@@ -1,9 +1,9 @@
 // =============================================
-// 管考追蹤系統 - v3 ISMS Corrective Action
+// 管考追蹤系統 - v4 ISMS Corrective Action + Audit Checklist
 // =============================================
 (function () {
   'use strict';
-  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth';
+  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template';
   const STATUSES = { CREATED: '開立', PENDING: '待矯正', PROPOSED: '已提案', REVIEWING: '審核中', TRACKING: '追蹤中', CLOSED: '結案' };
   const STATUS_CLASSES = { [STATUSES.CREATED]: 'created', [STATUSES.PENDING]: 'pending', [STATUSES.PROPOSED]: 'proposed', [STATUSES.REVIEWING]: 'reviewing', [STATUSES.TRACKING]: 'tracking', [STATUSES.CLOSED]: 'closed' };
   const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
@@ -42,6 +42,7 @@
   function isUnitAdmin() { return currentUser()?.role === ROLES.UNIT_ADMIN; }
   function canCreateCAR() { return isAdmin() || isUnitAdmin(); }
   function canReview() { return isAdmin() || isUnitAdmin(); }
+  function canFillChecklist() { return isAdmin() || isUnitAdmin(); }
   function canManageUsers() { return isAdmin(); }
   function fmt(d) { if (!d) return '—'; const x = new Date(d); return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, '0')}/${String(x.getDate()).padStart(2, '0')}`; }
   function fmtTime(d) { if (!d) return '—'; const x = new Date(d); return `${fmt(d)} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; }
@@ -96,14 +97,21 @@
   function renderSidebar() {
     var u = currentUser(); if (!u) return; var items = getVisibleItems(); var pc = items.filter(function (i) { return i.status === STATUSES.PENDING || isOverdue(i); }).length; var r = getRoute(); var nav = '<div class="sidebar-section"><div class="sidebar-section-title">主選單</div>' +
       '<a class="nav-item ' + (r.page === 'dashboard' ? 'active' : '') + '" href="#dashboard"><span class="nav-icon">' + ic('pie-chart') + '</span>儀表板</a>' +
-      '<a class="nav-item ' + (r.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>矯正單列表' + (pc ? '<span class="nav-badge">' + pc + '</span>' : '') + '</a></div>';
-    if (canCreateCAR()) nav += '<div class="sidebar-section"><div class="sidebar-section-title">操作</div><a class="nav-item ' + (r.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>開立矯正單</a></div>';
-    if (canManageUsers()) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div><a class="nav-item ' + (r.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a></div>';
+      '<a class="nav-item ' + (r.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>矯正單列表' + (pc ? '<span class="nav-badge">' + pc + '</span>' : '') + '</a>' +
+      '<a class="nav-item ' + (r.page === 'checklist' || r.page === 'checklist-fill' || r.page === 'checklist-detail' ? 'active' : '') + '" href="#checklist"><span class="nav-icon">' + ic('clipboard-check') + '</span>內稽檢核表</a></div>';
+    var opNav = '';
+    if (canCreateCAR()) opNav += '<a class="nav-item ' + (r.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>開立矯正單</a>';
+    if (canFillChecklist()) opNav += '<a class="nav-item ' + (r.page === 'checklist-fill' ? 'active' : '') + '" href="#checklist-fill"><span class="nav-icon">' + ic('edit-3') + '</span>填報檢核表</a>';
+    if (opNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">操作</div>' + opNav + '</div>';
+    var sysNav = '';
+    if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a>';
+    if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>檢核表管理</a>';
+    if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div>' + sysNav + '</div>';
     document.getElementById('sidebar').innerHTML = '<div class="sidebar-logo"><h1>' + ic('layout-dashboard') + ' 管考追蹤系統</h1><p>ISMS Corrective Action</p></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
   }
 
   function renderHeader() {
-    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理' }; var r = getRoute();
+    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理' }; var r = getRoute();
     document.getElementById('header').innerHTML = '<div class="header-left"><span class="header-title">' + (titles[r.page] || '管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
   }
   window._logout = function () { logout(); };
@@ -475,7 +483,7 @@
   // ─── Router ────────────────────────────────
   function handleRoute() {
     if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader();
-    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; default: renderDashboard(); }
+    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; default: renderDashboard(); }
   }
 
   // ─── Seed Data ─────────────────────────────
@@ -495,6 +503,314 @@
       { id: 'CAR-0004', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(14), handlerUnit: '稽核室', handlerName: '劉文管人員', handlerDate: past(13), deficiencyType: '次要缺失', source: '外部稽核', category: ['資訊'], clause: 'A.7.5.3', problemDesc: '3 份程序書紙本與電子版本不一致。', occurrence: '外部稽核時發現文管系統的版本控制未正確同步。', correctiveAction: '已回收舊版並重新分發正確版本。', correctiveDueDate: fut(1), rootCause: '文管系統未自動通知換版，且無版本確認機制。', rootElimination: '導入自動版次通知功能，新增版本確認簽收流程。', rootElimDueDate: fut(1), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [{ tracker: '張稽核員', trackDate: past(5), execution: '已完成舊版回收，新版已分發至各單位。', trackNote: '電子版已同步更新，需確認紙本是否全部替換。', result: '持續追蹤', nextTrackDate: fut(7), reviewer: '張稽核員', reviewDate: past(5) }], status: STATUSES.TRACKING, createdAt: ago(14), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(14), action: '開立矯正單', user: '王經理' }, { time: ago(14), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(10), action: '劉文管人員 提交矯正措施提案', user: '劉文管人員' }, { time: ago(10), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(7), action: '狀態變更為「審核中」', user: '張稽核員' }, { time: ago(5), action: '狀態變更為「追蹤中」', user: '張稽核員' }, { time: ago(5), action: '第 1 次追蹤 — 持續追蹤', user: '張稽核員' }] }
     ];
     d.nextId = 5; saveData(d);
+  }
+
+  // ─── Checklist Data Model ─────────────────
+  const DEFAULT_CHECKLIST_SECTIONS = [
+    {
+      section: '1. 資安意識及資安通識教育訓練', items: [
+        { id: '1.1', text: '單位同仁是否瞭解本校資通安全政策？', hint: '本校資安政策放置於資通安全管理專區，已透過 MAIL 方式向同仁宣導' },
+        { id: '1.2', text: '單位同仁是否每年接受 3 小時以上之資通安全通識教育？', hint: '114 年資通安全教育訓練執行情形、全校資安通識教育訓練時數統計表' },
+        { id: '1.3', text: '是否指派適當人員擔任單位資通安全長及資安窗口，負責推動及督導或執行機關內資通安全相關事務？', hint: '單位資通安全長及資安窗口聯絡資訊' }
+      ]
+    },
+    {
+      section: '2. 資通系統盤點暨安全等級評估', items: [
+        { id: '2.1', text: '每年是否實施資通系統清查，並於本校「資通盤點系統」完成填報？', hint: '請參考資通盤點系統' },
+        { id: '2.2', text: '自行或委外開發之資通系統，是否完成安全等級評估？', hint: '請參考資通盤點系統' },
+        { id: '2.3', text: '自行或委外開發之資通系統，是否填寫相對應之防護基準表（普、中、高）？', hint: '請參考資通盤點系統' },
+        { id: '2.4', text: '每年是否檢視一次資通系統分級妥適性？', hint: '請參考資通盤點系統' },
+        { id: '2.5', text: '資訊資產上線前是否進行系統更新與漏洞修補，並採取適當管控機制，如連線控管、變更廠商預設帳密、禁止使用弱密碼？', hint: '系統更新與漏洞修補紀錄、弱點掃描報告、變更預設帳密的操作紀錄' }
+      ]
+    },
+    {
+      section: '3. 資訊資產盤點暨風險評鑑', items: [
+        { id: '3.1', text: '每年是否實施資訊資產盤點，並建立「資訊資產清冊」？', hint: '請參考資通盤點系統' },
+        { id: '3.2', text: '是否完成風險評鑑，並擬定對應之控制措施？', hint: '風險評鑑彙整表及風險改善計畫' },
+        { id: '3.3', text: '危害國家資通安全產品是否已清查列冊管理？', hint: '大陸廠牌資通訊產品清查結果' },
+        { id: '3.4', text: '是否清查物聯網設備，盤點範圍包含單位採購、公務使用之物聯網設備，並納入「資訊資產清冊」列管？', hint: '請參考資通盤點系統' },
+        { id: '3.5', text: '資訊資產安裝完畢後是否立即更新廠商所預設之通行碼？', hint: '變更預設通行碼的操作紀錄、系統管理介面截圖' },
+        { id: '3.6', text: '是否規劃已停止支援服務（EOS）資訊資產的汰換及升級計畫？', hint: 'EOS 資產清冊、汰換與升級計畫文件' }
+      ]
+    },
+    {
+      section: '4. 日常作業資訊安全管理', items: [
+        { id: '4.1', text: '汰除之儲存設備是否已確認機敏資訊已刪除？並依本校「資訊設備回收再使用及汰除之安全控制作業程序與校內報廢程序」辦理？', hint: '儲存設備資料清除紀錄、資料刪除或摧毀證明文件' },
+        { id: '4.2', text: '【適用設有機房單位】是否針對電腦機房及重要區域之安全控制、人員進出管控、環境維護（如溫溼度控制）等項目建立適當之管理措施，落實執行？', hint: '機房出入紀錄、環境監控紀錄、CCTV 架設紀錄' },
+        { id: '4.3', text: '【適用設有機房單位】針對電腦機房及重要區域之公用服務（如水、電、消防及通訊等）建立適當之備援方案？', hint: 'UPS/發電機設備清單、電力異常應變 SOP、消防系統說明文件' }
+      ]
+    },
+    {
+      section: '5. 資通系統發展及維護安全', items: [
+        { id: '5.1', text: '是否定期執行重要資料之備份作業？', hint: '備份排程設定截圖、備份作業紀錄或日誌、備份資料驗證紀錄' },
+        { id: '5.2', text: '對外服務之資通系統是否上線前、重大變更時及定期執行各項系統之弱點掃描，並針對高風險（含）以上之漏洞執行修補？', hint: '今年度弱點掃描初測及複測報告' },
+        { id: '5.3', text: '對外服務之資通系統（網站）是否定期更換憑證？', hint: 'SSL/TLS 憑證有效期限截圖、憑證更新紀錄' }
+      ]
+    },
+    {
+      section: '6. 資通系統或服務委外辦理之管理', items: [
+        { id: '6.1', text: '單位辦理資訊系統建置、軟體開發、維運服務、資安強化等購案，是否依據政府採購法第 63 條第 1 項，採用「資訊服務採購契約範本」？', hint: '已核定或陳核中的資訊服務採購契約' },
+        { id: '6.2', text: '資通系統或服務購案契約是否已納入相關資通安全責任規範？', hint: '已核定或陳核中的資訊服務採購契約' },
+        { id: '6.3', text: '資通系統或服務委外辦理時，是否已將選任受託者應注意事項加入招標文件中？', hint: '招標文件或投標須知副本' },
+        { id: '6.4', text: '辦理委外資通系統開發，是否於契約規範，要求受託者提出安全性檢測證明？', hint: '契約條文內容、安全性檢測報告' },
+        { id: '6.5', text: '契約是否已訂定資通安全事件通報相關程序、通報機制、作法或管道？', hint: '契約條文、廠商承諾書或資安責任切結書' },
+        { id: '6.6', text: '契約是否已訂定委託關係終止或解除時，本專案相關履行契約而持有資料之返還、移交、刪除或銷毀作法？', hint: '契約條文副本、資料銷毀證明文件' },
+        { id: '6.7', text: '採購案契約範圍內之委外廠商是否為大陸廠商或所涉及之人員是否有陸籍身分？是否允許委外廠商使用大陸廠牌之資通訊產品？', hint: '廠商聲明文件或切結書' }
+      ]
+    },
+    {
+      section: '7. 資安事件通報', items: [
+        { id: '7.1', text: '單位人員是否知悉資通安全事件，本校之通報應變處理程序？', hint: '資安事件通報流程文件、宣導紀錄、通報演練紀錄' }
+      ]
+    },
+    {
+      section: '8. 個人電腦安全管理（抽檢 2 台）', items: [
+        { id: '8.1', text: '是否已安裝防毒軟體、啟動自動更新病毒碼並為最新版本？', hint: '抽檢同仁電腦之防毒軟體佐證圖片' },
+        { id: '8.2', text: '是否已啟動微軟自動更新，並為最新版本？', hint: '抽檢同仁電腦之 Windows Update 佐證圖片' },
+        { id: '8.3', text: '系統登出/重新開機是否需要登入帳號及密碼？密碼是否符合單位密碼長度及複雜度規範？', hint: '現場抽查' },
+        { id: '8.4', text: '是否設置螢幕保護程式，並設定密碼保護？', hint: '現場抽查' },
+        { id: '8.5', text: '是否將帳號密碼，紀錄或張貼於辦公公開區域？', hint: '現場抽查' },
+        { id: '8.6', text: '電腦鐘訊是否定期核對校正以確保時間記錄正確？', hint: 'NTP Server 同步設定' },
+        { id: '8.7', text: '是否設定有效且可信度較高之 DNS Server 做查詢？', hint: 'DNS 設定截圖' },
+        { id: '8.8', text: '個人電腦是否依規定完成政府組態基準（GCB）檢核，並採取適當之安全組態設定？', hint: 'GCB 檢測工具（如瑞思 RISS）安裝佐證截圖、GCB 檢核報告、組態設定合規比對結果' },
+        { id: '8.9', text: '是否針對遠端桌面連線（如 RDP）進行存取控管，限制非授權來源 IP 連線，並關閉不必要之遠端存取服務？', hint: '遠端桌面連線設定截圖（如僅允許校內 IP 連線）、防火牆規則截圖、Windows 遠端桌面啟用/停用設定截圖、VPN 連線政策文件' }
+      ]
+    },
+    {
+      section: '9. 網路安全管理', items: [
+        { id: '9.1', text: '是否定期備份網路設備的組態設定（如：防火牆、交換器）？', hint: '備份作業排程截圖、備份檔案名稱與時間截圖' },
+        { id: '9.2', text: '是否有針對網路設備之遠端管理介面（如 Web GUI、SSH）設定連線保護？', hint: '管理介面使用加密通訊協定設定截圖' },
+        { id: '9.3', text: '辦公室內物聯網（IoT）設備是否採取適當之網路存取控管措施，如限制使用內部 IP、實施網路區隔（VLAN）、關閉不必要之對外連線？', hint: 'IoT 設備網路配置截圖（如內部 IP 配置）、VLAN 區隔設定截圖、防火牆存取控制清單（ACL）、IoT 設備連線管控政策文件' }
+      ]
+    }
+  ];
+  // Template management — stored in localStorage so admin can edit
+  function getChecklistSections() {
+    try { const saved = JSON.parse(localStorage.getItem(TEMPLATE_KEY)); if (saved && saved.length) return saved; } catch { }
+    return JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS));
+  }
+  function saveChecklistSections(sections) { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(sections)); }
+  const COMPLIANCE_OPTS = ['符合', '部分符合', '不符合', '不適用'];
+  const COMPLIANCE_COLORS = { '符合': '#22c55e', '部分符合': '#f59e0b', '不符合': '#ef4444', '不適用': '#94a3b8' };
+  const COMPLIANCE_CLASSES = { '符合': 'comply', '部分符合': 'partial', '不符合': 'noncomply', '不適用': 'na' };
+
+  // ─── Checklist Storage ─────────────────────
+  function loadChecklists() { try { return JSON.parse(localStorage.getItem(CHECKLIST_KEY)) || { items: [], nextId: 1 }; } catch { return { items: [], nextId: 1 }; } }
+  function saveChecklists(d) { localStorage.setItem(CHECKLIST_KEY, JSON.stringify(d)); }
+  function getAllChecklists() { return loadChecklists().items; }
+  function getChecklist(id) { return loadChecklists().items.find(i => i.id === id); }
+  function addChecklist(item) { const d = loadChecklists(); d.items.push(item); saveChecklists(d); }
+  function generateChecklistId() { const d = loadChecklists(); const id = `CHK-${String(d.nextId).padStart(4, '0')}`; d.nextId++; saveChecklists(d); return id; }
+  function getVisibleChecklists() { const u = currentUser(); if (!u) return []; const all = getAllChecklists(); if (u.role === ROLES.ADMIN) return all; return all.filter(i => i.unit === u.unit); }
+
+  // ─── Render: Checklist List ────────────────
+  function renderChecklistList() {
+    const checklists = getVisibleChecklists();
+    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
+    const rows = checklists.length ? checklists.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(c => {
+      const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
+      const statusCls = c.status === '已提交' ? 'badge-closed' : 'badge-pending';
+      return `<tr onclick="location.hash='checklist-detail/${c.id}'"><td style="font-weight:600;color:var(--accent-primary)">${esc(c.id)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
+    }).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:60px"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">尚無檢核表紀錄</div><div class="empty-state-desc">單位管理員可點選「填報檢核表」開始填寫</div></div></td></tr>`;
+    document.getElementById('app').innerHTML = `<div class="animate-in">
+      <div class="page-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">國立台灣大學 114 年度內部資通安全稽核查檢表</p></div>${fillBtn}</div>
+      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>受稽單位</th><th>填報人</th><th>稽核年度</th><th>狀態</th><th>符合率</th><th>填報日期</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  // ─── Render: Checklist Fill ────────────────
+  function renderChecklistFill() {
+    if (!canFillChecklist()) { navigate('checklist'); toast('您沒有填報檢核表的權限', 'error'); return; }
+    const u = currentUser();
+    let sectionsHtml = '';
+    CHECKLIST_SECTIONS.forEach((sec, si) => {
+      let itemsHtml = '';
+      sec.items.forEach(item => {
+        const radios = COMPLIANCE_OPTS.map(opt => `<label class="cl-radio-label cl-radio-${COMPLIANCE_CLASSES[opt]}"><input type="radio" name="cl-${item.id}" value="${opt}"><span class="cl-radio-indicator"></span>${opt}</label>`).join('');
+        itemsHtml += `<div class="cl-item" id="cl-item-${item.id}">
+          <div class="cl-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span></div>
+          <div class="cl-item-body">
+            <div class="cl-compliance"><label class="form-label form-required">單位自評</label><div class="cl-radio-group">${radios}</div></div>
+            <div class="cl-fields">
+              <div class="form-group"><label class="form-label">執行情形簡述</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2"></textarea></div>
+              <div class="form-group"><label class="form-label">佐證資料</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="如執行紀錄、公文、截圖說明等" rows="2"></textarea></div>
+            </div>
+          </div>
+        </div>`;
+      });
+      sectionsHtml += `<div class="cl-section"><div class="cl-section-header"><span class="cl-section-num">${si + 1}</span>${esc(sec.section)}</div><div class="cl-section-body">${itemsHtml}</div></div>`;
+    });
+
+    const allUsers = getUsers();
+    const unitOpts = [...new Set(allUsers.map(u => u.unit))].map(ut => `<option value="${esc(ut)}" ${ut === u.unit ? 'selected' : ''}>${esc(ut)}</option>`).join('');
+
+    document.getElementById('app').innerHTML = `<div class="animate-in">
+      <div class="page-header"><div><h1 class="page-title">填報檢核表</h1><p class="page-subtitle">國立台灣大學 114 年度內部資通安全稽核查檢表</p></div><a href="#checklist" class="btn btn-secondary">← 返回列表</a></div>
+      <div class="card" style="max-width:960px"><form id="checklist-form">
+        <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label form-required">受稽單位</label><select class="form-select" id="cl-unit" required>${unitOpts}</select></div>
+          <div class="form-group"><label class="form-label form-required">填表人員</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
+          <div class="form-group"><label class="form-label form-required">自評日期</label><input type="date" class="form-input" id="cl-date" value="${new Date().toISOString().split('T')[0]}" required></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">稽核年度</label><input type="text" class="form-input" id="cl-year" value="114" required></div>
+          <div class="form-group"><label class="form-label">權責主管</label><input type="text" class="form-input" id="cl-supervisor" placeholder="請輸入權責主管姓名"></div>
+        </div>
+        <div class="cl-progress-bar-wrap"><div class="cl-progress-label">填報進度</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0)}</span></div>
+        ${sectionsHtml}
+        <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft">${ic('save', 'icon-sm')} 儲存草稿</button><a href="#checklist" class="btn btn-ghost">取消</a></div>
+      </form></div></div>`;
+
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+
+    // Progress tracking
+    const totalItems = CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0);
+    function updateProgress() {
+      let filled = 0;
+      CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => {
+        if (document.querySelector(`input[name="cl-${item.id}"]:checked`)) filled++;
+      }));
+      const pct = Math.round(filled / totalItems * 100);
+      document.getElementById('cl-progress-fill').style.width = pct + '%';
+      document.getElementById('cl-progress-text').textContent = filled + ' / ' + totalItems;
+    }
+    document.querySelectorAll('.cl-radio-group input').forEach(r => r.addEventListener('change', updateProgress));
+
+    // Submit
+    function collectData(status) {
+      const results = {};
+      let conform = 0, partial = 0, nonConform = 0, na = 0, total = 0;
+      CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => {
+        const sel = document.querySelector(`input[name="cl-${item.id}"]:checked`);
+        const compliance = sel ? sel.value : '';
+        results[item.id] = {
+          compliance: compliance,
+          execution: document.getElementById(`cl-exec-${item.id}`).value.trim(),
+          evidence: document.getElementById(`cl-evidence-${item.id}`).value.trim()
+        };
+        total++;
+        if (compliance === '符合') conform++;
+        else if (compliance === '部分符合') partial++;
+        else if (compliance === '不符合') nonConform++;
+        else if (compliance === '不適用') na++;
+      }));
+      const now = new Date().toISOString();
+      return {
+        id: generateChecklistId(),
+        unit: document.getElementById('cl-unit').value,
+        fillerName: document.getElementById('cl-filler').value,
+        fillDate: document.getElementById('cl-date').value,
+        auditYear: document.getElementById('cl-year').value,
+        supervisor: document.getElementById('cl-supervisor').value.trim(),
+        results: results,
+        summary: { total, conform, partial, nonConform, na },
+        status: status,
+        createdAt: now,
+        updatedAt: now
+      };
+    }
+
+    document.getElementById('checklist-form').addEventListener('submit', e => {
+      e.preventDefault();
+      // Validate all items have compliance selected
+      let missing = [];
+      CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => {
+        if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id);
+      }));
+      if (missing.length > 0) {
+        toast(`尚有 ${missing.length} 個項目未填寫自評結果`, 'error');
+        const el = document.getElementById(`cl-item-${missing[0]}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      const data = collectData('已提交');
+      addChecklist(data);
+      toast(`檢核表 ${data.id} 已成功送出！`);
+      navigate('checklist-detail/' + data.id);
+    });
+
+    document.getElementById('cl-save-draft').addEventListener('click', () => {
+      const data = collectData('草稿');
+      addChecklist(data);
+      toast(`草稿 ${data.id} 已儲存`);
+      navigate('checklist');
+    });
+  }
+
+  // ─── Render: Checklist Detail ──────────────
+  function renderChecklistDetail(id) {
+    const cl = getChecklist(id);
+    if (!cl) { document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到檢核表</div><a href="#checklist" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`; return; }
+    const s = cl.summary;
+    const rate = s.total > 0 ? Math.round(s.conform / s.total * 100) : 0;
+    const applicable = s.total - s.na;
+    const applicableRate = applicable > 0 ? Math.round(s.conform / applicable * 100) : 0;
+
+    // Donut chart for compliance
+    const R = 50, C = 2 * Math.PI * R;
+    const vals = [{ label: '符合', count: s.conform, color: COMPLIANCE_COLORS['符合'] }, { label: '部分符合', count: s.partial, color: COMPLIANCE_COLORS['部分符合'] }, { label: '不符合', count: s.nonConform, color: COMPLIANCE_COLORS['不符合'] }, { label: '不適用', count: s.na, color: COMPLIANCE_COLORS['不適用'] }];
+    let segs = '', off = 0;
+    if (s.total > 0) { vals.forEach(v => { if (!v.count) return; const l = v.count / s.total * C; segs += `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${v.color}" stroke-width="16" stroke-dasharray="${l} ${C - l}" stroke-dashoffset="${-off}"/>`; off += l; }); }
+    else { segs = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="#e2e8f0" stroke-width="16"/>`; }
+    const svg = `<svg viewBox="0 0 120 120" class="cl-donut"><style>circle{transition:stroke-dashoffset .8s ease}</style>${segs}<text x="60" y="56" text-anchor="middle" fill="#0f172a" font-size="18" font-weight="700" font-family="Inter">${applicableRate}%</text><text x="60" y="72" text-anchor="middle" fill="#94a3b8" font-size="8" font-weight="500" font-family="Inter">符合率</text></svg>`;
+    const legend = vals.map(v => `<div class="cl-legend-item"><span class="cl-legend-dot" style="background:${v.color}"></span>${v.label}<span class="cl-legend-count">${v.count}</span></div>`).join('');
+
+    // Items detail
+    let sectDetail = '';
+    CHECKLIST_SECTIONS.forEach(sec => {
+      let rows = '';
+      sec.items.forEach(item => {
+        const r = cl.results[item.id] || {};
+        const comp = r.compliance || '未填';
+        const compCls = COMPLIANCE_CLASSES[comp] || '';
+        rows += `<div class="cl-detail-item"><div class="cl-detail-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span><span class="cl-compliance-badge cl-badge-${compCls}">${comp}</span></div>`;
+        if (r.execution) rows += `<div class="cl-detail-field"><span class="cl-detail-label">執行情形：</span>${esc(r.execution)}</div>`;
+        if (r.evidence) rows += `<div class="cl-detail-field"><span class="cl-detail-label">佐證資料：</span>${esc(r.evidence)}</div>`;
+        rows += '</div>';
+      });
+      sectDetail += `<div class="cl-detail-section"><div class="cl-detail-section-title">${esc(sec.section)}</div>${rows}</div>`;
+    });
+
+    // Find issues
+    let issues = [];
+    CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => {
+      const r = cl.results[item.id] || {};
+      if (r.compliance === '不符合' || r.compliance === '部分符合') {
+        issues.push({ id: item.id, text: item.text, compliance: r.compliance, execution: r.execution || '' });
+      }
+    }));
+    const issueHtml = issues.length > 0 ? `<div class="card" style="margin-top:20px;border-left:3px solid #ef4444"><div class="section-header">${ic('alert-triangle', 'icon-sm')} 待改善項目（${issues.length} 項）</div>${issues.map(iss => `<div class="cl-issue-item"><span class="cl-compliance-badge cl-badge-${COMPLIANCE_CLASSES[iss.compliance]}">${iss.compliance}</span><span class="cl-item-id">${iss.id}</span> ${esc(iss.text)}${iss.execution ? `<div class="cl-issue-note">${esc(iss.execution)}</div>` : ''}</div>`).join('')}</div>` : '';
+
+    const statusCls = cl.status === '已提交' ? 'badge-closed' : 'badge-pending';
+    document.getElementById('app').innerHTML = `<div class="animate-in">
+      <div class="detail-header"><div>
+        <div class="detail-id">${esc(cl.id)} · ${esc(cl.auditYear)} 年度</div>
+        <h1 class="detail-title">內稽檢核表 — ${esc(cl.unit)}</h1>
+        <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(cl.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(cl.fillDate)}</span><span class="badge ${statusCls}"><span class="badge-dot"></span>${cl.status}</span></div>
+      </div><a href="#checklist" class="btn btn-secondary">← 返回列表</a></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+        <div class="card"><div class="card-header"><span class="card-title">符合度統計</span></div>
+          <div class="cl-stats-wrap">${svg}<div class="cl-legend">${legend}</div></div>
+        </div>
+        <div class="card"><div class="card-header"><span class="card-title">基本資訊</span></div>
+          <div class="detail-grid">
+            <div class="detail-field"><div class="detail-field-label">受稽單位</div><div class="detail-field-value">${esc(cl.unit)}</div></div>
+            <div class="detail-field"><div class="detail-field-label">填表人員</div><div class="detail-field-value">${esc(cl.fillerName)}</div></div>
+            <div class="detail-field"><div class="detail-field-label">稽核年度</div><div class="detail-field-value">${esc(cl.auditYear)} 年度</div></div>
+            <div class="detail-field"><div class="detail-field-label">自評日期</div><div class="detail-field-value">${fmt(cl.fillDate)}</div></div>
+            <div class="detail-field"><div class="detail-field-label">權責主管</div><div class="detail-field-value">${esc(cl.supervisor || '—')}</div></div>
+            <div class="detail-field"><div class="detail-field-label">適用項目符合率</div><div class="detail-field-value" style="font-weight:700;color:${applicableRate >= 80 ? '#22c55e' : applicableRate >= 60 ? '#f59e0b' : '#ef4444'}">${applicableRate}%（${s.conform}/${applicable}）</div></div>
+          </div>
+        </div>
+      </div>
+
+      ${issueHtml}
+
+      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 逐項檢核結果</span></div>${sectDetail}</div>
+    </div>`;
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
   }
 
   // ─── Init ──────────────────────────────────
