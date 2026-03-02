@@ -1,0 +1,506 @@
+// =============================================
+// 管考追蹤系統 - v3 ISMS Corrective Action
+// =============================================
+(function () {
+  'use strict';
+  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth';
+  const STATUSES = { CREATED: '開立', PENDING: '待矯正', PROPOSED: '已提案', REVIEWING: '審核中', TRACKING: '追蹤中', CLOSED: '結案' };
+  const STATUS_CLASSES = { [STATUSES.CREATED]: 'created', [STATUSES.PENDING]: 'pending', [STATUSES.PROPOSED]: 'proposed', [STATUSES.REVIEWING]: 'reviewing', [STATUSES.TRACKING]: 'tracking', [STATUSES.CLOSED]: 'closed' };
+  const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
+  const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員', REPORTER: '填報人' };
+  const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter' };
+  const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議', '無'];
+  const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
+  const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
+  const DEFAULT_USERS = [
+    { username: 'admin', password: 'admin123', name: '系統管理員', role: ROLES.ADMIN, unit: '資訊部', email: 'admin@company.com' },
+    { username: 'unit1', password: 'unit123', name: '王經理', role: ROLES.UNIT_ADMIN, unit: '資安組', email: 'wang@company.com' },
+    { username: 'unit2', password: 'unit123', name: '張稽核員', role: ROLES.UNIT_ADMIN, unit: '稽核室', email: 'zhang@company.com' },
+    { username: 'user1', password: 'user123', name: '李工程師', role: ROLES.REPORTER, unit: '資安組', email: 'li@company.com' },
+    { username: 'user2', password: 'user123', name: '陳資安主管', role: ROLES.REPORTER, unit: '資安組', email: 'chen@company.com' },
+    { username: 'user3', password: 'user123', name: '黃工程師', role: ROLES.REPORTER, unit: '資訊部', email: 'huang@company.com' },
+    { username: 'user4', password: 'user123', name: '劉文管人員', role: ROLES.REPORTER, unit: '稽核室', email: 'liu@company.com' },
+  ];
+  function loadData() { try { return JSON.parse(localStorage.getItem(DATA_KEY)) || { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 }; } catch { return { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 }; } }
+  function saveData(d) { localStorage.setItem(DATA_KEY, JSON.stringify(d)); }
+  function getAllItems() { return loadData().items; }
+  function getItem(id) { return loadData().items.find(i => i.id === id); }
+  function addItem(item) { const d = loadData(); d.items.push(item); saveData(d); }
+  function updateItem(id, updates) { const d = loadData(); const i = d.items.findIndex(x => x.id === id); if (i >= 0) { d.items[i] = { ...d.items[i], ...updates }; saveData(d); } }
+  function generateId() { const d = loadData(); const id = `CAR-${String(d.nextId).padStart(4, '0')}`; d.nextId++; saveData(d); return id; }
+  function getUsers() { return loadData().users; }
+  function addUser(user) { const d = loadData(); d.users.push(user); saveData(d); }
+  function updateUser(un, upd) { const d = loadData(); const i = d.users.findIndex(u => u.username === un); if (i >= 0) { d.users[i] = { ...d.users[i], ...upd }; saveData(d); } }
+  function deleteUser(un) { const d = loadData(); d.users = d.users.filter(u => u.username !== un); saveData(d); }
+  function findUser(un) { return loadData().users.find(u => u.username === un); }
+  function findUserByEmail(em) { return loadData().users.find(u => u.email && u.email.toLowerCase() === em.toLowerCase()); }
+  function generatePassword() { const c = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; let p = ''; for (let i = 0; i < 8; i++)p += c[Math.floor(Math.random() * c.length)]; return p; }
+  function login(un, pw) { const u = findUser(un); if (u && u.password === pw) { sessionStorage.setItem(AUTH_KEY, JSON.stringify(u)); return u; } return null; }
+  function logout() { sessionStorage.removeItem(AUTH_KEY); renderApp(); }
+  function currentUser() { try { return JSON.parse(sessionStorage.getItem(AUTH_KEY)); } catch { return null; } }
+  function isAdmin() { return currentUser()?.role === ROLES.ADMIN; }
+  function isUnitAdmin() { return currentUser()?.role === ROLES.UNIT_ADMIN; }
+  function canCreateCAR() { return isAdmin() || isUnitAdmin(); }
+  function canReview() { return isAdmin() || isUnitAdmin(); }
+  function canManageUsers() { return isAdmin(); }
+  function fmt(d) { if (!d) return '—'; const x = new Date(d); return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, '0')}/${String(x.getDate()).padStart(2, '0')}`; }
+  function fmtTime(d) { if (!d) return '—'; const x = new Date(d); return `${fmt(d)} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; }
+  function isOverdue(item) { return item.status !== STATUSES.CLOSED && item.correctiveDueDate && new Date(item.correctiveDueDate) < new Date(); }
+  function ic(n, c = '') { return `<i data-lucide="${n}" ${c ? 'class="' + c + '"' : ''}></i>`; }
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
+  function navigate(h) { window.location.hash = h; }
+  function getRoute() { const h = window.location.hash.slice(1) || 'dashboard'; const p = h.split('/'); return { page: p[0], param: p[1] }; }
+  function getVisibleItems() { const u = currentUser(); if (!u) return []; const all = getAllItems(); if (u.role === ROLES.ADMIN) return all; if (u.role === ROLES.UNIT_ADMIN) return all.filter(i => i.proposerUnit === u.unit || i.handlerUnit === u.unit || i.proposerName === u.name); return all.filter(i => i.handlerName === u.name); }
+  function mkChk(name, opts, sel) { return '<div class="checkbox-group">' + opts.map(o => '<label class="chk-label"><input type="checkbox" name="' + name + '" value="' + o + '" ' + ((sel || []).includes(o) ? 'checked' : '') + '><span class="chk-box"></span>' + o + '</label>').join('') + '</div>'; }
+  function mkRadio(name, opts, sel) { return '<div class="radio-group">' + opts.map(o => '<label class="radio-label"><input type="radio" name="' + name + '" value="' + o + '" ' + (sel === o ? 'checked' : '') + '><span class="radio-dot"></span>' + o + '</label>').join('') + '</div>'; }
+
+  // ─── Render: Login ─────────────────────────
+  function renderLogin() {
+    document.body.innerHTML = '<div class="login-page"><div class="login-card">' +
+      '<div class="login-logo"><span class="login-logo-icon">' + ic('boxes', 'icon-xl') + '</span><h1>管考追蹤系統</h1><p>ISMS Corrective Action Tracking</p></div>' +
+      '<div class="login-error" id="login-error">帳號或密碼錯誤</div>' +
+      '<div id="login-panel"><form class="login-form" id="login-form">' +
+      '<div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="login-user" placeholder="請輸入帳號" required autofocus></div>' +
+      '<div class="form-group"><label class="form-label">密碼</label><input type="password" class="form-input" id="login-pass" placeholder="請輸入密碼" required></div>' +
+      '<button type="submit" class="login-btn">登入系統 ' + ic('arrow-right', 'icon-sm') + '</button>' +
+      '</form>' +
+      '<p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">忘記密碼？</a></p></div>' +
+      '<div id="forgot-panel" style="display:none">' +
+      '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h3></div>' +
+      '<div class="login-error" id="forgot-error">找不到此信箱對應的帳號</div>' +
+      '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">電子信箱</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入註冊時的信箱" required></div>' +
+      '<button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 取得新密碼</button></form>' +
+      '<div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;text-align:center">' +
+      '<p style="font-size:.88rem;color:#15803d;font-weight:600">密碼已重設成功！</p>' +
+      '<p style="font-size:.82rem;color:var(--text-secondary)">帳號：<strong id="reset-username"></strong></p>' +
+      '<p style="font-size:1.1rem;font-weight:700;color:var(--text-heading);margin-top:6px;font-family:monospace;background:#f0f2f7;padding:8px;border-radius:8px" id="reset-newpass"></p></div>' +
+      '<p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">← 返回登入</a></p></div>' +
+      '<div class="login-hint"><p>預設測試帳號</p><table>' +
+      '<tr><th>角色</th><th>帳號</th><th>密碼</th></tr>' +
+      '<tr><td>最高管理員</td><td>admin</td><td>admin123</td></tr>' +
+      '<tr><td>單位管理員</td><td>unit1</td><td>unit123</td></tr>' +
+      '<tr><td>填報人</td><td>user1</td><td>user123</td></tr>' +
+      '</table></div></div></div><div class="toast-container" id="toast-container"></div>';
+    document.getElementById('login-form').addEventListener('submit', function (e) { e.preventDefault(); var u = document.getElementById('login-user').value.trim(), p = document.getElementById('login-pass').value; var user = login(u, p); if (user) { toast('歡迎回來，' + user.name + '！'); setTimeout(function () { renderApp(); }, 300); } else { document.getElementById('login-error').classList.add('show'); } });
+    document.getElementById('forgot-link').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('login-panel').style.display = 'none'; document.getElementById('login-error').classList.remove('show'); document.getElementById('forgot-panel').style.display = 'block'; });
+    document.getElementById('back-login-link').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('forgot-panel').style.display = 'none'; document.getElementById('login-panel').style.display = 'block'; });
+    document.getElementById('forgot-form').addEventListener('submit', function (e) { e.preventDefault(); var email = document.getElementById('forgot-email').value.trim(); var user = findUserByEmail(email); if (!user) { document.getElementById('forgot-error').classList.add('show'); return; } document.getElementById('forgot-error').classList.remove('show'); var np = generatePassword(); updateUser(user.username, { password: np }); document.getElementById('reset-username').textContent = user.username; document.getElementById('reset-newpass').textContent = np; document.getElementById('forgot-result').style.display = 'block'; document.getElementById('forgot-form').style.display = 'none'; toast('密碼已重設成功！', 'info'); });
+    setTimeout(function () { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  // ─── Render: App Shell ─────────────────────
+  function renderApp() { var u = currentUser(); if (!u) { renderLogin(); return; } document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>'; handleRoute(); setTimeout(function () { if (window.lucide) lucide.createIcons(); }, 50); }
+
+  // ─── Render: Sidebar ───────────────────────
+  function renderSidebar() {
+    var u = currentUser(); if (!u) return; var items = getVisibleItems(); var pc = items.filter(function (i) { return i.status === STATUSES.PENDING || isOverdue(i); }).length; var r = getRoute(); var nav = '<div class="sidebar-section"><div class="sidebar-section-title">主選單</div>' +
+      '<a class="nav-item ' + (r.page === 'dashboard' ? 'active' : '') + '" href="#dashboard"><span class="nav-icon">' + ic('pie-chart') + '</span>儀表板</a>' +
+      '<a class="nav-item ' + (r.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>矯正單列表' + (pc ? '<span class="nav-badge">' + pc + '</span>' : '') + '</a></div>';
+    if (canCreateCAR()) nav += '<div class="sidebar-section"><div class="sidebar-section-title">操作</div><a class="nav-item ' + (r.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>開立矯正單</a></div>';
+    if (canManageUsers()) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div><a class="nav-item ' + (r.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a></div>';
+    document.getElementById('sidebar').innerHTML = '<div class="sidebar-logo"><h1>' + ic('layout-dashboard') + ' 管考追蹤系統</h1><p>ISMS Corrective Action</p></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
+  }
+
+  function renderHeader() {
+    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理' }; var r = getRoute();
+    document.getElementById('header').innerHTML = '<div class="header-left"><span class="header-title">' + (titles[r.page] || '管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
+  }
+  window._logout = function () { logout(); };
+
+  // ─── Render: Dashboard ─────────────────────
+  function renderDashboard() {
+    var items = getVisibleItems(); var total = items.length; var pending = items.filter(function (i) { return i.status === STATUSES.PENDING; }).length; var overdue = items.filter(function (i) { return isOverdue(i); }).length; var now2 = new Date(); var closedM = items.filter(function (i) { return i.status === STATUSES.CLOSED && i.closedDate && new Date(i.closedDate).getMonth() === now2.getMonth() && new Date(i.closedDate).getFullYear() === now2.getFullYear(); }).length;
+    var sc = {}; STATUS_FLOW.forEach(function (s) { sc[s] = 0; }); items.forEach(function (i) { if (sc[i.status] !== undefined) sc[i.status]++; });
+    var cc = {}; cc[STATUSES.CREATED] = '#3b82f6'; cc[STATUSES.PENDING] = '#f59e0b'; cc[STATUSES.PROPOSED] = '#a855f7'; cc[STATUSES.REVIEWING] = '#06b6d4'; cc[STATUSES.TRACKING] = '#f97316'; cc[STATUSES.CLOSED] = '#22c55e';
+    var R = 60, C = 2 * Math.PI * R; var segs = '', off = 0;
+    if (total > 0) { STATUS_FLOW.forEach(function (s) { var c2 = sc[s]; if (!c2) return; var l = c2 / total * C; segs += '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="' + cc[s] + '" stroke-width="20" stroke-dasharray="' + l + ' ' + (C - l) + '" stroke-dashoffset="' + (-off) + '"/>'; off += l; }); } else { segs = '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="#e2e8f0" stroke-width="20"/>'; }
+    var svg = '<svg viewBox="0 0 160 160" class="donut-chart">' + segs + '<text x="80" y="74" text-anchor="middle" fill="#0f172a" font-size="24" font-weight="700" font-family="Inter">' + total + '</text><text x="80" y="94" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500" font-family="Inter">總計</text></svg>';
+    var leg = STATUS_FLOW.map(function (s) { return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>'; }).join('');
+    var recent = items.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
+    var rr = recent.length ? recent.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td>' + esc(i.id) + '</td><td>' + esc(i.problemDesc || '').substring(0, 30) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>'; }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">尚無矯正單</div></div></td></tr>';
+    var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
+    document.getElementById('app').innerHTML = '<div class="animate-in">' +
+      '<div class="page-header"><div><h1 class="page-title">儀表板</h1><p class="page-subtitle">管考追蹤系統總覽</p></div>' + createBtn + '</div>' +
+      '<div class="stats-grid">' +
+      '<div class="stat-card total"><div class="stat-icon">' + ic('files') + '</div><div class="stat-value">' + total + '</div><div class="stat-label">矯正單總數</div></div>' +
+      '<div class="stat-card pending"><div class="stat-icon">' + ic('clock') + '</div><div class="stat-value">' + pending + '</div><div class="stat-label">待矯正</div></div>' +
+      '<div class="stat-card overdue"><div class="stat-icon">' + ic('alert-triangle') + '</div><div class="stat-value">' + overdue + '</div><div class="stat-label">已逾期</div></div>' +
+      '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + closedM + '</div><div class="stat-label">本月結案</div></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
+      '<div class="card"><div class="card-header"><span class="card-title">狀態分布</span></div><div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div></div>' +
+      '<div class="card"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th>單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rr + '</tbody></table></div></div>' +
+      '</div></div>';
+    setTimeout(function () { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  // ─── Render: List ──────────────────────────
+  var curFilter = '全部', curSearch = '';
+  function renderList() {
+    var items = getVisibleItems(); var filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); var filtered = items;
+    if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
+    if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
+    filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+    var rows = filtered.length ? filtered.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td>' + esc(i.id) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>'; }).join('') : '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
+    var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
+    var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
+    document.getElementById('app').innerHTML = '<div class="animate-in">' +
+      '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + items.length + ' 筆，顯示 ' + filtered.length + ' 筆</p></div>' + createBtn + '</div>' +
+      '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
+      '<div class="card" style="padding:0;overflow:hidden;"><div class="table-wrapper"><table><thead><tr><th>單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+    setTimeout(function () { if (window.lucide) lucide.createIcons(); }, 50);
+    document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; renderList(); });
+    document.getElementById('filter-tabs').addEventListener('click', function (e) { if (e.target.classList.contains('filter-tab')) { curFilter = e.target.dataset.filter; renderList(); } });
+  }
+  // ─── Render: Create ────────────────────────
+  function renderCreate() {
+    if (!canCreateCAR()) { navigate('dashboard'); toast('您沒有開立矯正單的權限', 'error'); return; }
+    const u = currentUser();
+    const allUsers = getUsers();
+    const users = allUsers.filter(x => x.role === ROLES.REPORTER || x.role === ROLES.UNIT_ADMIN);
+    const opts = users.map(x => `<option value="${esc(x.name)}" data-email="${esc(x.email || '')}">${esc(x.name)}（${esc(x.unit)}）</option>`).join('');
+    const unitOpts = [...new Set(allUsers.map(u => u.unit))].map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+    document.getElementById('app').innerHTML = `<div class="animate-in">
+      <div class="page-header"><div><h1 class="page-title">開立矯正單</h1><p class="page-subtitle">依據 ISMS 規範填寫矯正措施需求單</p></div></div>
+      <div class="card" style="max-width:850px;"><form id="create-form">
+
+        <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label form-required">提出單位</label><select class="form-select" id="f-punit" required><option value="">請選擇</option>${unitOpts}</select></div>
+          <div class="form-group"><label class="form-label form-required">提出人員</label><input type="text" class="form-input" id="f-pname" value="${esc(u.name)}" readonly></div>
+          <div class="form-group"><label class="form-label form-required">提出日期</label><input type="date" class="form-input" id="f-pdate" value="${new Date().toISOString().split('T')[0]}" required></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label form-required">處理單位</label><select class="form-select" id="f-hunit" required><option value="">請選擇</option>${unitOpts}</select></div>
+          <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" required><option value="">請選擇</option>${opts}</select></div>
+          <div class="form-group"><label class="form-label">處理日期</label><input type="date" class="form-input" id="f-hdate"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">處理人員信箱</label><div class="input-with-icon"><input type="email" class="form-input" id="f-hemail" placeholder="選擇處理人員後自動帶入" readonly style="background:#f8fafc"><span class="input-icon-hint">${ic('mail', 'icon-xs')}</span></div><p class="form-hint">系統將發送通知信至此信箱</p></div>
+          <div class="form-group"><label class="form-label">勾選發送通知</label><label class="chk-label" style="margin-top:4px"><input type="checkbox" id="f-notify" checked><span class="chk-box"></span>開單後發送信件通知處理人員</label></div>
+        </div>
+
+        <div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
+        <div class="form-group"><label class="form-label form-required">缺失種類</label>${mkRadio('defType', DEF_TYPES, '')}</div>
+        <div class="form-group"><label class="form-label form-required">來源</label>${mkRadio('source', SOURCES, '')}</div>
+        <div class="form-group"><label class="form-label form-required">分類（可複選）</label>${mkChk('category', CATEGORIES, [])}</div>
+        <div class="form-group"><label class="form-label">條文</label><input type="text" class="form-input" id="f-clause" placeholder="例：A.9.2.6、ISO 27001:2022"></div>
+
+        <div class="section-header">${ic('message-square-warning', 'icon-sm')} 問題描述</div>
+        <div class="form-group"><label class="form-label form-required">問題或缺失說明</label><textarea class="form-textarea" id="f-problem" placeholder="詳細描述觀察到的問題或缺失..." required style="min-height:100px"></textarea></div>
+        <div class="form-group"><label class="form-label form-required">缺失發生過程</label><textarea class="form-textarea" id="f-occurrence" placeholder="說明缺失的發生過程與背景..." required style="min-height:80px"></textarea></div>
+
+        <div class="section-header">${ic('calendar', 'icon-sm')} 矯正期限</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label form-required">預定完成日期</label><input type="date" class="form-input" id="f-due" required></div>
+        </div>
+
+        <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出矯正單</button><a href="#list" class="btn btn-secondary">取消</a></div>
+      </form></div></div>`;
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    // Auto-fill handler email when handler is selected
+    document.getElementById('f-hname').addEventListener('change', function () {
+      const sel = this.options[this.selectedIndex];
+      const email = sel && sel.dataset ? (sel.dataset.email || '') : '';
+      document.getElementById('f-hemail').value = email;
+    });
+    document.getElementById('create-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const defType = document.querySelector('input[name="defType"]:checked');
+      const source = document.querySelector('input[name="source"]:checked');
+      const cats = [...document.querySelectorAll('input[name="category"]:checked')].map(c => c.value);
+      if (!defType) { toast('請選擇缺失種類', 'error'); return; }
+      if (!source) { toast('請選擇來源', 'error'); return; }
+      if (cats.length === 0) { toast('請至少選擇一個分類', 'error'); return; }
+      const now = new Date().toISOString();
+      const item = {
+        id: generateId(),
+        proposerUnit: document.getElementById('f-punit').value,
+        proposerName: document.getElementById('f-pname').value.trim(),
+        proposerDate: document.getElementById('f-pdate').value,
+        handlerUnit: document.getElementById('f-hunit').value,
+        handlerName: document.getElementById('f-hname').value,
+        handlerEmail: document.getElementById('f-hemail').value || '',
+        handlerDate: document.getElementById('f-hdate').value || null,
+        deficiencyType: defType.value,
+        source: source.value,
+        category: cats,
+        clause: document.getElementById('f-clause').value.trim(),
+        problemDesc: document.getElementById('f-problem').value.trim(),
+        occurrence: document.getElementById('f-occurrence').value.trim(),
+        correctiveAction: '', correctiveDueDate: document.getElementById('f-due').value,
+        rootCause: '', riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null,
+        rootElimination: '', rootElimDueDate: null,
+        reviewResult: '', reviewNextDate: null, reviewer: '', reviewDate: null,
+        trackings: [],
+        status: STATUSES.PENDING, createdAt: now, updatedAt: now, closedDate: null, evidence: [],
+        history: [{ time: now, action: '開立矯正單', user: u.name }, { time: now, action: `狀態變更為「${STATUSES.PENDING}」`, user: '系統' }]
+      };
+      const shouldNotify = document.getElementById('f-notify').checked;
+      const hEmail = document.getElementById('f-hemail').value;
+      addItem(item);
+      if (shouldNotify && hEmail) {
+        item.history.push({ time: now, action: `系統寄送通知信至 ${hEmail}`, user: '系統' });
+        updateItem(item.id, { history: item.history });
+        toast(`矯正單 ${item.id} 已開立，通知信已寄至 ${hEmail}`);
+      } else {
+        toast(`矯正單 ${item.id} 已成功開立！`);
+      }
+      navigate('detail/' + item.id);
+    });
+  }
+
+  // ─── Render: Detail ────────────────────────
+  function renderDetail(id) {
+    const item = getItem(id);
+    if (!item) { document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到矯正單</div><a href="#list" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`; return; }
+    const u = currentUser(); const ci = STATUS_FLOW.indexOf(item.status);
+    const stepper = STATUS_FLOW.map((s, i) => { let c = ''; if (i < ci) c = 'completed'; else if (i === ci) c = 'active'; return `<div class="stepper-step ${c}"><div class="stepper-circle">${i < ci ? '✓' : i + 1}</div><div class="stepper-label">${s}</div></div>`; }).join('');
+    const otag = isOverdue(item) ? ` <span class="badge badge-overdue"><span class="badge-dot"></span>已逾期</span>` : '';
+    const cats = (item.category || []).map(c => `<span class="badge badge-category">${esc(c)}</span>`).join(' ');
+
+    // Action buttons
+    let btns = '';
+    const canRespond = item.status === STATUSES.PENDING && (u.name === item.handlerName || isAdmin());
+    if (canRespond) btns += `<a href="#respond/${item.id}" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 回填矯正措施</a>`;
+    if (item.status === STATUSES.PROPOSED && canReview()) btns += `<button class="btn btn-primary" onclick="window._cs('${item.id}','${STATUSES.REVIEWING}')">${ic('eye', 'icon-sm')} 進入審核</button>`;
+    if (item.status === STATUSES.REVIEWING && canReview()) { btns += `<button class="btn btn-success" onclick="window._cs('${item.id}','${STATUSES.CLOSED}')">${ic('check', 'icon-sm')} 審核通過結案</button>`; btns += `<button class="btn btn-warning" onclick="window._cs('${item.id}','${STATUSES.TRACKING}')">${ic('eye', 'icon-sm')} 轉為追蹤</button>`; btns += `<button class="btn btn-danger" onclick="window._cs('${item.id}','${STATUSES.PENDING}')">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`; }
+    if (item.status === STATUSES.TRACKING && canReview()) btns += `<a href="#tracking/${item.id}" class="btn btn-primary">${ic('clipboard-check', 'icon-sm')} 填寫追蹤</a>`;
+
+    // Evidence
+    const evHtml = item.evidence && item.evidence.length ? `<div class="file-preview-list">${item.evidence.map(ev => ev.type && ev.type.startsWith('image/') ? `<div class="file-preview-item"><img src="${ev.data}" alt="${esc(ev.name)}"><div class="file-name">${esc(ev.name)}</div></div>` : `<div class="file-preview-item"><div class="file-pdf-icon">${ic('file-box')}</div><div class="file-name">${esc(ev.name)}</div></div>`).join('')}</div>` : '<p style="color:var(--text-muted);font-size:.88rem">尚無佐證</p>';
+
+    // Timeline
+    const tl = [...(item.history || [])].reverse().map(h => `<div class="timeline-item"><div class="timeline-time">${fmtTime(h.time)}</div><div class="timeline-text">${esc(h.action)}${h.user ? ` — ${esc(h.user)}` : ''}</div></div>`).join('');
+
+    // Tracking records
+    const tkHtml = (item.trackings || []).map((tk, i) => `<div class="card" style="margin-bottom:16px;border-left:3px solid #f97316;"><div class="section-header">第 ${i + 1} 次追蹤 — ${fmt(tk.trackDate)}</div>
+      <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">追蹤人</div><div class="detail-field-value">${esc(tk.tracker)}</div></div><div class="detail-field"><div class="detail-field-label">審核人</div><div class="detail-field-value">${esc(tk.reviewer || '—')}</div></div></div>
+      <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(tk.execution)}</div></div>
+      <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(tk.trackNote)}</div></div>
+      <div class="detail-section"><div class="detail-section-title">${ic('check-circle', 'icon-sm')} 結果</div><div class="detail-content">${esc(tk.result)}</div></div></div>`).join('') || '<p style="color:var(--text-muted);font-size:.88rem">尚無追蹤紀錄</p>';
+
+    document.getElementById('app').innerHTML = `<div class="animate-in">
+      <div class="detail-header"><div><div class="detail-id">${esc(item.id)} · ${esc(item.deficiencyType)}</div><h1 class="detail-title">${esc(item.problemDesc || '').substring(0, 50)}</h1>
+        <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(item.proposerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(item.proposerDate)}</span><span class="badge badge-${STATUS_CLASSES[item.status]}"><span class="badge-dot"></span>${item.status}</span>${otag}</div>
+      </div><div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">${btns}<a href="#list" class="btn btn-secondary">← 返回</a></div></div>
+      <div class="stepper">${stepper}</div>
+
+      <div class="card" style="margin-top:20px"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
+        <div class="detail-grid">
+          <div class="detail-field"><div class="detail-field-label">提出單位</div><div class="detail-field-value">${esc(item.proposerUnit)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">提出人員</div><div class="detail-field-value">${esc(item.proposerName)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">提出日期</div><div class="detail-field-value">${fmt(item.proposerDate)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">處理單位</div><div class="detail-field-value">${esc(item.handlerUnit)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">處理人員</div><div class="detail-field-value">${esc(item.handlerName)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">處理人員信箱</div><div class="detail-field-value">${item.handlerEmail ? '<a href="mailto:' + esc(item.handlerEmail) + '" style="color:var(--accent-primary);text-decoration:none">' + ic('mail', 'icon-xs') + ' ' + esc(item.handlerEmail) + '</a>' : '—'}</div></div>
+          <div class="detail-field"><div class="detail-field-label">處理日期</div><div class="detail-field-value">${fmt(item.handlerDate)}</div></div>
+        </div></div>
+
+      <div class="card" style="margin-top:20px"><div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
+        <div class="detail-grid">
+          <div class="detail-field"><div class="detail-field-label">缺失種類</div><div class="detail-field-value">${esc(item.deficiencyType)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">來源</div><div class="detail-field-value">${esc(item.source)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">條文</div><div class="detail-field-value">${esc(item.clause || '—')}</div></div>
+        </div>
+        <div class="detail-section" style="margin-top:12px"><div class="detail-section-title">分類</div><div class="detail-content">${cats || '—'}</div></div></div>
+
+      <div class="card" style="margin-top:20px"><div class="section-header">${ic('message-square-warning', 'icon-sm')} 問題描述</div>
+        <div class="detail-section"><div class="detail-section-title">問題或缺失說明</div><div class="detail-content">${esc(item.problemDesc)}</div></div>
+        <div class="detail-section"><div class="detail-section-title">缺失發生過程</div><div class="detail-content">${esc(item.occurrence)}</div></div></div>
+
+      ${item.correctiveAction ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('wrench', 'icon-sm')} 矯正措施提案</div>
+        <div class="detail-section"><div class="detail-content">${esc(item.correctiveAction)}</div></div>
+        <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.correctiveDueDate)}</div></div></div></div>` : ''}
+
+      ${item.rootCause ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('microscope', 'icon-sm')} 根因分析</div>
+        <div class="detail-section"><div class="detail-content">${esc(item.rootCause)}</div></div></div>` : ''}
+
+      ${item.riskDesc ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('shield-alert', 'icon-sm')} 風險管理</div>
+        <div class="detail-section"><div class="detail-content">${esc(item.riskDesc)}</div></div>
+        <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">受理人員</div><div class="detail-field-value">${esc(item.riskAcceptor || '—')}</div></div>
+        <div class="detail-field"><div class="detail-field-label">受理日期</div><div class="detail-field-value">${fmt(item.riskAcceptDate)}</div></div>
+        <div class="detail-field"><div class="detail-field-label">風險評鑑日期</div><div class="detail-field-value">${fmt(item.riskAssessDate)}</div></div></div></div>` : ''}
+
+      ${item.rootElimination ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
+        <div class="detail-section"><div class="detail-content">${esc(item.rootElimination)}</div></div>
+        <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.rootElimDueDate)}</div></div></div></div>` : ''}
+
+      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('paperclip', 'icon-sm')} 佐證文件</span></div>${evHtml}</div>
+      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('git-branch', 'icon-sm')} 追蹤監控</span></div>${tkHtml}</div>
+      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('history', 'icon-sm')} 歷程紀錄</span></div><div class="timeline">${tl}</div></div>
+    </div>`;
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  window._cs = function (id, ns) { const item = getItem(id); if (!item) return; const now = new Date().toISOString(); const u2 = { status: ns, updatedAt: now, history: [...item.history, { time: now, action: `狀態變更為「${ns}」`, user: currentUser().name }] }; if (ns === STATUSES.CLOSED) u2.closedDate = now; updateItem(id, u2); toast(`狀態已變更為「${ns}」`); renderDetail(id); renderSidebar(); setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50); };
+
+  // ─── Render: Respond ───────────────────────
+  function renderRespond(id) {
+    const item = getItem(id); if (!item) { navigate('list'); return; }
+    let tempEv = [];
+    document.getElementById('app').innerHTML = `<div class="animate-in">
+      <div class="page-header"><div><h1 class="page-title">回填矯正措施</h1><p class="page-subtitle">${esc(item.id)} · ${esc((item.problemDesc || '').substring(0, 40))}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">← 返回詳情</a></div>
+      <div class="card" style="max-width:850px"><form id="respond-form">
+
+        <div class="section-header">${ic('wrench', 'icon-sm')} 矯正措施提案</div>
+        <div class="form-group"><label class="form-label form-required">矯正措施說明</label><textarea class="form-textarea" id="r-action" placeholder="描述您所採取的矯正措施..." required style="min-height:120px">${esc(item.correctiveAction || '')}</textarea></div>
+        <div class="form-group"><label class="form-label form-required">預定完成日期</label><input type="date" class="form-input" id="r-due" value="${item.correctiveDueDate || ''}" required></div>
+
+        <div class="section-header">${ic('microscope', 'icon-sm')} 根因（Root Cause）分析</div>
+        <div class="form-group"><label class="form-label form-required">根因分析</label><textarea class="form-textarea" id="r-root" placeholder="分析根本原因..." required style="min-height:100px">${esc(item.rootCause || '')}</textarea></div>
+
+        <div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
+        <div class="form-group"><label class="form-label form-required">根因消除措施</label><textarea class="form-textarea" id="r-elim" placeholder="描述根因消除方案..." required style="min-height:100px">${esc(item.rootElimination || '')}</textarea></div>
+        <div class="form-group"><label class="form-label">預定完成日期</label><input type="date" class="form-input" id="r-elimdue" value="${item.rootElimDueDate || ''}"></div>
+
+        <div class="section-header">${ic('shield-alert', 'icon-sm')} 風險管理（選填）</div>
+        <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:12px">※ 如無法找到根因或根因無法消除才需填寫此區塊</p>
+        <div class="form-group"><label class="form-label">風險說明</label><textarea class="form-textarea" id="r-risk" placeholder="風險說明（選填）" style="min-height:70px">${esc(item.riskDesc || '')}</textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">受理人員</label><input type="text" class="form-input" id="r-riskwho" value="${esc(item.riskAcceptor || '')}"></div>
+          <div class="form-group"><label class="form-label">受理日期</label><input type="date" class="form-input" id="r-riskdate" value="${item.riskAcceptDate || ''}"></div>
+          <div class="form-group"><label class="form-label">風險評鑑日期</label><input type="date" class="form-input" id="r-riskassess" value="${item.riskAssessDate || ''}"></div>
+        </div>
+
+        <div class="section-header">${ic('paperclip', 'icon-sm')} 上傳佐證文件</div>
+        <div class="upload-zone" id="upload-zone"><input type="file" id="file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">拖放檔案或 <strong>點擊選擇</strong></div><div class="upload-zone-hint">支援 JPG、PNG、PDF（≤ 2MB）</div></div>
+        <div class="file-preview-list" id="file-previews"></div>
+
+        <div class="form-actions"><button type="submit" class="btn btn-success">${ic('check-circle', 'icon-sm')} 送出提案</button><a href="#detail/${item.id}" class="btn btn-secondary">取消</a></div>
+      </form></div></div>`;
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    const fi = document.getElementById('file-input'), uz = document.getElementById('upload-zone'), fp = document.getElementById('file-previews');
+    function handleF(files) { Array.from(files).forEach(f => { if (f.size > 2 * 1024 * 1024) { toast(`「${f.name}」超過2MB`, 'error'); return; } const r = new FileReader(); r.onload = e => { tempEv.push({ name: f.name, type: f.type, data: e.target.result }); updP(); }; r.readAsDataURL(f); }); }
+    function updP() { fp.innerHTML = tempEv.map((e, i) => { const pv = e.type.startsWith('image/') ? `<img src="${e.data}" alt="${esc(e.name)}">` : `<div class="file-pdf-icon">${ic('file-box')}</div>`; return `<div class="file-preview-item">${pv}<div class="file-name">${esc(e.name)}</div><button type="button" class="file-remove" data-idx="${i}">✕</button></div>`; }).join(''); fp.querySelectorAll('.file-remove').forEach(b => b.addEventListener('click', e => { tempEv.splice(parseInt(e.target.dataset.idx), 1); updP(); })); }
+    fi.addEventListener('change', e => handleF(e.target.files));
+    uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('dragover'); });
+    uz.addEventListener('dragleave', () => uz.classList.remove('dragover'));
+    uz.addEventListener('drop', e => { e.preventDefault(); uz.classList.remove('dragover'); handleF(e.dataTransfer.files); });
+    document.getElementById('respond-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const ca = document.getElementById('r-action').value.trim(), rc = document.getElementById('r-root').value.trim(), el = document.getElementById('r-elim').value.trim();
+      if (!ca || !rc || !el) { toast('請填寫矯正措施、根因分析與根因消除措施', 'error'); return; }
+      const now = new Date().toISOString(), li = getItem(id), u = currentUser();
+      const upd = {
+        correctiveAction: ca, correctiveDueDate: document.getElementById('r-due').value,
+        rootCause: rc,
+        rootElimination: el, rootElimDueDate: document.getElementById('r-elimdue').value || null,
+        riskDesc: document.getElementById('r-risk').value.trim(),
+        riskAcceptor: document.getElementById('r-riskwho').value.trim(),
+        riskAcceptDate: document.getElementById('r-riskdate').value || null,
+        riskAssessDate: document.getElementById('r-riskassess').value || null,
+        status: STATUSES.PROPOSED, updatedAt: now,
+        evidence: [...(li.evidence || []), ...tempEv],
+        history: [...li.history, { time: now, action: `${u.name} 提交矯正措施提案`, user: u.name }, { time: now, action: `狀態變更為「${STATUSES.PROPOSED}」`, user: '系統' }]
+      };
+      if (tempEv.length) upd.history.push({ time: now, action: `上傳 ${tempEv.length} 個佐證`, user: u.name });
+      updateItem(id, upd); toast('矯正措施提案已送出！'); navigate('detail/' + id);
+    });
+  }
+
+  // ─── Render: Tracking ──────────────────────
+  function renderTracking(id) {
+    const item = getItem(id); if (!item) { navigate('list'); return; }
+    const round = (item.trackings || []).length + 1;
+    if (round > 3) { toast('已達最大追蹤次數（3次）', 'error'); navigate('detail/' + id); return; }
+    document.getElementById('app').innerHTML = `<div class="animate-in">
+      <div class="page-header"><div><h1 class="page-title">第 ${round} 次追蹤監控</h1><p class="page-subtitle">${esc(item.id)}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">← 返回詳情</a></div>
+      <div class="card" style="max-width:850px"><form id="track-form">
+        <div class="section-header">${ic('clipboard-check', 'icon-sm')} 追蹤內容</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label form-required">追蹤人</label><input type="text" class="form-input" id="tk-tracker" value="${esc(currentUser().name)}" readonly></div>
+          <div class="form-group"><label class="form-label form-required">追蹤日期</label><input type="date" class="form-input" id="tk-date" value="${new Date().toISOString().split('T')[0]}" required></div>
+        </div>
+        <div class="form-group"><label class="form-label form-required">矯正措施執行情形</label><textarea class="form-textarea" id="tk-exec" placeholder="描述矯正措施的執行狀況..." required style="min-height:100px"></textarea></div>
+        <div class="form-group"><label class="form-label form-required">追蹤狀況說明</label><textarea class="form-textarea" id="tk-note" placeholder="追蹤狀況補充說明..." required style="min-height:80px"></textarea></div>
+
+        <div class="section-header">${ic('check-circle', 'icon-sm')} 審核決定</div>
+        <div class="form-group"><label class="form-label form-required">審核結果</label>${mkRadio('tkResult', ['同意所提矯正措施，准以結案', '持續追蹤'], '')}</div>
+        <div class="form-group" id="tk-next-wrap" style="display:none"><label class="form-label">預計下次追蹤日期</label><input type="date" class="form-input" id="tk-next"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label form-required">審核人員</label><input type="text" class="form-input" id="tk-reviewer" value="${esc(currentUser().name)}" readonly></div>
+          <div class="form-group"><label class="form-label form-required">審核日期</label><input type="date" class="form-input" id="tk-revdate" value="${new Date().toISOString().split('T')[0]}" required></div>
+        </div>
+        <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('save', 'icon-sm')} 儲存追蹤</button><a href="#detail/${item.id}" class="btn btn-secondary">取消</a></div>
+      </form></div></div>`;
+    setTimeout(() => {
+      if (window.lucide) lucide.createIcons();
+      document.querySelectorAll('input[name="tkResult"]').forEach(r => r.addEventListener('change', e => { document.getElementById('tk-next-wrap').style.display = e.target.value === '持續追蹤' ? 'block' : 'none'; }));
+    }, 50);
+    document.getElementById('track-form').addEventListener('submit', e => {
+      e.preventDefault(); const res = document.querySelector('input[name="tkResult"]:checked');
+      if (!res) { toast('請選擇審核結果', 'error'); return; }
+      const now = new Date().toISOString(), li = getItem(id), u = currentUser();
+      const tk = { tracker: document.getElementById('tk-tracker').value, trackDate: document.getElementById('tk-date').value, execution: document.getElementById('tk-exec').value.trim(), trackNote: document.getElementById('tk-note').value.trim(), result: res.value, nextTrackDate: document.getElementById('tk-next').value || null, reviewer: document.getElementById('tk-reviewer').value, reviewDate: document.getElementById('tk-revdate').value };
+      const ns = res.value === '同意所提矯正措施，准以結案' ? STATUSES.CLOSED : STATUSES.TRACKING;
+      const upd = { trackings: [...(li.trackings || []), tk], status: ns, updatedAt: now, history: [...li.history, { time: now, action: `第 ${round} 次追蹤 — ${res.value}`, user: u.name }, { time: now, action: `狀態變更為「${ns}」`, user: '系統' }] };
+      if (ns === STATUSES.CLOSED) upd.closedDate = now;
+      updateItem(id, upd); toast(ns === STATUSES.CLOSED ? '矯正單已結案！' : '追蹤紀錄已儲存'); navigate('detail/' + id);
+    });
+  }
+
+  // ─── Render: Users ─────────────────────────
+  function renderUsers() {
+    if (!canManageUsers()) { navigate('dashboard'); return; } const users = getUsers();
+    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="window._editUser('${u.username}')">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" onclick="window._delUser('${u.username}')">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理系統使用者帳號與權限</p></div><button class="btn btn-primary" onclick="window._addUser()">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
+      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>單位</th><th>信箱</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+  function showUserModal(eu) {
+    const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root');
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${title}</span><button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button></div><form id="user-form">
+      <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>
+      <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
+      <div class="form-group"><label class="form-label form-required">電子信箱</label><input type="email" class="form-input" id="u-email" value="${isE ? esc(eu.email || '') : ''}" required></div>
+      <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.REPORTER}" ${isE && eu.role === ROLES.REPORTER ? 'selected' : ''}>填報人</option><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option></select></div>
+      <div class="form-group"><label class="form-label form-required">單位</label><input type="text" class="form-input" id="u-unit" value="${isE ? esc(eu.unit) : ''}" required></div></div>
+      <div class="form-group"><label class="form-label ${isE ? '' : 'form-required'}">${isE ? '密碼（留空不修改）' : '密碼'}</label><input type="text" class="form-input" id="u-pass" ${isE ? '' : 'required'}></div>
+      <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-root').innerHTML=''">取消</button></div>
+    </form></div></div>`;
+    document.getElementById('modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
+    document.getElementById('user-form').addEventListener('submit', e => {
+      e.preventDefault(); const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), pw = document.getElementById('u-pass').value;
+      if (isE) { const upd = { name: nm, email: em, role: rl, unit: ut }; if (pw) upd.password = pw; updateUser(un, upd); toast('使用者已更新'); }
+      else { if (findUser(un)) { toast('帳號已存在', 'error'); return; } addUser({ username: un, password: pw, name: nm, email: em, role: rl, unit: ut }); toast('使用者已新增'); }
+      mr.innerHTML = ''; renderUsers(); setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    });
+  }
+  window._addUser = () => showUserModal(null);
+  window._editUser = (un) => showUserModal(findUser(un));
+  window._delUser = (un) => { if (confirm(`確定刪除使用者「${un}」？`)) { deleteUser(un); toast('使用者已刪除'); renderUsers(); } };
+
+  // ─── Router ────────────────────────────────
+  function handleRoute() {
+    if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader();
+    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; default: renderDashboard(); }
+  }
+
+  // ─── Seed Data ─────────────────────────────
+  function seedData() {
+    const d = loadData();
+    // Auto-clear old format data (v2 had 'title' field, v3 has 'problemDesc')
+    if (d.items.length > 0 && d.items[0].title && !d.items[0].problemDesc) {
+      d.items = []; d.nextId = 1; saveData(d);
+    }
+    if (d.items.length > 0) return;
+    if (!d.users || d.users.length === 0) d.users = DEFAULT_USERS.map(u => ({ ...u }));
+    const now = new Date(), ago = n => new Date(now - n * 864e5).toISOString(), fut = n => new Date(now.getTime() + n * 864e5).toISOString().split('T')[0], past = n => new Date(now - n * 864e5).toISOString().split('T')[0];
+    d.items = [
+      { id: 'CAR-0001', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(25), handlerUnit: '資安組', handlerName: '李工程師', handlerDate: past(24), deficiencyType: '主要缺失', source: '內部稽核', category: ['硬體', '基礎設施'], clause: 'A.11.2.2', problemDesc: '伺服器機房溫度超過 28°C 標準值，最高達 32°C。', occurrence: '例行巡檢時發現 A 區機房溫控設備失效，導致持續高溫 3 天。', correctiveAction: '已更換溫控感測器並校正空調系統。', correctiveDueDate: past(10), rootCause: '溫控感測器服役超過 5 年，精度下降且未按時校正。', rootElimination: '建立每季校正計畫，設定感測器更換週期為 3 年。', rootElimDueDate: past(8), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '同意', reviewer: '王經理', reviewDate: past(5), trackings: [], status: STATUSES.CLOSED, createdAt: ago(25), updatedAt: ago(5), closedDate: ago(5), evidence: [], history: [{ time: ago(25), action: '開立矯正單', user: '張稽核員' }, { time: ago(25), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(18), action: '李工程師 提交矯正措施提案', user: '李工程師' }, { time: ago(18), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(8), action: '狀態變更為「審核中」', user: '王經理' }, { time: ago(5), action: '狀態變更為「結案」', user: '王經理' }] },
+      { id: 'CAR-0002', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(10), handlerUnit: '資安組', handlerName: '陳資安主管', handlerDate: past(9), deficiencyType: '次要缺失', source: '內部稽核', category: ['人員', '資訊'], clause: 'A.9.2.6', problemDesc: '3 名離職員工帳號仍為啟用狀態，未即時停用。', occurrence: '內部稽核時檢查帳號權限管理，發現 3 筆離職超過 1 個月的帳號仍可登入系統。', correctiveAction: '已停用所有離職員工帳號並清查全公司帳號。', correctiveDueDate: fut(5), rootCause: 'HR 離職通知流程未納入 IT 帳號停用程序。', rootElimination: '修訂離職檢核表，新增 IT 帳號停用確認欄位。', rootElimDueDate: fut(3), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PROPOSED, createdAt: ago(10), updatedAt: ago(3), closedDate: null, evidence: [], history: [{ time: ago(10), action: '開立矯正單', user: '張稽核員' }, { time: ago(10), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(3), action: '陳資安主管 提交矯正措施提案', user: '陳資安主管' }, { time: ago(3), action: '狀態變更為「已提案」', user: '系統' }] },
+      { id: 'CAR-0003', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(5), handlerUnit: '資訊部', handlerName: '黃工程師', handlerDate: null, deficiencyType: '主要缺失', source: '資安事故', category: ['軟體', '服務'], clause: 'A.12.3.1', problemDesc: '每日備份排程連續 3 天未執行，存在資料遺失風險。', occurrence: '監控系統發出告警，確認 CronJob 因磁碟空間不足而中斷執行。', correctiveAction: '', correctiveDueDate: fut(3), rootCause: '', rootElimination: '', rootElimDueDate: null, riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PENDING, createdAt: ago(5), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(5), action: '開立矯正單', user: '王經理' }, { time: ago(5), action: '狀態變更為「待矯正」', user: '系統' }] },
+      { id: 'CAR-0004', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(14), handlerUnit: '稽核室', handlerName: '劉文管人員', handlerDate: past(13), deficiencyType: '次要缺失', source: '外部稽核', category: ['資訊'], clause: 'A.7.5.3', problemDesc: '3 份程序書紙本與電子版本不一致。', occurrence: '外部稽核時發現文管系統的版本控制未正確同步。', correctiveAction: '已回收舊版並重新分發正確版本。', correctiveDueDate: fut(1), rootCause: '文管系統未自動通知換版，且無版本確認機制。', rootElimination: '導入自動版次通知功能，新增版本確認簽收流程。', rootElimDueDate: fut(1), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [{ tracker: '張稽核員', trackDate: past(5), execution: '已完成舊版回收，新版已分發至各單位。', trackNote: '電子版已同步更新，需確認紙本是否全部替換。', result: '持續追蹤', nextTrackDate: fut(7), reviewer: '張稽核員', reviewDate: past(5) }], status: STATUSES.TRACKING, createdAt: ago(14), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(14), action: '開立矯正單', user: '王經理' }, { time: ago(14), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(10), action: '劉文管人員 提交矯正措施提案', user: '劉文管人員' }, { time: ago(10), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(7), action: '狀態變更為「審核中」', user: '張稽核員' }, { time: ago(5), action: '狀態變更為「追蹤中」', user: '張稽核員' }, { time: ago(5), action: '第 1 次追蹤 — 持續追蹤', user: '張稽核員' }] }
+    ];
+    d.nextId = 5; saveData(d);
+  }
+
+  // ─── Init ──────────────────────────────────
+  seedData();
+  window.addEventListener('hashchange', handleRoute);
+  renderApp();
+
+
+})();
