@@ -161,6 +161,7 @@
     document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; renderList(); });
     document.getElementById('filter-tabs').addEventListener('click', function (e) { if (e.target.classList.contains('filter-tab')) { curFilter = e.target.dataset.filter; renderList(); } });
   }
+
   // ─── Render: Create ────────────────────────
   function renderCreate() {
     if (!canCreateCAR()) { navigate('dashboard'); toast('您沒有開立矯正單的權限', 'error'); return; }
@@ -172,7 +173,6 @@
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">開立矯正單</h1><p class="page-subtitle">依據 ISMS 規範填寫矯正措施需求單</p></div></div>
       <div class="card" style="max-width:850px;"><form id="create-form">
-
         <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label form-required">提出單位</label><select class="form-select" id="f-punit" required><option value="">請選擇</option>${unitOpts}</select></div>
@@ -188,26 +188,21 @@
           <div class="form-group"><label class="form-label">處理人員信箱</label><div class="input-with-icon"><input type="email" class="form-input" id="f-hemail" placeholder="選擇處理人員後自動帶入" readonly style="background:#f8fafc"><span class="input-icon-hint">${ic('mail', 'icon-xs')}</span></div><p class="form-hint">系統將發送通知信至此信箱</p></div>
           <div class="form-group"><label class="form-label">勾選發送通知</label><label class="chk-label" style="margin-top:4px"><input type="checkbox" id="f-notify" checked><span class="chk-box"></span>開單後發送信件通知處理人員</label></div>
         </div>
-
         <div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
         <div class="form-group"><label class="form-label form-required">缺失種類</label>${mkRadio('defType', DEF_TYPES, '')}</div>
         <div class="form-group"><label class="form-label form-required">來源</label>${mkRadio('source', SOURCES, '')}</div>
         <div class="form-group"><label class="form-label form-required">分類（可複選）</label>${mkChk('category', CATEGORIES, [])}</div>
         <div class="form-group"><label class="form-label">條文</label><input type="text" class="form-input" id="f-clause" placeholder="例：A.9.2.6、ISO 27001:2022"></div>
-
         <div class="section-header">${ic('message-square-warning', 'icon-sm')} 問題描述</div>
         <div class="form-group"><label class="form-label form-required">問題或缺失說明</label><textarea class="form-textarea" id="f-problem" placeholder="詳細描述觀察到的問題或缺失..." required style="min-height:100px"></textarea></div>
         <div class="form-group"><label class="form-label form-required">缺失發生過程</label><textarea class="form-textarea" id="f-occurrence" placeholder="說明缺失的發生過程與背景..." required style="min-height:80px"></textarea></div>
-
         <div class="section-header">${ic('calendar', 'icon-sm')} 矯正期限</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label form-required">預定完成日期</label><input type="date" class="form-input" id="f-due" required></div>
         </div>
-
         <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出矯正單</button><a href="#list" class="btn btn-secondary">取消</a></div>
       </form></div></div>`;
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
-    // Auto-fill handler email when handler is selected
     document.getElementById('f-hname').addEventListener('change', function () {
       const sel = this.options[this.selectedIndex];
       const email = sel && sel.dataset ? (sel.dataset.email || '') : '';
@@ -267,34 +262,24 @@
     const stepper = STATUS_FLOW.map((s, i) => { let c = ''; if (i < ci) c = 'completed'; else if (i === ci) c = 'active'; return `<div class="stepper-step ${c}"><div class="stepper-circle">${i < ci ? '✓' : i + 1}</div><div class="stepper-label">${s}</div></div>`; }).join('');
     const otag = isOverdue(item) ? ` <span class="badge badge-overdue"><span class="badge-dot"></span>已逾期</span>` : '';
     const cats = (item.category || []).map(c => `<span class="badge badge-category">${esc(c)}</span>`).join(' ');
-
-    // Action buttons
     let btns = '';
     const canRespond = item.status === STATUSES.PENDING && (u.name === item.handlerName || isAdmin());
     if (canRespond) btns += `<a href="#respond/${item.id}" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 回填矯正措施</a>`;
     if (item.status === STATUSES.PROPOSED && canReview()) btns += `<button class="btn btn-primary" onclick="window._cs('${item.id}','${STATUSES.REVIEWING}')">${ic('eye', 'icon-sm')} 進入審核</button>`;
     if (item.status === STATUSES.REVIEWING && canReview()) { btns += `<button class="btn btn-success" onclick="window._cs('${item.id}','${STATUSES.CLOSED}')">${ic('check', 'icon-sm')} 審核通過結案</button>`; btns += `<button class="btn btn-warning" onclick="window._cs('${item.id}','${STATUSES.TRACKING}')">${ic('eye', 'icon-sm')} 轉為追蹤</button>`; btns += `<button class="btn btn-danger" onclick="window._cs('${item.id}','${STATUSES.PENDING}')">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`; }
     if (item.status === STATUSES.TRACKING && canReview()) btns += `<a href="#tracking/${item.id}" class="btn btn-primary">${ic('clipboard-check', 'icon-sm')} 填寫追蹤</a>`;
-
-    // Evidence
     const evHtml = item.evidence && item.evidence.length ? `<div class="file-preview-list">${item.evidence.map(ev => ev.type && ev.type.startsWith('image/') ? `<div class="file-preview-item"><img src="${ev.data}" alt="${esc(ev.name)}"><div class="file-name">${esc(ev.name)}</div></div>` : `<div class="file-preview-item"><div class="file-pdf-icon">${ic('file-box')}</div><div class="file-name">${esc(ev.name)}</div></div>`).join('')}</div>` : '<p style="color:var(--text-muted);font-size:.88rem">尚無佐證</p>';
-
-    // Timeline
     const tl = [...(item.history || [])].reverse().map(h => `<div class="timeline-item"><div class="timeline-time">${fmtTime(h.time)}</div><div class="timeline-text">${esc(h.action)}${h.user ? ` — ${esc(h.user)}` : ''}</div></div>`).join('');
-
-    // Tracking records
     const tkHtml = (item.trackings || []).map((tk, i) => `<div class="card" style="margin-bottom:16px;border-left:3px solid #f97316;"><div class="section-header">第 ${i + 1} 次追蹤 — ${fmt(tk.trackDate)}</div>
       <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">追蹤人</div><div class="detail-field-value">${esc(tk.tracker)}</div></div><div class="detail-field"><div class="detail-field-label">審核人</div><div class="detail-field-value">${esc(tk.reviewer || '—')}</div></div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(tk.execution)}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(tk.trackNote)}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('check-circle', 'icon-sm')} 結果</div><div class="detail-content">${esc(tk.result)}</div></div></div>`).join('') || '<p style="color:var(--text-muted);font-size:.88rem">尚無追蹤紀錄</p>';
-
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="detail-header"><div><div class="detail-id">${esc(item.id)} · ${esc(item.deficiencyType)}</div><h1 class="detail-title">${esc(item.problemDesc || '').substring(0, 50)}</h1>
         <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(item.proposerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(item.proposerDate)}</span><span class="badge badge-${STATUS_CLASSES[item.status]}"><span class="badge-dot"></span>${item.status}</span>${otag}</div>
       </div><div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">${btns}<a href="#list" class="btn btn-secondary">← 返回</a></div></div>
       <div class="stepper">${stepper}</div>
-
       <div class="card" style="margin-top:20px"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
         <div class="detail-grid">
           <div class="detail-field"><div class="detail-field-label">提出單位</div><div class="detail-field-value">${esc(item.proposerUnit)}</div></div>
@@ -305,7 +290,6 @@
           <div class="detail-field"><div class="detail-field-label">處理人員信箱</div><div class="detail-field-value">${item.handlerEmail ? '<a href="mailto:' + esc(item.handlerEmail) + '" style="color:var(--accent-primary);text-decoration:none">' + ic('mail', 'icon-xs') + ' ' + esc(item.handlerEmail) + '</a>' : '—'}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理日期</div><div class="detail-field-value">${fmt(item.handlerDate)}</div></div>
         </div></div>
-
       <div class="card" style="margin-top:20px"><div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
         <div class="detail-grid">
           <div class="detail-field"><div class="detail-field-label">缺失種類</div><div class="detail-field-value">${esc(item.deficiencyType)}</div></div>
@@ -313,28 +297,22 @@
           <div class="detail-field"><div class="detail-field-label">條文</div><div class="detail-field-value">${esc(item.clause || '—')}</div></div>
         </div>
         <div class="detail-section" style="margin-top:12px"><div class="detail-section-title">分類</div><div class="detail-content">${cats || '—'}</div></div></div>
-
       <div class="card" style="margin-top:20px"><div class="section-header">${ic('message-square-warning', 'icon-sm')} 問題描述</div>
         <div class="detail-section"><div class="detail-section-title">問題或缺失說明</div><div class="detail-content">${esc(item.problemDesc)}</div></div>
         <div class="detail-section"><div class="detail-section-title">缺失發生過程</div><div class="detail-content">${esc(item.occurrence)}</div></div></div>
-
       ${item.correctiveAction ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('wrench', 'icon-sm')} 矯正措施提案</div>
         <div class="detail-section"><div class="detail-content">${esc(item.correctiveAction)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.correctiveDueDate)}</div></div></div></div>` : ''}
-
       ${item.rootCause ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('microscope', 'icon-sm')} 根因分析</div>
         <div class="detail-section"><div class="detail-content">${esc(item.rootCause)}</div></div></div>` : ''}
-
       ${item.riskDesc ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('shield-alert', 'icon-sm')} 風險管理</div>
         <div class="detail-section"><div class="detail-content">${esc(item.riskDesc)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">受理人員</div><div class="detail-field-value">${esc(item.riskAcceptor || '—')}</div></div>
         <div class="detail-field"><div class="detail-field-label">受理日期</div><div class="detail-field-value">${fmt(item.riskAcceptDate)}</div></div>
         <div class="detail-field"><div class="detail-field-label">風險評鑑日期</div><div class="detail-field-value">${fmt(item.riskAssessDate)}</div></div></div></div>` : ''}
-
       ${item.rootElimination ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
         <div class="detail-section"><div class="detail-content">${esc(item.rootElimination)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.rootElimDueDate)}</div></div></div></div>` : ''}
-
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('paperclip', 'icon-sm')} 佐證文件</span></div>${evHtml}</div>
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('git-branch', 'icon-sm')} 追蹤監控</span></div>${tkHtml}</div>
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('history', 'icon-sm')} 歷程紀錄</span></div><div class="timeline">${tl}</div></div>
@@ -351,18 +329,14 @@
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">回填矯正措施</h1><p class="page-subtitle">${esc(item.id)} · ${esc((item.problemDesc || '').substring(0, 40))}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">← 返回詳情</a></div>
       <div class="card" style="max-width:850px"><form id="respond-form">
-
         <div class="section-header">${ic('wrench', 'icon-sm')} 矯正措施提案</div>
         <div class="form-group"><label class="form-label form-required">矯正措施說明</label><textarea class="form-textarea" id="r-action" placeholder="描述您所採取的矯正措施..." required style="min-height:120px">${esc(item.correctiveAction || '')}</textarea></div>
         <div class="form-group"><label class="form-label form-required">預定完成日期</label><input type="date" class="form-input" id="r-due" value="${item.correctiveDueDate || ''}" required></div>
-
         <div class="section-header">${ic('microscope', 'icon-sm')} 根因（Root Cause）分析</div>
         <div class="form-group"><label class="form-label form-required">根因分析</label><textarea class="form-textarea" id="r-root" placeholder="分析根本原因..." required style="min-height:100px">${esc(item.rootCause || '')}</textarea></div>
-
         <div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
         <div class="form-group"><label class="form-label form-required">根因消除措施</label><textarea class="form-textarea" id="r-elim" placeholder="描述根因消除方案..." required style="min-height:100px">${esc(item.rootElimination || '')}</textarea></div>
         <div class="form-group"><label class="form-label">預定完成日期</label><input type="date" class="form-input" id="r-elimdue" value="${item.rootElimDueDate || ''}"></div>
-
         <div class="section-header">${ic('shield-alert', 'icon-sm')} 風險管理（選填）</div>
         <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:12px">※ 如無法找到根因或根因無法消除才需填寫此區塊</p>
         <div class="form-group"><label class="form-label">風險說明</label><textarea class="form-textarea" id="r-risk" placeholder="風險說明（選填）" style="min-height:70px">${esc(item.riskDesc || '')}</textarea></div>
@@ -371,11 +345,9 @@
           <div class="form-group"><label class="form-label">受理日期</label><input type="date" class="form-input" id="r-riskdate" value="${item.riskAcceptDate || ''}"></div>
           <div class="form-group"><label class="form-label">風險評鑑日期</label><input type="date" class="form-input" id="r-riskassess" value="${item.riskAssessDate || ''}"></div>
         </div>
-
         <div class="section-header">${ic('paperclip', 'icon-sm')} 上傳佐證文件</div>
         <div class="upload-zone" id="upload-zone"><input type="file" id="file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">拖放檔案或 <strong>點擊選擇</strong></div><div class="upload-zone-hint">支援 JPG、PNG、PDF（≤ 2MB）</div></div>
         <div class="file-preview-list" id="file-previews"></div>
-
         <div class="form-actions"><button type="submit" class="btn btn-success">${ic('check-circle', 'icon-sm')} 送出提案</button><a href="#detail/${item.id}" class="btn btn-secondary">取消</a></div>
       </form></div></div>`;
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
@@ -423,7 +395,6 @@
         </div>
         <div class="form-group"><label class="form-label form-required">矯正措施執行情形</label><textarea class="form-textarea" id="tk-exec" placeholder="描述矯正措施的執行狀況..." required style="min-height:100px"></textarea></div>
         <div class="form-group"><label class="form-label form-required">追蹤狀況說明</label><textarea class="form-textarea" id="tk-note" placeholder="追蹤狀況補充說明..." required style="min-height:80px"></textarea></div>
-
         <div class="section-header">${ic('check-circle', 'icon-sm')} 審核決定</div>
         <div class="form-group"><label class="form-label form-required">審核結果</label>${mkRadio('tkResult', ['同意所提矯正措施，准以結案', '持續追蹤'], '')}</div>
         <div class="form-group" id="tk-next-wrap" style="display:none"><label class="form-label">預計下次追蹤日期</label><input type="date" class="form-input" id="tk-next"></div>
@@ -480,32 +451,8 @@
   window._editUser = (un) => showUserModal(findUser(un));
   window._delUser = (un) => { if (confirm(`確定刪除使用者「${un}」？`)) { deleteUser(un); toast('使用者已刪除'); renderUsers(); } };
 
-  // ─── Router ────────────────────────────────
-  function handleRoute() {
-    if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader();
-    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; default: renderDashboard(); }
-  }
-
-  // ─── Seed Data ─────────────────────────────
-  function seedData() {
-    const d = loadData();
-    // Auto-clear old format data (v2 had 'title' field, v3 has 'problemDesc')
-    if (d.items.length > 0 && d.items[0].title && !d.items[0].problemDesc) {
-      d.items = []; d.nextId = 1; saveData(d);
-    }
-    if (d.items.length > 0) return;
-    if (!d.users || d.users.length === 0) d.users = DEFAULT_USERS.map(u => ({ ...u }));
-    const now = new Date(), ago = n => new Date(now - n * 864e5).toISOString(), fut = n => new Date(now.getTime() + n * 864e5).toISOString().split('T')[0], past = n => new Date(now - n * 864e5).toISOString().split('T')[0];
-    d.items = [
-      { id: 'CAR-0001', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(25), handlerUnit: '資安組', handlerName: '李工程師', handlerDate: past(24), deficiencyType: '主要缺失', source: '內部稽核', category: ['硬體', '基礎設施'], clause: 'A.11.2.2', problemDesc: '伺服器機房溫度超過 28°C 標準值，最高達 32°C。', occurrence: '例行巡檢時發現 A 區機房溫控設備失效，導致持續高溫 3 天。', correctiveAction: '已更換溫控感測器並校正空調系統。', correctiveDueDate: past(10), rootCause: '溫控感測器服役超過 5 年，精度下降且未按時校正。', rootElimination: '建立每季校正計畫，設定感測器更換週期為 3 年。', rootElimDueDate: past(8), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '同意', reviewer: '王經理', reviewDate: past(5), trackings: [], status: STATUSES.CLOSED, createdAt: ago(25), updatedAt: ago(5), closedDate: ago(5), evidence: [], history: [{ time: ago(25), action: '開立矯正單', user: '張稽核員' }, { time: ago(25), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(18), action: '李工程師 提交矯正措施提案', user: '李工程師' }, { time: ago(18), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(8), action: '狀態變更為「審核中」', user: '王經理' }, { time: ago(5), action: '狀態變更為「結案」', user: '王經理' }] },
-      { id: 'CAR-0002', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(10), handlerUnit: '資安組', handlerName: '陳資安主管', handlerDate: past(9), deficiencyType: '次要缺失', source: '內部稽核', category: ['人員', '資訊'], clause: 'A.9.2.6', problemDesc: '3 名離職員工帳號仍為啟用狀態，未即時停用。', occurrence: '內部稽核時檢查帳號權限管理，發現 3 筆離職超過 1 個月的帳號仍可登入系統。', correctiveAction: '已停用所有離職員工帳號並清查全公司帳號。', correctiveDueDate: fut(5), rootCause: 'HR 離職通知流程未納入 IT 帳號停用程序。', rootElimination: '修訂離職檢核表，新增 IT 帳號停用確認欄位。', rootElimDueDate: fut(3), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PROPOSED, createdAt: ago(10), updatedAt: ago(3), closedDate: null, evidence: [], history: [{ time: ago(10), action: '開立矯正單', user: '張稽核員' }, { time: ago(10), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(3), action: '陳資安主管 提交矯正措施提案', user: '陳資安主管' }, { time: ago(3), action: '狀態變更為「已提案」', user: '系統' }] },
-      { id: 'CAR-0003', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(5), handlerUnit: '資訊部', handlerName: '黃工程師', handlerDate: null, deficiencyType: '主要缺失', source: '資安事故', category: ['軟體', '服務'], clause: 'A.12.3.1', problemDesc: '每日備份排程連續 3 天未執行，存在資料遺失風險。', occurrence: '監控系統發出告警，確認 CronJob 因磁碟空間不足而中斷執行。', correctiveAction: '', correctiveDueDate: fut(3), rootCause: '', rootElimination: '', rootElimDueDate: null, riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PENDING, createdAt: ago(5), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(5), action: '開立矯正單', user: '王經理' }, { time: ago(5), action: '狀態變更為「待矯正」', user: '系統' }] },
-      { id: 'CAR-0004', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(14), handlerUnit: '稽核室', handlerName: '劉文管人員', handlerDate: past(13), deficiencyType: '次要缺失', source: '外部稽核', category: ['資訊'], clause: 'A.7.5.3', problemDesc: '3 份程序書紙本與電子版本不一致。', occurrence: '外部稽核時發現文管系統的版本控制未正確同步。', correctiveAction: '已回收舊版並重新分發正確版本。', correctiveDueDate: fut(1), rootCause: '文管系統未自動通知換版，且無版本確認機制。', rootElimination: '導入自動版次通知功能，新增版本確認簽收流程。', rootElimDueDate: fut(1), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [{ tracker: '張稽核員', trackDate: past(5), execution: '已完成舊版回收，新版已分發至各單位。', trackNote: '電子版已同步更新，需確認紙本是否全部替換。', result: '持續追蹤', nextTrackDate: fut(7), reviewer: '張稽核員', reviewDate: past(5) }], status: STATUSES.TRACKING, createdAt: ago(14), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(14), action: '開立矯正單', user: '王經理' }, { time: ago(14), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(10), action: '劉文管人員 提交矯正措施提案', user: '劉文管人員' }, { time: ago(10), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(7), action: '狀態變更為「審核中」', user: '張稽核員' }, { time: ago(5), action: '狀態變更為「追蹤中」', user: '張稽核員' }, { time: ago(5), action: '第 1 次追蹤 — 持續追蹤', user: '張稽核員' }] }
-    ];
-    d.nextId = 5; saveData(d);
-  }
-
   // ─── Checklist Data Model ─────────────────
+  // ★ UPDATED: Added GCB (8.8), RDP control (8.9) to section 8; IoT control moved to section 9 (9.3)
   const DEFAULT_CHECKLIST_SECTIONS = [
     {
       section: '1. 資安意識及資安通識教育訓練', items: [
@@ -573,7 +520,7 @@
         { id: '8.6', text: '電腦鐘訊是否定期核對校正以確保時間記錄正確？', hint: 'NTP Server 同步設定' },
         { id: '8.7', text: '是否設定有效且可信度較高之 DNS Server 做查詢？', hint: 'DNS 設定截圖' },
         { id: '8.8', text: '個人電腦是否依規定完成政府組態基準（GCB）檢核，並採取適當之安全組態設定？', hint: 'GCB 檢測工具（如瑞思 RISS）安裝佐證截圖、GCB 檢核報告、組態設定合規比對結果' },
-        { id: '8.9', text: '是否針對遠端桌面連線（如 RDP）進行存取控管，限制非授權來源 IP 連線，並關閉不必要之遠端存取服務？', hint: '遠端桌面連線設定截圖（如僅允許校內 IP 連線）、防火牆規則截圖、Windows 遠端桌面啟用/停用設定截圖、VPN 連線政策文件' }
+        { id: '8.9', text: '是否針對遠端桌面連線（如 RDP）進行存取控管，限制非授權來源 IP 連線（如僅允許校內 IP），並關閉不必要之遠端存取服務？', hint: '遠端桌面連線設定截圖（如僅允許校內 IP 連線）、防火牆規則截圖、Windows 遠端桌面啟用/停用設定截圖、VPN 連線政策文件' }
       ]
     },
     {
@@ -584,12 +531,19 @@
       ]
     }
   ];
-  // Template management — stored in localStorage so admin can edit
+
+  // ─── Template management — stored in localStorage so admin can edit ───
   function getChecklistSections() {
     try { const saved = JSON.parse(localStorage.getItem(TEMPLATE_KEY)); if (saved && saved.length) return saved; } catch { }
     return JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS));
   }
   function saveChecklistSections(sections) { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(sections)); }
+
+  // Dynamic alias used throughout the fill/detail views
+  var CHECKLIST_SECTIONS;
+  function refreshChecklistSections() { CHECKLIST_SECTIONS = getChecklistSections(); }
+  refreshChecklistSections();
+
   const COMPLIANCE_OPTS = ['符合', '部分符合', '不符合', '不適用'];
   const COMPLIANCE_COLORS = { '符合': '#22c55e', '部分符合': '#f59e0b', '不符合': '#ef4444', '不適用': '#94a3b8' };
   const COMPLIANCE_CLASSES = { '符合': 'comply', '部分符合': 'partial', '不符合': 'noncomply', '不適用': 'na' };
@@ -605,6 +559,7 @@
 
   // ─── Render: Checklist List ────────────────
   function renderChecklistList() {
+    refreshChecklistSections();
     const checklists = getVisibleChecklists();
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     const rows = checklists.length ? checklists.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(c => {
@@ -620,6 +575,7 @@
 
   // ─── Render: Checklist Fill ────────────────
   function renderChecklistFill() {
+    refreshChecklistSections();
     if (!canFillChecklist()) { navigate('checklist'); toast('您沒有填報檢核表的權限', 'error'); return; }
     const u = currentUser();
     let sectionsHtml = '';
@@ -640,10 +596,8 @@
       });
       sectionsHtml += `<div class="cl-section"><div class="cl-section-header"><span class="cl-section-num">${si + 1}</span>${esc(sec.section)}</div><div class="cl-section-body">${itemsHtml}</div></div>`;
     });
-
     const allUsers = getUsers();
     const unitOpts = [...new Set(allUsers.map(u => u.unit))].map(ut => `<option value="${esc(ut)}" ${ut === u.unit ? 'selected' : ''}>${esc(ut)}</option>`).join('');
-
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">填報檢核表</h1><p class="page-subtitle">國立台灣大學 114 年度內部資通安全稽核查檢表</p></div><a href="#checklist" class="btn btn-secondary">← 返回列表</a></div>
       <div class="card" style="max-width:960px"><form id="checklist-form">
@@ -661,10 +615,7 @@
         ${sectionsHtml}
         <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft">${ic('save', 'icon-sm')} 儲存草稿</button><a href="#checklist" class="btn btn-ghost">取消</a></div>
       </form></div></div>`;
-
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
-
-    // Progress tracking
     const totalItems = CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0);
     function updateProgress() {
       let filled = 0;
@@ -676,19 +627,13 @@
       document.getElementById('cl-progress-text').textContent = filled + ' / ' + totalItems;
     }
     document.querySelectorAll('.cl-radio-group input').forEach(r => r.addEventListener('change', updateProgress));
-
-    // Submit
     function collectData(status) {
       const results = {};
       let conform = 0, partial = 0, nonConform = 0, na = 0, total = 0;
       CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => {
         const sel = document.querySelector(`input[name="cl-${item.id}"]:checked`);
         const compliance = sel ? sel.value : '';
-        results[item.id] = {
-          compliance: compliance,
-          execution: document.getElementById(`cl-exec-${item.id}`).value.trim(),
-          evidence: document.getElementById(`cl-evidence-${item.id}`).value.trim()
-        };
+        results[item.id] = { compliance, execution: document.getElementById(`cl-exec-${item.id}`).value.trim(), evidence: document.getElementById(`cl-evidence-${item.id}`).value.trim() };
         total++;
         if (compliance === '符合') conform++;
         else if (compliance === '部分符合') partial++;
@@ -696,58 +641,27 @@
         else if (compliance === '不適用') na++;
       }));
       const now = new Date().toISOString();
-      return {
-        id: generateChecklistId(),
-        unit: document.getElementById('cl-unit').value,
-        fillerName: document.getElementById('cl-filler').value,
-        fillDate: document.getElementById('cl-date').value,
-        auditYear: document.getElementById('cl-year').value,
-        supervisor: document.getElementById('cl-supervisor').value.trim(),
-        results: results,
-        summary: { total, conform, partial, nonConform, na },
-        status: status,
-        createdAt: now,
-        updatedAt: now
-      };
+      return { id: generateChecklistId(), unit: document.getElementById('cl-unit').value, fillerName: document.getElementById('cl-filler').value, fillDate: document.getElementById('cl-date').value, auditYear: document.getElementById('cl-year').value, supervisor: document.getElementById('cl-supervisor').value.trim(), results, summary: { total, conform, partial, nonConform, na }, status, createdAt: now, updatedAt: now };
     }
-
     document.getElementById('checklist-form').addEventListener('submit', e => {
       e.preventDefault();
-      // Validate all items have compliance selected
       let missing = [];
-      CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => {
-        if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id);
-      }));
-      if (missing.length > 0) {
-        toast(`尚有 ${missing.length} 個項目未填寫自評結果`, 'error');
-        const el = document.getElementById(`cl-item-${missing[0]}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
+      CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => { if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id); }));
+      if (missing.length > 0) { toast(`尚有 ${missing.length} 個項目未填寫自評結果`, 'error'); const el = document.getElementById(`cl-item-${missing[0]}`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
       const data = collectData('已提交');
-      addChecklist(data);
-      toast(`檢核表 ${data.id} 已成功送出！`);
-      navigate('checklist-detail/' + data.id);
+      addChecklist(data); toast(`檢核表 ${data.id} 已成功送出！`); navigate('checklist-detail/' + data.id);
     });
-
-    document.getElementById('cl-save-draft').addEventListener('click', () => {
-      const data = collectData('草稿');
-      addChecklist(data);
-      toast(`草稿 ${data.id} 已儲存`);
-      navigate('checklist');
-    });
+    document.getElementById('cl-save-draft').addEventListener('click', () => { const data = collectData('草稿'); addChecklist(data); toast(`草稿 ${data.id} 已儲存`); navigate('checklist'); });
   }
 
   // ─── Render: Checklist Detail ──────────────
   function renderChecklistDetail(id) {
+    refreshChecklistSections();
     const cl = getChecklist(id);
     if (!cl) { document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到檢核表</div><a href="#checklist" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`; return; }
     const s = cl.summary;
-    const rate = s.total > 0 ? Math.round(s.conform / s.total * 100) : 0;
     const applicable = s.total - s.na;
     const applicableRate = applicable > 0 ? Math.round(s.conform / applicable * 100) : 0;
-
-    // Donut chart for compliance
     const R = 50, C = 2 * Math.PI * R;
     const vals = [{ label: '符合', count: s.conform, color: COMPLIANCE_COLORS['符合'] }, { label: '部分符合', count: s.partial, color: COMPLIANCE_COLORS['部分符合'] }, { label: '不符合', count: s.nonConform, color: COMPLIANCE_COLORS['不符合'] }, { label: '不適用', count: s.na, color: COMPLIANCE_COLORS['不適用'] }];
     let segs = '', off = 0;
@@ -755,8 +669,6 @@
     else { segs = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="#e2e8f0" stroke-width="16"/>`; }
     const svg = `<svg viewBox="0 0 120 120" class="cl-donut"><style>circle{transition:stroke-dashoffset .8s ease}</style>${segs}<text x="60" y="56" text-anchor="middle" fill="#0f172a" font-size="18" font-weight="700" font-family="Inter">${applicableRate}%</text><text x="60" y="72" text-anchor="middle" fill="#94a3b8" font-size="8" font-weight="500" font-family="Inter">符合率</text></svg>`;
     const legend = vals.map(v => `<div class="cl-legend-item"><span class="cl-legend-dot" style="background:${v.color}"></span>${v.label}<span class="cl-legend-count">${v.count}</span></div>`).join('');
-
-    // Items detail
     let sectDetail = '';
     CHECKLIST_SECTIONS.forEach(sec => {
       let rows = '';
@@ -771,17 +683,12 @@
       });
       sectDetail += `<div class="cl-detail-section"><div class="cl-detail-section-title">${esc(sec.section)}</div>${rows}</div>`;
     });
-
-    // Find issues
     let issues = [];
     CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => {
       const r = cl.results[item.id] || {};
-      if (r.compliance === '不符合' || r.compliance === '部分符合') {
-        issues.push({ id: item.id, text: item.text, compliance: r.compliance, execution: r.execution || '' });
-      }
+      if (r.compliance === '不符合' || r.compliance === '部分符合') issues.push({ id: item.id, text: item.text, compliance: r.compliance, execution: r.execution || '' });
     }));
     const issueHtml = issues.length > 0 ? `<div class="card" style="margin-top:20px;border-left:3px solid #ef4444"><div class="section-header">${ic('alert-triangle', 'icon-sm')} 待改善項目（${issues.length} 項）</div>${issues.map(iss => `<div class="cl-issue-item"><span class="cl-compliance-badge cl-badge-${COMPLIANCE_CLASSES[iss.compliance]}">${iss.compliance}</span><span class="cl-item-id">${iss.id}</span> ${esc(iss.text)}${iss.execution ? `<div class="cl-issue-note">${esc(iss.execution)}</div>` : ''}</div>`).join('')}</div>` : '';
-
     const statusCls = cl.status === '已提交' ? 'badge-closed' : 'badge-pending';
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="detail-header"><div>
@@ -789,7 +696,6 @@
         <h1 class="detail-title">內稽檢核表 — ${esc(cl.unit)}</h1>
         <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(cl.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(cl.fillDate)}</span><span class="badge ${statusCls}"><span class="badge-dot"></span>${cl.status}</span></div>
       </div><a href="#checklist" class="btn btn-secondary">← 返回列表</a></div>
-
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
         <div class="card"><div class="card-header"><span class="card-title">符合度統計</span></div>
           <div class="cl-stats-wrap">${svg}<div class="cl-legend">${legend}</div></div>
@@ -805,18 +711,319 @@
           </div>
         </div>
       </div>
-
       ${issueHtml}
-
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 逐項檢核結果</span></div>${sectDetail}</div>
     </div>`;
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  // ─── Render: Checklist Manage (Admin only) ──────────────────────────────
+  function renderChecklistManage() {
+    if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可管理檢核表', 'error'); return; }
+    refreshChecklistSections();
+
+    const totalItems = CHECKLIST_SECTIONS.reduce((acc, s) => acc + s.items.length, 0);
+
+    // Build accordion UI for each section
+    let sectHtml = '';
+    CHECKLIST_SECTIONS.forEach((sec, si) => {
+      const itemRows = sec.items.map((item, ii) => `
+        <div class="cm-item" data-si="${si}" data-ii="${ii}">
+          <div class="cm-item-drag" title="拖曳排序">≡</div>
+          <div class="cm-item-content">
+            <div class="cm-item-row">
+              <span class="cl-item-id" style="flex-shrink:0">${esc(item.id)}</span>
+              <span class="cm-item-text">${esc(item.text)}</span>
+            </div>
+            <div class="cm-item-hint">💡 ${esc(item.hint || '（無提示）')}</div>
+          </div>
+          <div class="cm-item-actions">
+            <button class="btn btn-sm btn-secondary" onclick="window._cmEditItem(${si},${ii})" title="編輯">${ic('edit-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-danger" onclick="window._cmDelItem(${si},${ii})" title="刪除">${ic('trash-2', 'btn-icon-svg')}</button>
+          </div>
+        </div>`).join('');
+
+      sectHtml += `
+        <div class="cm-section" data-si="${si}">
+          <div class="cm-section-header">
+            <div class="cm-section-title-wrap">
+              <span class="cl-section-num">${si + 1}</span>
+              <span class="cm-section-name" id="cm-sname-${si}">${esc(sec.section)}</span>
+            </div>
+            <div class="cm-section-actions">
+              <span class="cm-item-count">${sec.items.length} 題</span>
+              <button class="btn btn-sm btn-secondary" onclick="window._cmEditSection(${si})" title="編輯大項名稱">${ic('edit-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-primary" onclick="window._cmAddItem(${si})" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
+              <button class="btn btn-sm btn-danger" onclick="window._cmDelSection(${si})" title="刪除大項">${ic('trash-2', 'btn-icon-svg')}</button>
+            </div>
+          </div>
+          <div class="cm-items-wrap">${itemRows}</div>
+        </div>`;
+    });
+
+    document.getElementById('app').innerHTML = `<div class="animate-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">檢核表管理</h1>
+          <p class="page-subtitle">共 ${CHECKLIST_SECTIONS.length} 大項 · ${totalItems} 題 — 可新增、編輯、刪除各大項及題目</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="window._cmResetDefault()">${ic('refresh-cw', 'icon-sm')} 恢復預設</button>
+          <button class="btn btn-primary" onclick="window._cmAddSection()">${ic('plus-circle', 'icon-sm')} 新增大項</button>
+        </div>
+      </div>
+
+      <div class="cm-info-banner">
+        ${ic('info', 'icon-sm')}
+        <span>修改後立即生效，填報時將使用最新版本。已提交的檢核表不受影響。</span>
+      </div>
+
+      <div id="cm-sections-wrap">${sectHtml}</div>
+    </div>`;
+
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  // ── Checklist Manage: helper to re-render just the sections ──
+  function _cmRefreshSections() {
+    refreshChecklistSections();
+    const wrap = document.getElementById('cm-sections-wrap');
+    if (!wrap) { renderChecklistManage(); return; }
+
+    let sectHtml = '';
+    CHECKLIST_SECTIONS.forEach((sec, si) => {
+      const itemRows = sec.items.map((item, ii) => `
+        <div class="cm-item" data-si="${si}" data-ii="${ii}">
+          <div class="cm-item-drag" title="拖曳排序">≡</div>
+          <div class="cm-item-content">
+            <div class="cm-item-row">
+              <span class="cl-item-id" style="flex-shrink:0">${esc(item.id)}</span>
+              <span class="cm-item-text">${esc(item.text)}</span>
+            </div>
+            <div class="cm-item-hint">💡 ${esc(item.hint || '（無提示）')}</div>
+          </div>
+          <div class="cm-item-actions">
+            <button class="btn btn-sm btn-secondary" onclick="window._cmEditItem(${si},${ii})" title="編輯">${ic('edit-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-danger" onclick="window._cmDelItem(${si},${ii})" title="刪除">${ic('trash-2', 'btn-icon-svg')}</button>
+          </div>
+        </div>`).join('');
+
+      sectHtml += `
+        <div class="cm-section" data-si="${si}">
+          <div class="cm-section-header">
+            <div class="cm-section-title-wrap">
+              <span class="cl-section-num">${si + 1}</span>
+              <span class="cm-section-name" id="cm-sname-${si}">${esc(sec.section)}</span>
+            </div>
+            <div class="cm-section-actions">
+              <span class="cm-item-count">${sec.items.length} 題</span>
+              <button class="btn btn-sm btn-secondary" onclick="window._cmEditSection(${si})" title="編輯大項名稱">${ic('edit-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-primary" onclick="window._cmAddItem(${si})" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
+              <button class="btn btn-sm btn-danger" onclick="window._cmDelSection(${si})" title="刪除大項">${ic('trash-2', 'btn-icon-svg')}</button>
+            </div>
+          </div>
+          <div class="cm-items-wrap">${itemRows}</div>
+        </div>`;
+    });
+
+    wrap.innerHTML = sectHtml;
+    // Update subtitle
+    const totalItems = CHECKLIST_SECTIONS.reduce((acc, s) => acc + s.items.length, 0);
+    const subtitle = document.querySelector('.page-subtitle');
+    if (subtitle) subtitle.textContent = `共 ${CHECKLIST_SECTIONS.length} 大項 · ${totalItems} 題 — 可新增、編輯、刪除各大項及題目`;
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  // ── Modal helper for checklist manage ──
+  function _cmModal(title, bodyHtml, onSave) {
+    const mr = document.getElementById('modal-root');
+    mr.innerHTML = `<div class="modal-backdrop" id="cm-modal-bg">
+      <div class="modal" style="max-width:620px">
+        <div class="modal-header">
+          <span class="modal-title">${title}</span>
+          <button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button>
+        </div>
+        <form id="cm-modal-form">
+          ${bodyHtml}
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">${ic('save', 'icon-sm')} 儲存</button>
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-root').innerHTML=''">取消</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+    document.getElementById('cm-modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
+    document.getElementById('cm-modal-form').addEventListener('submit', e => { e.preventDefault(); onSave(); mr.innerHTML = ''; _cmRefreshSections(); });
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  // ── Generate next item ID for a section ──
+  function _cmNextItemId(si) {
+    const sec = CHECKLIST_SECTIONS[si];
+    const prefix = String(si + 1) + '.';
+    const used = sec.items.map(it => {
+      const n = parseFloat(it.id.replace(prefix, ''));
+      return isNaN(n) ? 0 : n;
+    });
+    const max = used.length ? Math.max(...used) : 0;
+    return prefix + (max + 1);
+  }
+
+  // ── Add Section ──
+  window._cmAddSection = function () {
+    _cmModal('新增大項', `
+      <div class="form-group">
+        <label class="form-label form-required">大項名稱</label>
+        <input type="text" class="form-input" id="cm-sec-name" placeholder="例：10. 雲端服務安全管理" required autofocus>
+      </div>`, () => {
+      const name = document.getElementById('cm-sec-name').value.trim();
+      if (!name) return;
+      const secs = getChecklistSections();
+      secs.push({ section: name, items: [] });
+      saveChecklistSections(secs);
+      toast('大項已新增');
+    });
+  };
+
+  // ── Edit Section ──
+  window._cmEditSection = function (si) {
+    const secs = getChecklistSections();
+    const sec = secs[si];
+    _cmModal('編輯大項名稱', `
+      <div class="form-group">
+        <label class="form-label form-required">大項名稱</label>
+        <input type="text" class="form-input" id="cm-sec-name" value="${esc(sec.section)}" required autofocus>
+      </div>`, () => {
+      const name = document.getElementById('cm-sec-name').value.trim();
+      if (!name) return;
+      const s2 = getChecklistSections();
+      s2[si].section = name;
+      saveChecklistSections(s2);
+      toast('大項名稱已更新');
+    });
+  };
+
+  // ── Delete Section ──
+  window._cmDelSection = function (si) {
+    const secs = getChecklistSections();
+    if (!confirm(`確定刪除大項「${secs[si].section}」及其所有題目（共 ${secs[si].items.length} 題）？`)) return;
+    secs.splice(si, 1);
+    saveChecklistSections(secs);
+    toast('大項已刪除', 'info');
+    _cmRefreshSections();
+  };
+
+  // ── Add Item ──
+  window._cmAddItem = function (si) {
+    const nextId = _cmNextItemId(si);
+    _cmModal('新增題目', `
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label form-required">題號</label>
+          <input type="text" class="form-input" id="cm-item-id" value="${esc(nextId)}" placeholder="例：8.10" required>
+          <p class="form-hint">建議格式：大項編號.流水號</p>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-required">題目文字</label>
+        <textarea class="form-textarea" id="cm-item-text" placeholder="請輸入稽核題目…" required style="min-height:80px" autofocus></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">佐證提示（填表說明）</label>
+        <textarea class="form-textarea" id="cm-item-hint" placeholder="例：請提供截圖或相關文件" style="min-height:60px"></textarea>
+      </div>`, () => {
+      const id = document.getElementById('cm-item-id').value.trim();
+      const text = document.getElementById('cm-item-text').value.trim();
+      const hint = document.getElementById('cm-item-hint').value.trim();
+      if (!id || !text) { toast('題號與題目為必填', 'error'); return; }
+      const secs = getChecklistSections();
+      // Check for duplicate ID
+      const allIds = secs.flatMap(s => s.items.map(it => it.id));
+      if (allIds.includes(id)) { toast(`題號「${id}」已存在，請使用其他題號`, 'error'); return; }
+      secs[si].items.push({ id, text, hint });
+      saveChecklistSections(secs);
+      toast('題目已新增');
+    });
+  };
+
+  // ── Edit Item ──
+  window._cmEditItem = function (si, ii) {
+    const secs = getChecklistSections();
+    const item = secs[si].items[ii];
+    _cmModal('編輯題目', `
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label form-required">題號</label>
+          <input type="text" class="form-input" id="cm-item-id" value="${esc(item.id)}" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-required">題目文字</label>
+        <textarea class="form-textarea" id="cm-item-text" required style="min-height:80px">${esc(item.text)}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">佐證提示（填表說明）</label>
+        <textarea class="form-textarea" id="cm-item-hint" style="min-height:60px">${esc(item.hint || '')}</textarea>
+      </div>`, () => {
+      const newId = document.getElementById('cm-item-id').value.trim();
+      const text = document.getElementById('cm-item-text').value.trim();
+      const hint = document.getElementById('cm-item-hint').value.trim();
+      if (!newId || !text) { toast('題號與題目為必填', 'error'); return; }
+      const s2 = getChecklistSections();
+      // Check for duplicate ID (excluding current item)
+      const allIds = s2.flatMap((sec, sIdx) => sec.items.map((it, iIdx) => ({ id: it.id, si: sIdx, ii: iIdx }))).filter(x => !(x.si === si && x.ii === ii)).map(x => x.id);
+      if (allIds.includes(newId)) { toast(`題號「${newId}」已存在，請使用其他題號`, 'error'); return; }
+      s2[si].items[ii] = { id: newId, text, hint };
+      saveChecklistSections(s2);
+      toast('題目已更新');
+    });
+  };
+
+  // ── Delete Item ──
+  window._cmDelItem = function (si, ii) {
+    const secs = getChecklistSections();
+    const item = secs[si].items[ii];
+    if (!confirm(`確定刪除題目「${item.id}」？`)) return;
+    secs[si].items.splice(ii, 1);
+    saveChecklistSections(secs);
+    toast('題目已刪除', 'info');
+    _cmRefreshSections();
+  };
+
+  // ── Reset to Default ──
+  window._cmResetDefault = function () {
+    if (!confirm('確定恢復為系統預設題目？目前所有自訂修改將會遺失。')) return;
+    localStorage.removeItem(TEMPLATE_KEY);
+    refreshChecklistSections();
+    toast('已恢復為系統預設', 'info');
+    _cmRefreshSections();
+  };
+
+  // ─── Router ────────────────────────────────
+  function handleRoute() {
+    if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader();
+    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; default: renderDashboard(); }
+  }
+
+  // ─── Seed Data ─────────────────────────────
+  function seedData() {
+    const d = loadData();
+    if (d.items.length > 0 && d.items[0].title && !d.items[0].problemDesc) { d.items = []; d.nextId = 1; saveData(d); }
+    if (d.items.length > 0) return;
+    if (!d.users || d.users.length === 0) d.users = DEFAULT_USERS.map(u => ({ ...u }));
+    const now = new Date(), ago = n => new Date(now - n * 864e5).toISOString(), fut = n => new Date(now.getTime() + n * 864e5).toISOString().split('T')[0], past = n => new Date(now - n * 864e5).toISOString().split('T')[0];
+    d.items = [
+      { id: 'CAR-0001', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(25), handlerUnit: '資安組', handlerName: '李工程師', handlerDate: past(24), deficiencyType: '主要缺失', source: '內部稽核', category: ['硬體', '基礎設施'], clause: 'A.11.2.2', problemDesc: '伺服器機房溫度超過 28°C 標準值，最高達 32°C。', occurrence: '例行巡檢時發現 A 區機房溫控設備失效，導致持續高溫 3 天。', correctiveAction: '已更換溫控感測器並校正空調系統。', correctiveDueDate: past(10), rootCause: '溫控感測器服役超過 5 年，精度下降且未按時校正。', rootElimination: '建立每季校正計畫，設定感測器更換週期為 3 年。', rootElimDueDate: past(8), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '同意', reviewer: '王經理', reviewDate: past(5), trackings: [], status: STATUSES.CLOSED, createdAt: ago(25), updatedAt: ago(5), closedDate: ago(5), evidence: [], history: [{ time: ago(25), action: '開立矯正單', user: '張稽核員' }, { time: ago(25), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(18), action: '李工程師 提交矯正措施提案', user: '李工程師' }, { time: ago(18), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(8), action: '狀態變更為「審核中」', user: '王經理' }, { time: ago(5), action: '狀態變更為「結案」', user: '王經理' }] },
+      { id: 'CAR-0002', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(10), handlerUnit: '資安組', handlerName: '陳資安主管', handlerDate: past(9), deficiencyType: '次要缺失', source: '內部稽核', category: ['人員', '資訊'], clause: 'A.9.2.6', problemDesc: '3 名離職員工帳號仍為啟用狀態，未即時停用。', occurrence: '內部稽核時檢查帳號權限管理，發現 3 筆離職超過 1 個月的帳號仍可登入系統。', correctiveAction: '已停用所有離職員工帳號並清查全公司帳號。', correctiveDueDate: fut(5), rootCause: 'HR 離職通知流程未納入 IT 帳號停用程序。', rootElimination: '修訂離職檢核表，新增 IT 帳號停用確認欄位。', rootElimDueDate: fut(3), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PROPOSED, createdAt: ago(10), updatedAt: ago(3), closedDate: null, evidence: [], history: [{ time: ago(10), action: '開立矯正單', user: '張稽核員' }, { time: ago(10), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(3), action: '陳資安主管 提交矯正措施提案', user: '陳資安主管' }, { time: ago(3), action: '狀態變更為「已提案」', user: '系統' }] },
+      { id: 'CAR-0003', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(5), handlerUnit: '資訊部', handlerName: '黃工程師', handlerDate: null, deficiencyType: '主要缺失', source: '資安事故', category: ['軟體', '服務'], clause: 'A.12.3.1', problemDesc: '每日備份排程連續 3 天未執行，存在資料遺失風險。', occurrence: '監控系統發出告警，確認 CronJob 因磁碟空間不足而中斷執行。', correctiveAction: '', correctiveDueDate: fut(3), rootCause: '', rootElimination: '', rootElimDueDate: null, riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PENDING, createdAt: ago(5), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(5), action: '開立矯正單', user: '王經理' }, { time: ago(5), action: '狀態變更為「待矯正」', user: '系統' }] },
+      { id: 'CAR-0004', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(14), handlerUnit: '稽核室', handlerName: '劉文管人員', handlerDate: past(13), deficiencyType: '次要缺失', source: '外部稽核', category: ['資訊'], clause: 'A.7.5.3', problemDesc: '3 份程序書紙本與電子版本不一致。', occurrence: '外部稽核時發現文管系統的版本控制未正確同步。', correctiveAction: '已回收舊版並重新分發正確版本。', correctiveDueDate: fut(1), rootCause: '文管系統未自動通知換版，且無版本確認機制。', rootElimination: '導入自動版次通知功能，新增版本確認簽收流程。', rootElimDueDate: fut(1), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [{ tracker: '張稽核員', trackDate: past(5), execution: '已完成舊版回收，新版已分發至各單位。', trackNote: '電子版已同步更新，需確認紙本是否全部替換。', result: '持續追蹤', nextTrackDate: fut(7), reviewer: '張稽核員', reviewDate: past(5) }], status: STATUSES.TRACKING, createdAt: ago(14), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(14), action: '開立矯正單', user: '王經理' }, { time: ago(14), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(10), action: '劉文管人員 提交矯正措施提案', user: '劉文管人員' }, { time: ago(10), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(7), action: '狀態變更為「審核中」', user: '張稽核員' }, { time: ago(5), action: '狀態變更為「追蹤中」', user: '張稽核員' }, { time: ago(5), action: '第 1 次追蹤 — 持續追蹤', user: '張稽核員' }] }
+    ];
+    d.nextId = 5; saveData(d);
   }
 
   // ─── Init ──────────────────────────────────
   seedData();
   window.addEventListener('hashchange', handleRoute);
   renderApp();
-
 
 })();
