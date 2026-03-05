@@ -3,14 +3,14 @@
 // =============================================
 (function () {
   'use strict';
-  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template', TRAINING_KEY = 'cats_training_hours';
+  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template', TRAINING_KEY = 'cats_training_hours', LOGIN_LOG_KEY = 'cats_login_log';
   const STATUSES = { CREATED: '開立', PENDING: '待矯正', PROPOSED: '已提案', REVIEWING: '審核中', TRACKING: '追蹤中', CLOSED: '結案' };
   const STATUS_CLASSES = { [STATUSES.CREATED]: 'created', [STATUSES.PENDING]: 'pending', [STATUSES.PROPOSED]: 'proposed', [STATUSES.REVIEWING]: 'reviewing', [STATUSES.TRACKING]: 'tracking', [STATUSES.CLOSED]: 'closed' };
   const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
   const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員', REPORTER: '填報人' };
   const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter' };
   const TRAINING_STATUSES = { DRAFT: '暫存', SUBMITTED: '正式送出', RETURNED: '退回更正' };
-  const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議', '無'];
+  const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議'];
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
   const DEFAULT_USERS = [
@@ -36,7 +36,38 @@
   function findUser(un) { return loadData().users.find(u => u.username === un); }
   function findUserByEmail(em) { return loadData().users.find(u => u.email && u.email.toLowerCase() === em.toLowerCase()); }
   function generatePassword() { const c = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; let p = ''; for (let i = 0; i < 8; i++)p += c[Math.floor(Math.random() * c.length)]; return p; }
-  function login(un, pw) { const u = findUser(un); if (u && u.password === pw) { sessionStorage.setItem(AUTH_KEY, JSON.stringify(u)); return u; } return null; }
+  function loadLoginLogs() {
+    try {
+      const logs = JSON.parse(localStorage.getItem(LOGIN_LOG_KEY));
+      return Array.isArray(logs) ? logs : [];
+    } catch {
+      return [];
+    }
+  }
+  function saveLoginLogs(logs) { localStorage.setItem(LOGIN_LOG_KEY, JSON.stringify(logs)); }
+  function addLoginLog(username, user, success) {
+    const logs = loadLoginLogs();
+    logs.push({
+      time: new Date().toISOString(),
+      username: (username || '').trim(),
+      name: user?.name || '',
+      role: user?.role || '',
+      success: !!success
+    });
+    if (logs.length > 500) logs.splice(0, logs.length - 500);
+    saveLoginLogs(logs);
+  }
+  function clearLoginLogs() { localStorage.removeItem(LOGIN_LOG_KEY); }
+  function login(un, pw) {
+    const u = findUser(un);
+    const ok = !!(u && u.password === pw);
+    addLoginLog(un, u, ok);
+    if (ok) {
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify(u));
+      return u;
+    }
+    return null;
+  }
   function logout() { sessionStorage.removeItem(AUTH_KEY); renderApp(); }
   function currentUser() { try { return JSON.parse(sessionStorage.getItem(AUTH_KEY)); } catch { return null; } }
   function isAdmin() { return currentUser()?.role === ROLES.ADMIN; }
@@ -110,13 +141,14 @@
     if (opNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">操作</div>' + opNav + '</div>';
     var sysNav = '';
     if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a>';
+    if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'login-log' ? 'active' : '') + '" href="#login-log"><span class="nav-icon">' + ic('shield-check') + '</span>登入紀錄</a>';
     if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>檢核表管理</a>';
     if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div>' + sysNav + '</div>';
-    document.getElementById('sidebar').innerHTML = '<div class="sidebar-logo"><h1>' + ntuLogo('ntu-logo-sm') + ' 內部稽核管考追蹤系統</h1><p>ISMS Corrective Action</p></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
+    document.getElementById('sidebar').innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS Corrective Action</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
   }
 
   function renderHeader() {
-    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', training: '教育訓練時數統計', 'training-fill': '填報教育訓練時數', 'training-detail': '教育訓練填報詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
+    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', 'login-log': '登入紀錄', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', training: '教育訓練時數統計', 'training-fill': '填報教育訓練時數', 'training-detail': '教育訓練填報詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
     document.getElementById('header').innerHTML = '<div class="header-left"><span class="header-title">' + (titles[r.page] || '內部稽核管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
   }
   window._logout = function () { logout(); };
@@ -173,7 +205,7 @@
     const u = currentUser();
     const allUsers = getUsers();
     const users = allUsers.filter(x => x.role === ROLES.REPORTER || x.role === ROLES.UNIT_ADMIN);
-    const opts = users.map(x => `<option value="${esc(x.name)}" data-email="${esc(x.email || '')}">${esc(x.name)}（${esc(x.unit)}）</option>`).join('');
+
     const unitOpts = [...new Set(allUsers.map(u => u.unit))].map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">開立矯正單</h1><p class="page-subtitle">依據 ISMS 規範填寫矯正措施需求單</p></div></div>
@@ -186,7 +218,7 @@
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label form-required">處理單位</label><select class="form-select" id="f-hunit" required><option value="">請選擇</option>${unitOpts}</select></div>
-          <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" required><option value="">請選擇</option>${opts}</select></div>
+          <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" required><option value="">請選擇</option></select></div>
           <div class="form-group"><label class="form-label">處理日期</label><input type="date" class="form-input" id="f-hdate"></div>
         </div>
         <div class="form-row">
@@ -208,10 +240,31 @@
         <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出矯正單</button><a href="#list" class="btn btn-secondary">取消</a></div>
       </form></div></div>`;
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
-    document.getElementById('f-hname').addEventListener('change', function () {
+    const proposerUnit = document.getElementById('f-punit');
+    const handlerUnit = document.getElementById('f-hunit');
+    const handlerName = document.getElementById('f-hname');
+    const handlerEmailInput = document.getElementById('f-hemail');
+    if (u.unit) proposerUnit.value = u.unit;
+    function updateHandlerEmail() {
+      const sel = handlerName.options[handlerName.selectedIndex];
+      const email = sel && sel.dataset ? (sel.dataset.email || '') : '';
+      handlerEmailInput.value = email;
+    }
+    function renderHandlerOptionsByUnit(unit) {
+      const prevSelected = handlerName.value;
+      const filtered = unit ? users.filter(x => x.unit === unit) : users;
+      handlerName.innerHTML = '<option value="">請選擇</option>' + filtered.map(x => `<option value="${esc(x.name)}" data-email="${esc(x.email || '')}">${esc(x.name)}（${esc(x.unit)}）</option>`).join('');
+      if (prevSelected && filtered.some(x => x.name === prevSelected)) handlerName.value = prevSelected;
+      updateHandlerEmail();
+    }
+    renderHandlerOptionsByUnit(handlerUnit.value);
+    handlerUnit.addEventListener('change', function () {
+      renderHandlerOptionsByUnit(this.value);
+    });
+    handlerName.addEventListener('change', function () {
       const sel = this.options[this.selectedIndex];
       const email = sel && sel.dataset ? (sel.dataset.email || '') : '';
-      document.getElementById('f-hemail').value = email;
+      handlerEmailInput.value = email;
     });
     document.getElementById('create-form').addEventListener('submit', e => {
       e.preventDefault();
@@ -484,6 +537,25 @@
   window._addUser = () => showUserModal(null);
   window._editUser = (un) => showUserModal(findUser(un));
   window._delUser = (un) => { if (confirm(`確定刪除使用者「${un}」？`)) { deleteUser(un); toast('使用者已刪除'); renderUsers(); } };
+  window._clearLoginLogs = function () {
+    if (!canManageUsers()) return;
+    if (!confirm('確定清除所有登入紀錄？')) return;
+    clearLoginLogs();
+    toast('登入紀錄已清除', 'info');
+    renderLoginLog();
+  };
+
+  // ─── Render: Login Log ─────────────────────
+  function renderLoginLog() {
+    if (!canManageUsers()) { navigate('dashboard'); return; }
+    const logs = loadLoginLogs().slice().reverse();
+    const rows = logs.length ? logs.map(log => {
+      const status = log.success ? '<span style="color:#16a34a;font-weight:600">成功</span>' : '<span style="color:#dc2626;font-weight:600">失敗</span>';
+      return `<tr><td>${fmtTime(log.time)}</td><td>${esc(log.username)}</td><td>${esc(log.name || '—')}</td><td>${esc(log.role || '—')}</td><td>${status}</td></tr>`;
+    }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:36px"><div class="empty-state-title">尚無登入紀錄</div></div></td></tr>';
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">系統保存最近 500 筆登入成功與失敗事件</p></div><button type="button" class="btn btn-danger" onclick="window._clearLoginLogs()">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>角色</th><th>結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
 
   // ─── Checklist Data Model ─────────────────
   // ★ UPDATED: Added GCB (8.8), RDP control (8.9) to section 8; IoT control moved to section 9 (9.3)
@@ -673,7 +745,7 @@
           <div class="form-group"><label class="form-label form-required">自評日期</label><input type="date" class="form-input" id="cl-date" value="${existing ? esc(existing.fillDate) : today}" required></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">稽核年度</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : '114'}" required></div>
+          <div class="form-group"><label class="form-label">稽核年度</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}" required></div>
           <div class="form-group"><label class="form-label">權責主管</label><input type="text" class="form-input" id="cl-supervisor" value="${existing ? esc(existing.supervisor || '') : ''}" placeholder="請輸入權責主管姓名"></div>
         </div>
         <div class="cl-progress-bar-wrap"><div class="cl-progress-label">填報進度</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0)}</span></div>
@@ -696,6 +768,16 @@
 
     document.querySelectorAll('.cl-radio-group input').forEach(r => r.addEventListener('change', updateProgress));
     updateProgress();
+    const clDateInput = document.getElementById('cl-date');
+    const clYearInput = document.getElementById('cl-year');
+    function syncAuditYearByDate() {
+      const val = clDateInput.value;
+      if (!val) return;
+      const y = Number(val.split('-')[0]);
+      if (Number.isFinite(y) && y >= 1911) clYearInput.value = String(y - 1911);
+    }
+    clDateInput.addEventListener('change', syncAuditYearByDate);
+    if (!existing) syncAuditYearByDate();
 
     function collectData(status) {
       const results = {};
@@ -1465,7 +1547,7 @@
   // ─── Router ────────────────────────────────
   function handleRoute() {
     if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader();
-    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(r.param); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
+    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'login-log': renderLoginLog(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(r.param); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
   }
 
   // ─── Seed Data ─────────────────────────────
@@ -1491,13 +1573,3 @@
   renderApp();
 
 })();
-
-
-
-
-
-
-
-
-
-
