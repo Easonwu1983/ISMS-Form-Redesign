@@ -3,12 +3,13 @@
 // =============================================
 (function () {
   'use strict';
-  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template';
+  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template', TRAINING_KEY = 'cats_training_hours';
   const STATUSES = { CREATED: '開立', PENDING: '待矯正', PROPOSED: '已提案', REVIEWING: '審核中', TRACKING: '追蹤中', CLOSED: '結案' };
   const STATUS_CLASSES = { [STATUSES.CREATED]: 'created', [STATUSES.PENDING]: 'pending', [STATUSES.PROPOSED]: 'proposed', [STATUSES.REVIEWING]: 'reviewing', [STATUSES.TRACKING]: 'tracking', [STATUSES.CLOSED]: 'closed' };
   const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
   const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員', REPORTER: '填報人' };
   const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter' };
+  const TRAINING_STATUSES = { DRAFT: '暫存', SUBMITTED: '正式送出', RETURNED: '退回更正' };
   const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議', '無'];
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
@@ -43,6 +44,7 @@
   function canCreateCAR() { return isAdmin() || isUnitAdmin(); }
   function canReview() { return isAdmin() || isUnitAdmin(); }
   function canFillChecklist() { return isAdmin() || isUnitAdmin(); }
+  function canFillTraining() { return !!currentUser(); }
   function canManageUsers() { return isAdmin(); }
   function fmt(d) { if (!d) return '—'; const x = new Date(d); return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, '0')}/${String(x.getDate()).padStart(2, '0')}`; }
   function fmtTime(d) { if (!d) return '—'; const x = new Date(d); return `${fmt(d)} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; }
@@ -98,7 +100,8 @@
     var u = currentUser(); if (!u) return; var items = getVisibleItems(); var pc = items.filter(function (i) { return i.status === STATUSES.PENDING || isOverdue(i); }).length; var r = getRoute(); var nav = '<div class="sidebar-section"><div class="sidebar-section-title">主選單</div>' +
       '<a class="nav-item ' + (r.page === 'dashboard' ? 'active' : '') + '" href="#dashboard"><span class="nav-icon">' + ic('pie-chart') + '</span>儀表板</a>' +
       '<a class="nav-item ' + (r.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>矯正單列表' + (pc ? '<span class="nav-badge">' + pc + '</span>' : '') + '</a>' +
-      '<a class="nav-item ' + (r.page === 'checklist' || r.page === 'checklist-fill' || r.page === 'checklist-detail' ? 'active' : '') + '" href="#checklist"><span class="nav-icon">' + ic('clipboard-check') + '</span>內稽檢核表</a></div>';
+      '<a class="nav-item ' + (r.page === 'checklist' || r.page === 'checklist-fill' || r.page === 'checklist-detail' ? 'active' : '') + '" href="#checklist"><span class="nav-icon">' + ic('clipboard-check') + '</span>內稽檢核表</a>' +
+      '<a class="nav-item ' + (r.page === 'training' || r.page === 'training-fill' || r.page === 'training-detail' || r.page === 'training-roster' ? 'active' : '') + '" href="#training"><span class="nav-icon">' + ic('graduation-cap') + '</span>教育訓練時數統計</a></div>';
     var opNav = '';
     if (canCreateCAR()) opNav += '<a class="nav-item ' + (r.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>開立矯正單</a>';
     if (canFillChecklist()) opNav += '<a class="nav-item ' + (r.page === 'checklist-fill' ? 'active' : '') + '" href="#checklist-fill"><span class="nav-icon">' + ic('edit-3') + '</span>填報檢核表</a>';
@@ -111,7 +114,7 @@
   }
 
   function renderHeader() {
-    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理' }; var r = getRoute();
+    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', training: '教育訓練時數統計', 'training-fill': '填報教育訓練時數', 'training-detail': '教育訓練填報詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
     document.getElementById('header').innerHTML = '<div class="header-left"><span class="header-title">' + (titles[r.page] || '管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
   }
   window._logout = function () { logout(); };
@@ -999,10 +1002,374 @@
     _cmRefreshSections();
   };
 
+  // ─── Training Hours Data Model ─────────────────────
+  function emptyTrainingStore() { return { forms: [], rosters: [], nextFormId: 1, nextRosterId: 1 }; }
+  function loadTrainingStore() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(TRAINING_KEY));
+      if (!raw || typeof raw !== 'object') return emptyTrainingStore();
+      return {
+        forms: Array.isArray(raw.forms) ? raw.forms : [],
+        rosters: Array.isArray(raw.rosters) ? raw.rosters : [],
+        nextFormId: Number.isFinite(raw.nextFormId) ? raw.nextFormId : 1,
+        nextRosterId: Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : 1
+      };
+    } catch {
+      return emptyTrainingStore();
+    }
+  }
+  function saveTrainingStore(d) { localStorage.setItem(TRAINING_KEY, JSON.stringify(d)); }
+  function getAllTrainingForms() { return loadTrainingStore().forms; }
+  function getTrainingForm(id) { return loadTrainingStore().forms.find(f => f.id === id); }
+  function upsertTrainingForm(form) { const d = loadTrainingStore(); const i = d.forms.findIndex(f => f.id === form.id); if (i >= 0) d.forms[i] = form; else d.forms.push(form); saveTrainingStore(d); }
+  function updateTrainingForm(id, updates) { const d = loadTrainingStore(); const i = d.forms.findIndex(f => f.id === id); if (i < 0) return; d.forms[i] = { ...d.forms[i], ...updates }; saveTrainingStore(d); }
+  function generateTrainingFormId() { const d = loadTrainingStore(); const id = `TRN-${String(d.nextFormId).padStart(4, '0')}`; d.nextFormId++; saveTrainingStore(d); return id; }
+
+  function getAllTrainingRosters() { return loadTrainingStore().rosters; }
+  function getTrainingRosterByUnit(unit) { return getAllTrainingRosters().filter(r => r.unit === unit).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')); }
+  function addTrainingRosterPerson(unit, name, source, actor) {
+    const cleanUnit = (unit || '').trim();
+    const cleanName = (name || '').trim();
+    if (!cleanUnit || !cleanName) return { added: false, reason: '單位與姓名不可為空白' };
+    const d = loadTrainingStore();
+    const exists = d.rosters.find(r => r.unit === cleanUnit && r.name.toLowerCase() === cleanName.toLowerCase());
+    if (exists) return { added: false, reason: `「${cleanName}」已在名單中` };
+    const id = `RST-${String(d.nextRosterId).padStart(4, '0')}`;
+    d.nextRosterId++;
+    d.rosters.push({ id, unit: cleanUnit, name: cleanName, source: source || 'manual', createdBy: actor || '系統', createdAt: new Date().toISOString() });
+    saveTrainingStore(d);
+    return { added: true, id };
+  }
+  function deleteTrainingRosterPerson(id) { const d = loadTrainingStore(); d.rosters = d.rosters.filter(r => r.id !== id); saveTrainingStore(d); }
+
+  function getTrainingUnits() {
+    const set = new Set();
+    getUsers().forEach(u => { if (u.unit) set.add(u.unit); });
+    getAllTrainingRosters().forEach(r => { if (r.unit) set.add(r.unit); });
+    getAllTrainingForms().forEach(f => { if (f.unit) set.add(f.unit); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  }
+  function getVisibleTrainingForms() {
+    const u = currentUser();
+    if (!u) return [];
+    const all = getAllTrainingForms();
+    if (u.role === ROLES.ADMIN) return all;
+    return all.filter(f => f.unit === u.unit || f.fillerUsername === u.username);
+  }
+  function canEditTrainingForm(form) {
+    const u = currentUser();
+    if (!u || !form) return false;
+    const inScope = u.role === ROLES.ADMIN || form.unit === u.unit || form.fillerUsername === u.username;
+    if (!inScope) return false;
+    return form.status !== TRAINING_STATUSES.SUBMITTED;
+  }
+  function isTrainingVisible(form) {
+    const u = currentUser();
+    if (!u || !form) return false;
+    if (u.role === ROLES.ADMIN) return true;
+    return form.unit === u.unit || form.fillerUsername === u.username;
+  }
+
+  function computeTrainingSummary(records) {
+    const rows = Array.isArray(records) ? records : [];
+    let totalHours = 0;
+    let filledPeople = 0;
+    let reached = 0;
+    rows.forEach(r => {
+      const h = Number(r.hours || 0);
+      if (h > 0) filledPeople++;
+      if (h >= 3) reached++;
+      totalHours += h;
+    });
+    const totalPeople = rows.length;
+    const avgHours = totalPeople > 0 ? totalHours / totalPeople : 0;
+    return { totalPeople, filledPeople, reached, totalHours: Number(totalHours.toFixed(2)), avgHours: Number(avgHours.toFixed(2)), reachRate: totalPeople > 0 ? Math.round(reached / totalPeople * 100) : 0 };
+  }
+  function trainingStatusBadge(status) {
+    const cls = status === TRAINING_STATUSES.SUBMITTED ? 'badge-closed' : (status === TRAINING_STATUSES.RETURNED ? 'badge-overdue' : 'badge-pending');
+    return `<span class="badge ${cls}"><span class="badge-dot"></span>${status}</span>`;
+  }
+  function csvCell(v) {
+    const text = String(v === null || v === undefined ? '' : v);
+    if (text.includes(',') || text.includes('"') || text.includes('\n')) return `"${text.replace(/"/g, '""')}"`;
+    return text;
+  }
+  function downloadCsv(filename, headers, rows) {
+    const lines = [headers.map(csvCell).join(',')].concat(rows.map(r => r.map(csvCell).join(',')));
+    const csv = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportTrainingSummaryCsv(forms, filename) {
+    const rows = forms.map(f => [f.id, f.unit, f.trainingYear, f.status, f.fillerName, fmt(f.fillDate), f.summary?.totalPeople || 0, f.summary?.filledPeople || 0, f.summary?.reached || 0, f.summary?.totalHours || 0, f.summary?.avgHours || 0, f.submittedAt ? fmtTime(f.submittedAt) : '', fmtTime(f.updatedAt)]);
+    downloadCsv(filename || `教育訓練時數統計_${new Date().toISOString().slice(0, 10)}.csv`, ['編號', '單位', '年度', '狀態', '填報人', '填報日期', '名單總人數', '已填時數人數', '達標人數(>=3h)', '總時數', '平均時數', '正式送出時間', '最後更新時間'], rows);
+  }
+  window._trainingReturn = function (id) {
+    if (!isAdmin()) { toast('僅管理者可退回更正', 'error'); return; }
+    const form = getTrainingForm(id);
+    if (!form) return;
+    if (form.status !== TRAINING_STATUSES.SUBMITTED) { toast('僅正式送出資料可退回', 'error'); return; }
+    const reason = prompt('請輸入退回更正原因：');
+    if (reason === null) return;
+    const trimmed = reason.trim();
+    if (!trimmed) { toast('退回原因不可空白', 'error'); return; }
+    const now = new Date().toISOString();
+    updateTrainingForm(id, {
+      status: TRAINING_STATUSES.RETURNED,
+      returnReason: trimmed,
+      updatedAt: now,
+      history: [...(form.history || []), { time: now, action: `管理者退回更正：${trimmed}`, user: currentUser().name }]
+    });
+    toast(`已退回 ${id} 供填報人更正`, 'info');
+    const r = getRoute();
+    if (r.page === 'training-detail') renderTrainingDetail(id); else renderTraining();
+  };
+
+  window._trainingExportDetailCsv = function (id) {
+    const form = getTrainingForm(id);
+    if (!form) return;
+    const rows = (form.records || []).map(r => [form.id, form.unit, form.trainingYear, r.name, r.source === 'import' ? '管理者匯入' : '填報新增', Number(r.hours || 0), r.note || '']);
+    downloadCsv(`教育訓練時數_${form.id}.csv`, ['填報編號', '單位', '年度', '人員姓名', '來源', '時數', '備註'], rows);
+  };
+
+  window._trainingDeleteRoster = function (id) {
+    if (!isAdmin()) { toast('僅管理者可刪除名單', 'error'); return; }
+    const roster = getAllTrainingRosters().find(r => r.id === id);
+    if (!roster) return;
+    if (!confirm(`確定刪除名單人員「${roster.name}（${roster.unit}）」？`)) return;
+    deleteTrainingRosterPerson(id);
+    toast('名單人員已刪除', 'info');
+    renderTrainingRoster();
+  };
+
+  function renderTraining() {
+    const forms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const summary = {
+      total: forms.length,
+      draft: forms.filter(f => f.status === TRAINING_STATUSES.DRAFT).length,
+      submitted: forms.filter(f => f.status === TRAINING_STATUSES.SUBMITTED).length,
+      returned: forms.filter(f => f.status === TRAINING_STATUSES.RETURNED).length
+    };
+
+    const toolbar = `<div style="display:flex;gap:8px;flex-wrap:wrap">${canFillTraining() ? `<a href="#training-fill" class="btn btn-primary">${ic('plus-circle', 'icon-sm')} 新增填報</a>` : ''}${forms.length ? `<button class="btn btn-secondary" id="training-export-all">${ic('download', 'icon-sm')} 匯出CSV</button>` : ''}${isAdmin() ? `<a href="#training-roster" class="btn btn-secondary">${ic('users', 'icon-sm')} 名單管理</a>` : ''}</div>`;
+
+    const rows = forms.length ? forms.map(f => {
+      const act = [`<a href="#training-detail/${f.id}" class="btn btn-sm btn-secondary">檢視</a>`];
+      if (canEditTrainingForm(f)) act.push(`<a href="#training-fill/${f.id}" class="btn btn-sm btn-primary">繼續填報</a>`);
+      if (isAdmin() && f.status === TRAINING_STATUSES.SUBMITTED) act.push(`<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn('${f.id}')">退回更正</button>`);
+      return `<tr><td style="font-weight:600;color:var(--accent-primary)">${esc(f.id)}</td><td>${esc(f.unit)}</td><td>${esc(f.fillerName)}</td><td>${esc(f.trainingYear)}</td><td>${trainingStatusBadge(f.status)}</td><td>${f.summary?.totalPeople || 0}</td><td>${f.summary?.totalHours || 0}</td><td>${f.summary?.reachRate || 0}%</td><td>${fmtTime(f.updatedAt)}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">${act.join('')}</div></td></tr>`;
+    }).join('') : `<tr><td colspan="10"><div class="empty-state" style="padding:50px"><div class="empty-state-icon">${ic('graduation-cap')}</div><div class="empty-state-title">尚無教育訓練時數填報資料</div><div class="empty-state-desc">可先新增填報，或由管理者先匯入各單位名單</div></div></td></tr>`;
+
+    let adminPanel = '';
+    if (isAdmin()) {
+      const allForms = getAllTrainingForms();
+      const units = getTrainingUnits();
+      const unitStats = units.map(unit => {
+        const latest = allForms.filter(f => f.unit === unit).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+        return { unit, status: latest ? latest.status : '未填報', reachRate: latest ? (latest.summary?.reachRate || 0) : 0 };
+      });
+      const submittedUnits = unitStats.filter(x => x.status === TRAINING_STATUSES.SUBMITTED).length;
+      const schoolProgress = unitStats.length ? Math.round(submittedUnits / unitStats.length * 100) : 0;
+      const totalHours = allForms.reduce((sum, f) => sum + Number(f.summary?.totalHours || 0), 0).toFixed(1);
+      const chartRows = unitStats.length ? unitStats.map(u => `<div class="training-chart-row"><div class="training-chart-label">${esc(u.unit)}</div><div class="training-chart-track"><div class="training-chart-fill" style="width:${Math.max(0, Math.min(100, u.reachRate))}%"></div></div><div class="training-chart-value">${u.reachRate}% (${esc(u.status)})</div></div>`).join('') : `<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無單位資料</div></div>`;
+      adminPanel = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px"><div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">${schoolProgress}%</div><div class="training-kpi-desc">已正式送出單位 ${submittedUnits} / ${unitStats.length}</div></div><div class="card"><div class="card-header"><span class="card-title">全校訓練總時數</span></div><div class="training-kpi-value">${totalHours}</div><div class="training-kpi-desc">以最新填報資料累計</div></div></div><div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">各單位達標率（每人 3 小時以上）</span></div><div class="training-chart">${chartRows}</div></div>`;
+    }
+
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">教育訓練時數統計</h1><p class="page-subtitle">支援名單匯入、暫存、正式送出、退回更正與 CSV 匯出</p></div>${toolbar}</div><div class="stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('files')}</div><div class="stat-value">${summary.total}</div><div class="stat-label">填報單總數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('save')}</div><div class="stat-value">${summary.draft}</div><div class="stat-label">暫存中</div></div><div class="stat-card closed"><div class="stat-icon">${ic('check-circle-2')}</div><div class="stat-value">${summary.submitted}</div><div class="stat-label">正式送出</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('corner-up-left')}</div><div class="stat-value">${summary.returned}</div><div class="stat-label">退回更正</div></div></div>${adminPanel}<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>單位</th><th>填報人</th><th>年度</th><th>狀態</th><th>名單人數</th><th>總時數</th><th>達標率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+
+    document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(forms));
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+  function renderTrainingFill(id) {
+    if (!canFillTraining()) { navigate('training'); return; }
+    const u = currentUser();
+    const existing = id ? getTrainingForm(id) : null;
+    if (id && !existing) { toast('找不到填報單', 'error'); navigate('training'); return; }
+    if (existing && !isTrainingVisible(existing)) { toast('您沒有此填報單權限', 'error'); navigate('training'); return; }
+    if (existing && !canEditTrainingForm(existing)) { toast('此填報單已正式送出，請待管理者退回後再修改', 'error'); navigate('training-detail/' + existing.id); return; }
+
+    const units = getTrainingUnits();
+    if (u.unit && !units.includes(u.unit)) units.push(u.unit);
+    if (existing?.unit && !units.includes(existing.unit)) units.push(existing.unit);
+    units.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    const unitValue = existing ? existing.unit : (isAdmin() ? (units[0] || u.unit || '') : u.unit);
+    const isUnitLocked = !!existing || !isAdmin();
+    const unitOpts = units.map(unit => `<option value="${esc(unit)}" ${unit === unitValue ? 'selected' : ''}>${esc(unit)}</option>`).join('');
+
+    function buildRows(targetUnit, carryRows) {
+      const rosterRows = getTrainingRosterByUnit(targetUnit).map(r => {
+        const fromCarry = (carryRows || []).find(c => (c.rosterId && c.rosterId === r.id) || (!c.rosterId && c.name === r.name));
+        return { rosterId: r.id, name: r.name, source: r.source || 'import', hours: fromCarry ? fromCarry.hours : '', note: fromCarry ? fromCarry.note : '' };
+      });
+      (carryRows || []).forEach(c => {
+        const exists = rosterRows.some(r => (c.rosterId && r.rosterId === c.rosterId) || r.name === c.name);
+        if (!exists) rosterRows.push({ rosterId: c.rosterId || '', name: c.name, source: c.source || 'manual', hours: c.hours || '', note: c.note || '' });
+      });
+      return rosterRows.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    }
+
+    let rowsState = buildRows(unitValue, existing ? (existing.records || []) : []);
+    let signedFiles = existing ? [...(existing.signedFiles || [])] : [];
+    const submitLabel = existing && existing.status === TRAINING_STATUSES.RETURNED ? '更正後正式送出' : '正式送出';
+
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">填報教育訓練時數</h1><p class="page-subtitle">填報進度可暫存於系統，正式送出後將鎖定，需管理者退回才可更正</p></div><a href="#training" class="btn btn-secondary">← 返回列表</a></div>${existing && existing.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(existing.returnReason || '未提供')}</div>` : ''}<div class="card" style="max-width:980px"><form id="training-form"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div><div class="form-row"><div class="form-group"><label class="form-label form-required">填報單位</label><select class="form-select" id="tr-unit" ${isUnitLocked ? 'disabled' : ''}>${unitOpts}</select></div><div class="form-group"><label class="form-label form-required">填報人</label><input type="text" class="form-input" value="${esc(u.name)}" readonly></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="${existing ? esc(existing.fillDate) : new Date().toISOString().split('T')[0]}" required></div></div><div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="${existing ? esc(existing.trainingYear) : String(new Date().getFullYear() - 1911)}" required></div><div class="form-group"><label class="form-label">填報說明</label><input type="text" class="form-input" value="管理者可匯入名單；填報人可新增名單外人員" readonly></div></div><div class="section-header">${ic('users', 'icon-sm')} 人員名單與時數</div><p class="form-hint">名單刪除僅限管理者。填報人可新增名單外人員，不可刪減既有名單。</p><div class="form-row" style="align-items:flex-end"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-person" placeholder="輸入姓名後按新增"></div><div class="form-group" style="flex:0 0 auto"><button type="button" class="btn btn-secondary" id="training-add-person">${ic('user-plus', 'icon-sm')} 新增到名單</button></div></div><div class="table-wrapper" style="margin-top:8px"><table><thead><tr><th style="width:160px">來源</th><th>姓名</th><th style="width:160px">時數</th><th>備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div><div id="training-summary" class="training-summary-grid"></div><div class="section-header" style="margin-top:16px">${ic('paperclip', 'icon-sm')} 上傳簽核後掃描檔</div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div><div class="file-preview-list" id="training-file-previews"></div><div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft">${ic('save', 'icon-sm')} 儲存暫存</button><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} ${submitLabel}</button><a href="#training" class="btn btn-ghost">取消</a></div></form></div></div>`;
+
+    function renderSummary() {
+      const s = computeTrainingSummary(rowsState.map(r => ({ ...r, hours: Number(r.hours || 0) })));
+      document.getElementById('training-summary').innerHTML = `<div class="training-mini-card"><div class="training-mini-label">名單總人數</div><div class="training-mini-value">${s.totalPeople}</div></div><div class="training-mini-card"><div class="training-mini-label">已填時數人數</div><div class="training-mini-value">${s.filledPeople}</div></div><div class="training-mini-card"><div class="training-mini-label">總時數</div><div class="training-mini-value">${s.totalHours}</div></div><div class="training-mini-card"><div class="training-mini-label">達標率(>=3h)</div><div class="training-mini-value">${s.reachRate}%</div></div>`;
+    }
+
+    function renderRows() {
+      const body = document.getElementById('training-rows-body');
+      if (!rowsState.length) {
+        body.innerHTML = `<tr><td colspan="4"><div class="empty-state" style="padding:24px"><div class="empty-state-title">此單位目前尚無名單人員</div><div class="empty-state-desc">請先新增名單外人員，或由管理者匯入名單</div></div></td></tr>`;
+        renderSummary();
+        return;
+      }
+      body.innerHTML = rowsState.map((r, idx) => `<tr><td><span class="training-source-tag ${r.source === 'import' ? 'import' : 'manual'}">${r.source === 'import' ? '管理者匯入' : '填報新增'}</span></td><td>${esc(r.name)}</td><td><input type="number" min="0" step="0.5" class="form-input training-hours-input" data-idx="${idx}" value="${esc(r.hours === 0 ? '0' : (r.hours || ''))}"></td><td><input type="text" class="form-input training-note-input" data-idx="${idx}" value="${esc(r.note || '')}" placeholder="可填課程名稱或備註"></td></tr>`).join('');
+      body.querySelectorAll('.training-hours-input').forEach(el => el.addEventListener('input', e => { const i = Number(e.target.dataset.idx); rowsState[i].hours = e.target.value; renderSummary(); }));
+      body.querySelectorAll('.training-note-input').forEach(el => el.addEventListener('input', e => { const i = Number(e.target.dataset.idx); rowsState[i].note = e.target.value; }));
+      renderSummary();
+    }
+
+    function renderSignedFiles() {
+      const wrap = document.getElementById('training-file-previews');
+      if (!signedFiles.length) { wrap.innerHTML = '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>'; return; }
+      wrap.innerHTML = signedFiles.map((f, i) => { const preview = f.type && f.type.startsWith('image/') ? `<img src="${f.data}" alt="${esc(f.name)}">` : `<div class="file-pdf-icon">${ic('file-box')}</div>`; return `<div class="file-preview-item">${preview}<div class="file-name">${esc(f.name)}</div><button type="button" class="file-remove" data-idx="${i}">✕</button></div>`; }).join('');
+      wrap.querySelectorAll('.file-remove').forEach(btn => btn.addEventListener('click', e => { const i = Number(e.target.dataset.idx); signedFiles.splice(i, 1); renderSignedFiles(); }));
+      setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    }
+
+    function handleFiles(files) {
+      Array.from(files).forEach(file => {
+        if (file.size > 5 * 1024 * 1024) { toast(`「${file.name}」超過 5MB`, 'error'); return; }
+        const reader = new FileReader();
+        reader.onload = evt => { signedFiles.push({ name: file.name, type: file.type, data: evt.target.result }); renderSignedFiles(); };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function collectRecords() { return rowsState.map(r => ({ rosterId: r.rosterId || null, name: r.name, source: r.source || 'manual', hours: Number(r.hours || 0), note: (r.note || '').trim() })); }
+
+    function saveTrainingForm(targetStatus) {
+      const now = new Date().toISOString();
+      const formId = existing ? existing.id : generateTrainingFormId();
+      const records = collectRecords();
+      const summary = computeTrainingSummary(records);
+      if (targetStatus === TRAINING_STATUSES.SUBMITTED) {
+        if (!signedFiles.length) { toast('正式送出前請先上傳簽核掃描檔', 'error'); return; }
+        if (summary.filledPeople === 0) { toast('正式送出前請至少填寫一位人員時數', 'error'); return; }
+      }
+      const nextStatus = targetStatus === TRAINING_STATUSES.SUBMITTED ? TRAINING_STATUSES.SUBMITTED : ((existing && existing.status === TRAINING_STATUSES.RETURNED) ? TRAINING_STATUSES.RETURNED : TRAINING_STATUSES.DRAFT);
+      const history = [...(existing?.history || [])];
+      history.push({ time: now, action: targetStatus === TRAINING_STATUSES.SUBMITTED ? '正式送出教育訓練時數統計' : '儲存教育訓練時數暫存', user: u.name });
+      const payload = { id: formId, unit: document.getElementById('tr-unit').value, fillerName: u.name, fillerUsername: u.username, fillDate: document.getElementById('tr-date').value, trainingYear: document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911), status: nextStatus, records, summary, signedFiles, returnReason: targetStatus === TRAINING_STATUSES.SUBMITTED ? '' : (existing?.returnReason || ''), createdAt: existing?.createdAt || now, updatedAt: now, submittedAt: targetStatus === TRAINING_STATUSES.SUBMITTED ? now : (existing?.submittedAt || null), history };
+      upsertTrainingForm(payload);
+      toast(targetStatus === TRAINING_STATUSES.SUBMITTED ? `填報單 ${formId} 已正式送出` : `填報單 ${formId} 已暫存`);
+      navigate('training-detail/' + formId);
+    }
+
+    document.getElementById('training-form').addEventListener('submit', e => { e.preventDefault(); saveTrainingForm(TRAINING_STATUSES.SUBMITTED); });
+    document.getElementById('training-save-draft').addEventListener('click', () => saveTrainingForm(TRAINING_STATUSES.DRAFT));
+    document.getElementById('training-add-person').addEventListener('click', () => {
+      const unit = document.getElementById('tr-unit').value;
+      const input = document.getElementById('tr-new-person');
+      const name = input.value.trim();
+      if (!name) { toast('請輸入要新增的人員姓名', 'error'); return; }
+      const result = addTrainingRosterPerson(unit, name, 'manual', u.name);
+      if (!result.added) { toast(result.reason, 'error'); return; }
+      rowsState = buildRows(unit, rowsState);
+      renderRows();
+      input.value = '';
+      toast(`已新增「${name}」至 ${unit} 名單`);
+    });
+
+    if (!isUnitLocked) document.getElementById('tr-unit').addEventListener('change', e => { rowsState = buildRows(e.target.value, rowsState); renderRows(); });
+
+    const fi = document.getElementById('training-file-input');
+    const uz = document.getElementById('training-upload-zone');
+    fi.addEventListener('change', e => handleFiles(e.target.files));
+    uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('dragover'); });
+    uz.addEventListener('dragleave', () => uz.classList.remove('dragover'));
+    uz.addEventListener('drop', e => { e.preventDefault(); uz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+
+    renderRows();
+    renderSignedFiles();
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+  function renderTrainingDetail(id) {
+    const form = getTrainingForm(id);
+    if (!form) {
+      document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到教育訓練填報單</div><a href="#training" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`;
+      return;
+    }
+    if (!isTrainingVisible(form)) { navigate('training'); toast('您沒有權限檢視此填報單', 'error'); return; }
+
+    const s = form.summary || computeTrainingSummary(form.records || []);
+    const records = form.records || [];
+    const detailRows = records.length ? records.map(r => `<tr><td>${esc(r.name)}</td><td><span class="training-source-tag ${r.source === 'import' ? 'import' : 'manual'}">${r.source === 'import' ? '管理者匯入' : '填報新增'}</span></td><td>${Number(r.hours || 0)}</td><td>${esc(r.note || '')}</td></tr>`).join('') : `<tr><td colspan="4"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無時數資料</div></div></td></tr>`;
+    const files = form.signedFiles || [];
+    const fileHtml = files.length ? `<div class="file-preview-list">${files.map(f => f.type && f.type.startsWith('image/') ? `<div class="file-preview-item"><img src="${f.data}" alt="${esc(f.name)}"><div class="file-name">${esc(f.name)}</div></div>` : `<div class="file-preview-item"><div class="file-pdf-icon">${ic('file-box')}</div><div class="file-name">${esc(f.name)}</div></div>`).join('')}</div>` : '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>';
+    const timeline = (form.history || []).slice().reverse().map(h => `<div class="timeline-item"><div class="timeline-time">${fmtTime(h.time)}</div><div class="timeline-text">${esc(h.action)} · ${esc(h.user || '系統')}</div></div>`).join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
+
+    const actions = [`<button type="button" class="btn btn-secondary" id="training-export-detail">${ic('download', 'icon-sm')} 匯出CSV</button>`, `<a href="#training" class="btn btn-secondary">← 返回列表</a>`];
+    if (canEditTrainingForm(form)) actions.unshift(`<a href="#training-fill/${form.id}" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 繼續填報</a>`);
+    if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift(`<button type="button" class="btn btn-danger" onclick="window._trainingReturn('${form.id}')">${ic('corner-up-left', 'icon-sm')} 退回更正</button>`);
+
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="detail-header"><div><div class="detail-id">${esc(form.id)} · ${esc(form.trainingYear)} 年度</div><h1 class="detail-title">教育訓練時數統計 — ${esc(form.unit)}</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(form.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(form.fillDate)}</span>${trainingStatusBadge(form.status)}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${actions.join('')}</div></div>${form.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(form.returnReason || '未提供')}</div>` : ''}<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px"><div class="card"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">名單總人數</div><div class="detail-field-value">${s.totalPeople}</div></div><div class="detail-field"><div class="detail-field-label">已填時數人數</div><div class="detail-field-value">${s.filledPeople}</div></div><div class="detail-field"><div class="detail-field-label">總時數</div><div class="detail-field-value">${s.totalHours}</div></div><div class="detail-field"><div class="detail-field-label">達標率(>=3h)</div><div class="detail-field-value">${s.reachRate}%</div></div></div></div><div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">單位</div><div class="detail-field-value">${esc(form.unit)}</div></div><div class="detail-field"><div class="detail-field-label">填報人</div><div class="detail-field-value">${esc(form.fillerName)}</div></div><div class="detail-field"><div class="detail-field-label">正式送出時間</div><div class="detail-field-value">${form.submittedAt ? fmtTime(form.submittedAt) : '—'}</div></div><div class="detail-field"><div class="detail-field-label">最後更新</div><div class="detail-field-value">${fmtTime(form.updatedAt)}</div></div></div></div></div><div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">人員時數明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>來源</th><th>時數</th><th>備註</th></tr></thead><tbody>${detailRows}</tbody></table></div></div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">簽核掃描檔</span></div>${fileHtml}</div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">歷程紀錄</span></div><div class="timeline">${timeline}</div></div></div>`;
+
+    document.getElementById('training-export-detail')?.addEventListener('click', () => window._trainingExportDetailCsv(form.id));
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  function renderTrainingRoster() {
+    if (!isAdmin()) { navigate('training'); toast('僅管理者可管理名單', 'error'); return; }
+    const units = getTrainingUnits();
+    const unitOpts = units.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+    const rosters = getAllTrainingRosters().slice().sort((a, b) => a.unit === b.unit ? a.name.localeCompare(b.name, 'zh-Hant') : a.unit.localeCompare(b.unit, 'zh-Hant'));
+    const rows = rosters.length ? rosters.map(r => `<tr><td>${esc(r.unit)}</td><td>${esc(r.name)}</td><td>${r.source === 'import' ? '管理者匯入' : '填報新增'}</td><td>${esc(r.createdBy || '')}</td><td>${fmtTime(r.createdAt)}</td><td><button type="button" class="btn btn-sm btn-danger" onclick="window._trainingDeleteRoster('${r.id}')">${ic('trash-2', 'btn-icon-svg')}</button></td></tr>`).join('') : `<tr><td colspan="6"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>`;
+
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可依單位匯入與刪除人員；填報人僅可新增名單外人員</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div><div class="card" style="max-width:960px;margin-bottom:20px"><form id="training-import-form"><div class="section-header">${ic('upload', 'icon-sm')} 匯入單位名單</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label><select class="form-select" id="training-import-unit" required>${unitOpts}</select></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="每行一位人員，可混合逗號、分號分隔" readonly></div></div><div class="form-group"><label class="form-label form-required">人員名單</label><textarea class="form-textarea" id="training-import-names" rows="6" placeholder="王小明&#10;陳小華&#10;張小資" required></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('upload', 'icon-sm')} 匯入名單</button></div></form></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>單位</th><th>姓名</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+
+    document.getElementById('training-import-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const unit = document.getElementById('training-import-unit').value;
+      const namesRaw = document.getElementById('training-import-names').value;
+      const names = Array.from(new Set(namesRaw.split(/[\r\n,;]+/).map(x => x.trim()).filter(Boolean)));
+      if (!names.length) { toast('請至少輸入一位人員', 'error'); return; }
+      let added = 0, skipped = 0;
+      names.forEach(name => { const ret = addTrainingRosterPerson(unit, name, 'import', currentUser().name); if (ret.added) added++; else skipped++; });
+      toast(`匯入完成：新增 ${added} 人，略過 ${skipped} 人`);
+      renderTrainingRoster();
+    });
+
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  }
+
+  function seedTrainingData() {
+    const d = loadTrainingStore();
+    if (d.rosters.length > 0) return;
+    const now = new Date().toISOString();
+    const seen = new Set();
+    getUsers().filter(u => u.role !== ROLES.ADMIN).forEach(u => {
+      const key = `${u.unit}::${u.name}`.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      const id = `RST-${String(d.nextRosterId).padStart(4, '0')}`;
+      d.nextRosterId++;
+      d.rosters.push({ id, unit: u.unit, name: u.name, source: 'import', createdBy: '系統初始化', createdAt: now });
+    });
+    saveTrainingStore(d);
+  }
   // ─── Router ────────────────────────────────
   function handleRoute() {
     if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader();
-    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; default: renderDashboard(); }
+    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
   }
 
   // ─── Seed Data ─────────────────────────────
@@ -1023,7 +1390,16 @@
 
   // ─── Init ──────────────────────────────────
   seedData();
+  seedTrainingData();
   window.addEventListener('hashchange', handleRoute);
   renderApp();
 
 })();
+
+
+
+
+
+
+
+

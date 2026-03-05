@@ -2404,3 +2404,132 @@ tbody td:first-child {
   gap: 6px;
   flex-shrink: 0;
 }
+/* ========================================
+   Training Hours Styles
+   ======================================== */
+.training-kpi-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  line-height: 1.1;
+}
+
+.training-kpi-desc {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.training-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.training-chart-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 120px;
+  gap: 10px;
+  align-items: center;
+}
+
+.training-chart-label {
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.training-chart-track {
+  height: 9px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.training-chart-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
+}
+
+.training-chart-value {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.training-summary-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.training-mini-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.training-mini-label {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.training-mini-value {
+  margin-top: 4px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.training-source-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.training-source-tag.import {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.training-source-tag.manual {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.training-return-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 768px) {
+  .training-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .training-chart-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .training-chart-value {
+    text-align: left;
+  }
+}
