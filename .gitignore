@@ -5,3 +5,8 @@ ngrok.exe
 ngrok.zip
 ssh_log.txt
 ssh_log2.txt
+
+.codex-local-server.err.log
+.codex-local-server.out.log
+.tmp-*
+local-preview.png

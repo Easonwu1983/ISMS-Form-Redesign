@@ -1,4 +1,4 @@
-﻿/* ========================================
+/* ========================================
    管考追蹤系統 - Light Theme Design System
    ======================================== */
 
@@ -418,14 +418,30 @@ body {
   box-shadow: 1px 0 4px rgba(0, 0, 0, 0.03);
 }
 
+
 .sidebar-logo {
-  padding: 22px 24px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.sidebar-logo h1 {
+.sidebar-brand-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-brand-text {
+  min-width: 0;
+}
+
+.sidebar-brand-text h1 {
   font-size: 1.1rem;
   font-weight: 700;
+  line-height: 1.18;
   background: var(--accent-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -433,12 +449,13 @@ body {
   letter-spacing: -0.02em;
 }
 
-.sidebar-logo p {
+.sidebar-brand-text p {
   font-size: 0.7rem;
   color: var(--text-muted);
-  margin-top: 2px;
-  letter-spacing: 0.06em;
+  margin-top: 3px;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
+  line-height: 1.2;
 }
 
 .sidebar-nav {
@@ -2564,6 +2581,5 @@ tbody td:first-child {
   width: 28px;
   height: 28px;
   font-size: 0.54rem;
-  margin-right: 8px;
-  vertical-align: middle;
+  flex-shrink: 0;
 }

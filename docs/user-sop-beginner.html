@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>內部稽核管考追蹤系統｜小白使用教學 SOP</title>
+  <style>
+    @page { size: A4; margin: 16mm; }
+    :root {
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #d1d5db;
+      --accent: #1d4ed8;
+      --bg: #f8fafc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      line-height: 1.6;
+      font-size: 12pt;
+      background: #fff;
+    }
+    .cover {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20mm 14mm;
+      background: linear-gradient(180deg, #eff6ff 0%, #ffffff 36%);
+      margin-bottom: 12mm;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24pt;
+      line-height: 1.25;
+      color: #0f172a;
+    }
+    h2 {
+      margin: 18px 0 8px;
+      padding-left: 10px;
+      border-left: 4px solid var(--accent);
+      font-size: 15pt;
+      color: #0f172a;
+    }
+    h3 {
+      margin: 14px 0 6px;
+      font-size: 12.5pt;
+      color: #111827;
+    }
+    p { margin: 6px 0; }
+    ul, ol { margin: 6px 0 8px 20px; }
+    li { margin: 2px 0; }
+    .meta {
+      color: var(--muted);
+      font-size: 10.5pt;
+      margin-top: 8px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg);
+      padding: 10px 12px;
+      margin: 8px 0;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 10pt;
+      border: 1px solid #93c5fd;
+      background: #eff6ff;
+      color: #1e40af;
+      border-radius: 999px;
+      padding: 1px 8px;
+      margin-right: 6px;
+    }
+    .warn {
+      border-left: 4px solid #f59e0b;
+      background: #fffbeb;
+      padding: 8px 10px;
+      margin: 8px 0;
+    }
+    .ok {
+      border-left: 4px solid #16a34a;
+      background: #f0fdf4;
+      padding: 8px 10px;
+      margin: 8px 0;
+    }
+    .page-break { break-before: page; page-break-before: always; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 11pt;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 6px 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #f3f4f6; }
+    .footer {
+      margin-top: 12mm;
+      font-size: 10pt;
+      color: var(--muted);
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <h1>內部稽核管考追蹤系統<br/>小白使用教學 SOP</h1>
+    <p>適用對象：第一次接觸系統的行政同仁、單位填報窗口、主管。</p>
+    <p>目標：照著流程操作即可完成填報、送出、審核與追蹤，不需要技術背景。</p>
+    <div class="meta">版本：v1.0｜產出日期：2026-03-05｜系統名稱：內部稽核管考追蹤系統</div>
+  </section>
+
+  <h2>1. 先看這裡（3 分鐘上手）</h2>
+  <ol>
+    <li>打開系統首頁並登入。</li>
+    <li>從左側主選單選你要的功能：
+      <ul>
+        <li>矯正單列表 / 開立矯正單</li>
+        <li>內稽檢核表</li>
+        <li>教育訓練時數統計</li>
+      </ul>
+    </li>
+    <li>填報過程可暫存（教育訓練、檢核表草稿）。</li>
+    <li>正式送出後通常會鎖定，若要修改需管理者退回。</li>
+  </ol>
+
+  <div class="card">
+    <span class="tag">提醒</span>
+    本系統不同角色可見功能不同。若你看不到某頁，多半是「角色權限」問題，不是系統壞掉。
+  </div>
+
+  <h2>2. 登入與密碼重設</h2>
+  <h3>2.1 登入</h3>
+  <ol>
+    <li>輸入帳號與密碼。</li>
+    <li>按「登入系統」。</li>
+    <li>成功後進入儀表板。</li>
+  </ol>
+
+  <h3>2.2 忘記密碼</h3>
+  <ol>
+    <li>按「忘記密碼？」。</li>
+    <li>輸入帳號綁定信箱。</li>
+    <li>系統會產生新密碼（畫面顯示）。</li>
+    <li>回登入頁使用新密碼。</li>
+  </ol>
+
+  <h2>3. 角色與權限對照</h2>
+  <table>
+    <thead>
+      <tr><th>角色</th><th>可做事項</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>最高管理員</td>
+        <td>帳號管理、登入紀錄、檢核表管理、教育訓練名單管理、退回更正、全校統計檢視</td>
+      </tr>
+      <tr>
+        <td>單位管理員</td>
+        <td>開立矯正單、填報檢核表、填報教育訓練時數、查看單位資料</td>
+      </tr>
+      <tr>
+        <td>填報人</td>
+        <td>教育訓練時數填報、被指派矯正單之回填作業</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h2>4. SOP-A：開立矯正單（單位管理員以上）</h2>
+  <ol>
+    <li>進入「開立矯正單」。</li>
+    <li>確認「提出單位」：系統會預設你的單位。</li>
+    <li>選擇「處理單位」後，再選「處理人員」。
+      <div class="ok">處理人員會自動只顯示該處理單位的人，避免選錯。</div>
+    </li>
+    <li>填寫缺失分類、來源、問題描述與預定完成日期。</li>
+    <li>按「送出矯正單」。</li>
+  </ol>
+
+  <h3>常見錯誤</h3>
+  <ul>
+    <li>沒選缺失種類或來源</li>
+    <li>分類一項都沒勾</li>
+    <li>處理人員未選，導致無法送出</li>
+  </ul>
+
+  <h2>5. SOP-B：回填矯正措施（處理人員）</h2>
+  <ol>
+    <li>進入矯正單詳情，按「回填矯正措施」。</li>
+    <li>填寫：矯正措施、根因分析、根因消除措施。</li>
+    <li>必要時上傳佐證（圖片/PDF）。</li>
+    <li>送出後狀態會改為「已提案」。</li>
+  </ol>
+
+  <h2>6. SOP-C：審核與追蹤（管理者）</h2>
+  <ol>
+    <li>在「已提案」案件按「進入審核」。</li>
+    <li>審核中可選：通過結案 / 轉追蹤 / 退回重填。</li>
+    <li>若轉追蹤，可持續記錄追蹤結果（系統最多 3 次追蹤）。</li>
+  </ol>
+
+  <div class="warn">
+    若案件狀態已改變，系統會阻止舊畫面重複送出，請回到詳情頁重新操作。
+  </div>
+
+  <h2>7. SOP-D：內稽檢核表填報</h2>
+  <ol>
+    <li>進入「填報檢核表」。</li>
+    <li>逐題選符合狀態，填寫執行情形與佐證說明。</li>
+    <li>可按「儲存草稿」先離開；完成後再「送出檢核表」。</li>
+  </ol>
+
+  <h3>重要規則</h3>
+  <ul>
+    <li>自評日期變更時，稽核年度會自動換算成民國年。</li>
+    <li>草稿可續填；正式送出後不開放直接改內容。</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <h2>8. SOP-E：教育訓練時數統計</h2>
+  <h3>8.1 填報人流程</h3>
+  <ol>
+    <li>進入「教育訓練時數統計」→「新增填報」。</li>
+    <li>依名單填每位人員時數與備註。</li>
+    <li>若名單缺人，可新增名單外人員。</li>
+    <li>可先「儲存暫存」。</li>
+    <li>正式送出前，必須上傳簽核掃描檔（圖片/PDF）。</li>
+  </ol>
+
+  <h3>8.2 管理者流程</h3>
+  <ol>
+    <li>在「名單管理」依單位匯入人員名單。</li>
+    <li>可刪除名單人員（填報人不可刪）。</li>
+    <li>可查看全校填報進度與達標率圖表。</li>
+    <li>若誤送，可把「正式送出」資料退回更正。</li>
+  </ol>
+
+  <h3>8.3 匯出</h3>
+  <ul>
+    <li>支援全體統計匯出 CSV</li>
+    <li>支援單一填報單明細匯出 CSV</li>
+  </ul>
+
+  <h2>9. SOP-F：帳號與登入紀錄（管理者）</h2>
+  <ul>
+    <li>帳號管理：新增、編輯、刪除使用者</li>
+    <li>登入紀錄：查看登入成功/失敗（保存最近 500 筆）</li>
+    <li>可手動清除登入紀錄</li>
+  </ul>
+
+  <h2>10. 常見問題排除</h2>
+  <h3>Q1：點某頁會卡住或空白</h3>
+  <ul>
+    <li>先重新整理頁面再操作。</li>
+    <li>確認網址是否正確（例如 `#training`、`#checklist`）。</li>
+  </ul>
+
+  <h3>Q2：我看不到某些資料</h3>
+  <ul>
+    <li>多數是角色/單位權限限制。</li>
+    <li>請請管理者確認你的角色設定。</li>
+  </ul>
+
+  <h3>Q3：為什麼不能改資料</h3>
+  <ul>
+    <li>正式送出後資料通常會鎖定。</li>
+    <li>需要管理者退回，才可再次編輯。</li>
+  </ul>
+
+  <h2>11. 每月建議例行作業（管理者）</h2>
+  <ol>
+    <li>匯出教育訓練 CSV 留存。</li>
+    <li>檢查登入紀錄是否有異常失敗嘗試。</li>
+    <li>檢查逾期矯正單並追蹤單位改善。</li>
+    <li>抽查內稽檢核表填報品質。</li>
+  </ol>
+
+  <div class="footer">內部稽核管考追蹤系統｜小白使用教學 SOP</div>
+</body>
+</html>
