@@ -160,14 +160,42 @@
       childEl.disabled = true;
     }
   }
-  function loadData() { try { return JSON.parse(localStorage.getItem(DATA_KEY)) || { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 }; } catch { return { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 }; } }
-  function saveData(d) { localStorage.setItem(DATA_KEY, JSON.stringify(d)); }
-  function getAllItems() { return loadData().items; }
+  const STORAGE_CACHE = Object.create(null);
+  function readCachedJson(key, fallbackFactory) {
+    const raw = localStorage.getItem(key);
+    const hit = STORAGE_CACHE[key];
+    if (hit && hit.raw === raw) return hit.parsed;
+    if (raw !== null && raw !== undefined) {
+      try {
+        const parsed = JSON.parse(raw);
+        STORAGE_CACHE[key] = { raw, parsed };
+        return parsed;
+      } catch (_) { }
+    }
+    const fallback = fallbackFactory();
+    STORAGE_CACHE[key] = { raw: JSON.stringify(fallback), parsed: fallback };
+    return fallback;
+  }
+  function writeCachedJson(key, value) {
+    const raw = JSON.stringify(value);
+    STORAGE_CACHE[key] = { raw, parsed: value };
+    localStorage.setItem(key, raw);
+  }
+  function removeCachedJson(key) {
+    delete STORAGE_CACHE[key];
+    localStorage.removeItem(key);
+  }
+  function createDefaultData() {
+    return { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 };
+  }
+  function loadData() { return readCachedJson(DATA_KEY, createDefaultData); }
+  function saveData(d) { writeCachedJson(DATA_KEY, d); }
+  function getAllItems() { return loadData().items.slice(); }
   function getItem(id) { return loadData().items.find(i => i.id === id); }
   function addItem(item) { const d = loadData(); d.items.push(item); saveData(d); }
   function updateItem(id, updates) { const d = loadData(); const i = d.items.findIndex(x => x.id === id); if (i >= 0) { d.items[i] = { ...d.items[i], ...updates }; saveData(d); } }
   function generateId() { const d = loadData(); const id = `CAR-${String(d.nextId).padStart(4, '0')}`; d.nextId++; saveData(d); return id; }
-  function getUsers() { return loadData().users; }
+  function getUsers() { return loadData().users.slice(); }
   function addUser(user) { const d = loadData(); d.users.push(user); saveData(d); }
   function updateUser(un, upd) { const d = loadData(); const i = d.users.findIndex(u => u.username === un); if (i >= 0) { d.users[i] = { ...d.users[i], ...upd }; saveData(d); } }
   function deleteUser(un) { const d = loadData(); d.users = d.users.filter(u => u.username !== un); saveData(d); }
@@ -175,14 +203,10 @@
   function findUserByEmail(em) { return loadData().users.find(u => u.email && u.email.toLowerCase() === em.toLowerCase()); }
   function generatePassword() { const c = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; let p = ''; for (let i = 0; i < 8; i++)p += c[Math.floor(Math.random() * c.length)]; return p; }
   function loadLoginLogs() {
-    try {
-      const logs = JSON.parse(localStorage.getItem(LOGIN_LOG_KEY));
-      return Array.isArray(logs) ? logs : [];
-    } catch {
-      return [];
-    }
+    const logs = readCachedJson(LOGIN_LOG_KEY, () => []);
+    return Array.isArray(logs) ? logs : [];
   }
-  function saveLoginLogs(logs) { localStorage.setItem(LOGIN_LOG_KEY, JSON.stringify(logs)); }
+  function saveLoginLogs(logs) { writeCachedJson(LOGIN_LOG_KEY, Array.isArray(logs) ? logs : []); }
   function addLoginLog(username, user, success) {
     const logs = loadLoginLogs();
     logs.push({
@@ -195,7 +219,7 @@
     if (logs.length > 500) logs.splice(0, logs.length - 500);
     saveLoginLogs(logs);
   }
-  function clearLoginLogs() { localStorage.removeItem(LOGIN_LOG_KEY); }
+  function clearLoginLogs() { removeCachedJson(LOGIN_LOG_KEY); }
   function login(un, pw) {
     const u = findUser(un);
     const ok = !!(u && u.password === pw);
@@ -224,8 +248,20 @@
   function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
   function navigate(h) { window.location.hash = h; }
   function getRoute() { const h = window.location.hash.slice(1) || 'dashboard'; const p = h.split('/'); return { page: p[0], param: p[1] }; }
+  function refreshIcons() {
+    if (!window.lucide || typeof window.lucide.createIcons !== 'function') return;
+    const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
+    raf(() => window.lucide.createIcons());
+  }
   function getVisibleItems() { const u = currentUser(); if (!u) return []; const all = getAllItems(); if (u.role === ROLES.ADMIN) return all; if (u.role === ROLES.UNIT_ADMIN) return all.filter(i => i.proposerUnit === u.unit || i.handlerUnit === u.unit || i.proposerName === u.name); return all.filter(i => i.handlerName === u.name); }
-  function canAccessItem(item) { if (!item) return false; return getVisibleItems().some(i => i.id === item.id); }
+  function canAccessItem(item) {
+    if (!item) return false;
+    const u = currentUser();
+    if (!u) return false;
+    if (u.role === ROLES.ADMIN) return true;
+    if (u.role === ROLES.UNIT_ADMIN) return item.proposerUnit === u.unit || item.handlerUnit === u.unit || item.proposerName === u.name;
+    return item.handlerName === u.name;
+  }
   function mkChk(name, opts, sel) { return '<div class="checkbox-group">' + opts.map(o => '<label class="chk-label"><input type="checkbox" name="' + name + '" value="' + o + '" ' + ((sel || []).includes(o) ? 'checked' : '') + '><span class="chk-box"></span>' + o + '</label>').join('') + '</div>'; }
   function mkRadio(name, opts, sel) { return '<div class="radio-group">' + opts.map(o => '<label class="radio-label"><input type="radio" name="' + name + '" value="' + o + '" ' + (sel === o ? 'checked' : '') + '><span class="radio-dot"></span>' + o + '</label>').join('') + '</div>'; }
 
@@ -260,11 +296,11 @@
     document.getElementById('forgot-link').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('login-panel').style.display = 'none'; document.getElementById('login-error').classList.remove('show'); document.getElementById('forgot-panel').style.display = 'block'; });
     document.getElementById('back-login-link').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('forgot-panel').style.display = 'none'; document.getElementById('login-panel').style.display = 'block'; });
     document.getElementById('forgot-form').addEventListener('submit', function (e) { e.preventDefault(); var email = document.getElementById('forgot-email').value.trim(); var user = findUserByEmail(email); if (!user) { document.getElementById('forgot-error').classList.add('show'); return; } document.getElementById('forgot-error').classList.remove('show'); var np = generatePassword(); updateUser(user.username, { password: np }); document.getElementById('reset-username').textContent = user.username; document.getElementById('reset-newpass').textContent = np; document.getElementById('forgot-result').style.display = 'block'; document.getElementById('forgot-form').style.display = 'none'; toast('密碼已重設成功！', 'info'); });
-    setTimeout(function () { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   // ─── Render: App Shell ─────────────────────
-  function renderApp() { var u = currentUser(); if (!u) { renderLogin(); return; } document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>'; handleRoute(); setTimeout(function () { if (window.lucide) lucide.createIcons(); }, 50); }
+  function renderApp() { var u = currentUser(); if (!u) { renderLogin(); return; } document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>'; handleRoute(); refreshIcons(); }
 
   // ─── Render: Sidebar ───────────────────────
   function renderSidebar() {
@@ -315,13 +351,13 @@
       '<div class="card"><div class="card-header"><span class="card-title">狀態分布</span></div><div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div></div>' +
       '<div class="card"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th>單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rr + '</tbody></table></div></div>' +
       '</div></div>';
-    setTimeout(function () { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   // ─── Render: List ──────────────────────────
   var curFilter = '全部', curSearch = '';
   function renderList() {
-    var items = getVisibleItems(); var filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); var filtered = items;
+    var items = getVisibleItems(); var filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); var filtered = items.slice();
     if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
     if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
     filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
@@ -332,7 +368,7 @@
       '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + items.length + ' 筆，顯示 ' + filtered.length + ' 筆</p></div>' + createBtn + '</div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
       '<div class="card" style="padding:0;overflow:hidden;"><div class="table-wrapper"><table><thead><tr><th>單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
-    setTimeout(function () { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
     document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; renderList(); });
     document.getElementById('filter-tabs').addEventListener('click', function (e) { if (e.target.classList.contains('filter-tab')) { curFilter = e.target.dataset.filter; renderList(); } });
   }
@@ -377,7 +413,7 @@
         </div>
         <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出矯正單</button><a href="#list" class="btn btn-secondary">取消</a></div>
       </form></div></div>`;
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
     const proposerUnit = document.getElementById('f-punit');
     const handlerUnit = document.getElementById('f-hunit');
     const handlerName = document.getElementById('f-hname');
@@ -519,7 +555,7 @@
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('git-branch', 'icon-sm')} 追蹤監控</span></div>${tkHtml}</div>
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('history', 'icon-sm')} 歷程紀錄</span></div><div class="timeline">${tl}</div></div>
     </div>`;
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   window._cs = function (id, ns) {
@@ -540,7 +576,7 @@
     toast(`狀態已變更為「${ns}」`);
     renderDetail(id);
     renderSidebar();
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   };
 
   // ─── Render: Respond ───────────────────────
@@ -574,7 +610,7 @@
         <div class="file-preview-list" id="file-previews"></div>
         <div class="form-actions"><button type="submit" class="btn btn-success">${ic('check-circle', 'icon-sm')} 送出提案</button><a href="#detail/${item.id}" class="btn btn-secondary">取消</a></div>
       </form></div></div>`;
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
     const fi = document.getElementById('file-input'), uz = document.getElementById('upload-zone'), fp = document.getElementById('file-previews');
     function handleF(files) { Array.from(files).forEach(f => { if (f.size > 2 * 1024 * 1024) { toast(`「${f.name}」超過2MB`, 'error'); return; } const r = new FileReader(); r.onload = e => { tempEv.push({ name: f.name, type: f.type, data: e.target.result }); updP(); }; r.readAsDataURL(f); }); }
     function updP() { fp.innerHTML = tempEv.map((e, i) => { const pv = e.type.startsWith('image/') ? `<img src="${e.data}" alt="${esc(e.name)}">` : `<div class="file-pdf-icon">${ic('file-box')}</div>`; return `<div class="file-preview-item">${pv}<div class="file-name">${esc(e.name)}</div><button type="button" class="file-remove" data-idx="${i}">✕</button></div>`; }).join(''); fp.querySelectorAll('.file-remove').forEach(b => b.addEventListener('click', e => { tempEv.splice(parseInt(e.target.dataset.idx), 1); updP(); })); }
@@ -656,7 +692,7 @@
     const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="window._editUser('${u.username}')">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" onclick="window._delUser('${u.username}')">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
     document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理系統使用者帳號與權限</p></div><button class="btn btn-primary" onclick="window._addUser()">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
       <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>單位</th><th>信箱</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
   function showUserModal(eu) {
     const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root'); const initUnit = isE ? (eu.unit || '') : '';
@@ -675,7 +711,7 @@
       e.preventDefault(); const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), pw = document.getElementById('u-pass').value;
       if (isE) { const upd = { name: nm, email: em, role: rl, unit: ut }; if (pw) upd.password = pw; updateUser(un, upd); toast('使用者已更新'); }
       else { if (findUser(un)) { toast('帳號已存在', 'error'); return; } addUser({ username: un, password: pw, name: nm, email: em, role: rl, unit: ut }); toast('使用者已新增'); }
-      mr.innerHTML = ''; renderUsers(); setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+      mr.innerHTML = ''; renderUsers(); refreshIcons();
     });
   }
   window._addUser = () => showUserModal(null);
@@ -698,7 +734,7 @@
       return `<tr><td>${fmtTime(log.time)}</td><td>${esc(log.username)}</td><td>${esc(log.name || '—')}</td><td>${esc(log.role || '—')}</td><td>${status}</td></tr>`;
     }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:36px"><div class="empty-state-title">尚無登入紀錄</div></div></td></tr>';
     document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">系統保存最近 500 筆登入成功與失敗事件</p></div><button type="button" class="btn btn-danger" onclick="window._clearLoginLogs()">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>角色</th><th>結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   // ─── Checklist Data Model ─────────────────
@@ -799,9 +835,16 @@
   const COMPLIANCE_CLASSES = { '符合': 'comply', '部分符合': 'partial', '不符合': 'noncomply', '不適用': 'na' };
 
   // ─── Checklist Storage ─────────────────────
-  function loadChecklists() { try { return JSON.parse(localStorage.getItem(CHECKLIST_KEY)) || { items: [], nextId: 1 }; } catch { return { items: [], nextId: 1 }; } }
-  function saveChecklists(d) { localStorage.setItem(CHECKLIST_KEY, JSON.stringify(d)); }
-  function getAllChecklists() { return loadChecklists().items; }
+  function emptyChecklistStore() { return { items: [], nextId: 1 }; }
+  function loadChecklists() {
+    const raw = readCachedJson(CHECKLIST_KEY, emptyChecklistStore);
+    if (!raw || typeof raw !== 'object') return emptyChecklistStore();
+    if (!Array.isArray(raw.items)) raw.items = [];
+    if (!Number.isFinite(raw.nextId)) raw.nextId = 1;
+    return raw;
+  }
+  function saveChecklists(d) { writeCachedJson(CHECKLIST_KEY, d); }
+  function getAllChecklists() { return loadChecklists().items.slice(); }
   function getChecklist(id) { return loadChecklists().items.find(i => i.id === id); }
   function addChecklist(item) { const d = loadChecklists(); d.items.push(item); saveChecklists(d); }
   function updateChecklist(id, updates) {
@@ -841,7 +884,7 @@
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">國立臺灣大學內部資通安全稽核查檢表</p></div>${fillBtn}</div>
       <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>受稽單位</th><th>填報人</th><th>稽核年度</th><th>狀態</th><th>符合率</th><th>填報日期</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   // ─── Render: Checklist Fill ────────────────
@@ -895,7 +938,7 @@
         <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft">${ic('save', 'icon-sm')} 儲存草稿</button><a href="#checklist" class="btn btn-ghost">取消</a></div>
       </form></div></div>`;
 
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
     initUnitCascade('cl-unit', selectedUnit, { disabled: false });
 
     const totalItems = CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0);
@@ -1038,7 +1081,7 @@
       ${issueHtml}
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 逐項檢核結果</span></div>${sectDetail}</div>
     </div>`;
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   // ─── Render: Checklist Manage (Admin only) ──────────────────────────────
@@ -1105,7 +1148,7 @@
       <div id="cm-sections-wrap">${sectHtml}</div>
     </div>`;
 
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   // ── Checklist Manage: helper to re-render just the sections ──
@@ -1155,7 +1198,7 @@
     const totalItems = CHECKLIST_SECTIONS.reduce((acc, s) => acc + s.items.length, 0);
     const subtitle = document.querySelector('.page-subtitle');
     if (subtitle) subtitle.textContent = `共 ${CHECKLIST_SECTIONS.length} 大項 · ${totalItems} 題 — 可新增、編輯、刪除各大項及題目`;
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   // ── Modal helper for checklist manage ──
@@ -1178,7 +1221,7 @@
     </div>`;
     document.getElementById('cm-modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
     document.getElementById('cm-modal-form').addEventListener('submit', e => { e.preventDefault(); onSave(); mr.innerHTML = ''; _cmRefreshSections(); });
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   // ── Generate next item ID for a section ──
@@ -1326,27 +1369,22 @@
   // ─── Training Hours Data Model ─────────────────────
   function emptyTrainingStore() { return { forms: [], rosters: [], nextFormId: 1, nextRosterId: 1 }; }
   function loadTrainingStore() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(TRAINING_KEY));
-      if (!raw || typeof raw !== 'object') return emptyTrainingStore();
-      return {
-        forms: Array.isArray(raw.forms) ? raw.forms : [],
-        rosters: Array.isArray(raw.rosters) ? raw.rosters : [],
-        nextFormId: Number.isFinite(raw.nextFormId) ? raw.nextFormId : 1,
-        nextRosterId: Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : 1
-      };
-    } catch {
-      return emptyTrainingStore();
-    }
+    const raw = readCachedJson(TRAINING_KEY, emptyTrainingStore);
+    if (!raw || typeof raw !== 'object') return emptyTrainingStore();
+    if (!Array.isArray(raw.forms)) raw.forms = [];
+    if (!Array.isArray(raw.rosters)) raw.rosters = [];
+    if (!Number.isFinite(raw.nextFormId)) raw.nextFormId = 1;
+    if (!Number.isFinite(raw.nextRosterId)) raw.nextRosterId = 1;
+    return raw;
   }
-  function saveTrainingStore(d) { localStorage.setItem(TRAINING_KEY, JSON.stringify(d)); }
-  function getAllTrainingForms() { return loadTrainingStore().forms; }
+  function saveTrainingStore(d) { writeCachedJson(TRAINING_KEY, d); }
+  function getAllTrainingForms() { return loadTrainingStore().forms.slice(); }
   function getTrainingForm(id) { return loadTrainingStore().forms.find(f => f.id === id); }
   function upsertTrainingForm(form) { const d = loadTrainingStore(); const i = d.forms.findIndex(f => f.id === form.id); if (i >= 0) d.forms[i] = form; else d.forms.push(form); saveTrainingStore(d); }
   function updateTrainingForm(id, updates) { const d = loadTrainingStore(); const i = d.forms.findIndex(f => f.id === id); if (i < 0) return; d.forms[i] = { ...d.forms[i], ...updates }; saveTrainingStore(d); }
   function generateTrainingFormId() { const d = loadTrainingStore(); const id = `TRN-${String(d.nextFormId).padStart(4, '0')}`; d.nextFormId++; saveTrainingStore(d); return id; }
 
-  function getAllTrainingRosters() { return loadTrainingStore().rosters; }
+  function getAllTrainingRosters() { return loadTrainingStore().rosters.slice(); }
   function getTrainingRosterByUnit(unit) { return getAllTrainingRosters().filter(r => r.unit === unit).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')); }
   function addTrainingRosterPerson(unit, name, source, actor) {
     const cleanUnit = (unit || '').trim();
@@ -1500,7 +1538,7 @@
     document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">教育訓練時數統計</h1><p class="page-subtitle">支援名單匯入、暫存、正式送出、退回更正與 CSV 匯出</p></div>${toolbar}</div><div class="stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('files')}</div><div class="stat-value">${summary.total}</div><div class="stat-label">填報單總數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('save')}</div><div class="stat-value">${summary.draft}</div><div class="stat-label">暫存中</div></div><div class="stat-card closed"><div class="stat-icon">${ic('check-circle-2')}</div><div class="stat-value">${summary.submitted}</div><div class="stat-label">正式送出</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('corner-up-left')}</div><div class="stat-value">${summary.returned}</div><div class="stat-label">退回更正</div></div></div>${adminPanel}<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>單位</th><th>填報人</th><th>年度</th><th>狀態</th><th>名單人數</th><th>總時數</th><th>達標率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
 
     document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(forms));
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
   function renderTrainingFill(id) {
     if (!canFillTraining()) { navigate('training'); return; }
@@ -1559,7 +1597,7 @@
       if (!signedFiles.length) { wrap.innerHTML = '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>'; return; }
       wrap.innerHTML = signedFiles.map((f, i) => { const preview = f.type && f.type.startsWith('image/') ? `<img src="${f.data}" alt="${esc(f.name)}">` : `<div class="file-pdf-icon">${ic('file-box')}</div>`; return `<div class="file-preview-item">${preview}<div class="file-name">${esc(f.name)}</div><button type="button" class="file-remove" data-idx="${i}">✕</button></div>`; }).join('');
       wrap.querySelectorAll('.file-remove').forEach(btn => btn.addEventListener('click', e => { const i = Number(e.target.dataset.idx); signedFiles.splice(i, 1); renderSignedFiles(); }));
-      setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+      refreshIcons();
     }
 
     function handleFiles(files) {
@@ -1618,7 +1656,7 @@
 
     renderRows();
     renderSignedFiles();
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
   function renderTrainingDetail(id) {
     const form = getTrainingForm(id);
@@ -1642,7 +1680,7 @@
     document.getElementById('app').innerHTML = `<div class="animate-in"><div class="detail-header"><div><div class="detail-id">${esc(form.id)} · ${esc(form.trainingYear)} 年度</div><h1 class="detail-title">教育訓練時數統計 — ${esc(form.unit)}</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(form.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(form.fillDate)}</span>${trainingStatusBadge(form.status)}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${actions.join('')}</div></div>${form.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(form.returnReason || '未提供')}</div>` : ''}<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px"><div class="card"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">名單總人數</div><div class="detail-field-value">${s.totalPeople}</div></div><div class="detail-field"><div class="detail-field-label">已填時數人數</div><div class="detail-field-value">${s.filledPeople}</div></div><div class="detail-field"><div class="detail-field-label">總時數</div><div class="detail-field-value">${s.totalHours}</div></div><div class="detail-field"><div class="detail-field-label">達標率(>=3h)</div><div class="detail-field-value">${s.reachRate}%</div></div></div></div><div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">單位</div><div class="detail-field-value">${esc(form.unit)}</div></div><div class="detail-field"><div class="detail-field-label">填報人</div><div class="detail-field-value">${esc(form.fillerName)}</div></div><div class="detail-field"><div class="detail-field-label">正式送出時間</div><div class="detail-field-value">${form.submittedAt ? fmtTime(form.submittedAt) : '—'}</div></div><div class="detail-field"><div class="detail-field-label">最後更新</div><div class="detail-field-value">${fmtTime(form.updatedAt)}</div></div></div></div></div><div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">人員時數明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>來源</th><th>時數</th><th>備註</th></tr></thead><tbody>${detailRows}</tbody></table></div></div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">簽核掃描檔</span></div>${fileHtml}</div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">歷程紀錄</span></div><div class="timeline">${timeline}</div></div></div>`;
 
     document.getElementById('training-export-detail')?.addEventListener('click', () => window._trainingExportDetailCsv(form.id));
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   function renderTrainingRoster() {
@@ -1666,7 +1704,7 @@
       renderTrainingRoster();
     });
 
-    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    refreshIcons();
   }
 
   function seedTrainingData() {
