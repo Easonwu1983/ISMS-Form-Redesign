@@ -1,4 +1,4 @@
-/* ========================================
+﻿/* ========================================
    管考追蹤系統 - Light Theme Design System
    ======================================== */
 
@@ -2532,4 +2532,38 @@ tbody td:first-child {
   .training-chart-value {
     text-align: left;
   }
+}
+
+
+/* NTU Brand Icon */
+.ntu-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1.5px solid #93a4bf;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #dbeafe);
+  color: #0b3a8d;
+  font-family: 'Inter', 'Noto Sans TC', sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  -webkit-text-fill-color: initial !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+}
+
+.ntu-logo-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 1rem;
+}
+
+.ntu-logo-sm {
+  width: 28px;
+  height: 28px;
+  font-size: 0.54rem;
+  margin-right: 8px;
+  vertical-align: middle;
 }

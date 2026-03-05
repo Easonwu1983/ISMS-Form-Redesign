@@ -50,18 +50,20 @@
   function fmtTime(d) { if (!d) return '—'; const x = new Date(d); return `${fmt(d)} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; }
   function isOverdue(item) { return item.status !== STATUSES.CLOSED && item.correctiveDueDate && new Date(item.correctiveDueDate) < new Date(); }
   function ic(n, c = '') { return `<i data-lucide="${n}" ${c ? 'class="' + c + '"' : ''}></i>`; }
+  function ntuLogo(c = '') { return '<span class="ntu-logo ' + c + '">NTU</span>'; }
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
   function navigate(h) { window.location.hash = h; }
   function getRoute() { const h = window.location.hash.slice(1) || 'dashboard'; const p = h.split('/'); return { page: p[0], param: p[1] }; }
   function getVisibleItems() { const u = currentUser(); if (!u) return []; const all = getAllItems(); if (u.role === ROLES.ADMIN) return all; if (u.role === ROLES.UNIT_ADMIN) return all.filter(i => i.proposerUnit === u.unit || i.handlerUnit === u.unit || i.proposerName === u.name); return all.filter(i => i.handlerName === u.name); }
+  function canAccessItem(item) { if (!item) return false; return getVisibleItems().some(i => i.id === item.id); }
   function mkChk(name, opts, sel) { return '<div class="checkbox-group">' + opts.map(o => '<label class="chk-label"><input type="checkbox" name="' + name + '" value="' + o + '" ' + ((sel || []).includes(o) ? 'checked' : '') + '><span class="chk-box"></span>' + o + '</label>').join('') + '</div>'; }
   function mkRadio(name, opts, sel) { return '<div class="radio-group">' + opts.map(o => '<label class="radio-label"><input type="radio" name="' + name + '" value="' + o + '" ' + (sel === o ? 'checked' : '') + '><span class="radio-dot"></span>' + o + '</label>').join('') + '</div>'; }
 
   // ─── Render: Login ─────────────────────────
   function renderLogin() {
     document.body.innerHTML = '<div class="login-page"><div class="login-card">' +
-      '<div class="login-logo"><span class="login-logo-icon">' + ic('boxes', 'icon-xl') + '</span><h1>管考追蹤系統</h1><p>ISMS Corrective Action Tracking</p></div>' +
+      '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1>內部稽核管考追蹤系統</h1><p>ISMS Corrective Action Tracking</p></div>' +
       '<div class="login-error" id="login-error">帳號或密碼錯誤</div>' +
       '<div id="login-panel"><form class="login-form" id="login-form">' +
       '<div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="login-user" placeholder="請輸入帳號" required autofocus></div>' +
@@ -110,12 +112,12 @@
     if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a>';
     if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>檢核表管理</a>';
     if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div>' + sysNav + '</div>';
-    document.getElementById('sidebar').innerHTML = '<div class="sidebar-logo"><h1>' + ic('layout-dashboard') + ' 管考追蹤系統</h1><p>ISMS Corrective Action</p></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
+    document.getElementById('sidebar').innerHTML = '<div class="sidebar-logo"><h1>' + ntuLogo('ntu-logo-sm') + ' 內部稽核管考追蹤系統</h1><p>ISMS Corrective Action</p></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
   }
 
   function renderHeader() {
     var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', training: '教育訓練時數統計', 'training-fill': '填報教育訓練時數', 'training-detail': '教育訓練填報詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
-    document.getElementById('header').innerHTML = '<div class="header-left"><span class="header-title">' + (titles[r.page] || '管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
+    document.getElementById('header').innerHTML = '<div class="header-left"><span class="header-title">' + (titles[r.page] || '內部稽核管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
   }
   window._logout = function () { logout(); };
 
@@ -132,7 +134,7 @@
     var rr = recent.length ? recent.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td>' + esc(i.id) + '</td><td>' + esc(i.problemDesc || '').substring(0, 30) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>'; }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">尚無矯正單</div></div></td></tr>';
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
-      '<div class="page-header"><div><h1 class="page-title">儀表板</h1><p class="page-subtitle">管考追蹤系統總覽</p></div>' + createBtn + '</div>' +
+      '<div class="page-header"><div><h1 class="page-title">儀表板</h1><p class="page-subtitle">內部稽核管考追蹤系統總覽</p></div>' + createBtn + '</div>' +
       '<div class="stats-grid">' +
       '<div class="stat-card total"><div class="stat-icon">' + ic('files') + '</div><div class="stat-value">' + total + '</div><div class="stat-label">矯正單總數</div></div>' +
       '<div class="stat-card pending"><div class="stat-icon">' + ic('clock') + '</div><div class="stat-value">' + pending + '</div><div class="stat-label">待矯正</div></div>' +
@@ -261,6 +263,7 @@
   function renderDetail(id) {
     const item = getItem(id);
     if (!item) { document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到矯正單</div><a href="#list" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`; return; }
+    if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限檢視此矯正單', 'error'); return; }
     const u = currentUser(); const ci = STATUS_FLOW.indexOf(item.status);
     const stepper = STATUS_FLOW.map((s, i) => { let c = ''; if (i < ci) c = 'completed'; else if (i === ci) c = 'active'; return `<div class="stepper-step ${c}"><div class="stepper-circle">${i < ci ? '✓' : i + 1}</div><div class="stepper-label">${s}</div></div>`; }).join('');
     const otag = isOverdue(item) ? ` <span class="badge badge-overdue"><span class="badge-dot"></span>已逾期</span>` : '';
@@ -323,11 +326,33 @@
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
   }
 
-  window._cs = function (id, ns) { const item = getItem(id); if (!item) return; const now = new Date().toISOString(); const u2 = { status: ns, updatedAt: now, history: [...item.history, { time: now, action: `狀態變更為「${ns}」`, user: currentUser().name }] }; if (ns === STATUSES.CLOSED) u2.closedDate = now; updateItem(id, u2); toast(`狀態已變更為「${ns}」`); renderDetail(id); renderSidebar(); setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50); };
+  window._cs = function (id, ns) {
+    const item = getItem(id);
+    const u = currentUser();
+    if (!item || !u) return;
+    if (!canAccessItem(item) || !canReview()) { toast('您沒有變更狀態的權限', 'error'); return; }
+    const allowedTransitions = {
+      [STATUSES.PROPOSED]: [STATUSES.REVIEWING],
+      [STATUSES.REVIEWING]: [STATUSES.CLOSED, STATUSES.TRACKING, STATUSES.PENDING]
+    };
+    const next = allowedTransitions[item.status] || [];
+    if (!next.includes(ns)) { toast(`不允許從「${item.status}」變更為「${ns}」`, 'error'); return; }
+    const now = new Date().toISOString();
+    const updates = { status: ns, updatedAt: now, history: [...item.history, { time: now, action: `狀態變更為「${ns}」`, user: u.name }] };
+    if (ns === STATUSES.CLOSED) updates.closedDate = now;
+    updateItem(id, updates);
+    toast(`狀態已變更為「${ns}」`);
+    renderDetail(id);
+    renderSidebar();
+    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+  };
 
   // ─── Render: Respond ───────────────────────
   function renderRespond(id) {
     const item = getItem(id); if (!item) { navigate('list'); return; }
+    if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限操作此矯正單', 'error'); return; }
+    const canRespond = item.status === STATUSES.PENDING && (currentUser().name === item.handlerName || isAdmin());
+    if (!canRespond) { navigate('detail/' + id); toast('目前狀態不可回填，或您沒有回填權限', 'error'); return; }
     let tempEv = [];
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">回填矯正措施</h1><p class="page-subtitle">${esc(item.id)} · ${esc((item.problemDesc || '').substring(0, 40))}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">← 返回詳情</a></div>
@@ -366,6 +391,8 @@
       const ca = document.getElementById('r-action').value.trim(), rc = document.getElementById('r-root').value.trim(), el = document.getElementById('r-elim').value.trim();
       if (!ca || !rc || !el) { toast('請填寫矯正措施、根因分析與根因消除措施', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
+      if (!li || !canAccessItem(li)) { toast('您沒有權限操作此矯正單', 'error'); navigate('list'); return; }
+      if (li.status !== STATUSES.PENDING || !(u.name === li.handlerName || isAdmin())) { toast('此矯正單狀態已變更，無法回填', 'error'); navigate('detail/' + id); return; }
       const upd = {
         correctiveAction: ca, correctiveDueDate: document.getElementById('r-due').value,
         rootCause: rc,
@@ -386,6 +413,8 @@
   // ─── Render: Tracking ──────────────────────
   function renderTracking(id) {
     const item = getItem(id); if (!item) { navigate('list'); return; }
+    if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限操作此矯正單', 'error'); return; }
+    if (!(item.status === STATUSES.TRACKING && canReview())) { navigate('detail/' + id); toast('目前狀態不可追蹤，或您沒有追蹤權限', 'error'); return; }
     const round = (item.trackings || []).length + 1;
     if (round > 3) { toast('已達最大追蹤次數（3次）', 'error'); navigate('detail/' + id); return; }
     document.getElementById('app').innerHTML = `<div class="animate-in">
@@ -415,6 +444,8 @@
       e.preventDefault(); const res = document.querySelector('input[name="tkResult"]:checked');
       if (!res) { toast('請選擇審核結果', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
+      if (!li || !canAccessItem(li)) { toast('您沒有權限操作此矯正單', 'error'); navigate('list'); return; }
+      if (!(li.status === STATUSES.TRACKING && canReview())) { toast('此矯正單狀態已變更，無法儲存追蹤', 'error'); navigate('detail/' + id); return; }
       const tk = { tracker: document.getElementById('tk-tracker').value, trackDate: document.getElementById('tk-date').value, execution: document.getElementById('tk-exec').value.trim(), trackNote: document.getElementById('tk-note').value.trim(), result: res.value, nextTrackDate: document.getElementById('tk-next').value || null, reviewer: document.getElementById('tk-reviewer').value, reviewDate: document.getElementById('tk-revdate').value };
       const ns = res.value === '同意所提矯正措施，准以結案' ? STATUSES.CLOSED : STATUSES.TRACKING;
       const upd = { trackings: [...(li.trackings || []), tk], status: ns, updatedAt: now, history: [...li.history, { time: now, action: `第 ${round} 次追蹤 — ${res.value}`, user: u.name }, { time: now, action: `狀態變更為「${ns}」`, user: '系統' }] };
@@ -557,8 +588,28 @@
   function getAllChecklists() { return loadChecklists().items; }
   function getChecklist(id) { return loadChecklists().items.find(i => i.id === id); }
   function addChecklist(item) { const d = loadChecklists(); d.items.push(item); saveChecklists(d); }
+  function updateChecklist(id, updates) {
+    const d = loadChecklists();
+    const idx = d.items.findIndex(i => i.id === id);
+    if (idx < 0) return false;
+    d.items[idx] = { ...d.items[idx], ...updates };
+    saveChecklists(d);
+    return true;
+  }
   function generateChecklistId() { const d = loadChecklists(); const id = `CHK-${String(d.nextId).padStart(4, '0')}`; d.nextId++; saveChecklists(d); return id; }
   function getVisibleChecklists() { const u = currentUser(); if (!u) return []; const all = getAllChecklists(); if (u.role === ROLES.ADMIN) return all; return all.filter(i => i.unit === u.unit); }
+  function canEditChecklist(cl) {
+    const u = currentUser();
+    if (!u || !cl || cl.status !== '草稿' || !canFillChecklist()) return false;
+    if (u.role === ROLES.ADMIN) return true;
+    const sameUser = cl.fillerUsername ? cl.fillerUsername === u.username : cl.fillerName === u.name;
+    return sameUser && cl.unit === u.unit;
+  }
+  function getLatestEditableChecklistDraft() {
+    const drafts = getVisibleChecklists().filter(c => c.status === '草稿' && canEditChecklist(c));
+    drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    return drafts[0] || null;
+  }
 
   // ─── Render: Checklist List ────────────────
   function renderChecklistList() {
@@ -568,57 +619,70 @@
     const rows = checklists.length ? checklists.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(c => {
       const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
       const statusCls = c.status === '已提交' ? 'badge-closed' : 'badge-pending';
-      return `<tr onclick="location.hash='checklist-detail/${c.id}'"><td style="font-weight:600;color:var(--accent-primary)">${esc(c.id)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
+      const target = c.status === '草稿' && canEditChecklist(c) ? `checklist-fill/${c.id}` : `checklist-detail/${c.id}`;
+      return `<tr onclick="location.hash='${target}'"><td style="font-weight:600;color:var(--accent-primary)">${esc(c.id)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
     }).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:60px"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">尚無檢核表紀錄</div><div class="empty-state-desc">單位管理員可點選「填報檢核表」開始填寫</div></div></td></tr>`;
     document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">國立台灣大學 114 年度內部資通安全稽核查檢表</p></div>${fillBtn}</div>
+      <div class="page-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">國立臺灣大學內部資通安全稽核查檢表</p></div>${fillBtn}</div>
       <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>受稽單位</th><th>填報人</th><th>稽核年度</th><th>狀態</th><th>符合率</th><th>填報日期</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
   }
 
   // ─── Render: Checklist Fill ────────────────
-  function renderChecklistFill() {
+  function renderChecklistFill(id) {
     refreshChecklistSections();
     if (!canFillChecklist()) { navigate('checklist'); toast('您沒有填報檢核表的權限', 'error'); return; }
+
     const u = currentUser();
+    let existing = id ? getChecklist(id) : getLatestEditableChecklistDraft();
+    if (id && !existing) { navigate('checklist'); toast('找不到可續填的草稿', 'error'); return; }
+    if (existing && !canEditChecklist(existing)) { navigate('checklist'); toast('此檢核表不可編輯', 'error'); return; }
+
     let sectionsHtml = '';
     CHECKLIST_SECTIONS.forEach((sec, si) => {
       let itemsHtml = '';
       sec.items.forEach(item => {
-        const radios = COMPLIANCE_OPTS.map(opt => `<label class="cl-radio-label cl-radio-${COMPLIANCE_CLASSES[opt]}"><input type="radio" name="cl-${item.id}" value="${opt}"><span class="cl-radio-indicator"></span>${opt}</label>`).join('');
+        const saved = existing?.results?.[item.id] || {};
+        const radios = COMPLIANCE_OPTS.map(opt => `<label class="cl-radio-label cl-radio-${COMPLIANCE_CLASSES[opt]}"><input type="radio" name="cl-${item.id}" value="${opt}" ${saved.compliance === opt ? 'checked' : ''}><span class="cl-radio-indicator"></span>${opt}</label>`).join('');
         itemsHtml += `<div class="cl-item" id="cl-item-${item.id}">
           <div class="cl-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span></div>
           <div class="cl-item-body">
             <div class="cl-compliance"><label class="form-label form-required">單位自評</label><div class="cl-radio-group">${radios}</div></div>
             <div class="cl-fields">
-              <div class="form-group"><label class="form-label">執行情形簡述</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2"></textarea></div>
-              <div class="form-group"><label class="form-label">佐證資料</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="如執行紀錄、公文、截圖說明等" rows="2"></textarea></div>
+              <div class="form-group"><label class="form-label">執行情形簡述</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2">${esc(saved.execution || '')}</textarea></div>
+              <div class="form-group"><label class="form-label">佐證資料</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="如執行紀錄、公文、截圖說明等" rows="2">${esc(saved.evidence || '')}</textarea></div>
             </div>
           </div>
         </div>`;
       });
       sectionsHtml += `<div class="cl-section"><div class="cl-section-header"><span class="cl-section-num">${si + 1}</span>${esc(sec.section)}</div><div class="cl-section-body">${itemsHtml}</div></div>`;
     });
+
     const allUsers = getUsers();
-    const unitOpts = [...new Set(allUsers.map(u => u.unit))].map(ut => `<option value="${esc(ut)}" ${ut === u.unit ? 'selected' : ''}>${esc(ut)}</option>`).join('');
+    const selectedUnit = existing ? existing.unit : u.unit;
+    const unitOpts = [...new Set(allUsers.map(x => x.unit))].map(ut => `<option value="${esc(ut)}" ${ut === selectedUnit ? 'selected' : ''}>${esc(ut)}</option>`).join('');
+    const today = new Date().toISOString().split('T')[0];
+
     document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">填報檢核表</h1><p class="page-subtitle">國立台灣大學 114 年度內部資通安全稽核查檢表</p></div><a href="#checklist" class="btn btn-secondary">← 返回列表</a></div>
+      <div class="page-header"><div><h1 class="page-title">${existing ? '續填檢核表' : '填報檢核表'}</h1><p class="page-subtitle">國立臺灣大學內部資通安全稽核查檢表${existing ? `（草稿 ${esc(existing.id)}）` : ''}</p></div><a href="#checklist" class="btn btn-secondary">← 返回列表</a></div>
       <div class="card" style="max-width:960px"><form id="checklist-form">
         <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label form-required">受稽單位</label><select class="form-select" id="cl-unit" required>${unitOpts}</select></div>
           <div class="form-group"><label class="form-label form-required">填表人員</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
-          <div class="form-group"><label class="form-label form-required">自評日期</label><input type="date" class="form-input" id="cl-date" value="${new Date().toISOString().split('T')[0]}" required></div>
+          <div class="form-group"><label class="form-label form-required">自評日期</label><input type="date" class="form-input" id="cl-date" value="${existing ? esc(existing.fillDate) : today}" required></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">稽核年度</label><input type="text" class="form-input" id="cl-year" value="114" required></div>
-          <div class="form-group"><label class="form-label">權責主管</label><input type="text" class="form-input" id="cl-supervisor" placeholder="請輸入權責主管姓名"></div>
+          <div class="form-group"><label class="form-label">稽核年度</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : '114'}" required></div>
+          <div class="form-group"><label class="form-label">權責主管</label><input type="text" class="form-input" id="cl-supervisor" value="${existing ? esc(existing.supervisor || '') : ''}" placeholder="請輸入權責主管姓名"></div>
         </div>
         <div class="cl-progress-bar-wrap"><div class="cl-progress-label">填報進度</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0)}</span></div>
         ${sectionsHtml}
         <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft">${ic('save', 'icon-sm')} 儲存草稿</button><a href="#checklist" class="btn btn-ghost">取消</a></div>
       </form></div></div>`;
+
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+
     const totalItems = CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0);
     function updateProgress() {
       let filled = 0;
@@ -629,7 +693,10 @@
       document.getElementById('cl-progress-fill').style.width = pct + '%';
       document.getElementById('cl-progress-text').textContent = filled + ' / ' + totalItems;
     }
+
     document.querySelectorAll('.cl-radio-group input').forEach(r => r.addEventListener('change', updateProgress));
+    updateProgress();
+
     function collectData(status) {
       const results = {};
       let conform = 0, partial = 0, nonConform = 0, na = 0, total = 0;
@@ -643,25 +710,54 @@
         else if (compliance === '不符合') nonConform++;
         else if (compliance === '不適用') na++;
       }));
+
       const now = new Date().toISOString();
-      return { id: generateChecklistId(), unit: document.getElementById('cl-unit').value, fillerName: document.getElementById('cl-filler').value, fillDate: document.getElementById('cl-date').value, auditYear: document.getElementById('cl-year').value, supervisor: document.getElementById('cl-supervisor').value.trim(), results, summary: { total, conform, partial, nonConform, na }, status, createdAt: now, updatedAt: now };
+      return {
+        id: existing ? existing.id : generateChecklistId(),
+        unit: document.getElementById('cl-unit').value,
+        fillerName: document.getElementById('cl-filler').value,
+        fillerUsername: existing?.fillerUsername || u.username,
+        fillDate: document.getElementById('cl-date').value,
+        auditYear: document.getElementById('cl-year').value,
+        supervisor: document.getElementById('cl-supervisor').value.trim(),
+        results,
+        summary: { total, conform, partial, nonConform, na },
+        status,
+        createdAt: existing ? existing.createdAt : now,
+        updatedAt: now
+      };
     }
+
     document.getElementById('checklist-form').addEventListener('submit', e => {
       e.preventDefault();
-      let missing = [];
+      const missing = [];
       CHECKLIST_SECTIONS.forEach(sec => sec.items.forEach(item => { if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id); }));
-      if (missing.length > 0) { toast(`尚有 ${missing.length} 個項目未填寫自評結果`, 'error'); const el = document.getElementById(`cl-item-${missing[0]}`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-      const data = collectData('已提交');
-      addChecklist(data); toast(`檢核表 ${data.id} 已成功送出！`); navigate('checklist-detail/' + data.id);
-    });
-    document.getElementById('cl-save-draft').addEventListener('click', () => { const data = collectData('草稿'); addChecklist(data); toast(`草稿 ${data.id} 已儲存`); navigate('checklist'); });
-  }
+      if (missing.length > 0) {
+        toast(`尚有 ${missing.length} 個項目未填寫自評結果`, 'error');
+        const el = document.getElementById(`cl-item-${missing[0]}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
 
+      const data = collectData('已提交');
+      if (existing) updateChecklist(existing.id, data); else addChecklist(data);
+      toast(`檢核表 ${data.id} 已成功送出！`);
+      navigate('checklist-detail/' + data.id);
+    });
+
+    document.getElementById('cl-save-draft').addEventListener('click', () => {
+      const data = collectData('草稿');
+      if (existing) updateChecklist(existing.id, data); else addChecklist(data);
+      toast(`草稿 ${data.id} 已儲存`);
+      navigate('checklist');
+    });
+  }
   // ─── Render: Checklist Detail ──────────────
   function renderChecklistDetail(id) {
     refreshChecklistSections();
     const cl = getChecklist(id);
     if (!cl) { document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到檢核表</div><a href="#checklist" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`; return; }
+    if (!isAdmin() && cl.unit !== currentUser().unit) { navigate('checklist'); toast('您沒有權限檢視此檢核表', 'error'); return; }
     const s = cl.summary;
     const applicable = s.total - s.na;
     const applicableRate = applicable > 0 ? Math.round(s.conform / applicable * 100) : 0;
@@ -1369,7 +1465,7 @@
   // ─── Router ────────────────────────────────
   function handleRoute() {
     if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader();
-    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
+    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(r.param); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
   }
 
   // ─── Seed Data ─────────────────────────────
@@ -1395,6 +1491,8 @@
   renderApp();
 
 })();
+
+
 
 
 
