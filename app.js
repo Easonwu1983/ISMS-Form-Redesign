@@ -1,5 +1,5 @@
 // =============================================
-// 管考追蹤系統 - v4 ISMS Corrective Action + Audit Checklist
+// ISMS Internal Audit Tracking System - v4
 // =============================================
 (function () {
   'use strict';
@@ -248,10 +248,27 @@
   function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
   function navigate(h) { window.location.hash = h; }
   function getRoute() { const h = window.location.hash.slice(1) || 'dashboard'; const p = h.split('/'); return { page: p[0], param: p[1] }; }
+  let iconRetryTimer = null;
+  let iconRetryCount = 0;
   function refreshIcons() {
-    if (!window.lucide || typeof window.lucide.createIcons !== 'function') return;
+    const lucideApi = window.lucide;
+    if (!lucideApi || typeof lucideApi.createIcons !== 'function') {
+      if (!iconRetryTimer && iconRetryCount < 20) {
+        iconRetryTimer = setTimeout(() => {
+          iconRetryTimer = null;
+          iconRetryCount += 1;
+          refreshIcons();
+        }, 120);
+      }
+      return;
+    }
+    iconRetryCount = 0;
+    if (iconRetryTimer) {
+      clearTimeout(iconRetryTimer);
+      iconRetryTimer = null;
+    }
     const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
-    raf(() => window.lucide.createIcons());
+    raf(() => lucideApi.createIcons());
   }
   function getVisibleItems() { const u = currentUser(); if (!u) return []; const all = getAllItems(); if (u.role === ROLES.ADMIN) return all; if (u.role === ROLES.UNIT_ADMIN) return all.filter(i => i.proposerUnit === u.unit || i.handlerUnit === u.unit || i.proposerName === u.name); return all.filter(i => i.handlerName === u.name); }
   function canAccessItem(item) {
@@ -669,7 +686,7 @@
         <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('save', 'icon-sm')} 儲存追蹤</button><a href="#detail/${item.id}" class="btn btn-secondary">取消</a></div>
       </form></div></div>`;
     setTimeout(() => {
-      if (window.lucide) lucide.createIcons();
+      refreshIcons();
       document.querySelectorAll('input[name="tkResult"]').forEach(r => r.addEventListener('change', e => { document.getElementById('tk-next-wrap').style.display = e.target.value === '持續追蹤' ? 'block' : 'none'; }));
     }, 50);
     document.getElementById('track-form').addEventListener('submit', e => {
@@ -1748,6 +1765,9 @@
   seedData();
   seedTrainingData();
   window.addEventListener('hashchange', handleRoute);
+  window.addEventListener('load', refreshIcons);
   renderApp();
+  refreshIcons();
 
 })();
+
