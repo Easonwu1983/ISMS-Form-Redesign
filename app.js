@@ -14,14 +14,152 @@
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
   const DEFAULT_USERS = [
-    { username: 'admin', password: 'admin123', name: '系統管理員', role: ROLES.ADMIN, unit: '資訊部', email: 'admin@company.com' },
-    { username: 'unit1', password: 'unit123', name: '王經理', role: ROLES.UNIT_ADMIN, unit: '資安組', email: 'wang@company.com' },
+    { username: 'admin', password: 'admin123', name: '系統管理員', role: ROLES.ADMIN, unit: '計算機及資訊網路中心／資訊網路組', email: 'admin@company.com' },
+    { username: 'unit1', password: 'unit123', name: '王經理', role: ROLES.UNIT_ADMIN, unit: '計算機及資訊網路中心／資訊網路組', email: 'wang@company.com' },
     { username: 'unit2', password: 'unit123', name: '張稽核員', role: ROLES.UNIT_ADMIN, unit: '稽核室', email: 'zhang@company.com' },
-    { username: 'user1', password: 'user123', name: '李工程師', role: ROLES.REPORTER, unit: '資安組', email: 'li@company.com' },
-    { username: 'user2', password: 'user123', name: '陳資安主管', role: ROLES.REPORTER, unit: '資安組', email: 'chen@company.com' },
-    { username: 'user3', password: 'user123', name: '黃工程師', role: ROLES.REPORTER, unit: '資訊部', email: 'huang@company.com' },
-    { username: 'user4', password: 'user123', name: '劉文管人員', role: ROLES.REPORTER, unit: '稽核室', email: 'liu@company.com' },
+    { username: 'user1', password: 'user123', name: '李工程師', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', email: 'li@company.com' },
+    { username: 'user2', password: 'user123', name: '陳資安主管', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', email: 'chen@company.com' },
+    { username: 'user3', password: 'user123', name: '黃工程師', role: ROLES.REPORTER, unit: '總務處／營繕組', email: 'huang@company.com' },
+    { username: 'user4', password: 'user123', name: '劉文管人員', role: ROLES.REPORTER, unit: '人事室／綜合業務組', email: 'liu@company.com' },
   ];
+
+  function getOfficialUnits() {
+    try {
+      if (typeof window !== 'undefined' && typeof window.getOfficialUnitList_ === 'function') {
+        const units = window.getOfficialUnitList_();
+        if (Array.isArray(units)) return units;
+      }
+    } catch (_) { }
+    return [];
+  }
+
+  function getSystemUnits() {
+    const set = new Set(getOfficialUnits());
+    try {
+      const data = loadData();
+      (data.users || []).forEach((u) => { if (u && u.unit) set.add(String(u.unit)); });
+      (data.items || []).forEach((i) => {
+        if (i && i.proposerUnit) set.add(String(i.proposerUnit));
+        if (i && i.handlerUnit) set.add(String(i.handlerUnit));
+      });
+    } catch (_) { }
+    try {
+      const checks = loadChecklists();
+      (checks.items || []).forEach((c) => { if (c && c.unit) set.add(String(c.unit)); });
+    } catch (_) { }
+    try {
+      const tr = loadTrainingStore();
+      (tr.forms || []).forEach((f) => { if (f && f.unit) set.add(String(f.unit)); });
+      (tr.rosters || []).forEach((r) => { if (r && r.unit) set.add(String(r.unit)); });
+    } catch (_) { }
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  }
+
+  function buildUnitOptions(units, selected, includeEmpty) {
+    const list = Array.isArray(units) ? units : [];
+    const safeSelected = String(selected || '');
+    const base = includeEmpty ? '<option value="">請選擇</option>' : '';
+    return base + list.map((u) => `<option value="${esc(u)}" ${safeSelected === u ? 'selected' : ''}>${esc(u)}</option>`).join('');
+  }
+
+  function getUnitStructureSafe() {
+    try {
+      if (typeof window !== 'undefined' && typeof window.getUnitStructure_ === 'function') {
+        const structure = window.getUnitStructure_();
+        if (structure && typeof structure === 'object') return structure;
+      }
+    } catch (_) { }
+    return {};
+  }
+
+  function splitUnitValue(unitValue) {
+    const raw = String(unitValue || '').trim();
+    if (!raw) return { parent: '', child: '' };
+    const sep = raw.includes('／') ? '／' : (raw.includes('/') ? '/' : '');
+    if (!sep) return { parent: raw, child: '' };
+    const parts = raw.split(sep);
+    const parent = String(parts.shift() || '').trim();
+    const child = String(parts.join(sep) || '').trim();
+    return { parent, child };
+  }
+
+  function composeUnitValue(parent, child) {
+    const p = String(parent || '').trim();
+    const c = String(child || '').trim();
+    if (!p) return '';
+    return c ? `${p}／${c}` : p;
+  }
+
+  function buildUnitCascadeControl(baseId, selectedUnit, disabled, required) {
+    const dis = disabled ? 'disabled' : '';
+    const req = required ? 'required' : '';
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <select class="form-select" id="${baseId}-parent" ${dis} ${req}></select>
+      <select class="form-select" id="${baseId}-child" ${dis}></select>
+      <input type="hidden" id="${baseId}" value="${esc(selectedUnit || '')}" />
+    </div>`;
+  }
+
+  function initUnitCascade(baseId, initialValue, options) {
+    const opts = options || {};
+    const parentEl = document.getElementById(`${baseId}-parent`);
+    const childEl = document.getElementById(`${baseId}-child`);
+    const hiddenEl = document.getElementById(baseId);
+    if (!parentEl || !childEl || !hiddenEl) return;
+
+    const structure = getUnitStructureSafe();
+    const parsed = splitUnitValue(initialValue || hiddenEl.value);
+    const parentSet = new Set(Object.keys(structure || {}));
+    if (parsed.parent) parentSet.add(parsed.parent);
+    const parents = Array.from(parentSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+
+    parentEl.innerHTML = '<option value="">請選擇一級單位</option>' + parents.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+
+    const syncHidden = (dispatchChange) => {
+      const parent = String(parentEl.value || '').trim();
+      const hasChildren = Array.isArray(structure[parent]) && structure[parent].length > 0;
+      const child = (!childEl.disabled && hasChildren) ? String(childEl.value || '').trim() : '';
+      hiddenEl.value = composeUnitValue(parent, child);
+      if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
+    };
+
+    const renderChildren = (parent, selectedChild) => {
+      const children = Array.isArray(structure[parent]) ? [...structure[parent]] : [];
+      const child = String(selectedChild || '').trim();
+      if (child && !children.includes(child)) children.unshift(child);
+
+      if (!parent) {
+        childEl.innerHTML = '<option value="">請先選擇一級單位</option>';
+        childEl.disabled = true;
+        return;
+      }
+
+      if (children.length === 0) {
+        childEl.innerHTML = '<option value="">無二級單位</option>';
+        childEl.disabled = true;
+        return;
+      }
+
+      childEl.disabled = false;
+      childEl.innerHTML = '<option value="">請選擇二級單位（選填）</option>' + children.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      if (child) childEl.value = child;
+    };
+
+    parentEl.addEventListener('change', () => {
+      renderChildren(parentEl.value, '');
+      syncHidden(true);
+    });
+    childEl.addEventListener('change', () => syncHidden(true));
+
+    if (parsed.parent) parentEl.value = parsed.parent;
+    renderChildren(parentEl.value, parsed.child);
+    syncHidden(false);
+
+    if (opts.disabled) {
+      parentEl.disabled = true;
+      childEl.disabled = true;
+    }
+  }
   function loadData() { try { return JSON.parse(localStorage.getItem(DATA_KEY)) || { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 }; } catch { return { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 }; } }
   function saveData(d) { localStorage.setItem(DATA_KEY, JSON.stringify(d)); }
   function getAllItems() { return loadData().items; }
@@ -206,18 +344,18 @@
     const allUsers = getUsers();
     const users = allUsers.filter(x => x.role === ROLES.REPORTER || x.role === ROLES.UNIT_ADMIN);
 
-    const unitOpts = [...new Set(allUsers.map(u => u.unit))].map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">開立矯正單</h1><p class="page-subtitle">依據 ISMS 規範填寫矯正措施需求單</p></div></div>
       <div class="card" style="max-width:850px;"><form id="create-form">
         <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label form-required">提出單位</label><select class="form-select" id="f-punit" required><option value="">請選擇</option>${unitOpts}</select></div>
+          <div class="form-group"><label class="form-label form-required">提出單位</label>${buildUnitCascadeControl('f-punit', u.unit || '', false, true)}</div>
           <div class="form-group"><label class="form-label form-required">提出人員</label><input type="text" class="form-input" id="f-pname" value="${esc(u.name)}" readonly></div>
           <div class="form-group"><label class="form-label form-required">提出日期</label><input type="date" class="form-input" id="f-pdate" value="${new Date().toISOString().split('T')[0]}" required></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label form-required">處理單位</label><select class="form-select" id="f-hunit" required><option value="">請選擇</option>${unitOpts}</select></div>
+          <div class="form-group"><label class="form-label form-required">處理單位</label>${buildUnitCascadeControl('f-hunit', '', false, true)}</div>
           <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" required><option value="">請選擇</option></select></div>
           <div class="form-group"><label class="form-label">處理日期</label><input type="date" class="form-input" id="f-hdate"></div>
         </div>
@@ -244,7 +382,8 @@
     const handlerUnit = document.getElementById('f-hunit');
     const handlerName = document.getElementById('f-hname');
     const handlerEmailInput = document.getElementById('f-hemail');
-    if (u.unit) proposerUnit.value = u.unit;
+    initUnitCascade('f-punit', u.unit || '', { disabled: false });
+    initUnitCascade('f-hunit', '', { disabled: false });
     function updateHandlerEmail() {
       const sel = handlerName.options[handlerName.selectedIndex];
       const email = sel && sel.dataset ? (sel.dataset.email || '') : '';
@@ -252,8 +391,8 @@
     }
     function renderHandlerOptionsByUnit(unit) {
       const prevSelected = handlerName.value;
-      const filtered = unit ? users.filter(x => x.unit === unit) : users;
-      handlerName.innerHTML = '<option value="">請選擇</option>' + filtered.map(x => `<option value="${esc(x.name)}" data-email="${esc(x.email || '')}">${esc(x.name)}（${esc(x.unit)}）</option>`).join('');
+      const filtered = unit ? users.filter(x => x.unit === unit || x.unit.startsWith(unit + '／')) : users;
+      handlerName.innerHTML = '<option value="">請選擇</option>' + filtered.map(x => `<option value="${esc(x.name)}" data-username="${esc(x.username || '')}" data-email="${esc(x.email || '')}">${esc(x.name)}（${esc(x.unit)}）</option>`).join('');
       if (prevSelected && filtered.some(x => x.name === prevSelected)) handlerName.value = prevSelected;
       updateHandlerEmail();
     }
@@ -274,14 +413,18 @@
       if (!defType) { toast('請選擇缺失種類', 'error'); return; }
       if (!source) { toast('請選擇來源', 'error'); return; }
       if (cats.length === 0) { toast('請至少選擇一個分類', 'error'); return; }
+      const selectedHandler = handlerName.options[handlerName.selectedIndex];
+      const handlerUsername = selectedHandler && selectedHandler.dataset ? (selectedHandler.dataset.username || '') : '';
       const now = new Date().toISOString();
       const item = {
         id: generateId(),
         proposerUnit: document.getElementById('f-punit').value,
         proposerName: document.getElementById('f-pname').value.trim(),
+        proposerUsername: u.username,
         proposerDate: document.getElementById('f-pdate').value,
         handlerUnit: document.getElementById('f-hunit').value,
         handlerName: document.getElementById('f-hname').value,
+        handlerUsername,
         handlerEmail: document.getElementById('f-hemail').value || '',
         handlerDate: document.getElementById('f-hdate').value || null,
         deficiencyType: defType.value,
@@ -516,16 +659,17 @@
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
   }
   function showUserModal(eu) {
-    const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root');
+    const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root'); const initUnit = isE ? (eu.unit || '') : '';
     mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${title}</span><button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button></div><form id="user-form">
       <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>
       <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
       <div class="form-group"><label class="form-label form-required">電子信箱</label><input type="email" class="form-input" id="u-email" value="${isE ? esc(eu.email || '') : ''}" required></div>
       <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.REPORTER}" ${isE && eu.role === ROLES.REPORTER ? 'selected' : ''}>填報人</option><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option></select></div>
-      <div class="form-group"><label class="form-label form-required">單位</label><input type="text" class="form-input" id="u-unit" value="${isE ? esc(eu.unit) : ''}" required></div></div>
+      <div class="form-group"><label class="form-label form-required">單位</label>${buildUnitCascadeControl('u-unit', initUnit, false, true)}</div></div>
       <div class="form-group"><label class="form-label ${isE ? '' : 'form-required'}">${isE ? '密碼（留空不修改）' : '密碼'}</label><input type="text" class="form-input" id="u-pass" ${isE ? '' : 'required'}></div>
       <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-root').innerHTML=''">取消</button></div>
     </form></div></div>`;
+    initUnitCascade('u-unit', initUnit, { disabled: false });
     document.getElementById('modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
     document.getElementById('user-form').addEventListener('submit', e => {
       e.preventDefault(); const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), pw = document.getElementById('u-pass').value;
@@ -730,9 +874,7 @@
       sectionsHtml += `<div class="cl-section"><div class="cl-section-header"><span class="cl-section-num">${si + 1}</span>${esc(sec.section)}</div><div class="cl-section-body">${itemsHtml}</div></div>`;
     });
 
-    const allUsers = getUsers();
     const selectedUnit = existing ? existing.unit : u.unit;
-    const unitOpts = [...new Set(allUsers.map(x => x.unit))].map(ut => `<option value="${esc(ut)}" ${ut === selectedUnit ? 'selected' : ''}>${esc(ut)}</option>`).join('');
     const today = new Date().toISOString().split('T')[0];
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
@@ -740,7 +882,7 @@
       <div class="card" style="max-width:960px"><form id="checklist-form">
         <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label form-required">受稽單位</label><select class="form-select" id="cl-unit" required>${unitOpts}</select></div>
+          <div class="form-group"><label class="form-label form-required">受稽單位</label>${buildUnitCascadeControl('cl-unit', selectedUnit, false, true)}</div>
           <div class="form-group"><label class="form-label form-required">填表人員</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
           <div class="form-group"><label class="form-label form-required">自評日期</label><input type="date" class="form-input" id="cl-date" value="${existing ? esc(existing.fillDate) : today}" required></div>
         </div>
@@ -754,6 +896,7 @@
       </form></div></div>`;
 
     setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+    initUnitCascade('cl-unit', selectedUnit, { disabled: false });
 
     const totalItems = CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0);
     function updateProgress() {
@@ -1221,11 +1364,7 @@
   function deleteTrainingRosterPerson(id) { const d = loadTrainingStore(); d.rosters = d.rosters.filter(r => r.id !== id); saveTrainingStore(d); }
 
   function getTrainingUnits() {
-    const set = new Set();
-    getUsers().forEach(u => { if (u.unit) set.add(u.unit); });
-    getAllTrainingRosters().forEach(r => { if (r.unit) set.add(r.unit); });
-    getAllTrainingForms().forEach(f => { if (f.unit) set.add(f.unit); });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    return getSystemUnits();
   }
   function getVisibleTrainingForms() {
     const u = currentUser();
@@ -1375,9 +1514,9 @@
     if (u.unit && !units.includes(u.unit)) units.push(u.unit);
     if (existing?.unit && !units.includes(existing.unit)) units.push(existing.unit);
     units.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
-    const unitValue = existing ? existing.unit : (isAdmin() ? (units[0] || u.unit || '') : u.unit);
+    const unitValue = existing ? existing.unit : (isAdmin() ? (u.unit || units[0] || '') : u.unit);
     const isUnitLocked = !!existing || !isAdmin();
-    const unitOpts = units.map(unit => `<option value="${esc(unit)}" ${unit === unitValue ? 'selected' : ''}>${esc(unit)}</option>`).join('');
+
 
     function buildRows(targetUnit, carryRows) {
       const rosterRows = getTrainingRosterByUnit(targetUnit).map(r => {
@@ -1395,7 +1534,7 @@
     let signedFiles = existing ? [...(existing.signedFiles || [])] : [];
     const submitLabel = existing && existing.status === TRAINING_STATUSES.RETURNED ? '更正後正式送出' : '正式送出';
 
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">填報教育訓練時數</h1><p class="page-subtitle">填報進度可暫存於系統，正式送出後將鎖定，需管理者退回才可更正</p></div><a href="#training" class="btn btn-secondary">← 返回列表</a></div>${existing && existing.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(existing.returnReason || '未提供')}</div>` : ''}<div class="card" style="max-width:980px"><form id="training-form"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div><div class="form-row"><div class="form-group"><label class="form-label form-required">填報單位</label><select class="form-select" id="tr-unit" ${isUnitLocked ? 'disabled' : ''}>${unitOpts}</select></div><div class="form-group"><label class="form-label form-required">填報人</label><input type="text" class="form-input" value="${esc(u.name)}" readonly></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="${existing ? esc(existing.fillDate) : new Date().toISOString().split('T')[0]}" required></div></div><div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="${existing ? esc(existing.trainingYear) : String(new Date().getFullYear() - 1911)}" required></div><div class="form-group"><label class="form-label">填報說明</label><input type="text" class="form-input" value="管理者可匯入名單；填報人可新增名單外人員" readonly></div></div><div class="section-header">${ic('users', 'icon-sm')} 人員名單與時數</div><p class="form-hint">名單刪除僅限管理者。填報人可新增名單外人員，不可刪減既有名單。</p><div class="form-row" style="align-items:flex-end"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-person" placeholder="輸入姓名後按新增"></div><div class="form-group" style="flex:0 0 auto"><button type="button" class="btn btn-secondary" id="training-add-person">${ic('user-plus', 'icon-sm')} 新增到名單</button></div></div><div class="table-wrapper" style="margin-top:8px"><table><thead><tr><th style="width:160px">來源</th><th>姓名</th><th style="width:160px">時數</th><th>備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div><div id="training-summary" class="training-summary-grid"></div><div class="section-header" style="margin-top:16px">${ic('paperclip', 'icon-sm')} 上傳簽核後掃描檔</div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div><div class="file-preview-list" id="training-file-previews"></div><div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft">${ic('save', 'icon-sm')} 儲存暫存</button><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} ${submitLabel}</button><a href="#training" class="btn btn-ghost">取消</a></div></form></div></div>`;
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">填報教育訓練時數</h1><p class="page-subtitle">填報進度可暫存於系統，正式送出後將鎖定，需管理者退回才可更正</p></div><a href="#training" class="btn btn-secondary">← 返回列表</a></div>${existing && existing.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(existing.returnReason || '未提供')}</div>` : ''}<div class="card" style="max-width:980px"><form id="training-form"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div><div class="form-row"><div class="form-group"><label class="form-label form-required">填報單位</label>${buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true)}</div><div class="form-group"><label class="form-label form-required">填報人</label><input type="text" class="form-input" value="${esc(u.name)}" readonly></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="${existing ? esc(existing.fillDate) : new Date().toISOString().split('T')[0]}" required></div></div><div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="${existing ? esc(existing.trainingYear) : String(new Date().getFullYear() - 1911)}" required></div><div class="form-group"><label class="form-label">填報說明</label><input type="text" class="form-input" value="管理者可匯入名單；填報人可新增名單外人員" readonly></div></div><div class="section-header">${ic('users', 'icon-sm')} 人員名單與時數</div><p class="form-hint">名單刪除僅限管理者。填報人可新增名單外人員，不可刪減既有名單。</p><div class="form-row" style="align-items:flex-end"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-person" placeholder="輸入姓名後按新增"></div><div class="form-group" style="flex:0 0 auto"><button type="button" class="btn btn-secondary" id="training-add-person">${ic('user-plus', 'icon-sm')} 新增到名單</button></div></div><div class="table-wrapper" style="margin-top:8px"><table><thead><tr><th style="width:160px">來源</th><th>姓名</th><th style="width:160px">時數</th><th>備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div><div id="training-summary" class="training-summary-grid"></div><div class="section-header" style="margin-top:16px">${ic('paperclip', 'icon-sm')} 上傳簽核後掃描檔</div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div><div class="file-preview-list" id="training-file-previews"></div><div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft">${ic('save', 'icon-sm')} 儲存暫存</button><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} ${submitLabel}</button><a href="#training" class="btn btn-ghost">取消</a></div></form></div></div>`;
 
     function renderSummary() {
       const s = computeTrainingSummary(rowsState.map(r => ({ ...r, hours: Number(r.hours || 0) })));
@@ -1454,6 +1593,7 @@
 
     document.getElementById('training-form').addEventListener('submit', e => { e.preventDefault(); saveTrainingForm(TRAINING_STATUSES.SUBMITTED); });
     document.getElementById('training-save-draft').addEventListener('click', () => saveTrainingForm(TRAINING_STATUSES.DRAFT));
+    initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });
     document.getElementById('training-add-person').addEventListener('click', () => {
       const unit = document.getElementById('tr-unit').value;
       const input = document.getElementById('tr-new-person');
@@ -1507,13 +1647,13 @@
 
   function renderTrainingRoster() {
     if (!isAdmin()) { navigate('training'); toast('僅管理者可管理名單', 'error'); return; }
-    const units = getTrainingUnits();
-    const unitOpts = units.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+
     const rosters = getAllTrainingRosters().slice().sort((a, b) => a.unit === b.unit ? a.name.localeCompare(b.name, 'zh-Hant') : a.unit.localeCompare(b.unit, 'zh-Hant'));
     const rows = rosters.length ? rosters.map(r => `<tr><td>${esc(r.unit)}</td><td>${esc(r.name)}</td><td>${r.source === 'import' ? '管理者匯入' : '填報新增'}</td><td>${esc(r.createdBy || '')}</td><td>${fmtTime(r.createdAt)}</td><td><button type="button" class="btn btn-sm btn-danger" onclick="window._trainingDeleteRoster('${r.id}')">${ic('trash-2', 'btn-icon-svg')}</button></td></tr>`).join('') : `<tr><td colspan="6"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>`;
 
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可依單位匯入與刪除人員；填報人僅可新增名單外人員</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div><div class="card" style="max-width:960px;margin-bottom:20px"><form id="training-import-form"><div class="section-header">${ic('upload', 'icon-sm')} 匯入單位名單</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label><select class="form-select" id="training-import-unit" required>${unitOpts}</select></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="每行一位人員，可混合逗號、分號分隔" readonly></div></div><div class="form-group"><label class="form-label form-required">人員名單</label><textarea class="form-textarea" id="training-import-names" rows="6" placeholder="王小明&#10;陳小華&#10;張小資" required></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('upload', 'icon-sm')} 匯入名單</button></div></form></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>單位</th><th>姓名</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可依單位匯入與刪除人員；填報人僅可新增名單外人員</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div><div class="card" style="max-width:960px;margin-bottom:20px"><form id="training-import-form"><div class="section-header">${ic('upload', 'icon-sm')} 匯入單位名單</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label>${buildUnitCascadeControl('training-import-unit', '', false, true)}</div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="每行一位人員，可混合逗號、分號分隔" readonly></div></div><div class="form-group"><label class="form-label form-required">人員名單</label><textarea class="form-textarea" id="training-import-names" rows="6" placeholder="王小明&#10;陳小華&#10;張小資" required></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('upload', 'icon-sm')} 匯入名單</button></div></form></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>單位</th><th>姓名</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
 
+    initUnitCascade('training-import-unit', '', { disabled: false });
     document.getElementById('training-import-form').addEventListener('submit', e => {
       e.preventDefault();
       const unit = document.getElementById('training-import-unit').value;
@@ -1558,10 +1698,10 @@
     if (!d.users || d.users.length === 0) d.users = DEFAULT_USERS.map(u => ({ ...u }));
     const now = new Date(), ago = n => new Date(now - n * 864e5).toISOString(), fut = n => new Date(now.getTime() + n * 864e5).toISOString().split('T')[0], past = n => new Date(now - n * 864e5).toISOString().split('T')[0];
     d.items = [
-      { id: 'CAR-0001', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(25), handlerUnit: '資安組', handlerName: '李工程師', handlerDate: past(24), deficiencyType: '主要缺失', source: '內部稽核', category: ['硬體', '基礎設施'], clause: 'A.11.2.2', problemDesc: '伺服器機房溫度超過 28°C 標準值，最高達 32°C。', occurrence: '例行巡檢時發現 A 區機房溫控設備失效，導致持續高溫 3 天。', correctiveAction: '已更換溫控感測器並校正空調系統。', correctiveDueDate: past(10), rootCause: '溫控感測器服役超過 5 年，精度下降且未按時校正。', rootElimination: '建立每季校正計畫，設定感測器更換週期為 3 年。', rootElimDueDate: past(8), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '同意', reviewer: '王經理', reviewDate: past(5), trackings: [], status: STATUSES.CLOSED, createdAt: ago(25), updatedAt: ago(5), closedDate: ago(5), evidence: [], history: [{ time: ago(25), action: '開立矯正單', user: '張稽核員' }, { time: ago(25), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(18), action: '李工程師 提交矯正措施提案', user: '李工程師' }, { time: ago(18), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(8), action: '狀態變更為「審核中」', user: '王經理' }, { time: ago(5), action: '狀態變更為「結案」', user: '王經理' }] },
-      { id: 'CAR-0002', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(10), handlerUnit: '資安組', handlerName: '陳資安主管', handlerDate: past(9), deficiencyType: '次要缺失', source: '內部稽核', category: ['人員', '資訊'], clause: 'A.9.2.6', problemDesc: '3 名離職員工帳號仍為啟用狀態，未即時停用。', occurrence: '內部稽核時檢查帳號權限管理，發現 3 筆離職超過 1 個月的帳號仍可登入系統。', correctiveAction: '已停用所有離職員工帳號並清查全公司帳號。', correctiveDueDate: fut(5), rootCause: 'HR 離職通知流程未納入 IT 帳號停用程序。', rootElimination: '修訂離職檢核表，新增 IT 帳號停用確認欄位。', rootElimDueDate: fut(3), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PROPOSED, createdAt: ago(10), updatedAt: ago(3), closedDate: null, evidence: [], history: [{ time: ago(10), action: '開立矯正單', user: '張稽核員' }, { time: ago(10), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(3), action: '陳資安主管 提交矯正措施提案', user: '陳資安主管' }, { time: ago(3), action: '狀態變更為「已提案」', user: '系統' }] },
-      { id: 'CAR-0003', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(5), handlerUnit: '資訊部', handlerName: '黃工程師', handlerDate: null, deficiencyType: '主要缺失', source: '資安事故', category: ['軟體', '服務'], clause: 'A.12.3.1', problemDesc: '每日備份排程連續 3 天未執行，存在資料遺失風險。', occurrence: '監控系統發出告警，確認 CronJob 因磁碟空間不足而中斷執行。', correctiveAction: '', correctiveDueDate: fut(3), rootCause: '', rootElimination: '', rootElimDueDate: null, riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PENDING, createdAt: ago(5), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(5), action: '開立矯正單', user: '王經理' }, { time: ago(5), action: '狀態變更為「待矯正」', user: '系統' }] },
-      { id: 'CAR-0004', proposerUnit: '資安組', proposerName: '王經理', proposerDate: past(14), handlerUnit: '稽核室', handlerName: '劉文管人員', handlerDate: past(13), deficiencyType: '次要缺失', source: '外部稽核', category: ['資訊'], clause: 'A.7.5.3', problemDesc: '3 份程序書紙本與電子版本不一致。', occurrence: '外部稽核時發現文管系統的版本控制未正確同步。', correctiveAction: '已回收舊版並重新分發正確版本。', correctiveDueDate: fut(1), rootCause: '文管系統未自動通知換版，且無版本確認機制。', rootElimination: '導入自動版次通知功能，新增版本確認簽收流程。', rootElimDueDate: fut(1), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [{ tracker: '張稽核員', trackDate: past(5), execution: '已完成舊版回收，新版已分發至各單位。', trackNote: '電子版已同步更新，需確認紙本是否全部替換。', result: '持續追蹤', nextTrackDate: fut(7), reviewer: '張稽核員', reviewDate: past(5) }], status: STATUSES.TRACKING, createdAt: ago(14), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(14), action: '開立矯正單', user: '王經理' }, { time: ago(14), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(10), action: '劉文管人員 提交矯正措施提案', user: '劉文管人員' }, { time: ago(10), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(7), action: '狀態變更為「審核中」', user: '張稽核員' }, { time: ago(5), action: '狀態變更為「追蹤中」', user: '張稽核員' }, { time: ago(5), action: '第 1 次追蹤 — 持續追蹤', user: '張稽核員' }] }
+      { id: 'CAR-0001', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(25), handlerUnit: '計算機及資訊網路中心／資訊網路組', handlerName: '李工程師', handlerDate: past(24), deficiencyType: '主要缺失', source: '內部稽核', category: ['硬體', '基礎設施'], clause: 'A.11.2.2', problemDesc: '伺服器機房溫度超過 28°C 標準值，最高達 32°C。', occurrence: '例行巡檢時發現 A 區機房溫控設備失效，導致持續高溫 3 天。', correctiveAction: '已更換溫控感測器並校正空調系統。', correctiveDueDate: past(10), rootCause: '溫控感測器服役超過 5 年，精度下降且未按時校正。', rootElimination: '建立每季校正計畫，設定感測器更換週期為 3 年。', rootElimDueDate: past(8), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '同意', reviewer: '王經理', reviewDate: past(5), trackings: [], status: STATUSES.CLOSED, createdAt: ago(25), updatedAt: ago(5), closedDate: ago(5), evidence: [], history: [{ time: ago(25), action: '開立矯正單', user: '張稽核員' }, { time: ago(25), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(18), action: '李工程師 提交矯正措施提案', user: '李工程師' }, { time: ago(18), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(8), action: '狀態變更為「審核中」', user: '王經理' }, { time: ago(5), action: '狀態變更為「結案」', user: '王經理' }] },
+      { id: 'CAR-0002', proposerUnit: '稽核室', proposerName: '張稽核員', proposerDate: past(10), handlerUnit: '計算機及資訊網路中心／資訊網路組', handlerName: '陳資安主管', handlerDate: past(9), deficiencyType: '次要缺失', source: '內部稽核', category: ['人員', '資訊'], clause: 'A.9.2.6', problemDesc: '3 名離職員工帳號仍為啟用狀態，未即時停用。', occurrence: '內部稽核時檢查帳號權限管理，發現 3 筆離職超過 1 個月的帳號仍可登入系統。', correctiveAction: '已停用所有離職員工帳號並清查全公司帳號。', correctiveDueDate: fut(5), rootCause: 'HR 離職通知流程未納入 IT 帳號停用程序。', rootElimination: '修訂離職檢核表，新增 IT 帳號停用確認欄位。', rootElimDueDate: fut(3), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PROPOSED, createdAt: ago(10), updatedAt: ago(3), closedDate: null, evidence: [], history: [{ time: ago(10), action: '開立矯正單', user: '張稽核員' }, { time: ago(10), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(3), action: '陳資安主管 提交矯正措施提案', user: '陳資安主管' }, { time: ago(3), action: '狀態變更為「已提案」', user: '系統' }] },
+      { id: 'CAR-0003', proposerUnit: '計算機及資訊網路中心／資訊網路組', proposerName: '王經理', proposerDate: past(5), handlerUnit: '總務處／營繕組', handlerName: '黃工程師', handlerDate: null, deficiencyType: '主要缺失', source: '資安事故', category: ['軟體', '服務'], clause: 'A.12.3.1', problemDesc: '每日備份排程連續 3 天未執行，存在資料遺失風險。', occurrence: '監控系統發出告警，確認 CronJob 因磁碟空間不足而中斷執行。', correctiveAction: '', correctiveDueDate: fut(3), rootCause: '', rootElimination: '', rootElimDueDate: null, riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [], status: STATUSES.PENDING, createdAt: ago(5), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(5), action: '開立矯正單', user: '王經理' }, { time: ago(5), action: '狀態變更為「待矯正」', user: '系統' }] },
+      { id: 'CAR-0004', proposerUnit: '計算機及資訊網路中心／資訊網路組', proposerName: '王經理', proposerDate: past(14), handlerUnit: '人事室／綜合業務組', handlerName: '劉文管人員', handlerDate: past(13), deficiencyType: '次要缺失', source: '外部稽核', category: ['資訊'], clause: 'A.7.5.3', problemDesc: '3 份程序書紙本與電子版本不一致。', occurrence: '外部稽核時發現文管系統的版本控制未正確同步。', correctiveAction: '已回收舊版並重新分發正確版本。', correctiveDueDate: fut(1), rootCause: '文管系統未自動通知換版，且無版本確認機制。', rootElimination: '導入自動版次通知功能，新增版本確認簽收流程。', rootElimDueDate: fut(1), riskDesc: '', riskAcceptor: '', riskAcceptDate: null, riskAssessDate: null, reviewResult: '', reviewer: '', reviewDate: null, trackings: [{ tracker: '張稽核員', trackDate: past(5), execution: '已完成舊版回收，新版已分發至各單位。', trackNote: '電子版已同步更新，需確認紙本是否全部替換。', result: '持續追蹤', nextTrackDate: fut(7), reviewer: '張稽核員', reviewDate: past(5) }], status: STATUSES.TRACKING, createdAt: ago(14), updatedAt: ago(5), closedDate: null, evidence: [], history: [{ time: ago(14), action: '開立矯正單', user: '王經理' }, { time: ago(14), action: '狀態變更為「待矯正」', user: '系統' }, { time: ago(10), action: '劉文管人員 提交矯正措施提案', user: '劉文管人員' }, { time: ago(10), action: '狀態變更為「已提案」', user: '系統' }, { time: ago(7), action: '狀態變更為「審核中」', user: '張稽核員' }, { time: ago(5), action: '狀態變更為「追蹤中」', user: '張稽核員' }, { time: ago(5), action: '第 1 次追蹤 — 持續追蹤', user: '張稽核員' }] }
     ];
     d.nextId = 5; saveData(d);
   }
