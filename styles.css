@@ -4928,6 +4928,7 @@ tbody tr:hover {
 }
 
 .checklist-draft-floating {
+  display: none;
   position: fixed;
   right: 28px;
   bottom: 26px;
@@ -4940,6 +4941,7 @@ tbody tr:hover {
 
 @media (max-width: 1260px) {
   .checklist-draft-floating {
+    display: flex;
     right: 20px;
     bottom: 20px;
   }
@@ -4947,6 +4949,7 @@ tbody tr:hover {
 
 @media (max-width: 768px) {
   .checklist-draft-floating {
+    display: flex;
     left: 16px;
     right: 16px;
     bottom: 16px;

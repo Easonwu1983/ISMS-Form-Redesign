@@ -862,7 +862,7 @@
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">矯正單號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動編號，例如 CAR-0001"><p class="form-hint">管理者可自行輸入單號。僅支援英數、連字號與底線，不能使用空白或斜線。</p></div>
-              <div class="form-group"><label class="form-label form-required">提報單位</label>${buildUnitCascadeControl('f-punit', u.unit || '', false, true)}</div>
+              <div class="form-group"><label class="form-label form-required">提報單位</label>${buildUnitCascadeControl('f-punit', u.unit || '', true, true)}</div>
               <div class="form-group"><label class="form-label form-required">提報日期</label><input type="date" class="form-input" id="f-pdate" value="${new Date().toISOString().split('T')[0]}" required></div>
             </div>
             <div class="form-row">
@@ -939,7 +939,7 @@
     const summaryDue = document.getElementById('create-summary-due');
     const summaryNotify = document.getElementById('create-summary-notify');
 
-    initUnitCascade('f-punit', u.unit || '', { disabled: false });
+    initUnitCascade('f-punit', u.unit || '', { disabled: true });
     initUnitCascade('f-hunit', '', { disabled: false });
 
     function syncCreateSummary() {
@@ -1012,7 +1012,7 @@
       const now = new Date().toISOString();
       const item = {
         id: itemId,
-        proposerUnit: document.getElementById('f-punit').value,
+        proposerUnit: u.unit || document.getElementById('f-punit').value,
         proposerName: document.getElementById('f-pname').value.trim(),
         proposerUsername: u.username,
         proposerDate: document.getElementById('f-pdate').value,
@@ -1033,7 +1033,7 @@
         reviewResult: '', reviewNextDate: null, reviewer: '', reviewDate: null,
         trackings: [],
         status: STATUSES.PENDING, createdAt: now, updatedAt: now, closedDate: null, evidence: [],
-        history: [{ time: now, action: '開立矯正單', user: u.name }, { time: now, action: `系統狀態更新為 ${STATUSES.PENDING}`, user: '系統' }]
+        history: [{ time: now, action: '開立矯正單', user: u.name }, { time: now, action: `狀態變更為「${STATUSES.PENDING}」`, user: u.name }]
       };
       const shouldNotify = document.getElementById('f-notify').checked;
       const hEmail = document.getElementById('f-hemail').value;
@@ -1064,7 +1064,15 @@
     if (item.status === STATUSES.REVIEWING && canReview()) { btns += `<button class="btn btn-success" onclick="window._cs('${item.id}','${STATUSES.CLOSED}')">${ic('check', 'icon-sm')} 審核通過結案</button>`; btns += `<button class="btn btn-warning" onclick="window._cs('${item.id}','${STATUSES.TRACKING}')">${ic('eye', 'icon-sm')} 轉為追蹤</button>`; btns += `<button class="btn btn-danger" onclick="window._cs('${item.id}','${STATUSES.PENDING}')">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`; }
     if (item.status === STATUSES.TRACKING && canReview()) btns += `<a href="#tracking/${item.id}" class="btn btn-primary">${ic('clipboard-check', 'icon-sm')} 填寫追蹤</a>`;
     const evHtml = item.evidence && item.evidence.length ? `<div class="file-preview-list">${item.evidence.map(ev => ev.type && ev.type.startsWith('image/') ? `<div class="file-preview-item"><img src="${ev.data}" alt="${esc(ev.name)}"><div class="file-name">${esc(ev.name)}</div></div>` : `<div class="file-preview-item"><div class="file-pdf-icon">${ic('file-box')}</div><div class="file-name">${esc(ev.name)}</div></div>`).join('')}</div>` : '<p style="color:var(--text-muted);font-size:.88rem">尚無佐證</p>';
-    const tl = [...(item.history || [])].reverse().map(h => `<div class="timeline-item"><div class="timeline-time">${fmtTime(h.time)}</div><div class="timeline-text">${esc(h.action)}${h.user ? ` — ${esc(h.user)}` : ''}</div></div>`).join('');
+    const historyList = item.history || [];
+    const tl = historyList.map((h, index) => {
+      let actor = h.user || '';
+      if (!actor || actor === '系統') {
+        const linked = historyList.slice(0, index).reverse().find((entry) => entry.time === h.time && entry.user && entry.user !== '系統');
+        if (linked) actor = linked.user;
+      }
+      return `<div class="timeline-item"><div class="timeline-time">${fmtTime(h.time)}</div><div class="timeline-text">${esc(h.action)}${actor ? ` - ${esc(actor)}` : ''}</div></div>`;
+    }).reverse().join('');
     const tkHtml = (item.trackings || []).map((tk, i) => `<div class="card" style="margin-bottom:16px;border-left:3px solid #f97316;"><div class="section-header">第 ${i + 1} 次追蹤 — ${fmt(tk.trackDate)}</div>
       <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">追蹤人</div><div class="detail-field-value">${esc(tk.tracker)}</div></div><div class="detail-field"><div class="detail-field-label">審核人</div><div class="detail-field-value">${esc(tk.reviewer || '—')}</div></div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(tk.execution)}</div></div>
@@ -1263,7 +1271,7 @@
         riskAssessDate: document.getElementById('r-riskassess').value || null,
         status: STATUSES.PROPOSED, updatedAt: now,
         evidence: [...(li.evidence || []), ...tempEv],
-        history: [...li.history, { time: now, action: `${u.name} 已回覆矯正措施`, user: u.name }, { time: now, action: `系統狀態更新為 ${STATUSES.PROPOSED}`, user: '系統' }]
+        history: [...li.history, { time: now, action: `${u.name} 已回覆矯正措施`, user: u.name }, { time: now, action: `狀態變更為「${STATUSES.PROPOSED}」`, user: u.name }]
       };
       if (tempEv.length) upd.history.push({ time: now, action: `上傳 ${tempEv.length} 份佐證附件`, user: u.name });
       updateItem(id, upd); toast('矯正措施回覆已正式送出'); navigate('detail/' + id);
@@ -1348,11 +1356,14 @@
     function syncTrackingSummary() {
       summaryDate.textContent = dateInput.value ? fmt(dateInput.value) : '未指定';
       const selected = document.querySelector('input[name="tkResult"]:checked');
-      const isContinue = selected && selected.value === '持續追蹤';
-      const isClosable = selected && selected.value === '可結案，改善措施已完成';
+      const selectedValue = selected ? String(selected.value || '') : '';
+      const isContinue = selectedValue.includes('追蹤');
+      const isClosable = selectedValue.includes('結案');
       summaryResult.textContent = selected ? selected.value : '待判定';
       summaryNext.textContent = nextInput.value ? fmt(nextInput.value) : '未指定';
       nextWrap.style.display = isContinue ? 'block' : 'none';
+      nextInput.required = !!isContinue;
+      if (fileInput) fileInput.required = !!isClosable;
       if (evidenceWrap) evidenceWrap.style.display = isClosable ? 'block' : 'none';
     }
 
@@ -1421,7 +1432,7 @@
         evidence: isClose && tempEv.length ? [...(li.evidence || []), ...tempEv] : (li.evidence || []),
         status: ns,
         updatedAt: now,
-        history: [...li.history, { time: now, action: `\u7b2c ${round} \u6b21\u8ffd\u8e64 - ${res.value}`, user: u.name }, { time: now, action: `\u7cfb\u7d71\u72c0\u614b\u66f4\u65b0\u70ba ${ns}`, user: '\u7cfb\u7d71' }]
+        history: [...li.history, { time: now, action: `\u7b2c ${round} \u6b21\u8ffd\u8e64 - ${res.value}`, user: u.name }, { time: now, action: `\u72c0\u614b\u8b8a\u66f4\u70ba\u300c${ns}\u300d`, user: u.name }]
       };
       if (isClose && tempEv.length) upd.history.push({ time: now, action: `\u4e0a\u50b3 ${tempEv.length} \u4efd\u8ffd\u8e64\u4f50\u8b49`, user: u.name });
       if (ns === STATUSES.CLOSED) upd.closedDate = now;
@@ -1826,7 +1837,8 @@
       sectionsHtml += `<div class="cl-section"><div class="cl-section-header"><span class="cl-section-num">${si + 1}</span>${esc(sec.section)}</div><div class="cl-section-body">${itemsHtml}</div></div>`;
     });
 
-    const selectedUnit = existing ? existing.unit : (u.unit || '');
+    const checklistUnitLocked = u.role === ROLES.REPORTER;
+    const selectedUnit = checklistUnitLocked ? (u.unit || existing?.unit || '') : (existing ? existing.unit : (u.unit || ''));
     const today = new Date().toISOString().split('T')[0];
     const totalItems = CHECKLIST_SECTIONS.reduce((sum, sec) => sum + sec.items.length, 0);
     const supervisorName = existing?.supervisorName || existing?.supervisor || '';
@@ -1842,18 +1854,18 @@
           <div class="card editor-card"><form id="checklist-form">
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">受稽單位</label>${buildUnitCascadeControl('cl-unit', selectedUnit, false, true)}</div>
+              <div class="form-group"><label class="form-label form-required">受稽單位</label>${buildUnitCascadeControl('cl-unit', selectedUnit, checklistUnitLocked, true)}</div>
               <div class="form-group"><label class="form-label form-required">填表人員</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
               <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="cl-date" value="${existing ? esc(existing.fillDate) : today}" required></div>
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">稽核年度</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}" required></div>
-              <div class="form-group"><label class="form-label">權責主管姓名</label><input type="text" class="form-input" id="cl-supervisor-name" value="${esc(supervisorName)}" placeholder="例如 資訊網路組組長"></div>
-              <div class="form-group"><label class="form-label">主管職稱</label><input type="text" class="form-input" id="cl-supervisor-title" value="${esc(supervisorTitle)}" placeholder="例如 組長 / 主任"></div>
+              <div class="form-group"><label class="form-label form-required">\u6b0a\u8cac\u4e3b\u7ba1\u59d3\u540d</label><input type="text" class="form-input" id="cl-supervisor-name" value="${esc(supervisorName)}" placeholder="\u4f8b\u5982 \u8cc7\u8a0a\u7db2\u8def\u7d44\u7d44\u9577" required></div>
+              <div class="form-group"><label class="form-label form-required">\u4e3b\u7ba1\u8077\u7a31</label><input type="text" class="form-input" id="cl-supervisor-title" value="${esc(supervisorTitle)}" placeholder="\u4f8b\u5982 \u7d44\u9577 / \u4e3b\u4efb" required></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label">簽核狀態</label><select class="form-select" id="cl-sign-status"><option value="待簽核" ${signStatus === '待簽核' ? 'selected' : ''}>待簽核</option><option value="已簽核" ${signStatus === '已簽核' ? 'selected' : ''}>已簽核</option></select></div>
-              <div class="form-group"><label class="form-label">簽核日期</label><input type="date" class="form-input" id="cl-sign-date" value="${esc(signDate)}"></div>
+              <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u72c0\u614b</label><select class="form-select" id="cl-sign-status" required><option value="\u5f85\u7c3d\u6838" ${signStatus === '\u5f85\u7c3d\u6838' ? 'selected' : ''}>\u5f85\u7c3d\u6838</option><option value="\u5df2\u7c3d\u6838" ${signStatus === '\u5df2\u7c3d\u6838' ? 'selected' : ''}>\u5df2\u7c3d\u6838</option></select></div>
+              <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u65e5\u671f</label><input type="date" class="form-input" id="cl-sign-date" required value="${esc(signDate)}"></div>
               <div class="form-group"><label class="form-label">簽核備註</label><input type="text" class="form-input" id="cl-supervisor-note" value="${esc(supervisorNote)}" placeholder="可填簽核說明或補充備註"></div>
             </div>
             <div class="cl-progress-bar-wrap"><div class="cl-progress-label">填報進度</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${totalItems}</span></div>
@@ -1903,7 +1915,7 @@
     </div>`;
 
     refreshIcons();
-    initUnitCascade('cl-unit', selectedUnit, { disabled: false });
+    initUnitCascade('cl-unit', selectedUnit, { disabled: checklistUnitLocked });
 
     function syncChecklistMeta() {
       document.getElementById('cl-side-unit').textContent = document.getElementById('cl-unit').value || '未指定';
@@ -1956,7 +1968,7 @@
       const supervisorTitleValue = document.getElementById('cl-supervisor-title').value.trim();
       return {
         id: existing ? existing.id : generateChecklistId(document.getElementById('cl-unit').value),
-        unit: document.getElementById('cl-unit').value,
+        unit: checklistUnitLocked ? (u.unit || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value,
         fillerName: u.name,
         fillerUsername: u.username,
         fillDate: document.getElementById('cl-date').value,
@@ -1976,9 +1988,9 @@
     }
 
     function saveChecklistDraft() {
-      const data = collectData('草稿');
+      const data = collectData('\u8349\u7a3f');
       if (existing) updateChecklist(existing.id, data); else addChecklist(data);
-      toast(`草稿 ${data.id} 已暫存`);
+      toast(`\u8349\u7a3f ${data.id} \u5df2\u66ab\u5b58`);
       navigate('checklist-fill/' + data.id);
     }
 
@@ -2009,14 +2021,26 @@
         if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id);
       }));
       if (missing.length > 0) {
-        toast(`仍有 ${missing.length} 個查檢項目尚未填答`, 'error');
+        toast(`\u4ecd\u6709 ${missing.length} \u500b\u67e5\u6aa2\u9805\u76ee\u5c1a\u672a\u586b\u7b54`, 'error');
         const el = document.getElementById(`cl-item-${missing[0]}`);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
-      const data = collectData('已送出');
+      const requiredMeta = [
+        { el: document.getElementById('cl-supervisor-name'), label: '\u6b0a\u8cac\u4e3b\u7ba1\u59d3\u540d' },
+        { el: document.getElementById('cl-supervisor-title'), label: '\u4e3b\u7ba1\u8077\u7a31' },
+        { el: document.getElementById('cl-sign-status'), label: '\u7c3d\u6838\u72c0\u614b' },
+        { el: document.getElementById('cl-sign-date'), label: '\u7c3d\u6838\u65e5\u671f' }
+      ];
+      const missingMeta = requiredMeta.find(({ el }) => !String(el.value || '').trim());
+      if (missingMeta) {
+        toast(`\u8acb\u5b8c\u6574\u586b\u5beb${missingMeta.label}`, 'error');
+        missingMeta.el.focus();
+        return;
+      }
+      const data = collectData('\u5df2\u9001\u51fa');
       if (existing) updateChecklist(existing.id, data); else addChecklist(data);
-      toast(`檢核表 ${data.id} 已正式送出`);
+      toast(`\u6aa2\u6838\u8868 ${data.id} \u5df2\u6b63\u5f0f\u9001\u51fa`);
       navigate('checklist-detail/' + data.id);
     });
 
