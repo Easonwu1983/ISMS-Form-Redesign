@@ -248,6 +248,22 @@
   function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
   function navigate(h) { window.location.hash = h; }
   function getRoute() { const h = window.location.hash.slice(1) || 'dashboard'; const p = h.split('/'); return { page: p[0], param: p[1] }; }
+  let isSidebarOpen = false;
+  function isMobileViewport() {
+    if (window.matchMedia) return window.matchMedia('(max-width: 768px)').matches;
+    return window.innerWidth <= 768;
+  }
+  function setSidebarOpen(nextOpen) {
+    isSidebarOpen = !!nextOpen && isMobileViewport();
+    if (!document.body) return;
+    document.body.classList.toggle('sidebar-open', isSidebarOpen);
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.classList.toggle('show', isSidebarOpen);
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (backdrop) backdrop.classList.toggle('show', isSidebarOpen);
+  }
+  function closeSidebar() { setSidebarOpen(false); }
+  function toggleSidebar() { setSidebarOpen(!isSidebarOpen); }
   let iconRetryTimer = null;
   let iconRetryCount = 0;
   function refreshIcons() {
@@ -317,7 +333,7 @@
   }
 
   // ─── Render: App Shell ─────────────────────
-  function renderApp() { var u = currentUser(); if (!u) { renderLogin(); return; } document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>'; handleRoute(); refreshIcons(); }
+  function renderApp() { var u = currentUser(); if (!u) { renderLogin(); return; } document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" onclick="window._closeSidebar()"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>'; handleRoute(); refreshIcons(); }
 
   // ─── Render: Sidebar ───────────────────────
   function renderSidebar() {
@@ -335,14 +351,19 @@
     if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'login-log' ? 'active' : '') + '" href="#login-log"><span class="nav-icon">' + ic('shield-check') + '</span>登入紀錄</a>';
     if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>檢核表管理</a>';
     if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div>' + sysNav + '</div>';
-    document.getElementById('sidebar').innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS Corrective Action</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
+    var sidebarEl = document.getElementById('sidebar'); sidebarEl.innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS Corrective Action</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
+    sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
+      link.addEventListener('click', function () { if (isMobileViewport()) closeSidebar(); });
+    });
   }
 
   function renderHeader() {
     var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', 'login-log': '登入紀錄', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', training: '教育訓練時數統計', 'training-fill': '填報教育訓練時數', 'training-detail': '教育訓練填報詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
-    document.getElementById('header').innerHTML = '<div class="header-left"><span class="header-title">' + (titles[r.page] || '內部稽核管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
+    document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" onclick="window._toggleSidebar()" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + (titles[r.page] || '內部稽核管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
   }
   window._logout = function () { logout(); };
+  window._toggleSidebar = function () { toggleSidebar(); };
+  window._closeSidebar = function () { closeSidebar(); };
 
   // ─── Render: Dashboard ─────────────────────
   function renderDashboard() {
@@ -1741,7 +1762,7 @@
   }
   // ─── Router ────────────────────────────────
   function handleRoute() {
-    if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader();
+    if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader(); closeSidebar();
     switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'login-log': renderLoginLog(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(r.param); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
   }
 
@@ -1765,6 +1786,7 @@
   seedData();
   seedTrainingData();
   window.addEventListener('hashchange', handleRoute);
+  window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
   window.addEventListener('load', refreshIcons);
   renderApp();
   refreshIcons();
