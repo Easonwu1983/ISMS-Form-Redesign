@@ -672,15 +672,28 @@
     if (!u) return [];
     const all = getAllItems();
     if (u.role === ROLES.ADMIN || u.role === ROLES.UNIT_ADMIN) return all;
-    return all.filter((item) => item.handlerUsername ? item.handlerUsername === u.username : item.handlerName === u.name);
+    return all.filter((item) => isItemHandler(item, u));
   }
   function canAccessItem(item) {
     if (!item) return false;
     const u = currentUser();
     if (!u) return false;
     if (u.role === ROLES.ADMIN || u.role === ROLES.UNIT_ADMIN) return true;
-    return item.handlerUsername ? item.handlerUsername === u.username : item.handlerName === u.name;
+    return isItemHandler(item, u);
   }
+  function isItemHandler(item, user = currentUser()) {
+    if (!item || !user) return false;
+    return item.handlerUsername ? item.handlerUsername === user.username : item.handlerName === user.name;
+  }
+  function canRespondItem(item, user = currentUser()) {
+    if (!item || !user) return false;
+    return item.status === STATUSES.PENDING && (isItemHandler(item, user) || user.role === ROLES.ADMIN);
+  }
+  function canSubmitTracking(item, user = currentUser()) {
+    if (!item || !user) return false;
+    return item.status === STATUSES.TRACKING && isItemHandler(item, user) && !item.pendingTracking;
+  }
+  
   function mkChk(name, opts, sel) { return '<div class="checkbox-group">' + opts.map(o => '<label class="chk-label"><input type="checkbox" name="' + name + '" value="' + o + '" ' + ((sel || []).includes(o) ? 'checked' : '') + '><span class="chk-box"></span>' + o + '</label>').join('') + '</div>'; }
   function mkRadio(name, opts, sel) { return '<div class="radio-group">' + opts.map(o => '<label class="radio-label"><input type="radio" name="' + name + '" value="' + o + '" ' + (sel === o ? 'checked' : '') + '><span class="radio-dot"></span>' + o + '</label>').join('') + '</div>'; }
 
@@ -1053,17 +1066,35 @@
     const item = getItem(id);
     if (!item) { document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到矯正單</div><a href="#list" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`; return; }
     if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限檢視此矯正單', 'error'); return; }
-    const u = currentUser(); const ci = STATUS_FLOW.indexOf(item.status);
+    const u = currentUser();
+    const ci = STATUS_FLOW.indexOf(item.status);
+    const isHandler = isItemHandler(item, u);
+    const canRespond = canRespondItem(item, u);
+    const canFillTracking = canSubmitTracking(item, u);
+    const canReviewTracking = item.status === STATUSES.TRACKING && !!item.pendingTracking && canReview();
+    const pending = item.pendingTracking || null;
     const stepper = STATUS_FLOW.map((s, i) => { let c = ''; if (i < ci) c = 'completed'; else if (i === ci) c = 'active'; return `<div class="stepper-step ${c}"><div class="stepper-circle">${i < ci ? '✓' : i + 1}</div><div class="stepper-label">${s}</div></div>`; }).join('');
     const otag = isOverdue(item) ? ` <span class="badge badge-overdue"><span class="badge-dot"></span>已逾期</span>` : '';
     const cats = (item.category || []).map(c => `<span class="badge badge-category">${esc(c)}</span>`).join(' ');
     let btns = '';
-    const canRespond = item.status === STATUSES.PENDING && (u.name === item.handlerName || isAdmin());
     if (canRespond) btns += `<a href="#respond/${item.id}" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 回填矯正措施</a>`;
     if (item.status === STATUSES.PROPOSED && canReview()) btns += `<button class="btn btn-primary" onclick="window._cs('${item.id}','${STATUSES.REVIEWING}')">${ic('eye', 'icon-sm')} 進入審核</button>`;
-    if (item.status === STATUSES.REVIEWING && canReview()) { btns += `<button class="btn btn-success" onclick="window._cs('${item.id}','${STATUSES.CLOSED}')">${ic('check', 'icon-sm')} 審核通過結案</button>`; btns += `<button class="btn btn-warning" onclick="window._cs('${item.id}','${STATUSES.TRACKING}')">${ic('eye', 'icon-sm')} 轉為追蹤</button>`; btns += `<button class="btn btn-danger" onclick="window._cs('${item.id}','${STATUSES.PENDING}')">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`; }
-    if (item.status === STATUSES.TRACKING && canReview()) btns += `<a href="#tracking/${item.id}" class="btn btn-primary">${ic('clipboard-check', 'icon-sm')} 填寫追蹤</a>`;
-    const evHtml = item.evidence && item.evidence.length ? `<div class="file-preview-list">${item.evidence.map(ev => ev.type && ev.type.startsWith('image/') ? `<div class="file-preview-item"><img src="${ev.data}" alt="${esc(ev.name)}"><div class="file-name">${esc(ev.name)}</div></div>` : `<div class="file-preview-item"><div class="file-pdf-icon">${ic('file-box')}</div><div class="file-name">${esc(ev.name)}</div></div>`).join('')}</div>` : '<p style="color:var(--text-muted);font-size:.88rem">尚無佐證</p>';
+    if (item.status === STATUSES.REVIEWING && canReview()) {
+      btns += `<button class="btn btn-success" onclick="window._cs('${item.id}','${STATUSES.CLOSED}')">${ic('check', 'icon-sm')} 審核通過結案</button>`;
+      btns += `<button class="btn btn-warning" onclick="window._cs('${item.id}','${STATUSES.TRACKING}')">${ic('eye', 'icon-sm')} 轉為追蹤</button>`;
+      btns += `<button class="btn btn-danger" onclick="window._cs('${item.id}','${STATUSES.PENDING}')">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`;
+    }
+    if (canFillTracking) btns += `<a href="#tracking/${item.id}" class="btn btn-primary">${ic('clipboard-check', 'icon-sm')} 填報追蹤結果</a>`;
+    if (canReviewTracking) {
+      btns += `<button class="btn btn-success" onclick="window._reviewTracking('${item.id}','close')">${ic('check', 'icon-sm')} 同意結案</button>`;
+      btns += `<button class="btn btn-warning" onclick="window._reviewTracking('${item.id}','continue')">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button>`;
+    }
+
+    const renderEvidenceList = (files, emptyText = '尚無佐證') => files && files.length
+      ? `<div class="file-preview-list">${files.map(ev => ev.type && ev.type.startsWith('image/') ? `<div class="file-preview-item"><img src="${ev.data}" alt="${esc(ev.name)}"><div class="file-name">${esc(ev.name)}</div></div>` : `<div class="file-preview-item"><div class="file-pdf-icon">${ic('file-box')}</div><div class="file-name">${esc(ev.name)}</div></div>`).join('')}</div>`
+      : `<p style="color:var(--text-muted);font-size:.88rem">${emptyText}</p>`;
+
+    const evHtml = renderEvidenceList(item.evidence, '尚無佐證');
     const historyList = item.history || [];
     const tl = historyList.map((h, index) => {
       let actor = h.user || '';
@@ -1073,11 +1104,34 @@
       }
       return `<div class="timeline-item"><div class="timeline-time">${fmtTime(h.time)}</div><div class="timeline-text">${esc(h.action)}${actor ? ` - ${esc(actor)}` : ''}</div></div>`;
     }).reverse().join('');
-    const tkHtml = (item.trackings || []).map((tk, i) => `<div class="card" style="margin-bottom:16px;border-left:3px solid #f97316;"><div class="section-header">第 ${i + 1} 次追蹤 — ${fmt(tk.trackDate)}</div>
-      <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">追蹤人</div><div class="detail-field-value">${esc(tk.tracker)}</div></div><div class="detail-field"><div class="detail-field-label">審核人</div><div class="detail-field-value">${esc(tk.reviewer || '—')}</div></div></div>
-      <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(tk.execution)}</div></div>
-      <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(tk.trackNote)}</div></div>
-      <div class="detail-section"><div class="detail-section-title">${ic('check-circle', 'icon-sm')} 結果</div><div class="detail-content">${esc(tk.result)}</div></div></div>`).join('') || '<p style="color:var(--text-muted);font-size:.88rem">尚無追蹤紀錄</p>';
+
+    const pendingTrackingHtml = pending ? `<div class="card" style="margin-top:20px;border-left:3px solid #0f766e;"><div class="card-header"><span class="card-title">${ic('hourglass', 'icon-sm')} 待管理者審核的追蹤提報</span></div>
+      <div class="detail-grid">
+        <div class="detail-field"><div class="detail-field-label">追蹤輪次</div><div class="detail-field-value">第 ${pending.round || ((item.trackings || []).length + 1)} 次</div></div>
+        <div class="detail-field"><div class="detail-field-label">提報人員</div><div class="detail-field-value">${esc(pending.tracker || '—')}</div></div>
+        <div class="detail-field"><div class="detail-field-label">提報日期</div><div class="detail-field-value">${fmt(pending.trackDate)}</div></div>
+        <div class="detail-field"><div class="detail-field-label">填報建議</div><div class="detail-field-value">${esc(pending.result || '—')}</div></div>
+        <div class="detail-field"><div class="detail-field-label">下一次追蹤日期</div><div class="detail-field-value">${pending.nextTrackDate ? fmt(pending.nextTrackDate) : '—'}</div></div>
+      </div>
+      <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(pending.execution || '')}</div></div>
+      <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(pending.trackNote || '')}</div></div>
+      <div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次提報佐證</div>${renderEvidenceList(pending.evidence, '本次追蹤未附佐證')}</div>
+      ${canReviewTracking ? `<div class="form-actions"><button type="button" class="btn btn-success" onclick="window._reviewTracking('${item.id}','close')">${ic('check', 'icon-sm')} 同意結案</button><button type="button" class="btn btn-warning" onclick="window._reviewTracking('${item.id}','continue')">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button></div>` : `<div class="detail-section"><div class="detail-content" style="color:var(--text-muted)">${isHandler ? '已送出追蹤提報，待管理者審核。' : '目前已有追蹤提報待管理者審核。'}</div></div>`}
+    </div>` : '';
+
+    const tkHtml = (item.trackings || []).map((tk, i) => {
+      const requestedHtml = tk.requestedResult ? `<div class="detail-section"><div class="detail-section-title">${ic('message-square', 'icon-sm')} 填報建議</div><div class="detail-content">${esc(tk.requestedResult)}</div></div>` : '';
+      const nextHtml = tk.nextTrackDate ? `<div class="detail-field"><div class="detail-field-label">下一次追蹤日期</div><div class="detail-field-value">${fmt(tk.nextTrackDate)}</div></div>` : '';
+      const evidenceHtml = tk.evidence && tk.evidence.length ? `<div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次佐證</div>${renderEvidenceList(tk.evidence, '')}</div>` : '';
+      return `<div class="card" style="margin-bottom:16px;border-left:3px solid #f97316;"><div class="section-header">第 ${i + 1} 次追蹤 — ${fmt(tk.trackDate)}</div>
+        <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">追蹤人</div><div class="detail-field-value">${esc(tk.tracker)}</div></div><div class="detail-field"><div class="detail-field-label">審核人</div><div class="detail-field-value">${esc(tk.reviewer || '—')}</div></div><div class="detail-field"><div class="detail-field-label">審核日期</div><div class="detail-field-value">${tk.reviewDate ? fmt(tk.reviewDate) : '—'}</div></div>${nextHtml}</div>
+        <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(tk.execution)}</div></div>
+        <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(tk.trackNote)}</div></div>
+        ${requestedHtml}
+        <div class="detail-section"><div class="detail-section-title">${ic('check-circle', 'icon-sm')} 管理者決議</div><div class="detail-content">${esc(tk.result || '—')}</div></div>
+        ${evidenceHtml}</div>`;
+    }).join('') || '<p style="color:var(--text-muted);font-size:.88rem">尚無追蹤紀錄</p>';
+
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="detail-header"><div><div class="detail-id">${esc(item.id)} · ${esc(item.deficiencyType)}</div><h1 class="detail-title">${esc(item.problemDesc || '').substring(0, 50)}</h1>
         <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(item.proposerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(item.proposerDate)}</span><span class="badge badge-${STATUS_CLASSES[item.status]}"><span class="badge-dot"></span>${item.status}</span>${otag}</div>
@@ -1117,13 +1171,15 @@
         <div class="detail-section"><div class="detail-content">${esc(item.rootElimination)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.rootElimDueDate)}</div></div></div></div>` : ''}
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('paperclip', 'icon-sm')} 佐證文件</span></div>${evHtml}</div>
+      ${pendingTrackingHtml}
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('git-branch', 'icon-sm')} 追蹤監控</span></div>${tkHtml}</div>
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('history', 'icon-sm')} 歷程紀錄</span></div><div class="timeline">${tl}</div></div>
     </div>`;
     refreshIcons();
   }
 
-  window._cs = function (id, ns) {
+  
+window._cs = function (id, ns) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
@@ -1135,8 +1191,8 @@
     const next = allowedTransitions[item.status] || [];
     if (!next.includes(ns)) { toast(`不允許從「${item.status}」變更為「${ns}」`, 'error'); return; }
     const now = new Date().toISOString();
-    const updates = { status: ns, updatedAt: now, history: [...item.history, { time: now, action: `狀態變更為「${ns}」`, user: u.name }] };
-    if (ns === STATUSES.CLOSED) updates.closedDate = now;
+    const updates = { status: ns, updatedAt: now, pendingTracking: null, history: [...item.history, { time: now, action: `狀態變更為「${ns}」`, user: u.name }] };
+    updates.closedDate = ns === STATUSES.CLOSED ? now : null;
     updateItem(id, updates);
     toast(`狀態已變更為「${ns}」`);
     renderDetail(id);
@@ -1144,11 +1200,57 @@
     refreshIcons();
   };
 
+  window._reviewTracking = function (id, decision) {
+    const item = getItem(id);
+    const u = currentUser();
+    if (!item || !u) return;
+    if (!(item.status === STATUSES.TRACKING && item.pendingTracking && canReview())) { toast('目前沒有可審核的追蹤提報', 'error'); return; }
+    const pending = item.pendingTracking;
+    const round = pending.round || ((item.trackings || []).length + 1);
+    const now = new Date().toISOString();
+    const shouldClose = decision === 'close';
+    const finalResult = shouldClose ? '同意結案' : '同意繼續追蹤';
+    const approvedTracking = {
+      ...pending,
+      requestedResult: pending.result,
+      result: finalResult,
+      decision: finalResult,
+      reviewer: u.name,
+      reviewDate: now.split('T')[0],
+      reviewedAt: now
+    };
+    const history = [
+      ...(item.history || []),
+      { time: now, action: `管理者審核第 ${round} 次追蹤提報`, user: u.name },
+      { time: now, action: finalResult, user: u.name }
+    ];
+    if (!shouldClose && pending.nextTrackDate) {
+      history.push({ time: now, action: `下一次追蹤日期：${pending.nextTrackDate}`, user: u.name });
+    }
+    if (pending.evidence && pending.evidence.length) {
+      history.push({ time: now, action: `追蹤佐證歸檔 ${pending.evidence.length} 份`, user: u.name });
+    }
+    updateItem(id, {
+      trackings: [...(item.trackings || []), approvedTracking],
+      pendingTracking: null,
+      status: shouldClose ? STATUSES.CLOSED : STATUSES.TRACKING,
+      updatedAt: now,
+      closedDate: shouldClose ? now : null,
+      evidence: pending.evidence && pending.evidence.length ? [...(item.evidence || []), ...pending.evidence] : (item.evidence || []),
+      history
+    });
+    toast(shouldClose ? '已同意結案' : '已同意繼續追蹤');
+    renderDetail(id);
+    renderSidebar();
+    refreshIcons();
+  };
+
   // ─── Render: Respond ───────────────────────
+  
   function renderRespond(id) {
     const item = getItem(id); if (!item) { navigate('list'); return; }
     if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限存取此矯正單', 'error'); return; }
-    const canRespond = item.status === STATUSES.PENDING && (currentUser().name === item.handlerName || isAdmin());
+    const canRespond = canRespondItem(item);
     if (!canRespond) { navigate('detail/' + id); toast('目前無法回覆這筆待矯正案件', 'error'); return; }
     let tempEv = [];
     document.getElementById('app').innerHTML = `<div class="animate-in">
@@ -1260,7 +1362,7 @@
       if (!ca || !rc || !el) { toast('請完整填寫矯正措施、根因分析與根因消除措施', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
       if (!li || !canAccessItem(li)) { toast('您沒有權限存取此矯正單', 'error'); navigate('list'); return; }
-      if (li.status !== STATUSES.PENDING || !(u.name === li.handlerName || isAdmin())) { toast('這筆案件目前不允許送出回覆', 'error'); navigate('detail/' + id); return; }
+      if (!canRespondItem(li, u)) { toast('\u9019\u7b46\u6848\u4ef6\u76ee\u524d\u4e0d\u5141\u8a31\u9001\u51fa\u56de\u8986', 'error'); navigate('detail/' + id); return; }
       const upd = {
         correctiveAction: ca, correctiveDueDate: document.getElementById('r-due').value,
         rootCause: rc,
@@ -1281,52 +1383,49 @@
   function renderTracking(id) {
     const item = getItem(id); if (!item) { navigate('list'); return; }
     if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限存取此矯正單', 'error'); return; }
-    if (!(item.status === STATUSES.TRACKING && canReview())) { navigate('detail/' + id); toast('目前無法進行這筆案件的追蹤填報', 'error'); return; }
+    if (item.pendingTracking) { navigate('detail/' + id); toast('目前已有待管理者審核的追蹤提報', 'error'); return; }
+    if (!canSubmitTracking(item)) { navigate('detail/' + id); toast('目前由處理人員填報追蹤結果，管理者負責審核', 'error'); return; }
     const round = (item.trackings || []).length + 1;
     if (round > 3) { toast('系統目前最多支援 3 次追蹤', 'error'); navigate('detail/' + id); return; }
     document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">第 ${round} 次追蹤</h1><p class="page-subtitle">${esc(item.id)} · ${esc(item.handlerName || '')}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">返回單據</a></div>
+      <div class="page-header"><div><h1 class="page-title">第 ${round} 次追蹤提報</h1><p class="page-subtitle">${esc(item.id)} · ${esc(item.handlerName || '')}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">返回單據</a></div>
       <div class="editor-shell editor-shell--tracking">
         <section class="editor-main">
           <div class="card editor-card"><form id="track-form">
-            <div class="section-header">${ic('clipboard-check', 'icon-sm')} 追蹤紀錄</div>
+            <div class="section-header">${ic('clipboard-check', 'icon-sm')} 追蹤提報</div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">追蹤人員</label><input type="text" class="form-input" id="tk-tracker" value="${esc(currentUser().name)}" readonly></div>
-              <div class="form-group"><label class="form-label form-required">追蹤日期</label><input type="date" class="form-input" id="tk-date" value="${new Date().toISOString().split('T')[0]}" required></div>
+              <div class="form-group"><label class="form-label form-required">填報人員</label><input type="text" class="form-input" id="tk-tracker" value="${esc(currentUser().name)}" readonly></div>
+              <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tk-date" value="${new Date().toISOString().split('T')[0]}" required></div>
             </div>
             <div class="form-group"><label class="form-label form-required">改善措施執行情形</label><textarea class="form-textarea" id="tk-exec" placeholder="請說明目前的改善進度、已完成內容與尚待處理事項" required style="min-height:112px"></textarea></div>
             <div class="form-group"><label class="form-label form-required">追蹤觀察與說明</label><textarea class="form-textarea" id="tk-note" placeholder="請記錄本次追蹤的判斷依據、重點發現或需補強事項" required style="min-height:88px"></textarea></div>
-            <div class="section-header">${ic('check-circle', 'icon-sm')} 審核判定</div>
-            <div class="form-group"><label class="form-label form-required">判定結果</label>${mkRadio('tkResult', ['可結案，改善措施已完成', '持續追蹤'], '')}</div>
-            <div class="form-group" id="tk-next-wrap" style="display:none"><label class="form-label">下一次追蹤日期</label><input type="date" class="form-input" id="tk-next"></div>
-            <div class="form-group" id="tk-evidence-wrap" style="display:none"><label class="form-label form-required">結案佐證資料</label><div class="upload-zone" id="tk-upload-zone"><input type="file" id="tk-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">可拖曳檔案，或 <strong>點擊選擇</strong></div><div class="upload-zone-hint">選擇「可結案」時，必須上傳佐證資料</div></div><div class="file-preview-list" id="tk-file-previews"></div></div>
-            <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">審核人員</label><input type="text" class="form-input" id="tk-reviewer" value="${esc(currentUser().name)}" readonly></div>
-              <div class="form-group"><label class="form-label form-required">審核日期</label><input type="date" class="form-input" id="tk-revdate" value="${new Date().toISOString().split('T')[0]}" required></div>
-            </div>
-            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('save', 'icon-sm')} 儲存追蹤</button><a href="#detail/${item.id}" class="btn btn-secondary">取消返回</a></div>
+            <div class="section-header">${ic('check-circle', 'icon-sm')} 提報建議</div>
+            <div class="form-group"><label class="form-label form-required">本次建議</label>${mkRadio('tkResult', ['擬請同意結案', '建議持續追蹤'], '')}</div>
+            <div class="form-group" id="tk-next-wrap" style="display:none"><label class="form-label form-required">下一次追蹤日期</label><input type="date" class="form-input" id="tk-next"></div>
+            <div class="form-group" id="tk-evidence-wrap" style="display:none"><label class="form-label form-required">結案佐證資料</label><div class="upload-zone" id="tk-upload-zone"><input type="file" id="tk-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">可拖曳檔案，或 <strong>點擊選擇</strong></div><div class="upload-zone-hint">只有選擇「擬請同意結案」時，才會強制要求上傳佐證</div></div><div class="file-preview-list" id="tk-file-previews"></div></div>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出追蹤提報</button><a href="#detail/${item.id}" class="btn btn-secondary">取消返回</a></div>
           </form></div>
         </section>
         <aside class="editor-aside">
           <div class="editor-sticky">
             <div class="editor-side-card editor-side-card--accent">
               <div class="editor-side-kicker">Tracking Summary</div>
-              <div class="editor-side-title">追蹤摘要</div>
-              <div class="editor-side-text">這一輪的判定會決定案件是結案還是繼續追蹤，右側摘要會跟著更新。</div>
+              <div class="editor-side-title">追蹤提報摘要</div>
+              <div class="editor-side-text">這一輪先由處理人員提出追蹤建議，再由管理者決定是否結案或繼續追蹤。</div>
               <div class="editor-summary-list editor-summary-list--compact">
                 <div class="editor-summary-item"><span>案件編號</span><strong>${esc(item.id)}</strong></div>
                 <div class="editor-summary-item"><span>追蹤輪次</span><strong>第 ${round} 次</strong></div>
-                <div class="editor-summary-item"><span>追蹤日期</span><strong id="track-summary-date">${fmt(new Date().toISOString().split('T')[0])}</strong></div>
-                <div class="editor-summary-item"><span>判定結果</span><strong id="track-summary-result">待判定</strong></div>
+                <div class="editor-summary-item"><span>填報日期</span><strong id="track-summary-date">${fmt(new Date().toISOString().split('T')[0])}</strong></div>
+                <div class="editor-summary-item"><span>提報建議</span><strong id="track-summary-result">待判定</strong></div>
                 <div class="editor-summary-item"><span>下一次追蹤</span><strong id="track-summary-next">未指定</strong></div>
               </div>
             </div>
             <div class="editor-side-card">
-              <div class="editor-side-title">判定規則</div>
+              <div class="editor-side-title">提報規則</div>
               <div class="editor-step-list">
-                <div class="editor-step-item"><span class="editor-step-badge">1</span><div><strong>可結案</strong><p>確認改善措施已落地，且後續不需再補件或追蹤時使用。</p></div></div>
-                <div class="editor-step-item"><span class="editor-step-badge">2</span><div><strong>持續追蹤</strong><p>仍有缺口或需要觀察時使用，建議補上下一次追蹤日期。</p></div></div>
-                <div class="editor-step-item"><span class="editor-step-badge">3</span><div><strong>留下判斷依據</strong><p>追蹤說明請寫清楚你是根據哪些事實做出判定，方便後續查核。</p></div></div>
+                <div class="editor-step-item"><span class="editor-step-badge">1</span><div><strong>擬請同意結案</strong><p>只有改善措施已完成，且可提供佐證資料時才使用。</p></div></div>
+                <div class="editor-step-item"><span class="editor-step-badge">2</span><div><strong>建議持續追蹤</strong><p>仍需補強或觀察時使用，必須填寫下一次追蹤日期。</p></div></div>
+                <div class="editor-step-item"><span class="editor-step-badge">3</span><div><strong>管理者核定</strong><p>送出後會回到案件明細，由管理者決定同意結案或同意繼續追蹤。</p></div></div>
               </div>
             </div>
             <div class="editor-side-card">
@@ -1407,41 +1506,44 @@
     document.getElementById('track-form').addEventListener('submit', e => {
       e.preventDefault();
       const res = document.querySelector('input[name="tkResult"]:checked');
-      if (!res) { toast('\u8acb\u9078\u64c7\u8ffd\u8e64\u5224\u5b9a\u7d50\u679c', 'error'); return; }
+      if (!res) { toast('請選擇追蹤建議結果', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
-      if (!li || !canAccessItem(li)) { toast('\u60a8\u6c92\u6709\u6b0a\u9650\u5b58\u53d6\u6b64\u77ef\u6b63\u55ae', 'error'); navigate('list'); return; }
-      if (!(li.status === STATUSES.TRACKING && canReview())) { toast('\u9019\u7b46\u6848\u4ef6\u76ee\u524d\u4e0d\u5141\u8a31\u5132\u5b58\u8ffd\u8e64\u7d50\u679c', 'error'); navigate('detail/' + id); return; }
-      const isClose = res.value === '\u53ef\u7d50\u6848\uff0c\u6539\u5584\u63aa\u65bd\u5df2\u5b8c\u6210';
-      const isContinue = res.value === '\u6301\u7e8c\u8ffd\u8e64';
-      if (isContinue && !document.getElementById('tk-next').value) { toast('\u9078\u64c7\u6301\u7e8c\u8ffd\u8e64\u6642\uff0c\u8acb\u586b\u5beb\u4e0b\u4e00\u6b21\u8ffd\u8e64\u65e5\u671f', 'error'); return; }
-      if (isClose && tempEv.length === 0) { toast('\u9078\u64c7\u53ef\u7d50\u6848\u6642\uff0c\u8acb\u4e0a\u50b3\u4f50\u8b49\u8cc7\u6599', 'error'); return; }
-      const tk = {
+      if (!li || !canAccessItem(li)) { toast('您沒有權限存取此矯正單', 'error'); navigate('list'); return; }
+      if (li.pendingTracking) { toast('目前已有待管理者審核的追蹤提報', 'error'); navigate('detail/' + id); return; }
+      if (!canSubmitTracking(li, u)) { toast('目前只有處理人員可送出追蹤提報', 'error'); navigate('detail/' + id); return; }
+      const isClose = res.value === '擬請同意結案';
+      const isContinue = res.value === '建議持續追蹤';
+      if (isContinue && !document.getElementById('tk-next').value) { toast('選擇建議持續追蹤時，請填寫下一次追蹤日期', 'error'); return; }
+      if (isClose && tempEv.length === 0) { toast('選擇擬請同意結案時，請上傳佐證資料', 'error'); return; }
+      const submission = {
+        round,
         tracker: document.getElementById('tk-tracker').value,
         trackDate: document.getElementById('tk-date').value,
         execution: document.getElementById('tk-exec').value.trim(),
         trackNote: document.getElementById('tk-note').value.trim(),
         result: res.value,
         nextTrackDate: isContinue ? (document.getElementById('tk-next').value || null) : null,
-        evidence: isClose ? tempEv.slice() : [],
-        reviewer: document.getElementById('tk-reviewer').value,
-        reviewDate: document.getElementById('tk-revdate').value
+        evidence: tempEv.slice(),
+        submittedAt: now
       };
-      const ns = isClose ? STATUSES.CLOSED : STATUSES.TRACKING;
-      const upd = {
-        trackings: [...(li.trackings || []), tk],
-        evidence: isClose && tempEv.length ? [...(li.evidence || []), ...tempEv] : (li.evidence || []),
-        status: ns,
+      const history = [
+        ...(li.history || []),
+        { time: now, action: `提交第 ${round} 次追蹤提報`, user: u.name },
+        { time: now, action: `提報建議：${res.value}`, user: u.name }
+      ];
+      if (submission.nextTrackDate) history.push({ time: now, action: `建議下一次追蹤日期：${submission.nextTrackDate}`, user: u.name });
+      if (submission.evidence.length) history.push({ time: now, action: `上傳 ${submission.evidence.length} 份追蹤佐證`, user: u.name });
+      updateItem(id, {
+        pendingTracking: submission,
         updatedAt: now,
-        history: [...li.history, { time: now, action: `\u7b2c ${round} \u6b21\u8ffd\u8e64 - ${res.value}`, user: u.name }, { time: now, action: `\u72c0\u614b\u8b8a\u66f4\u70ba\u300c${ns}\u300d`, user: u.name }]
-      };
-      if (isClose && tempEv.length) upd.history.push({ time: now, action: `\u4e0a\u50b3 ${tempEv.length} \u4efd\u8ffd\u8e64\u4f50\u8b49`, user: u.name });
-      if (ns === STATUSES.CLOSED) upd.closedDate = now;
-      updateItem(id, upd);
-      toast(ns === STATUSES.CLOSED ? '\u6848\u4ef6\u5df2\u7d50\u6848' : '\u8ffd\u8e64\u7d50\u679c\u5df2\u5132\u5b58');
+        history
+      });
+      toast('追蹤提報已送出，待管理者審核');
       navigate('detail/' + id);
     });
   }
 
+  
   function renderUsers() {
     if (!canManageUsers()) { navigate('dashboard'); return; } const users = getUsers();
     const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="window._editUser('${u.username}')">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" onclick="window._delUser('${u.username}')">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
