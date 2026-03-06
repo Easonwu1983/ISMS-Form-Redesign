@@ -667,14 +667,19 @@
     const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
     raf(() => lucideApi.createIcons());
   }
-  function getVisibleItems() { const u = currentUser(); if (!u) return []; const all = getAllItems(); if (u.role === ROLES.ADMIN) return all; if (u.role === ROLES.UNIT_ADMIN) return all.filter(i => i.proposerUnit === u.unit || i.handlerUnit === u.unit || i.proposerName === u.name); return all.filter(i => i.handlerName === u.name); }
+  function getVisibleItems() {
+    const u = currentUser();
+    if (!u) return [];
+    const all = getAllItems();
+    if (u.role === ROLES.ADMIN || u.role === ROLES.UNIT_ADMIN) return all;
+    return all.filter((item) => item.handlerUsername ? item.handlerUsername === u.username : item.handlerName === u.name);
+  }
   function canAccessItem(item) {
     if (!item) return false;
     const u = currentUser();
     if (!u) return false;
-    if (u.role === ROLES.ADMIN) return true;
-    if (u.role === ROLES.UNIT_ADMIN) return item.proposerUnit === u.unit || item.handlerUnit === u.unit || item.proposerName === u.name;
-    return item.handlerName === u.name;
+    if (u.role === ROLES.ADMIN || u.role === ROLES.UNIT_ADMIN) return true;
+    return item.handlerUsername ? item.handlerUsername === u.username : item.handlerName === u.name;
   }
   function mkChk(name, opts, sel) { return '<div class="checkbox-group">' + opts.map(o => '<label class="chk-label"><input type="checkbox" name="' + name + '" value="' + o + '" ' + ((sel || []).includes(o) ? 'checked' : '') + '><span class="chk-box"></span>' + o + '</label>').join('') + '</div>'; }
   function mkRadio(name, opts, sel) { return '<div class="radio-group">' + opts.map(o => '<label class="radio-label"><input type="radio" name="' + name + '" value="' + o + '" ' + (sel === o ? 'checked' : '') + '><span class="radio-dot"></span>' + o + '</label>').join('') + '</div>'; }
@@ -1667,7 +1672,34 @@
     saveChecklists(d);
     return true;
   }
-  function generateChecklistId() { const d = loadChecklists(); const id = `CHK-${String(d.nextId).padStart(4, '0')}`; d.nextId += 1; saveChecklists(d); return id; }
+  function getChecklistUnitCode(unit) {
+    const suffixMap = { '\u4e2d\u5fc3': '\u4e2d', '\u5b78\u9662': '\u9662', '\u5b78\u7cfb': '\u7cfb', '\u7814\u7a76\u6240': '\u6240', '\u8655': '\u8655', '\u5ba4': '\u5ba4', '\u7d44': '\u7d44', '\u9928': '\u9928', '\u9662': '\u9662', '\u6240': '\u6240' };
+    const normalizePart = (part) => String(part || '').trim()
+      .replace(/\u570b\u7acb[\u81fa\u53f0]\u7063\u5927\u5b78/g, '')
+      .replace(/[()\uff08\uff09\s]/g, '');
+    const shorten = (part) => {
+      const clean = normalizePart(part);
+      if (!clean) return '';
+      if (clean.length <= 3) return clean;
+      const suffix = Object.keys(suffixMap).find((key) => clean.endsWith(key));
+      const body = suffix ? clean.slice(0, -suffix.length) : clean;
+      const tokens = body.split(/[\u53ca\u8207\u66a8\u3001]/).map((token) => token.trim()).filter(Boolean);
+      if (tokens.length >= 2) return tokens.slice(0, 2).map((token) => token[0]).join('') + (suffix ? suffixMap[suffix] : body.slice(-1));
+      if (suffix) return body.slice(0, Math.min(2, body.length)) + suffixMap[suffix];
+      return clean.slice(0, Math.min(4, clean.length));
+    };
+    const parsed = splitUnitValue(unit);
+    const parentCode = shorten(parsed.parent);
+    const childCode = shorten(parsed.child);
+    return [parentCode, childCode].filter(Boolean).join('-') || 'CHK';
+  }
+  function generateChecklistId(unit) {
+    const d = loadChecklists();
+    const id = `${getChecklistUnitCode(unit)}-${String(d.nextId).padStart(4, '0')}`;
+    d.nextId += 1;
+    saveChecklists(d);
+    return id;
+  }
   function isChecklistOwner(cl, user) {
     const actor = user || currentUser();
     if (!actor || !cl) return false;
@@ -1778,7 +1810,7 @@
             </div>
             <div class="cl-progress-bar-wrap"><div class="cl-progress-label">填報進度</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${totalItems}</span></div>
             ${sectionsHtml}
-            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 正式送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft">${ic('save', 'icon-sm')} 暫存草稿</button><a href="#checklist" class="btn btn-ghost">取消返回</a></div>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 正式送出檢核表</button><a href="#checklist" class="btn btn-ghost">取消返回</a></div>
           </form></div>
         </section>
         <aside class="editor-aside">
@@ -1875,7 +1907,7 @@
       const supervisorNameValue = document.getElementById('cl-supervisor-name').value.trim();
       const supervisorTitleValue = document.getElementById('cl-supervisor-title').value.trim();
       return {
-        id: existing ? existing.id : generateChecklistId(),
+        id: existing ? existing.id : generateChecklistId(document.getElementById('cl-unit').value),
         unit: document.getElementById('cl-unit').value,
         fillerName: u.name,
         fillerUsername: u.username,
@@ -1940,7 +1972,7 @@
       navigate('checklist-detail/' + data.id);
     });
 
-    document.getElementById('cl-save-draft').addEventListener('click', saveChecklistDraft);
+    document.getElementById('cl-save-draft')?.addEventListener('click', saveChecklistDraft);
     document.getElementById('cl-save-draft-inline').addEventListener('click', saveChecklistDraft);
     document.getElementById('cl-save-draft-floating').addEventListener('click', saveChecklistDraft);
   }
