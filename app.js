@@ -3083,7 +3083,8 @@ window._cs = function (id, ns) {
           + '<div class="training-chart-meta"><div class="training-chart-status">' + statusHtml + '</div><div class="training-chart-rate">' + safeRate + '%</div></div>'
           + '</div>';
       };
-      const chartRows = sortedGroupedUnits.length ? sortedGroupedUnits.map(([parentUnit, children]) => {
+      const chartIntro = '<div class="training-chart-overview"><div class="training-chart-overview-copy"><div class="training-chart-kicker">\u5c64\u7d1a\u8996\u5716</div><div class="training-chart-subtitle">\u5148\u770b\u4e00\u7d1a\u55ae\u4f4d\u6574\u9ad4\u9032\u5ea6\uff0c\u518d\u5c55\u958b\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30\u3002</div></div><div class="training-chart-legend"><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--live"></span>\u9032\u5ea6\u689d</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--submitted"></span>\u5df2\u9001\u51fa</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--pending"></span>\u5f85\u8ffd\u8e64</span></div></div>';
+      const chartRows = chartIntro + (sortedGroupedUnits.length ? sortedGroupedUnits.map(([parentUnit, children]) => {
         const childRows = children
           .slice()
           .sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'))
@@ -3099,6 +3100,7 @@ window._cs = function (id, ns) {
         const draftCount = children.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.DRAFT).length;
         const returnedCount = children.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.RETURNED).length;
         const totalCount = children.length;
+        const followUpCount = Math.max(0, totalCount - submittedCount);
         let parentStatus = '<span class="training-inline-status">\u672a\u586b\u5831</span>';
         if (totalCount > 0 && submittedCount === totalCount) {
           parentStatus = trainingStatusBadge(TRAINING_STATUSES.SUBMITTED);
@@ -3108,8 +3110,13 @@ window._cs = function (id, ns) {
           parentStatus = '<span class="training-inline-status">\u5df2\u9001\u51fa ' + submittedCount + '/' + totalCount + '</span>';
         }
         const parentRow = buildChartRow(parentUnit, parentStatus, parentCompletion, 'training-chart-row--parent');
-        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head">' + parentRow + '<span class="training-chart-toggle">\u4e8c\u7d1a\u55ae\u4f4d ' + totalCount + '</span></div></summary><div class="training-chart-children">' + childRows + '</div></details>';
-      }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">\u5c1a\u7121\u55ae\u4f4d\u8cc7\u6599</div></div>';
+        const groupPills = '<div class="training-chart-pills">'
+          + '<span class="training-chart-pill">' + totalCount + ' \u500b\u4e8c\u7d1a</span>'
+          + '<span class="training-chart-pill training-chart-pill--success">' + submittedCount + ' \u5df2\u9001\u51fa</span>'
+          + '<span class="training-chart-pill training-chart-pill--warning">' + followUpCount + ' \u5f85\u8ffd\u8e64</span>'
+          + '</div>';
+        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head"><div class="training-chart-group-main"><div class="training-chart-group-kicker">\u4e00\u7d1a\u55ae\u4f4d</div>' + parentRow + '</div><div class="training-chart-group-side">' + groupPills + '<span class="training-chart-toggle">\u5c55\u958b\u660e\u7d30</span></div></div></summary><div class="training-chart-children"><div class="training-chart-children-title">\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30</div>' + childRows + '</div></details>';
+      }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">\u5c1a\u7121\u55ae\u4f4d\u8cc7\u6599</div></div>');
       adminPanel = '<div class="training-admin-grid">'
         + '<div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">' + schoolProgress + '%</div><div class="training-kpi-desc">已正式送出單位 ' + submittedUnits + ' / ' + latestByUnit.length + '</div></div>'
         + '<div class="card"><div class="card-header"><span class="card-title">待追蹤單位</span></div><div class="training-kpi-value">' + pendingUnits + '</div><div class="training-kpi-desc">尚未正式送出或仍退回中</div></div>'
