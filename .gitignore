@@ -10,3 +10,4 @@ ssh_log2.txt
 .codex-local-server.out.log
 .tmp-*
 local-preview.png
+node_modules/
