@@ -1,4 +1,4 @@
-﻿// =============================================
+// =============================================
 // ISMS Internal Audit Tracking System - v4
 // =============================================
 (function () {
@@ -10,6 +10,8 @@
   const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員', REPORTER: '填報人' };
   const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter' };
   const TRAINING_STATUSES = { DRAFT: '暫存', SUBMITTED: '正式送出', RETURNED: '退回更正' };
+  const TRAINING_EMPLOYEE_STATUS = ['在職', '離職', '退休', '留職停薪', '單位調職'];
+  const TRAINING_BOOLEAN_OPTIONS = ['是', '否'];
   const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議'];
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
@@ -697,7 +699,7 @@
       '<a class="nav-item ' + (r.page === 'dashboard' ? 'active' : '') + '" href="#dashboard"><span class="nav-icon">' + ic('pie-chart') + '</span>儀表板</a>' +
       '<a class="nav-item ' + (r.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>矯正單列表' + (pc ? '<span class="nav-badge">' + pc + '</span>' : '') + '</a>' +
       '<a class="nav-item ' + (r.page === 'checklist' || r.page === 'checklist-fill' || r.page === 'checklist-detail' ? 'active' : '') + '" href="#checklist"><span class="nav-icon">' + ic('clipboard-check') + '</span>內稽檢核表</a>' +
-      '<a class="nav-item ' + (r.page === 'training' || r.page === 'training-fill' || r.page === 'training-detail' || r.page === 'training-roster' ? 'active' : '') + '" href="#training"><span class="nav-icon">' + ic('graduation-cap') + '</span>教育訓練時數統計</a></div>';
+      '<a class="nav-item ' + (r.page === 'training' || r.page === 'training-fill' || r.page === 'training-detail' || r.page === 'training-roster' ? 'active' : '') + '" href="#training"><span class="nav-icon">' + ic('graduation-cap') + '</span>資安教育訓練統計</a></div>';
     var opNav = '';
     if (canCreateCAR()) opNav += '<a class="nav-item ' + (r.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>開立矯正單</a>';
     if (canFillChecklist()) opNav += '<a class="nav-item ' + (r.page === 'checklist-fill' ? 'active' : '') + '" href="#checklist-fill"><span class="nav-icon">' + ic('edit-3') + '</span>填報檢核表</a>';
@@ -715,7 +717,7 @@
   }
 
   function renderHeader() {
-    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', 'login-log': '登入紀錄', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', 'unit-review': '單位治理', training: '教育訓練時數統計', 'training-fill': '填報教育訓練時數', 'training-detail': '教育訓練填報詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
+    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', 'login-log': '登入紀錄', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', 'unit-review': '單位治理', training: '資安教育訓練統計', 'training-fill': '填報資安教育訓練統計', 'training-detail': '資安教育訓練統計詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
     document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" onclick="window._toggleSidebar()" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + (titles[r.page] || '內部稽核管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
   }
   window._logout = function () { logout(); };
@@ -1234,7 +1236,7 @@
     {
       section: '1. 資安意識及資安通識教育訓練', items: [
         { id: '1.1', text: '單位同仁是否瞭解本校資通安全政策？', hint: '本校資安政策放置於資通安全管理專區，已透過 MAIL 方式向同仁宣導' },
-        { id: '1.2', text: '單位同仁是否每年接受 3 小時以上之資通安全通識教育？', hint: '114 年資通安全教育訓練執行情形、全校資安通識教育訓練時數統計表' },
+        { id: '1.2', text: '單位同仁是否每年接受 3 小時以上之資通安全通識教育？', hint: '114 年資通安全教育訓練執行情形、全校資安通識教育訓練統計表' },
         { id: '1.3', text: '是否指派適當人員擔任單位資通安全長及資安窗口，負責推動及督導或執行機關內資通安全相關事務？', hint: '單位資通安全長及資安窗口聯絡資訊' }
       ]
     },
@@ -1858,249 +1860,785 @@
   };
 
   // ─── Training Hours Data Model ─────────────────────
-  function emptyTrainingStore() { return { forms: [], rosters: [], nextFormId: 1, nextRosterId: 1 }; }
+  const TRAINING_PROFESSIONAL_OPTIONS = ['是', '否', '無須'];
+
+  function emptyTrainingStore() {
+    return { forms: [], rosters: [], nextFormId: 1, nextRosterId: 1 };
+  }
+
+  function getTrainingStatsUnit(unit) {
+    const parsed = splitUnitValue(unit || '');
+    return String(parsed.parent || unit || '').trim();
+  }
+
+  function getTrainingJobUnit(unit, explicit) {
+    const parsed = splitUnitValue(unit || '');
+    return String(explicit || parsed.child || parsed.parent || unit || '').trim();
+  }
+
+  function hasTrainingValue(value) {
+    return value !== undefined && value !== null && String(value).trim() !== '';
+  }
+
+  function normalizeTrainingRosterRow(row, fallbackUnit) {
+    const unit = String((row && row.unit) || fallbackUnit || '').trim();
+    const statsUnit = String((row && (row.statsUnit || row.l1Unit)) || getTrainingStatsUnit(unit)).trim();
+    const unitName = String((row && row.unitName) || getTrainingJobUnit(unit)).trim() || statsUnit;
+    return {
+      id: String((row && row.id) || '').trim(),
+      unit,
+      statsUnit,
+      l1Unit: statsUnit,
+      name: String((row && row.name) || '').trim(),
+      unitName,
+      identity: String((row && row.identity) || '').trim(),
+      jobTitle: String((row && row.jobTitle) || '').trim(),
+      source: ((row && row.source) === 'manual') ? 'manual' : 'import',
+      createdBy: String((row && row.createdBy) || '系統').trim() || '系統',
+      createdAt: (row && row.createdAt) || new Date().toISOString()
+    };
+  }
+
+  function normalizeTrainingRecordState(record) {
+    const normalized = { ...record };
+    const status = TRAINING_EMPLOYEE_STATUS.includes(String(normalized.status || '').trim())
+      ? String(normalized.status || '').trim()
+      : '';
+
+    let completedGeneral = TRAINING_BOOLEAN_OPTIONS.includes(String(normalized.completedGeneral || '').trim())
+      ? String(normalized.completedGeneral || '').trim()
+      : '';
+    if (!completedGeneral && status === '在職' && hasTrainingValue(normalized.hours)) {
+      completedGeneral = Number(normalized.hours || 0) >= 3 ? '是' : '否';
+    }
+
+    let isInfoStaff = TRAINING_BOOLEAN_OPTIONS.includes(String(normalized.isInfoStaff || '').trim())
+      ? String(normalized.isInfoStaff || '').trim()
+      : '';
+    if (!isInfoStaff && TRAINING_BOOLEAN_OPTIONS.includes(String(normalized.outsourced || '').trim())) {
+      isInfoStaff = String(normalized.outsourced || '').trim();
+    }
+
+    let completedProfessional = ['是', '否', '無須'].includes(String(normalized.completedProfessional || '').trim())
+      ? String(normalized.completedProfessional || '').trim()
+      : '';
+    if (!completedProfessional && ['是', '否', '無須'].includes(String(normalized.completedInfo || '').trim())) {
+      completedProfessional = String(normalized.completedInfo || '').trim();
+    }
+
+    if (status !== '在職') {
+      completedGeneral = '';
+      isInfoStaff = '';
+      completedProfessional = '';
+    } else {
+      if (!TRAINING_BOOLEAN_OPTIONS.includes(completedGeneral)) completedGeneral = '';
+      if (!TRAINING_BOOLEAN_OPTIONS.includes(isInfoStaff)) isInfoStaff = '';
+      if (isInfoStaff === '否') {
+        completedProfessional = '無須';
+      } else if (isInfoStaff === '是') {
+        if (!TRAINING_BOOLEAN_OPTIONS.includes(completedProfessional)) completedProfessional = '';
+      } else {
+        completedProfessional = '';
+      }
+    }
+
+    normalized.status = status;
+    normalized.completedGeneral = completedGeneral;
+    normalized.isInfoStaff = isInfoStaff;
+    normalized.completedProfessional = completedProfessional;
+    normalized.note = String(normalized.note || '').trim();
+    return normalized;
+  }
+
+  function normalizeTrainingRecordRow(row, fallbackUnit) {
+    const base = normalizeTrainingRosterRow(row, fallbackUnit);
+    return normalizeTrainingRecordState({
+      ...base,
+      rosterId: (row && row.rosterId) || null,
+      status: String((row && row.status) || '').trim(),
+      completedGeneral: String((row && row.completedGeneral) || '').trim(),
+      isInfoStaff: String((row && (row.isInfoStaff || row.outsourced)) || '').trim(),
+      completedProfessional: String((row && (row.completedProfessional || row.completedInfo)) || '').trim(),
+      note: String((row && row.note) || '').trim(),
+      hours: hasTrainingValue(row && row.hours) ? Number(row.hours) : ''
+    });
+  }
+
+  function normalizeTrainingForm(form) {
+    const unit = String((form && form.unit) || '').trim();
+    const records = Array.isArray(form && form.records)
+      ? form.records.map((row) => normalizeTrainingRecordRow(row, unit))
+      : [];
+    return {
+      id: String((form && form.id) || '').trim(),
+      unit,
+      statsUnit: String((form && form.statsUnit) || getTrainingStatsUnit(unit)).trim(),
+      fillerName: String((form && form.fillerName) || '').trim(),
+      fillerUsername: String((form && form.fillerUsername) || '').trim(),
+      submitterPhone: String((form && form.submitterPhone) || '').trim(),
+      submitterEmail: String((form && form.submitterEmail) || '').trim(),
+      fillDate: (form && form.fillDate) || new Date().toISOString().split('T')[0],
+      trainingYear: String((form && form.trainingYear) || String(new Date().getFullYear() - 1911)).trim(),
+      status: Object.values(TRAINING_STATUSES).includes(form && form.status) ? form.status : TRAINING_STATUSES.DRAFT,
+      records,
+      summary: computeTrainingSummary(records),
+      signedFiles: Array.isArray(form && form.signedFiles) ? form.signedFiles : [],
+      returnReason: String((form && form.returnReason) || '').trim(),
+      createdAt: (form && form.createdAt) || new Date().toISOString(),
+      updatedAt: (form && form.updatedAt) || new Date().toISOString(),
+      submittedAt: (form && form.submittedAt) || null,
+      history: Array.isArray(form && form.history) ? form.history : []
+    };
+  }
+
   function loadTrainingStore() {
     const raw = readCachedJson(TRAINING_KEY, emptyTrainingStore);
     if (!raw || typeof raw !== 'object') return emptyTrainingStore();
-    if (!Array.isArray(raw.forms)) raw.forms = [];
-    if (!Array.isArray(raw.rosters)) raw.rosters = [];
-    if (!Number.isFinite(raw.nextFormId)) raw.nextFormId = 1;
-    if (!Number.isFinite(raw.nextRosterId)) raw.nextRosterId = 1;
-    return raw;
+    return {
+      forms: Array.isArray(raw.forms) ? raw.forms.map((form) => normalizeTrainingForm(form)) : [],
+      rosters: Array.isArray(raw.rosters) ? raw.rosters.map((row) => normalizeTrainingRosterRow(row, row.unit)) : [],
+      nextFormId: Number.isFinite(raw.nextFormId) ? raw.nextFormId : 1,
+      nextRosterId: Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : 1
+    };
   }
-  function saveTrainingStore(d) { writeCachedJson(TRAINING_KEY, d); }
-  function getAllTrainingForms() { return loadTrainingStore().forms.slice(); }
-  function getTrainingForm(id) { return loadTrainingStore().forms.find(f => f.id === id); }
-  function upsertTrainingForm(form) { const d = loadTrainingStore(); const i = d.forms.findIndex(f => f.id === form.id); if (i >= 0) d.forms[i] = form; else d.forms.push(form); saveTrainingStore(d); }
-  function updateTrainingForm(id, updates) { const d = loadTrainingStore(); const i = d.forms.findIndex(f => f.id === id); if (i < 0) return; d.forms[i] = { ...d.forms[i], ...updates }; saveTrainingStore(d); }
-  function generateTrainingFormId() { const d = loadTrainingStore(); const id = `TRN-${String(d.nextFormId).padStart(4, '0')}`; d.nextFormId++; saveTrainingStore(d); return id; }
 
-  function getAllTrainingRosters() { return loadTrainingStore().rosters.slice(); }
-  function getTrainingRosterByUnit(unit) { return getAllTrainingRosters().filter(r => r.unit === unit).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')); }
-  function addTrainingRosterPerson(unit, name, source, actor) {
-    const cleanUnit = (unit || '').trim();
-    const cleanName = (name || '').trim();
-    if (!cleanUnit || !cleanName) return { added: false, reason: '單位與姓名不可為空白' };
-    const d = loadTrainingStore();
-    const exists = d.rosters.find(r => r.unit === cleanUnit && r.name.toLowerCase() === cleanName.toLowerCase());
-    if (exists) return { added: false, reason: `「${cleanName}」已在名單中` };
-    const id = `RST-${String(d.nextRosterId).padStart(4, '0')}`;
-    d.nextRosterId++;
-    d.rosters.push({ id, unit: cleanUnit, name: cleanName, source: source || 'manual', createdBy: actor || '系統', createdAt: new Date().toISOString() });
-    saveTrainingStore(d);
-    return { added: true, id };
+  function saveTrainingStore(store) {
+    writeCachedJson(TRAINING_KEY, store);
   }
-  function deleteTrainingRosterPerson(id) { const d = loadTrainingStore(); d.rosters = d.rosters.filter(r => r.id !== id); saveTrainingStore(d); }
+
+  function getAllTrainingForms() {
+    return loadTrainingStore().forms.slice();
+  }
+
+  function getTrainingForm(id) {
+    return loadTrainingStore().forms.find((form) => form.id === id);
+  }
+
+  function upsertTrainingForm(form) {
+    const store = loadTrainingStore();
+    const normalized = normalizeTrainingForm(form);
+    const index = store.forms.findIndex((item) => item.id === normalized.id);
+    if (index >= 0) store.forms[index] = normalized;
+    else store.forms.push(normalized);
+    saveTrainingStore(store);
+  }
+
+  function updateTrainingForm(id, updates) {
+    const store = loadTrainingStore();
+    const index = store.forms.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    store.forms[index] = normalizeTrainingForm({ ...store.forms[index], ...updates });
+    saveTrainingStore(store);
+  }
+
+  function generateTrainingFormId() {
+    const store = loadTrainingStore();
+    const id = 'TRN-' + String(store.nextFormId).padStart(4, '0');
+    store.nextFormId += 1;
+    saveTrainingStore(store);
+    return id;
+  }
+
+  function getAllTrainingRosters() {
+    return loadTrainingStore().rosters.slice();
+  }
+
+  function getTrainingRosterByUnit(unit) {
+    return getAllTrainingRosters()
+      .filter((row) => row.unit === unit)
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  }
+
+  function addTrainingRosterPerson(unit, payload, source, actor) {
+    const cleanUnit = String(unit || '').trim();
+    const base = typeof payload === 'string' ? { name: payload } : (payload || {});
+    const cleanName = String(base.name || '').trim();
+    if (!cleanUnit || !cleanName) {
+      return { added: false, updated: false, reason: '請先選擇單位並輸入姓名' };
+    }
+
+    const store = loadTrainingStore();
+    const index = store.rosters.findIndex((row) => row.unit === cleanUnit && row.name.toLowerCase() === cleanName.toLowerCase());
+    const nextRow = normalizeTrainingRosterRow({
+      ...base,
+      id: index >= 0 ? store.rosters[index].id : 'RST-' + String(store.nextRosterId).padStart(4, '0'),
+      unit: cleanUnit,
+      source: source || base.source || 'manual',
+      createdBy: index >= 0 ? store.rosters[index].createdBy : (actor || '系統'),
+      createdAt: index >= 0 ? store.rosters[index].createdAt : new Date().toISOString()
+    }, cleanUnit);
+
+    if (index >= 0) {
+      const current = store.rosters[index];
+      const merged = { ...current, ...nextRow };
+      const changed = ['unitName', 'identity', 'jobTitle', 'statsUnit', 'l1Unit'].some(
+        (key) => String(current[key] || '') !== String(merged[key] || '')
+      );
+      if (changed) {
+        store.rosters[index] = merged;
+        saveTrainingStore(store);
+        return { added: false, updated: true, reason: `已更新 ${cleanName} 的名單資訊` };
+      }
+      return { added: false, updated: false, reason: `${cleanName} 已存在於該單位名單` };
+    }
+
+    store.nextRosterId += 1;
+    store.rosters.push(nextRow);
+    saveTrainingStore(store);
+    return { added: true, updated: false, id: nextRow.id };
+  }
+
+  function deleteTrainingRosterPerson(id) {
+    const store = loadTrainingStore();
+    store.rosters = store.rosters.filter((row) => row.id !== id);
+    saveTrainingStore(store);
+  }
 
   function getTrainingUnits() {
     return getSystemUnits();
   }
+
   function getVisibleTrainingForms() {
-    const u = currentUser();
-    if (!u) return [];
-    const all = getAllTrainingForms();
-    if (u.role === ROLES.ADMIN) return all;
-    return all.filter(f => f.unit === u.unit || f.fillerUsername === u.username);
+    const user = currentUser();
+    if (!user) return [];
+    const forms = getAllTrainingForms();
+    if (user.role === ROLES.ADMIN) return forms;
+    return forms.filter((form) => form.unit === user.unit || form.fillerUsername === user.username);
   }
+
   function canEditTrainingForm(form) {
-    const u = currentUser();
-    if (!u || !form) return false;
-    const inScope = u.role === ROLES.ADMIN || form.unit === u.unit || form.fillerUsername === u.username;
+    const user = currentUser();
+    if (!user || !form) return false;
+    const inScope = user.role === ROLES.ADMIN || form.unit === user.unit || form.fillerUsername === user.username;
     if (!inScope) return false;
     return form.status !== TRAINING_STATUSES.SUBMITTED;
   }
+
   function isTrainingVisible(form) {
-    const u = currentUser();
-    if (!u || !form) return false;
-    if (u.role === ROLES.ADMIN) return true;
-    return form.unit === u.unit || form.fillerUsername === u.username;
+    const user = currentUser();
+    if (!user || !form) return false;
+    if (user.role === ROLES.ADMIN) return true;
+    return form.unit === user.unit || form.fillerUsername === user.username;
+  }
+
+  function isTrainingRecordReadyForSubmit(record) {
+    if (!record || !record.status) return false;
+    if (record.status !== '在職') return true;
+    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.completedGeneral)) return false;
+    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.isInfoStaff)) return false;
+    if (record.isInfoStaff === '是') return TRAINING_BOOLEAN_OPTIONS.includes(record.completedProfessional);
+    return true;
+  }
+
+  function isTrainingRecordComplete(record) {
+    if (!record || record.status !== '在職') return false;
+    if (record.completedGeneral !== '是') return false;
+    if (record.isInfoStaff === '是') return record.completedProfessional === '是';
+    return record.isInfoStaff === '否';
+  }
+
+  function getTrainingRecordHint(record) {
+    if (!record.status) return '請先選擇在職狀態';
+    if (record.status !== '在職') return '非在職人員，不列入統計';
+    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.completedGeneral)) return '請填寫資安通識課程完成情形';
+    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.isInfoStaff)) return '請判定是否為資訊人員';
+    if (record.isInfoStaff === '是' && !TRAINING_BOOLEAN_OPTIONS.includes(record.completedProfessional)) {
+      return '請填寫資安專業課程完成情形';
+    }
+    if (isTrainingRecordComplete(record)) return '已符合完成條件';
+    if (record.completedGeneral === '否') return '未完成資安通識課程';
+    if (record.isInfoStaff === '是' && record.completedProfessional === '否') return '待補資安專業課程';
+    return '尚未完成';
+  }
+
+  function getTrainingDecisionMeta(record) {
+    if (!record.status) return { label: '待填資料', tone: 'pending' };
+    if (record.status !== '在職') return { label: '不列計', tone: 'muted' };
+    if (!isTrainingRecordReadyForSubmit(record)) return { label: '待補欄位', tone: 'pending' };
+    if (isTrainingRecordComplete(record)) return { label: '已完成', tone: 'complete' };
+    if (record.completedGeneral === '否') return { label: '通識未完成', tone: 'risk' };
+    if (record.isInfoStaff === '是' && record.completedProfessional === '否') return { label: '專業未完成', tone: 'warning' };
+    return { label: '未完成', tone: 'warning' };
+  }
+
+  function trainingDecisionBadge(record) {
+    const meta = getTrainingDecisionMeta(record);
+    return '<span class="training-judgement training-judgement--' + meta.tone + '">' + esc(meta.label) + '</span>';
   }
 
   function computeTrainingSummary(records) {
-    const rows = Array.isArray(records) ? records : [];
-    let totalHours = 0;
-    let filledPeople = 0;
-    let reached = 0;
-    rows.forEach(r => {
-      const h = Number(r.hours || 0);
-      if (h > 0) filledPeople++;
-      if (h >= 3) reached++;
-      totalHours += h;
-    });
-    const totalPeople = rows.length;
-    const avgHours = totalPeople > 0 ? totalHours / totalPeople : 0;
-    return { totalPeople, filledPeople, reached, totalHours: Number(totalHours.toFixed(2)), avgHours: Number(avgHours.toFixed(2)), reachRate: totalPeople > 0 ? Math.round(reached / totalPeople * 100) : 0 };
+    const rows = Array.isArray(records) ? records.map((row) => normalizeTrainingRecordRow(row, row.unit)) : [];
+    const activeRows = rows.filter((row) => row.status === '在職');
+    const completedRows = activeRows.filter((row) => isTrainingRecordComplete(row));
+    const infoRows = activeRows.filter((row) => row.isInfoStaff === '是');
+    const readyRows = activeRows.filter((row) => isTrainingRecordReadyForSubmit(row));
+    const incompleteCount = activeRows.length - completedRows.length;
+    const completionRate = activeRows.length > 0 ? Math.round((completedRows.length / activeRows.length) * 100) : 0;
+    const professionalPendingCount = infoRows.filter((row) => row.completedProfessional !== '是').length;
+    const missingStatusCount = rows.filter((row) => !row.status).length;
+    const missingFieldCount = activeRows.filter((row) => !isTrainingRecordReadyForSubmit(row)).length;
+    return {
+      totalPeople: activeRows.length,
+      activeCount: activeRows.length,
+      totalRoster: rows.length,
+      inactiveCount: rows.length - activeRows.length,
+      completedCount: completedRows.length,
+      readyCount: readyRows.length,
+      incompleteCount,
+      completionRate,
+      reachRate: completionRate,
+      reached: completedRows.length,
+      infoStaffCount: infoRows.length,
+      professionalPendingCount,
+      missingStatusCount,
+      missingFieldCount
+    };
   }
+
   function trainingStatusBadge(status) {
     const cls = status === TRAINING_STATUSES.SUBMITTED ? 'badge-closed' : (status === TRAINING_STATUSES.RETURNED ? 'badge-overdue' : 'badge-pending');
-    return `<span class="badge ${cls}"><span class="badge-dot"></span>${status}</span>`;
+    return '<span class="badge ' + cls + '"><span class="badge-dot"></span>' + status + '</span>';
   }
-  function csvCell(v) {
-    const text = String(v === null || v === undefined ? '' : v);
-    if (text.includes(',') || text.includes('"') || text.includes('\n')) return `"${text.replace(/"/g, '""')}"`;
+
+  function trainingSelectOptionsHtml(options, selected, placeholder) {
+    const base = placeholder ? '<option value="">' + placeholder + '</option>' : '';
+    return base + options.map((option) => '<option value="' + esc(option) + '" ' + (selected === option ? 'selected' : '') + '>' + esc(option) + '</option>').join('');
+  }
+
+  function csvCell(value) {
+    const text = String(value === null || value === undefined ? '' : value);
+    if (text.includes(',') || text.includes('"') || text.includes('\n')) return '"' + text.replace(/"/g, '""') + '"';
     return text;
   }
+
   function downloadCsv(filename, headers, rows) {
-    const lines = [headers.map(csvCell).join(',')].concat(rows.map(r => r.map(csvCell).join(',')));
+    const lines = [headers.map(csvCell).join(',')].concat(rows.map((row) => row.map(csvCell).join(',')));
     const csv = '\uFEFF' + lines.join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
     URL.revokeObjectURL(url);
   }
+
   function exportTrainingSummaryCsv(forms, filename) {
-    const rows = forms.map(f => [f.id, f.unit, f.trainingYear, f.status, f.fillerName, fmt(f.fillDate), f.summary?.totalPeople || 0, f.summary?.filledPeople || 0, f.summary?.reached || 0, f.summary?.totalHours || 0, f.summary?.avgHours || 0, f.submittedAt ? fmtTime(f.submittedAt) : '', fmtTime(f.updatedAt)]);
-    downloadCsv(filename || `教育訓練時數統計_${new Date().toISOString().slice(0, 10)}.csv`, ['編號', '單位', '年度', '狀態', '填報人', '填報日期', '名單總人數', '已填時數人數', '達標人數(>=3h)', '總時數', '平均時數', '正式送出時間', '最後更新時間'], rows);
+    const rows = forms.map((form) => {
+      const summary = form.summary || computeTrainingSummary(form.records || []);
+      return [
+        form.id,
+        form.statsUnit || getTrainingStatsUnit(form.unit),
+        form.unit,
+        form.trainingYear,
+        form.status,
+        form.fillerName,
+        form.submitterPhone || '',
+        form.submitterEmail || '',
+        summary.activeCount || 0,
+        summary.completedCount || 0,
+        summary.incompleteCount || 0,
+        (summary.completionRate || 0) + '%',
+        summary.infoStaffCount || 0,
+        summary.professionalPendingCount || 0,
+        fmt(form.fillDate),
+        form.submittedAt ? fmtTime(form.submittedAt) : '',
+        fmtTime(form.updatedAt)
+      ];
+    });
+    downloadCsv(filename || '資安教育訓練統計總表_' + new Date().toISOString().slice(0, 10) + '.csv', ['編號', '統計單位', '填報單位', '年度', '狀態', '經辦人', '聯絡電話', '聯絡信箱', '在職人數', '已完成', '未完成', '完成率', '資訊人員數', '待補專業課程', '填報日期', '正式送出時間', '最後更新'], rows);
   }
+
+  function exportTrainingDetailCsv(form) {
+    const rows = (form.records || []).map((row, index) => [form.id, form.statsUnit || getTrainingStatsUnit(form.unit), form.unit, form.trainingYear, form.fillerName, index + 1, row.name, row.l1Unit || '', row.unitName || '', row.identity || '', row.jobTitle || '', row.status || '', row.completedGeneral || '', row.isInfoStaff || '', row.completedProfessional || '', getTrainingRecordHint(row), row.note || '']);
+    downloadCsv('資安教育訓練明細_' + form.id + '.csv', ['填報單編號', '統計單位', '填報單位', '年度', '經辦人', '序號', '姓名', '一級單位', '本職單位', '身分別', '職稱', '在職狀態', '資安通識', '資訊人員(含委外)', '資安專業課程', '判定說明', '備註'], rows);
+  }
+
+  function buildTrainingPrintHtml(payload) {
+    const summary = payload.summary || computeTrainingSummary(payload.records || []);
+    const unitName = payload.statsUnit || getTrainingStatsUnit(payload.unit);
+    const fillDate = payload.fillDate ? fmt(payload.fillDate) : fmt(new Date().toISOString());
+    return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>資安教育訓練統計表</title><style>body{font-family:"Noto Sans TC",sans-serif;color:#111827;margin:0;padding:24px}.sheet{max-width:960px;margin:0 auto}h1{font-size:24px;text-align:center;margin:0 0 18px}.meta,.summary{width:100%;border-collapse:collapse;margin-bottom:18px}.meta th,.meta td,.summary th,.summary td{border:1px solid #111827;padding:10px 12px;font-size:14px}.meta th,.summary th{background:#f3f4f6;text-align:left;width:18%}.sign-box{border:2px solid #111827;height:120px;margin-top:24px;padding:12px;font-size:16px}.notes{font-size:12px;color:#374151;line-height:1.7;margin-top:18px}</style></head><body><div class="sheet"><h1>' + esc(payload.trainingYear || '') + ' 年度資安教育訓練統計表</h1><table class="meta"><tr><th>統計單位</th><td>' + esc(unitName || '未指定') + '</td><th>填報日期</th><td>' + esc(fillDate) + '</td></tr><tr><th>經辦人</th><td>' + esc(payload.fillerName || payload.submitterName || '') + '</td><th>聯絡電話</th><td>' + esc(payload.submitterPhone || '') + '</td></tr><tr><th>聯絡信箱</th><td colspan="3">' + esc(payload.submitterEmail || '') + '</td></tr></table><table class="summary"><tr><th>在職人數</th><th>已完成</th><th>未完成</th><th>完成率</th><th>資訊人員數</th><th>待補專業課程</th></tr><tr><td>' + (summary.activeCount || 0) + '</td><td>' + (summary.completedCount || 0) + '</td><td>' + (summary.incompleteCount || 0) + '</td><td>' + (summary.completionRate || 0) + '%</td><td>' + (summary.infoStaffCount || 0) + '</td><td>' + (summary.professionalPendingCount || 0) + '</td></tr></table><div class="sign-box">主管簽章區</div><div class="notes"><div>1. 僅統計在職人員；離職、退休、留職停薪、單位調職不列入完成率。</div><div>2. 一般人員需完成資安通識課程；資訊人員另需完成資安專業課程。</div><div>3. 列印簽核後，請回到系統上傳掃描檔並正式送出。</div></div></div></body></html>';
+  }
+
+  function printTrainingSheet(payload) {
+    const win = window.open('', '_blank', 'width=980,height=800');
+    if (!win) {
+      toast('無法開啟列印視窗，請確認瀏覽器未封鎖彈出視窗', 'error');
+      return;
+    }
+    win.document.open();
+    win.document.write(buildTrainingPrintHtml(payload));
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 250);
+  }
+
+  function parseTrainingRosterImport(text, unit) {
+    return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+      const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+      const clean = parts.map((part) => String(part || '').trim());
+      const firstCell = String(clean[0] || '').replace(/^\uFEFF/, '');
+      if (firstCell === '姓名') return null;
+      return { name: firstCell, unitName: clean[1] || getTrainingJobUnit(unit), identity: clean[2] || '', jobTitle: clean[3] || '' };
+    }).filter((row) => row && row.name);
+  }
+
+  function mergeTrainingRows(targetUnit, carryRows) {
+    const carry = Array.isArray(carryRows) ? carryRows.map((row) => normalizeTrainingRecordRow(row, targetUnit)) : [];
+    const rosterRows = targetUnit ? getTrainingRosterByUnit(targetUnit).map((row) => {
+      const existing = carry.find((item) => (item.rosterId && item.rosterId === row.id) || item.name === row.name);
+      return normalizeTrainingRecordRow({ ...row, ...existing, rosterId: row.id, unit: targetUnit, statsUnit: row.statsUnit || getTrainingStatsUnit(targetUnit), unitName: existing?.unitName || row.unitName || getTrainingJobUnit(targetUnit), identity: existing?.identity || row.identity || '', jobTitle: existing?.jobTitle || row.jobTitle || '', source: existing?.source || row.source || 'import', status: existing?.status || '', completedGeneral: existing?.completedGeneral || '', isInfoStaff: existing?.isInfoStaff || '', completedProfessional: existing?.completedProfessional || '', note: existing?.note || '' }, targetUnit);
+    }) : [];
+    carry.forEach((row) => {
+      const exists = rosterRows.some((item) => (row.rosterId && item.rosterId === row.rosterId) || item.name === row.name);
+      if (!exists) rosterRows.push(normalizeTrainingRecordRow(row, targetUnit || row.unit));
+    });
+    return rosterRows.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  }
+
+  function buildTrainingSummaryCards(summary) {
+    const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
+    return cards.map(([label, value, tone]) => '<div class="training-mini-card training-mini-card--' + tone + '"><div class="training-mini-label">' + label + '</div><div class="training-mini-value">' + value + '</div></div>').join('');
+  }
+
   window._trainingReturn = function (id) {
-    if (!isAdmin()) { toast('僅管理者可退回更正', 'error'); return; }
+    if (!isAdmin()) {
+      toast('僅最高管理員可退回填報單', 'error');
+      return;
+    }
     const form = getTrainingForm(id);
     if (!form) return;
-    if (form.status !== TRAINING_STATUSES.SUBMITTED) { toast('僅正式送出資料可退回', 'error'); return; }
-    const reason = prompt('請輸入退回更正原因：');
+    if (form.status !== TRAINING_STATUSES.SUBMITTED) {
+      toast('只有正式送出的填報單可以退回', 'error');
+      return;
+    }
+    const reason = prompt('請輸入退回原因');
     if (reason === null) return;
     const trimmed = reason.trim();
-    if (!trimmed) { toast('退回原因不可空白', 'error'); return; }
+    if (!trimmed) {
+      toast('退回原因不可空白', 'error');
+      return;
+    }
     const now = new Date().toISOString();
-    updateTrainingForm(id, {
-      status: TRAINING_STATUSES.RETURNED,
-      returnReason: trimmed,
-      updatedAt: now,
-      history: [...(form.history || []), { time: now, action: `管理者退回更正：${trimmed}`, user: currentUser().name }]
-    });
-    toast(`已退回 ${id} 供填報人更正`, 'info');
-    const r = getRoute();
-    if (r.page === 'training-detail') renderTrainingDetail(id); else renderTraining();
+    updateTrainingForm(id, { status: TRAINING_STATUSES.RETURNED, returnReason: trimmed, updatedAt: now, history: [...(form.history || []), { time: now, action: '管理者退回更正：' + trimmed, user: currentUser().name }] });
+    toast('已退回 ' + id + ' 供填報人更正', 'info');
+    const route = getRoute();
+    if (route.page === 'training-detail') renderTrainingDetail(id); else renderTraining();
+  };
+
+  window._trainingDeleteRoster = function (id) {
+    if (!isAdmin()) {
+      toast('僅管理者可刪除名單', 'error');
+      return;
+    }
+    const roster = getAllTrainingRosters().find((row) => row.id === id);
+    if (!roster) return;
+    if (!confirm('確定刪除 ' + roster.unit + ' 的 ' + roster.name + ' 嗎？已填報的歷史資料不會被刪除。')) return;
+    deleteTrainingRosterPerson(id);
+    toast('名單已刪除', 'info');
+    renderTrainingRoster();
+  };
+
+  window._trainingPrintDetail = function (id) {
+    const form = getTrainingForm(id);
+    if (!form) return;
+    printTrainingSheet(form);
   };
 
   window._trainingExportDetailCsv = function (id) {
     const form = getTrainingForm(id);
     if (!form) return;
-    const rows = (form.records || []).map(r => [form.id, form.unit, form.trainingYear, r.name, r.source === 'import' ? '管理者匯入' : '填報新增', Number(r.hours || 0), r.note || '']);
-    downloadCsv(`教育訓練時數_${form.id}.csv`, ['填報編號', '單位', '年度', '人員姓名', '來源', '時數', '備註'], rows);
-  };
-
-  window._trainingDeleteRoster = function (id) {
-    if (!isAdmin()) { toast('僅管理者可刪除名單', 'error'); return; }
-    const roster = getAllTrainingRosters().find(r => r.id === id);
-    if (!roster) return;
-    if (!confirm(`確定刪除名單人員「${roster.name}（${roster.unit}）」？`)) return;
-    deleteTrainingRosterPerson(id);
-    toast('名單人員已刪除', 'info');
-    renderTrainingRoster();
+    exportTrainingDetailCsv(form);
   };
 
   function renderTraining() {
     const forms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const summary = {
       total: forms.length,
-      draft: forms.filter(f => f.status === TRAINING_STATUSES.DRAFT).length,
-      submitted: forms.filter(f => f.status === TRAINING_STATUSES.SUBMITTED).length,
-      returned: forms.filter(f => f.status === TRAINING_STATUSES.RETURNED).length
+      draft: forms.filter((form) => form.status === TRAINING_STATUSES.DRAFT).length,
+      submitted: forms.filter((form) => form.status === TRAINING_STATUSES.SUBMITTED).length,
+      returned: forms.filter((form) => form.status === TRAINING_STATUSES.RETURNED).length,
+      avgCompletion: forms.length ? Math.round(forms.reduce((sum, form) => sum + Number(form.summary?.completionRate || 0), 0) / forms.length) : 0
     };
 
-    const toolbar = `<div style="display:flex;gap:8px;flex-wrap:wrap">${canFillTraining() ? `<a href="#training-fill" class="btn btn-primary">${ic('plus-circle', 'icon-sm')} 新增填報</a>` : ''}${forms.length ? `<button class="btn btn-secondary" id="training-export-all">${ic('download', 'icon-sm')} 匯出CSV</button>` : ''}${isAdmin() ? `<a href="#training-roster" class="btn btn-secondary">${ic('users', 'icon-sm')} 名單管理</a>` : ''}</div>`;
+    const toolbar = '<div class="training-toolbar-actions">'
+      + (canFillTraining() ? '<a href="#training-fill" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 新增填報</a>' : '')
+      + (forms.length ? '<button class="btn btn-secondary" id="training-export-all">' + ic('download', 'icon-sm') + ' 匯出 CSV</button>' : '')
+      + (isAdmin() ? '<a href="#training-roster" class="btn btn-secondary">' + ic('users', 'icon-sm') + ' 名單管理</a>' : '')
+      + '</div>';
 
-    const rows = forms.length ? forms.map(f => {
-      const act = [`<a href="#training-detail/${f.id}" class="btn btn-sm btn-secondary">檢視</a>`];
-      if (canEditTrainingForm(f)) act.push(`<a href="#training-fill/${f.id}" class="btn btn-sm btn-primary">繼續填報</a>`);
-      if (isAdmin() && f.status === TRAINING_STATUSES.SUBMITTED) act.push(`<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn('${f.id}')">退回更正</button>`);
-      return `<tr><td style="font-weight:600;color:var(--accent-primary)">${esc(f.id)}</td><td>${esc(f.unit)}</td><td>${esc(f.fillerName)}</td><td>${esc(f.trainingYear)}</td><td>${trainingStatusBadge(f.status)}</td><td>${f.summary?.totalPeople || 0}</td><td>${f.summary?.totalHours || 0}</td><td>${f.summary?.reachRate || 0}%</td><td>${fmtTime(f.updatedAt)}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">${act.join('')}</div></td></tr>`;
-    }).join('') : `<tr><td colspan="10"><div class="empty-state" style="padding:50px"><div class="empty-state-icon">${ic('graduation-cap')}</div><div class="empty-state-title">尚無教育訓練時數填報資料</div><div class="empty-state-desc">可先新增填報，或由管理者先匯入各單位名單</div></div></td></tr>`;
+    const tableRows = forms.length ? forms.map((form) => {
+      const formSummary = form.summary || computeTrainingSummary(form.records || []);
+      const actions = ['<a href="#training-detail/' + form.id + '" class="btn btn-sm btn-secondary">檢視</a>'];
+      if (canEditTrainingForm(form)) actions.push('<a href="#training-fill/' + form.id + '" class="btn btn-sm btn-primary">編修</a>');
+      if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) {
+        actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回更正</button>');
+      }
+      return '<tr>'
+        + '<td style="font-weight:700;color:var(--accent-primary)">' + esc(form.id) + '</td>'
+        + '<td>' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</td>'
+        + '<td>' + esc(form.unit) + '</td>'
+        + '<td>' + esc(form.fillerName) + '</td>'
+        + '<td>' + trainingStatusBadge(form.status) + '</td>'
+        + '<td>' + (formSummary.activeCount || 0) + '</td>'
+        + '<td>' + (formSummary.completedCount || 0) + '</td>'
+        + '<td>' + (formSummary.incompleteCount || 0) + '</td>'
+        + '<td><span class="training-rate-pill">' + (formSummary.completionRate || 0) + '%</span></td>'
+        + '<td>' + fmtTime(form.updatedAt) + '</td>'
+        + '<td><div class="training-table-actions">' + actions.join('') + '</div></td>'
+        + '</tr>';
+    }).join('') : '<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-state-icon">' + ic('graduation-cap') + '</div><div class="empty-state-title">尚無教育訓練統計資料</div><div class="empty-state-desc">請先新增填報，或由管理者先匯入單位名單。</div></div></td></tr>';
 
     let adminPanel = '';
     if (isAdmin()) {
       const allForms = getAllTrainingForms();
       const units = getTrainingUnits();
-      const unitStats = units.map(unit => {
-        const latest = allForms.filter(f => f.unit === unit).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
-        return { unit, status: latest ? latest.status : '未填報', reachRate: latest ? (latest.summary?.reachRate || 0) : 0 };
+      const latestByUnit = units.map((unit) => {
+        const latest = allForms.filter((form) => form.unit === unit).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+        const unitSummary = latest ? (latest.summary || computeTrainingSummary(latest.records || [])) : computeTrainingSummary([]);
+        return { unit, latest, summary: unitSummary };
       });
-      const submittedUnits = unitStats.filter(x => x.status === TRAINING_STATUSES.SUBMITTED).length;
-      const schoolProgress = unitStats.length ? Math.round(submittedUnits / unitStats.length * 100) : 0;
-      const totalHours = allForms.reduce((sum, f) => sum + Number(f.summary?.totalHours || 0), 0).toFixed(1);
-      const chartRows = unitStats.length ? unitStats.map(u => `<div class="training-chart-row"><div class="training-chart-label">${esc(u.unit)}</div><div class="training-chart-track"><div class="training-chart-fill" style="width:${Math.max(0, Math.min(100, u.reachRate))}%"></div></div><div class="training-chart-value">${u.reachRate}% (${esc(u.status)})</div></div>`).join('') : `<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無單位資料</div></div>`;
-      adminPanel = `<div class="panel-grid-two panel-grid-bottom"><div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">${schoolProgress}%</div><div class="training-kpi-desc">已正式送出單位 ${submittedUnits} / ${unitStats.length}</div></div><div class="card"><div class="card-header"><span class="card-title">全校訓練總時數</span></div><div class="training-kpi-value">${totalHours}</div><div class="training-kpi-desc">以最新填報資料累計</div></div></div><div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">各單位達標率（每人 3 小時以上）</span></div><div class="training-chart">${chartRows}</div></div>`;
+      const submittedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED).length;
+      const schoolProgress = latestByUnit.length ? Math.round((submittedUnits / latestByUnit.length) * 100) : 0;
+      const pendingUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED).length;
+      const chartRows = latestByUnit.length ? latestByUnit.map((item) => '<div class="training-chart-row"><div class="training-chart-label">' + esc(item.unit) + '</div><div class="training-chart-track"><div class="training-chart-fill" style="width:' + Math.max(0, Math.min(100, item.summary.completionRate || 0)) + '%"></div></div><div class="training-chart-value">' + (item.latest ? trainingStatusBadge(item.latest.status) : '<span class="training-inline-status">未填報</span>') + ' <strong>' + (item.summary.completionRate || 0) + '%</strong></div></div>').join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無單位資料</div></div>';
+      adminPanel = '<div class="training-admin-grid">'
+        + '<div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">' + schoolProgress + '%</div><div class="training-kpi-desc">已正式送出單位 ' + submittedUnits + ' / ' + latestByUnit.length + '</div></div>'
+        + '<div class="card"><div class="card-header"><span class="card-title">待追蹤單位</span></div><div class="training-kpi-value">' + pendingUnits + '</div><div class="training-kpi-desc">尚未正式送出或仍退回中</div></div>'
+        + '<div class="card"><div class="card-header"><span class="card-title">平均完成率</span></div><div class="training-kpi-value">' + summary.avgCompletion + '%</div><div class="training-kpi-desc">依各單位最新填報計算</div></div>'
+        + '</div>'
+        + '<div class="card training-chart-card"><div class="card-header"><span class="card-title">各單位完成率與填報狀態</span></div><div class="training-chart">' + chartRows + '</div></div>';
     }
 
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">教育訓練時數統計</h1><p class="page-subtitle">支援名單匯入、暫存、正式送出、退回更正與 CSV 匯出</p></div>${toolbar}</div><div class="stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('files')}</div><div class="stat-value">${summary.total}</div><div class="stat-label">填報單總數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('save')}</div><div class="stat-value">${summary.draft}</div><div class="stat-label">暫存中</div></div><div class="stat-card closed"><div class="stat-icon">${ic('check-circle-2')}</div><div class="stat-value">${summary.submitted}</div><div class="stat-label">正式送出</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('corner-up-left')}</div><div class="stat-value">${summary.returned}</div><div class="stat-label">退回更正</div></div></div>${adminPanel}<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>單位</th><th>填報人</th><th>年度</th><th>狀態</th><th>名單人數</th><th>總時數</th><th>達標率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    document.getElementById('app').innerHTML = '<div class="animate-in">'
+      + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">改為逐人完成狀態統計：在職人員才列計，資訊人員需同時完成通識與專業課程。</p></div>' + toolbar + '</div>'
+      + '<div class="stats-grid">'
+      + '<div class="stat-card total"><div class="stat-icon">' + ic('files') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">填報單總數</div></div>'
+      + '<div class="stat-card pending"><div class="stat-icon">' + ic('save') + '</div><div class="stat-value">' + summary.draft + '</div><div class="stat-label">暫存中</div></div>'
+      + '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + summary.submitted + '</div><div class="stat-label">正式送出</div></div>'
+      + '<div class="stat-card overdue"><div class="stat-icon">' + ic('corner-up-left') + '</div><div class="stat-value">' + summary.returned + '</div><div class="stat-label">退回更正</div></div>'
+      + '</div>'
+      + adminPanel
+      + '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>統計單位</th><th>填報單位</th><th>經辦人</th><th>狀態</th><th>在職</th><th>已完成</th><th>未完成</th><th>完成率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>'
+      + '</div>';
 
     document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(forms));
     refreshIcons();
   }
+
   function renderTrainingFill(id) {
-    if (!canFillTraining()) { navigate('training'); return; }
-    const u = currentUser();
-    const existing = id ? getTrainingForm(id) : null;
-    if (id && !existing) { toast('找不到填報單', 'error'); navigate('training'); return; }
-    if (existing && !isTrainingVisible(existing)) { toast('您沒有此填報單權限', 'error'); navigate('training'); return; }
-    if (existing && !canEditTrainingForm(existing)) { toast('此填報單已正式送出，請待管理者退回後再修改', 'error'); navigate('training-detail/' + existing.id); return; }
-
-    const units = getTrainingUnits();
-    if (u.unit && !units.includes(u.unit)) units.push(u.unit);
-    if (existing?.unit && !units.includes(existing.unit)) units.push(existing.unit);
-    units.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
-    const unitValue = existing ? existing.unit : (isAdmin() ? (u.unit || units[0] || '') : u.unit);
-    const isUnitLocked = !!existing || !isAdmin();
-
-
-    function buildRows(targetUnit, carryRows) {
-      const rosterRows = getTrainingRosterByUnit(targetUnit).map(r => {
-        const fromCarry = (carryRows || []).find(c => (c.rosterId && c.rosterId === r.id) || (!c.rosterId && c.name === r.name));
-        return { rosterId: r.id, name: r.name, source: r.source || 'import', hours: fromCarry ? fromCarry.hours : '', note: fromCarry ? fromCarry.note : '' };
-      });
-      (carryRows || []).forEach(c => {
-        const exists = rosterRows.some(r => (c.rosterId && r.rosterId === c.rosterId) || r.name === c.name);
-        if (!exists) rosterRows.push({ rosterId: c.rosterId || '', name: c.name, source: c.source || 'manual', hours: c.hours || '', note: c.note || '' });
-      });
-      return rosterRows.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    if (!canFillTraining()) {
+      navigate('training');
+      return;
     }
 
-    let rowsState = buildRows(unitValue, existing ? (existing.records || []) : []);
+    const user = currentUser();
+    const existing = id ? getTrainingForm(id) : null;
+    if (id && !existing) {
+      toast('找不到填報單', 'error');
+      navigate('training');
+      return;
+    }
+    if (existing && !isTrainingVisible(existing)) {
+      toast('您沒有此填報單權限', 'error');
+      navigate('training');
+      return;
+    }
+    if (existing && !canEditTrainingForm(existing)) {
+      toast('此填報單已正式送出，需由管理者退回後才可修改', 'error');
+      navigate('training-detail/' + existing.id);
+      return;
+    }
+
+    const units = getTrainingUnits().slice();
+    if (user.unit && !units.includes(user.unit)) units.push(user.unit);
+    if (existing?.unit && !units.includes(existing.unit)) units.push(existing.unit);
+    units.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+
+    const unitValue = existing ? existing.unit : (isAdmin() ? (user.unit || units[0] || '') : user.unit);
+    const isUnitLocked = !!existing || !isAdmin();
+    let rowsState = mergeTrainingRows(unitValue, existing ? (existing.records || []) : []);
     let signedFiles = existing ? [...(existing.signedFiles || [])] : [];
     const submitLabel = existing && existing.status === TRAINING_STATUSES.RETURNED ? '更正後正式送出' : '正式送出';
 
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">填報教育訓練時數</h1><p class="page-subtitle">填報進度可暫存於系統，正式送出後將鎖定，需管理者退回才可更正</p></div><a href="#training" class="btn btn-secondary">← 返回列表</a></div>${existing && existing.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(existing.returnReason || '未提供')}</div>` : ''}<div class="card" style="max-width:980px"><form id="training-form"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div><div class="form-row"><div class="form-group"><label class="form-label form-required">填報單位</label>${buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true)}</div><div class="form-group"><label class="form-label form-required">填報人</label><input type="text" class="form-input" value="${esc(u.name)}" readonly></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="${existing ? esc(existing.fillDate) : new Date().toISOString().split('T')[0]}" required></div></div><div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="${existing ? esc(existing.trainingYear) : String(new Date().getFullYear() - 1911)}" required></div><div class="form-group"><label class="form-label">填報說明</label><input type="text" class="form-input" value="管理者可匯入名單；填報人可新增名單外人員" readonly></div></div><div class="section-header">${ic('users', 'icon-sm')} 人員名單與時數</div><p class="form-hint">名單刪除僅限管理者。填報人可新增名單外人員，不可刪減既有名單。</p><div class="form-row" style="align-items:flex-end"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-person" placeholder="輸入姓名後按新增"></div><div class="form-group" style="flex:0 0 auto"><button type="button" class="btn btn-secondary" id="training-add-person">${ic('user-plus', 'icon-sm')} 新增到名單</button></div></div><div class="table-wrapper" style="margin-top:8px"><table><thead><tr><th style="width:160px">來源</th><th>姓名</th><th style="width:160px">時數</th><th>備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div><div id="training-summary" class="training-summary-grid"></div><div class="section-header" style="margin-top:16px">${ic('paperclip', 'icon-sm')} 上傳簽核後掃描檔</div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div><div class="file-preview-list" id="training-file-previews"></div><div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft">${ic('save', 'icon-sm')} 儲存暫存</button><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} ${submitLabel}</button><a href="#training" class="btn btn-ghost">取消</a></div></form></div></div>`;
+    document.getElementById('app').innerHTML = '<div class="animate-in">'
+      + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">僅統計在職人員；資訊人員需同時完成通識與專業課程。進度可先暫存，正式送出後即鎖定。</p></div><div class="training-toolbar-actions"><button type="button" class="btn btn-secondary" id="training-print-draft">' + ic('printer', 'icon-sm') + ' 列印簽核表</button><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
+      + (existing && existing.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(existing.returnReason || '未提供') + '</div>' : '')
+      + '<div class="training-editor-layout">'
+      + '<div class="card training-editor-card"><form id="training-form">'
+      + '<div class="section-header">' + ic('info', 'icon-sm') + ' 基本資訊</div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計單位（一級）</label><input type="text" class="form-input" id="tr-stats-unit" value="' + esc(existing?.statsUnit || getTrainingStatsUnit(unitValue)) + '" readonly></div><div class="form-group"><label class="form-label form-required">填報單位</label>' + buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true) + '</div></div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(existing?.fillerName || user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="填報人可新增名單外人員，但不可刪除管理者匯入名單。" readonly></div></div>'
+      + '<div class="section-header">' + ic('users', 'icon-sm') + ' 人員清單</div>'
+      + '<div class="training-editor-note">請逐人選擇在職狀態與課程完成情形。只有正式送出時會鎖定；若被退回，可繼續修正後重送。</div>'
+      + '<div class="training-editor-toolbar"><label class="training-search-box"><span class="training-search-icon">' + ic('search', 'icon-sm') + '</span><input type="search" class="form-input" id="training-search" placeholder="搜尋姓名、本職單位、職稱"></label><label class="training-inline-check"><input type="checkbox" id="training-only-focus"> 只看未完成或未填</label></div>'
+      + '<div id="training-summary" class="training-summary-grid training-summary-grid-wide"></div>'
+      + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
+      + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:68px">序號</th><th style="width:160px">姓名 / 來源</th><th style="min-width:160px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:130px">在職狀態</th><th style="width:130px">資安通識</th><th style="width:150px">資訊人員(含委外)</th><th style="width:140px">資安專業課程</th><th style="width:130px">判定</th><th style="min-width:220px">備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
+      + '<div class="section-header" style="margin-top:18px">' + ic('paperclip', 'icon-sm') + ' 上傳簽核後掃描檔</div>'
+      + '<div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div>'
+      + '<div class="file-preview-list" id="training-file-previews"></div>'
+      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('send', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
+      + '</form></div>'
+      + '</div>'
+      + '</div>';
+
+    function syncStatsUnitField(unit) {
+      document.getElementById('tr-stats-unit').value = getTrainingStatsUnit(unit);
+    }
 
     function renderSummary() {
-      const s = computeTrainingSummary(rowsState.map(r => ({ ...r, hours: Number(r.hours || 0) })));
-      document.getElementById('training-summary').innerHTML = `<div class="training-mini-card"><div class="training-mini-label">名單總人數</div><div class="training-mini-value">${s.totalPeople}</div></div><div class="training-mini-card"><div class="training-mini-label">已填時數人數</div><div class="training-mini-value">${s.filledPeople}</div></div><div class="training-mini-card"><div class="training-mini-label">總時數</div><div class="training-mini-value">${s.totalHours}</div></div><div class="training-mini-card"><div class="training-mini-label">達標率(>=3h)</div><div class="training-mini-value">${s.reachRate}%</div></div>`;
+      const summary = computeTrainingSummary(rowsState);
+      document.getElementById('training-summary').innerHTML = buildTrainingSummaryCards(summary);
+    }
+
+    function getFilteredRows() {
+      const keyword = String(document.getElementById('training-search')?.value || '').trim().toLowerCase();
+      const focusOnly = !!document.getElementById('training-only-focus')?.checked;
+      return rowsState.map((row, index) => ({ row, index })).filter(({ row }) => {
+        const haystack = [row.name, row.unitName, row.identity, row.jobTitle].join(' ').toLowerCase();
+        const keywordMatch = !keyword || haystack.includes(keyword);
+        const focusMatch = !focusOnly || !isTrainingRecordComplete(row) || !isTrainingRecordReadyForSubmit(row);
+        return keywordMatch && focusMatch;
+      });
     }
 
     function renderRows() {
       const body = document.getElementById('training-rows-body');
+      const visibleRows = getFilteredRows();
       if (!rowsState.length) {
-        body.innerHTML = `<tr><td colspan="4"><div class="empty-state" style="padding:24px"><div class="empty-state-title">此單位目前尚無名單人員</div><div class="empty-state-desc">請先新增名單外人員，或由管理者匯入名單</div></div></td></tr>`;
+        body.innerHTML = '<tr><td colspan="11"><div class="empty-state" style="padding:28px"><div class="empty-state-title">此單位尚未建立名單</div><div class="empty-state-desc">請由管理者匯入名單，或由填報人新增名單外人員。</div></div></td></tr>';
         renderSummary();
         return;
       }
-      body.innerHTML = rowsState.map((r, idx) => `<tr><td><span class="training-source-tag ${r.source === 'import' ? 'import' : 'manual'}">${r.source === 'import' ? '管理者匯入' : '填報新增'}</span></td><td>${esc(r.name)}</td><td><input type="number" min="0" step="0.5" class="form-input training-hours-input" data-idx="${idx}" value="${esc(r.hours === 0 ? '0' : (r.hours || ''))}"></td><td><input type="text" class="form-input training-note-input" data-idx="${idx}" value="${esc(r.note || '')}" placeholder="可填課程名稱或備註"></td></tr>`).join('');
-      body.querySelectorAll('.training-hours-input').forEach(el => el.addEventListener('input', e => { const i = Number(e.target.dataset.idx); rowsState[i].hours = e.target.value; renderSummary(); }));
-      body.querySelectorAll('.training-note-input').forEach(el => el.addEventListener('input', e => { const i = Number(e.target.dataset.idx); rowsState[i].note = e.target.value; }));
+      if (!visibleRows.length) {
+        body.innerHTML = '<tr><td colspan="11"><div class="empty-state" style="padding:28px"><div class="empty-state-title">沒有符合條件的人員</div><div class="empty-state-desc">請調整搜尋條件或取消「只看未完成或未填」。</div></div></td></tr>';
+        renderSummary();
+        return;
+      }
+
+      body.innerHTML = visibleRows.map(({ row, index }, visibleIndex) => {
+        const professionalValue = row.isInfoStaff === '否' ? '無須' : (row.completedProfessional || '');
+        const professionalDisabled = row.status !== '在職' || row.isInfoStaff !== '是';
+        return '<tr>'
+          + '<td>' + (visibleIndex + 1) + '</td>'
+          + '<td><div class="training-person-cell"><div class="training-person-name">' + esc(row.name) + '</div><span class="training-source-tag ' + (row.source === 'import' ? 'import' : 'manual') + '">' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</span></div></td>'
+          + '<td>' + esc(row.unitName || '—') + '</td>'
+          + '<td>' + esc(row.identity || '—') + '</td>'
+          + '<td>' + esc(row.jobTitle || '—') + '</td>'
+          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="status">' + trainingSelectOptionsHtml(TRAINING_EMPLOYEE_STATUS, row.status, '請選擇') + '</select></td>'
+          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="completedGeneral" ' + (row.status === '在職' ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_OPTIONS, row.completedGeneral, '請選擇') + '</select></td>'
+          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="isInfoStaff" ' + (row.status === '在職' ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_OPTIONS, row.isInfoStaff, '請選擇') + '</select></td>'
+          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="completedProfessional" ' + (professionalDisabled ? 'disabled' : '') + '>' + trainingSelectOptionsHtml(TRAINING_PROFESSIONAL_OPTIONS, professionalValue, '請選擇') + '</select></td>'
+          + '<td><div class="training-cell-note">' + trainingDecisionBadge(row) + '<div class="training-cell-hint">' + esc(getTrainingRecordHint(row)) + '</div></div></td>'
+          + '<td><input type="text" class="form-input training-row-note" data-idx="' + index + '" value="' + esc(row.note || '') + '" placeholder="可填補充說明或課程名稱"></td>'
+          + '</tr>';
+      }).join('');
+
+      body.querySelectorAll('.training-row-select').forEach((element) => {
+        element.addEventListener('change', (event) => {
+          const row = rowsState[Number(event.target.dataset.idx)];
+          const field = event.target.dataset.field;
+          row[field] = event.target.value;
+          if (field === 'status' && row.status !== '在職') {
+            row.completedGeneral = '';
+            row.isInfoStaff = '';
+            row.completedProfessional = '';
+          }
+          if (field === 'isInfoStaff') {
+            if (row.isInfoStaff === '否') row.completedProfessional = '無須';
+            if (row.isInfoStaff === '是' && row.completedProfessional === '無須') row.completedProfessional = '';
+            if (!row.isInfoStaff) row.completedProfessional = '';
+          }
+          if (field === 'completedProfessional' && row.isInfoStaff !== '是') {
+            row.completedProfessional = row.isInfoStaff === '否' ? '無須' : '';
+          }
+          rowsState[Number(event.target.dataset.idx)] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
+          renderRows();
+        });
+      });
+
+      body.querySelectorAll('.training-row-note').forEach((element) => {
+        element.addEventListener('input', (event) => {
+          rowsState[Number(event.target.dataset.idx)].note = event.target.value;
+        });
+      });
+
       renderSummary();
     }
 
     function renderSignedFiles() {
       const wrap = document.getElementById('training-file-previews');
-      if (!signedFiles.length) { wrap.innerHTML = '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>'; return; }
-      wrap.innerHTML = signedFiles.map((f, i) => { const preview = f.type && f.type.startsWith('image/') ? `<img src="${f.data}" alt="${esc(f.name)}">` : `<div class="file-pdf-icon">${ic('file-box')}</div>`; return `<div class="file-preview-item">${preview}<div class="file-name">${esc(f.name)}</div><button type="button" class="file-remove" data-idx="${i}">✕</button></div>`; }).join('');
-      wrap.querySelectorAll('.file-remove').forEach(btn => btn.addEventListener('click', e => { const i = Number(e.target.dataset.idx); signedFiles.splice(i, 1); renderSignedFiles(); }));
+      if (!signedFiles.length) {
+        wrap.innerHTML = '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>';
+        return;
+      }
+      wrap.innerHTML = signedFiles.map((file, index) => {
+        const preview = file.type && file.type.startsWith('image/') ? '<img src="' + file.data + '" alt="' + esc(file.name) + '">' : '<div class="file-pdf-icon">' + ic('file-box') + '</div>';
+        return '<div class="file-preview-item">' + preview + '<div class="file-name">' + esc(file.name) + '</div><button type="button" class="file-remove" data-idx="' + index + '">✕</button></div>';
+      }).join('');
+      wrap.querySelectorAll('.file-remove').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          signedFiles.splice(Number(event.target.dataset.idx), 1);
+          renderSignedFiles();
+        });
+      });
       refreshIcons();
     }
 
     function handleFiles(files) {
-      Array.from(files).forEach(file => {
-        if (file.size > 5 * 1024 * 1024) { toast(`「${file.name}」超過 5MB`, 'error'); return; }
+      Array.from(files).forEach((file) => {
+        if (file.size > 5 * 1024 * 1024) {
+          toast('「' + file.name + '」超過 5MB', 'error');
+          return;
+        }
         const reader = new FileReader();
-        reader.onload = evt => { signedFiles.push({ name: file.name, type: file.type, data: evt.target.result }); renderSignedFiles(); };
+        reader.onload = (evt) => {
+          signedFiles.push({ name: file.name, type: file.type, data: evt.target.result });
+          renderSignedFiles();
+        };
         reader.readAsDataURL(file);
       });
     }
 
-    function collectRecords() { return rowsState.map(r => ({ rosterId: r.rosterId || null, name: r.name, source: r.source || 'manual', hours: Number(r.hours || 0), note: (r.note || '').trim() })); }
+    function collectRecords() {
+      return rowsState.map((row) => normalizeTrainingRecordRow({
+        rosterId: row.rosterId || null,
+        unit: document.getElementById('tr-unit').value,
+        statsUnit: getTrainingStatsUnit(document.getElementById('tr-unit').value),
+        name: row.name,
+        unitName: row.unitName,
+        identity: row.identity,
+        jobTitle: row.jobTitle,
+        source: row.source || 'manual',
+        status: row.status,
+        completedGeneral: row.completedGeneral,
+        isInfoStaff: row.isInfoStaff,
+        completedProfessional: row.isInfoStaff === '否' ? '無須' : row.completedProfessional,
+        note: row.note || ''
+      }, document.getElementById('tr-unit').value));
+    }
+
+    function validateSubmitPayload(records) {
+      const unit = document.getElementById('tr-unit').value;
+      const phone = document.getElementById('tr-phone').value.trim();
+      const email = document.getElementById('tr-email').value.trim();
+      const year = document.getElementById('tr-year').value.trim();
+      const fillDate = document.getElementById('tr-date').value;
+      if (!unit) return '請先選擇填報單位';
+      if (!phone) return '請填寫聯絡電話';
+      if (!email) return '請填寫聯絡信箱';
+      if (!/^.+@.+\..+$/.test(email)) return '聯絡信箱格式不正確';
+      if (!year) return '請填寫統計年度';
+      if (!fillDate) return '請填寫填報日期';
+      if (!records.length) return '至少需有一位人員資料';
+      if (!signedFiles.length) return '正式送出前請先上傳簽核掃描檔';
+      const invalid = records.find((record) => !isTrainingRecordReadyForSubmit(record));
+      if (invalid) return '請先完成「' + invalid.name + '」的在職狀態與課程欄位';
+      return '';
+    }
 
     function saveTrainingForm(targetStatus) {
       const now = new Date().toISOString();
@@ -2108,90 +2646,208 @@
       const records = collectRecords();
       const summary = computeTrainingSummary(records);
       if (targetStatus === TRAINING_STATUSES.SUBMITTED) {
-        if (!signedFiles.length) { toast('正式送出前請先上傳簽核掃描檔', 'error'); return; }
-        if (summary.filledPeople === 0) { toast('正式送出前請至少填寫一位人員時數', 'error'); return; }
+        const validationError = validateSubmitPayload(records);
+        if (validationError) {
+          toast(validationError, 'error');
+          return;
+        }
       }
       const nextStatus = targetStatus === TRAINING_STATUSES.SUBMITTED ? TRAINING_STATUSES.SUBMITTED : ((existing && existing.status === TRAINING_STATUSES.RETURNED) ? TRAINING_STATUSES.RETURNED : TRAINING_STATUSES.DRAFT);
       const history = [...(existing?.history || [])];
-      history.push({ time: now, action: targetStatus === TRAINING_STATUSES.SUBMITTED ? '正式送出教育訓練時數統計' : '儲存教育訓練時數暫存', user: u.name });
-      const payload = { id: formId, unit: document.getElementById('tr-unit').value, fillerName: u.name, fillerUsername: u.username, fillDate: document.getElementById('tr-date').value, trainingYear: document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911), status: nextStatus, records, summary, signedFiles, returnReason: targetStatus === TRAINING_STATUSES.SUBMITTED ? '' : (existing?.returnReason || ''), createdAt: existing?.createdAt || now, updatedAt: now, submittedAt: targetStatus === TRAINING_STATUSES.SUBMITTED ? now : (existing?.submittedAt || null), history };
-      upsertTrainingForm(payload);
-      toast(targetStatus === TRAINING_STATUSES.SUBMITTED ? `填報單 ${formId} 已正式送出` : `填報單 ${formId} 已暫存`);
+      history.push({ time: now, action: targetStatus === TRAINING_STATUSES.SUBMITTED ? '正式送出教育訓練統計' : '儲存教育訓練統計暫存', user: user.name });
+      upsertTrainingForm({
+        id: formId,
+        unit: document.getElementById('tr-unit').value,
+        statsUnit: getTrainingStatsUnit(document.getElementById('tr-unit').value),
+        fillerName: user.name,
+        fillerUsername: user.username,
+        submitterPhone: document.getElementById('tr-phone').value.trim(),
+        submitterEmail: document.getElementById('tr-email').value.trim(),
+        fillDate: document.getElementById('tr-date').value,
+        trainingYear: document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911),
+        status: nextStatus,
+        records,
+        summary,
+        signedFiles,
+        returnReason: targetStatus === TRAINING_STATUSES.SUBMITTED ? '' : (existing?.returnReason || ''),
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+        submittedAt: targetStatus === TRAINING_STATUSES.SUBMITTED ? now : (existing?.submittedAt || null),
+        history
+      });
+      toast(targetStatus === TRAINING_STATUSES.SUBMITTED ? ('填報單 ' + formId + ' 已正式送出') : ('填報單 ' + formId + ' 已儲存暫存'));
       navigate('training-detail/' + formId);
     }
 
-    document.getElementById('training-form').addEventListener('submit', e => { e.preventDefault(); saveTrainingForm(TRAINING_STATUSES.SUBMITTED); });
+    document.getElementById('training-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      saveTrainingForm(TRAINING_STATUSES.SUBMITTED);
+    });
     document.getElementById('training-save-draft').addEventListener('click', () => saveTrainingForm(TRAINING_STATUSES.DRAFT));
-    initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });
-    document.getElementById('training-add-person').addEventListener('click', () => {
-      const unit = document.getElementById('tr-unit').value;
-      const input = document.getElementById('tr-new-person');
-      const name = input.value.trim();
-      if (!name) { toast('請輸入要新增的人員姓名', 'error'); return; }
-      const result = addTrainingRosterPerson(unit, name, 'manual', u.name);
-      if (!result.added) { toast(result.reason, 'error'); return; }
-      rowsState = buildRows(unit, rowsState);
-      renderRows();
-      input.value = '';
-      toast(`已新增「${name}」至 ${unit} 名單`);
+    document.getElementById('training-print-draft').addEventListener('click', () => {
+      const currentRecords = collectRecords();
+      printTrainingSheet({
+        unit: document.getElementById('tr-unit').value,
+        statsUnit: getTrainingStatsUnit(document.getElementById('tr-unit').value),
+        fillerName: user.name,
+        submitterPhone: document.getElementById('tr-phone').value.trim(),
+        submitterEmail: document.getElementById('tr-email').value.trim(),
+        fillDate: document.getElementById('tr-date').value,
+        trainingYear: document.getElementById('tr-year').value.trim(),
+        records: currentRecords,
+        summary: computeTrainingSummary(currentRecords)
+      });
     });
 
-    if (!isUnitLocked) document.getElementById('tr-unit').addEventListener('change', e => { rowsState = buildRows(e.target.value, rowsState); renderRows(); });
+    initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });
+    if (!isUnitLocked) {
+      document.getElementById('tr-unit').addEventListener('change', (event) => {
+        syncStatsUnitField(event.target.value);
+        rowsState = mergeTrainingRows(event.target.value, rowsState);
+        renderRows();
+      });
+    }
 
-    const fi = document.getElementById('training-file-input');
-    const uz = document.getElementById('training-upload-zone');
-    fi.addEventListener('change', e => handleFiles(e.target.files));
-    uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('dragover'); });
-    uz.addEventListener('dragleave', () => uz.classList.remove('dragover'));
-    uz.addEventListener('drop', e => { e.preventDefault(); uz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+    document.getElementById('training-search').addEventListener('input', renderRows);
+    document.getElementById('training-only-focus').addEventListener('change', renderRows);
+
+    document.getElementById('training-add-person').addEventListener('click', () => {
+      const unit = document.getElementById('tr-unit').value;
+      const payload = {
+        name: document.getElementById('tr-new-name').value.trim(),
+        unitName: document.getElementById('tr-new-unit-name').value.trim() || getTrainingJobUnit(unit),
+        identity: document.getElementById('tr-new-identity').value.trim(),
+        jobTitle: document.getElementById('tr-new-job-title').value.trim()
+      };
+      if (!payload.name) {
+        toast('請輸入要新增的人員姓名', 'error');
+        return;
+      }
+      const result = addTrainingRosterPerson(unit, payload, 'manual', user.name);
+      if (!result.added && !result.updated) {
+        toast(result.reason, 'error');
+        return;
+      }
+      rowsState = mergeTrainingRows(unit, rowsState);
+      ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
+        document.getElementById(idName).value = '';
+      });
+      renderRows();
+      toast(result.updated ? result.reason : ('已新增「' + payload.name + '」到名單'));
+    });
+
+    const fileInput = document.getElementById('training-file-input');
+    const uploadZone = document.getElementById('training-upload-zone');
+    fileInput.addEventListener('change', (event) => handleFiles(event.target.files));
+    uploadZone.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      uploadZone.classList.add('dragover');
+    });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', (event) => {
+      event.preventDefault();
+      uploadZone.classList.remove('dragover');
+      handleFiles(event.dataTransfer.files);
+    });
 
     renderRows();
     renderSignedFiles();
     refreshIcons();
   }
+
   function renderTrainingDetail(id) {
     const form = getTrainingForm(id);
     if (!form) {
-      document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到教育訓練填報單</div><a href="#training" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`;
+      document.getElementById('app').innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + ic('help-circle', 'icon-lg') + '</div><div class="empty-state-title">找不到教育訓練填報單</div><a href="#training" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>';
       return;
     }
-    if (!isTrainingVisible(form)) { navigate('training'); toast('您沒有權限檢視此填報單', 'error'); return; }
+    if (!isTrainingVisible(form)) {
+      navigate('training');
+      toast('您沒有權限檢視此填報單', 'error');
+      return;
+    }
 
-    const s = form.summary || computeTrainingSummary(form.records || []);
+    const summary = form.summary || computeTrainingSummary(form.records || []);
     const records = form.records || [];
-    const detailRows = records.length ? records.map(r => `<tr><td>${esc(r.name)}</td><td><span class="training-source-tag ${r.source === 'import' ? 'import' : 'manual'}">${r.source === 'import' ? '管理者匯入' : '填報新增'}</span></td><td>${Number(r.hours || 0)}</td><td>${esc(r.note || '')}</td></tr>`).join('') : `<tr><td colspan="4"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無時數資料</div></div></td></tr>`;
+    const detailRows = records.length ? records.map((row) => '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + esc(row.status || '—') + '</td><td>' + esc(row.completedGeneral || '—') + '</td><td>' + esc(row.isInfoStaff || '—') + '</td><td>' + esc(row.completedProfessional || (row.isInfoStaff === '否' ? '無須' : '—')) + '</td><td>' + trainingDecisionBadge(row) + '</td><td>' + esc(row.note || '') + '</td></tr>').join('') : '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無明細資料</div></div></td></tr>';
     const files = form.signedFiles || [];
-    const fileHtml = files.length ? `<div class="file-preview-list">${files.map(f => f.type && f.type.startsWith('image/') ? `<div class="file-preview-item"><img src="${f.data}" alt="${esc(f.name)}"><div class="file-name">${esc(f.name)}</div></div>` : `<div class="file-preview-item"><div class="file-pdf-icon">${ic('file-box')}</div><div class="file-name">${esc(f.name)}</div></div>`).join('')}</div>` : '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>';
-    const timeline = (form.history || []).slice().reverse().map(h => `<div class="timeline-item"><div class="timeline-time">${fmtTime(h.time)}</div><div class="timeline-text">${esc(h.action)} · ${esc(h.user || '系統')}</div></div>`).join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
+    const fileHtml = files.length ? '<div class="file-preview-list">' + files.map((file) => file.type && file.type.startsWith('image/') ? '<div class="file-preview-item"><img src="' + file.data + '" alt="' + esc(file.name) + '"><div class="file-name">' + esc(file.name) + '</div></div>' : '<div class="file-preview-item"><div class="file-pdf-icon">' + ic('file-box') + '</div><div class="file-name">' + esc(file.name) + '</div></div>').join('') + '</div>' : '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>';
+    const timeline = (form.history || []).slice().reverse().map((item) => '<div class="timeline-item"><div class="timeline-time">' + fmtTime(item.time) + '</div><div class="timeline-text">' + esc(item.action) + ' · ' + esc(item.user || '系統') + '</div></div>').join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
 
-    const actions = [`<button type="button" class="btn btn-secondary" id="training-export-detail">${ic('download', 'icon-sm')} 匯出CSV</button>`, `<a href="#training" class="btn btn-secondary">← 返回列表</a>`];
-    if (canEditTrainingForm(form)) actions.unshift(`<a href="#training-fill/${form.id}" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 繼續填報</a>`);
-    if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift(`<button type="button" class="btn btn-danger" onclick="window._trainingReturn('${form.id}')">${ic('corner-up-left', 'icon-sm')} 退回更正</button>`);
+    const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出 CSV</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
+    if (canEditTrainingForm(form)) actions.unshift('<a href="#training-fill/' + form.id + '" class="btn btn-primary">' + ic('edit-3', 'icon-sm') + ' 繼續填報</a>');
+    if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift('<button type="button" class="btn btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">' + ic('corner-up-left', 'icon-sm') + ' 退回更正</button>');
 
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="detail-header"><div><div class="detail-id">${esc(form.id)} · ${esc(form.trainingYear)} 年度</div><h1 class="detail-title">教育訓練時數統計 — ${esc(form.unit)}</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(form.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(form.fillDate)}</span>${trainingStatusBadge(form.status)}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${actions.join('')}</div></div>${form.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(form.returnReason || '未提供')}</div>` : ''}<div class="panel-grid-two panel-grid-spaced"><div class="card"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">名單總人數</div><div class="detail-field-value">${s.totalPeople}</div></div><div class="detail-field"><div class="detail-field-label">已填時數人數</div><div class="detail-field-value">${s.filledPeople}</div></div><div class="detail-field"><div class="detail-field-label">總時數</div><div class="detail-field-value">${s.totalHours}</div></div><div class="detail-field"><div class="detail-field-label">達標率(>=3h)</div><div class="detail-field-value">${s.reachRate}%</div></div></div></div><div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">單位</div><div class="detail-field-value">${esc(form.unit)}</div></div><div class="detail-field"><div class="detail-field-label">填報人</div><div class="detail-field-value">${esc(form.fillerName)}</div></div><div class="detail-field"><div class="detail-field-label">正式送出時間</div><div class="detail-field-value">${form.submittedAt ? fmtTime(form.submittedAt) : '—'}</div></div><div class="detail-field"><div class="detail-field-label">最後更新</div><div class="detail-field-value">${fmtTime(form.updatedAt)}</div></div></div></div></div><div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">人員時數明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>來源</th><th>時數</th><th>備註</th></tr></thead><tbody>${detailRows}</tbody></table></div></div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">簽核掃描檔</span></div>${fileHtml}</div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">歷程紀錄</span></div><div class="timeline">${timeline}</div></div></div>`;
+    document.getElementById('app').innerHTML = '<div class="animate-in">'
+      + '<div class="detail-header"><div><div class="detail-id">' + esc(form.id) + ' · ' + esc(form.trainingYear) + ' 年度</div><h1 class="detail-title">資安教育訓練統計 — ' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('building-2', 'icon-xs') + '</span>' + esc(form.unit) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('user', 'icon-xs') + '</span>' + esc(form.fillerName) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('calendar', 'icon-xs') + '</span>' + fmt(form.fillDate) + '</span>' + trainingStatusBadge(form.status) + '</div></div><div class="training-toolbar-actions">' + actions.join('') + '</div></div>'
+      + (form.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(form.returnReason || '未提供') + '</div>' : '')
+      + '<div class="card"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div></div>'
+      + '<div class="panel-grid-two panel-grid-spaced">'
+      + '<div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">統計單位</div><div class="detail-field-value">' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</div></div><div class="detail-field"><div class="detail-field-label">填報單位</div><div class="detail-field-value">' + esc(form.unit) + '</div></div><div class="detail-field"><div class="detail-field-label">經辦人</div><div class="detail-field-value">' + esc(form.fillerName) + '</div></div><div class="detail-field"><div class="detail-field-label">聯絡電話</div><div class="detail-field-value">' + esc(form.submitterPhone || '—') + '</div></div><div class="detail-field"><div class="detail-field-label">聯絡信箱</div><div class="detail-field-value">' + esc(form.submitterEmail || '—') + '</div></div><div class="detail-field"><div class="detail-field-label">正式送出時間</div><div class="detail-field-value">' + (form.submittedAt ? fmtTime(form.submittedAt) : '—') + '</div></div></div></div>'
+      + '<div class="card"><div class="card-header"><span class="card-title">簽核掃描檔</span></div>' + fileHtml + '</div>'
+      + '</div>'
+      + '<div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">逐人明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>資安通識</th><th>資訊人員(含委外)</th><th>資安專業課程</th><th>判定</th><th>備註</th></tr></thead><tbody>' + detailRows + '</tbody></table></div></div>'
+      + '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">歷程紀錄</span></div><div class="timeline">' + timeline + '</div></div>'
+      + '</div>';
 
-    document.getElementById('training-export-detail')?.addEventListener('click', () => window._trainingExportDetailCsv(form.id));
+    document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
+    document.getElementById('training-print-detail')?.addEventListener('click', () => printTrainingSheet(form));
     refreshIcons();
   }
 
   function renderTrainingRoster() {
-    if (!isAdmin()) { navigate('training'); toast('僅管理者可管理名單', 'error'); return; }
+    if (!isAdmin()) {
+      navigate('training');
+      toast('僅管理者可管理名單', 'error');
+      return;
+    }
 
-    const rosters = getAllTrainingRosters().slice().sort((a, b) => a.unit === b.unit ? a.name.localeCompare(b.name, 'zh-Hant') : a.unit.localeCompare(b.unit, 'zh-Hant'));
-    const rows = rosters.length ? rosters.map(r => `<tr><td>${esc(r.unit)}</td><td>${esc(r.name)}</td><td>${r.source === 'import' ? '管理者匯入' : '填報新增'}</td><td>${esc(r.createdBy || '')}</td><td>${fmtTime(r.createdAt)}</td><td><button type="button" class="btn btn-sm btn-danger" onclick="window._trainingDeleteRoster('${r.id}')">${ic('trash-2', 'btn-icon-svg')}</button></td></tr>`).join('') : `<tr><td colspan="6"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>`;
+    const rosters = getAllTrainingRosters().slice().sort((a, b) => {
+      if (a.unit === b.unit) return a.name.localeCompare(b.name, 'zh-Hant');
+      return a.unit.localeCompare(b.unit, 'zh-Hant');
+    });
+    const summary = {
+      total: rosters.length,
+      imported: rosters.filter((row) => row.source === 'import').length,
+      manual: rosters.filter((row) => row.source === 'manual').length
+    };
+    const rows = rosters.length ? rosters.map((row) => '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" onclick="window._trainingDeleteRoster(\'' + row.id + '\')">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>').join('') : '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>';
 
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可依單位匯入與刪除人員；填報人僅可新增名單外人員</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div><div class="card" style="max-width:960px;margin-bottom:20px"><form id="training-import-form"><div class="section-header">${ic('upload', 'icon-sm')} 匯入單位名單</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label>${buildUnitCascadeControl('training-import-unit', '', false, true)}</div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="每行一位人員，可混合逗號、分號分隔" readonly></div></div><div class="form-group"><label class="form-label form-required">人員名單</label><textarea class="form-textarea" id="training-import-names" rows="6" placeholder="王小明&#10;陳小華&#10;張小資" required></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('upload', 'icon-sm')} 匯入名單</button></div></form></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>單位</th><th>姓名</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    document.getElementById('app').innerHTML = '<div class="animate-in">'
+      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div>'
+      + '<div class="stats-grid">'
+      + '<div class="stat-card total"><div class="stat-icon">' + ic('users') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">總名單筆數</div></div>'
+      + '<div class="stat-card closed"><div class="stat-icon">' + ic('download') + '</div><div class="stat-value">' + summary.imported + '</div><div class="stat-label">管理者匯入</div></div>'
+      + '<div class="stat-card pending"><div class="stat-icon">' + ic('user-plus') + '</div><div class="stat-value">' + summary.manual + '</div><div class="stat-label">填報新增</div></div>'
+      + '</div>'
+      + '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">支援每行一筆，格式可為「姓名」或「姓名,本職單位,身分別,職稱」，也可貼上 tab 分隔資料。</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, true) + '</div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師</textarea></div></div><div class="form-group"><label class="form-label form-required">匯入內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱" required></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>'
+      + '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>'
+      + '</div>';
 
     initUnitCascade('training-import-unit', '', { disabled: false });
-    document.getElementById('training-import-form').addEventListener('submit', e => {
-      e.preventDefault();
+    document.getElementById('training-import-form').addEventListener('submit', (event) => {
+      event.preventDefault();
       const unit = document.getElementById('training-import-unit').value;
-      const namesRaw = document.getElementById('training-import-names').value;
-      const names = Array.from(new Set(namesRaw.split(/[\r\n,;]+/).map(x => x.trim()).filter(Boolean)));
-      if (!names.length) { toast('請至少輸入一位人員', 'error'); return; }
-      let added = 0, skipped = 0;
-      names.forEach(name => { const ret = addTrainingRosterPerson(unit, name, 'import', currentUser().name); if (ret.added) added++; else skipped++; });
-      toast(`匯入完成：新增 ${added} 人，略過 ${skipped} 人`);
+      const raw = document.getElementById('training-import-names').value;
+      const entries = parseTrainingRosterImport(raw, unit);
+      if (!unit) {
+        toast('請先選擇單位', 'error');
+        return;
+      }
+      if (!entries.length) {
+        toast('請至少輸入一筆名單資料', 'error');
+        return;
+      }
+      let added = 0;
+      let updated = 0;
+      let skipped = 0;
+      entries.forEach((entry) => {
+        const result = addTrainingRosterPerson(unit, entry, 'import', currentUser().name);
+        if (result.added) added += 1;
+        else if (result.updated) updated += 1;
+        else skipped += 1;
+      });
+      toast('匯入完成：新增 ' + added + ' 筆、更新 ' + updated + ' 筆、略過 ' + skipped + ' 筆');
       renderTrainingRoster();
     });
 
@@ -2199,21 +2855,31 @@
   }
 
   function seedTrainingData() {
-    const d = loadTrainingStore();
-    if (d.rosters.length > 0) return;
+    const store = loadTrainingStore();
+    if (store.rosters.length > 0) return;
     const now = new Date().toISOString();
     const seen = new Set();
-    getUsers().filter(u => u.role !== ROLES.ADMIN).forEach(u => {
-      const key = `${u.unit}::${u.name}`.toLowerCase();
+    getUsers().filter((user) => user.role !== ROLES.ADMIN).forEach((user) => {
+      const key = (user.unit + '::' + user.name).toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
-      const id = `RST-${String(d.nextRosterId).padStart(4, '0')}`;
-      d.nextRosterId++;
-      d.rosters.push({ id, unit: u.unit, name: u.name, source: 'import', createdBy: '系統初始化', createdAt: now });
+      const row = normalizeTrainingRosterRow({
+        id: 'RST-' + String(store.nextRosterId).padStart(4, '0'),
+        unit: user.unit,
+        name: user.name,
+        unitName: getTrainingJobUnit(user.unit),
+        identity: user.role === ROLES.UNIT_ADMIN ? '單位管理員' : '填報人',
+        jobTitle: '',
+        source: 'import',
+        createdBy: '系統初始化',
+        createdAt: now
+      }, user.unit);
+      store.nextRosterId += 1;
+      store.rosters.push(row);
     });
-    saveTrainingStore(d);
+    saveTrainingStore(store);
   }
-  // ─── Router ────────────────────────────────
+
   function handleRoute() {
     if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader(); closeSidebar();
     switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'login-log': renderLoginLog(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(r.param); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'unit-review': renderUnitReview(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
