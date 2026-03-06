@@ -2404,6 +2404,10 @@ tbody td:first-child {
     z-index: 280;
   }
 
+  .header::before {
+    content: none;
+  }
+
   .header-menu-btn {
     display: inline-flex;
   }
@@ -3486,6 +3490,20 @@ body {
   padding: 0 24px;
 }
 
+.header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-color);
+}
+
+.header-left {
+  min-width: 0;
+}
+
 .header-title {
   font-size: 1.08rem;
   font-weight: 800;
@@ -3518,6 +3536,7 @@ body {
   background: #ffffff;
   border-right: 1px solid var(--border-color);
   box-shadow: none;
+  overflow-x: hidden;
 }
 
 .sidebar::before {
@@ -3525,11 +3544,25 @@ body {
 }
 
 .sidebar-logo {
-  padding: 18px 18px 14px;
-  min-height: auto;
+  position: relative;
+  height: var(--header-height);
+  padding: 10px 18px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
   gap: 12px;
   background: linear-gradient(180deg, #fbfcfe 0%, #f6f9fc 100%);
   border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-logo::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: 0;
+  bottom: -1px;
+  width: 1px;
+  background: var(--border-color);
 }
 
 .sidebar-brand-icon {
@@ -3537,16 +3570,30 @@ body {
   height: 40px;
 }
 
+.sidebar-brand-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
 .sidebar-brand-text h1 {
-  font-size: 1.02rem;
-  line-height: 1.18;
+  font-size: 0.98rem;
+  line-height: 1.08;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-brand-text p {
-  margin-top: 4px;
-  font-size: 0.7rem;
-  letter-spacing: 0.11em;
+  margin-top: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
   color: #8d9caf;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-nav {
@@ -3599,16 +3646,17 @@ body {
 }
 
 .main-content {
-  padding: 22px 24px 32px;
+  padding: 16px 24px 32px;
 }
 
 .main-content > .animate-in {
   width: min(100%, 1360px);
-  margin: 0 auto;
+  max-width: 1360px;
+  margin: 0;
 }
 
 .page-header {
-  padding: 4px 0 16px;
+  padding: 0 0 16px;
   margin-bottom: 18px;
   border: 0;
   border-bottom: 1px solid var(--border-color);
