@@ -366,13 +366,13 @@
     const req = required ? 'required' : '';
     return `<div class="unit-cascade">
       <div class="unit-cascade-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <select class="form-select" id="${baseId}-parent" ${dis} ${req}></select>
-        <select class="form-select" id="${baseId}-child" ${dis}></select>
+        <select class="form-select" id="${baseId}-parent" data-testid="${baseId}-parent" ${dis} ${req}></select>
+        <select class="form-select" id="${baseId}-child" data-testid="${baseId}-child" ${dis}></select>
       </div>
       <div class="unit-cascade-custom" id="${baseId}-custom-wrap" style="display:none;margin-top:8px">
-        <input type="text" class="form-input" id="${baseId}-custom" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
+        <input type="text" class="form-input" id="${baseId}-custom" data-testid="${baseId}-custom" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
       </div>
-      <input type="hidden" id="${baseId}" value="${esc(selectedUnit || '')}" />
+      <input type="hidden" id="${baseId}" data-testid="${baseId}" value="${esc(selectedUnit || '')}" />
     </div>`;
   }
 
@@ -627,7 +627,30 @@
   function ntuLogo(c = '') { return '<span class="ntu-logo ' + c + '">NTU</span>'; }
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
-  function navigate(h) { window.location.hash = h; }
+  function debugFlow(scope, message, data) {
+    try {
+      if (!window.console || typeof window.console.info !== 'function') return;
+      if (data === undefined) window.console.info(`[ISMS:${scope}] ${message}`);
+      else window.console.info(`[ISMS:${scope}] ${message}`, data);
+    } catch (_) { }
+  }
+  function navigate(h, options) {
+    const opts = options || {};
+    const target = '#' + String(h || '').replace(/^#/, '');
+    if (window.location.hash === target) {
+      if (opts.replace && window.history && typeof window.history.replaceState === 'function') {
+        window.history.replaceState(null, '', target);
+      }
+      handleRoute();
+      return;
+    }
+    if (opts.replace && window.history && typeof window.history.replaceState === 'function') {
+      window.history.replaceState(null, '', target);
+      handleRoute();
+      return;
+    }
+    window.location.hash = target;
+  }
   function getRoute() { const h = window.location.hash.slice(1) || 'dashboard'; const p = h.split('/'); return { page: p[0], param: p[1] }; }
   let isSidebarOpen = false;
   function isMobileViewport() {
@@ -871,7 +894,7 @@
       <div class="page-header"><div><h1 class="page-title">開立矯正單</h1><p class="page-subtitle">建立內部資通安全稽核矯正單，送出後即可進入處理與追蹤流程。</p></div></div>
       <div class="editor-shell editor-shell--car">
         <section class="editor-main">
-          <div class="card editor-card"><form id="create-form">
+          <div class="card editor-card"><form id="create-form" data-testid="create-form">
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">矯正單號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動編號，例如 CAR-0001"><p class="form-hint">管理者可自行輸入單號。僅支援英數、連字號與底線，不能使用空白或斜線。</p></div>
@@ -881,7 +904,7 @@
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">提報人員</label><input type="text" class="form-input" id="f-pname" value="${esc(u.name)}" readonly></div>
               <div class="form-group"><label class="form-label form-required">處理單位</label>${buildUnitCascadeControl('f-hunit', '', false, true)}</div>
-              <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" required><option value="">請先選擇處理單位</option></select></div>
+              <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" data-testid="create-handler-name" required><option value="">請先選擇處理單位</option></select></div>
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">指派日期</label><input type="date" class="form-input" id="f-hdate"></div>
@@ -989,6 +1012,7 @@
       const filtered = filterUsersByUnit(unit);
       handlerName.innerHTML = '<option value="">請選擇處理人員</option>' + filtered.map(x => `<option value="${esc(x.name)}" data-username="${esc(x.username || '')}" data-email="${esc(x.email || '')}">${esc(x.name)}（${esc(x.unit)}）</option>`).join('');
       if (prevSelected && filtered.some(x => x.name === prevSelected)) handlerName.value = prevSelected;
+      else if (filtered.length > 0) handlerName.value = filtered[0].name;
       updateHandlerEmail();
     }
 
@@ -1004,8 +1028,40 @@
     idInput.addEventListener('input', syncCreateSummary);
     syncCreateSummary();
 
+    const createForm = document.getElementById('create-form');
+    function focusCreateField(el) {
+      if (!el || typeof el.focus !== 'function') return;
+      const group = el.closest('.form-group') || el;
+      if (group && typeof group.scrollIntoView === 'function') group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.focus();
+    }
+
+    function validateCreateForm() {
+      if (!createForm.reportValidity()) {
+        const invalid = createForm.querySelector(':invalid');
+        const label = invalid?.closest('.form-group')?.querySelector('.form-label')?.textContent?.trim() || '\u5fc5\u586b\u6b04\u4f4d';
+        debugFlow('create', 'native validation failed', { field: invalid?.id || invalid?.name || label });
+        toast(`\u8acb\u5b8c\u6574\u586b\u5beb${label}`, 'error');
+        focusCreateField(invalid);
+        return false;
+      }
+      const missing = [];
+      if (!document.querySelector('input[name="defType"]:checked')) missing.push({ label: '缺失類型', el: document.querySelector('input[name="defType"]') });
+      if (!document.querySelector('input[name="source"]:checked')) missing.push({ label: '來源', el: document.querySelector('input[name="source"]') });
+      if (![...document.querySelectorAll('input[name="category"]:checked')].length) missing.push({ label: '缺失分類', el: document.querySelector('input[name="category"]') });
+      if (missing.length > 0) {
+        debugFlow('create', 'business validation failed', { missing: missing.map((entry) => entry.label) });
+        toast(`\u8acb\u5b8c\u6574\u586b\u5beb${missing.map((entry) => entry.label).join('\u3001')}`, 'error');
+        focusCreateField(missing[0].el);
+        return false;
+      }
+      return true;
+    }
+
     document.getElementById('create-form').addEventListener('submit', e => {
       e.preventDefault();
+      debugFlow('create', 'submit start', { handlerUnit: document.getElementById('f-hunit').value, handlerName: document.getElementById('f-hname').value });
+      if (!validateCreateForm()) return;
       const defType = document.querySelector('input[name="defType"]:checked');
       const source = document.querySelector('input[name="source"]:checked');
       const cats = [...document.querySelectorAll('input[name="category"]:checked')].map(c => c.value);
@@ -1013,9 +1069,11 @@
       if (!source) { toast('請選擇來源', 'error'); return; }
       if (cats.length === 0) { toast('請至少選擇一項分類', 'error'); return; }
       let itemId = '';
+      debugFlow('create', 'validation passed');
       try {
         itemId = reserveCarId(idInput.value);
       } catch (error) {
+        debugFlow('create', 'reserve id failed', { message: error.message || '' });
         toast(error.message || '矯正單號格式不正確', 'error');
         idInput.focus();
         return;
@@ -1051,6 +1109,7 @@
       const shouldNotify = document.getElementById('f-notify').checked;
       const hEmail = document.getElementById('f-hemail').value;
       addItem(item);
+      debugFlow('create', 'submit success', { id: item.id, notify: shouldNotify, handlerEmail: hEmail || '' });
       if (shouldNotify && hEmail) {
         item.history.push({ time: now, action: `系統寄送指派通知至 ${hEmail}`, user: '系統' });
         updateItem(item.id, { history: item.history });
@@ -1953,7 +2012,7 @@ window._cs = function (id, ns) {
       <div class="page-header"><div><h1 class="page-title">${existing ? '編修檢核表' : '填報檢核表'}</h1><p class="page-subtitle">受稽單位預設帶入目前登入單位，但可依實際填報需求切換到其他單位。草稿可隨時暫存，正式送出後鎖定。</p></div><a href="#checklist" class="btn btn-secondary">返回列表</a></div>
       <div class="editor-shell editor-shell--checklist">
         <section class="editor-main">
-          <div class="card editor-card"><form id="checklist-form">
+          <div class="card editor-card"><form id="checklist-form" data-testid="checklist-form">
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">受稽單位</label>${buildUnitCascadeControl('cl-unit', selectedUnit, checklistUnitLocked, true)}</div>
@@ -1971,8 +2030,9 @@ window._cs = function (id, ns) {
               <div class="form-group"><label class="form-label">簽核備註</label><input type="text" class="form-input" id="cl-supervisor-note" value="${esc(supervisorNote)}" placeholder="可填簽核說明或補充備註"></div>
             </div>
             <div class="cl-progress-bar-wrap"><div class="cl-progress-label">填報進度</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${totalItems}</span></div>
+            <div class="cl-draft-status" id="cl-draft-status">${existing && isChecklistDraftStatus(existing.status) ? `\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a${fmtTime(existing.updatedAt || existing.createdAt)}` : '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f'}</div>
             ${sectionsHtml}
-            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 正式送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft">${ic('save', 'icon-sm')} 暫存草稿</button><a href="#checklist" class="btn btn-ghost">取消返回</a></div>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 正式送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft" data-testid="checklist-save-draft">${ic('save', 'icon-sm')} 暫存草稿</button><a href="#checklist" class="btn btn-ghost">取消返回</a></div>
           </form></div>
         </section>
         <aside class="editor-aside">
@@ -1991,7 +2051,7 @@ window._cs = function (id, ns) {
                 <div class="editor-summary-item"><span>填報日期</span><strong id="cl-side-date">${fmt(existing ? existing.fillDate : today)}</strong></div>
                 <div class="editor-summary-item"><span>簽核狀態</span><strong id="cl-side-sign-status">${esc(signStatus)}</strong></div>
               </div>
-              <button type="button" class="btn btn-secondary checklist-draft-inline" id="cl-save-draft-inline">${ic('save', 'icon-sm')} 立即暫存草稿</button>
+              <button type="button" class="btn btn-secondary checklist-draft-inline" id="cl-save-draft-inline" data-testid="checklist-save-draft-inline">${ic('save', 'icon-sm')} 立即暫存草稿</button>
             </div>
             <div class="editor-side-card">
               <div class="editor-side-title">判定分布</div>
@@ -2013,7 +2073,7 @@ window._cs = function (id, ns) {
           </div>
         </aside>
       </div>
-      <button type="button" class="btn btn-secondary checklist-draft-floating" id="cl-save-draft-floating">${ic('save', 'icon-sm')} 暫存草稿</button>
+      <button type="button" class="btn btn-secondary checklist-draft-floating" id="cl-save-draft-floating" data-testid="checklist-save-draft-floating">${ic('save', 'icon-sm')} 暫存草稿</button>
     </div>`;
 
     refreshIcons();
@@ -2024,6 +2084,21 @@ window._cs = function (id, ns) {
       document.getElementById('cl-side-date').textContent = document.getElementById('cl-date').value ? fmt(document.getElementById('cl-date').value) : '未指定';
       document.getElementById('cl-side-year').textContent = document.getElementById('cl-year').value || '未指定';
       document.getElementById('cl-side-sign-status').textContent = document.getElementById('cl-sign-status').value || '待簽核';
+    }
+
+    function updateChecklistDraftStatus(item) {
+      const statusEl = document.getElementById('cl-draft-status');
+      if (!statusEl) return;
+      if (item && isChecklistDraftStatus(item.status)) {
+        statusEl.textContent = `\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a${fmtTime(item.updatedAt || item.createdAt)}`;
+        statusEl.classList.add('is-saved');
+      } else if (item) {
+        statusEl.textContent = `\u6700\u5f8c\u66f4\u65b0\uff1a${fmtTime(item.updatedAt || item.createdAt)}`;
+        statusEl.classList.add('is-saved');
+      } else {
+        statusEl.textContent = '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f';
+        statusEl.classList.remove('is-saved');
+      }
     }
 
     function updateProgress() {
@@ -2092,8 +2167,11 @@ window._cs = function (id, ns) {
     function saveChecklistDraft() {
       const data = collectData('\u8349\u7a3f');
       if (existing) updateChecklist(existing.id, data); else addChecklist(data);
+      existing = getChecklist(data.id) || data;
+      debugFlow('checklist', 'draft saved', { id: data.id, unit: data.unit, status: data.status });
+      updateChecklistDraftStatus(existing);
       toast(`\u8349\u7a3f ${data.id} \u5df2\u66ab\u5b58`);
-      navigate('checklist-fill/' + data.id);
+      navigate('checklist-fill/' + data.id, { replace: true });
     }
 
     document.querySelectorAll('.cl-radio-group input').forEach((radio) => radio.addEventListener('change', updateProgress));
@@ -2115,14 +2193,17 @@ window._cs = function (id, ns) {
     if (!existing) syncAuditYearByDate();
     syncChecklistMeta();
     updateProgress();
+    updateChecklistDraftStatus(existing);
 
     document.getElementById('checklist-form').addEventListener('submit', (event) => {
       event.preventDefault();
+      debugFlow('checklist', 'submit start', { id: existing?.id || null, unit: document.getElementById('cl-unit').value });
       const missing = [];
       CHECKLIST_SECTIONS.forEach((sec) => sec.items.forEach((item) => {
         if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id);
       }));
       if (missing.length > 0) {
+        debugFlow('checklist', 'submit blocked by unanswered items', { count: missing.length, first: missing[0] });
         toast(`\u4ecd\u6709 ${missing.length} \u500b\u67e5\u6aa2\u9805\u76ee\u5c1a\u672a\u586b\u7b54`, 'error');
         const el = document.getElementById(`cl-item-${missing[0]}`);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2136,12 +2217,16 @@ window._cs = function (id, ns) {
       ];
       const missingMeta = requiredMeta.find(({ el }) => !String(el.value || '').trim());
       if (missingMeta) {
+        debugFlow('checklist', 'submit blocked by metadata', { field: missingMeta.label });
         toast(`\u8acb\u5b8c\u6574\u586b\u5beb${missingMeta.label}`, 'error');
         missingMeta.el.focus();
         return;
       }
       const data = collectData('\u5df2\u9001\u51fa');
       if (existing) updateChecklist(existing.id, data); else addChecklist(data);
+      existing = getChecklist(data.id) || data;
+      debugFlow('checklist', 'submit success', { id: data.id, unit: data.unit, status: data.status });
+      updateChecklistDraftStatus(existing);
       toast(`\u6aa2\u6838\u8868 ${data.id} \u5df2\u6b63\u5f0f\u9001\u51fa`);
       navigate('checklist-detail/' + data.id);
     });
@@ -3629,6 +3714,5 @@ window._cs = function (id, ns) {
   refreshIcons();
 
 })();
-
 
 

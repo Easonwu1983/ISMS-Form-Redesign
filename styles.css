@@ -2189,6 +2189,21 @@ tbody td:first-child {
   white-space: nowrap;
 }
 
+.cl-draft-status {
+  margin: -2px 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.cl-draft-status.is-saved {
+  background: rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
+}
+
 /* Rate Bar (List page) */
 .cl-rate-bar {
   width: 80px;
