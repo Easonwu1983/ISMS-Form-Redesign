@@ -3066,7 +3066,50 @@ window._cs = function (id, ns) {
       const submittedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED).length;
       const schoolProgress = latestByUnit.length ? Math.round((submittedUnits / latestByUnit.length) * 100) : 0;
       const pendingUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED).length;
-      const chartRows = latestByUnit.length ? latestByUnit.map((item) => '<div class="training-chart-row"><div class="training-chart-label">' + esc(item.unit) + '</div><div class="training-chart-track"><div class="training-chart-fill" style="width:' + Math.max(0, Math.min(100, item.summary.completionRate || 0)) + '%"></div></div><div class="training-chart-value">' + (item.latest ? trainingStatusBadge(item.latest.status) : '<span class="training-inline-status">未填報</span>') + ' <strong>' + (item.summary.completionRate || 0) + '%</strong></div></div>').join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無單位資料</div></div>';
+      const groupedByParent = latestByUnit.reduce((groups, item) => {
+        const parsed = splitUnitValue(item.unit);
+        const parentUnit = String(parsed.parent || item.unit || '').trim();
+        if (!parentUnit) return groups;
+        if (!groups.has(parentUnit)) groups.set(parentUnit, []);
+        groups.get(parentUnit).push({ ...item, parsed });
+        return groups;
+      }, new Map());
+      const sortedGroupedUnits = Array.from(groupedByParent.entries()).sort((a, b) => a[0].localeCompare(b[0], 'zh-Hant'));
+      const buildChartRow = (label, statusHtml, completionRate, rowClass) => {
+        const safeRate = Math.max(0, Math.min(100, Number(completionRate) || 0));
+        return '<div class="training-chart-row ' + (rowClass || '') + '">'
+          + '<div class="training-chart-label" title="' + esc(label) + '">' + esc(label) + '</div>'
+          + '<div class="training-chart-track"><div class="training-chart-fill" style="width:' + safeRate + '%"></div></div>'
+          + '<div class="training-chart-meta"><div class="training-chart-status">' + statusHtml + '</div><div class="training-chart-rate">' + safeRate + '%</div></div>'
+          + '</div>';
+      };
+      const chartRows = sortedGroupedUnits.length ? sortedGroupedUnits.map(([parentUnit, children]) => {
+        const childRows = children
+          .slice()
+          .sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'))
+          .map((child) => {
+            const childLabel = String((child.parsed && child.parsed.child) || child.unit || '').trim() || parentUnit;
+            const childStatus = child.latest ? trainingStatusBadge(child.latest.status) : '<span class="training-inline-status">\u672a\u586b\u5831</span>';
+            return buildChartRow(childLabel, childStatus, child.summary.completionRate || 0, 'training-chart-row--child');
+          }).join('');
+        const activeCount = children.reduce((sum, child) => sum + Number(child.summary.activeCount || 0), 0);
+        const completedCount = children.reduce((sum, child) => sum + Number(child.summary.completedCount || 0), 0);
+        const parentCompletion = activeCount > 0 ? Math.round((completedCount / activeCount) * 100) : 0;
+        const submittedCount = children.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.SUBMITTED).length;
+        const draftCount = children.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.DRAFT).length;
+        const returnedCount = children.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.RETURNED).length;
+        const totalCount = children.length;
+        let parentStatus = '<span class="training-inline-status">\u672a\u586b\u5831</span>';
+        if (totalCount > 0 && submittedCount === totalCount) {
+          parentStatus = trainingStatusBadge(TRAINING_STATUSES.SUBMITTED);
+        } else if (returnedCount > 0) {
+          parentStatus = '<span class="training-inline-status">\u542b\u9000\u56de ' + returnedCount + '/' + totalCount + '</span>';
+        } else if (submittedCount > 0 || draftCount > 0) {
+          parentStatus = '<span class="training-inline-status">\u5df2\u9001\u51fa ' + submittedCount + '/' + totalCount + '</span>';
+        }
+        const parentRow = buildChartRow(parentUnit, parentStatus, parentCompletion, 'training-chart-row--parent');
+        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head">' + parentRow + '<span class="training-chart-toggle">\u4e8c\u7d1a\u55ae\u4f4d ' + totalCount + '</span></div></summary><div class="training-chart-children">' + childRows + '</div></details>';
+      }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">\u5c1a\u7121\u55ae\u4f4d\u8cc7\u6599</div></div>';
       adminPanel = '<div class="training-admin-grid">'
         + '<div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">' + schoolProgress + '%</div><div class="training-kpi-desc">已正式送出單位 ' + submittedUnits + ' / ' + latestByUnit.length + '</div></div>'
         + '<div class="card"><div class="card-header"><span class="card-title">待追蹤單位</span></div><div class="training-kpi-value">' + pendingUnits + '</div><div class="training-kpi-desc">尚未正式送出或仍退回中</div></div>'
