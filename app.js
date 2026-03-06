@@ -1,9 +1,9 @@
-// =============================================
+﻿// =============================================
 // ISMS Internal Audit Tracking System - v4
 // =============================================
 (function () {
   'use strict';
-  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template', TRAINING_KEY = 'cats_training_hours', LOGIN_LOG_KEY = 'cats_login_log';
+  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template', TRAINING_KEY = 'cats_training_hours', LOGIN_LOG_KEY = 'cats_login_log', UNIT_REVIEW_KEY = 'cats_unit_review';
   const STATUSES = { CREATED: '開立', PENDING: '待矯正', PROPOSED: '已提案', REVIEWING: '審核中', TRACKING: '追蹤中', CLOSED: '結案' };
   const STATUS_CLASSES = { [STATUSES.CREATED]: 'created', [STATUSES.PENDING]: 'pending', [STATUSES.PROPOSED]: 'proposed', [STATUSES.REVIEWING]: 'reviewing', [STATUSES.TRACKING]: 'tracking', [STATUSES.CLOSED]: 'closed' };
   const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
@@ -14,7 +14,7 @@
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
   const DEFAULT_USERS = [
-    { username: 'admin', password: 'admin123', name: '系統管理員', role: ROLES.ADMIN, unit: '計算機及資訊網路中心／資訊網路組', email: 'admin@company.com' },
+    { username: 'admin', password: 'admin123', name: '計算機及資訊網路中心', role: ROLES.ADMIN, unit: '計算機及資訊網路中心／資訊網路組', email: 'admin@company.com' },
     { username: 'unit1', password: 'unit123', name: '王經理', role: ROLES.UNIT_ADMIN, unit: '計算機及資訊網路中心／資訊網路組', email: 'wang@company.com' },
     { username: 'unit2', password: 'unit123', name: '張稽核員', role: ROLES.UNIT_ADMIN, unit: '稽核室', email: 'zhang@company.com' },
     { username: 'user1', password: 'user123', name: '李工程師', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', email: 'li@company.com' },
@@ -22,6 +22,9 @@
     { username: 'user3', password: 'user123', name: '黃工程師', role: ROLES.REPORTER, unit: '總務處／營繕組', email: 'huang@company.com' },
     { username: 'user4', password: 'user123', name: '劉文管人員', role: ROLES.REPORTER, unit: '人事室／綜合業務組', email: 'liu@company.com' },
   ];
+
+  const UNIT_CUSTOM_VALUE = '__unit_custom__';
+  const UNIT_CUSTOM_LABEL = '其他（手動輸入）';
 
   function getOfficialUnits() {
     try {
@@ -55,6 +58,239 @@
     return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   }
 
+  function getOfficialUnitSet() {
+    return new Set(getOfficialUnits());
+  }
+
+  function isOfficialUnit(unit) {
+    const value = String(unit || '').trim();
+    if (!value) return true;
+    return getOfficialUnitSet().has(value);
+  }
+
+  function emptyUnitReviewStore() {
+    return { approvedUnits: [], history: [] };
+  }
+
+  function loadUnitReviewStore() {
+    const raw = readCachedJson(UNIT_REVIEW_KEY, emptyUnitReviewStore);
+    if (!raw || typeof raw !== 'object') return emptyUnitReviewStore();
+    if (!Array.isArray(raw.approvedUnits)) raw.approvedUnits = [];
+    if (!Array.isArray(raw.history)) raw.history = [];
+    return raw;
+  }
+
+  function saveUnitReviewStore(store) {
+    writeCachedJson(UNIT_REVIEW_KEY, store);
+  }
+
+  function formatUnitScopeSummary(scopes) {
+    const defs = [
+      ['users', '帳號'],
+      ['items', '矯正單'],
+      ['checklists', '檢核表'],
+      ['trainingForms', '訓練填報'],
+      ['trainingRosters', '名單']
+    ];
+    const parts = defs.filter(([key]) => scopes[key] > 0).map(([key, label]) => `${label} ${scopes[key]}`);
+    return parts.join('、') || '尚未使用';
+  }
+
+  function approveCustomUnit(unit, actor) {
+    const value = String(unit || '').trim();
+    if (!value) return false;
+
+    const now = new Date().toISOString();
+    const store = loadUnitReviewStore();
+    const existing = store.approvedUnits.find((entry) => entry.unit === value);
+    if (existing) {
+      existing.approvedAt = now;
+      existing.approvedBy = actor || '';
+    } else {
+      store.approvedUnits.push({ unit: value, approvedAt: now, approvedBy: actor || '' });
+    }
+    store.history.unshift({ type: 'approved', unit: value, targetUnit: '', actor: actor || '', time: now });
+    store.history = store.history.slice(0, 40);
+    saveUnitReviewStore(store);
+    return true;
+  }
+
+  function removeCustomUnitApproval(unit) {
+    const value = String(unit || '').trim();
+    if (!value) return;
+    const store = loadUnitReviewStore();
+    store.approvedUnits = store.approvedUnits.filter((entry) => entry.unit !== value);
+    saveUnitReviewStore(store);
+  }
+
+  function createUnitReferenceEntry(unit) {
+    return {
+      unit,
+      count: 0,
+      scopes: { users: 0, items: 0, checklists: 0, trainingForms: 0, trainingRosters: 0 },
+      references: []
+    };
+  }
+
+  function pushUnitReference(map, unit, scope, label) {
+    const value = String(unit || '').trim();
+    if (!value) return;
+
+    let entry = map.get(value);
+    if (!entry) {
+      entry = createUnitReferenceEntry(value);
+      map.set(value, entry);
+    }
+
+    entry.count += 1;
+    entry.scopes[scope] += 1;
+    if (entry.references.length < 24) entry.references.push(label);
+  }
+
+  function collectUnitReferences() {
+    const map = new Map();
+    const data = loadData();
+    const checklistStore = loadChecklists();
+    const trainingStore = loadTrainingStore();
+
+    (data.users || []).forEach((user) => {
+      pushUnitReference(map, user.unit, 'users', `帳號 ${user.username} · ${user.name}`);
+    });
+
+    (data.items || []).forEach((item) => {
+      pushUnitReference(map, item.proposerUnit, 'items', `矯正單 ${item.id}（提出單位）`);
+      pushUnitReference(map, item.handlerUnit, 'items', `矯正單 ${item.id}（處理單位）`);
+    });
+
+    (checklistStore.items || []).forEach((item) => {
+      pushUnitReference(map, item.unit, 'checklists', `檢核表 ${item.id} · ${item.fillerName || '未填報'}`);
+    });
+
+    (trainingStore.forms || []).forEach((form) => {
+      pushUnitReference(map, form.unit, 'trainingForms', `教育訓練 ${form.id} · ${form.fillerName || '未填報'}`);
+    });
+
+    (trainingStore.rosters || []).forEach((row) => {
+      pushUnitReference(map, row.unit, 'trainingRosters', `教育訓練名單 · ${row.name}`);
+    });
+
+    return Array.from(map.values());
+  }
+
+  function getCustomUnitRegistry() {
+    const store = loadUnitReviewStore();
+    const approvedMap = new Map(store.approvedUnits.map((entry) => [entry.unit, entry]));
+    return collectUnitReferences()
+      .filter((entry) => !isOfficialUnit(entry.unit))
+      .map((entry) => ({
+        ...entry,
+        approval: approvedMap.get(entry.unit) || null,
+        status: approvedMap.has(entry.unit) ? 'approved' : 'pending'
+      }))
+      .sort((a, b) => {
+        if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+        if (b.count !== a.count) return b.count - a.count;
+        return a.unit.localeCompare(b.unit, 'zh-Hant');
+      });
+  }
+
+  function syncSessionUnit(sourceUnit, targetUnit) {
+    try {
+      const raw = sessionStorage.getItem(AUTH_KEY);
+      if (!raw) return;
+      const auth = JSON.parse(raw);
+      if (!auth || auth.unit !== sourceUnit) return;
+      auth.unit = targetUnit;
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    } catch (_) { }
+  }
+
+  function mergeCustomUnit(sourceUnit, targetUnit, actor) {
+    const source = String(sourceUnit || '').trim();
+    const target = String(targetUnit || '').trim();
+    if (!source || !target || source === target) return null;
+
+    const now = new Date().toISOString();
+    const summary = { users: 0, items: 0, checklists: 0, trainingForms: 0, trainingRosters: 0 };
+
+    const data = loadData();
+    let dataChanged = false;
+    (data.users || []).forEach((user) => {
+      if (user.unit === source) {
+        user.unit = target;
+        summary.users += 1;
+        dataChanged = true;
+      }
+    });
+    (data.items || []).forEach((item) => {
+      let changed = false;
+      if (item.proposerUnit === source) {
+        item.proposerUnit = target;
+        changed = true;
+      }
+      if (item.handlerUnit === source) {
+        item.handlerUnit = target;
+        changed = true;
+      }
+      if (changed) {
+        item.updatedAt = now;
+        summary.items += 1;
+        dataChanged = true;
+      }
+    });
+    if (dataChanged) saveData(data);
+
+    const checklistStore = loadChecklists();
+    let checklistChanged = false;
+    (checklistStore.items || []).forEach((item) => {
+      if (item.unit === source) {
+        item.unit = target;
+        item.updatedAt = now;
+        summary.checklists += 1;
+        checklistChanged = true;
+      }
+    });
+    if (checklistChanged) saveChecklists(checklistStore);
+
+    const trainingStore = loadTrainingStore();
+    let trainingChanged = false;
+    (trainingStore.forms || []).forEach((form) => {
+      if (form.unit === source) {
+        form.unit = target;
+        form.updatedAt = now;
+        summary.trainingForms += 1;
+        trainingChanged = true;
+      }
+    });
+    (trainingStore.rosters || []).forEach((row) => {
+      if (row.unit === source) {
+        row.unit = target;
+        summary.trainingRosters += 1;
+        trainingChanged = true;
+      }
+    });
+    if (trainingChanged) saveTrainingStore(trainingStore);
+
+    syncSessionUnit(source, target);
+
+    const store = loadUnitReviewStore();
+    store.approvedUnits = store.approvedUnits.filter((entry) => entry.unit !== source);
+    if (!isOfficialUnit(target) && !store.approvedUnits.some((entry) => entry.unit === target)) {
+      store.approvedUnits.push({ unit: target, approvedAt: now, approvedBy: actor || '' });
+    }
+    store.history.unshift({
+      type: 'merged',
+      unit: source,
+      targetUnit: target,
+      actor: actor || '',
+      time: now,
+      summary
+    });
+    store.history = store.history.slice(0, 40);
+    saveUnitReviewStore(store);
+
+    return { ...summary, total: summary.users + summary.items + summary.checklists + summary.trainingForms + summary.trainingRosters };
+  }
   function buildUnitOptions(units, selected, includeEmpty) {
     const list = Array.isArray(units) ? units : [];
     const safeSelected = String(selected || '');
@@ -70,6 +306,39 @@
       }
     } catch (_) { }
     return {};
+  }
+
+  function getApprovedCustomUnits() {
+    const store = loadUnitReviewStore();
+    return (store.approvedUnits || [])
+      .map((entry) => String(entry && entry.unit || '').trim())
+      .filter(Boolean);
+  }
+
+  function getSelectableUnitStructure() {
+    const base = getUnitStructureSafe();
+    const merged = {};
+
+    Object.keys(base).forEach((parent) => {
+      merged[parent] = Array.isArray(base[parent]) ? [...base[parent]] : [];
+    });
+
+    getApprovedCustomUnits().forEach((unit) => {
+      const parsed = splitUnitValue(unit);
+      if (!parsed.parent) return;
+      if (!merged[parsed.parent]) merged[parsed.parent] = [];
+      if (parsed.child && !merged[parsed.parent].includes(parsed.child)) {
+        merged[parsed.parent].push(parsed.child);
+      }
+    });
+
+    Object.keys(merged).forEach((parent) => {
+      merged[parent] = merged[parent]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    });
+
+    return merged;
   }
 
   function splitUnitValue(unitValue) {
@@ -93,9 +362,14 @@
   function buildUnitCascadeControl(baseId, selectedUnit, disabled, required) {
     const dis = disabled ? 'disabled' : '';
     const req = required ? 'required' : '';
-    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <select class="form-select" id="${baseId}-parent" ${dis} ${req}></select>
-      <select class="form-select" id="${baseId}-child" ${dis}></select>
+    return `<div class="unit-cascade">
+      <div class="unit-cascade-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <select class="form-select" id="${baseId}-parent" ${dis} ${req}></select>
+        <select class="form-select" id="${baseId}-child" ${dis}></select>
+      </div>
+      <div class="unit-cascade-custom" id="${baseId}-custom-wrap" style="display:none;margin-top:8px">
+        <input type="text" class="form-input" id="${baseId}-custom" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
+      </div>
       <input type="hidden" id="${baseId}" value="${esc(selectedUnit || '')}" />
     </div>`;
   }
@@ -105,18 +379,46 @@
     const parentEl = document.getElementById(`${baseId}-parent`);
     const childEl = document.getElementById(`${baseId}-child`);
     const hiddenEl = document.getElementById(baseId);
+    const customWrap = document.getElementById(`${baseId}-custom-wrap`);
+    const customEl = document.getElementById(`${baseId}-custom`);
     if (!parentEl || !childEl || !hiddenEl) return;
 
-    const structure = getUnitStructureSafe();
-    const parsed = splitUnitValue(initialValue || hiddenEl.value);
-    const parentSet = new Set(Object.keys(structure || {}));
-    if (parsed.parent) parentSet.add(parsed.parent);
+    const allowCustom = isAdmin() && !opts.disabled && !!customWrap && !!customEl;
+    const structure = getSelectableUnitStructure();
+    const rawInitial = String(initialValue || hiddenEl.value || '').trim();
+    const parsed = splitUnitValue(rawInitial);
+    const knownParents = new Set(Object.keys(structure || {}));
+    const isInitialCustom = allowCustom && !!rawInitial && !!parsed.parent && !knownParents.has(parsed.parent);
+
+    const parentSet = new Set(knownParents);
+    if (parsed.parent && !isInitialCustom) parentSet.add(parsed.parent);
     const parents = Array.from(parentSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 
-    parentEl.innerHTML = '<option value="">請選擇一級單位</option>' + parents.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+    parentEl.innerHTML =
+      '<option value="">\u8acb\u9078\u64c7\u4e00\u7d1a\u55ae\u4f4d</option>' +
+      parents.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('') +
+      (allowCustom ? `<option value="${UNIT_CUSTOM_VALUE}">${UNIT_CUSTOM_LABEL}</option>` : '');
+
+    const setCustomMode = (enabled) => {
+      if (!customWrap || !customEl) return;
+      customWrap.style.display = enabled ? 'block' : 'none';
+      customEl.required = !!enabled;
+    };
 
     const syncHidden = (dispatchChange) => {
       const parent = String(parentEl.value || '').trim();
+
+      if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
+        setCustomMode(true);
+        customEl.placeholder = '\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31';
+        childEl.innerHTML = '<option value="">\u81ea\u8a02\u55ae\u4f4d\u6a21\u5f0f</option>';
+        childEl.disabled = true;
+        hiddenEl.value = String(customEl.value || '').trim();
+        if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
+        return;
+      }
+
+      setCustomMode(false);
       const hasChildren = Array.isArray(structure[parent]) && structure[parent].length > 0;
       const child = (!childEl.disabled && hasChildren) ? String(childEl.value || '').trim() : '';
       hiddenEl.value = composeUnitValue(parent, child);
@@ -124,24 +426,31 @@
     };
 
     const renderChildren = (parent, selectedChild) => {
-      const children = Array.isArray(structure[parent]) ? [...structure[parent]] : [];
       const child = String(selectedChild || '').trim();
+
+      if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
+        childEl.innerHTML = '<option value="">\u81ea\u8a02\u55ae\u4f4d\u6a21\u5f0f</option>';
+        childEl.disabled = true;
+        return;
+      }
+
+      const children = Array.isArray(structure[parent]) ? [...structure[parent]] : [];
       if (child && !children.includes(child)) children.unshift(child);
 
       if (!parent) {
-        childEl.innerHTML = '<option value="">請先選擇一級單位</option>';
+        childEl.innerHTML = '<option value="">\u8acb\u5148\u9078\u64c7\u4e00\u7d1a\u55ae\u4f4d</option>';
         childEl.disabled = true;
         return;
       }
 
       if (children.length === 0) {
-        childEl.innerHTML = '<option value="">無二級單位</option>';
+        childEl.innerHTML = '<option value="">\u7121\u4e8c\u7d1a\u55ae\u4f4d</option>';
         childEl.disabled = true;
         return;
       }
 
       childEl.disabled = false;
-      childEl.innerHTML = '<option value="">請選擇二級單位（選填）</option>' + children.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      childEl.innerHTML = '<option value="">\u8acb\u9078\u64c7\u4e8c\u7d1a\u55ae\u4f4d\uff08\u9078\u586b\uff09</option>' + children.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
       if (child) childEl.value = child;
     };
 
@@ -150,16 +459,24 @@
       syncHidden(true);
     });
     childEl.addEventListener('change', () => syncHidden(true));
+    if (allowCustom) customEl.addEventListener('input', () => syncHidden(true));
 
-    if (parsed.parent) parentEl.value = parsed.parent;
+    if (isInitialCustom) {
+      parentEl.value = UNIT_CUSTOM_VALUE;
+      customEl.value = rawInitial;
+    } else if (parsed.parent) {
+      parentEl.value = parsed.parent;
+    }
     renderChildren(parentEl.value, parsed.child);
     syncHidden(false);
 
     if (opts.disabled) {
       parentEl.disabled = true;
       childEl.disabled = true;
+      if (customEl) customEl.disabled = true;
     }
   }
+
   const STORAGE_CACHE = Object.create(null);
   function readCachedJson(key, fallbackFactory) {
     const raw = localStorage.getItem(key);
@@ -201,6 +518,45 @@
   function deleteUser(un) { const d = loadData(); d.users = d.users.filter(u => u.username !== un); saveData(d); }
   function findUser(un) { return loadData().users.find(u => u.username === un); }
   function findUserByEmail(em) { return loadData().users.find(u => u.email && u.email.toLowerCase() === em.toLowerCase()); }
+  function ensurePrimaryAdminProfile() {
+    const d = loadData();
+    if (!d || !Array.isArray(d.users)) return;
+
+    let changed = false;
+    let admin = d.users.find((u) => u.username === 'admin');
+    if (!admin) {
+      const defaultAdmin = DEFAULT_USERS.find((u) => u.username === 'admin');
+      if (defaultAdmin) {
+        admin = { ...defaultAdmin };
+        d.users.unshift(admin);
+        changed = true;
+      }
+    }
+
+    if (!admin) return;
+    if (admin.role !== ROLES.ADMIN) {
+      admin.role = ROLES.ADMIN;
+      changed = true;
+    }
+    if (admin.name !== '計算機及資訊網路中心') {
+      admin.name = '計算機及資訊網路中心';
+      changed = true;
+    }
+
+    if (changed) saveData(d);
+
+    try {
+      const rawAuth = sessionStorage.getItem(AUTH_KEY);
+      if (!rawAuth) return;
+      const auth = JSON.parse(rawAuth);
+      if (auth && auth.username === 'admin') {
+        auth.role = ROLES.ADMIN;
+        auth.name = '計算機及資訊網路中心';
+        sessionStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+      }
+    } catch (_) { }
+  }
+
   function generatePassword() { const c = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; let p = ''; for (let i = 0; i < 8; i++)p += c[Math.floor(Math.random() * c.length)]; return p; }
   function loadLoginLogs() {
     const logs = readCachedJson(LOGIN_LOG_KEY, () => []);
@@ -350,6 +706,7 @@
     if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a>';
     if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'login-log' ? 'active' : '') + '" href="#login-log"><span class="nav-icon">' + ic('shield-check') + '</span>登入紀錄</a>';
     if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>檢核表管理</a>';
+    if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'unit-review' ? 'active' : '') + '" href="#unit-review"><span class="nav-icon">' + ic('building-2') + '</span>單位治理</a>';
     if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div>' + sysNav + '</div>';
     var sidebarEl = document.getElementById('sidebar'); sidebarEl.innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS Corrective Action</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
     sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
@@ -358,7 +715,7 @@
   }
 
   function renderHeader() {
-    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', 'login-log': '登入紀錄', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', training: '教育訓練時數統計', 'training-fill': '填報教育訓練時數', 'training-detail': '教育訓練填報詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
+    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', 'login-log': '登入紀錄', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', 'unit-review': '單位治理', training: '教育訓練時數統計', 'training-fill': '填報教育訓練時數', 'training-detail': '教育訓練填報詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
     document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" onclick="window._toggleSidebar()" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + (titles[r.page] || '內部稽核管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
   }
   window._logout = function () { logout(); };
@@ -385,9 +742,9 @@
       '<div class="stat-card overdue"><div class="stat-icon">' + ic('alert-triangle') + '</div><div class="stat-value">' + overdue + '</div><div class="stat-label">已逾期</div></div>' +
       '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + closedM + '</div><div class="stat-label">本月結案</div></div>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
-      '<div class="card"><div class="card-header"><span class="card-title">狀態分布</span></div><div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div></div>' +
-      '<div class="card"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th>單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rr + '</tbody></table></div></div>' +
+      '<div class="dashboard-grid">' +
+      '<div class="card dashboard-panel dashboard-chart-panel"><div class="card-header"><span class="card-title">狀態分布</span></div><div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div></div>' +
+      '<div class="card dashboard-panel dashboard-table-panel"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th>單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rr + '</tbody></table></div></div>' +
       '</div></div>';
     refreshIcons();
   }
@@ -755,6 +1112,102 @@
   window._addUser = () => showUserModal(null);
   window._editUser = (un) => showUserModal(findUser(un));
   window._delUser = (un) => { if (confirm(`確定刪除使用者「${un}」？`)) { deleteUser(un); toast('使用者已刪除'); renderUsers(); } };
+  function unitReviewStatusBadge(entry) {
+    const approved = entry.status === 'approved';
+    return `<span class="review-status-badge ${approved ? 'approved' : 'pending'}">${approved ? '已核准保留' : '待審核'}</span>`;
+  }
+
+  function formatUnitReviewHistory(entry) {
+    if (entry.type === 'merged') {
+      return {
+        badgeClass: 'merged',
+        badgeText: '合併單位',
+        title: `${entry.unit} → ${entry.targetUnit}`,
+        meta: entry.summary ? formatUnitScopeSummary(entry.summary) : '已完成資料同步'
+      };
+    }
+    return {
+      badgeClass: 'approved',
+      badgeText: '核准保留',
+      title: entry.unit,
+      meta: '保留為可接受的自訂單位'
+    };
+  }
+
+  function showUnitReferenceModal(unit) {
+    const entry = getCustomUnitRegistry().find((item) => item.unit === unit);
+    if (!entry) { toast('找不到此自訂單位引用資料', 'error'); return; }
+
+    const refs = entry.references.length
+      ? entry.references.map((ref) => `<li class="review-ref-item">${esc(ref)}</li>`).join('')
+      : '<li class="review-ref-item">目前沒有可顯示的引用明細</li>';
+
+    const mr = document.getElementById('modal-root');
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal"><div class="modal-header"><span class="modal-title">自訂單位引用明細</span><button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button></div><div class="review-modal-head"><div class="review-unit-name">${esc(entry.unit)}</div><div class="review-modal-subtitle">共 ${entry.count} 筆引用，涵蓋 ${esc(formatUnitScopeSummary(entry.scopes))}</div></div><ul class="review-ref-list">${refs}</ul></div></div>`;
+    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
+  }
+
+  function showUnitMergeModal(unit) {
+    const entry = getCustomUnitRegistry().find((item) => item.unit === unit);
+    if (!entry) { toast('找不到此自訂單位', 'error'); return; }
+
+    const mr = document.getElementById('modal-root');
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal"><div class="modal-header"><span class="modal-title">合併自訂單位</span><button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button></div><div class="review-callout compact"><span class="review-callout-icon">${ic('git-merge', 'icon-sm')}</span><div><strong>${esc(entry.unit)}</strong> 目前共有 ${entry.count} 筆引用，合併後會同步更新帳號、矯正單、檢核表與教育訓練資料。</div></div><form id="unit-merge-form"><div class="form-group"><label class="form-label">來源單位</label><input type="text" class="form-input" value="${esc(entry.unit)}" readonly></div><div class="form-group"><label class="form-label form-required">合併目標</label>${buildUnitCascadeControl('unit-merge-target', '', false, true)}<div class="form-hint">可選正式單位，或使用「其他」輸入新的標準名稱。</div></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('git-merge', 'icon-sm')} 立即合併</button><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-root').innerHTML=''">取消</button></div></form></div></div>`;
+    initUnitCascade('unit-merge-target', '', { disabled: false });
+    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
+    document.getElementById('unit-merge-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const target = document.getElementById('unit-merge-target').value.trim();
+      if (!target) { toast('請選擇或輸入合併目標', 'error'); return; }
+      if (target === entry.unit) { toast('來源與目標單位不能相同', 'error'); return; }
+      const summary = mergeCustomUnit(entry.unit, target, currentUser().name);
+      if (!summary) { toast('單位合併失敗', 'error'); return; }
+      mr.innerHTML = '';
+      toast(`已完成單位合併，共更新 ${summary.total} 筆資料`);
+      renderUnitReview();
+      refreshIcons();
+    });
+  }
+
+  function renderUnitReview() {
+    if (!isAdmin()) { navigate('dashboard'); toast('您沒有管理單位治理的權限', 'error'); return; }
+
+    const registry = getCustomUnitRegistry();
+    const reviewStore = loadUnitReviewStore();
+    const pendingCount = registry.filter((entry) => entry.status === 'pending').length;
+    const approvedCount = registry.filter((entry) => entry.status === 'approved').length;
+    const recentMerged = reviewStore.history.filter((entry) => entry.type === 'merged').slice(0, 10);
+    const history = reviewStore.history.slice(0, 8);
+
+    const rows = registry.length ? registry.map((entry) => {
+      const encoded = encodeURIComponent(entry.unit);
+      const sampleRefs = entry.references.slice(0, 2).map((ref) => `<span class="review-source-pill">${esc(ref)}</span>`).join('');
+      const approveBtn = entry.status === 'approved'
+        ? `<button type="button" class="btn btn-sm btn-secondary" disabled>${ic('shield-check', 'icon-sm')} 已核准</button>`
+        : `<button type="button" class="btn btn-sm btn-secondary" onclick="window._approveUnit('${encoded}')">${ic('shield-check', 'icon-sm')} 核准保留</button>`;
+      return `<tr><td><div class="review-unit-name">${esc(entry.unit)}</div></td><td>${unitReviewStatusBadge(entry)}</td><td><div class="review-count-chip">${entry.count} 筆</div></td><td><div class="review-scope-text">${esc(formatUnitScopeSummary(entry.scopes))}</div><div class="review-source-list">${sampleRefs}</div></td><td><div class="review-actions"><button type="button" class="btn btn-sm btn-ghost" onclick="window._viewUnitRefs('${encoded}')">${ic('list', 'icon-sm')} 檢視引用</button>${approveBtn}<button type="button" class="btn btn-sm btn-primary" onclick="window._mergeUnit('${encoded}')">${ic('git-merge', 'icon-sm')} 合併</button></div></td></tr>`;
+    }).join('') : `<tr><td colspan="5"><div class="empty-state review-empty"><div class="empty-state-icon">${ic('badge-check')}</div><div class="empty-state-title">目前沒有待治理的自訂單位</div><div class="empty-state-desc">所有單位都已符合正式名錄，或已由最高管理員審核完成。</div></div></td></tr>`;
+
+    const historyHtml = history.length ? history.map((entry) => {
+      const detail = formatUnitReviewHistory(entry);
+      return `<div class="review-history-item"><div class="review-history-top"><span class="review-history-badge ${detail.badgeClass}">${detail.badgeText}</span><span class="review-history-time">${fmtTime(entry.time)}</span></div><div class="review-history-title">${esc(detail.title)}</div><div class="review-history-meta">${esc(detail.meta)}${entry.actor ? ` · ${esc(entry.actor)}` : ''}</div></div>`;
+    }).join('') : `<div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">尚無治理紀錄</div></div>`;
+
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">System Governance</div><h1 class="page-title">自訂單位審核與合併</h1><p class="page-subtitle">集中處理最高管理員手動建立的自訂單位，已核准保留的名稱會回流到最高管理員的單位選單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" onclick="window._refreshUnitReview()">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('sparkles', 'icon-sm')}</span><div>建議優先處理<strong>待審核</strong>且引用次數高的自訂單位；若名稱合理但暫時不納入正式名錄，可先使用「核准保留」，系統會讓最高管理員之後可直接選用。</div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${registry.length}</div><div class="stat-label">自訂單位總數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${pendingCount}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('shield-check')}</div><div class="stat-value">${approvedCount}</div><div class="stat-label">已核准保留</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('git-merge')}</div><div class="stat-value">${recentMerged.length}</div><div class="stat-label">最近合併筆數</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">自訂單位清單</span><span class="review-card-subtitle">依待審核優先、引用次數排序</span></div><div class="table-wrapper"><table><thead><tr><th>單位名稱</th><th>狀態</th><th>引用數</th><th>使用位置</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="card review-history-card"><div class="card-header"><span class="card-title">最近治理紀錄</span><span class="review-card-subtitle">保留最近 8 筆操作</span></div><div class="review-history-list">${historyHtml}</div></div></div></div>`;
+    refreshIcons();
+  }
+
+  window._refreshUnitReview = function () { renderUnitReview(); };
+  window._viewUnitRefs = function (encodedUnit) { showUnitReferenceModal(decodeURIComponent(encodedUnit)); };
+  window._approveUnit = function (encodedUnit) {
+    if (!isAdmin()) return;
+    const unit = decodeURIComponent(encodedUnit);
+    if (!confirm(`確定將「${unit}」核准保留為自訂單位？`)) return;
+    approveCustomUnit(unit, currentUser().name);
+    toast('自訂單位已核准保留，之後可於最高管理員單位選單直接選用');
+    renderUnitReview();
+  };
+  window._mergeUnit = function (encodedUnit) { showUnitMergeModal(decodeURIComponent(encodedUnit)); };
   window._clearLoginLogs = function () {
     if (!canManageUsers()) return;
     if (!confirm('確定清除所有登入紀錄？')) return;
@@ -1101,7 +1554,7 @@
         <h1 class="detail-title">內稽檢核表 — ${esc(cl.unit)}</h1>
         <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(cl.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(cl.fillDate)}</span><span class="badge ${statusCls}"><span class="badge-dot"></span>${cl.status}</span></div>
       </div><a href="#checklist" class="btn btn-secondary">← 返回列表</a></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+      <div class="panel-grid-two panel-grid-spaced">
         <div class="card"><div class="card-header"><span class="card-title">符合度統計</span></div>
           <div class="cl-stats-wrap">${svg}<div class="cl-legend">${legend}</div></div>
         </div>
@@ -1570,7 +2023,7 @@
       const schoolProgress = unitStats.length ? Math.round(submittedUnits / unitStats.length * 100) : 0;
       const totalHours = allForms.reduce((sum, f) => sum + Number(f.summary?.totalHours || 0), 0).toFixed(1);
       const chartRows = unitStats.length ? unitStats.map(u => `<div class="training-chart-row"><div class="training-chart-label">${esc(u.unit)}</div><div class="training-chart-track"><div class="training-chart-fill" style="width:${Math.max(0, Math.min(100, u.reachRate))}%"></div></div><div class="training-chart-value">${u.reachRate}% (${esc(u.status)})</div></div>`).join('') : `<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無單位資料</div></div>`;
-      adminPanel = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px"><div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">${schoolProgress}%</div><div class="training-kpi-desc">已正式送出單位 ${submittedUnits} / ${unitStats.length}</div></div><div class="card"><div class="card-header"><span class="card-title">全校訓練總時數</span></div><div class="training-kpi-value">${totalHours}</div><div class="training-kpi-desc">以最新填報資料累計</div></div></div><div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">各單位達標率（每人 3 小時以上）</span></div><div class="training-chart">${chartRows}</div></div>`;
+      adminPanel = `<div class="panel-grid-two panel-grid-bottom"><div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">${schoolProgress}%</div><div class="training-kpi-desc">已正式送出單位 ${submittedUnits} / ${unitStats.length}</div></div><div class="card"><div class="card-header"><span class="card-title">全校訓練總時數</span></div><div class="training-kpi-value">${totalHours}</div><div class="training-kpi-desc">以最新填報資料累計</div></div></div><div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">各單位達標率（每人 3 小時以上）</span></div><div class="training-chart">${chartRows}</div></div>`;
     }
 
     document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">教育訓練時數統計</h1><p class="page-subtitle">支援名單匯入、暫存、正式送出、退回更正與 CSV 匯出</p></div>${toolbar}</div><div class="stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('files')}</div><div class="stat-value">${summary.total}</div><div class="stat-label">填報單總數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('save')}</div><div class="stat-value">${summary.draft}</div><div class="stat-label">暫存中</div></div><div class="stat-card closed"><div class="stat-icon">${ic('check-circle-2')}</div><div class="stat-value">${summary.submitted}</div><div class="stat-label">正式送出</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('corner-up-left')}</div><div class="stat-value">${summary.returned}</div><div class="stat-label">退回更正</div></div></div>${adminPanel}<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>單位</th><th>填報人</th><th>年度</th><th>狀態</th><th>名單人數</th><th>總時數</th><th>達標率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
@@ -1715,7 +2168,7 @@
     if (canEditTrainingForm(form)) actions.unshift(`<a href="#training-fill/${form.id}" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 繼續填報</a>`);
     if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift(`<button type="button" class="btn btn-danger" onclick="window._trainingReturn('${form.id}')">${ic('corner-up-left', 'icon-sm')} 退回更正</button>`);
 
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="detail-header"><div><div class="detail-id">${esc(form.id)} · ${esc(form.trainingYear)} 年度</div><h1 class="detail-title">教育訓練時數統計 — ${esc(form.unit)}</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(form.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(form.fillDate)}</span>${trainingStatusBadge(form.status)}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${actions.join('')}</div></div>${form.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(form.returnReason || '未提供')}</div>` : ''}<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px"><div class="card"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">名單總人數</div><div class="detail-field-value">${s.totalPeople}</div></div><div class="detail-field"><div class="detail-field-label">已填時數人數</div><div class="detail-field-value">${s.filledPeople}</div></div><div class="detail-field"><div class="detail-field-label">總時數</div><div class="detail-field-value">${s.totalHours}</div></div><div class="detail-field"><div class="detail-field-label">達標率(>=3h)</div><div class="detail-field-value">${s.reachRate}%</div></div></div></div><div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">單位</div><div class="detail-field-value">${esc(form.unit)}</div></div><div class="detail-field"><div class="detail-field-label">填報人</div><div class="detail-field-value">${esc(form.fillerName)}</div></div><div class="detail-field"><div class="detail-field-label">正式送出時間</div><div class="detail-field-value">${form.submittedAt ? fmtTime(form.submittedAt) : '—'}</div></div><div class="detail-field"><div class="detail-field-label">最後更新</div><div class="detail-field-value">${fmtTime(form.updatedAt)}</div></div></div></div></div><div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">人員時數明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>來源</th><th>時數</th><th>備註</th></tr></thead><tbody>${detailRows}</tbody></table></div></div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">簽核掃描檔</span></div>${fileHtml}</div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">歷程紀錄</span></div><div class="timeline">${timeline}</div></div></div>`;
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="detail-header"><div><div class="detail-id">${esc(form.id)} · ${esc(form.trainingYear)} 年度</div><h1 class="detail-title">教育訓練時數統計 — ${esc(form.unit)}</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(form.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(form.fillDate)}</span>${trainingStatusBadge(form.status)}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${actions.join('')}</div></div>${form.status === TRAINING_STATUSES.RETURNED ? `<div class="training-return-banner">${ic('alert-triangle', 'icon-sm')} 退回原因：${esc(form.returnReason || '未提供')}</div>` : ''}<div class="panel-grid-two panel-grid-spaced"><div class="card"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">名單總人數</div><div class="detail-field-value">${s.totalPeople}</div></div><div class="detail-field"><div class="detail-field-label">已填時數人數</div><div class="detail-field-value">${s.filledPeople}</div></div><div class="detail-field"><div class="detail-field-label">總時數</div><div class="detail-field-value">${s.totalHours}</div></div><div class="detail-field"><div class="detail-field-label">達標率(>=3h)</div><div class="detail-field-value">${s.reachRate}%</div></div></div></div><div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">單位</div><div class="detail-field-value">${esc(form.unit)}</div></div><div class="detail-field"><div class="detail-field-label">填報人</div><div class="detail-field-value">${esc(form.fillerName)}</div></div><div class="detail-field"><div class="detail-field-label">正式送出時間</div><div class="detail-field-value">${form.submittedAt ? fmtTime(form.submittedAt) : '—'}</div></div><div class="detail-field"><div class="detail-field-label">最後更新</div><div class="detail-field-value">${fmtTime(form.updatedAt)}</div></div></div></div></div><div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">人員時數明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>來源</th><th>時數</th><th>備註</th></tr></thead><tbody>${detailRows}</tbody></table></div></div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">簽核掃描檔</span></div>${fileHtml}</div><div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">歷程紀錄</span></div><div class="timeline">${timeline}</div></div></div>`;
 
     document.getElementById('training-export-detail')?.addEventListener('click', () => window._trainingExportDetailCsv(form.id));
     refreshIcons();
@@ -1763,7 +2216,7 @@
   // ─── Router ────────────────────────────────
   function handleRoute() {
     if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader(); closeSidebar();
-    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'login-log': renderLoginLog(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(r.param); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
+    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'login-log': renderLoginLog(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(r.param); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'unit-review': renderUnitReview(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
   }
 
   // ─── Seed Data ─────────────────────────────
@@ -1784,6 +2237,7 @@
 
   // ─── Init ──────────────────────────────────
   seedData();
+  ensurePrimaryAdminProfile();
   seedTrainingData();
   window.addEventListener('hashchange', handleRoute);
   window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
@@ -1792,4 +2246,6 @@
   refreshIcons();
 
 })();
+
+
 
