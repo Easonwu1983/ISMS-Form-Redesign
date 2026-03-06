@@ -1291,6 +1291,7 @@
             <div class="section-header">${ic('check-circle', 'icon-sm')} 審核判定</div>
             <div class="form-group"><label class="form-label form-required">判定結果</label>${mkRadio('tkResult', ['可結案，改善措施已完成', '持續追蹤'], '')}</div>
             <div class="form-group" id="tk-next-wrap" style="display:none"><label class="form-label">下一次追蹤日期</label><input type="date" class="form-input" id="tk-next"></div>
+            <div class="form-group" id="tk-evidence-wrap" style="display:none"><label class="form-label form-required">結案佐證資料</label><div class="upload-zone" id="tk-upload-zone"><input type="file" id="tk-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">可拖曳檔案，或 <strong>點擊選擇</strong></div><div class="upload-zone-hint">選擇「可結案」時，必須上傳佐證資料</div></div><div class="file-preview-list" id="tk-file-previews"></div></div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">審核人員</label><input type="text" class="form-input" id="tk-reviewer" value="${esc(currentUser().name)}" readonly></div>
               <div class="form-group"><label class="form-label form-required">審核日期</label><input type="date" class="form-input" id="tk-revdate" value="${new Date().toISOString().split('T')[0]}" required></div>
@@ -1338,47 +1339,94 @@
     const summaryDate = document.getElementById('track-summary-date');
     const summaryResult = document.getElementById('track-summary-result');
     const summaryNext = document.getElementById('track-summary-next');
+    const evidenceWrap = document.getElementById('tk-evidence-wrap');
+    const uploadZone = document.getElementById('tk-upload-zone');
+    const fileInput = document.getElementById('tk-file-input');
+    const filePreviews = document.getElementById('tk-file-previews');
+    let tempEv = [];
 
     function syncTrackingSummary() {
       summaryDate.textContent = dateInput.value ? fmt(dateInput.value) : '未指定';
       const selected = document.querySelector('input[name="tkResult"]:checked');
+      const isContinue = selected && selected.value === '持續追蹤';
+      const isClosable = selected && selected.value === '可結案，改善措施已完成';
       summaryResult.textContent = selected ? selected.value : '待判定';
       summaryNext.textContent = nextInput.value ? fmt(nextInput.value) : '未指定';
-      nextWrap.style.display = selected && selected.value === '持續追蹤' ? 'block' : 'none';
+      nextWrap.style.display = isContinue ? 'block' : 'none';
+      if (evidenceWrap) evidenceWrap.style.display = isClosable ? 'block' : 'none';
+    }
+
+    function handleTrackingFiles(files) {
+      Array.from(files).forEach((file) => {
+        if (file.size > 2 * 1024 * 1024) { toast(file.name + ' 超過 2MB', 'error'); return; }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          tempEv.push({ name: file.name, type: file.type, data: event.target.result });
+          updateTrackingPreviews();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function updateTrackingPreviews() {
+      if (!filePreviews) return;
+      filePreviews.innerHTML = tempEv.map((file, index) => {
+        const preview = file.type && file.type.startsWith('image/') ? '<img src="' + file.data + '" alt="' + esc(file.name) + '">' : '<div class="file-pdf-icon">' + ic('file-box') + '</div>';
+        return '<div class="file-preview-item">' + preview + '<div class="file-name">' + esc(file.name) + '</div><button type="button" class="file-remove" data-idx="' + index + '">移除</button></div>';
+      }).join('');
+      filePreviews.querySelectorAll('.file-remove').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          tempEv.splice(parseInt(event.target.dataset.idx, 10), 1);
+          updateTrackingPreviews();
+        });
+      });
     }
 
     document.querySelectorAll('input[name="tkResult"]').forEach(r => r.addEventListener('change', syncTrackingSummary));
     dateInput.addEventListener('change', syncTrackingSummary);
     nextInput.addEventListener('change', syncTrackingSummary);
+    if (fileInput) fileInput.addEventListener('change', (event) => handleTrackingFiles(event.target.files));
+    if (uploadZone) {
+      uploadZone.addEventListener('dragover', (event) => { event.preventDefault(); uploadZone.classList.add('dragover'); });
+      uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+      uploadZone.addEventListener('drop', (event) => { event.preventDefault(); uploadZone.classList.remove('dragover'); handleTrackingFiles(event.dataTransfer.files); });
+    }
     syncTrackingSummary();
 
     document.getElementById('track-form').addEventListener('submit', e => {
       e.preventDefault();
       const res = document.querySelector('input[name="tkResult"]:checked');
-      if (!res) { toast('請選擇追蹤判定結果', 'error'); return; }
+      if (!res) { toast('\u8acb\u9078\u64c7\u8ffd\u8e64\u5224\u5b9a\u7d50\u679c', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
-      if (!li || !canAccessItem(li)) { toast('您沒有權限存取此矯正單', 'error'); navigate('list'); return; }
-      if (!(li.status === STATUSES.TRACKING && canReview())) { toast('這筆案件目前不允許儲存追蹤結果', 'error'); navigate('detail/' + id); return; }
+      if (!li || !canAccessItem(li)) { toast('\u60a8\u6c92\u6709\u6b0a\u9650\u5b58\u53d6\u6b64\u77ef\u6b63\u55ae', 'error'); navigate('list'); return; }
+      if (!(li.status === STATUSES.TRACKING && canReview())) { toast('\u9019\u7b46\u6848\u4ef6\u76ee\u524d\u4e0d\u5141\u8a31\u5132\u5b58\u8ffd\u8e64\u7d50\u679c', 'error'); navigate('detail/' + id); return; }
+      const isClose = res.value === '\u53ef\u7d50\u6848\uff0c\u6539\u5584\u63aa\u65bd\u5df2\u5b8c\u6210';
+      const isContinue = res.value === '\u6301\u7e8c\u8ffd\u8e64';
+      if (isContinue && !document.getElementById('tk-next').value) { toast('\u9078\u64c7\u6301\u7e8c\u8ffd\u8e64\u6642\uff0c\u8acb\u586b\u5beb\u4e0b\u4e00\u6b21\u8ffd\u8e64\u65e5\u671f', 'error'); return; }
+      if (isClose && tempEv.length === 0) { toast('\u9078\u64c7\u53ef\u7d50\u6848\u6642\uff0c\u8acb\u4e0a\u50b3\u4f50\u8b49\u8cc7\u6599', 'error'); return; }
       const tk = {
         tracker: document.getElementById('tk-tracker').value,
         trackDate: document.getElementById('tk-date').value,
         execution: document.getElementById('tk-exec').value.trim(),
         trackNote: document.getElementById('tk-note').value.trim(),
         result: res.value,
-        nextTrackDate: document.getElementById('tk-next').value || null,
+        nextTrackDate: isContinue ? (document.getElementById('tk-next').value || null) : null,
+        evidence: isClose ? tempEv.slice() : [],
         reviewer: document.getElementById('tk-reviewer').value,
         reviewDate: document.getElementById('tk-revdate').value
       };
-      const ns = res.value === '可結案，改善措施已完成' ? STATUSES.CLOSED : STATUSES.TRACKING;
+      const ns = isClose ? STATUSES.CLOSED : STATUSES.TRACKING;
       const upd = {
         trackings: [...(li.trackings || []), tk],
+        evidence: isClose && tempEv.length ? [...(li.evidence || []), ...tempEv] : (li.evidence || []),
         status: ns,
         updatedAt: now,
-        history: [...li.history, { time: now, action: `第 ${round} 次追蹤：${res.value}`, user: u.name }, { time: now, action: `系統狀態更新為 ${ns}`, user: '系統' }]
+        history: [...li.history, { time: now, action: `\u7b2c ${round} \u6b21\u8ffd\u8e64 - ${res.value}`, user: u.name }, { time: now, action: `\u7cfb\u7d71\u72c0\u614b\u66f4\u65b0\u70ba ${ns}`, user: '\u7cfb\u7d71' }]
       };
+      if (isClose && tempEv.length) upd.history.push({ time: now, action: `\u4e0a\u50b3 ${tempEv.length} \u4efd\u8ffd\u8e64\u4f50\u8b49`, user: u.name });
       if (ns === STATUSES.CLOSED) upd.closedDate = now;
       updateItem(id, upd);
-      toast(ns === STATUSES.CLOSED ? '案件已結案' : '追蹤結果已儲存');
+      toast(ns === STATUSES.CLOSED ? '\u6848\u4ef6\u5df2\u7d50\u6848' : '\u8ffd\u8e64\u7d50\u679c\u5df2\u5132\u5b58');
       navigate('detail/' + id);
     });
   }
