@@ -3111,11 +3111,11 @@ window._cs = function (id, ns) {
         }
         const parentRow = buildChartRow(parentUnit, parentStatus, parentCompletion, 'training-chart-row--parent');
         const groupPills = '<div class="training-chart-pills">'
-          + '<span class="training-chart-pill">' + totalCount + ' \u500b\u4e8c\u7d1a</span>'
-          + '<span class="training-chart-pill training-chart-pill--success">' + submittedCount + ' \u5df2\u9001\u51fa</span>'
-          + '<span class="training-chart-pill training-chart-pill--warning">' + followUpCount + ' \u5f85\u8ffd\u8e64</span>'
+          + '<div class="training-chart-pill"><span class="training-chart-pill-label">\u4e8c\u7d1a\u55ae\u4f4d</span><strong class="training-chart-pill-value">' + totalCount + '</strong></div>'
+          + '<div class="training-chart-pill training-chart-pill--success"><span class="training-chart-pill-label">\u5df2\u9001\u51fa</span><strong class="training-chart-pill-value">' + submittedCount + '</strong></div>'
+          + '<div class="training-chart-pill training-chart-pill--warning"><span class="training-chart-pill-label">\u5f85\u8ffd\u8e64</span><strong class="training-chart-pill-value">' + followUpCount + '</strong></div>'
           + '</div>';
-        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head"><div class="training-chart-group-main"><div class="training-chart-group-kicker">\u4e00\u7d1a\u55ae\u4f4d</div>' + parentRow + '</div><div class="training-chart-group-side">' + groupPills + '<span class="training-chart-toggle">\u5c55\u958b\u660e\u7d30</span></div></div></summary><div class="training-chart-children"><div class="training-chart-children-title">\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30</div>' + childRows + '</div></details>';
+        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head"><div class="training-chart-group-main"><div class="training-chart-group-kicker">\u4e00\u7d1a\u55ae\u4f4d</div>' + parentRow + '</div><div class="training-chart-group-side">' + groupPills + '<span class="training-chart-toggle">\u5c55\u958b\u660e\u7d30</span></div></div></summary><div class="training-chart-children"><div class="training-chart-children-title">\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30</div><div class="training-chart-subgrid-head"><span>\u55ae\u4f4d</span><span>\u5b8c\u6210\u7387</span><span>\u72c0\u614b / \u6bd4\u4f8b</span></div>' + childRows + '</div></details>';
       }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">\u5c1a\u7121\u55ae\u4f4d\u8cc7\u6599</div></div>');
       adminPanel = '<div class="training-admin-grid">'
         + '<div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">' + schoolProgress + '%</div><div class="training-kpi-desc">已正式送出單位 ' + submittedUnits + ' / ' + latestByUnit.length + '</div></div>'
