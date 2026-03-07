@@ -895,6 +895,7 @@
       <div class="editor-shell editor-shell--car">
         <section class="editor-main">
           <div class="card editor-card"><form id="create-form" data-testid="create-form">
+            <div class="form-feedback" id="create-feedback" data-state="idle" aria-live="polite" hidden></div>
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">矯正單號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動編號，例如 CAR-0001"><p class="form-hint">管理者可自行輸入單號。僅支援英數、連字號與底線，不能使用空白或斜線。</p></div>
@@ -1029,6 +1030,7 @@
     syncCreateSummary();
 
     const createForm = document.getElementById('create-form');
+    const createFeedback = document.getElementById('create-feedback');
     function focusCreateField(el) {
       if (!el || typeof el.focus !== 'function') return;
       const group = el.closest('.form-group') || el;
@@ -1036,11 +1038,27 @@
       el.focus();
     }
 
+    function setCreateFeedback(state, title, details) {
+      if (!createFeedback) return;
+      const lines = Array.isArray(details) ? details.filter(Boolean) : [];
+      createFeedback.dataset.state = state || 'info';
+      createFeedback.hidden = false;
+      createFeedback.innerHTML = `<div class="form-feedback-title">${esc(title || '')}</div>${lines.length ? `<div class="form-feedback-list">${lines.map((line) => `<span>${esc(line)}</span>`).join('')}</div>` : ''}`;
+    }
+
+    function clearCreateFeedback() {
+      if (!createFeedback) return;
+      createFeedback.hidden = true;
+      createFeedback.dataset.state = 'idle';
+      createFeedback.innerHTML = '';
+    }
+
     function validateCreateForm() {
       if (!createForm.reportValidity()) {
         const invalid = createForm.querySelector(':invalid');
         const label = invalid?.closest('.form-group')?.querySelector('.form-label')?.textContent?.trim() || '\u5fc5\u586b\u6b04\u4f4d';
         debugFlow('create', 'native validation failed', { field: invalid?.id || invalid?.name || label });
+        setCreateFeedback('error', `\u8acb\u5b8c\u6574\u586b\u5beb${label}`, ['\u8acb\u6aa2\u67e5\u5fc5\u586b\u6b04\u4f4d\u662f\u5426\u5df2\u8f38\u5165\u5b8c\u6574\u8cc7\u6599\u3002']);
         toast(`\u8acb\u5b8c\u6574\u586b\u5beb${label}`, 'error');
         focusCreateField(invalid);
         return false;
@@ -1051,16 +1069,19 @@
       if (![...document.querySelectorAll('input[name="category"]:checked')].length) missing.push({ label: '缺失分類', el: document.querySelector('input[name="category"]') });
       if (missing.length > 0) {
         debugFlow('create', 'business validation failed', { missing: missing.map((entry) => entry.label) });
+        setCreateFeedback('error', '\u9001\u51fa\u524d\u4ecd\u6709\u5fc5\u586b\u9078\u9805\u672a\u5b8c\u6210', missing.map((entry) => `\u5c1a\u672a\u5b8c\u6210\uff1a${entry.label}`));
         toast(`\u8acb\u5b8c\u6574\u586b\u5beb${missing.map((entry) => entry.label).join('\u3001')}`, 'error');
         focusCreateField(missing[0].el);
         return false;
       }
+      clearCreateFeedback();
       return true;
     }
 
     document.getElementById('create-form').addEventListener('submit', e => {
       e.preventDefault();
       debugFlow('create', 'submit start', { handlerUnit: document.getElementById('f-hunit').value, handlerName: document.getElementById('f-hname').value });
+      setCreateFeedback('info', '\u6b63\u5728\u6aa2\u67e5\u958b\u55ae\u8cc7\u6599', ['\u6aa2\u6838\u5fc5\u586b\u6b04\u4f4d\u3001\u8655\u7406\u55ae\u4f4d\u8207\u8655\u7406\u4eba\u8cc7\u8a0a\u3002']);
       if (!validateCreateForm()) return;
       const defType = document.querySelector('input[name="defType"]:checked');
       const source = document.querySelector('input[name="source"]:checked');
@@ -1070,10 +1091,12 @@
       if (cats.length === 0) { toast('請至少選擇一項分類', 'error'); return; }
       let itemId = '';
       debugFlow('create', 'validation passed');
+      setCreateFeedback('success', '\u6b04\u4f4d\u6aa2\u67e5\u5b8c\u6210\uff0c\u6b63\u5728\u5efa\u7acb\u77ef\u6b63\u55ae', ['\u7cfb\u7d71\u5df2\u4fdd\u7559\u55ae\u865f\uff0c\u5373\u5c07\u5beb\u5165\u55ae\u64da\u8207\u901a\u77e5\u8cc7\u8a0a\u3002']);
       try {
         itemId = reserveCarId(idInput.value);
       } catch (error) {
         debugFlow('create', 'reserve id failed', { message: error.message || '' });
+        setCreateFeedback('error', error.message || '\u55ae\u865f\u7121\u6cd5\u4f7f\u7528', ['\u8acb\u8abf\u6574\u55ae\u865f\u5f8c\u91cd\u65b0\u9001\u51fa\u3002']);
         toast(error.message || '矯正單號格式不正確', 'error');
         idInput.focus();
         return;
@@ -1119,6 +1142,8 @@
       }
       navigate('detail/' + item.id);
     });
+    createForm.addEventListener('input', clearCreateFeedback);
+    createForm.addEventListener('change', clearCreateFeedback);
   }
 
   function renderDetail(id) {
@@ -3110,6 +3135,7 @@ window._cs = function (id, ns) {
       returned: forms.filter((form) => form.status === TRAINING_STATUSES.RETURNED).length,
       avgCompletion: forms.length ? Math.round(forms.reduce((sum, form) => sum + Number(form.summary?.completionRate || 0), 0) / forms.length) : 0
     };
+    const latestUpdateLabel = forms.length ? fmtTime(forms[0].updatedAt) : 'No updates';
 
     const toolbar = '<div class="training-toolbar-actions">'
       + (canFillTraining() ? '<a href="#training-fill" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 新增填報</a>' : '')
@@ -3122,7 +3148,7 @@ window._cs = function (id, ns) {
       const actions = ['<a href="#training-detail/' + form.id + '" class="btn btn-sm btn-secondary">檢視</a>'];
       if (canEditTrainingForm(form)) actions.push('<a href="#training-fill/' + form.id + '" class="btn btn-sm btn-primary">編修</a>');
       if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) {
-        actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回更正</button>');
+        actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回修正</button>');
       }
       return '<tr>'
         + '<td style="font-weight:700;color:var(--accent-primary)">' + esc(form.id) + '</td>'
@@ -3137,9 +3163,15 @@ window._cs = function (id, ns) {
         + '<td>' + fmtTime(form.updatedAt) + '</td>'
         + '<td><div class="training-table-actions">' + actions.join('') + '</div></td>'
         + '</tr>';
-    }).join('') : '<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-state-icon">' + ic('graduation-cap') + '</div><div class="empty-state-title">尚無教育訓練統計資料</div><div class="empty-state-desc">請先新增填報，或由管理者先匯入單位名單。</div></div></td></tr>';
+    }).join('') : '<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-state-icon">' + ic('graduation-cap') + '</div><div class="empty-state-title">No training reports yet</div><div class="empty-state-desc">Create a new report or import a roster to start the dashboard.</div></div></td></tr>';
 
-    let adminPanel = '';
+    const buildExecStatus = (label, tone) => '<span class="training-exec-status training-exec-status--' + tone + '">' + esc(label) + '</span>';
+    const buildMiniTrack = (value) => {
+      const safeValue = Math.max(0, Math.min(100, Number(value) || 0));
+      return '<div class="training-exec-mini-track"><span style="width:' + safeValue + '%"></span></div>';
+    };
+
+    let dashboardPanel = '';
     if (isAdmin()) {
       const allForms = getAllTrainingForms();
       const units = getTrainingUnits();
@@ -3147,10 +3179,17 @@ window._cs = function (id, ns) {
         const latest = allForms.filter((form) => form.unit === unit).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
         const unitSummary = latest ? (latest.summary || computeTrainingSummary(latest.records || [])) : computeTrainingSummary([]);
         return { unit, latest, summary: unitSummary };
-      });
+      }).sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
       const submittedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED).length;
       const schoolProgress = latestByUnit.length ? Math.round((submittedUnits / latestByUnit.length) * 100) : 0;
       const pendingUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED).length;
+      const returnedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.RETURNED).length;
+      const draftUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.DRAFT).length;
+      const missingUnits = latestByUnit.filter((item) => !item.latest).length;
+      const totalActivePeople = latestByUnit.reduce((sum, item) => sum + Number(item.summary.activeCount || 0), 0);
+      const totalCompletedPeople = latestByUnit.reduce((sum, item) => sum + Number(item.summary.completedCount || 0), 0);
+      const overallCompletion = totalActivePeople > 0 ? Math.round((totalCompletedPeople / totalActivePeople) * 100) : 0;
+      const latestUnitAvgCompletion = latestByUnit.length ? Math.round(latestByUnit.reduce((sum, item) => sum + Number(item.summary.completionRate || 0), 0) / latestByUnit.length) : 0;
       const groupedByParent = latestByUnit.reduce((groups, item) => {
         const parsed = splitUnitValue(item.unit);
         const parentUnit = String(parsed.parent || item.unit || '').trim();
@@ -3159,7 +3198,119 @@ window._cs = function (id, ns) {
         groups.get(parentUnit).push({ ...item, parsed });
         return groups;
       }, new Map());
-      const sortedGroupedUnits = Array.from(groupedByParent.entries()).sort((a, b) => a[0].localeCompare(b[0], 'zh-Hant'));
+      const groupInsights = Array.from(groupedByParent.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], 'zh-Hant'))
+        .map(([parentUnit, children]) => {
+          const sortedChildren = children.slice().sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
+          const activeCount = sortedChildren.reduce((sum, child) => sum + Number(child.summary.activeCount || 0), 0);
+          const completedCount = sortedChildren.reduce((sum, child) => sum + Number(child.summary.completedCount || 0), 0);
+          const parentCompletion = activeCount > 0 ? Math.round((completedCount / activeCount) * 100) : 0;
+          const submittedCount = sortedChildren.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.SUBMITTED).length;
+          const draftCount = sortedChildren.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.DRAFT).length;
+          const returnedCount = sortedChildren.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.RETURNED).length;
+          const totalCount = sortedChildren.length;
+          const followUpCount = Math.max(0, totalCount - submittedCount);
+          return {
+            parentUnit,
+            children: sortedChildren,
+            activeCount,
+            completedCount,
+            parentCompletion,
+            submittedCount,
+            draftCount,
+            returnedCount,
+            totalCount,
+            followUpCount
+          };
+        });
+      const recentUpdates = allForms.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 4);
+      const unitPriority = (item) => {
+        if (!item.latest) return 5;
+        if (item.latest.status === TRAINING_STATUSES.RETURNED) return 4;
+        if (item.latest.status === TRAINING_STATUSES.DRAFT) return 3;
+        if (item.latest.status !== TRAINING_STATUSES.SUBMITTED) return 2;
+        const completionRate = Number(item.summary.completionRate || 0);
+        if (completionRate < 100) return 1;
+        return 0;
+      };
+      const focusUnits = latestByUnit.slice()
+        .sort((a, b) => {
+          const priorityDiff = unitPriority(b) - unitPriority(a);
+          if (priorityDiff) return priorityDiff;
+          const completionDiff = Number(a.summary.completionRate || 0) - Number(b.summary.completionRate || 0);
+          if (completionDiff) return completionDiff;
+          return String(a.unit || '').localeCompare(String(b.unit || ''), 'zh-Hant');
+        })
+        .slice(0, 5);
+      const focusUnitsHtml = focusUnits.length ? focusUnits.map((item) => {
+        let tone = 'slate';
+        let label = 'No report';
+        let note = 'No latest submission recorded';
+        if (item.latest) {
+          if (item.latest.status === TRAINING_STATUSES.SUBMITTED) {
+            tone = 'green';
+            label = 'Submitted';
+            note = 'Updated ' + fmtTime(item.latest.updatedAt);
+          } else if (item.latest.status === TRAINING_STATUSES.RETURNED) {
+            tone = 'red';
+            label = 'Returned';
+            note = item.latest.returnReason ? 'Returned: ' + item.latest.returnReason : 'Needs revision before resubmission';
+          } else {
+            tone = 'amber';
+            label = 'Draft';
+            note = 'Draft saved at ' + fmtTime(item.latest.updatedAt);
+          }
+        }
+        const target = item.latest ? '#training-detail/' + item.latest.id : '#training-fill';
+        return '<a class="training-exec-list-item" href="' + target + '">'
+          + '<div class="training-exec-list-main"><div class="training-exec-list-head"><strong>' + esc(item.unit) + '</strong>' + buildExecStatus(label, tone) + '</div>'
+          + '<div class="training-exec-list-subtitle">' + esc(note) + '</div>'
+          + buildMiniTrack(item.summary.completionRate || 0)
+          + '</div><div class="training-exec-list-side"><div class="training-exec-list-value">' + (item.summary.completionRate || 0) + '%</div><div class="training-exec-list-caption">' + (item.summary.completedCount || 0) + ' / ' + (item.summary.activeCount || 0) + ' active</div></div></a>';
+      }).join('') : '<div class="training-exec-empty">No priority units right now.</div>';
+      const parentLeaderboardHtml = groupInsights.length ? groupInsights
+        .slice()
+        .sort((a, b) => {
+          const followDiff = b.followUpCount - a.followUpCount;
+          if (followDiff) return followDiff;
+          const returnedDiff = b.returnedCount - a.returnedCount;
+          if (returnedDiff) return returnedDiff;
+          return a.parentCompletion - b.parentCompletion;
+        })
+        .slice(0, 5)
+        .map((group) => '<div class="training-exec-rank-item"><div class="training-exec-rank-head"><strong>' + esc(group.parentUnit) + '</strong><span>Submitted ' + group.submittedCount + ' / ' + group.totalCount + '</span></div>'
+          + buildMiniTrack(group.parentCompletion)
+          + '<div class="training-exec-rank-foot"><span>Follow-up ' + group.followUpCount + '</span><span>Returned ' + group.returnedCount + '</span><span>' + group.parentCompletion + '%</span></div></div>')
+        .join('') : '<div class="training-exec-empty">No parent unit data yet.</div>';
+      const recentUpdatesHtml = recentUpdates.length ? recentUpdates.map((form) => '<a class="training-exec-update-item" href="#training-detail/' + form.id + '"><div class="training-exec-update-copy"><div class="training-exec-update-title">' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + ' / ' + esc(form.unit) + '</div><div class="training-exec-update-meta">' + esc(form.fillerName) + ' / ' + fmtTime(form.updatedAt) + '</div></div><div class="training-exec-update-side">' + trainingStatusBadge(form.status) + '</div></a>').join('') : '<div class="training-exec-empty">No recent activity.</div>';
+      let heroTitle = 'Submission rhythm is stable. Move into completion and quality review.';
+      let heroDesc = 'Review low-completion parent units first so the dashboard reflects both reporting discipline and actual training coverage.';
+      if (returnedUnits > 0) {
+        heroTitle = returnedUnits + ' returned units need immediate action.';
+        heroDesc = 'Clear returned submissions first, then close drafts and missing units to restore reporting confidence.';
+      } else if (draftUnits > 0) {
+        heroTitle = draftUnits + ' units are still sitting in draft.';
+        heroDesc = 'Push draft units over the finish line before reviewing low-completion groups.';
+      } else if (missingUnits > 0) {
+        heroTitle = missingUnits + ' units have not reported yet.';
+        heroDesc = 'Complete the map before comparing parent-unit performance side by side.';
+      }
+      const heroMetrics = [
+        ['People completion', overallCompletion + '%', totalCompletedPeople + ' / ' + totalActivePeople + ' active people complete'],
+        ['Unit submission', schoolProgress + '%', submittedUnits + ' / ' + latestByUnit.length + ' units submitted'],
+        ['Average completion', latestUnitAvgCompletion + '%', 'Calculated from each unit latest version']
+      ].map((entry) => '<div class="training-exec-hero-metric"><div class="training-exec-hero-label">' + entry[0] + '</div><div class="training-exec-hero-value">' + entry[1] + '</div><div class="training-exec-hero-note">' + entry[2] + '</div></div>').join('');
+      const heroTags = [
+        groupInsights.length + ' parent groups',
+        'Latest update ' + latestUpdateLabel,
+        pendingUnits + ' units need follow-up'
+      ].map((text) => '<span class="training-exec-hero-tag">' + esc(text) + '</span>').join('');
+      const signalCards = [
+        ['Follow-up units', pendingUnits, 'Draft, returned, or missing submissions', 'amber'],
+        ['Returned units', returnedUnits, 'Need correction before resubmission', 'red'],
+        ['Missing units', missingUnits, 'No current submission on file', 'slate'],
+        ['Draft units', draftUnits, 'Started but not formally submitted', 'blue']
+      ].map((entry) => '<div class="training-exec-signal training-exec-signal--' + entry[3] + '"><div class="training-exec-signal-label">' + entry[0] + '</div><div class="training-exec-signal-value">' + entry[1] + '</div><div class="training-exec-signal-note">' + entry[2] + '</div></div>').join('');
       const buildChartRow = (label, statusHtml, completionRate, rowClass) => {
         const safeRate = Math.max(0, Math.min(100, Number(completionRate) || 0));
         return '<div class="training-chart-row ' + (rowClass || '') + '">'
@@ -3168,58 +3319,60 @@ window._cs = function (id, ns) {
           + '<div class="training-chart-meta"><div class="training-chart-status">' + statusHtml + '</div><div class="training-chart-rate">' + safeRate + '%</div></div>'
           + '</div>';
       };
-      const chartIntro = '<div class="training-chart-overview"><div class="training-chart-overview-copy"><div class="training-chart-kicker">\u5c64\u7d1a\u8996\u5716</div><div class="training-chart-subtitle">\u5148\u770b\u4e00\u7d1a\u55ae\u4f4d\u6574\u9ad4\u9032\u5ea6\uff0c\u518d\u5c55\u958b\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30\u3002</div></div><div class="training-chart-legend"><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--live"></span>\u9032\u5ea6\u689d</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--submitted"></span>\u5df2\u9001\u51fa</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--pending"></span>\u5f85\u8ffd\u8e64</span></div></div>';
-      const chartRows = chartIntro + (sortedGroupedUnits.length ? sortedGroupedUnits.map(([parentUnit, children]) => {
-        const childRows = children
-          .slice()
-          .sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'))
-          .map((child) => {
-            const childLabel = String((child.parsed && child.parsed.child) || child.unit || '').trim() || parentUnit;
-            const childStatus = child.latest ? trainingStatusBadge(child.latest.status) : '<span class="training-inline-status">\u672a\u586b\u5831</span>';
-            return buildChartRow(childLabel, childStatus, child.summary.completionRate || 0, 'training-chart-row--child');
-          }).join('');
-        const activeCount = children.reduce((sum, child) => sum + Number(child.summary.activeCount || 0), 0);
-        const completedCount = children.reduce((sum, child) => sum + Number(child.summary.completedCount || 0), 0);
-        const parentCompletion = activeCount > 0 ? Math.round((completedCount / activeCount) * 100) : 0;
-        const submittedCount = children.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.SUBMITTED).length;
-        const draftCount = children.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.DRAFT).length;
-        const returnedCount = children.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.RETURNED).length;
-        const totalCount = children.length;
-        const followUpCount = Math.max(0, totalCount - submittedCount);
-        let parentStatus = '<span class="training-inline-status">\u672a\u586b\u5831</span>';
-        if (totalCount > 0 && submittedCount === totalCount) {
+      const chartOverviewStats = [
+        ['Parent groups', groupInsights.length],
+        ['Fully submitted', groupInsights.filter((group) => group.totalCount > 0 && group.submittedCount === group.totalCount).length],
+        ['People complete', totalCompletedPeople + ' / ' + totalActivePeople]
+      ].map((entry) => '<div class="training-chart-overview-stat"><span>' + entry[0] + '</span><strong>' + entry[1] + '</strong></div>').join('');
+      const chartIntro = '<div class="training-chart-overview"><div class="training-chart-overview-copy"><div class="training-chart-kicker">Hierarchy Map</div><div class="training-chart-subtitle">Start with parent-unit completion and submission rhythm, then open each group to inspect child units in detail.</div></div><div class="training-chart-overview-side"><div class="training-chart-overview-stats">' + chartOverviewStats + '</div><div class="training-chart-legend"><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--live"></span>Completion</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--submitted"></span>Submitted</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--pending"></span>Follow-up</span></div></div></div>';
+      const chartRows = chartIntro + (groupInsights.length ? groupInsights.map((group) => {
+        const childRows = group.children.map((child) => {
+          const childLabel = String((child.parsed && child.parsed.child) || child.unit || '').trim() || group.parentUnit;
+          const childStatus = child.latest ? trainingStatusBadge(child.latest.status) : '<span class="training-inline-status">No report</span>';
+          return buildChartRow(childLabel, childStatus, child.summary.completionRate || 0, 'training-chart-row--child');
+        }).join('');
+        let parentStatus = '<span class="training-inline-status">No report</span>';
+        if (group.totalCount > 0 && group.submittedCount === group.totalCount) {
           parentStatus = trainingStatusBadge(TRAINING_STATUSES.SUBMITTED);
-        } else if (returnedCount > 0) {
-          parentStatus = '<span class="training-inline-status">\u542b\u9000\u56de ' + returnedCount + '/' + totalCount + '</span>';
-        } else if (submittedCount > 0 || draftCount > 0) {
-          parentStatus = '<span class="training-inline-status">\u5df2\u9001\u51fa ' + submittedCount + '/' + totalCount + '</span>';
+        } else if (group.returnedCount > 0) {
+          parentStatus = '<span class="training-inline-status">Returned ' + group.returnedCount + '/' + group.totalCount + '</span>';
+        } else if (group.submittedCount > 0 || group.draftCount > 0) {
+          parentStatus = '<span class="training-inline-status">Submitted ' + group.submittedCount + '/' + group.totalCount + '</span>';
         }
-        const parentRow = buildChartRow(parentUnit, parentStatus, parentCompletion, 'training-chart-row--parent');
+        const parentRow = buildChartRow(group.parentUnit, parentStatus, group.parentCompletion, 'training-chart-row--parent');
         const groupPills = '<div class="training-chart-pills">'
-          + '<div class="training-chart-pill"><span class="training-chart-pill-label">\u4e8c\u7d1a\u55ae\u4f4d</span><strong class="training-chart-pill-value">' + totalCount + '</strong></div>'
-          + '<div class="training-chart-pill training-chart-pill--success"><span class="training-chart-pill-label">\u5df2\u9001\u51fa</span><strong class="training-chart-pill-value">' + submittedCount + '</strong></div>'
-          + '<div class="training-chart-pill training-chart-pill--warning"><span class="training-chart-pill-label">\u5f85\u8ffd\u8e64</span><strong class="training-chart-pill-value">' + followUpCount + '</strong></div>'
+          + '<div class="training-chart-pill"><span class="training-chart-pill-label">L2 units</span><strong class="training-chart-pill-value">' + group.totalCount + '</strong></div>'
+          + '<div class="training-chart-pill training-chart-pill--success"><span class="training-chart-pill-label">Submitted</span><strong class="training-chart-pill-value">' + group.submittedCount + '</strong></div>'
+          + '<div class="training-chart-pill training-chart-pill--warning"><span class="training-chart-pill-label">Follow-up</span><strong class="training-chart-pill-value">' + group.followUpCount + '</strong></div>'
+          + '<div class="training-chart-pill"><span class="training-chart-pill-label">Completed</span><strong class="training-chart-pill-value">' + group.completedCount + ' / ' + group.activeCount + '</strong></div>'
           + '</div>';
-        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head"><div class="training-chart-group-main"><div class="training-chart-group-kicker">\u4e00\u7d1a\u55ae\u4f4d</div>' + parentRow + '</div><div class="training-chart-group-side">' + groupPills + '<span class="training-chart-toggle">\u5c55\u958b\u660e\u7d30</span></div></div></summary><div class="training-chart-children"><div class="training-chart-children-title">\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30</div><div class="training-chart-subgrid-head"><span>\u55ae\u4f4d</span><span>\u5b8c\u6210\u7387</span><span>\u72c0\u614b / \u6bd4\u4f8b</span></div>' + childRows + '</div></details>';
-      }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">\u5c1a\u7121\u55ae\u4f4d\u8cc7\u6599</div></div>');
-      adminPanel = '<div class="training-admin-grid">'
-        + '<div class="card"><div class="card-header"><span class="card-title">全校填報進度</span></div><div class="training-kpi-value">' + schoolProgress + '%</div><div class="training-kpi-desc">已正式送出單位 ' + submittedUnits + ' / ' + latestByUnit.length + '</div></div>'
-        + '<div class="card"><div class="card-header"><span class="card-title">待追蹤單位</span></div><div class="training-kpi-value">' + pendingUnits + '</div><div class="training-kpi-desc">尚未正式送出或仍退回中</div></div>'
-        + '<div class="card"><div class="card-header"><span class="card-title">平均完成率</span></div><div class="training-kpi-value">' + summary.avgCompletion + '%</div><div class="training-kpi-desc">依各單位最新填報計算</div></div>'
+        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head"><div class="training-chart-group-main"><div class="training-chart-group-kicker">Parent unit</div>' + parentRow + '</div><div class="training-chart-group-side">' + groupPills + '<span class="training-chart-toggle">Expand details</span></div></div></summary><div class="training-chart-children"><div class="training-chart-children-title">Child units</div><div class="training-chart-subgrid-head"><span>Unit</span><span>Completion</span><span>Status / Ratio</span></div>' + childRows + '</div></details>';
+      }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">No unit data yet</div></div>');
+      dashboardPanel = '<section class="training-exec-shell">'
+        + '<section class="training-exec-hero"><div class="training-exec-hero-grid"><div class="training-exec-hero-copy"><div class="training-exec-hero-kicker">Executive Dashboard</div><h2 class="training-exec-hero-title">校級教育訓練執行總覽</h2><p class="training-exec-hero-text">' + heroTitle + '</p><p class="training-exec-hero-subtext">' + heroDesc + '</p><div class="training-exec-hero-tags">' + heroTags + '</div><div class="training-exec-hero-metrics">' + heroMetrics + '</div></div><div class="training-exec-hero-aside"><div class="training-exec-hero-aside-card"><div class="training-exec-hero-aside-label">This cycle focus</div><div class="training-exec-hero-aside-value">' + pendingUnits + ' units to close</div><div class="training-exec-hero-aside-copy">Resolve returned items first, close drafts second, then review low-completion groups.</div></div><div class="training-exec-hero-orbit"><div class="training-exec-hero-orbit-ring"><span>' + schoolProgress + '%</span><small>Submit rate</small></div><div class="training-exec-hero-orbit-caption">People completion ' + overallCompletion + '%</div></div></div></div></section>'
+        + '<div class="training-exec-signals">' + signalCards + '</div>'
+        + '<div class="training-exec-panels">'
+        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">Focus List</div><h3 class="training-exec-panel-title">Priority units</h3></div><span class="training-exec-panel-badge">' + focusUnits.length + ' items</span></div><div class="training-exec-list">' + focusUnitsHtml + '</div></div>'
+        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">Parent Units</div><h3 class="training-exec-panel-title">Group tracking</h3></div><span class="training-exec-panel-badge">' + groupInsights.length + ' groups</span></div><div class="training-exec-rank-list">' + parentLeaderboardHtml + '</div></div>'
+        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">Live Feed</div><h3 class="training-exec-panel-title">Recent updates</h3></div><span class="training-exec-panel-badge">' + recentUpdates.length + ' items</span></div><div class="training-exec-update-list">' + recentUpdatesHtml + '</div></div>'
         + '</div>'
-        + '<div class="card training-chart-card"><div class="card-header"><span class="card-title">各單位完成率與填報狀態</span></div><div class="training-chart">' + chartRows + '</div></div>';
+        + '<div class="card training-chart-card"><div class="card-header"><div><span class="card-title">一級單位完成率地圖</span><div class="training-table-subtitle">Parent units stay compact by default. Click any card to open child-unit detail without overwhelming the page.</div></div></div><div class="training-chart">' + chartRows + '</div></div>'
+        + '</section>';
+    } else {
+      const visibleFormsRate = summary.total ? Math.round((summary.submitted / summary.total) * 100) : 0;
+      const liteCards = [
+        ['Visible reports', summary.total, 'Reports you can access right now', 'blue'],
+        ['Drafts', summary.draft, 'Still waiting for formal submission', 'amber'],
+        ['Submitted', summary.submitted, 'Completed report workflow', 'green'],
+        ['Submit rate', visibleFormsRate + '%', 'Calculated from visible reports', 'slate']
+      ].map((entry) => '<div class="training-lite-card training-lite-card--' + entry[3] + '"><div class="training-lite-label">' + entry[0] + '</div><div class="training-lite-value">' + entry[1] + '</div><div class="training-lite-note">' + entry[2] + '</div></div>').join('');
+      dashboardPanel = '<section class="training-lite-shell"><div class="training-lite-header"><div><div class="training-exec-panel-kicker">Overview</div><h2 class="training-lite-title">個人可見範圍摘要</h2></div><div class="training-lite-updated">Updated ' + latestUpdateLabel + '</div></div><div class="training-lite-grid">' + liteCards + '</div></section>';
     }
 
-    document.getElementById('app').innerHTML = '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">改為逐人完成狀態統計：在職人員才列計，資訊人員需同時完成通識與專業課程。</p></div>' + toolbar + '</div>'
-      + '<div class="stats-grid">'
-      + '<div class="stat-card total"><div class="stat-icon">' + ic('files') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">填報單總數</div></div>'
-      + '<div class="stat-card pending"><div class="stat-icon">' + ic('save') + '</div><div class="stat-value">' + summary.draft + '</div><div class="stat-label">暫存中</div></div>'
-      + '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + summary.submitted + '</div><div class="stat-label">正式送出</div></div>'
-      + '<div class="stat-card overdue"><div class="stat-icon">' + ic('corner-up-left') + '</div><div class="stat-value">' + summary.returned + '</div><div class="stat-label">退回更正</div></div>'
-      + '</div>'
-      + adminPanel
-      + '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>統計單位</th><th>填報單位</th><th>經辦人</th><th>狀態</th><th>在職</th><th>已完成</th><th>未完成</th><th>完成率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>'
+    document.getElementById('app').innerHTML = '<div class="animate-in training-dashboard-page">'
+      + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">Executive view for submission rhythm, unit completion, and training gaps.</p></div>' + toolbar + '</div>'
+      + dashboardPanel
+      + '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">填報清單</span><div class="training-table-subtitle">Keep the operational list below the dashboard so the first screen stays focused on decisions, not rows.</div></div></div><div class="table-wrapper"><table><thead><tr><th>編號</th><th>統計單位</th><th>填報單位</th><th>填報人</th><th>狀態</th><th>在職</th><th>已完成</th><th>未完成</th><th>完成率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>'
       + '</div>';
 
     document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(forms));
@@ -3233,7 +3386,7 @@ window._cs = function (id, ns) {
     }
 
     const user = currentUser();
-    const existing = id ? getTrainingForm(id) : null;
+    let existing = id ? getTrainingForm(id) : null;
     if (id && !existing) {
       toast('找不到填報單', 'error');
       navigate('training');
@@ -3267,13 +3420,15 @@ window._cs = function (id, ns) {
       + (existing && existing.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(existing.returnReason || '未提供') + '</div>' : '')
       + (takeoverDraft ? '<div class="training-return-banner">' + ic('user-cog', 'icon-sm') + ' 此草稿原填報人為 ' + esc(existing.fillerName || '未指定') + '，本次儲存後將改由目前單位管理員 ' + esc(user.name) + ' 接手填報。</div>' : '')
       + '<div class="training-editor-layout">'
-      + '<div class="card training-editor-card"><form id="training-form">'
+      + '<div class="card training-editor-card"><form id="training-form" data-testid="training-form">'
+      + '<div class="form-feedback" id="training-feedback" data-state="idle" aria-live="polite" hidden></div>'
       + '<div class="section-header">' + ic('info', 'icon-sm') + ' 基本資訊</div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計單位（一級）</label><input type="text" class="form-input" id="tr-stats-unit" value="' + esc(existing?.statsUnit || getTrainingStatsUnit(unitValue)) + '" readonly></div><div class="form-group"><label class="form-label form-required">填報單位</label>' + buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true) + '</div></div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="填報人可新增名單外人員，但不可刪除管理者匯入名單。" readonly></div></div>'
       + '<div class="section-header">' + ic('users', 'icon-sm') + ' 人員清單</div>'
       + '<div class="training-editor-note">請逐人選擇在職狀態與課程完成情形。只有正式送出時會鎖定；若被退回，可繼續修正後重送。</div>'
+      + '<div class="training-draft-status" id="training-draft-status">' + (existing ? (existing.status === TRAINING_STATUSES.DRAFT ? ('\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)) : (existing.status === TRAINING_STATUSES.RETURNED ? ('\u9000\u56de\u7248\u672c\u6700\u5f8c\u66f4\u65b0\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)) : ('\u6700\u5f8c\u66f4\u65b0\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)))) : '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f') + '</div>'
       + '<div class="training-editor-toolbar"><label class="training-search-box"><span class="training-search-icon">' + ic('search', 'icon-sm') + '</span><input type="search" class="form-input" id="training-search" placeholder="搜尋姓名、本職單位、職稱"></label><label class="training-inline-check"><input type="checkbox" id="training-only-focus"> 只看未完成或未填</label></div>'
       + '<div id="training-summary" class="training-summary-grid training-summary-grid-wide"></div>'
       + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
@@ -3281,10 +3436,46 @@ window._cs = function (id, ns) {
       + '<div class="section-header" style="margin-top:18px">' + ic('paperclip', 'icon-sm') + ' 上傳簽核後掃描檔</div>'
       + '<div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div>'
       + '<div class="file-preview-list" id="training-file-previews"></div>'
-      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('send', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
+      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('send', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
       + '</form></div>'
       + '</div>'
       + '</div>';
+
+    const trainingForm = document.getElementById('training-form');
+    const trainingFeedback = document.getElementById('training-feedback');
+    const trainingDraftStatus = document.getElementById('training-draft-status');
+
+    function setTrainingFeedback(state, title, details) {
+      if (!trainingFeedback) return;
+      const lines = Array.isArray(details) ? details.filter(Boolean) : [];
+      trainingFeedback.dataset.state = state || 'info';
+      trainingFeedback.hidden = false;
+      trainingFeedback.innerHTML = `<div class="form-feedback-title">${esc(title || '')}</div>${lines.length ? `<div class="form-feedback-list">${lines.map((line) => `<span>${esc(line)}</span>`).join('')}</div>` : ''}`;
+    }
+
+    function clearTrainingFeedback() {
+      if (!trainingFeedback) return;
+      trainingFeedback.hidden = true;
+      trainingFeedback.dataset.state = 'idle';
+      trainingFeedback.innerHTML = '';
+    }
+
+    function updateTrainingDraftStatus(item) {
+      if (!trainingDraftStatus) return;
+      if (item && item.status === TRAINING_STATUSES.DRAFT) {
+        trainingDraftStatus.textContent = `\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a${fmtTime(item.updatedAt || item.createdAt)}`;
+        trainingDraftStatus.classList.add('is-saved');
+      } else if (item && item.status === TRAINING_STATUSES.RETURNED) {
+        trainingDraftStatus.textContent = `\u9000\u56de\u7248\u672c\u6700\u5f8c\u66f4\u65b0\uff1a${fmtTime(item.updatedAt || item.createdAt)}`;
+        trainingDraftStatus.classList.add('is-saved');
+      } else if (item) {
+        trainingDraftStatus.textContent = `\u6700\u5f8c\u66f4\u65b0\uff1a${fmtTime(item.updatedAt || item.createdAt)}`;
+        trainingDraftStatus.classList.add('is-saved');
+      } else {
+        trainingDraftStatus.textContent = '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f';
+        trainingDraftStatus.classList.remove('is-saved');
+      }
+    }
 
     function syncStatsUnitField(unit) {
       document.getElementById('tr-stats-unit').value = getTrainingStatsUnit(unit);
@@ -3428,17 +3619,17 @@ window._cs = function (id, ns) {
       const email = document.getElementById('tr-email').value.trim();
       const year = document.getElementById('tr-year').value.trim();
       const fillDate = document.getElementById('tr-date').value;
-      if (!unit) return '請先選擇填報單位';
-      if (!phone) return '請填寫聯絡電話';
-      if (!email) return '請填寫聯絡信箱';
-      if (!/^.+@.+\..+$/.test(email)) return '聯絡信箱格式不正確';
-      if (!year) return '請填寫統計年度';
-      if (!fillDate) return '請填寫填報日期';
-      if (!records.length) return '至少需有一位人員資料';
-      if (!signedFiles.length) return '正式送出前請先上傳簽核掃描檔';
+      if (!unit) return { message: '\u8acb\u5148\u9078\u64c7\u586b\u5831\u55ae\u4f4d', field: document.getElementById('tr-unit') };
+      if (!phone) return { message: '\u8acb\u586b\u5beb\u806f\u7d61\u96fb\u8a71', field: document.getElementById('tr-phone') };
+      if (!email) return { message: '\u8acb\u586b\u5beb\u806f\u7d61\u4fe1\u7bb1', field: document.getElementById('tr-email') };
+      if (!/^.+@.+\..+$/.test(email)) return { message: '\u806f\u7d61\u4fe1\u7bb1\u683c\u5f0f\u4e0d\u6b63\u78ba', field: document.getElementById('tr-email') };
+      if (!year) return { message: '\u8acb\u586b\u5beb\u8a13\u7df4\u5e74\u5ea6', field: document.getElementById('tr-year') };
+      if (!fillDate) return { message: '\u8acb\u586b\u5beb\u586b\u5831\u65e5\u671f', field: document.getElementById('tr-date') };
+      if (!records.length) return { message: '\u81f3\u5c11\u9700\u8981\u4e00\u7b46\u53d7\u8a13\u4eba\u54e1\u8cc7\u6599', field: document.getElementById('training-add-person') };
+      if (!signedFiles.length) return { message: '\u6b63\u5f0f\u9001\u51fa\u524d\u8acb\u4e0a\u50b3\u5df2\u7c3d\u6838\u9644\u4ef6', field: document.getElementById('training-upload-zone') };
       const invalid = records.find((record) => !isTrainingRecordReadyForSubmit(record));
-      if (invalid) return '請先完成「' + invalid.name + '」的在職狀態與課程欄位';
-      return '';
+      if (invalid) return { message: `\u8acb\u5148\u5b8c\u6210 ${invalid.name || '\u53d7\u8a13\u4eba\u54e1'} \u7684\u8a13\u7df4\u6b04\u4f4d`, field: document.getElementById('training-rows-body') };
+      return null;
     }
 
     function saveTrainingForm(targetStatus) {
@@ -3446,10 +3637,16 @@ window._cs = function (id, ns) {
       const formId = existing ? existing.id : generateTrainingFormId();
       const records = collectRecords();
       const summary = computeTrainingSummary(records);
+      debugFlow('training', targetStatus === TRAINING_STATUSES.SUBMITTED ? 'submit start' : 'draft save start', { id: existing?.id || null, unit: document.getElementById('tr-unit').value, records: records.length });
+      setTrainingFeedback('info', targetStatus === TRAINING_STATUSES.SUBMITTED ? '\u6b63\u5728\u6aa2\u67e5\u6559\u80b2\u8a13\u7df4\u8cc7\u6599' : '\u6b63\u5728\u66ab\u5b58\u6559\u80b2\u8a13\u7df4\u8349\u7a3f', [targetStatus === TRAINING_STATUSES.SUBMITTED ? '\u6aa2\u6838\u806f\u7d61\u8cc7\u6599\u3001\u53d7\u8a13\u540d\u55ae\u8207\u7c3d\u6838\u9644\u4ef6\u3002' : '\u4fdd\u7559\u76ee\u524d\u7de8\u4fee\u5167\u5bb9\uff0c\u7a0d\u5f8c\u53ef\u56de\u4f86\u7e7c\u7e8c\u586b\u5beb\u3002']);
       if (targetStatus === TRAINING_STATUSES.SUBMITTED) {
         const validationError = validateSubmitPayload(records);
         if (validationError) {
-          toast(validationError, 'error');
+          debugFlow('training', 'submit blocked', { message: validationError.message });
+          setTrainingFeedback('error', validationError.message, ['\u6b63\u5f0f\u9001\u51fa\u524d\uff0c\u8acb\u88dc\u9f4a\u806f\u7d61\u8cc7\u6599\u3001\u53d7\u8a13\u72c0\u614b\u8207\u7c3d\u6838\u9644\u4ef6\u3002']);
+          toast(validationError.message, 'error');
+          if (validationError.field && typeof validationError.field.scrollIntoView === 'function') validationError.field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (validationError.field && typeof validationError.field.focus === 'function') validationError.field.focus();
           return;
         }
       }
@@ -3478,7 +3675,17 @@ window._cs = function (id, ns) {
         history
       });
       toast(targetStatus === TRAINING_STATUSES.SUBMITTED ? ('填報單 ' + formId + ' 已正式送出') : ('填報單 ' + formId + ' 已儲存暫存'));
-      navigate('training-detail/' + formId);
+      existing = getTrainingForm(formId) || existing;
+      updateTrainingDraftStatus(existing);
+      if (targetStatus === TRAINING_STATUSES.SUBMITTED) {
+        debugFlow('training', 'submit success', { id: formId, unit: existing?.unit || document.getElementById('tr-unit').value, status: existing?.status || TRAINING_STATUSES.SUBMITTED });
+        setTrainingFeedback('success', `\u6559\u80b2\u8a13\u7df4 ${formId} \u5df2\u6b63\u5f0f\u9001\u51fa`, ['\u7cfb\u7d71\u5df2\u5132\u5b58\u540d\u55ae\u8207\u7c3d\u6838\u9644\u4ef6\uff0c\u5373\u5c07\u5207\u63db\u81f3\u8a73\u60c5\u9801\u3002']);
+        navigate('training-detail/' + formId);
+        return;
+      }
+      debugFlow('training', 'draft saved', { id: formId, unit: existing?.unit || document.getElementById('tr-unit').value, status: existing?.status || TRAINING_STATUSES.DRAFT });
+      setTrainingFeedback('success', `\u8349\u7a3f ${formId} \u5df2\u66ab\u5b58`, ['\u9801\u9762\u6703\u4fdd\u6301\u5728\u76ee\u524d\u7de8\u4fee\u72c0\u614b\uff0c\u53ef\u76f4\u63a5\u7e7c\u7e8c\u4fee\u6539\u3002']);
+      navigate('training-fill/' + formId, { replace: true });
     }
 
     document.getElementById('training-form').addEventListener('submit', (event) => {
@@ -3512,6 +3719,8 @@ window._cs = function (id, ns) {
 
     document.getElementById('training-search').addEventListener('input', renderRows);
     document.getElementById('training-only-focus').addEventListener('change', renderRows);
+    trainingForm.addEventListener('input', clearTrainingFeedback);
+    trainingForm.addEventListener('change', clearTrainingFeedback);
 
     document.getElementById('training-add-person').addEventListener('click', () => {
       const unit = document.getElementById('tr-unit').value;
@@ -3554,6 +3763,9 @@ window._cs = function (id, ns) {
 
     renderRows();
     renderSignedFiles();
+    syncStatsUnitField(unitValue);
+    updateTrainingDraftStatus(existing);
+    clearTrainingFeedback();
     refreshIcons();
   }
 
@@ -3714,5 +3926,3 @@ window._cs = function (id, ns) {
   refreshIcons();
 
 })();
-
-
