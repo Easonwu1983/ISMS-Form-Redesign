@@ -1580,14 +1580,8 @@ function renderRespond(id) {
     });
   }
 
-  function renderTracking(id) {
-    const item = getItem(id); if (!item) { navigate('list'); return; }
-    if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限存取此矯正單', 'error'); return; }
-    if (item.pendingTracking) { navigate('detail/' + id); toast('目前已有待管理者審核的追蹤提報', 'error'); return; }
-    if (!canSubmitTracking(item)) { navigate('detail/' + id); toast('目前由處理人員填報追蹤結果，管理者負責審核', 'error'); return; }
-    const round = (item.trackings || []).length + 1;
-    if (round > 3) { toast('系統目前最多支援 3 次追蹤', 'error'); navigate('detail/' + id); return; }
-    document.getElementById('app').innerHTML = `<div class="animate-in">
+  function buildTrackingPage(item, round) {
+    return `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">第 ${round} 次追蹤提報</h1><p class="page-subtitle">${esc(item.id)} · ${esc(item.handlerName || '')}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">返回單據</a></div>
       <div class="editor-shell editor-shell--tracking">
         <section class="editor-main">
@@ -1639,6 +1633,16 @@ function renderRespond(id) {
           </div>
         </aside>
       </div></div>`;
+  }
+
+function renderTracking(id) {
+    const item = getItem(id); if (!item) { navigate('list'); return; }
+    if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限存取此矯正單', 'error'); return; }
+    if (item.pendingTracking) { navigate('detail/' + id); toast('目前已有待管理者審核的追蹤提報', 'error'); return; }
+    if (!canSubmitTracking(item)) { navigate('detail/' + id); toast('目前由處理人員填報追蹤結果，管理者負責審核', 'error'); return; }
+    const round = (item.trackings || []).length + 1;
+    if (round > 3) { toast('系統目前最多支援 3 次追蹤', 'error'); navigate('detail/' + id); return; }
+    document.getElementById('app').innerHTML = buildTrackingPage(item, round);
     refreshIcons();
     applyTestIds({
       'track-form': 'tracking-form',
