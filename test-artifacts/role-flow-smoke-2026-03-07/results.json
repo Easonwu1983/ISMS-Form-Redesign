@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-07T01:36:17.744Z",
+  "startedAt": "2026-03-07T09:28:21.060Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "steps": [
     {
@@ -21,7 +21,7 @@
       "role": "單位管理員",
       "title": "建立矯正單",
       "status": "passed",
-      "detail": "CAR-E2E-385536"
+      "detail": "CAR-E2E-708864"
     },
     {
       "id": "RP-01",
@@ -89,10 +89,6 @@
   ],
   "console": [
     {
-      "type": "error",
-      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
-    },
-    {
       "type": "info",
       "text": "[ISMS:create] submit start {handlerUnit: 計算機及資訊網路中心／資訊網路組, handlerName: 李工程師}"
     },
@@ -102,7 +98,7 @@
     },
     {
       "type": "info",
-      "text": "[ISMS:create] submit success {id: CAR-E2E-385536, notify: true, handlerEmail: li@company.com}"
+      "text": "[ISMS:create] submit success {id: CAR-E2E-708864, notify: true, handlerEmail: li@company.com}"
     },
     {
       "type": "info",
@@ -158,7 +154,7 @@
       "password": "user123"
     }
   },
-  "finishedAt": "2026-03-07T01:36:41.362Z",
+  "finishedAt": "2026-03-07T09:28:45.607Z",
   "summary": {
     "passed": 12,
     "failed": 0,

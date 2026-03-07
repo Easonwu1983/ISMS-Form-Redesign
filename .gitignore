@@ -8,6 +8,7 @@ ssh_log2.txt
 
 .codex-local-server.err.log
 .codex-local-server.out.log
+.codex-server.log
 .tmp-*
 local-preview.png
 node_modules/

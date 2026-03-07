@@ -1,0 +1,50 @@
+{
+  "startedAt": "2026-03-07T09:28:11.711Z",
+  "baseUrl": "http://127.0.0.1:8080/",
+  "console": [],
+  "pageErrors": [],
+  "steps": [
+    {
+      "id": "PROBE-UA-01",
+      "role": "單位管理員",
+      "title": "建立矯正單",
+      "status": "passed",
+      "detail": "CAR-PROBE-1772875694654"
+    },
+    {
+      "id": "PROBE-RP-01",
+      "role": "填報者",
+      "title": "回填矯正措施",
+      "status": "passed",
+      "detail": "CAR-PROBE-1772875694654"
+    },
+    {
+      "id": "PROBE-ADM-01",
+      "role": "最高管理者",
+      "title": "管理頁與案件查核",
+      "status": "passed",
+      "detail": "CAR-PROBE-1772875694654"
+    }
+  ],
+  "context": {
+    "admin": {
+      "username": "admin",
+      "password": "admin123"
+    },
+    "unitAdmin": {
+      "username": "unit1",
+      "password": "unit123"
+    },
+    "reporter": {
+      "username": "user1",
+      "password": "user123"
+    }
+  },
+  "finishedAt": "2026-03-07T09:28:20.273Z",
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "consoleErrors": 0,
+    "pageErrors": 0
+  }
+}

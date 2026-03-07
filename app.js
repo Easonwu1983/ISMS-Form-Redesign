@@ -627,6 +627,18 @@
   function ntuLogo(c = '') { return '<span class="ntu-logo ' + c + '">NTU</span>'; }
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
+  function applyTestIds(map) {
+    Object.entries(map || {}).forEach(([id, testId]) => {
+      const el = document.getElementById(id);
+      if (el && testId) el.setAttribute('data-testid', testId);
+    });
+  }
+  function applySelectorTestIds(entries) {
+    (entries || []).forEach((entry) => {
+      const el = document.querySelector(entry.selector);
+      if (el && entry.testId) el.setAttribute('data-testid', entry.testId);
+    });
+  }
   function debugFlow(scope, message, data) {
     try {
       if (!window.console || typeof window.console.info !== 'function') return;
@@ -660,6 +672,45 @@
     }
     return { page: p[0], param };
   }
+  const ROUTE_WHITELIST = {
+    dashboard: { title: '\u5100\u8868\u677f', allow: () => !!currentUser(), render: () => renderDashboard() },
+    list: { title: '\u77ef\u6b63\u55ae\u5217\u8868', allow: () => !!currentUser(), render: () => renderList() },
+    create: { title: '\u958b\u7acb\u77ef\u6b63\u55ae', allow: () => canCreateCAR(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u958b\u7acb\u77ef\u6b63\u55ae\u6b0a\u9650', render: () => renderCreate() },
+    detail: { title: '\u77ef\u6b63\u55ae\u8a73\u60c5', allow: () => !!currentUser(), render: (param) => renderDetail(param) },
+    respond: { title: '\u56de\u586b\u77ef\u6b63\u63aa\u65bd', allow: () => !!currentUser(), render: (param) => renderRespond(param) },
+    tracking: { title: '\u8ffd\u8e64\u76e3\u63a7', allow: () => !!currentUser(), render: (param) => renderTracking(param) },
+    users: { title: '\u5e33\u865f\u7ba1\u7406', allow: () => canManageUsers(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u5e33\u865f\u7ba1\u7406\u6b0a\u9650', render: () => renderUsers() },
+    'login-log': { title: '\u767b\u5165\u7d00\u9304', allow: () => canManageUsers(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u6aa2\u8996\u767b\u5165\u7d00\u9304\u6b0a\u9650', render: () => renderLoginLog() },
+    checklist: { title: '\u5167\u7a3d\u6aa2\u6838\u8868', allow: () => !!currentUser(), render: () => renderChecklistList() },
+    'checklist-fill': { title: '\u586b\u5831\u6aa2\u6838\u8868', allow: () => canFillChecklist(), fallback: 'checklist', deniedMessage: '\u60a8\u6c92\u6709\u586b\u5831\u6aa2\u6838\u8868\u6b0a\u9650', render: (param) => renderChecklistFill(param) },
+    'checklist-detail': { title: '\u6aa2\u6838\u8868\u8a73\u60c5', allow: () => !!currentUser(), render: (param) => renderChecklistDetail(param) },
+    'checklist-manage': { title: '\u6aa2\u6838\u8868\u7ba1\u7406', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u7ba1\u7406\u6aa2\u6838\u8868', render: () => renderChecklistManage() },
+    'unit-review': { title: '\u55ae\u4f4d\u6cbb\u7406', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u7ba1\u7406\u55ae\u4f4d\u6cbb\u7406\u7684\u6b0a\u9650', render: () => renderUnitReview() },
+    training: { title: '\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08', allow: () => !!currentUser(), render: () => renderTraining() },
+    'training-fill': { title: '\u586b\u5831\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08', allow: () => canFillTraining(), fallback: 'training', deniedMessage: '\u60a8\u6c92\u6709\u586b\u5831\u6559\u80b2\u8a13\u7df4\u7684\u6b0a\u9650', render: (param) => renderTrainingFill(param) },
+    'training-detail': { title: '\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08\u8a73\u60c5', allow: () => !!currentUser(), render: (param) => renderTrainingDetail(param) },
+    'training-roster': { title: '\u6559\u80b2\u8a13\u7df4\u540d\u55ae\u7ba1\u7406', allow: () => isAdmin(), fallback: 'training', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u7ba1\u7406\u6559\u80b2\u8a13\u7df4\u540d\u55ae', render: () => renderTrainingRoster() }
+  };
+  function getRouteMeta(page) { return ROUTE_WHITELIST[page] || ROUTE_WHITELIST.dashboard; }
+  function getRouteTitle(page) { return getRouteMeta(page).title || '\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71'; }
+  function canAccessRoute(page) {
+    const meta = getRouteMeta(page);
+    if (!meta || typeof meta.allow !== 'function') return true;
+    try { return !!meta.allow(); } catch (_) { return false; }
+  }
+  function getRouteFallback(page) {
+    const meta = getRouteMeta(page);
+    return meta && meta.fallback ? meta.fallback : 'dashboard';
+  }
+  window._routeWhitelist = function () {
+    return Object.keys(ROUTE_WHITELIST).reduce((acc, page) => {
+      acc[page] = {
+        title: ROUTE_WHITELIST[page].title,
+        fallback: ROUTE_WHITELIST[page].fallback || null
+      };
+      return acc;
+    }, {});
+  };
   let isSidebarOpen = false;
   function isMobileViewport() {
     if (window.matchMedia) return window.matchMedia('(max-width: 768px)').matches;
@@ -725,8 +776,24 @@
     return item.status === STATUSES.TRACKING && isItemHandler(item, user) && !item.pendingTracking;
   }
   
-  function mkChk(name, opts, sel) { return '<div class="checkbox-group">' + opts.map(o => '<label class="chk-label"><input type="checkbox" name="' + name + '" value="' + o + '" ' + ((sel || []).includes(o) ? 'checked' : '') + '><span class="chk-box"></span>' + o + '</label>').join('') + '</div>'; }
-  function mkRadio(name, opts, sel) { return '<div class="radio-group">' + opts.map(o => '<label class="radio-label"><input type="radio" name="' + name + '" value="' + o + '" ' + (sel === o ? 'checked' : '') + '><span class="radio-dot"></span>' + o + '</label>').join('') + '</div>'; }
+  function toTestIdFragment(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+  function mkChk(name, opts, sel) {
+    return '<div class="checkbox-group" data-testid="' + name + '-group">' + opts.map((o, index) => {
+      const key = toTestIdFragment(o) || String(index);
+      return '<label class="chk-label" data-testid="' + name + '-option-' + key + '"><input type="checkbox" name="' + name + '" value="' + o + '" data-testid="' + name + '-input-' + key + '" ' + ((sel || []).includes(o) ? 'checked' : '') + '><span class="chk-box"></span>' + o + '</label>';
+    }).join('') + '</div>';
+  }
+  function mkRadio(name, opts, sel) {
+    return '<div class="radio-group" data-testid="' + name + '-group">' + opts.map((o, index) => {
+      const key = toTestIdFragment(o) || String(index);
+      return '<label class="radio-label" data-testid="' + name + '-option-' + key + '"><input type="radio" name="' + name + '" value="' + o + '" data-testid="' + name + '-input-' + key + '" ' + (sel === o ? 'checked' : '') + '><span class="radio-dot"></span>' + o + '</label>';
+    }).join('') + '</div>';
+  }
 
   // ─── Render: Login ─────────────────────────
   function renderLogin() {
@@ -790,8 +857,8 @@
   }
 
   function renderHeader() {
-    var u = currentUser(); if (!u) return; var titles = { dashboard: '儀表板', list: '矯正單列表', create: '開立矯正單', detail: '矯正單詳情', respond: '回填矯正措施', tracking: '追蹤監控', users: '帳號管理', 'login-log': '登入紀錄', checklist: '內稽檢核表', 'checklist-fill': '填報檢核表', 'checklist-detail': '檢核表詳情', 'checklist-manage': '檢核表管理', 'unit-review': '單位治理', training: '資安教育訓練統計', 'training-fill': '填報資安教育訓練統計', 'training-detail': '資安教育訓練統計詳情', 'training-roster': '教育訓練名單管理' }; var r = getRoute();
-    document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" onclick="window._toggleSidebar()" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + (titles[r.page] || '內部稽核管考追蹤系統') + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
+    var u = currentUser(); if (!u) return; var r = getRoute();
+    document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" onclick="window._toggleSidebar()" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + getRouteTitle(r.page) + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">\u767b\u51fa</button></div>';
   }
   window._logout = function () { logout(); };
   window._toggleSidebar = function () { toggleSidebar(); };
@@ -971,6 +1038,21 @@
         </aside>
       </div></div>`;
     refreshIcons();
+    applyTestIds({
+      'f-id': 'create-id',
+      'f-pdate': 'create-proposer-date',
+      'f-pname': 'create-proposer-name',
+      'f-hdate': 'create-handler-date',
+      'f-hemail': 'create-handler-email',
+      'f-notify': 'create-notify',
+      'f-clause': 'create-clause',
+      'f-problem': 'create-problem',
+      'f-occurrence': 'create-occurrence',
+      'f-due': 'create-due'
+    });
+    applySelectorTestIds([
+      { selector: '#create-form button[type="submit"]', testId: 'create-submit' }
+    ]);
     const idInput = document.getElementById('f-id');
     const proposerUnit = document.getElementById('f-punit');
     const handlerUnit = document.getElementById('f-hunit');
@@ -1406,6 +1488,23 @@ window._cs = function (id, ns) {
         </aside>
       </div></div>`;
     refreshIcons();
+    applyTestIds({
+      'respond-form': 'respond-form',
+      'r-action': 'respond-action',
+      'r-due': 'respond-due',
+      'r-root': 'respond-root-cause',
+      'r-elim': 'respond-root-elimination',
+      'r-elimdue': 'respond-root-elimination-due',
+      'r-risk': 'respond-risk',
+      'r-riskwho': 'respond-risk-owner',
+      'r-riskdate': 'respond-risk-date',
+      'r-riskassess': 'respond-risk-assess-date',
+      'upload-zone': 'respond-upload-zone',
+      'file-input': 'respond-file-input'
+    });
+    applySelectorTestIds([
+      { selector: '#respond-form button[type="submit"]', testId: 'respond-submit' }
+    ]);
     const fi = document.getElementById('file-input');
     const uz = document.getElementById('upload-zone');
     const fp = document.getElementById('file-previews');
@@ -1533,6 +1632,19 @@ window._cs = function (id, ns) {
         </aside>
       </div></div>`;
     refreshIcons();
+    applyTestIds({
+      'track-form': 'tracking-form',
+      'tk-tracker': 'tracking-tracker',
+      'tk-date': 'tracking-date',
+      'tk-exec': 'tracking-execution',
+      'tk-note': 'tracking-note',
+      'tk-next': 'tracking-next-date',
+      'tk-upload-zone': 'tracking-upload-zone',
+      'tk-file-input': 'tracking-file-input'
+    });
+    applySelectorTestIds([
+      { selector: '#track-form button[type="submit"]', testId: 'tracking-submit' }
+    ]);
     const dateInput = document.getElementById('tk-date');
     const nextInput = document.getElementById('tk-next');
     const nextWrap = document.getElementById('tk-next-wrap');
@@ -2006,34 +2118,36 @@ window._cs = function (id, ns) {
   }
 
   // ─── Render: Checklist Fill ────────────────
+  function buildChecklistItemBlock(item, saved) {
+    const radios = COMPLIANCE_OPTS.map((opt) => `<label class="cl-radio-label cl-radio-${COMPLIANCE_CLASSES[opt]}"><input type="radio" name="cl-${item.id}" value="${opt}" ${saved.compliance === opt ? 'checked' : ''}><span class="cl-radio-indicator"></span>${opt}</label>`).join('');
+    return `<div class="cl-item" id="cl-item-${item.id}">
+      <div class="cl-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span></div>
+      <div class="cl-item-body">
+        <div class="cl-compliance"><label class="form-label form-required">\u7b26\u5408\u7a0b\u5ea6</label><div class="cl-radio-group">${radios}</div></div>
+        <div class="cl-fields">
+          <div class="form-group"><label class="form-label">\u57f7\u884c\u60c5\u5f62\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2">${esc(saved.execution || '')}</textarea></div>
+          <div class="form-group"><label class="form-label">\u4f50\u8b49\u8cc7\u6599\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="\u4f8b\u5982\u6587\u4ef6\u540d\u7a31\u3001\u756b\u9762\u622a\u5716\u3001\u8def\u5f91\u6216\u88dc\u5145\u8aaa\u660e" rows="2">${esc(saved.evidence || '')}</textarea></div>
+        </div>
+      </div>
+    </div>`;
+  }
+  function buildChecklistSectionsHtml(existing) {
+    return CHECKLIST_SECTIONS.map((sec, si) => {
+      const itemsHtml = sec.items.map((item) => buildChecklistItemBlock(item, existing?.results?.[item.id] || {})).join('');
+      return `<div class="cl-section"><div class="cl-section-header"><span class="cl-section-num">${si + 1}</span>${esc(sec.section)}</div><div class="cl-section-body">${itemsHtml}</div></div>`;
+    }).join('');
+  }
+
   function renderChecklistFill(id) {
     refreshChecklistSections();
-    if (!canFillChecklist()) { navigate('checklist'); toast('您沒有填報檢核表權限', 'error'); return; }
+    if (!canFillChecklist()) { navigate('checklist'); toast('\u60a8\u6c92\u6709\u586b\u5831\u6aa2\u6838\u8868\u6b0a\u9650', 'error'); return; }
 
     const u = currentUser();
     let existing = id ? getChecklist(id) : getLatestEditableChecklistDraft();
-    if (id && !existing) { navigate('checklist'); toast('找不到要編修的檢核表', 'error'); return; }
-    if (existing && !canEditChecklist(existing)) { navigate('checklist'); toast('這份檢核表目前不可修改', 'error'); return; }
+    if (id && !existing) { navigate('checklist'); toast('\u627e\u4e0d\u5230\u8981\u7de8\u4fee\u7684\u6aa2\u6838\u8868', 'error'); return; }
+    if (existing && !canEditChecklist(existing)) { navigate('checklist'); toast('\u9019\u4efd\u6aa2\u6838\u8868\u76ee\u524d\u4e0d\u53ef\u4fee\u6539', 'error'); return; }
 
-    let sectionsHtml = '';
-    CHECKLIST_SECTIONS.forEach((sec, si) => {
-      let itemsHtml = '';
-      sec.items.forEach((item) => {
-        const saved = existing?.results?.[item.id] || {};
-        const radios = COMPLIANCE_OPTS.map((opt) => `<label class="cl-radio-label cl-radio-${COMPLIANCE_CLASSES[opt]}"><input type="radio" name="cl-${item.id}" value="${opt}" ${saved.compliance === opt ? 'checked' : ''}><span class="cl-radio-indicator"></span>${opt}</label>`).join('');
-        itemsHtml += `<div class="cl-item" id="cl-item-${item.id}">
-          <div class="cl-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span></div>
-          <div class="cl-item-body">
-            <div class="cl-compliance"><label class="form-label form-required">符合程度</label><div class="cl-radio-group">${radios}</div></div>
-            <div class="cl-fields">
-              <div class="form-group"><label class="form-label">執行情形說明</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2">${esc(saved.execution || '')}</textarea></div>
-              <div class="form-group"><label class="form-label">佐證資料說明</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="例如文件名稱、畫面截圖、路徑或補充說明" rows="2">${esc(saved.evidence || '')}</textarea></div>
-            </div>
-          </div>
-        </div>`;
-      });
-      sectionsHtml += `<div class="cl-section"><div class="cl-section-header"><span class="cl-section-num">${si + 1}</span>${esc(sec.section)}</div><div class="cl-section-body">${itemsHtml}</div></div>`;
-    });
+    const sectionsHtml = buildChecklistSectionsHtml(existing);
 
     const checklistUnitLocked = u.role === ROLES.REPORTER;
     const selectedUnit = checklistUnitLocked ? (u.unit || existing?.unit || '') : (existing ? existing.unit : (u.unit || ''));
@@ -2114,6 +2228,19 @@ window._cs = function (id, ns) {
     </div>`;
 
     refreshIcons();
+    applyTestIds({
+      'cl-filler': 'checklist-filler',
+      'cl-date': 'checklist-date',
+      'cl-year': 'checklist-year',
+      'cl-supervisor-name': 'checklist-supervisor-name',
+      'cl-supervisor-title': 'checklist-supervisor-title',
+      'cl-sign-status': 'checklist-sign-status',
+      'cl-sign-date': 'checklist-sign-date',
+      'cl-supervisor-note': 'checklist-supervisor-note'
+    });
+    applySelectorTestIds([
+      { selector: '#checklist-form button[type="submit"]', testId: 'checklist-submit' }
+    ]);
     initUnitCascade('cl-unit', selectedUnit, { disabled: checklistUnitLocked });
 
     function syncChecklistMeta() {
@@ -3453,6 +3580,25 @@ window._cs = function (id, ns) {
       + '</div>'
       + '</div>';
 
+    applyTestIds({
+      'tr-stats-unit': 'training-stats-unit',
+      'tr-phone': 'training-phone',
+      'tr-email': 'training-email',
+      'tr-year': 'training-year',
+      'tr-date': 'training-date',
+      'training-search': 'training-search',
+      'training-only-focus': 'training-only-focus',
+      'tr-new-name': 'training-new-name',
+      'tr-new-unit-name': 'training-new-unit-name',
+      'tr-new-identity': 'training-new-identity',
+      'tr-new-job-title': 'training-new-job-title',
+      'training-add-person': 'training-add-person',
+      'training-upload-zone': 'training-upload-zone',
+      'training-file-input': 'training-file-input'
+    });
+    applySelectorTestIds([
+      { selector: '#training-form button[type="submit"]', testId: 'training-submit' }
+    ]);
     const trainingForm = document.getElementById('training-form');
     const trainingFeedback = document.getElementById('training-feedback');
     const trainingDraftStatus = document.getElementById('training-draft-status');
@@ -3821,6 +3967,25 @@ window._cs = function (id, ns) {
     refreshIcons();
   }
 
+  function buildTrainingRosterRows(rosters) {
+    if (!rosters.length) return '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>';
+    return rosters.map((row) => '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" onclick="window._trainingDeleteRoster(\'' + row.id + '\')">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>').join('');
+  }
+  function buildTrainingRosterImportCard() {
+    return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">支援每行一筆，格式可為「姓名」或「姓名,本職單位,身分別,職稱」，也可貼上 tab 分隔資料。</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, true) + '</div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師</textarea></div></div><div class="form-group"><label class="form-label form-required">匯入內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱" required></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
+  }
+  function buildTrainingRosterPage(summary, rowsHtml) {
+    return '<div class="animate-in">'
+      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div>'
+      + '<div class="stats-grid">'
+      + '<div class="stat-card total"><div class="stat-icon">' + ic('users') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">總名單筆數</div></div>'
+      + '<div class="stat-card closed"><div class="stat-icon">' + ic('download') + '</div><div class="stat-value">' + summary.imported + '</div><div class="stat-label">管理者匯入</div></div>'
+      + '<div class="stat-card pending"><div class="stat-icon">' + ic('user-plus') + '</div><div class="stat-value">' + summary.manual + '</div><div class="stat-label">填報新增</div></div>'
+      + '</div>'
+      + buildTrainingRosterImportCard()
+      + '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>'
+      + '</div>';
+  }
   function renderTrainingRoster() {
     if (!isAdmin()) {
       navigate('training');
@@ -3837,20 +4002,14 @@ window._cs = function (id, ns) {
       imported: rosters.filter((row) => row.source === 'import').length,
       manual: rosters.filter((row) => row.source === 'manual').length
     };
-    const rows = rosters.length ? rosters.map((row) => '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" onclick="window._trainingDeleteRoster(\'' + row.id + '\')">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>').join('') : '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>';
-
-    document.getElementById('app').innerHTML = '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div>'
-      + '<div class="stats-grid">'
-      + '<div class="stat-card total"><div class="stat-icon">' + ic('users') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">總名單筆數</div></div>'
-      + '<div class="stat-card closed"><div class="stat-icon">' + ic('download') + '</div><div class="stat-value">' + summary.imported + '</div><div class="stat-label">管理者匯入</div></div>'
-      + '<div class="stat-card pending"><div class="stat-icon">' + ic('user-plus') + '</div><div class="stat-value">' + summary.manual + '</div><div class="stat-label">填報新增</div></div>'
-      + '</div>'
-      + '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">支援每行一筆，格式可為「姓名」或「姓名,本職單位,身分別,職稱」，也可貼上 tab 分隔資料。</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, true) + '</div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師</textarea></div></div><div class="form-group"><label class="form-label form-required">匯入內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱" required></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>'
-      + '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>'
-      + '</div>';
+    const rows = buildTrainingRosterRows(rosters);
+    document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, rows);
 
     initUnitCascade('training-import-unit', '', { disabled: false });
+    applyTestIds({
+      'training-import-form': 'training-import-form',
+      'training-import-names': 'training-import-names'
+    });
     document.getElementById('training-import-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const unit = document.getElementById('training-import-unit').value;
@@ -3907,8 +4066,20 @@ window._cs = function (id, ns) {
   }
 
   function handleRoute() {
-    if (!currentUser()) { renderLogin(); return; } const r = getRoute(); renderSidebar(); renderHeader(); closeSidebar();
-    switch (r.page) { case 'dashboard': renderDashboard(); break; case 'list': renderList(); break; case 'create': renderCreate(); break; case 'detail': renderDetail(r.param); break; case 'respond': renderRespond(r.param); break; case 'tracking': renderTracking(r.param); break; case 'users': renderUsers(); break; case 'login-log': renderLoginLog(); break; case 'checklist': renderChecklistList(); break; case 'checklist-fill': renderChecklistFill(r.param); break; case 'checklist-detail': renderChecklistDetail(r.param); break; case 'checklist-manage': renderChecklistManage(); break; case 'unit-review': renderUnitReview(); break; case 'training': renderTraining(); break; case 'training-fill': renderTrainingFill(r.param); break; case 'training-detail': renderTrainingDetail(r.param); break; case 'training-roster': renderTrainingRoster(); break; default: renderDashboard(); }
+    if (!currentUser()) { renderLogin(); return; }
+    const route = getRoute();
+    const page = ROUTE_WHITELIST[route.page] ? route.page : 'dashboard';
+    if (!canAccessRoute(page)) {
+      const fallback = getRouteFallback(page);
+      const message = getRouteMeta(page).deniedMessage;
+      navigate(fallback, { replace: true });
+      if (message) toast(message, 'error');
+      return;
+    }
+    renderSidebar();
+    renderHeader();
+    closeSidebar();
+    getRouteMeta(page).render(route.param);
   }
 
   // ─── Seed Data ─────────────────────────────

@@ -1,6 +1,6 @@
 ﻿const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium } = require('./_playwright.cjs');
 
 const BASE_URL = 'http://127.0.0.1:8080/';
 const EDGE_PATHS = [
