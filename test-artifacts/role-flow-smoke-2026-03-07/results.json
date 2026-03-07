@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-07T09:28:21.060Z",
+  "startedAt": "2026-03-07T09:36:29.455Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "steps": [
     {
@@ -21,7 +21,7 @@
       "role": "單位管理員",
       "title": "建立矯正單",
       "status": "passed",
-      "detail": "CAR-E2E-708864"
+      "detail": "CAR-E2E-197228"
     },
     {
       "id": "RP-01",
@@ -98,7 +98,7 @@
     },
     {
       "type": "info",
-      "text": "[ISMS:create] submit success {id: CAR-E2E-708864, notify: true, handlerEmail: li@company.com}"
+      "text": "[ISMS:create] submit success {id: CAR-E2E-197228, notify: true, handlerEmail: li@company.com}"
     },
     {
       "type": "info",
@@ -154,7 +154,7 @@
       "password": "user123"
     }
   },
-  "finishedAt": "2026-03-07T09:28:45.607Z",
+  "finishedAt": "2026-03-07T09:36:54.211Z",
   "summary": {
     "passed": 12,
     "failed": 0,

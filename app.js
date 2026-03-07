@@ -960,13 +960,8 @@
   }
 
   // ─── Render: Create ────────────────────────
-  function renderCreate() {
-    if (!canCreateCAR()) { navigate('dashboard'); toast('您沒有開立矯正單權限', 'error'); return; }
-    const u = currentUser();
-    const allUsers = getUsers();
-    const users = allUsers.filter(x => x.role === ROLES.REPORTER || x.role === ROLES.UNIT_ADMIN);
-
-    document.getElementById('app').innerHTML = `<div class="animate-in">
+  function buildCreatePage(u) {
+    return `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">開立矯正單</h1><p class="page-subtitle">建立內部資通安全稽核矯正單，送出後即可進入處理與追蹤流程。</p></div></div>
       <div class="editor-shell editor-shell--car">
         <section class="editor-main">
@@ -1037,6 +1032,15 @@
           </div>
         </aside>
       </div></div>`;
+  }
+
+function renderCreate() {
+    if (!canCreateCAR()) { navigate('dashboard'); toast('您沒有開立矯正單權限', 'error'); return; }
+    const u = currentUser();
+    const allUsers = getUsers();
+    const users = allUsers.filter(x => x.role === ROLES.REPORTER || x.role === ROLES.UNIT_ADMIN);
+
+    document.getElementById('app').innerHTML = buildCreatePage(u);
     refreshIcons();
     applyTestIds({
       'f-id': 'create-id',
@@ -1422,13 +1426,8 @@ window._cs = function (id, ns) {
 
   // ─── Render: Respond ───────────────────────
   
-  function renderRespond(id) {
-    const item = getItem(id); if (!item) { navigate('list'); return; }
-    if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限存取此矯正單', 'error'); return; }
-    const canRespond = canRespondItem(item);
-    if (!canRespond) { navigate('detail/' + id); toast('目前無法回覆這筆待矯正案件', 'error'); return; }
-    let tempEv = [];
-    document.getElementById('app').innerHTML = `<div class="animate-in">
+  function buildRespondPage(item) {
+    return `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">回覆矯正單</h1><p class="page-subtitle">${esc(item.id)} · ${esc((item.problemDesc || '').substring(0, 48))}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">返回單據</a></div>
       <div class="editor-shell editor-shell--respond">
         <section class="editor-main">
@@ -1487,6 +1486,15 @@ window._cs = function (id, ns) {
           </div>
         </aside>
       </div></div>`;
+  }
+
+function renderRespond(id) {
+    const item = getItem(id); if (!item) { navigate('list'); return; }
+    if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限存取此矯正單', 'error'); return; }
+    const canRespond = canRespondItem(item);
+    if (!canRespond) { navigate('detail/' + id); toast('目前無法回覆這筆待矯正案件', 'error'); return; }
+    let tempEv = [];
+    document.getElementById('app').innerHTML = buildRespondPage(item);
     refreshIcons();
     applyTestIds({
       'respond-form': 'respond-form',
@@ -3518,7 +3526,36 @@ window._cs = function (id, ns) {
     refreshIcons();
   }
 
-  function renderTrainingFill(id) {
+  function buildTrainingFillPage(params) {
+    const { existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user } = params;
+    return '<div class="animate-in">'
+      + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">僅統計在職人員；資訊人員需同時完成通識與專業課程。進度可先暫存，正式送出後即鎖定。</p></div><div class="training-toolbar-actions"><button type="button" class="btn btn-secondary" id="training-print-draft">' + ic('printer', 'icon-sm') + ' 列印簽核表</button><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
+      + (existing && existing.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(existing.returnReason || '未提供') + '</div>' : '')
+      + (takeoverDraft ? '<div class="training-return-banner">' + ic('user-cog', 'icon-sm') + ' 此草稿原填報人為 ' + esc(existing.fillerName || '未指定') + '，本次儲存後將改由目前單位管理員 ' + esc(user.name) + ' 接手填報。</div>' : '')
+      + '<div class="training-editor-layout">'
+      + '<div class="card training-editor-card"><form id="training-form" data-testid="training-form">'
+      + '<div class="form-feedback" id="training-feedback" data-state="idle" aria-live="polite" hidden></div>'
+      + '<div class="section-header">' + ic('info', 'icon-sm') + ' 基本資訊</div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計單位（一級）</label><input type="text" class="form-input" id="tr-stats-unit" value="' + esc(existing?.statsUnit || getTrainingStatsUnit(unitValue)) + '" readonly></div><div class="form-group"><label class="form-label form-required">填報單位</label>' + buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true) + '</div></div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="填報人可新增名單外人員，但不可刪除管理者匯入名單。" readonly></div></div>'
+      + '<div class="section-header">' + ic('users', 'icon-sm') + ' 人員清單</div>'
+      + '<div class="training-editor-note">請逐人選擇在職狀態與課程完成情形。只有正式送出時會鎖定；若被退回，可繼續修正後重送。</div>'
+      + '<div class="training-draft-status" id="training-draft-status">' + (existing ? (existing.status === TRAINING_STATUSES.DRAFT ? ('\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)) : (existing.status === TRAINING_STATUSES.RETURNED ? ('\u9000\u56de\u7248\u672c\u6700\u5f8c\u66f4\u65b0\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)) : ('\u6700\u5f8c\u66f4\u65b0\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)))) : '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f') + '</div>'
+      + '<div class="training-editor-toolbar"><label class="training-search-box"><span class="training-search-icon">' + ic('search', 'icon-sm') + '</span><input type="search" class="form-input" id="training-search" placeholder="搜尋姓名、本職單位、職稱"></label><label class="training-inline-check"><input type="checkbox" id="training-only-focus"> 只看未完成或未填</label></div>'
+      + '<div id="training-summary" class="training-summary-grid training-summary-grid-wide"></div>'
+      + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
+      + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:68px">序號</th><th style="width:160px">姓名 / 來源</th><th style="min-width:160px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:130px">在職狀態</th><th style="width:130px">資安通識</th><th style="width:150px">資訊人員(含委外)</th><th style="width:140px">資安專業課程</th><th style="width:130px">判定</th><th style="min-width:220px">備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
+      + '<div class="section-header" style="margin-top:18px">' + ic('paperclip', 'icon-sm') + ' 上傳簽核後掃描檔</div>'
+      + '<div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div>'
+      + '<div class="file-preview-list" id="training-file-previews"></div>'
+      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('send', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
+      + '</form></div>'
+      + '</div>'
+      + '</div>';
+  }
+
+function renderTrainingFill(id) {
     if (!canFillTraining()) {
       navigate('training');
       return;
@@ -3554,31 +3591,7 @@ window._cs = function (id, ns) {
     let signedFiles = existing ? [...(existing.signedFiles || [])] : [];
     const submitLabel = existing && existing.status === TRAINING_STATUSES.RETURNED ? '更正後正式送出' : '正式送出';
 
-    document.getElementById('app').innerHTML = '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">僅統計在職人員；資訊人員需同時完成通識與專業課程。進度可先暫存，正式送出後即鎖定。</p></div><div class="training-toolbar-actions"><button type="button" class="btn btn-secondary" id="training-print-draft">' + ic('printer', 'icon-sm') + ' 列印簽核表</button><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
-      + (existing && existing.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(existing.returnReason || '未提供') + '</div>' : '')
-      + (takeoverDraft ? '<div class="training-return-banner">' + ic('user-cog', 'icon-sm') + ' 此草稿原填報人為 ' + esc(existing.fillerName || '未指定') + '，本次儲存後將改由目前單位管理員 ' + esc(user.name) + ' 接手填報。</div>' : '')
-      + '<div class="training-editor-layout">'
-      + '<div class="card training-editor-card"><form id="training-form" data-testid="training-form">'
-      + '<div class="form-feedback" id="training-feedback" data-state="idle" aria-live="polite" hidden></div>'
-      + '<div class="section-header">' + ic('info', 'icon-sm') + ' 基本資訊</div>'
-      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計單位（一級）</label><input type="text" class="form-input" id="tr-stats-unit" value="' + esc(existing?.statsUnit || getTrainingStatsUnit(unitValue)) + '" readonly></div><div class="form-group"><label class="form-label form-required">填報單位</label>' + buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true) + '</div></div>'
-      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
-      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="填報人可新增名單外人員，但不可刪除管理者匯入名單。" readonly></div></div>'
-      + '<div class="section-header">' + ic('users', 'icon-sm') + ' 人員清單</div>'
-      + '<div class="training-editor-note">請逐人選擇在職狀態與課程完成情形。只有正式送出時會鎖定；若被退回，可繼續修正後重送。</div>'
-      + '<div class="training-draft-status" id="training-draft-status">' + (existing ? (existing.status === TRAINING_STATUSES.DRAFT ? ('\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)) : (existing.status === TRAINING_STATUSES.RETURNED ? ('\u9000\u56de\u7248\u672c\u6700\u5f8c\u66f4\u65b0\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)) : ('\u6700\u5f8c\u66f4\u65b0\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)))) : '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f') + '</div>'
-      + '<div class="training-editor-toolbar"><label class="training-search-box"><span class="training-search-icon">' + ic('search', 'icon-sm') + '</span><input type="search" class="form-input" id="training-search" placeholder="搜尋姓名、本職單位、職稱"></label><label class="training-inline-check"><input type="checkbox" id="training-only-focus"> 只看未完成或未填</label></div>'
-      + '<div id="training-summary" class="training-summary-grid training-summary-grid-wide"></div>'
-      + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
-      + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:68px">序號</th><th style="width:160px">姓名 / 來源</th><th style="min-width:160px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:130px">在職狀態</th><th style="width:130px">資安通識</th><th style="width:150px">資訊人員(含委外)</th><th style="width:140px">資安專業課程</th><th style="width:130px">判定</th><th style="min-width:220px">備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
-      + '<div class="section-header" style="margin-top:18px">' + ic('paperclip', 'icon-sm') + ' 上傳簽核後掃描檔</div>'
-      + '<div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div>'
-      + '<div class="file-preview-list" id="training-file-previews"></div>'
-      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('send', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
-      + '</form></div>'
-      + '</div>'
-      + '</div>';
+    document.getElementById('app').innerHTML = buildTrainingFillPage({ existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user });
 
     applyTestIds({
       'tr-stats-unit': 'training-stats-unit',

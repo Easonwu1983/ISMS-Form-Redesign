@@ -6,5 +6,8 @@
     "test:role:probe": "node scripts/role-flow-probe.cjs",
     "test:role:smoke": "node scripts/role-flow-smoke.cjs",
     "test:role:all": "npm run test:role:permission && npm run test:role:probe && npm run test:role:smoke"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-07T09:27:50.737Z",
+  "startedAt": "2026-03-07T09:35:58.704Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "console": [],
   "pageErrors": [],
@@ -450,7 +450,7 @@
       "detail": "all routes matched expected permission matrix"
     }
   ],
-  "finishedAt": "2026-03-07T09:28:10.942Z",
+  "finishedAt": "2026-03-07T09:36:19.081Z",
   "summary": {
     "passed": 3,
     "failed": 0,

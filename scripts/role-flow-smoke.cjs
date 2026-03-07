@@ -1,12 +1,8 @@
 ﻿const fs = require('fs');
 const path = require('path');
-const { chromium } = require('./_playwright.cjs');
+const { launchBrowser } = require('./_role-test-utils.cjs');
 
 const BASE_URL = 'http://127.0.0.1:8080/';
-const EDGE_PATHS = [
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Google/Chrome/Application/chrome.exe'
-];
 const OUT_DIR = path.join(process.cwd(), 'test-artifacts', 'role-flow-smoke-2026-03-07');
 const SHOT_DIR = path.join(OUT_DIR, 'screenshots');
 const RESULT_PATH = path.join(OUT_DIR, 'results.json');
@@ -173,14 +169,7 @@ function isoDate(offsetDays) {
 }
 
 (async () => {
-  const executablePath = EDGE_PATHS.find((entry) => fs.existsSync(entry));
-  if (!executablePath) throw new Error('No local Chromium-compatible browser found');
-
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath,
-    args: ['--disable-gpu']
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1600, height: 1200 } });
 
   page.on('console', (msg) => {
