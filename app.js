@@ -651,7 +651,15 @@
     }
     window.location.hash = target;
   }
-  function getRoute() { const h = window.location.hash.slice(1) || 'dashboard'; const p = h.split('/'); return { page: p[0], param: p[1] }; }
+  function getRoute() {
+    const h = window.location.hash.slice(1) || 'dashboard';
+    const p = h.split('/');
+    let param = p[1];
+    if (param) {
+      try { param = decodeURIComponent(param); } catch (_) { }
+    }
+    return { page: p[0], param };
+  }
   let isSidebarOpen = false;
   function isMobileViewport() {
     if (window.matchMedia) return window.matchMedia('(max-width: 768px)').matches;
@@ -769,11 +777,12 @@
     if (canFillChecklist()) opNav += '<a class="nav-item ' + (r.page === 'checklist-fill' ? 'active' : '') + '" href="#checklist-fill"><span class="nav-icon">' + ic('edit-3') + '</span>填報檢核表</a>';
     if (opNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">操作</div>' + opNav + '</div>';
     var sysNav = '';
-    if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a>';
-    if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'login-log' ? 'active' : '') + '" href="#login-log"><span class="nav-icon">' + ic('shield-check') + '</span>登入紀錄</a>';
-    if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>檢核表管理</a>';
-    if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'unit-review' ? 'active' : '') + '" href="#unit-review"><span class="nav-icon">' + ic('building-2') + '</span>單位治理</a>';
-    if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div>' + sysNav + '</div>';
+    if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>\u5e33\u865f\u7ba1\u7406</a>';
+    if (canManageUsers()) sysNav += '<a class="nav-item ' + (r.page === 'login-log' ? 'active' : '') + '" href="#login-log"><span class="nav-icon">' + ic('shield-check') + '</span>\u767b\u5165\u7d00\u9304</a>';
+    if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>\u6aa2\u6838\u8868\u7ba1\u7406</a>';
+    if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'training-roster' ? 'active' : '') + '" href="#training-roster"><span class="nav-icon">' + ic('users-round') + '</span>\u6559\u80b2\u8a13\u7df4\u540d\u55ae\u7ba1\u7406</a>';
+    if (isAdmin()) sysNav += '<a class="nav-item ' + (r.page === 'unit-review' ? 'active' : '') + '" href="#unit-review"><span class="nav-icon">' + ic('building-2') + '</span>\u55ae\u4f4d\u6cbb\u7406</a>';
+    if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">\u7cfb\u7d71\u7ba1\u7406</div>' + sysNav + '</div>';
     var sidebarEl = document.getElementById('sidebar'); sidebarEl.innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS Corrective Action</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
     sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
       link.addEventListener('click', function () { if (isMobileViewport()) closeSidebar(); });
@@ -1873,13 +1882,16 @@ window._cs = function (id, ns) {
 
   // ─── Checklist Storage ─────────────────────
   function emptyChecklistStore() { return { items: [], nextId: 1 }; }
+  const CHECKLIST_STATUS_DRAFT = '\u8349\u7a3f';
+  const CHECKLIST_STATUS_SUBMITTED = '\u5df2\u9001\u51fa';
   function normalizeChecklistStatus(status) {
     const value = String(status || '').trim();
-    if (!value || value === '草稿') return '草稿';
-    if (value === '已提交') return '已送出';
+    const lower = value.toLowerCase();
+    if (!value || value === CHECKLIST_STATUS_DRAFT || lower === 'draft') return CHECKLIST_STATUS_DRAFT;
+    if (value === '\u5df2\u63d0\u4ea4' || value === CHECKLIST_STATUS_SUBMITTED || lower === 'submitted') return CHECKLIST_STATUS_SUBMITTED;
     return value;
   }
-  function isChecklistDraftStatus(status) { return normalizeChecklistStatus(status) === '草稿'; }
+  function isChecklistDraftStatus(status) { return normalizeChecklistStatus(status) === CHECKLIST_STATUS_DRAFT; }
   function normalizeChecklistItem(item) {
     const base = item && typeof item === 'object' ? { ...item } : {};
     base.status = normalizeChecklistStatus(base.status);
@@ -1983,7 +1995,7 @@ window._cs = function (id, ns) {
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     const rows = checklists.length ? checklists.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(c => {
       const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
-      const statusCls = c.status === '已送出' ? 'badge-closed' : 'badge-pending';
+      const statusCls = normalizeChecklistStatus(c.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
       const target = isChecklistDraftStatus(c.status) && canEditChecklist(c) ? `checklist-fill/${c.id}` : `checklist-detail/${c.id}`;
       return `<tr onclick="location.hash='${target}'"><td style="font-weight:600;color:var(--accent-primary)">${esc(c.id)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
     }).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:60px"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">尚無檢核表紀錄</div><div class="empty-state-desc">登入使用者可點選「填報檢核表」開始填寫</div></div></td></tr>`;
@@ -2321,7 +2333,7 @@ window._cs = function (id, ns) {
       }
     }));
     const issueHtml = issues.length ? `<div class="card" style="margin-top:20px;border-left:3px solid #ef4444"><div class="section-header">${ic('alert-triangle', 'icon-sm')} 需追蹤項目 ${issues.length} 項</div>${issues.map((iss) => `<div class="cl-issue-item"><span class="cl-compliance-badge cl-badge-${COMPLIANCE_CLASSES[iss.compliance]}">${iss.compliance}</span><span class="cl-item-id">${iss.id}</span> ${esc(iss.text)}${iss.execution ? `<div class="cl-issue-note">${esc(iss.execution)}</div>` : ''}</div>`).join('')}</div>` : '';
-    const statusCls = cl.status === '已送出' ? 'badge-closed' : 'badge-pending';
+    const statusCls = normalizeChecklistStatus(cl.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="detail-header"><div>
@@ -3244,21 +3256,21 @@ window._cs = function (id, ns) {
         .slice(0, 5);
       const focusUnitsHtml = focusUnits.length ? focusUnits.map((item) => {
         let tone = 'slate';
-        let label = 'No report';
-        let note = 'No latest submission recorded';
+        let label = '\u672a\u586b\u5831';
+        let note = '\u5c1a\u7121\u6700\u65b0\u586b\u5831\u7d00\u9304';
         if (item.latest) {
           if (item.latest.status === TRAINING_STATUSES.SUBMITTED) {
             tone = 'green';
-            label = 'Submitted';
-            note = 'Updated ' + fmtTime(item.latest.updatedAt);
+            label = '\u5df2\u9001\u51fa';
+            note = '\u66f4\u65b0\u6642\u9593 ' + fmtTime(item.latest.updatedAt);
           } else if (item.latest.status === TRAINING_STATUSES.RETURNED) {
             tone = 'red';
-            label = 'Returned';
-            note = item.latest.returnReason ? 'Returned: ' + item.latest.returnReason : 'Needs revision before resubmission';
+            label = '\u9000\u56de\u66f4\u6b63';
+            note = item.latest.returnReason ? '\u9000\u56de\u539f\u56e0\uff1a' + item.latest.returnReason : '\u9700\u4fee\u6b63\u5f8c\u91cd\u65b0\u9001\u51fa';
           } else {
             tone = 'amber';
-            label = 'Draft';
-            note = 'Draft saved at ' + fmtTime(item.latest.updatedAt);
+            label = '\u66ab\u5b58';
+            note = '\u66ab\u5b58\u6642\u9593 ' + fmtTime(item.latest.updatedAt);
           }
         }
         const target = item.latest ? '#training-detail/' + item.latest.id : '#training-fill';
@@ -3266,8 +3278,8 @@ window._cs = function (id, ns) {
           + '<div class="training-exec-list-main"><div class="training-exec-list-head"><strong>' + esc(item.unit) + '</strong>' + buildExecStatus(label, tone) + '</div>'
           + '<div class="training-exec-list-subtitle">' + esc(note) + '</div>'
           + buildMiniTrack(item.summary.completionRate || 0)
-          + '</div><div class="training-exec-list-side"><div class="training-exec-list-value">' + (item.summary.completionRate || 0) + '%</div><div class="training-exec-list-caption">' + (item.summary.completedCount || 0) + ' / ' + (item.summary.activeCount || 0) + ' active</div></div></a>';
-      }).join('') : '<div class="training-exec-empty">No priority units right now.</div>';
+          + '</div><div class="training-exec-list-side"><div class="training-exec-list-value">' + (item.summary.completionRate || 0) + '%</div><div class="training-exec-list-caption">' + (item.summary.completedCount || 0) + ' / ' + (item.summary.activeCount || 0) + ' \u5728\u8077</div></div></a>';
+      }).join('') : '<div class="training-exec-empty">\u76ee\u524d\u6c92\u6709\u9700\u8981\u512a\u5148\u8655\u7406\u7684\u55ae\u4f4d\u3002</div>';
       const parentLeaderboardHtml = groupInsights.length ? groupInsights
         .slice()
         .sort((a, b) => {
@@ -3278,38 +3290,38 @@ window._cs = function (id, ns) {
           return a.parentCompletion - b.parentCompletion;
         })
         .slice(0, 5)
-        .map((group) => '<div class="training-exec-rank-item"><div class="training-exec-rank-head"><strong>' + esc(group.parentUnit) + '</strong><span>Submitted ' + group.submittedCount + ' / ' + group.totalCount + '</span></div>'
+        .map((group) => '<div class="training-exec-rank-item"><div class="training-exec-rank-head"><strong>' + esc(group.parentUnit) + '</strong><span>\u5df2\u9001\u51fa ' + group.submittedCount + ' / ' + group.totalCount + '</span></div>'
           + buildMiniTrack(group.parentCompletion)
-          + '<div class="training-exec-rank-foot"><span>Follow-up ' + group.followUpCount + '</span><span>Returned ' + group.returnedCount + '</span><span>' + group.parentCompletion + '%</span></div></div>')
-        .join('') : '<div class="training-exec-empty">No parent unit data yet.</div>';
-      const recentUpdatesHtml = recentUpdates.length ? recentUpdates.map((form) => '<a class="training-exec-update-item" href="#training-detail/' + form.id + '"><div class="training-exec-update-copy"><div class="training-exec-update-title">' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + ' / ' + esc(form.unit) + '</div><div class="training-exec-update-meta">' + esc(form.fillerName) + ' / ' + fmtTime(form.updatedAt) + '</div></div><div class="training-exec-update-side">' + trainingStatusBadge(form.status) + '</div></a>').join('') : '<div class="training-exec-empty">No recent activity.</div>';
-      let heroTitle = 'Submission rhythm is stable. Move into completion and quality review.';
-      let heroDesc = 'Review low-completion parent units first so the dashboard reflects both reporting discipline and actual training coverage.';
+          + '<div class="training-exec-rank-foot"><span>\u5f85\u8ffd\u8e64 ' + group.followUpCount + '</span><span>\u9000\u56de ' + group.returnedCount + '</span><span>' + group.parentCompletion + '%</span></div></div>')
+        .join('') : '<div class="training-exec-empty">\u76ee\u524d\u5c1a\u7121\u4e00\u7d1a\u55ae\u4f4d\u8cc7\u6599\u3002</div>';
+      const recentUpdatesHtml = recentUpdates.length ? recentUpdates.map((form) => '<a class="training-exec-update-item" href="#training-detail/' + form.id + '"><div class="training-exec-update-copy"><div class="training-exec-update-title">' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + ' / ' + esc(form.unit) + '</div><div class="training-exec-update-meta">' + esc(form.fillerName) + ' / ' + fmtTime(form.updatedAt) + '</div></div><div class="training-exec-update-side">' + trainingStatusBadge(form.status) + '</div></a>').join('') : '<div class="training-exec-empty">\u76ee\u524d\u6c92\u6709\u6700\u65b0\u52d5\u614b\u3002</div>';
+      let heroTitle = '\u6574\u9ad4\u586b\u5831\u7bc0\u594f\u7a69\u5b9a\uff0c\u53ef\u9032\u4e00\u6b65\u6aa2\u8996\u5b8c\u6210\u7387\u8207\u54c1\u8cea\u3002';
+      let heroDesc = '\u512a\u5148\u67e5\u770b\u4f4e\u5b8c\u6210\u7387\u7684\u4e00\u7d1a\u55ae\u4f4d\uff0c\u78ba\u8a8d\u586b\u5831\u9032\u5ea6\u8207\u5be6\u969b\u8a13\u7df4\u8986\u84cb\u662f\u5426\u4e00\u81f4\u3002';
       if (returnedUnits > 0) {
-        heroTitle = returnedUnits + ' returned units need immediate action.';
-        heroDesc = 'Clear returned submissions first, then close drafts and missing units to restore reporting confidence.';
+        heroTitle = '\u76ee\u524d\u6709 ' + returnedUnits + ' \u500b\u9000\u56de\u55ae\u4f4d\u9700\u512a\u5148\u8655\u7406\u3002';
+        heroDesc = '\u8acb\u5148\u5b8c\u6210\u9000\u56de\u4ef6\u4fee\u6b63\uff0c\u518d\u6536\u6582\u66ab\u5b58\u8207\u672a\u586b\u5831\u55ae\u4f4d\uff0c\u6062\u5fa9\u6574\u9ad4\u586b\u5831\u4fe1\u5fc3\u3002';
       } else if (draftUnits > 0) {
-        heroTitle = draftUnits + ' units are still sitting in draft.';
-        heroDesc = 'Push draft units over the finish line before reviewing low-completion groups.';
+        heroTitle = '\u76ee\u524d\u4ecd\u6709 ' + draftUnits + ' \u500b\u55ae\u4f4d\u505c\u7559\u5728\u66ab\u5b58\u3002';
+        heroDesc = '\u5148\u63a8\u9032\u66ab\u5b58\u55ae\u4f4d\u6b63\u5f0f\u9001\u51fa\uff0c\u518d\u56de\u982d\u6aa2\u8996\u4f4e\u5b8c\u6210\u7387\u7fa4\u7d44\u3002';
       } else if (missingUnits > 0) {
-        heroTitle = missingUnits + ' units have not reported yet.';
-        heroDesc = 'Complete the map before comparing parent-unit performance side by side.';
+        heroTitle = '\u76ee\u524d\u4ecd\u6709 ' + missingUnits + ' \u500b\u55ae\u4f4d\u5c1a\u672a\u586b\u5831\u3002';
+        heroDesc = '\u5148\u88dc\u9f4a\u4e00\u7d1a\u8207\u4e8c\u7d1a\u55ae\u4f4d\u586b\u5831\u5730\u5716\uff0c\u518d\u9032\u884c\u6a6b\u5411\u6bd4\u8f03\u3002';
       }
       const heroMetrics = [
-        ['People completion', overallCompletion + '%', totalCompletedPeople + ' / ' + totalActivePeople + ' active people complete'],
-        ['Unit submission', schoolProgress + '%', submittedUnits + ' / ' + latestByUnit.length + ' units submitted'],
-        ['Average completion', latestUnitAvgCompletion + '%', 'Calculated from each unit latest version']
+        ['\u4eba\u54e1\u5b8c\u6210\u7387', overallCompletion + '%', totalCompletedPeople + ' / ' + totalActivePeople + ' \u4f4d\u5728\u8077\u4eba\u54e1\u5b8c\u6210'],
+        ['\u55ae\u4f4d\u9001\u51fa\u7387', schoolProgress + '%', submittedUnits + ' / ' + latestByUnit.length + ' \u500b\u55ae\u4f4d\u5df2\u9001\u51fa'],
+        ['\u5e73\u5747\u5b8c\u6210\u7387', latestUnitAvgCompletion + '%', '\u4f9d\u5404\u55ae\u4f4d\u6700\u65b0\u7248\u672c\u7d71\u8a08']
       ].map((entry) => '<div class="training-exec-hero-metric"><div class="training-exec-hero-label">' + entry[0] + '</div><div class="training-exec-hero-value">' + entry[1] + '</div><div class="training-exec-hero-note">' + entry[2] + '</div></div>').join('');
       const heroTags = [
-        groupInsights.length + ' parent groups',
-        'Latest update ' + latestUpdateLabel,
-        pendingUnits + ' units need follow-up'
+        groupInsights.length + ' \u500b\u4e00\u7d1a\u55ae\u4f4d\u7fa4\u7d44',
+        '\u6700\u8fd1\u66f4\u65b0 ' + latestUpdateLabel,
+        pendingUnits + ' \u500b\u55ae\u4f4d\u5f85\u8ffd\u8e64'
       ].map((text) => '<span class="training-exec-hero-tag">' + esc(text) + '</span>').join('');
       const signalCards = [
-        ['Follow-up units', pendingUnits, 'Draft, returned, or missing submissions', 'amber'],
-        ['Returned units', returnedUnits, 'Need correction before resubmission', 'red'],
-        ['Missing units', missingUnits, 'No current submission on file', 'slate'],
-        ['Draft units', draftUnits, 'Started but not formally submitted', 'blue']
+        ['\u5f85\u8ffd\u8e64\u55ae\u4f4d', pendingUnits, '\u5305\u542b\u66ab\u5b58\u3001\u9000\u56de\u8207\u672a\u586b\u5831\u55ae\u4f4d', 'amber'],
+        ['\u9000\u56de\u55ae\u4f4d', returnedUnits, '\u9700\u4fee\u6b63\u5f8c\u91cd\u65b0\u9001\u51fa', 'red'],
+        ['\u672a\u586b\u5831\u55ae\u4f4d', missingUnits, '\u76ee\u524d\u5c1a\u7121\u586b\u5831\u8cc7\u6599', 'slate'],
+        ['\u66ab\u5b58\u55ae\u4f4d', draftUnits, '\u5df2\u958b\u59cb\u586b\u5831\u4f46\u5c1a\u672a\u6b63\u5f0f\u9001\u51fa', 'blue']
       ].map((entry) => '<div class="training-exec-signal training-exec-signal--' + entry[3] + '"><div class="training-exec-signal-label">' + entry[0] + '</div><div class="training-exec-signal-value">' + entry[1] + '</div><div class="training-exec-signal-note">' + entry[2] + '</div></div>').join('');
       const buildChartRow = (label, statusHtml, completionRate, rowClass) => {
         const safeRate = Math.max(0, Math.min(100, Number(completionRate) || 0));
@@ -3320,53 +3332,53 @@ window._cs = function (id, ns) {
           + '</div>';
       };
       const chartOverviewStats = [
-        ['Parent groups', groupInsights.length],
-        ['Fully submitted', groupInsights.filter((group) => group.totalCount > 0 && group.submittedCount === group.totalCount).length],
-        ['People complete', totalCompletedPeople + ' / ' + totalActivePeople]
+        ['\u4e00\u7d1a\u55ae\u4f4d\u7fa4\u7d44', groupInsights.length],
+        ['\u5168\u6578\u9001\u51fa', groupInsights.filter((group) => group.totalCount > 0 && group.submittedCount === group.totalCount).length],
+        ['\u5b8c\u6210\u4eba\u6578', totalCompletedPeople + ' / ' + totalActivePeople]
       ].map((entry) => '<div class="training-chart-overview-stat"><span>' + entry[0] + '</span><strong>' + entry[1] + '</strong></div>').join('');
-      const chartIntro = '<div class="training-chart-overview"><div class="training-chart-overview-copy"><div class="training-chart-kicker">Hierarchy Map</div><div class="training-chart-subtitle">Start with parent-unit completion and submission rhythm, then open each group to inspect child units in detail.</div></div><div class="training-chart-overview-side"><div class="training-chart-overview-stats">' + chartOverviewStats + '</div><div class="training-chart-legend"><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--live"></span>Completion</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--submitted"></span>Submitted</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--pending"></span>Follow-up</span></div></div></div>';
+      const chartIntro = '<div class="training-chart-overview"><div class="training-chart-overview-copy"><div class="training-chart-kicker">\u5c64\u7d1a\u7e3d\u89bd</div><div class="training-chart-subtitle">\u5148\u770b\u4e00\u7d1a\u55ae\u4f4d\u6574\u9ad4\u9032\u5ea6\uff0c\u518d\u5c55\u958b\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30\u3002</div></div><div class="training-chart-overview-side"><div class="training-chart-overview-stats">' + chartOverviewStats + '</div><div class="training-chart-legend"><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--live"></span>\u5b8c\u6210\u7387</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--submitted"></span>\u5df2\u9001\u51fa</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--pending"></span>\u5f85\u8ffd\u8e64</span></div></div></div>';
       const chartRows = chartIntro + (groupInsights.length ? groupInsights.map((group) => {
         const childRows = group.children.map((child) => {
           const childLabel = String((child.parsed && child.parsed.child) || child.unit || '').trim() || group.parentUnit;
-          const childStatus = child.latest ? trainingStatusBadge(child.latest.status) : '<span class="training-inline-status">No report</span>';
+          const childStatus = child.latest ? trainingStatusBadge(child.latest.status) : '<span class="training-inline-status">\u672a\u586b\u5831</span>';
           return buildChartRow(childLabel, childStatus, child.summary.completionRate || 0, 'training-chart-row--child');
         }).join('');
-        let parentStatus = '<span class="training-inline-status">No report</span>';
+        let parentStatus = '<span class="training-inline-status">\u672a\u586b\u5831</span>';
         if (group.totalCount > 0 && group.submittedCount === group.totalCount) {
           parentStatus = trainingStatusBadge(TRAINING_STATUSES.SUBMITTED);
         } else if (group.returnedCount > 0) {
-          parentStatus = '<span class="training-inline-status">Returned ' + group.returnedCount + '/' + group.totalCount + '</span>';
+          parentStatus = '<span class="training-inline-status">\u9000\u56de ' + group.returnedCount + '/' + group.totalCount + '</span>';
         } else if (group.submittedCount > 0 || group.draftCount > 0) {
-          parentStatus = '<span class="training-inline-status">Submitted ' + group.submittedCount + '/' + group.totalCount + '</span>';
+          parentStatus = '<span class="training-inline-status">\u5df2\u9001\u51fa ' + group.submittedCount + '/' + group.totalCount + '</span>';
         }
         const parentRow = buildChartRow(group.parentUnit, parentStatus, group.parentCompletion, 'training-chart-row--parent');
         const groupPills = '<div class="training-chart-pills">'
-          + '<div class="training-chart-pill"><span class="training-chart-pill-label">L2 units</span><strong class="training-chart-pill-value">' + group.totalCount + '</strong></div>'
-          + '<div class="training-chart-pill training-chart-pill--success"><span class="training-chart-pill-label">Submitted</span><strong class="training-chart-pill-value">' + group.submittedCount + '</strong></div>'
-          + '<div class="training-chart-pill training-chart-pill--warning"><span class="training-chart-pill-label">Follow-up</span><strong class="training-chart-pill-value">' + group.followUpCount + '</strong></div>'
-          + '<div class="training-chart-pill"><span class="training-chart-pill-label">Completed</span><strong class="training-chart-pill-value">' + group.completedCount + ' / ' + group.activeCount + '</strong></div>'
+          + '<div class="training-chart-pill"><span class="training-chart-pill-label">\u4e8c\u7d1a\u55ae\u4f4d</span><strong class="training-chart-pill-value">' + group.totalCount + '</strong></div>'
+          + '<div class="training-chart-pill training-chart-pill--success"><span class="training-chart-pill-label">\u5df2\u9001\u51fa</span><strong class="training-chart-pill-value">' + group.submittedCount + '</strong></div>'
+          + '<div class="training-chart-pill training-chart-pill--warning"><span class="training-chart-pill-label">\u5f85\u8ffd\u8e64</span><strong class="training-chart-pill-value">' + group.followUpCount + '</strong></div>'
+          + '<div class="training-chart-pill"><span class="training-chart-pill-label">\u5df2\u5b8c\u6210</span><strong class="training-chart-pill-value">' + group.completedCount + ' / ' + group.activeCount + '</strong></div>'
           + '</div>';
-        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head"><div class="training-chart-group-main"><div class="training-chart-group-kicker">Parent unit</div>' + parentRow + '</div><div class="training-chart-group-side">' + groupPills + '<span class="training-chart-toggle">Expand details</span></div></div></summary><div class="training-chart-children"><div class="training-chart-children-title">Child units</div><div class="training-chart-subgrid-head"><span>Unit</span><span>Completion</span><span>Status / Ratio</span></div>' + childRows + '</div></details>';
-      }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">No unit data yet</div></div>');
+        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head"><div class="training-chart-group-main"><div class="training-chart-group-kicker">\u4e00\u7d1a\u55ae\u4f4d</div>' + parentRow + '</div><div class="training-chart-group-side">' + groupPills + '<span class="training-chart-toggle">\u5c55\u958b\u660e\u7d30</span></div></div></summary><div class="training-chart-children"><div class="training-chart-children-title">\u4e8c\u7d1a\u55ae\u4f4d</div><div class="training-chart-subgrid-head"><span>\u55ae\u4f4d</span><span>\u5b8c\u6210\u7387</span><span>\u72c0\u614b / \u6bd4\u4f8b</span></div>' + childRows + '</div></details>';
+      }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">\u76ee\u524d\u5c1a\u7121\u55ae\u4f4d\u8cc7\u6599</div></div>');
       dashboardPanel = '<section class="training-exec-shell">'
-        + '<section class="training-exec-hero"><div class="training-exec-hero-grid"><div class="training-exec-hero-copy"><div class="training-exec-hero-kicker">Executive Dashboard</div><h2 class="training-exec-hero-title">校級教育訓練執行總覽</h2><p class="training-exec-hero-text">' + heroTitle + '</p><p class="training-exec-hero-subtext">' + heroDesc + '</p><div class="training-exec-hero-tags">' + heroTags + '</div><div class="training-exec-hero-metrics">' + heroMetrics + '</div></div><div class="training-exec-hero-aside"><div class="training-exec-hero-aside-card"><div class="training-exec-hero-aside-label">This cycle focus</div><div class="training-exec-hero-aside-value">' + pendingUnits + ' units to close</div><div class="training-exec-hero-aside-copy">Resolve returned items first, close drafts second, then review low-completion groups.</div></div><div class="training-exec-hero-orbit"><div class="training-exec-hero-orbit-ring"><span>' + schoolProgress + '%</span><small>Submit rate</small></div><div class="training-exec-hero-orbit-caption">People completion ' + overallCompletion + '%</div></div></div></div></section>'
+        + '<section class="training-exec-hero"><div class="training-exec-hero-grid"><div class="training-exec-hero-copy"><div class="training-exec-hero-kicker">\u6821\u7d1a\u7e3d\u89bd</div><h2 class="training-exec-hero-title">\u6821\u7d1a\u6559\u80b2\u8a13\u7df4\u57f7\u884c\u7e3d\u89bd</h2><p class="training-exec-hero-text">' + heroTitle + '</p><p class="training-exec-hero-subtext">' + heroDesc + '</p><div class="training-exec-hero-tags">' + heroTags + '</div><div class="training-exec-hero-metrics">' + heroMetrics + '</div></div><div class="training-exec-hero-aside"><div class="training-exec-hero-aside-card"><div class="training-exec-hero-aside-label">\u672c\u8f2a\u7126\u9ede</div><div class="training-exec-hero-aside-value">' + pendingUnits + ' \u500b\u55ae\u4f4d\u5f85\u8ffd\u8e64</div><div class="training-exec-hero-aside-copy">\u512a\u5148\u8655\u7406\u9000\u56de\u4ef6\uff0c\u5176\u6b21\u6536\u6582\u66ab\u5b58\u8207\u672a\u586b\u5831\u55ae\u4f4d\uff0c\u518d\u6aa2\u8996\u4f4e\u5b8c\u6210\u7387\u7fa4\u7d44\u3002</div></div><div class="training-exec-hero-orbit"><div class="training-exec-hero-orbit-ring"><span>' + schoolProgress + '%</span><small>\u9001\u51fa\u7387</small></div><div class="training-exec-hero-orbit-caption">\u4eba\u54e1\u5b8c\u6210\u7387 ' + overallCompletion + '%</div></div></div></div></section>'
         + '<div class="training-exec-signals">' + signalCards + '</div>'
         + '<div class="training-exec-panels">'
-        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">Focus List</div><h3 class="training-exec-panel-title">Priority units</h3></div><span class="training-exec-panel-badge">' + focusUnits.length + ' items</span></div><div class="training-exec-list">' + focusUnitsHtml + '</div></div>'
-        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">Parent Units</div><h3 class="training-exec-panel-title">Group tracking</h3></div><span class="training-exec-panel-badge">' + groupInsights.length + ' groups</span></div><div class="training-exec-rank-list">' + parentLeaderboardHtml + '</div></div>'
-        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">Live Feed</div><h3 class="training-exec-panel-title">Recent updates</h3></div><span class="training-exec-panel-badge">' + recentUpdates.length + ' items</span></div><div class="training-exec-update-list">' + recentUpdatesHtml + '</div></div>'
+        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">\u91cd\u9ede\u8ffd\u8e64</div><h3 class="training-exec-panel-title">\u512a\u5148\u8655\u7406\u55ae\u4f4d</h3></div><span class="training-exec-panel-badge">' + focusUnits.length + ' \u9805</span></div><div class="training-exec-list">' + focusUnitsHtml + '</div></div>'
+        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">\u4e00\u7d1a\u55ae\u4f4d</div><h3 class="training-exec-panel-title">\u7fa4\u7d44\u8ffd\u8e64</h3></div><span class="training-exec-panel-badge">' + groupInsights.length + ' \u7fa4</span></div><div class="training-exec-rank-list">' + parentLeaderboardHtml + '</div></div>'
+        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">\u6700\u65b0\u52d5\u614b</div><h3 class="training-exec-panel-title">\u6700\u8fd1\u66f4\u65b0</h3></div><span class="training-exec-panel-badge">' + recentUpdates.length + ' \u7b46</span></div><div class="training-exec-update-list">' + recentUpdatesHtml + '</div></div>'
         + '</div>'
-        + '<div class="card training-chart-card"><div class="card-header"><div><span class="card-title">一級單位完成率地圖</span><div class="training-table-subtitle">Parent units stay compact by default. Click any card to open child-unit detail without overwhelming the page.</div></div></div><div class="training-chart">' + chartRows + '</div></div>'
+        + '<div class="card training-chart-card"><div class="card-header"><div><span class="card-title">\u4e00\u7d1a\u55ae\u4f4d\u5b8c\u6210\u7387\u5730\u5716</span><div class="training-table-subtitle">\u9810\u8a2d\u50c5\u986f\u793a\u4e00\u7d1a\u55ae\u4f4d\u6458\u8981\uff0c\u9ede\u64ca\u5361\u7247\u5373\u53ef\u5c55\u958b\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30\uff0c\u907f\u514d\u756b\u9762\u904e\u5ea6\u64c1\u64e0\u3002</div></div></div><div class="training-chart">' + chartRows + '</div></div>'
         + '</section>';
     } else {
       const visibleFormsRate = summary.total ? Math.round((summary.submitted / summary.total) * 100) : 0;
       const liteCards = [
-        ['Visible reports', summary.total, 'Reports you can access right now', 'blue'],
-        ['Drafts', summary.draft, 'Still waiting for formal submission', 'amber'],
-        ['Submitted', summary.submitted, 'Completed report workflow', 'green'],
-        ['Submit rate', visibleFormsRate + '%', 'Calculated from visible reports', 'slate']
+        ['\u53ef\u898b\u586b\u5831', summary.total, '\u4f60\u76ee\u524d\u53ef\u67e5\u770b\u7684\u586b\u5831\u6578\u91cf', 'blue'],
+        ['\u66ab\u5b58', summary.draft, '\u4ecd\u5f85\u6b63\u5f0f\u9001\u51fa', 'amber'],
+        ['\u5df2\u9001\u51fa', summary.submitted, '\u5df2\u5b8c\u6210\u586b\u5831\u6d41\u7a0b', 'green'],
+        ['\u9001\u51fa\u7387', visibleFormsRate + '%', '\u4f9d\u53ef\u898b\u586b\u5831\u8a08\u7b97', 'slate']
       ].map((entry) => '<div class="training-lite-card training-lite-card--' + entry[3] + '"><div class="training-lite-label">' + entry[0] + '</div><div class="training-lite-value">' + entry[1] + '</div><div class="training-lite-note">' + entry[2] + '</div></div>').join('');
-      dashboardPanel = '<section class="training-lite-shell"><div class="training-lite-header"><div><div class="training-exec-panel-kicker">Overview</div><h2 class="training-lite-title">個人可見範圍摘要</h2></div><div class="training-lite-updated">Updated ' + latestUpdateLabel + '</div></div><div class="training-lite-grid">' + liteCards + '</div></section>';
+      dashboardPanel = '<section class="training-lite-shell"><div class="training-lite-header"><div><div class="training-exec-panel-kicker">\u7e3d\u89bd</div><h2 class="training-lite-title">\u500b\u4eba\u53ef\u898b\u7bc4\u570d\u6458\u8981</h2></div><div class="training-lite-updated">\u66f4\u65b0\u6642\u9593 ' + latestUpdateLabel + '</div></div><div class="training-lite-grid">' + liteCards + '</div></section>';
     }
 
     document.getElementById('app').innerHTML = '<div class="animate-in training-dashboard-page">'

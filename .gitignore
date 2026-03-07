@@ -11,3 +11,5 @@ ssh_log2.txt
 .tmp-*
 local-preview.png
 node_modules/
+.codex-playwright/
+.npm-cache/

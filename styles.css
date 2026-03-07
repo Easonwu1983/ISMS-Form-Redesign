@@ -4516,22 +4516,23 @@ tbody tr:hover {
   position: relative;
   overflow: hidden;
   border-radius: 28px;
-  padding: 26px;
+  padding: 24px;
   background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.22), transparent 22%),
-    radial-gradient(circle at 84% 24%, rgba(147, 197, 253, 0.3), transparent 26%),
-    linear-gradient(135deg, #0f172a 0%, #1d4ed8 52%, #0f766e 100%);
-  box-shadow: 0 34px 70px -42px rgba(15, 23, 42, 0.72);
-  color: #f8fbff;
+    radial-gradient(circle at 100% 0%, rgba(36, 89, 169, 0.12), transparent 34%),
+    radial-gradient(circle at 0% 100%, rgba(15, 118, 110, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 255, 0.96));
+  border: 1px solid rgba(198, 210, 224, 0.95);
+  box-shadow: 0 22px 40px -34px rgba(36, 89, 169, 0.24);
+  color: var(--text-primary);
 }
 
 .training-exec-hero::before {
   content: "";
   position: absolute;
-  inset: auto -8% -38% 36%;
-  height: 260px;
+  inset: auto -4% -26% 44%;
+  height: 220px;
   background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.14), transparent 58%);
+    radial-gradient(circle at center, rgba(36, 89, 169, 0.09), transparent 58%);
   pointer-events: none;
 }
 
@@ -4539,9 +4540,9 @@ tbody tr:hover {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.82fr);
-  gap: 18px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1.48fr) minmax(250px, 0.78fr);
+  gap: 16px;
+  align-items: start;
 }
 
 .training-exec-hero-copy {
@@ -4555,29 +4556,28 @@ tbody tr:hover {
   width: fit-content;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.86);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  background: rgba(36, 89, 169, 0.08);
+  border: 1px solid rgba(36, 89, 169, 0.16);
+  color: var(--accent-primary);
+  letter-spacing: 0.08em;
   font-size: 0.68rem;
   font-weight: 800;
 }
 
 .training-exec-hero-title {
   margin: 0;
-  font-size: clamp(1.8rem, 3vw, 2.5rem);
-  line-height: 1.08;
+  font-size: clamp(1.7rem, 2.8vw, 2.2rem);
+  line-height: 1.1;
   letter-spacing: -0.03em;
-  color: #fff;
+  color: var(--text-heading);
 }
 
 .training-exec-hero-text {
   margin: 0;
-  font-size: 1.02rem;
-  line-height: 1.55;
+  font-size: 1rem;
+  line-height: 1.6;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--text-heading);
   max-width: 680px;
 }
 
@@ -4585,7 +4585,7 @@ tbody tr:hover {
   margin: -6px 0 0;
   font-size: 0.9rem;
   line-height: 1.75;
-  color: rgba(226, 232, 240, 0.88);
+  color: var(--text-secondary);
   max-width: 720px;
 }
 
@@ -4600,9 +4600,9 @@ tbody tr:hover {
   align-items: center;
   padding: 7px 11px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: rgba(248, 250, 252, 0.9);
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(198, 210, 224, 0.9);
+  color: var(--text-secondary);
   font-size: 0.74rem;
   font-weight: 700;
 }
@@ -4616,16 +4616,15 @@ tbody tr:hover {
 .training-exec-hero-metric {
   padding: 14px 16px;
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(210, 220, 232, 0.92);
+  box-shadow: 0 16px 28px -26px rgba(36, 89, 169, 0.22);
 }
 
 .training-exec-hero-label {
   font-size: 0.76rem;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(226, 232, 240, 0.78);
+  color: var(--text-secondary);
   font-weight: 700;
 }
 
@@ -4634,7 +4633,7 @@ tbody tr:hover {
   font-size: 1.7rem;
   line-height: 1;
   font-weight: 800;
-  color: #fff;
+  color: var(--text-heading);
   font-variant-numeric: tabular-nums;
 }
 
@@ -4642,7 +4641,7 @@ tbody tr:hover {
   margin-top: 8px;
   font-size: 0.82rem;
   line-height: 1.55;
-  color: rgba(226, 232, 240, 0.82);
+  color: var(--text-secondary);
 }
 
 .training-exec-hero-aside {
@@ -4653,16 +4652,16 @@ tbody tr:hover {
 .training-exec-hero-aside-card {
   padding: 18px;
   border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(12px);
+  background:
+    linear-gradient(180deg, rgba(234, 242, 255, 0.94), rgba(255, 255, 255, 0.98));
+  border: 1px solid rgba(192, 210, 232, 0.92);
+  box-shadow: 0 16px 28px -26px rgba(36, 89, 169, 0.22);
 }
 
 .training-exec-hero-aside-label {
   font-size: 0.74rem;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(226, 232, 240, 0.78);
+  color: var(--accent-primary);
   font-weight: 700;
 }
 
@@ -4671,45 +4670,48 @@ tbody tr:hover {
   font-size: 1.4rem;
   font-weight: 800;
   line-height: 1.1;
-  color: #fff;
+  color: var(--text-heading);
 }
 
 .training-exec-hero-aside-copy {
   margin-top: 10px;
   font-size: 0.84rem;
   line-height: 1.65;
-  color: rgba(226, 232, 240, 0.86);
+  color: var(--text-secondary);
 }
 
 .training-exec-hero-orbit {
   display: grid;
   justify-items: center;
   gap: 10px;
-  padding: 20px 16px 12px;
+  padding: 18px 16px 12px;
   border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(192, 210, 232, 0.92);
+  box-shadow: 0 16px 28px -26px rgba(15, 23, 42, 0.18);
 }
 
 .training-exec-hero-orbit-ring {
-  width: 148px;
-  height: 148px;
+  width: 132px;
+  height: 132px;
   border-radius: 999px;
   display: grid;
   place-items: center;
   text-align: center;
   background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.15) 0 50%, transparent 51%),
-    conic-gradient(from 180deg, rgba(255, 255, 255, 0.18), rgba(191, 219, 254, 0.65), rgba(94, 234, 212, 0.5), rgba(255, 255, 255, 0.18));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.92) 0 54%, transparent 55%),
+    conic-gradient(from 180deg, rgba(36, 89, 169, 0.14), rgba(59, 130, 246, 0.42), rgba(15, 118, 110, 0.28), rgba(36, 89, 169, 0.14));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.92),
+    0 12px 28px -22px rgba(36, 89, 169, 0.35);
 }
 
 .training-exec-hero-orbit-ring span {
   display: block;
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: 800;
   line-height: 1;
-  color: #fff;
+  color: var(--accent-primary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -4718,13 +4720,12 @@ tbody tr:hover {
   margin-top: 6px;
   font-size: 0.76rem;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(226, 232, 240, 0.82);
+  color: var(--text-secondary);
 }
 
 .training-exec-hero-orbit-caption {
   font-size: 0.84rem;
-  color: rgba(226, 232, 240, 0.86);
+  color: var(--text-secondary);
   text-align: center;
 }
 
