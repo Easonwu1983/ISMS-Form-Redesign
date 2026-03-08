@@ -1224,7 +1224,7 @@
 
     var recent = items.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
     var recentRows = recent.length ? recent.map(function (i) {
-      return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td>' + esc(i.id) + '</td><td>' + esc(i.problemDesc || '').substring(0, 34) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>';
+      return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.problemDesc || '').substring(0, 34) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>';
     }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">尚無矯正單</div></div></td></tr>';
 
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
@@ -1255,9 +1255,10 @@
       + '</div>'
       + '<div class="dashboard-grid">'
       + '<div class="card dashboard-panel dashboard-chart-panel"><div class="card-header"><span class="card-title">狀態分布</span></div><div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div></div>'
-      + '<div class="card dashboard-panel dashboard-table-panel"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th>單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + recentRows + '</tbody></table></div></div>'
+      + '<div class="card dashboard-panel dashboard-table-panel"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + recentRows + '</tbody></table></div></div>'
       + '</div></div>';
     refreshIcons();
+    bindCopyButtons();
   }
 
   var curFilter = '全部', curSearch = '';
@@ -1266,13 +1267,13 @@
     if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
     if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
     filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-    var rows = filtered.length ? filtered.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td>' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>'; }).join('') : '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
+    var rows = filtered.length ? filtered.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>'; }).join('') : '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
     var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
       '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + items.length + ' 筆，顯示 ' + filtered.length + ' 筆</p></div>' + createBtn + '</div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
-      '<div class="card" style="padding:0;overflow:hidden;"><div class="table-wrapper"><table><thead><tr><th>單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+      '<div class="card" style="padding:0;overflow:hidden;"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
     refreshIcons();
     bindCopyButtons();
     document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; renderList(); });
@@ -2516,11 +2517,11 @@ function renderTracking(id) {
       const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
       const statusCls = normalizeChecklistStatus(c.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
       const target = isChecklistDraftStatus(c.status) && canEditChecklist(c) ? `checklist-fill/${c.id}` : `checklist-detail/${c.id}`;
-      return `<tr onclick="location.hash='${target}'"><td>${renderCopyIdCell(c.id, '檢核表編號', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
+      return `<tr onclick="location.hash='${target}'"><td class="record-id-col">${renderCopyIdCell(c.id, '檢核表編號', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
     }).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:60px"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">尚無檢核表紀錄</div><div class="empty-state-desc">登入使用者可點選「填報檢核表」開始填寫</div></div></td></tr>`;
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">國立臺灣大學內部資通安全稽核查檢表</p></div>${fillBtn}</div>
-      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>受稽單位</th><th>填報人</th><th>稽核年度</th><th>狀態</th><th>符合率</th><th>填報日期</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>受稽單位</th><th>填報人</th><th>稽核年度</th><th>狀態</th><th>符合率</th><th>填報日期</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
     bindCopyButtons();
   }
@@ -3741,7 +3742,7 @@ function renderTracking(id) {
         actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回修正</button>');
       }
       return '<tr>'
-        + '<td>' + renderCopyIdCell(form.id, '教育訓練編號', true) + '</td>'
+        + '<td class="record-id-col">' + renderCopyIdCell(form.id, '教育訓練編號', true) + '</td>'
         + '<td>' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</td>'
         + '<td>' + esc(form.unit) + '</td>'
         + '<td>' + esc(form.fillerName) + '</td>'
@@ -3962,7 +3963,7 @@ function renderTracking(id) {
     document.getElementById('app').innerHTML = '<div class="animate-in training-dashboard-page">'
       + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">Executive view for submission rhythm, unit completion, and training gaps.</p></div>' + toolbar + '</div>'
       + dashboardPanel
-      + '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">填報清單</span><div class="training-table-subtitle">Keep the operational list below the dashboard so the first screen stays focused on decisions, not rows.</div></div></div><div class="table-wrapper"><table><thead><tr><th>編號</th><th>統計單位</th><th>填報單位</th><th>填報人</th><th>狀態</th><th>在職</th><th>已完成</th><th>未完成</th><th>完成率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>'
+      + '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">填報清單</span><div class="training-table-subtitle">Keep the operational list below the dashboard so the first screen stays focused on decisions, not rows.</div></div></div><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>統計單位</th><th>填報單位</th><th>填報人</th><th>狀態</th><th>在職</th><th>已完成</th><th>未完成</th><th>完成率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>'
       + '</div>';
 
     document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(forms));

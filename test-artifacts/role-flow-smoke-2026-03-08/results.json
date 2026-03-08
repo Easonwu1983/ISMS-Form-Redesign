@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-08T07:47:18.840Z",
+  "startedAt": "2026-03-08T08:03:10.985Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "steps": [
     {
@@ -165,7 +165,7 @@
       "password": "viewer123"
     }
   },
-  "finishedAt": "2026-03-08T07:47:51.022Z",
+  "finishedAt": "2026-03-08T08:03:43.113Z",
   "summary": {
     "passed": 13,
     "failed": 0,
