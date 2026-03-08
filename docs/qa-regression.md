@@ -6,7 +6,7 @@
 
 ## Goal
 
-This project uses three regression layers so route permissions, role flow, and end-to-end submission behavior can be verified separately.
+This project uses four regression layers so route permissions, focused business flow, broad role flow, and end-to-end submission behavior can be verified separately.
 
 ## Test Layers
 
@@ -30,7 +30,22 @@ This project uses three regression layers so route permissions, role flow, and e
 - Output:
   - `test-artifacts/role-flow-regression-YYYY-MM-DD/flow-probe.json`
 
-### 3. Full Smoke Flow
+### 3. Focus Regression
+
+- Command: `npm run test:role:focus`
+- Script: [C:\AI\ISMS-Form-Redesign\scripts\admin-reporter-regression.cjs](C:\AI\ISMS-Form-Redesign\scripts\admin-reporter-regression.cjs)
+- Purpose:
+  - Validate the most critical business path only.
+  - Sequence:
+    - admin create
+    - unit1 respond
+    - admin review to tracking
+    - unit1 tracking submit
+    - admin close
+- Output:
+  - `test-artifacts/role-flow-focus-YYYY-MM-DD/admin-reporter-regression.json`
+
+### 4. Full Smoke Flow
 
 - Command: `npm run test:role:smoke`
 - Script: [C:\AI\ISMS-Form-Redesign\scripts\role-flow-smoke.cjs](C:\AI\ISMS-Form-Redesign\scripts\role-flow-smoke.cjs)
@@ -51,7 +66,8 @@ This project uses three regression layers so route permissions, role flow, and e
 
 1. `npm run test:role:permission`
 2. `npm run test:role:probe`
-3. `npm run test:role:smoke`
+3. `npm run test:role:focus`
+4. `npm run test:role:smoke`
 
 Or run all in one command:
 
@@ -101,6 +117,13 @@ npm run test:role:all
 - `consoleErrors = 0`
 - `pageErrors = 0`
 
+### Focus Regression
+
+- `failed = 0`
+- `consoleErrors = 0`
+- `pageErrors = 0`
+- all 5 focus steps present and passed
+
 ### Full Smoke Flow
 
 - `failed = 0`
@@ -119,7 +142,8 @@ npm run test:role:all
 
 - Use `permission` after route or role logic changes.
 - Use `probe` after form selector or UI interaction changes.
-- Use `smoke` before merge, release, or after data flow changes.
+- Use `focus` after correction workflow, state machine, or review logic changes.
+- Use `smoke` before merge, release, or after wider data flow changes.
 
 ## Maintenance Rules
 
@@ -129,10 +153,10 @@ npm run test:role:all
 
 2. New critical form field:
    - add stable `data-testid`
-   - update probe or smoke script if that field is part of a blocking flow
+   - update probe, focus, or smoke script if that field is part of a blocking flow
 
 3. New workflow stage:
-   - extend smoke flow
+   - extend focus and smoke flow
    - keep probe short and focused
 
 4. New test run:

@@ -4,8 +4,9 @@
   "scripts": {
     "test:role:permission": "node scripts/route-permission-matrix.cjs",
     "test:role:probe": "node scripts/role-flow-probe.cjs",
+    "test:role:focus": "node scripts/admin-reporter-regression.cjs",
     "test:role:smoke": "node scripts/role-flow-smoke.cjs",
-    "test:role:all": "npm run test:role:permission && npm run test:role:probe && npm run test:role:smoke"
+    "test:role:all": "npm run test:role:permission && npm run test:role:probe && npm run test:role:focus && npm run test:role:smoke"
   },
   "devDependencies": {
     "playwright": "1.58.2"
