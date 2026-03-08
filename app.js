@@ -877,6 +877,61 @@
   function ntuLogo(c = '') { return '<span class="ntu-logo ' + c + '">NTU</span>'; }
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
+  function renderCopyIdButton(value, label) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const safeLabel = String(label || '編號').trim();
+    return `<button type="button" class="copy-id-btn" data-copy="${esc(text)}" data-copy-label="${esc(safeLabel)}" title="複製${esc(safeLabel)}" aria-label="複製${esc(safeLabel)}">${ic('copy', 'icon-xs')}</button>`;
+  }
+  function renderCopyIdCell(value, label, strong = false) {
+    const text = String(value || '').trim();
+    const classes = ['copy-id-cell'];
+    if (strong) classes.push('copy-id-cell--strong');
+    return `<div class="${classes.join(' ')}"><span class="copy-id-text">${esc(text || '—')}</span>${renderCopyIdButton(text, label)}</div>`;
+  }
+  function copyTextToClipboard(value, label = '編號') {
+    const text = String(value || '').trim();
+    if (!text) {
+      toast(`沒有可複製的${label}`, 'error');
+      return Promise.resolve(false);
+    }
+    const fallbackCopy = () => {
+      try {
+        const input = document.createElement('textarea');
+        input.value = text;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(input);
+        if (!ok) throw new Error('copy command failed');
+        toast(`${label}已複製`);
+        return true;
+      } catch (_) {
+        toast(`${label}複製失敗`, 'error');
+        return false;
+      }
+    };
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      return navigator.clipboard.writeText(text).then(() => {
+        toast(`${label}已複製`);
+        return true;
+      }).catch(() => fallbackCopy());
+    }
+    return Promise.resolve(fallbackCopy());
+  }
+  function bindCopyButtons(root = document) {
+    root.querySelectorAll('.copy-id-btn:not([data-copy-bound])').forEach((button) => {
+      button.dataset.copyBound = '1';
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextToClipboard(button.dataset.copy || '', button.dataset.copyLabel || '編號');
+      });
+    });
+  }
   function applyTestIds(map) {
     Object.entries(map || {}).forEach(([id, testId]) => {
       const el = document.getElementById(id);
@@ -1211,7 +1266,7 @@
     if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
     if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
     filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-    var rows = filtered.length ? filtered.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td>' + esc(i.id) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>'; }).join('') : '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
+    var rows = filtered.length ? filtered.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td>' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>'; }).join('') : '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
     var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
@@ -1219,6 +1274,7 @@
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
       '<div class="card" style="padding:0;overflow:hidden;"><div class="table-wrapper"><table><thead><tr><th>單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
     refreshIcons();
+    bindCopyButtons();
     document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; renderList(); });
     document.getElementById('filter-tabs').addEventListener('click', function (e) { if (e.target.classList.contains('filter-tab')) { curFilter = e.target.dataset.filter; renderList(); } });
   }
@@ -1604,7 +1660,7 @@ function renderCreate() {
     }).join('') || '<p style="color:var(--text-muted);font-size:.88rem">尚無追蹤紀錄</p>';
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="detail-header"><div><div class="detail-id">${esc(item.id)} · ${esc(item.deficiencyType)}</div><h1 class="detail-title">${esc(item.problemDesc || '').substring(0, 50)}</h1>
+      <div class="detail-header"><div><div class="detail-id detail-id-with-copy"><span>${esc(item.id)} · ${esc(item.deficiencyType)}</span>${renderCopyIdButton(item.id, '矯正單號')}</div><h1 class="detail-title">${esc(item.problemDesc || '').substring(0, 50)}</h1>
         <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(item.proposerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(item.proposerDate)}</span><span class="badge badge-${STATUS_CLASSES[item.status]}"><span class="badge-dot"></span>${item.status}</span>${otag}</div>
       </div><div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">${btns}<a href="#list" class="btn btn-secondary">← 返回</a></div></div>
       <div class="stepper">${stepper}</div>
@@ -1651,6 +1707,7 @@ function renderCreate() {
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('history', 'icon-sm')} 歷程紀錄</span></div><div class="timeline">${tl}</div></div>
     </div>`;
     refreshIcons();
+    bindCopyButtons();
   }
 
   
@@ -2459,12 +2516,13 @@ function renderTracking(id) {
       const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
       const statusCls = normalizeChecklistStatus(c.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
       const target = isChecklistDraftStatus(c.status) && canEditChecklist(c) ? `checklist-fill/${c.id}` : `checklist-detail/${c.id}`;
-      return `<tr onclick="location.hash='${target}'"><td style="font-weight:600;color:var(--accent-primary)">${esc(c.id)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
+      return `<tr onclick="location.hash='${target}'"><td>${renderCopyIdCell(c.id, '檢核表編號', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
     }).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:60px"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">尚無檢核表紀錄</div><div class="empty-state-desc">登入使用者可點選「填報檢核表」開始填寫</div></div></td></tr>`;
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">國立臺灣大學內部資通安全稽核查檢表</p></div>${fillBtn}</div>
       <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>編號</th><th>受稽單位</th><th>填報人</th><th>稽核年度</th><th>狀態</th><th>符合率</th><th>填報日期</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
+    bindCopyButtons();
   }
 
   // ─── Render: Checklist Fill ────────────────
@@ -2817,7 +2875,7 @@ function renderTracking(id) {
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="detail-header"><div>
-        <div class="detail-id">${esc(cl.id)} · ${esc(cl.auditYear)} 年度</div>
+        <div class="detail-id detail-id-with-copy"><span>${esc(cl.id)} · ${esc(cl.auditYear)} 年度</span>${renderCopyIdButton(cl.id, '檢核表編號')}</div>
         <h1 class="detail-title">內稽檢核表 — ${esc(cl.unit)}</h1>
         <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(cl.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(cl.fillDate)}</span><span class="badge ${statusCls}"><span class="badge-dot"></span>${esc(cl.status)}</span></div>
       </div><a href="#checklist" class="btn btn-secondary">返回列表</a></div>
@@ -2842,6 +2900,7 @@ function renderTracking(id) {
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 檢核結果明細</span></div>${sectDetail}</div>
     </div>`;
     refreshIcons();
+    bindCopyButtons();
   }
 
   function renderChecklistManage() {
@@ -3682,7 +3741,7 @@ function renderTracking(id) {
         actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回修正</button>');
       }
       return '<tr>'
-        + '<td style="font-weight:700;color:var(--accent-primary)">' + esc(form.id) + '</td>'
+        + '<td>' + renderCopyIdCell(form.id, '教育訓練編號', true) + '</td>'
         + '<td>' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</td>'
         + '<td>' + esc(form.unit) + '</td>'
         + '<td>' + esc(form.fillerName) + '</td>'
@@ -3908,6 +3967,7 @@ function renderTracking(id) {
 
     document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(forms));
     refreshIcons();
+    bindCopyButtons();
   }
 
   function buildTrainingFillPage(params) {
@@ -4351,7 +4411,7 @@ function renderTrainingFill(id) {
     if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift('<button type="button" class="btn btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">' + ic('corner-up-left', 'icon-sm') + ' 退回更正</button>');
 
     document.getElementById('app').innerHTML = '<div class="animate-in">'
-      + '<div class="detail-header"><div><div class="detail-id">' + esc(form.id) + ' · ' + esc(form.trainingYear) + ' 年度</div><h1 class="detail-title">資安教育訓練統計 — ' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('building-2', 'icon-xs') + '</span>' + esc(form.unit) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('user', 'icon-xs') + '</span>' + esc(form.fillerName) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('calendar', 'icon-xs') + '</span>' + fmt(form.fillDate) + '</span>' + trainingStatusBadge(form.status) + '</div></div><div class="training-toolbar-actions">' + actions.join('') + '</div></div>'
+      + '<div class="detail-header"><div><div class="detail-id detail-id-with-copy">' + '<span>' + esc(form.id) + ' · ' + esc(form.trainingYear) + ' 年度</span>' + renderCopyIdButton(form.id, '教育訓練編號') + '</div><h1 class="detail-title">資安教育訓練統計 — ' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('building-2', 'icon-xs') + '</span>' + esc(form.unit) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('user', 'icon-xs') + '</span>' + esc(form.fillerName) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('calendar', 'icon-xs') + '</span>' + fmt(form.fillDate) + '</span>' + trainingStatusBadge(form.status) + '</div></div><div class="training-toolbar-actions">' + actions.join('') + '</div></div>'
       + (form.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(form.returnReason || '未提供') + '</div>' : '')
       + '<div class="card"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div></div>'
       + '<div class="panel-grid-two panel-grid-spaced">'
@@ -4365,6 +4425,7 @@ function renderTrainingFill(id) {
     document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
     document.getElementById('training-print-detail')?.addEventListener('click', () => printTrainingSheet(form));
     refreshIcons();
+    bindCopyButtons();
   }
 
   function buildTrainingRosterRows(rosters) {

@@ -1583,6 +1583,60 @@ tbody td:first-child {
   margin-bottom: 4px;
 }
 
+.detail-id-with-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.copy-id-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.copy-id-cell--strong .copy-id-text {
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+.copy-id-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.copy-id-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.copy-id-btn:hover {
+  background: #eff6ff;
+  border-color: rgba(37, 99, 235, 0.28);
+  transform: translateY(-1px);
+}
+
+.copy-id-btn:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
+}
+
+.copy-id-btn .icon-xs {
+  width: 14px;
+  height: 14px;
+}
+
 .detail-title {
   font-size: 1.5rem;
   font-weight: 700;
