@@ -23,8 +23,9 @@ const results = {
   artifacts: [],
   context: {
     admin: { username: 'admin', password: 'admin123' },
-    unitAdmin: { username: 'unit1', password: 'unit123' },
-    reporter: { username: 'user1', password: 'user123' }
+    reporter: { username: 'unit1', password: 'unit123' },
+    proxyReporter: { username: 'user1', password: 'user123' },
+    viewer: { username: 'viewer1', password: 'viewer123' }
   }
 };
 
@@ -212,25 +213,27 @@ function isoDate(offsetDays) {
     });
     await logout(page);
 
-    await runStep('UA-01', '單位管理員', '登入與管理頁限制', async () => {
+    await runStep('RP-01', '單位窗口', '登入與管理頁限制', async () => {
       await login(page, 'unit1', 'unit123');
-      if (!await page.locator('a[href="#create"]').count()) throw new Error('unit admin cannot see create link');
-      if (await page.locator('a[href="#users"]').count()) throw new Error('unit admin should not see users link');
+      if (await page.locator('a[href="#create"]').count()) throw new Error('reporter should not see create link');
+      if (await page.locator('a[href="#users"]').count()) throw new Error('reporter should not see users link');
       await gotoHash(page, 'users');
       await page.waitForTimeout(250);
       const hash = await currentHash(page);
-      if (hash === '#users') throw new Error('unit admin reached users page');
-      return 'unit admin can create CAR and is blocked from users page';
+      if (hash === '#users') throw new Error('reporter reached users page');
+      return 'reporter blocked from users and create routes';
     });
+    await logout(page);
 
-    await runStep('UA-02', '單位管理員', '建立矯正單', async () => {
-      createdCarId = 'CAR-E2E-' + String(Date.now()).slice(-6);
+    await runStep('ADM-02', '最高管理者', '建立矯正單', async () => {
+      await login(page, 'admin', 'admin123');
+      createdCarId = '115-C-A30-' + String(Date.now()).slice(-3);
       await gotoHash(page, 'create');
       await page.waitForSelector('#create-form');
       await page.fill('#f-id', createdCarId);
-      await chooseUnitForHandlerUsername(page, 'f-hunit', 'f-hname', 'user1');
-      await selectByMatcher(page, '#f-hname', 'return option.dataset.username === "user1";');
-      await page.fill('#f-problem', 'E2E 測試缺失：驗證單位管理員建立矯正單流程。');
+      await chooseUnitForHandlerUsername(page, 'f-hunit', 'f-hname', 'unit1');
+      await selectByMatcher(page, '#f-hname', 'return option.dataset.username === "unit1";');
+      await page.fill('#f-problem', 'E2E 測試缺失：驗證最高管理者開單與單位窗口回填流程。');
       await page.fill('#f-occurrence', '以自動化流程建立一筆新的矯正單，確認可進入後續回填與追蹤。');
       await page.fill('#f-due', isoDate(10));
       await page.evaluate(() => {
@@ -250,23 +253,42 @@ function isoDate(offsetDays) {
       const store = await getData(page);
       const item = (store.items || []).find((entry) => entry.id === createdCarId);
       if (!item) throw new Error('created CAR not found in storage');
-      if (item.handlerUsername !== 'user1') throw new Error(`expected handler user1, got ${item.handlerUsername}`);
+      if (item.handlerUsername !== 'unit1') throw new Error(`expected handler unit1, got ${item.handlerUsername}`);
       return createdCarId;
     });
     await logout(page);
 
-    await runStep('RP-01', '填報者', '登入與權限限制', async () => {
+    await runStep('VW-01', '跨單位檢視者', '唯讀檢視與編輯限制', async () => {
+      if (!createdCarId) throw new Error('no created CAR id');
+      await login(page, 'viewer1', 'viewer123');
+      if (await page.locator('a[href="#create"]').count()) throw new Error('viewer should not see create link');
+      if (await page.locator('a[href="#users"]').count()) throw new Error('viewer should not see users link');
+      await gotoHash(page, 'detail/' + createdCarId);
+      if ((await currentHash(page)) !== '#detail/' + createdCarId) throw new Error('viewer cannot open detail');
+      await gotoHash(page, 'checklist-fill');
+      if ((await currentHash(page)) === '#checklist-fill') throw new Error('viewer reached checklist-fill');
+      await gotoHash(page, 'training-fill');
+      if ((await currentHash(page)) === '#training-fill') throw new Error('viewer reached training-fill');
+      await logout(page);
+      return 'viewer can read case detail and is blocked from fill routes';
+    });
+
+    await runStep('RP-02', '單位窗口代理', '同單位代理權限', async () => {
       await login(page, 'user1', 'user123');
       if (await page.locator('a[href="#create"]').count()) throw new Error('reporter should not see create link');
       await gotoHash(page, 'users');
       await page.waitForTimeout(240);
       const hash = await currentHash(page);
       if (hash === '#users') throw new Error('reporter reached users page');
-      return 'reporter blocked from users and create routes';
+      await gotoHash(page, 'detail/' + createdCarId);
+      if ((await currentHash(page)) !== '#detail/' + createdCarId) throw new Error('proxy reporter cannot open same-unit case');
+      return 'same-unit proxy reporter is blocked from admin pages and can view same-unit case';
     });
+    await logout(page);
 
-    await runStep('RP-02', '填報者', '回填矯正單', async () => {
+    await runStep('RP-03', '單位窗口', '回填矯正單', async () => {
       if (!createdCarId) throw new Error('no created CAR id');
+      await login(page, 'unit1', 'unit123');
       await gotoHash(page, 'respond/' + createdCarId);
       await page.waitForSelector('#respond-form');
       await page.fill('#r-action', '已完成 E2E 測試矯正措施草案與責任分工。');
@@ -285,7 +307,7 @@ function isoDate(offsetDays) {
       return 'response submitted and stored';
     });
 
-    await runStep('RP-03', '填報者', '檢核表草稿導頁一致性', async () => {
+    await runStep('RP-04', '單位窗口', '檢核表草稿導頁一致性', async () => {
       await gotoHash(page, 'checklist-fill');
       await page.waitForSelector('#checklist-form');
       await page.fill('#cl-supervisor-name', '測試主管');
@@ -316,7 +338,7 @@ function isoDate(offsetDays) {
       return hash;
     });
 
-    await runStep('RP-04', '填報者', '檢核表正式送出', async () => {
+    await runStep('RP-05', '單位窗口', '檢核表正式送出', async () => {
       if (!checklistId) throw new Error('missing checklist draft id');
       await Promise.all([
         waitForHash(page, '#checklist-detail/' + encodeURIComponent(checklistId)),
@@ -329,11 +351,11 @@ function isoDate(offsetDays) {
       return checklistId;
     });
 
-    await runStep('RP-05', '填報者', '教育訓練草稿導頁一致性', async () => {
+    await runStep('RP-06', '單位窗口', '教育訓練草稿導頁一致性', async () => {
       await gotoHash(page, 'training-fill');
       await page.waitForSelector('#training-form');
       await page.fill('#tr-phone', '02-3366-1234');
-      await page.fill('#tr-email', 'user1@g.ntu.edu.tw');
+      await page.fill('#tr-email', 'unit1@g.ntu.edu.tw');
       await page.fill('#tr-year', '115');
       await page.fill('#tr-date', isoDate(0));
       await page.evaluate(() => {
@@ -366,7 +388,7 @@ function isoDate(offsetDays) {
       return hash;
     });
 
-    await runStep('RP-06', '填報者', '教育訓練正式送出', async () => {
+    await runStep('RP-07', '單位窗口', '教育訓練正式送出', async () => {
       if (!trainingId) throw new Error('missing training draft id');
       await page.setInputFiles('#training-file-input', DUMMY_FILE_PATH);
       await Promise.all([
@@ -381,12 +403,12 @@ function isoDate(offsetDays) {
     });
     await logout(page);
 
-    await runStep('ADM-02', '最高管理者', '審核矯正單並轉入追蹤', async () => {
+    await runStep('ADM-03', '最高管理者', '審核矯正單並轉入追蹤', async () => {
       if (!createdCarId) throw new Error('missing car id for admin review');
       await login(page, 'admin', 'admin123');
       await gotoHash(page, 'detail/' + createdCarId);
       await page.waitForSelector('.detail-header');
-      const reviewButton = page.locator('button.btn-primary[onclick*="_cs"]');
+      const reviewButton = page.locator('button.btn-primary[onclick*="_cs"]').first();
       if (!await reviewButton.count()) throw new Error('review transition button not available');
       await reviewButton.click();
       await page.waitForTimeout(250);
@@ -397,12 +419,13 @@ function isoDate(offsetDays) {
       const store = await getData(page);
       const item = (store.items || []).find((entry) => entry.id === createdCarId);
       if (!item) throw new Error('CAR missing after review transition');
+      if (item.pendingTracking) throw new Error('pendingTracking should be empty before reporter submission');
       if (!Array.isArray(item.trackings)) throw new Error('tracking array missing after transition');
       return 'moved to tracking stage';
     });
     await logout(page);
 
-    await runStep('RP-07', '填報者', '送出追蹤提報', async () => {
+    await runStep('RP-08', '單位窗口代理', '送出追蹤提報', async () => {
       if (!createdCarId) throw new Error('missing car id for tracking');
       await login(page, 'user1', 'user123');
       await gotoHash(page, 'tracking/' + createdCarId);
@@ -427,7 +450,7 @@ function isoDate(offsetDays) {
     });
     await logout(page);
 
-    await runStep('ADM-03', '最高管理者', '審核追蹤提報並結案', async () => {
+    await runStep('ADM-04', '最高管理者', '審核追蹤提報並結案', async () => {
       if (!createdCarId) throw new Error('missing car id for final review');
       await login(page, 'admin', 'admin123');
       await gotoHash(page, 'detail/' + createdCarId);

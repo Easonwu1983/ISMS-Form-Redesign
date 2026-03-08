@@ -1,0 +1,54 @@
+{
+  "startedAt": "2026-03-08T01:49:15.769Z",
+  "baseUrl": "http://127.0.0.1:8080/",
+  "steps": [
+    {
+      "id": "ADMIN-CREATE",
+      "status": "passed",
+      "detail": {
+        "carId": "115-C-A30-709"
+      }
+    },
+    {
+      "id": "REPORTER-RESPOND",
+      "status": "passed",
+      "detail": {
+        "route": "#detail/115-C-A30-709",
+        "hasCorrectiveAction": true,
+        "hasRootCause": true,
+        "hasRootElimination": true
+      }
+    },
+    {
+      "id": "ADMIN-TO-TRACKING",
+      "status": "passed",
+      "detail": {
+        "route": "#detail/115-C-A30-709",
+        "hasPendingTracking": false
+      }
+    },
+    {
+      "id": "REPORTER-TRACKING",
+      "status": "passed",
+      "detail": {
+        "route": "#detail/115-C-A30-709",
+        "pendingTracking": true
+      }
+    },
+    {
+      "id": "ADMIN-CLOSE",
+      "status": "passed",
+      "detail": {
+        "route": "#detail/115-C-A30-709",
+        "closedDate": true,
+        "pendingTracking": false,
+        "trackingCount": 1
+      }
+    }
+  ],
+  "finishedAt": "2026-03-08T01:49:31.328Z",
+  "summary": {
+    "passed": 5,
+    "failed": 0
+  }
+}

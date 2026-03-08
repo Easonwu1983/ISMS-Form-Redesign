@@ -32,8 +32,9 @@ async function setChoice(page, testId, checked = true) {
     steps: [],
     context: {
       admin: { username: 'admin', password: 'admin123' },
-      unitAdmin: { username: 'unit1', password: 'unit123' },
-      reporter: { username: 'user1', password: 'user123' }
+      reporter: { username: 'unit1', password: 'unit123' },
+      proxyReporter: { username: 'user1', password: 'user123' },
+      viewer: { username: 'viewer1', password: 'viewer123' }
     }
   });
   const browser = await launchBrowser();
@@ -43,19 +44,19 @@ async function setChoice(page, testId, checked = true) {
   try {
     await resetApp(page);
 
-    await runStep(results, 'PROBE-UA-01', '單位管理員', '建立矯正單', async () => {
-      await login(page, results.context.unitAdmin.username, results.context.unitAdmin.password);
+    await runStep(results, 'PROBE-ADM-01', '最高管理者', '建立矯正單', async () => {
+      await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'create');
       await page.waitForSelector('[data-testid="create-form"]');
-      await page.fill('[data-testid="create-id"]', 'CAR-PROBE-' + Date.now());
+      await page.fill('[data-testid="create-id"]', '115-C-A30-' + String(Date.now()).slice(-3));
       await page.selectOption('#f-hunit-parent', '計算機及資訊網路中心');
       await page.waitForTimeout(120);
       await page.selectOption('#f-hunit-child', '資訊網路組');
       await page.waitForTimeout(120);
       await page.evaluate(() => {
         const select = document.querySelector('[data-testid="create-handler-name"]');
-        const target = Array.from(select.options).find((option) => option.dataset.username === 'user1');
-        if (!target) throw new Error('missing handler option user1');
+        const target = Array.from(select.options).find((option) => option.dataset.username === 'unit1');
+        if (!target) throw new Error('missing handler option unit1');
         select.value = target.value;
         select.dispatchEvent(new Event('change', { bubbles: true }));
       });
@@ -75,7 +76,7 @@ async function setChoice(page, testId, checked = true) {
       return carId;
     });
 
-    await runStep(results, 'PROBE-RP-01', '填報者', '回填矯正措施', async () => {
+    await runStep(results, 'PROBE-RP-01', '單位窗口', '回填矯正措施', async () => {
       if (!carId) throw new Error('missing car id from create step');
       await login(page, results.context.reporter.username, results.context.reporter.password);
       await gotoHash(page, 'respond/' + carId);
@@ -92,7 +93,29 @@ async function setChoice(page, testId, checked = true) {
       return carId;
     });
 
-    await runStep(results, 'PROBE-ADM-01', '最高管理者', '管理頁與案件查核', async () => {
+    await runStep(results, 'PROBE-RP-02', '單位窗口代理', '同單位代理可存取案件', async () => {
+      if (!carId) throw new Error('missing car id from previous steps');
+      await login(page, results.context.proxyReporter.username, results.context.proxyReporter.password);
+      await gotoHash(page, 'detail/' + carId);
+      if ((await currentHash(page)) !== '#detail/' + carId) throw new Error('proxy reporter cannot open same-unit case');
+      await logout(page);
+      return carId;
+    });
+
+    await runStep(results, 'PROBE-VW-01', '跨單位檢視者', '唯讀角色不可進入填報頁', async () => {
+      if (!carId) throw new Error('missing car id from previous steps');
+      await login(page, results.context.viewer.username, results.context.viewer.password);
+      await gotoHash(page, 'detail/' + carId);
+      if ((await currentHash(page)) !== '#detail/' + carId) throw new Error('viewer cannot open cross-unit case');
+      await gotoHash(page, 'checklist-fill');
+      if ((await currentHash(page)) === '#checklist-fill') throw new Error('viewer reached checklist-fill');
+      await gotoHash(page, 'training-fill');
+      if ((await currentHash(page)) === '#training-fill') throw new Error('viewer reached training-fill');
+      await logout(page);
+      return carId;
+    });
+
+    await runStep(results, 'PROBE-ADM-02', '最高管理者', '管理頁與案件查核', async () => {
       if (!carId) throw new Error('missing car id from previous steps');
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'detail/' + carId);

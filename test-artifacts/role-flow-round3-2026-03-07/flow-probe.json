@@ -1,29 +1,43 @@
 {
-  "startedAt": "2026-03-07T09:39:55.727Z",
+  "startedAt": "2026-03-08T01:53:46.100Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "console": [],
   "pageErrors": [],
   "steps": [
     {
-      "id": "PROBE-UA-01",
-      "role": "單位管理員",
+      "id": "PROBE-ADM-01",
+      "role": "最高管理者",
       "title": "建立矯正單",
       "status": "passed",
-      "detail": "CAR-PROBE-1772876398600"
+      "detail": "115-C-A30-062"
     },
     {
       "id": "PROBE-RP-01",
-      "role": "填報者",
+      "role": "單位窗口",
       "title": "回填矯正措施",
       "status": "passed",
-      "detail": "CAR-PROBE-1772876398600"
+      "detail": "115-C-A30-062"
     },
     {
-      "id": "PROBE-ADM-01",
+      "id": "PROBE-RP-02",
+      "role": "單位窗口代理",
+      "title": "同單位代理可存取案件",
+      "status": "passed",
+      "detail": "115-C-A30-062"
+    },
+    {
+      "id": "PROBE-VW-01",
+      "role": "跨單位檢視者",
+      "title": "唯讀角色不可進入填報頁",
+      "status": "passed",
+      "detail": "115-C-A30-062"
+    },
+    {
+      "id": "PROBE-ADM-02",
       "role": "最高管理者",
       "title": "管理頁與案件查核",
       "status": "passed",
-      "detail": "CAR-PROBE-1772876398600"
+      "detail": "115-C-A30-062"
     }
   ],
   "context": {
@@ -31,18 +45,22 @@
       "username": "admin",
       "password": "admin123"
     },
-    "unitAdmin": {
+    "reporter": {
       "username": "unit1",
       "password": "unit123"
     },
-    "reporter": {
+    "proxyReporter": {
       "username": "user1",
       "password": "user123"
+    },
+    "viewer": {
+      "username": "viewer1",
+      "password": "viewer123"
     }
   },
-  "finishedAt": "2026-03-07T09:40:03.981Z",
+  "finishedAt": "2026-03-08T01:53:59.002Z",
   "summary": {
-    "passed": 3,
+    "passed": 5,
     "failed": 0,
     "consoleErrors": 0,
     "pageErrors": 0

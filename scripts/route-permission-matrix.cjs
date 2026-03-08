@@ -1,4 +1,4 @@
-const path = require('path');
+﻿const path = require('path');
 const {
   attachDiagnostics,
   createResultEnvelope,
@@ -25,15 +25,21 @@ const ROLES = [
   },
   {
     id: 'unit1',
-    title: '單位管理員',
+    title: '單位窗口',
     auth: { username: 'unit1', password: 'unit123' },
-    allowed: new Set(['dashboard', 'list', 'create', 'checklist', 'checklist-fill', 'training', 'training-fill'])
+    allowed: new Set(['dashboard', 'list', 'checklist', 'checklist-fill', 'training', 'training-fill'])
   },
   {
     id: 'user1',
-    title: '填報者',
+    title: '單位代理窗口',
     auth: { username: 'user1', password: 'user123' },
     allowed: new Set(['dashboard', 'list', 'checklist', 'checklist-fill', 'training', 'training-fill'])
+  },
+  {
+    id: 'viewer1',
+    title: '跨單位檢視者',
+    auth: { username: 'viewer1', password: 'viewer123' },
+    allowed: new Set(['dashboard', 'list', 'checklist', 'training'])
   }
 ];
 
@@ -49,7 +55,7 @@ function isRouteAccessible(route, hash) {
   try {
     await resetApp(page);
     for (const role of ROLES) {
-      await runStep(results, 'MATRIX-' + role.id.toUpperCase(), role.title, '路由權限矩陣', async () => {
+      await runStep(results, 'MATRIX-' + role.id.toUpperCase(), role.title, '頝舐甈??拚', async () => {
         await login(page, role.auth.username, role.auth.password);
         const whitelist = await page.evaluate(() => window._routeWhitelist ? window._routeWhitelist() : {});
         const matrix = {};
@@ -86,3 +92,4 @@ function isRouteAccessible(route, hash) {
   console.error(error);
   process.exitCode = 1;
 });
+

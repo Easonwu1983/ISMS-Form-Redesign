@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-07T09:40:04.703Z",
+  "startedAt": "2026-03-08T01:53:59.739Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "steps": [
     {
@@ -10,77 +10,84 @@
       "detail": "admin routes accessible; nav presence {\"#users\":1,\"#login-log\":1,\"#checklist-manage\":1,\"#unit-review\":1,\"#training-roster\":1}"
     },
     {
-      "id": "UA-01",
-      "role": "單位管理員",
-      "title": "登入與管理頁限制",
-      "status": "passed",
-      "detail": "unit admin can create CAR and is blocked from users page"
-    },
-    {
-      "id": "UA-02",
-      "role": "單位管理員",
-      "title": "建立矯正單",
-      "status": "passed",
-      "detail": "CAR-E2E-412204"
-    },
-    {
       "id": "RP-01",
-      "role": "填報者",
-      "title": "登入與權限限制",
+      "role": "單位窗口",
+      "title": "登入與管理頁限制",
       "status": "passed",
       "detail": "reporter blocked from users and create routes"
     },
     {
+      "id": "ADM-02",
+      "role": "最高管理者",
+      "title": "建立矯正單",
+      "status": "passed",
+      "detail": "115-C-A30-257"
+    },
+    {
+      "id": "VW-01",
+      "role": "跨單位檢視者",
+      "title": "唯讀檢視與編輯限制",
+      "status": "passed",
+      "detail": "viewer can read case detail and is blocked from fill routes"
+    },
+    {
       "id": "RP-02",
-      "role": "填報者",
+      "role": "單位窗口代理",
+      "title": "同單位代理權限",
+      "status": "passed",
+      "detail": "same-unit proxy reporter is blocked from admin pages and can view same-unit case"
+    },
+    {
+      "id": "RP-03",
+      "role": "單位窗口",
       "title": "回填矯正單",
       "status": "passed",
       "detail": "response submitted and stored"
     },
     {
-      "id": "RP-03",
-      "role": "填報者",
+      "id": "RP-04",
+      "role": "單位窗口",
       "title": "檢核表草稿導頁一致性",
       "status": "passed",
       "detail": "#checklist-fill/%E8%A8%88%E8%B3%87%E4%B8%AD-%E8%B3%87%E8%A8%8A%E7%B5%84-0001"
     },
     {
-      "id": "RP-04",
-      "role": "填報者",
+      "id": "RP-05",
+      "role": "單位窗口",
       "title": "檢核表正式送出",
       "status": "passed",
       "detail": "計資中-資訊組-0001"
     },
     {
-      "id": "RP-05",
-      "role": "填報者",
+      "id": "RP-06",
+      "role": "單位窗口",
       "title": "教育訓練草稿導頁一致性",
       "status": "passed",
       "detail": "#training-fill/TRN-0001"
     },
     {
-      "id": "RP-06",
-      "role": "填報者",
+      "id": "RP-07",
+      "role": "單位窗口",
       "title": "教育訓練正式送出",
       "status": "passed",
       "detail": "TRN-0001"
     },
     {
-      "id": "ADM-02",
+      "id": "ADM-03",
       "role": "最高管理者",
       "title": "審核矯正單並轉入追蹤",
       "status": "passed",
       "detail": "moved to tracking stage"
     },
     {
-      "id": "RP-07",
-      "role": "填報者",
+      "id": "RP-08",
+      "role": "單位窗口代理",
       "title": "送出追蹤提報",
       "status": "passed",
       "detail": "tracking submission waiting for admin review"
     },
     {
-      "id": "ADM-03",
+      "id": "ADM-04",
       "role": "最高管理者",
       "title": "審核追蹤提報並結案",
       "status": "passed",
@@ -90,7 +97,7 @@
   "console": [
     {
       "type": "info",
-      "text": "[ISMS:create] submit start {handlerUnit: 計算機及資訊網路中心／資訊網路組, handlerName: 李工程師}"
+      "text": "[ISMS:create] submit start {handlerUnit: 計算機及資訊網路中心／資訊網路組, handlerName: 王經理}"
     },
     {
       "type": "info",
@@ -98,7 +105,7 @@
     },
     {
       "type": "info",
-      "text": "[ISMS:create] submit success {id: CAR-E2E-412204, notify: true, handlerEmail: li@company.com}"
+      "text": "[ISMS:create] submit success {id: 115-C-A30-257, notify: true, handlerEmail: wang@company.com}"
     },
     {
       "type": "info",
@@ -145,18 +152,22 @@
       "username": "admin",
       "password": "admin123"
     },
-    "unitAdmin": {
+    "reporter": {
       "username": "unit1",
       "password": "unit123"
     },
-    "reporter": {
+    "proxyReporter": {
       "username": "user1",
       "password": "user123"
+    },
+    "viewer": {
+      "username": "viewer1",
+      "password": "viewer123"
     }
   },
-  "finishedAt": "2026-03-07T09:40:28.831Z",
+  "finishedAt": "2026-03-08T01:54:30.122Z",
   "summary": {
-    "passed": 12,
+    "passed": 13,
     "failed": 0,
     "pageErrors": 0,
     "flowLogs": 10

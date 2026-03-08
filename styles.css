@@ -393,6 +393,25 @@ body {
   gap: 16px;
 }
 
+.header-scope-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 240px;
+}
+
+.header-scope-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.header-scope-select {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+
 .header-user {
   display: flex;
   align-items: center;
@@ -1063,6 +1082,11 @@ body {
 .badge-reporter {
   background: #eef2ff;
   color: #4f46e5;
+}
+
+.badge-viewer {
+  background: #ecfeff;
+  color: #0f766e;
 }
 
 /* --- Buttons --- */
@@ -2496,6 +2520,14 @@ tbody td:first-child {
 
   .header-right {
     gap: 10px;
+  }
+
+  .header-scope-switch {
+    min-width: 170px;
+  }
+
+  .header-scope-label {
+    display: none;
   }
 
   .header-user-role {

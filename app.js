@@ -1,4 +1,4 @@
-// =============================================
+﻿// =============================================
 // ISMS Internal Audit Tracking System - v4
 // =============================================
 (function () {
@@ -7,8 +7,8 @@
   const STATUSES = { CREATED: '開立', PENDING: '待矯正', PROPOSED: '已提案', REVIEWING: '審核中', TRACKING: '追蹤中', CLOSED: '結案' };
   const STATUS_CLASSES = { [STATUSES.CREATED]: 'created', [STATUSES.PENDING]: 'pending', [STATUSES.PROPOSED]: 'proposed', [STATUSES.REVIEWING]: 'reviewing', [STATUSES.TRACKING]: 'tracking', [STATUSES.CLOSED]: 'closed' };
   const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
-  const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員', REPORTER: '填報人' };
-  const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter' };
+  const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員', REPORTER: '填報人', VIEWER: '跨單位檢視者' };
+  const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter', [ROLES.VIEWER]: 'badge-viewer' };
   const TRAINING_STATUSES = { DRAFT: '暫存', SUBMITTED: '正式送出', RETURNED: '退回更正' };
   const TRAINING_EMPLOYEE_STATUS = ['在職', '離職', '退休', '留職停薪', '單位調職'];
   const TRAINING_BOOLEAN_OPTIONS = ['是', '否'];
@@ -16,13 +16,14 @@
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
   const DEFAULT_USERS = [
-    { username: 'admin', password: 'admin123', name: '計算機及資訊網路中心', role: ROLES.ADMIN, unit: '計算機及資訊網路中心／資訊網路組', email: 'admin@company.com' },
-    { username: 'unit1', password: 'unit123', name: '王經理', role: ROLES.UNIT_ADMIN, unit: '計算機及資訊網路中心／資訊網路組', email: 'wang@company.com' },
-    { username: 'unit2', password: 'unit123', name: '張稽核員', role: ROLES.UNIT_ADMIN, unit: '稽核室', email: 'zhang@company.com' },
-    { username: 'user1', password: 'user123', name: '李工程師', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', email: 'li@company.com' },
-    { username: 'user2', password: 'user123', name: '陳資安主管', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', email: 'chen@company.com' },
-    { username: 'user3', password: 'user123', name: '黃工程師', role: ROLES.REPORTER, unit: '總務處／營繕組', email: 'huang@company.com' },
-    { username: 'user4', password: 'user123', name: '劉文管人員', role: ROLES.REPORTER, unit: '人事室／綜合業務組', email: 'liu@company.com' },
+    { username: 'admin', password: 'admin123', name: '計算機及資訊網路中心', role: ROLES.ADMIN, unit: '計算機及資訊網路中心／資訊網路組', units: ['計算機及資訊網路中心／資訊網路組'], email: 'admin@company.com' },
+    { username: 'unit1', password: 'unit123', name: '王經理', role: ROLES.UNIT_ADMIN, unit: '計算機及資訊網路中心／資訊網路組', units: ['計算機及資訊網路中心／資訊網路組'], email: 'wang@company.com' },
+    { username: 'unit2', password: 'unit123', name: '張稽核員', role: ROLES.UNIT_ADMIN, unit: '稽核室', units: ['稽核室'], email: 'zhang@company.com' },
+    { username: 'user1', password: 'user123', name: '李工程師', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', units: ['計算機及資訊網路中心／資訊網路組'], email: 'li@company.com' },
+    { username: 'user2', password: 'user123', name: '陳資安主管', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', units: ['計算機及資訊網路中心／資訊網路組', '總務處／營繕組'], activeUnit: '計算機及資訊網路中心／資訊網路組', email: 'chen@company.com' },
+    { username: 'user3', password: 'user123', name: '黃工程師', role: ROLES.REPORTER, unit: '總務處／營繕組', units: ['總務處／營繕組'], email: 'huang@company.com' },
+    { username: 'user4', password: 'user123', name: '劉文管人員', role: ROLES.REPORTER, unit: '人事室／綜合業務組', units: ['人事室／綜合業務組'], email: 'liu@company.com' },
+    { username: 'viewer1', password: 'viewer123', name: '跨單位檢視者', role: ROLES.VIEWER, unit: '', units: [], email: 'viewer@company.com' },
   ];
 
   const UNIT_CUSTOM_VALUE = '__unit_custom__';
@@ -42,7 +43,7 @@
     const set = new Set(getOfficialUnits());
     try {
       const data = loadData();
-      (data.users || []).forEach((u) => { if (u && u.unit) set.add(String(u.unit)); });
+      (data.users || []).forEach((u) => { getAuthorizedUnits(u).forEach((unit) => set.add(String(unit))); });
       (data.items || []).forEach((i) => {
         if (i && i.proposerUnit) set.add(String(i.proposerUnit));
         if (i && i.handlerUnit) set.add(String(i.handlerUnit));
@@ -156,7 +157,9 @@
     const trainingStore = loadTrainingStore();
 
     (data.users || []).forEach((user) => {
-      pushUnitReference(map, user.unit, 'users', `帳號 ${user.username} · ${user.name}`);
+      getAuthorizedUnits(user).forEach((unit) => {
+        pushUnitReference(map, unit, 'users', `帳號 ${user.username} · ${user.name}`);
+      });
     });
 
     (data.items || []).forEach((item) => {
@@ -218,8 +221,11 @@
     const data = loadData();
     let dataChanged = false;
     (data.users || []).forEach((user) => {
-      if (user.unit === source) {
-        user.unit = target;
+      const units = getAuthorizedUnits(user);
+      if (units.includes(source)) {
+        user.units = units.map((unit) => unit === source ? target : unit);
+        user.unit = user.units[0] || '';
+        if (user.activeUnit === source) user.activeUnit = target;
         summary.users += 1;
         dataChanged = true;
       }
@@ -507,7 +513,77 @@
   function createDefaultData() {
     return { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 };
   }
-  function loadData() { return readCachedJson(DATA_KEY, createDefaultData); }
+  function parseUserUnits(value) {
+    if (Array.isArray(value)) return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
+    if (typeof value === 'string') return Array.from(new Set(value.split(/\r?\n|,|;|\|/).map((entry) => String(entry || '').trim()).filter(Boolean)));
+    return [];
+  }
+  function normalizeUserRole(role) {
+    if (role === ROLES.ADMIN) return ROLES.ADMIN;
+    if (role === ROLES.VIEWER || String(role || '').trim().toLowerCase() === 'super_viewer') return ROLES.VIEWER;
+    if (role === ROLES.UNIT_ADMIN || role === ROLES.REPORTER) return role;
+    return ROLES.REPORTER;
+  }
+  function getAuthorizedUnits(user) {
+    const units = parseUserUnits(user?.units);
+    if (units.length) return units;
+    const unit = String(user?.unit || '').trim();
+    return unit ? [unit] : [];
+  }
+  function getActiveUnit(user) {
+    const units = getAuthorizedUnits(user);
+    if (!units.length) return '';
+    const candidate = String(user?.activeUnit || '').trim();
+    return units.includes(candidate) ? candidate : units[0];
+  }
+  function normalizeUserRecord(user) {
+    const role = normalizeUserRole(user?.role);
+    const units = getAuthorizedUnits(user);
+    return {
+      ...user,
+      role,
+      units,
+      unit: units[0] || '',
+      activeUnit: role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units })
+    };
+  }
+  function hasGlobalReadScope(user = currentUser()) {
+    return !!user && (user.role === ROLES.ADMIN || user.role === ROLES.VIEWER);
+  }
+  function hasUnitAccess(unit, user = currentUser()) {
+    if (!user) return false;
+    const target = String(unit || '').trim();
+    if (!target) return true;
+    if (user.role === ROLES.ADMIN) return true;
+    if (user.role === ROLES.VIEWER) {
+      const scoped = getActiveUnit(user);
+      return !scoped || scoped === target;
+    }
+    return getAuthorizedUnits(user).includes(target);
+  }
+  function canSwitchAuthorizedUnit(user = currentUser()) {
+    return !!user && user.role !== ROLES.ADMIN && getAuthorizedUnits(user).length > 1;
+  }
+  function getScopedUnit(user = currentUser()) {
+    if (!user) return '';
+    if (user.role === ROLES.ADMIN) return '';
+    return getActiveUnit(user);
+  }
+  function switchCurrentUserUnit(unit) {
+    const user = currentUser();
+    if (!user) return false;
+    const target = String(unit || '').trim();
+    if (!getAuthorizedUnits(user).includes(target)) return false;
+    const next = normalizeUserRecord({ ...user, activeUnit: target });
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify(next));
+    return true;
+  }
+  function loadData() {
+    const data = readCachedJson(DATA_KEY, createDefaultData);
+    if (!Array.isArray(data.users)) data.users = DEFAULT_USERS.map((u) => ({ ...u }));
+    data.users = data.users.map((user) => normalizeUserRecord(user));
+    return data;
+  }
   function saveData(d) { writeCachedJson(DATA_KEY, d); }
   function getAllItems() { return loadData().items.slice(); }
   function getItem(id) { return loadData().items.find(i => i.id === id); }
@@ -537,12 +613,12 @@
     saveData(d);
     return customId;
   }
-  function getUsers() { return loadData().users.slice(); }
-  function addUser(user) { const d = loadData(); d.users.push(user); saveData(d); }
-  function updateUser(un, upd) { const d = loadData(); const i = d.users.findIndex(u => u.username === un); if (i >= 0) { d.users[i] = { ...d.users[i], ...upd }; saveData(d); } }
+  function getUsers() { return loadData().users.slice().map((user) => normalizeUserRecord(user)); }
+  function addUser(user) { const d = loadData(); d.users.push(normalizeUserRecord(user)); saveData(d); }
+  function updateUser(un, upd) { const d = loadData(); const i = d.users.findIndex(u => u.username === un); if (i >= 0) { d.users[i] = normalizeUserRecord({ ...d.users[i], ...upd }); saveData(d); } }
   function deleteUser(un) { const d = loadData(); d.users = d.users.filter(u => u.username !== un); saveData(d); }
-  function findUser(un) { return loadData().users.find(u => u.username === un); }
-  function findUserByEmail(em) { return loadData().users.find(u => u.email && u.email.toLowerCase() === em.toLowerCase()); }
+  function findUser(un) { const user = loadData().users.find(u => u.username === un); return user ? normalizeUserRecord(user) : null; }
+  function findUserByEmail(em) { const user = loadData().users.find(u => u.email && u.email.toLowerCase() === em.toLowerCase()); return user ? normalizeUserRecord(user) : null; }
   function ensurePrimaryAdminProfile() {
     const d = loadData();
     if (!d || !Array.isArray(d.users)) return;
@@ -606,19 +682,21 @@
     const ok = !!(u && u.password === pw);
     addLoginLog(un, u, ok);
     if (ok) {
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify(u));
-      return u;
+      const normalized = normalizeUserRecord(u);
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify(normalized));
+      return normalized;
     }
     return null;
   }
   function logout() { sessionStorage.removeItem(AUTH_KEY); renderApp(); }
-  function currentUser() { try { return JSON.parse(sessionStorage.getItem(AUTH_KEY)); } catch { return null; } }
+  function currentUser() { try { const user = JSON.parse(sessionStorage.getItem(AUTH_KEY)); return user ? normalizeUserRecord(user) : null; } catch { return null; } }
   function isAdmin() { return currentUser()?.role === ROLES.ADMIN; }
   function isUnitAdmin() { return currentUser()?.role === ROLES.UNIT_ADMIN; }
-  function canCreateCAR() { return isAdmin() || isUnitAdmin(); }
-  function canReview() { return isAdmin() || isUnitAdmin(); }
-  function canFillChecklist() { return !!currentUser(); }
-  function canFillTraining() { return !!currentUser(); }
+  function isViewer(user = currentUser()) { return user?.role === ROLES.VIEWER; }
+  function canCreateCAR() { return isAdmin(); }
+  function canReview() { return isAdmin(); }
+  function canFillChecklist() { return !!currentUser() && !isViewer(); }
+  function canFillTraining() { return !!currentUser() && !isViewer(); }
   function canManageUsers() { return isAdmin(); }
   function fmt(d) { if (!d) return '—'; const x = new Date(d); return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, '0')}/${String(x.getDate()).padStart(2, '0')}`; }
   function fmtTime(d) { if (!d) return '—'; const x = new Date(d); return `${fmt(d)} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; }
@@ -753,27 +831,28 @@
     const u = currentUser();
     if (!u) return [];
     const all = getAllItems();
-    if (u.role === ROLES.ADMIN || u.role === ROLES.UNIT_ADMIN) return all;
-    return all.filter((item) => isItemHandler(item, u));
+    if (hasGlobalReadScope(u)) return all;
+    return all.filter((item) => hasUnitAccess(item.handlerUnit, u) || isItemHandler(item, u));
   }
   function canAccessItem(item) {
     if (!item) return false;
     const u = currentUser();
     if (!u) return false;
-    if (u.role === ROLES.ADMIN || u.role === ROLES.UNIT_ADMIN) return true;
-    return isItemHandler(item, u);
+    if (hasGlobalReadScope(u)) return true;
+    return hasUnitAccess(item.handlerUnit, u) || isItemHandler(item, u);
   }
   function isItemHandler(item, user = currentUser()) {
     if (!item || !user) return false;
+    if (hasUnitAccess(item.handlerUnit, user)) return true;
     return item.handlerUsername ? item.handlerUsername === user.username : item.handlerName === user.name;
   }
   function canRespondItem(item, user = currentUser()) {
     if (!item || !user) return false;
-    return item.status === STATUSES.PENDING && (isItemHandler(item, user) || user.role === ROLES.ADMIN);
+    return item.status === STATUSES.PENDING && !isViewer(user) && (isItemHandler(item, user) || user.role === ROLES.ADMIN);
   }
   function canSubmitTracking(item, user = currentUser()) {
     if (!item || !user) return false;
-    return item.status === STATUSES.TRACKING && isItemHandler(item, user) && !item.pendingTracking;
+    return item.status === STATUSES.TRACKING && !isViewer(user) && isItemHandler(item, user) && !item.pendingTracking;
   }
   
   function toTestIdFragment(value) {
@@ -821,6 +900,7 @@
       '<tr><td>最高管理員</td><td>admin</td><td>admin123</td></tr>' +
       '<tr><td>單位管理員</td><td>unit1</td><td>unit123</td></tr>' +
       '<tr><td>填報人</td><td>user1</td><td>user123</td></tr>' +
+      '<tr><td>跨單位檢視者</td><td>viewer1</td><td>viewer123</td></tr>' +
       '</table></div></div></div><div class="toast-container" id="toast-container"></div>';
     document.getElementById('login-form').addEventListener('submit', function (e) { e.preventDefault(); var u = document.getElementById('login-user').value.trim(), p = document.getElementById('login-pass').value; var user = login(u, p); if (user) { toast('歡迎回來，' + user.name + '！'); setTimeout(function () { renderApp(); }, 300); } else { document.getElementById('login-error').classList.add('show'); } });
     document.getElementById('forgot-link').addEventListener('click', function (e) { e.preventDefault(); document.getElementById('login-panel').style.display = 'none'; document.getElementById('login-error').classList.remove('show'); document.getElementById('forgot-panel').style.display = 'block'; });
@@ -858,7 +938,19 @@
 
   function renderHeader() {
     var u = currentUser(); if (!u) return; var r = getRoute();
-    document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" onclick="window._toggleSidebar()" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + getRouteTitle(r.page) + '</span></div><div class="header-right"><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">\u767b\u51fa</button></div>';
+    var switchHtml = '';
+    if (canSwitchAuthorizedUnit(u)) {
+      switchHtml = '<label class="header-scope-switch"><span class="header-scope-label">目前單位</span><select class="form-select header-scope-select" id="header-unit-switch">' +
+        getAuthorizedUnits(u).map(function (unit) { return '<option value="' + esc(unit) + '" ' + (getScopedUnit(u) === unit ? 'selected' : '') + '>' + esc(unit) + '</option>'; }).join('') +
+        '</select></label>';
+    }
+    document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" onclick="window._toggleSidebar()" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + getRouteTitle(r.page) + '</span></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">\u767b\u51fa</button></div>';
+    var switcher = document.getElementById('header-unit-switch');
+    if (switcher) {
+      switcher.addEventListener('change', function (event) {
+        if (switchCurrentUserUnit(event.target.value)) handleRoute();
+      });
+    }
   }
   window._logout = function () { logout(); };
   window._toggleSidebar = function () { toggleSidebar(); };
@@ -970,7 +1062,7 @@
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">矯正單號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動編號，例如 CAR-0001"><p class="form-hint">管理者可自行輸入單號。僅支援英數、連字號與底線，不能使用空白或斜線。</p></div>
-              <div class="form-group"><label class="form-label form-required">提報單位</label>${buildUnitCascadeControl('f-punit', u.unit || '', true, true)}</div>
+              <div class="form-group"><label class="form-label form-required">提報單位</label>${buildUnitCascadeControl('f-punit', getScopedUnit(u) || u.unit || '', true, true)}</div>
               <div class="form-group"><label class="form-label form-required">提報日期</label><input type="date" class="form-input" id="f-pdate" value="${new Date().toISOString().split('T')[0]}" required></div>
             </div>
             <div class="form-row">
@@ -1006,7 +1098,7 @@
               <div class="editor-side-text">右側摘要會跟著你的填寫內容即時更新，避免漏掉單號、指派與期限設定。</div>
               <div class="editor-summary-list editor-summary-list--compact">
                 <div class="editor-summary-item"><span>矯正單號</span><strong id="create-summary-id">自動編號</strong></div>
-                <div class="editor-summary-item"><span>提報單位</span><strong id="create-summary-proposer">${esc(u.unit || '未指定')}</strong></div>
+                <div class="editor-summary-item"><span>提報單位</span><strong id="create-summary-proposer">${esc(getScopedUnit(u) || u.unit || '未指定')}</strong></div>
                 <div class="editor-summary-item"><span>處理單位</span><strong id="create-summary-handler-unit">待指定</strong></div>
                 <div class="editor-summary-item"><span>處理人員</span><strong id="create-summary-handler">待指定</strong></div>
                 <div class="editor-summary-item"><span>預計完成</span><strong id="create-summary-due">未指定</strong></div>
@@ -1071,7 +1163,7 @@ function renderCreate() {
     const summaryDue = document.getElementById('create-summary-due');
     const summaryNotify = document.getElementById('create-summary-notify');
 
-    initUnitCascade('f-punit', u.unit || '', { disabled: true });
+    initUnitCascade('f-punit', getScopedUnit(u) || u.unit || '', { disabled: true });
     initUnitCascade('f-hunit', '', { disabled: false });
 
     function syncCreateSummary() {
@@ -1201,7 +1293,7 @@ function renderCreate() {
       const now = new Date().toISOString();
       const item = {
         id: itemId,
-        proposerUnit: u.unit || document.getElementById('f-punit').value,
+        proposerUnit: getScopedUnit(u) || u.unit || document.getElementById('f-punit').value,
         proposerName: document.getElementById('f-pname').value.trim(),
         proposerUsername: u.username,
         proposerDate: document.getElementById('f-pdate').value,
@@ -1761,30 +1853,53 @@ function renderTracking(id) {
   }
 
   
+  function formatUserUnitSummary(user) {
+    const units = getAuthorizedUnits(user);
+    if (user?.role === ROLES.VIEWER && !units.length) return '全校唯讀';
+    if (!units.length) return '未指定';
+    return units.join('、');
+  }
   function renderUsers() {
-    if (!canManageUsers()) { navigate('dashboard'); return; } const users = getUsers();
-    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="window._editUser('${u.username}')">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" onclick="window._delUser('${u.username}')">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理系統使用者帳號與權限</p></div><button class="btn btn-primary" onclick="window._addUser()">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
-      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>單位</th><th>信箱</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    if (!canManageUsers()) { navigate('dashboard'); return; }
+    const users = getUsers();
+    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit || '未指定')}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="window._editUser('${u.username}')">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" onclick="window._delUser('${u.username}')">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要單位與多單位授權範圍</p></div><button class="btn btn-primary" onclick="window._addUser()">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
+      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>主要單位</th><th>授權單位</th><th>信箱</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
   function showUserModal(eu) {
-    const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root'); const initUnit = isE ? (eu.unit || '') : '';
+    const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root'); const units = getAuthorizedUnits(eu); const initUnit = units[0] || '';
     mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${title}</span><button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button></div><form id="user-form">
       <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>
       <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
       <div class="form-group"><label class="form-label form-required">電子信箱</label><input type="email" class="form-input" id="u-email" value="${isE ? esc(eu.email || '') : ''}" required></div>
-      <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.REPORTER}" ${isE && eu.role === ROLES.REPORTER ? 'selected' : ''}>填報人</option><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option></select></div>
-      <div class="form-group"><label class="form-label form-required">單位</label>${buildUnitCascadeControl('u-unit', initUnit, false, true)}</div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.REPORTER}" ${isE && eu.role === ROLES.REPORTER ? 'selected' : ''}>填報人</option><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.VIEWER}" ${isE && eu.role === ROLES.VIEWER ? 'selected' : ''}>跨單位檢視者</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option></select></div>
+      <div class="form-group"><label class="form-label" id="u-unit-label">主要單位</label>${buildUnitCascadeControl('u-unit', initUnit, false, false)}</div></div>
+      <div class="form-group"><label class="form-label">額外授權單位</label><textarea class="form-textarea" id="u-units" rows="4" placeholder="每行一個單位，可用於跨單位代理">${esc(units.slice(1).join('\n'))}</textarea><div class="form-hint">系統不另外做代理模組，直接以授權單位陣列決定可切換單位。</div></div>
       <div class="form-group"><label class="form-label ${isE ? '' : 'form-required'}">${isE ? '密碼（留空不修改）' : '密碼'}</label><input type="text" class="form-input" id="u-pass" ${isE ? '' : 'required'}></div>
       <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-root').innerHTML=''">取消</button></div>
     </form></div></div>`;
     initUnitCascade('u-unit', initUnit, { disabled: false });
+    const roleEl = document.getElementById('u-role');
+    const unitLabel = document.getElementById('u-unit-label');
+    const parentEl = document.getElementById('u-unit-parent');
+    function syncRoleFields() {
+      const viewerMode = roleEl.value === ROLES.VIEWER;
+      unitLabel.textContent = viewerMode ? '主要單位（留空代表全校唯讀）' : '主要單位';
+      parentEl.required = !viewerMode;
+    }
+    syncRoleFields();
+    roleEl.addEventListener('change', syncRoleFields);
     document.getElementById('modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
     document.getElementById('user-form').addEventListener('submit', e => {
-      e.preventDefault(); const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), pw = document.getElementById('u-pass').value;
-      if (isE) { const upd = { name: nm, email: em, role: rl, unit: ut }; if (pw) upd.password = pw; updateUser(un, upd); toast('使用者已更新'); }
-      else { if (findUser(un)) { toast('帳號已存在', 'error'); return; } addUser({ username: un, password: pw, name: nm, email: em, role: rl, unit: ut }); toast('使用者已新增'); }
+      e.preventDefault();
+      const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), extraUnits = parseUserUnits(document.getElementById('u-units').value), pw = document.getElementById('u-pass').value;
+      const finalUnits = rl === ROLES.VIEWER ? Array.from(new Set([ut, ...extraUnits].filter(Boolean))) : Array.from(new Set([ut, ...extraUnits].filter(Boolean)));
+      if (rl !== ROLES.VIEWER && !finalUnits.length) { toast('請至少指定一個授權單位', 'error'); return; }
+      const payload = { name: nm, email: em, role: rl, unit: finalUnits[0] || '', units: finalUnits, activeUnit: finalUnits[0] || '' };
+      if (pw) payload.password = pw;
+      if (isE) { updateUser(un, payload); toast('使用者已更新'); }
+      else { if (findUser(un)) { toast('帳號已存在', 'error'); return; } addUser({ username: un, password: pw, ...payload }); toast('使用者已新增'); }
       mr.innerHTML = ''; renderUsers(); refreshIcons();
     });
   }
@@ -2090,22 +2205,21 @@ function renderTracking(id) {
   function canAccessChecklist(cl) {
     const u = currentUser();
     if (!u || !cl) return false;
-    if (u.role === ROLES.ADMIN) return true;
-    if (u.role === ROLES.UNIT_ADMIN) return cl.unit === u.unit || isChecklistOwner(cl, u);
-    return isChecklistOwner(cl, u);
+    if (hasGlobalReadScope(u)) return true;
+    return hasUnitAccess(cl.unit, u) || isChecklistOwner(cl, u);
   }
   function getVisibleChecklists() {
     const u = currentUser();
     if (!u) return [];
     const all = getAllChecklists();
-    if (u.role === ROLES.ADMIN) return all;
+    if (hasGlobalReadScope(u)) return all;
     return all.filter((item) => canAccessChecklist(item));
   }
   function canEditChecklist(cl) {
     const u = currentUser();
     if (!u || !cl || !isChecklistDraftStatus(cl.status) || !canFillChecklist()) return false;
     if (u.role === ROLES.ADMIN) return true;
-    return isChecklistOwner(cl, u);
+    return hasUnitAccess(cl.unit, u) || isChecklistOwner(cl, u);
   }
   function getLatestEditableChecklistDraft() {
     const drafts = getVisibleChecklists().filter((c) => isChecklistDraftStatus(c.status) && canEditChecklist(c));
@@ -2162,7 +2276,7 @@ function renderTracking(id) {
     const sectionsHtml = buildChecklistSectionsHtml(existing);
 
     const checklistUnitLocked = u.role === ROLES.REPORTER;
-    const selectedUnit = checklistUnitLocked ? (u.unit || existing?.unit || '') : (existing ? existing.unit : (u.unit || ''));
+    const selectedUnit = checklistUnitLocked ? (getScopedUnit(u) || existing?.unit || '') : (existing ? existing.unit : (getScopedUnit(u) || u.unit || ''));
     const today = new Date().toISOString().split('T')[0];
     const totalItems = CHECKLIST_SECTIONS.reduce((sum, sec) => sum + sec.items.length, 0);
     const supervisorName = existing?.supervisorName || existing?.supervisor || '';
@@ -2321,7 +2435,7 @@ function renderTracking(id) {
       const supervisorTitleValue = document.getElementById('cl-supervisor-title').value.trim();
       return {
         id: existing ? existing.id : generateChecklistId(document.getElementById('cl-unit').value),
-        unit: checklistUnitLocked ? (u.unit || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value,
+        unit: checklistUnitLocked ? (getScopedUnit(u) || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value,
         fillerName: u.name,
         fillerUsername: u.username,
         fillDate: document.getElementById('cl-date').value,
@@ -3027,14 +3141,15 @@ function renderTracking(id) {
     const user = currentUser();
     if (!user) return [];
     const forms = getAllTrainingForms();
-    if (user.role === ROLES.ADMIN) return forms;
-    return forms.filter((form) => form.unit === user.unit || form.fillerUsername === user.username);
+    if (hasGlobalReadScope(user)) return forms;
+    return forms.filter((form) => hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
   }
 
   function canEditTrainingForm(form) {
     const user = currentUser();
     if (!user || !form) return false;
-    const inScope = user.role === ROLES.ADMIN || form.unit === user.unit || form.fillerUsername === user.username;
+    if (isViewer(user)) return false;
+    const inScope = user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
     if (!inScope) return false;
     return form.status !== TRAINING_STATUSES.SUBMITTED;
   }
@@ -3042,8 +3157,8 @@ function renderTracking(id) {
   function isTrainingVisible(form) {
     const user = currentUser();
     if (!user || !form) return false;
-    if (user.role === ROLES.ADMIN) return true;
-    return form.unit === user.unit || form.fillerUsername === user.username;
+    if (hasGlobalReadScope(user)) return true;
+    return hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
   }
 
   function isTrainingRecordReadyForSubmit(record) {
@@ -3584,11 +3699,11 @@ function renderTrainingFill(id) {
     }
 
     const units = getTrainingUnits().slice();
-    if (user.unit && !units.includes(user.unit)) units.push(user.unit);
+    getAuthorizedUnits(user).forEach((unit) => { if (unit && !units.includes(unit)) units.push(unit); });
     if (existing?.unit && !units.includes(existing.unit)) units.push(existing.unit);
     units.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 
-    const unitValue = existing ? existing.unit : (isAdmin() ? (user.unit || units[0] || '') : user.unit);
+    const unitValue = existing ? existing.unit : (isAdmin() ? (user.unit || units[0] || '') : (getScopedUnit(user) || user.unit));
     const isUnitLocked = !!existing || !isAdmin();
     const takeoverDraft = !!(existing && existing.fillerUsername && existing.fillerUsername !== user.username && isUnitAdmin());
     let rowsState = mergeTrainingRows(unitValue, existing ? (existing.records || []) : []);
@@ -4061,23 +4176,25 @@ function renderTrainingFill(id) {
     if (store.rosters.length > 0) return;
     const now = new Date().toISOString();
     const seen = new Set();
-    getUsers().filter((user) => user.role !== ROLES.ADMIN).forEach((user) => {
-      const key = (user.unit + '::' + user.name).toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      const row = normalizeTrainingRosterRow({
-        id: 'RST-' + String(store.nextRosterId).padStart(4, '0'),
-        unit: user.unit,
-        name: user.name,
-        unitName: getTrainingJobUnit(user.unit),
-        identity: user.role === ROLES.UNIT_ADMIN ? '單位管理員' : '填報人',
-        jobTitle: '',
-        source: 'import',
-        createdBy: '系統初始化',
-        createdAt: now
-      }, user.unit);
-      store.nextRosterId += 1;
-      store.rosters.push(row);
+    getUsers().filter((user) => user.role !== ROLES.ADMIN && user.role !== ROLES.VIEWER).forEach((user) => {
+      getAuthorizedUnits(user).forEach((unit) => {
+        const key = (unit + '::' + user.name).toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        const row = normalizeTrainingRosterRow({
+          id: 'RST-' + String(store.nextRosterId).padStart(4, '0'),
+          unit,
+          name: user.name,
+          unitName: getTrainingJobUnit(unit),
+          identity: user.role === ROLES.UNIT_ADMIN ? '單位管理員' : '填報人',
+          jobTitle: '',
+          source: 'import',
+          createdBy: '系統初始化',
+          createdAt: now
+        }, unit);
+        store.nextRosterId += 1;
+        store.rosters.push(row);
+      });
     });
     saveTrainingStore(store);
   }
