@@ -4,6 +4,7 @@ const {
   attachDiagnostics,
   createArtifactRun,
   createResultEnvelope,
+  currentHash,
   finalizeResults,
   gotoHash,
   launchBrowser,
@@ -69,10 +70,8 @@ async function chooseUnitForHandlerUsername(page, baseId, handlerSelectId, usern
 
     await runStep(results, 'FOCUS-ADM-01', '最高管理者', '建立矯正單', async () => {
       await login(page, results.context.admin.username, results.context.admin.password);
-      carId = '115-C-A30-' + String(Date.now()).slice(-3);
       await gotoHash(page, 'create');
       await page.waitForSelector('#create-form');
-      await page.fill('#f-id', carId);
       await chooseUnitForHandlerUsername(page, 'f-hunit', 'f-hname', 'unit1');
       await page.evaluate(() => {
         const select = document.querySelector('#f-hname');
@@ -93,9 +92,13 @@ async function chooseUnitForHandlerUsername(page, baseId, handlerSelectId, usern
         });
       });
       await Promise.all([
-        waitForHash(page, '#detail/' + carId),
+        page.waitForFunction(() => window.location.hash.startsWith('#detail/'), { timeout: 8000 }),
         page.click('#create-form button[type="submit"]')
       ]);
+      carId = decodeURIComponent((await currentHash(page)).replace(/^#detail\//, ''));
+      if (!/^CAR-\d{3}-[A-Z0-9]+-\d+$/.test(carId)) {
+        throw new Error('unexpected generated car id ' + carId);
+      }
       return carId;
     });
     await logout(page);

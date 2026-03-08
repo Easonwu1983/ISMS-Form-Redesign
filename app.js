@@ -39,6 +39,123 @@
     return [];
   }
 
+  function getOfficialUnitCatalog() {
+    try {
+      if (typeof window !== 'undefined' && typeof window.getOfficialUnitCatalog_ === 'function') {
+        const catalog = window.getOfficialUnitCatalog_();
+        if (Array.isArray(catalog)) return catalog;
+      }
+    } catch (_) { }
+    return [];
+  }
+
+  function getOfficialUnitMeta(unitValue) {
+    const value = String(unitValue || '').trim();
+    if (!value) return null;
+    try {
+      if (typeof window !== 'undefined' && typeof window.getOfficialUnitMeta_ === 'function') {
+        const meta = window.getOfficialUnitMeta_(value);
+        if (meta && typeof meta === 'object') return meta;
+      }
+    } catch (_) { }
+    return getOfficialUnitCatalog().find((entry) => entry && entry.value === value) || null;
+  }
+
+  function getUnitCode(unitValue) {
+    return String(getOfficialUnitMeta(unitValue)?.normalizedCode || '').trim();
+  }
+
+  function getUnitCodeWithDots(unitValue) {
+    return String(getOfficialUnitMeta(unitValue)?.code || '').trim();
+  }
+
+  function getUnitOptionLabel(unitValue, fallbackText) {
+    const meta = getOfficialUnitMeta(unitValue);
+    if (meta && meta.name) return meta.name;
+    return String(fallbackText || unitValue || '').trim();
+  }
+
+  function getCorrectionYear(dateValue) {
+    const raw = String(dateValue || '').trim();
+    const date = raw ? new Date(raw) : new Date();
+    if (!Number.isFinite(date.getTime())) return String(new Date().getFullYear() - 1911).padStart(3, '0');
+    return String(date.getFullYear() - 1911).padStart(3, '0');
+  }
+
+  function normalizeRocYear(value, fallbackDateValue) {
+    const raw = String(value || '').trim();
+    if (/^\d{4}$/.test(raw) && Number(raw) > 1911) return String(Number(raw) - 1911).padStart(3, '0');
+    if (/^\d{1,3}$/.test(raw)) return String(Number(raw)).padStart(3, '0');
+    return getCorrectionYear(fallbackDateValue);
+  }
+
+  function buildScopedRecordPrefix(prefix, unitValue, yearValue, fallbackDateValue) {
+    const unitCode = getUnitCode(unitValue);
+    const year = normalizeRocYear(yearValue, fallbackDateValue);
+    return unitCode ? `${String(prefix || '').trim().toUpperCase()}-${year}-${unitCode}` : '';
+  }
+
+  function parseScopedRecordId(value, prefix) {
+    const target = String(prefix || '').trim().toUpperCase();
+    const pattern = target ? `^(${target}-\\d{3}-[A-Z0-9]+)-(\\d+)$` : '^([A-Z]{3}-\\d{3}-[A-Z0-9]+)-(\\d+)$';
+    const match = String(value || '').trim().toUpperCase().match(new RegExp(pattern));
+    if (!match) return null;
+    return {
+      documentNo: match[1],
+      sequence: Number(match[2]),
+      sequenceText: match[2]
+    };
+  }
+
+  function buildScopedRecordId(documentNo, sequence) {
+    if (!documentNo || !Number.isFinite(Number(sequence))) return '';
+    return `${documentNo}-${String(Number(sequence))}`;
+  }
+
+  function getNextScopedRecordSequence(documentNo, items, parser) {
+    let max = 0;
+    const parse = typeof parser === 'function' ? parser : ((value) => parseScopedRecordId(value));
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const parsed = parse(item?.id);
+      if (parsed && parsed.documentNo === documentNo) {
+        max = Math.max(max, parsed.sequence);
+      }
+    });
+    return max + 1;
+  }
+
+  function buildCorrectionDocumentNo(unitValue, dateValue) {
+    return buildScopedRecordPrefix('CAR', unitValue, '', dateValue);
+  }
+
+  function parseCorrectionAutoId(value) {
+    const match = String(value || '').trim().toUpperCase().match(/^(CAR-\d{3}-[A-Z0-9]+)-(\d+)$/);
+    if (!match) return null;
+    return {
+      documentNo: match[1],
+      sequence: Number(match[2]),
+      sequenceText: match[2]
+    };
+  }
+
+  function buildAutoCarIdByDocument(documentNo, sequence) {
+    return buildScopedRecordId(documentNo, sequence);
+  }
+
+  function buildAutoCarId(unitValue, sequence, dateValue) {
+    return buildAutoCarIdByDocument(buildCorrectionDocumentNo(unitValue, dateValue), sequence);
+  }
+
+  function getNextCorrectionSequence(documentNo, items) {
+    let max = getNextScopedRecordSequence(documentNo, items, parseCorrectionAutoId) - 1;
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      if (item?.documentNo === documentNo && Number.isFinite(Number(item.caseSeq))) {
+        max = Math.max(max, Number(item.caseSeq));
+      }
+    });
+    return max + 1;
+  }
+
   function getSystemUnits() {
     const set = new Set(getOfficialUnits());
     try {
@@ -404,7 +521,7 @@
 
     parentEl.innerHTML =
       '<option value="">\u8acb\u9078\u64c7\u4e00\u7d1a\u55ae\u4f4d</option>' +
-      parents.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('') +
+      parents.map((p) => `<option value="${esc(p)}">${esc(getUnitOptionLabel(p, p))}</option>`).join('') +
       (allowCustom ? `<option value="${UNIT_CUSTOM_VALUE}">${UNIT_CUSTOM_LABEL}</option>` : '');
 
     const setCustomMode = (enabled) => {
@@ -458,7 +575,10 @@
       }
 
       childEl.disabled = false;
-      childEl.innerHTML = '<option value="">\u8acb\u9078\u64c7\u4e8c\u7d1a\u55ae\u4f4d\uff08\u9078\u586b\uff09</option>' + children.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      childEl.innerHTML = '<option value="">\u8acb\u9078\u64c7\u4e8c\u7d1a\u55ae\u4f4d\uff08\u9078\u586b\uff09</option>' + children.map((c) => {
+        const unitValue = composeUnitValue(parent, c);
+        return `<option value="${esc(c)}">${esc(getUnitOptionLabel(unitValue, c))}</option>`;
+      }).join('');
       if (child) childEl.value = child;
     };
 
@@ -512,6 +632,55 @@
   }
   function createDefaultData() {
     return { items: [], users: DEFAULT_USERS.map(u => ({ ...u })), nextId: 1 };
+  }
+  function normalizeCorrectionItem(item, normalizedItems) {
+    const next = { ...(item || {}) };
+    let changed = false;
+
+    const proposerUnitCode = getUnitCode(next.proposerUnit);
+    const handlerUnitCode = getUnitCode(next.handlerUnit);
+    const documentNo = buildCorrectionDocumentNo(next.handlerUnit, next.proposerDate || next.createdAt || next.updatedAt);
+
+    if (proposerUnitCode && next.proposerUnitCode !== proposerUnitCode) {
+      next.proposerUnitCode = proposerUnitCode;
+      changed = true;
+    }
+    if (handlerUnitCode && next.handlerUnitCode !== handlerUnitCode) {
+      next.handlerUnitCode = handlerUnitCode;
+      changed = true;
+    }
+    if (documentNo && next.documentNo !== documentNo) {
+      next.documentNo = documentNo;
+      changed = true;
+    }
+
+    const parsedAutoId = parseCorrectionAutoId(next.id);
+    if (parsedAutoId) {
+      if (next.documentNo !== parsedAutoId.documentNo) {
+        next.documentNo = parsedAutoId.documentNo;
+        changed = true;
+      }
+      if (next.caseSeq !== parsedAutoId.sequence) {
+        next.caseSeq = parsedAutoId.sequence;
+        changed = true;
+      }
+      return { item: next, changed };
+    }
+
+    if (/^CAR-\d+$/i.test(String(next.id || '').trim()) && documentNo) {
+      const sequence = getNextCorrectionSequence(documentNo, normalizedItems);
+      const autoId = buildAutoCarIdByDocument(documentNo, sequence);
+      if (next.id !== autoId) {
+        next.id = autoId;
+        changed = true;
+      }
+      if (next.caseSeq !== sequence) {
+        next.caseSeq = sequence;
+        changed = true;
+      }
+    }
+
+    return { item: next, changed };
   }
   function parseUserUnits(value) {
     if (Array.isArray(value)) return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
@@ -581,7 +750,18 @@
   function loadData() {
     const data = readCachedJson(DATA_KEY, createDefaultData);
     if (!Array.isArray(data.users)) data.users = DEFAULT_USERS.map((u) => ({ ...u }));
+    if (!Array.isArray(data.items)) data.items = [];
+    if (!Number.isFinite(Number(data.nextId))) data.nextId = 1;
+    let changed = false;
     data.users = data.users.map((user) => normalizeUserRecord(user));
+    const normalizedItems = [];
+    data.items.forEach((item) => {
+      const normalized = normalizeCorrectionItem(item, normalizedItems);
+      normalizedItems.push(normalized.item);
+      if (normalized.changed) changed = true;
+    });
+    data.items = normalizedItems;
+    if (changed) saveData(data);
     return data;
   }
   function saveData(d) { writeCachedJson(DATA_KEY, d); }
@@ -589,28 +769,20 @@
   function getItem(id) { return loadData().items.find(i => i.id === id); }
   function addItem(item) { const d = loadData(); d.items.push(item); saveData(d); }
   function updateItem(id, updates) { const d = loadData(); const i = d.items.findIndex(x => x.id === id); if (i >= 0) { d.items[i] = { ...d.items[i], ...updates }; saveData(d); } }
-  function buildAutoCarId(num) { return `CAR-${String(num).padStart(4, '0')}`; }
   function normalizeCarIdInput(value) { return String(value || '').trim().toUpperCase().replace(/\s+/g, ''); }
-  function generateId() {
+  function generateId(unitValue, dateValue) {
     const d = loadData();
-    while (d.items.some((item) => String(item.id || '').toUpperCase() === buildAutoCarId(d.nextId))) d.nextId += 1;
-    const id = buildAutoCarId(d.nextId);
-    d.nextId += 1;
-    saveData(d);
-    return id;
+    const documentNo = buildCorrectionDocumentNo(unitValue, dateValue);
+    if (!documentNo) throw new Error('請先選擇具正式代碼的處理單位，或手動輸入案件編號');
+    const sequence = getNextCorrectionSequence(documentNo, d.items);
+    return buildAutoCarIdByDocument(documentNo, sequence);
   }
-  function reserveCarId(preferredId) {
+  function reserveCarId(preferredId, handlerUnit, dateValue) {
     const customId = normalizeCarIdInput(preferredId);
-    if (!customId) return generateId();
+    if (!customId) return generateId(handlerUnit, dateValue);
     if (!/^[A-Z0-9_-]+$/.test(customId)) throw new Error('矯正單號僅支援英數、連字號與底線');
     const d = loadData();
     if (d.items.some((item) => String(item.id || '').toUpperCase() === customId)) throw new Error('矯正單號已存在');
-    const matched = customId.match(/^CAR-(\d+)$/);
-    if (matched) {
-      const numeric = Number(matched[1]);
-      if (Number.isFinite(numeric) && numeric >= d.nextId) d.nextId = numeric + 1;
-    }
-    saveData(d);
     return customId;
   }
   function getUsers() { return loadData().users.slice().map((user) => normalizeUserRecord(user)); }
@@ -1061,18 +1233,21 @@
             <div class="form-feedback" id="create-feedback" data-state="idle" aria-live="polite" hidden></div>
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label">矯正單號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動編號，例如 CAR-0001"><p class="form-hint">管理者可自行輸入單號。僅支援英數、連字號與底線，不能使用空白或斜線。</p></div>
+              <div class="form-group"><label class="form-label">編號前綴</label><input type="text" class="form-input" id="f-docno" placeholder="選擇處理單位後自動帶入" readonly><p class="form-hint">系統依民國年與處理單位代碼帶入，例如 CAR-115-022。</p></div>
+              <div class="form-group"><label class="form-label">案件編號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動產生，例如 CAR-115-022-1"><p class="form-hint">若留白，系統會在編號前綴後加上該單位流水號；若手動輸入，僅支援英數、連字號與底線。</p></div>
               <div class="form-group"><label class="form-label form-required">提報單位</label>${buildUnitCascadeControl('f-punit', getScopedUnit(u) || u.unit || '', true, true)}</div>
-              <div class="form-group"><label class="form-label form-required">提報日期</label><input type="date" class="form-input" id="f-pdate" value="${new Date().toISOString().split('T')[0]}" required></div>
             </div>
             <div class="form-row">
+              <div class="form-group"><label class="form-label form-required">提報日期</label><input type="date" class="form-input" id="f-pdate" value="${new Date().toISOString().split('T')[0]}" required></div>
               <div class="form-group"><label class="form-label form-required">提報人員</label><input type="text" class="form-input" id="f-pname" value="${esc(u.name)}" readonly></div>
               <div class="form-group"><label class="form-label form-required">處理單位</label>${buildUnitCascadeControl('f-hunit', '', false, true)}</div>
-              <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" data-testid="create-handler-name" required><option value="">請先選擇處理單位</option></select></div>
             </div>
             <div class="form-row">
+              <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" data-testid="create-handler-name" required><option value="">請先選擇處理單位</option></select></div>
               <div class="form-group"><label class="form-label">指派日期</label><input type="date" class="form-input" id="f-hdate"></div>
               <div class="form-group"><label class="form-label">處理人員信箱</label><div class="input-with-icon"><input type="email" class="form-input" id="f-hemail" placeholder="選擇處理人員後自動帶入" readonly style="background:#f8fafc"><span class="input-icon-hint">${ic('mail', 'icon-xs')}</span></div><p class="form-hint">系統後續通知將優先送往此信箱</p></div>
+            </div>
+            <div class="form-row">
               <div class="form-group"><label class="form-label">通知設定</label><label class="chk-label" style="margin-top:4px"><input type="checkbox" id="f-notify" checked><span class="chk-box"></span>開單後寄送指派通知給處理人員</label></div>
             </div>
             <div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
@@ -1097,6 +1272,7 @@
               <div class="editor-side-title">開單摘要</div>
               <div class="editor-side-text">右側摘要會跟著你的填寫內容即時更新，避免漏掉單號、指派與期限設定。</div>
               <div class="editor-summary-list editor-summary-list--compact">
+                <div class="editor-summary-item"><span>編號前綴</span><strong id="create-summary-docno">待指定</strong></div>
                 <div class="editor-summary-item"><span>矯正單號</span><strong id="create-summary-id">自動編號</strong></div>
                 <div class="editor-summary-item"><span>提報單位</span><strong id="create-summary-proposer">${esc(getScopedUnit(u) || u.unit || '未指定')}</strong></div>
                 <div class="editor-summary-item"><span>處理單位</span><strong id="create-summary-handler-unit">待指定</strong></div>
@@ -1135,6 +1311,7 @@ function renderCreate() {
     document.getElementById('app').innerHTML = buildCreatePage(u);
     refreshIcons();
     applyTestIds({
+      'f-docno': 'create-document-no',
       'f-id': 'create-id',
       'f-pdate': 'create-proposer-date',
       'f-pname': 'create-proposer-name',
@@ -1149,13 +1326,16 @@ function renderCreate() {
     applySelectorTestIds([
       { selector: '#create-form button[type="submit"]', testId: 'create-submit' }
     ]);
+    const documentNoInput = document.getElementById('f-docno');
     const idInput = document.getElementById('f-id');
     const proposerUnit = document.getElementById('f-punit');
+    const proposerDateInput = document.getElementById('f-pdate');
     const handlerUnit = document.getElementById('f-hunit');
     const handlerName = document.getElementById('f-hname');
     const handlerEmailInput = document.getElementById('f-hemail');
     const dueInput = document.getElementById('f-due');
     const notifyInput = document.getElementById('f-notify');
+    const summaryDocNo = document.getElementById('create-summary-docno');
     const summaryId = document.getElementById('create-summary-id');
     const summaryProposer = document.getElementById('create-summary-proposer');
     const summaryHandlerUnit = document.getElementById('create-summary-handler-unit');
@@ -1166,10 +1346,22 @@ function renderCreate() {
     initUnitCascade('f-punit', getScopedUnit(u) || u.unit || '', { disabled: true });
     initUnitCascade('f-hunit', '', { disabled: false });
 
+    function getAutoGeneratedIdPreview() {
+      const documentNo = buildCorrectionDocumentNo(handlerUnit.value, proposerDateInput.value);
+      if (!documentNo) return '待選擇處理單位';
+      const sequence = getNextCorrectionSequence(documentNo, loadData().items);
+      return buildAutoCarIdByDocument(documentNo, sequence) || '待選擇處理單位';
+    }
+
     function syncCreateSummary() {
-      summaryId.textContent = normalizeCarIdInput(idInput.value) || '自動編號';
-      summaryProposer.textContent = proposerUnit.value || '未指定';
-      summaryHandlerUnit.textContent = handlerUnit.value || '待指定';
+      const documentNo = buildCorrectionDocumentNo(handlerUnit.value, proposerDateInput.value);
+      if (documentNoInput) documentNoInput.value = documentNo || '';
+      if (summaryDocNo) summaryDocNo.textContent = documentNo || '待指定';
+      summaryId.textContent = normalizeCarIdInput(idInput.value) || getAutoGeneratedIdPreview();
+      const proposerCode = getUnitCodeWithDots(proposerUnit.value);
+      const handlerCode = getUnitCodeWithDots(handlerUnit.value);
+      summaryProposer.textContent = proposerUnit.value ? `${proposerCode ? `${proposerCode} ` : ''}${proposerUnit.value}` : '未指定';
+      summaryHandlerUnit.textContent = handlerUnit.value ? `${handlerCode ? `${handlerCode} ` : ''}${handlerUnit.value}` : '待指定';
       summaryHandler.textContent = handlerName.value || '待指定';
       summaryDue.textContent = dueInput.value ? fmt(dueInput.value) : '未指定';
       summaryNotify.textContent = notifyInput.checked ? '送出後寄送通知' : '僅建立單據，不寄送通知';
@@ -1210,6 +1402,7 @@ function renderCreate() {
       syncCreateSummary();
     });
     proposerUnit.addEventListener('change', syncCreateSummary);
+    proposerDateInput.addEventListener('change', syncCreateSummary);
     handlerName.addEventListener('change', updateHandlerEmail);
     dueInput.addEventListener('change', syncCreateSummary);
     notifyInput.addEventListener('change', syncCreateSummary);
@@ -1276,11 +1469,13 @@ function renderCreate() {
       if (!defType) { toast('請選擇缺失種類', 'error'); return; }
       if (!source) { toast('請選擇來源', 'error'); return; }
       if (cats.length === 0) { toast('請至少選擇一項分類', 'error'); return; }
+      const proposerUnitValue = getScopedUnit(u) || u.unit || document.getElementById('f-punit').value;
+      const handlerUnitValue = document.getElementById('f-hunit').value;
       let itemId = '';
       debugFlow('create', 'validation passed');
       setCreateFeedback('success', '\u6b04\u4f4d\u6aa2\u67e5\u5b8c\u6210\uff0c\u6b63\u5728\u5efa\u7acb\u77ef\u6b63\u55ae', ['\u7cfb\u7d71\u5df2\u4fdd\u7559\u55ae\u865f\uff0c\u5373\u5c07\u5beb\u5165\u55ae\u64da\u8207\u901a\u77e5\u8cc7\u8a0a\u3002']);
       try {
-        itemId = reserveCarId(idInput.value);
+        itemId = reserveCarId(idInput.value, handlerUnitValue, proposerDateInput.value);
       } catch (error) {
         debugFlow('create', 'reserve id failed', { message: error.message || '' });
         setCreateFeedback('error', error.message || '\u55ae\u865f\u7121\u6cd5\u4f7f\u7528', ['\u8acb\u8abf\u6574\u55ae\u865f\u5f8c\u91cd\u65b0\u9001\u51fa\u3002']);
@@ -1291,13 +1486,18 @@ function renderCreate() {
       const selectedHandler = handlerName.options[handlerName.selectedIndex];
       const handlerUsername = selectedHandler && selectedHandler.dataset ? (selectedHandler.dataset.username || '') : '';
       const now = new Date().toISOString();
+      const parsedAutoId = parseCorrectionAutoId(itemId);
       const item = {
         id: itemId,
-        proposerUnit: getScopedUnit(u) || u.unit || document.getElementById('f-punit').value,
+        documentNo: buildCorrectionDocumentNo(handlerUnitValue, proposerDateInput.value) || '',
+        caseSeq: parsedAutoId ? parsedAutoId.sequence : null,
+        proposerUnit: proposerUnitValue,
+        proposerUnitCode: getUnitCode(proposerUnitValue) || '',
         proposerName: document.getElementById('f-pname').value.trim(),
         proposerUsername: u.username,
-        proposerDate: document.getElementById('f-pdate').value,
-        handlerUnit: document.getElementById('f-hunit').value,
+        proposerDate: proposerDateInput.value,
+        handlerUnit: handlerUnitValue,
+        handlerUnitCode: getUnitCode(handlerUnitValue) || '',
         handlerName: document.getElementById('f-hname').value,
         handlerUsername,
         handlerEmail: document.getElementById('f-hemail').value || '',
@@ -1410,9 +1610,13 @@ function renderCreate() {
       <div class="stepper">${stepper}</div>
       <div class="card" style="margin-top:20px"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
         <div class="detail-grid">
+          <div class="detail-field"><div class="detail-field-label">案件編號</div><div class="detail-field-value">${esc(item.id)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">編號前綴</div><div class="detail-field-value">${esc(item.documentNo || '—')}</div></div>
+          <div class="detail-field"><div class="detail-field-label">提出單位代碼</div><div class="detail-field-value">${esc(item.proposerUnitCode || getUnitCode(item.proposerUnit) || '—')}</div></div>
           <div class="detail-field"><div class="detail-field-label">提出單位</div><div class="detail-field-value">${esc(item.proposerUnit)}</div></div>
           <div class="detail-field"><div class="detail-field-label">提出人員</div><div class="detail-field-value">${esc(item.proposerName)}</div></div>
           <div class="detail-field"><div class="detail-field-label">提出日期</div><div class="detail-field-value">${fmt(item.proposerDate)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">處理單位代碼</div><div class="detail-field-value">${esc(item.handlerUnitCode || getUnitCode(item.handlerUnit) || '—')}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理單位</div><div class="detail-field-value">${esc(item.handlerUnit)}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理人員</div><div class="detail-field-value">${esc(item.handlerName)}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理人員信箱</div><div class="detail-field-value">${item.handlerEmail ? '<a href="mailto:' + esc(item.handlerEmail) + '" style="color:var(--accent-primary);text-decoration:none">' + ic('mail', 'icon-xs') + ' ' + esc(item.handlerEmail) + '</a>' : '—'}</div></div>
@@ -2146,6 +2350,10 @@ function renderTracking(id) {
     base.supervisorNote = String(base.supervisorNote || '').trim();
     base.results = base.results && typeof base.results === 'object' ? base.results : {};
     base.summary = base.summary && typeof base.summary === 'object' ? base.summary : { total: 0, conform: 0, partial: 0, nonConform: 0, na: 0 };
+    const parsedId = parseChecklistId(base.id);
+    if (parsedId) {
+      base.id = buildChecklistIdByDocument(parsedId.documentNo, parsedId.sequence);
+    }
     return base;
   }
   function loadChecklists() {
@@ -2153,7 +2361,24 @@ function renderTracking(id) {
     if (!raw || typeof raw !== 'object') return emptyChecklistStore();
     if (!Array.isArray(raw.items)) raw.items = [];
     if (!Number.isFinite(raw.nextId)) raw.nextId = 1;
-    raw.items = raw.items.map((item) => normalizeChecklistItem(item));
+    let changed = false;
+    const normalizedItems = [];
+    raw.items.forEach((item) => {
+      const normalized = normalizeChecklistItem(item);
+      const documentNo = buildChecklistDocumentNo(normalized.unit, normalized.auditYear, normalized.fillDate || normalized.updatedAt || normalized.createdAt);
+      const parsedId = parseChecklistId(normalized.id);
+      if (parsedId && normalized.id !== buildChecklistIdByDocument(parsedId.documentNo, parsedId.sequence)) {
+        normalized.id = buildChecklistIdByDocument(parsedId.documentNo, parsedId.sequence);
+        changed = true;
+      } else if ((!parsedId || !String(normalized.id || '').startsWith('CHK-')) && documentNo) {
+        const sequence = getNextChecklistSequence(documentNo, normalizedItems);
+        normalized.id = buildChecklistIdByDocument(documentNo, sequence);
+        changed = true;
+      }
+      normalizedItems.push(normalized);
+    });
+    raw.items = normalizedItems;
+    if (changed) saveChecklists(raw);
     return raw;
   }
   function saveChecklists(d) { writeCachedJson(CHECKLIST_KEY, d); }
@@ -2169,32 +2394,31 @@ function renderTracking(id) {
     return true;
   }
   function getChecklistUnitCode(unit) {
-    const suffixMap = { '\u4e2d\u5fc3': '\u4e2d', '\u5b78\u9662': '\u9662', '\u5b78\u7cfb': '\u7cfb', '\u7814\u7a76\u6240': '\u6240', '\u8655': '\u8655', '\u5ba4': '\u5ba4', '\u7d44': '\u7d44', '\u9928': '\u9928', '\u9662': '\u9662', '\u6240': '\u6240' };
-    const normalizePart = (part) => String(part || '').trim()
-      .replace(/\u570b\u7acb[\u81fa\u53f0]\u7063\u5927\u5b78/g, '')
-      .replace(/[()\uff08\uff09\s]/g, '');
-    const shorten = (part) => {
-      const clean = normalizePart(part);
-      if (!clean) return '';
-      if (clean.length <= 3) return clean;
-      const suffix = Object.keys(suffixMap).find((key) => clean.endsWith(key));
-      const body = suffix ? clean.slice(0, -suffix.length) : clean;
-      const tokens = body.split(/[\u53ca\u8207\u66a8\u3001]/).map((token) => token.trim()).filter(Boolean);
-      if (tokens.length >= 2) return tokens.slice(0, 2).map((token) => token[0]).join('') + (suffix ? suffixMap[suffix] : body.slice(-1));
-      if (suffix) return body.slice(0, Math.min(2, body.length)) + suffixMap[suffix];
-      return clean.slice(0, Math.min(4, clean.length));
-    };
-    const parsed = splitUnitValue(unit);
-    const parentCode = shorten(parsed.parent);
-    const childCode = shorten(parsed.child);
-    return [parentCode, childCode].filter(Boolean).join('-') || 'CHK';
+    return getUnitCode(unit) || 'CHK';
+  }
+  function buildChecklistDocumentNo(unit, auditYear, fillDate) {
+    return buildScopedRecordPrefix('CHK', unit, auditYear, fillDate);
+  }
+  function parseChecklistId(value) {
+    return parseScopedRecordId(value, 'CHK');
+  }
+  function buildChecklistIdByDocument(documentNo, sequence) {
+    return buildScopedRecordId(documentNo, sequence);
+  }
+  function getNextChecklistSequence(documentNo, items) {
+    return getNextScopedRecordSequence(documentNo, items, parseChecklistId);
   }
   function generateChecklistId(unit) {
     const d = loadChecklists();
-    const id = `${getChecklistUnitCode(unit)}-${String(d.nextId).padStart(4, '0')}`;
-    d.nextId += 1;
-    saveChecklists(d);
-    return id;
+    const documentNo = buildChecklistDocumentNo(unit);
+    if (!documentNo) throw new Error('請先選擇具正式代碼的受稽單位');
+    return buildChecklistIdByDocument(documentNo, getNextChecklistSequence(documentNo, d.items));
+  }
+  function generateChecklistIdForYear(unit, auditYear, fillDate) {
+    const d = loadChecklists();
+    const documentNo = buildChecklistDocumentNo(unit, auditYear, fillDate);
+    if (!documentNo) throw new Error('請先選擇具正式代碼的受稽單位');
+    return buildChecklistIdByDocument(documentNo, getNextChecklistSequence(documentNo, d.items));
   }
   function isChecklistOwner(cl, user) {
     const actor = user || currentUser();
@@ -2433,13 +2657,16 @@ function renderTracking(id) {
       const now = new Date().toISOString();
       const supervisorNameValue = document.getElementById('cl-supervisor-name').value.trim();
       const supervisorTitleValue = document.getElementById('cl-supervisor-title').value.trim();
+      const unitValue = checklistUnitLocked ? (getScopedUnit(u) || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
+      const fillDateValue = document.getElementById('cl-date').value;
+      const auditYearValue = document.getElementById('cl-year').value;
       return {
-        id: existing ? existing.id : generateChecklistId(document.getElementById('cl-unit').value),
-        unit: checklistUnitLocked ? (getScopedUnit(u) || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value,
+        id: existing ? existing.id : generateChecklistIdForYear(unitValue, auditYearValue, fillDateValue),
+        unit: unitValue,
         fillerName: u.name,
         fillerUsername: u.username,
-        fillDate: document.getElementById('cl-date').value,
-        auditYear: document.getElementById('cl-year').value,
+        fillDate: fillDateValue,
+        auditYear: auditYearValue,
         supervisor: supervisorNameValue,
         supervisorName: supervisorNameValue,
         supervisorTitle: supervisorTitleValue,
@@ -3008,7 +3235,7 @@ function renderTracking(id) {
     const records = Array.isArray(form && form.records)
       ? form.records.map((row) => normalizeTrainingRecordRow(row, unit))
       : [];
-    return {
+    const normalized = {
       id: String((form && form.id) || '').trim(),
       unit,
       statsUnit: String((form && form.statsUnit) || getTrainingStatsUnit(unit)).trim(),
@@ -3028,17 +3255,40 @@ function renderTracking(id) {
       submittedAt: (form && form.submittedAt) || null,
       history: Array.isArray(form && form.history) ? form.history : []
     };
+    const parsedId = parseTrainingFormId(normalized.id);
+    if (parsedId) {
+      normalized.id = buildTrainingFormIdByDocument(parsedId.documentNo, parsedId.sequence);
+    }
+    return normalized;
   }
 
   function loadTrainingStore() {
     const raw = readCachedJson(TRAINING_KEY, emptyTrainingStore);
     if (!raw || typeof raw !== 'object') return emptyTrainingStore();
-    return {
+    const store = {
       forms: Array.isArray(raw.forms) ? raw.forms.map((form) => normalizeTrainingForm(form)) : [],
       rosters: Array.isArray(raw.rosters) ? raw.rosters.map((row) => normalizeTrainingRosterRow(row, row.unit)) : [],
       nextFormId: Number.isFinite(raw.nextFormId) ? raw.nextFormId : 1,
       nextRosterId: Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : 1
     };
+    let changed = false;
+    const normalizedForms = [];
+    store.forms.forEach((form) => {
+      const documentNo = buildTrainingFormDocumentNo(form.unit, form.trainingYear, form.fillDate || form.updatedAt || form.createdAt);
+      const parsedId = parseTrainingFormId(form.id);
+      if (parsedId && form.id !== buildTrainingFormIdByDocument(parsedId.documentNo, parsedId.sequence)) {
+        form.id = buildTrainingFormIdByDocument(parsedId.documentNo, parsedId.sequence);
+        changed = true;
+      } else if ((!parsedId || !String(form.id || '').startsWith('TRN-')) && documentNo) {
+        const sequence = getNextTrainingFormSequence(documentNo, normalizedForms);
+        form.id = buildTrainingFormIdByDocument(documentNo, sequence);
+        changed = true;
+      }
+      normalizedForms.push(form);
+    });
+    store.forms = normalizedForms;
+    if (changed) saveTrainingStore(store);
+    return store;
   }
 
   function saveTrainingStore(store) {
@@ -3070,12 +3320,27 @@ function renderTracking(id) {
     saveTrainingStore(store);
   }
 
-  function generateTrainingFormId() {
+  function buildTrainingFormDocumentNo(unit, trainingYear, fillDate) {
+    return buildScopedRecordPrefix('TRN', unit, trainingYear, fillDate);
+  }
+
+  function parseTrainingFormId(value) {
+    return parseScopedRecordId(value, 'TRN');
+  }
+
+  function buildTrainingFormIdByDocument(documentNo, sequence) {
+    return buildScopedRecordId(documentNo, sequence);
+  }
+
+  function getNextTrainingFormSequence(documentNo, forms) {
+    return getNextScopedRecordSequence(documentNo, forms, parseTrainingFormId);
+  }
+
+  function generateTrainingFormId(unit, trainingYear, fillDate) {
     const store = loadTrainingStore();
-    const id = 'TRN-' + String(store.nextFormId).padStart(4, '0');
-    store.nextFormId += 1;
-    saveTrainingStore(store);
-    return id;
+    const documentNo = buildTrainingFormDocumentNo(unit, trainingYear, fillDate);
+    if (!documentNo) throw new Error('請先選擇具正式代碼的填報單位');
+    return buildTrainingFormIdByDocument(documentNo, getNextTrainingFormSequence(documentNo, store.forms));
   }
 
   function getAllTrainingRosters() {
@@ -3924,10 +4189,13 @@ function renderTrainingFill(id) {
 
     function saveTrainingForm(targetStatus) {
       const now = new Date().toISOString();
-      const formId = existing ? existing.id : generateTrainingFormId();
+      const unitValue = document.getElementById('tr-unit').value;
+      const trainingYearValue = document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911);
+      const fillDateValue = document.getElementById('tr-date').value;
+      const formId = existing ? existing.id : generateTrainingFormId(unitValue, trainingYearValue, fillDateValue);
       const records = collectRecords();
       const summary = computeTrainingSummary(records);
-      debugFlow('training', targetStatus === TRAINING_STATUSES.SUBMITTED ? 'submit start' : 'draft save start', { id: existing?.id || null, unit: document.getElementById('tr-unit').value, records: records.length });
+      debugFlow('training', targetStatus === TRAINING_STATUSES.SUBMITTED ? 'submit start' : 'draft save start', { id: existing?.id || null, unit: unitValue, records: records.length });
       setTrainingFeedback('info', targetStatus === TRAINING_STATUSES.SUBMITTED ? '\u6b63\u5728\u6aa2\u67e5\u6559\u80b2\u8a13\u7df4\u8cc7\u6599' : '\u6b63\u5728\u66ab\u5b58\u6559\u80b2\u8a13\u7df4\u8349\u7a3f', [targetStatus === TRAINING_STATUSES.SUBMITTED ? '\u6aa2\u6838\u806f\u7d61\u8cc7\u6599\u3001\u53d7\u8a13\u540d\u55ae\u8207\u7c3d\u6838\u9644\u4ef6\u3002' : '\u4fdd\u7559\u76ee\u524d\u7de8\u4fee\u5167\u5bb9\uff0c\u7a0d\u5f8c\u53ef\u56de\u4f86\u7e7c\u7e8c\u586b\u5beb\u3002']);
       if (targetStatus === TRAINING_STATUSES.SUBMITTED) {
         const validationError = validateSubmitPayload(records);
@@ -3946,14 +4214,14 @@ function renderTrainingFill(id) {
       history.push({ time: now, action: targetStatus === TRAINING_STATUSES.SUBMITTED ? '正式送出教育訓練統計' : '儲存教育訓練統計暫存', user: user.name });
       upsertTrainingForm({
         id: formId,
-        unit: document.getElementById('tr-unit').value,
-        statsUnit: getTrainingStatsUnit(document.getElementById('tr-unit').value),
+        unit: unitValue,
+        statsUnit: getTrainingStatsUnit(unitValue),
         fillerName: user.name,
         fillerUsername: user.username,
         submitterPhone: document.getElementById('tr-phone').value.trim(),
         submitterEmail: document.getElementById('tr-email').value.trim(),
-        fillDate: document.getElementById('tr-date').value,
-        trainingYear: document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911),
+        fillDate: fillDateValue,
+        trainingYear: trainingYearValue,
         status: nextStatus,
         records,
         summary,
@@ -3968,12 +4236,12 @@ function renderTrainingFill(id) {
       existing = getTrainingForm(formId) || existing;
       updateTrainingDraftStatus(existing);
       if (targetStatus === TRAINING_STATUSES.SUBMITTED) {
-        debugFlow('training', 'submit success', { id: formId, unit: existing?.unit || document.getElementById('tr-unit').value, status: existing?.status || TRAINING_STATUSES.SUBMITTED });
+        debugFlow('training', 'submit success', { id: formId, unit: existing?.unit || unitValue, status: existing?.status || TRAINING_STATUSES.SUBMITTED });
         setTrainingFeedback('success', `\u6559\u80b2\u8a13\u7df4 ${formId} \u5df2\u6b63\u5f0f\u9001\u51fa`, ['\u7cfb\u7d71\u5df2\u5132\u5b58\u540d\u55ae\u8207\u7c3d\u6838\u9644\u4ef6\uff0c\u5373\u5c07\u5207\u63db\u81f3\u8a73\u60c5\u9801\u3002']);
         navigate('training-detail/' + formId);
         return;
       }
-      debugFlow('training', 'draft saved', { id: formId, unit: existing?.unit || document.getElementById('tr-unit').value, status: existing?.status || TRAINING_STATUSES.DRAFT });
+      debugFlow('training', 'draft saved', { id: formId, unit: existing?.unit || unitValue, status: existing?.status || TRAINING_STATUSES.DRAFT });
       setTrainingFeedback('success', `\u8349\u7a3f ${formId} \u5df2\u66ab\u5b58`, ['\u9801\u9762\u6703\u4fdd\u6301\u5728\u76ee\u524d\u7de8\u4fee\u72c0\u614b\uff0c\u53ef\u76f4\u63a5\u7e7c\u7e8c\u4fee\u6539\u3002']);
       navigate('training-fill/' + formId, { replace: true });
     }

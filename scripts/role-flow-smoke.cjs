@@ -227,10 +227,8 @@ function isoDate(offsetDays) {
 
     await runStep('ADM-02', '最高管理者', '建立矯正單', async () => {
       await login(page, 'admin', 'admin123');
-      createdCarId = '115-C-A30-' + String(Date.now()).slice(-3);
       await gotoHash(page, 'create');
       await page.waitForSelector('#create-form');
-      await page.fill('#f-id', createdCarId);
       await chooseUnitForHandlerUsername(page, 'f-hunit', 'f-hname', 'unit1');
       await selectByMatcher(page, '#f-hname', 'return option.dataset.username === "unit1";');
       await page.fill('#f-problem', 'E2E 測試缺失：驗證最高管理者開單與單位窗口回填流程。');
@@ -247,9 +245,13 @@ function isoDate(offsetDays) {
         });
       });
       await Promise.all([
-        waitForHash(page, '#detail/' + createdCarId),
+        page.waitForFunction(() => window.location.hash.startsWith('#detail/'), { timeout: 8000 }),
         page.click('#create-form button[type="submit"]')
       ]);
+      createdCarId = decodeURIComponent((await currentHash(page)).replace(/^#detail\//, ''));
+      if (!/^CAR-\d{3}-[A-Z0-9]+-\d+$/.test(createdCarId)) {
+        throw new Error(`unexpected generated car id ${createdCarId}`);
+      }
       const store = await getData(page);
       const item = (store.items || []).find((entry) => entry.id === createdCarId);
       if (!item) throw new Error('created CAR not found in storage');
@@ -332,6 +334,7 @@ function isoDate(offsetDays) {
       const rawChecklistId = hash.split('/')[1] || null;
       checklistId = rawChecklistId ? decodeURIComponent(rawChecklistId) : null;
       if (!checklistId) throw new Error(`unable to parse checklist id from ${hash}`);
+      if (!/^CHK-\d{3}-[A-Z0-9]+-\d+$/.test(checklistId)) throw new Error(`unexpected checklist id ${checklistId}`);
       const store = await getChecklists(page);
       const item = (store.items || []).find((entry) => entry.id === checklistId);
       if (!item) throw new Error('checklist draft not stored');
@@ -380,8 +383,9 @@ function isoDate(offsetDays) {
       if (!hash.startsWith('#training-fill/')) {
         throw new Error(`training draft route mismatch: ${hash}`);
       }
-      trainingId = hash.split('/')[1] || null;
+      trainingId = decodeURIComponent(hash.split('/')[1] || '');
       if (!trainingId) throw new Error(`unable to parse training id from ${hash}`);
+      if (!/^TRN-\d{3}-[A-Z0-9]+-\d+$/.test(trainingId)) throw new Error(`unexpected training id ${trainingId}`);
       const store = await getTrainingStore(page);
       const form = (store.forms || []).find((entry) => entry.id === trainingId);
       if (!form) throw new Error('training draft not stored');

@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-08T04:40:57.519Z",
+  "startedAt": "2026-03-08T07:40:15.677Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "console": [],
   "pageErrors": [],
@@ -9,35 +9,35 @@
       "role": "最高管理者",
       "title": "建立矯正單",
       "status": "passed",
-      "detail": "115-C-A30-373"
+      "detail": "CAR-115-02204-3"
     },
     {
       "id": "FOCUS-RP-01",
       "role": "單位窗口",
       "title": "回填矯正措施",
       "status": "passed",
-      "detail": "115-C-A30-373"
+      "detail": "CAR-115-02204-3"
     },
     {
       "id": "FOCUS-ADM-02",
       "role": "最高管理者",
       "title": "進入審核並轉為追蹤",
       "status": "passed",
-      "detail": "115-C-A30-373"
+      "detail": "CAR-115-02204-3"
     },
     {
       "id": "FOCUS-RP-02",
       "role": "單位窗口",
       "title": "送出追蹤提報",
       "status": "passed",
-      "detail": "115-C-A30-373"
+      "detail": "CAR-115-02204-3"
     },
     {
       "id": "FOCUS-ADM-03",
       "role": "最高管理者",
       "title": "審核追蹤並結案",
       "status": "passed",
-      "detail": "115-C-A30-373"
+      "detail": "CAR-115-02204-3"
     }
   ],
   "context": {
@@ -50,7 +50,7 @@
       "password": "unit123"
     }
   },
-  "finishedAt": "2026-03-08T04:41:13.233Z",
+  "finishedAt": "2026-03-08T07:40:31.408Z",
   "summary": {
     "passed": 5,
     "failed": 0,

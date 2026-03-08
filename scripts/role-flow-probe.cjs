@@ -82,7 +82,6 @@ async function chooseUnitForHandlerUsername(page, baseId, handlerSelectId, usern
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'create');
       await page.waitForSelector('[data-testid="create-form"]');
-      await page.fill('[data-testid="create-id"]', '115-C-A30-' + String(Date.now()).slice(-3));
       await chooseUnitForHandlerUsername(page, 'f-hunit', 'f-hname', 'unit1');
       await page.evaluate(() => {
         const select = document.querySelector('[data-testid="create-handler-name"]');
@@ -101,8 +100,9 @@ async function chooseUnitForHandlerUsername(page, baseId, handlerSelectId, usern
         page.waitForFunction(() => window.location.hash.startsWith('#detail/'), { timeout: 8000 }),
         page.click('[data-testid="create-submit"]')
       ]);
-      carId = (await currentHash(page)).split('/')[1];
+      carId = decodeURIComponent((await currentHash(page)).replace(/^#detail\//, ''));
       if (!carId) throw new Error('missing created car id');
+      if (!/^CAR-\d{3}-[A-Z0-9]+-\d+$/.test(carId)) throw new Error('unexpected generated car id ' + carId);
       await logout(page);
       return carId;
     });

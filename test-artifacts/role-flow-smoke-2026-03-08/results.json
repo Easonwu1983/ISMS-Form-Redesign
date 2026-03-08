@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-08T04:41:14.018Z",
+  "startedAt": "2026-03-08T07:40:32.186Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "steps": [
     {
@@ -21,7 +21,7 @@
       "role": "最高管理者",
       "title": "建立矯正單",
       "status": "passed",
-      "detail": "115-C-A30-935"
+      "detail": "CAR-115-02204-3"
     },
     {
       "id": "VW-01",
@@ -49,28 +49,28 @@
       "role": "單位窗口",
       "title": "檢核表草稿導頁一致性",
       "status": "passed",
-      "detail": "#checklist-fill/%E8%A8%88%E8%B3%87%E4%B8%AD-%E8%B3%87%E8%A8%8A%E7%B5%84-0001"
+      "detail": "#checklist-fill/CHK-115-02204-1"
     },
     {
       "id": "RP-05",
       "role": "單位窗口",
       "title": "檢核表正式送出",
       "status": "passed",
-      "detail": "計資中-資訊組-0001"
+      "detail": "CHK-115-02204-1"
     },
     {
       "id": "RP-06",
       "role": "單位窗口",
       "title": "教育訓練草稿導頁一致性",
       "status": "passed",
-      "detail": "#training-fill/TRN-0001"
+      "detail": "#training-fill/TRN-115-02204-1"
     },
     {
       "id": "RP-07",
       "role": "單位窗口",
       "title": "教育訓練正式送出",
       "status": "passed",
-      "detail": "TRN-0001"
+      "detail": "TRN-115-02204-1"
     },
     {
       "id": "ADM-03",
@@ -105,19 +105,19 @@
     },
     {
       "type": "info",
-      "text": "[ISMS:create] submit success {id: 115-C-A30-935, notify: true, handlerEmail: wang@company.com}"
+      "text": "[ISMS:create] submit success {id: CAR-115-02204-3, notify: true, handlerEmail: wang@company.com}"
     },
     {
       "type": "info",
-      "text": "[ISMS:checklist] draft saved {id: 計資中-資訊組-0001, unit: 計算機及資訊網路中心／資訊網路組, status: 草稿}"
+      "text": "[ISMS:checklist] draft saved {id: CHK-115-02204-1, unit: 計算機及資訊網路中心／資訊網路組, status: 草稿}"
     },
     {
       "type": "info",
-      "text": "[ISMS:checklist] submit start {id: 計資中-資訊組-0001, unit: 計算機及資訊網路中心／資訊網路組}"
+      "text": "[ISMS:checklist] submit start {id: CHK-115-02204-1, unit: 計算機及資訊網路中心／資訊網路組}"
     },
     {
       "type": "info",
-      "text": "[ISMS:checklist] submit success {id: 計資中-資訊組-0001, unit: 計算機及資訊網路中心／資訊網路組, status: 已送出}"
+      "text": "[ISMS:checklist] submit success {id: CHK-115-02204-1, unit: 計算機及資訊網路中心／資訊網路組, status: 已送出}"
     },
     {
       "type": "info",
@@ -125,15 +125,15 @@
     },
     {
       "type": "info",
-      "text": "[ISMS:training] draft saved {id: TRN-0001, unit: 計算機及資訊網路中心／資訊網路組, status: 暫存}"
+      "text": "[ISMS:training] draft saved {id: TRN-115-02204-1, unit: 計算機及資訊網路中心／資訊網路組, status: 暫存}"
     },
     {
       "type": "info",
-      "text": "[ISMS:training] submit start {id: TRN-0001, unit: 計算機及資訊網路中心／資訊網路組, records: 3}"
+      "text": "[ISMS:training] submit start {id: TRN-115-02204-1, unit: 計算機及資訊網路中心／資訊網路組, records: 3}"
     },
     {
       "type": "info",
-      "text": "[ISMS:training] submit success {id: TRN-0001, unit: 計算機及資訊網路中心／資訊網路組, status: 正式送出}"
+      "text": "[ISMS:training] submit success {id: TRN-115-02204-1, unit: 計算機及資訊網路中心／資訊網路組, status: 正式送出}"
     }
   ],
   "pageErrors": [],
@@ -165,7 +165,7 @@
       "password": "viewer123"
     }
   },
-  "finishedAt": "2026-03-08T04:41:45.217Z",
+  "finishedAt": "2026-03-08T07:41:04.278Z",
   "summary": {
     "passed": 13,
     "failed": 0,
