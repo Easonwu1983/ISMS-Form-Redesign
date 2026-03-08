@@ -7,9 +7,29 @@ const BROWSER_CANDIDATES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Google/Chrome/Application/chrome.exe'
 ];
+const ARTIFACT_TZ = process.env.TEST_ARTIFACT_TZ || 'Asia/Taipei';
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function getArtifactDateStamp(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ARTIFACT_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function createArtifactRun(prefix) {
+  const dateStamp = getArtifactDateStamp();
+  const outDir = path.join(process.cwd(), 'test-artifacts', `${prefix}-${dateStamp}`);
+  ensureDir(outDir);
+  return { dateStamp, outDir };
 }
 
 async function launchBrowser() {
@@ -134,9 +154,11 @@ function writeJson(filePath, payload) {
 module.exports = {
   BASE_URL,
   attachDiagnostics,
+  createArtifactRun,
   createResultEnvelope,
   currentHash,
   finalizeResults,
+  getArtifactDateStamp,
   gotoHash,
   launchBrowser,
   login,

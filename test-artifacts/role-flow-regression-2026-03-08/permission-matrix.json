@@ -1,0 +1,603 @@
+{
+  "startedAt": "2026-03-08T03:23:43.208Z",
+  "baseUrl": "http://127.0.0.1:8080/",
+  "console": [],
+  "pageErrors": [],
+  "routes": [
+    "dashboard",
+    "list",
+    "create",
+    "checklist",
+    "checklist-fill",
+    "training",
+    "training-fill",
+    "users",
+    "login-log",
+    "checklist-manage",
+    "unit-review",
+    "training-roster"
+  ],
+  "roles": {
+    "admin": {
+      "title": "最高管理者",
+      "whitelist": {
+        "dashboard": {
+          "title": "儀表板",
+          "fallback": null
+        },
+        "list": {
+          "title": "矯正單列表",
+          "fallback": null
+        },
+        "create": {
+          "title": "開立矯正單",
+          "fallback": "dashboard"
+        },
+        "detail": {
+          "title": "矯正單詳情",
+          "fallback": null
+        },
+        "respond": {
+          "title": "回填矯正措施",
+          "fallback": null
+        },
+        "tracking": {
+          "title": "追蹤監控",
+          "fallback": null
+        },
+        "users": {
+          "title": "帳號管理",
+          "fallback": "dashboard"
+        },
+        "login-log": {
+          "title": "登入紀錄",
+          "fallback": "dashboard"
+        },
+        "checklist": {
+          "title": "內稽檢核表",
+          "fallback": null
+        },
+        "checklist-fill": {
+          "title": "填報檢核表",
+          "fallback": "checklist"
+        },
+        "checklist-detail": {
+          "title": "檢核表詳情",
+          "fallback": null
+        },
+        "checklist-manage": {
+          "title": "檢核表管理",
+          "fallback": "dashboard"
+        },
+        "unit-review": {
+          "title": "單位治理",
+          "fallback": "dashboard"
+        },
+        "training": {
+          "title": "資安教育訓練統計",
+          "fallback": null
+        },
+        "training-fill": {
+          "title": "填報資安教育訓練統計",
+          "fallback": "training"
+        },
+        "training-detail": {
+          "title": "資安教育訓練統計詳情",
+          "fallback": null
+        },
+        "training-roster": {
+          "title": "教育訓練名單管理",
+          "fallback": "training"
+        }
+      },
+      "matrix": {
+        "dashboard": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#dashboard"
+        },
+        "list": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#list"
+        },
+        "create": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#create"
+        },
+        "checklist": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#checklist"
+        },
+        "checklist-fill": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#checklist-fill"
+        },
+        "training": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#training"
+        },
+        "training-fill": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#training-fill"
+        },
+        "users": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#users"
+        },
+        "login-log": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#login-log"
+        },
+        "checklist-manage": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#checklist-manage"
+        },
+        "unit-review": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#unit-review"
+        },
+        "training-roster": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#training-roster"
+        }
+      },
+      "mismatches": []
+    },
+    "unit1": {
+      "title": "單位窗口",
+      "whitelist": {
+        "dashboard": {
+          "title": "儀表板",
+          "fallback": null
+        },
+        "list": {
+          "title": "矯正單列表",
+          "fallback": null
+        },
+        "create": {
+          "title": "開立矯正單",
+          "fallback": "dashboard"
+        },
+        "detail": {
+          "title": "矯正單詳情",
+          "fallback": null
+        },
+        "respond": {
+          "title": "回填矯正措施",
+          "fallback": null
+        },
+        "tracking": {
+          "title": "追蹤監控",
+          "fallback": null
+        },
+        "users": {
+          "title": "帳號管理",
+          "fallback": "dashboard"
+        },
+        "login-log": {
+          "title": "登入紀錄",
+          "fallback": "dashboard"
+        },
+        "checklist": {
+          "title": "內稽檢核表",
+          "fallback": null
+        },
+        "checklist-fill": {
+          "title": "填報檢核表",
+          "fallback": "checklist"
+        },
+        "checklist-detail": {
+          "title": "檢核表詳情",
+          "fallback": null
+        },
+        "checklist-manage": {
+          "title": "檢核表管理",
+          "fallback": "dashboard"
+        },
+        "unit-review": {
+          "title": "單位治理",
+          "fallback": "dashboard"
+        },
+        "training": {
+          "title": "資安教育訓練統計",
+          "fallback": null
+        },
+        "training-fill": {
+          "title": "填報資安教育訓練統計",
+          "fallback": "training"
+        },
+        "training-detail": {
+          "title": "資安教育訓練統計詳情",
+          "fallback": null
+        },
+        "training-roster": {
+          "title": "教育訓練名單管理",
+          "fallback": "training"
+        }
+      },
+      "matrix": {
+        "dashboard": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#dashboard"
+        },
+        "list": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#list"
+        },
+        "create": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "checklist": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#checklist"
+        },
+        "checklist-fill": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#checklist-fill"
+        },
+        "training": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#training"
+        },
+        "training-fill": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#training-fill"
+        },
+        "users": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "login-log": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "checklist-manage": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "unit-review": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "training-roster": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#training"
+        }
+      },
+      "mismatches": []
+    },
+    "user1": {
+      "title": "單位代理窗口",
+      "whitelist": {
+        "dashboard": {
+          "title": "儀表板",
+          "fallback": null
+        },
+        "list": {
+          "title": "矯正單列表",
+          "fallback": null
+        },
+        "create": {
+          "title": "開立矯正單",
+          "fallback": "dashboard"
+        },
+        "detail": {
+          "title": "矯正單詳情",
+          "fallback": null
+        },
+        "respond": {
+          "title": "回填矯正措施",
+          "fallback": null
+        },
+        "tracking": {
+          "title": "追蹤監控",
+          "fallback": null
+        },
+        "users": {
+          "title": "帳號管理",
+          "fallback": "dashboard"
+        },
+        "login-log": {
+          "title": "登入紀錄",
+          "fallback": "dashboard"
+        },
+        "checklist": {
+          "title": "內稽檢核表",
+          "fallback": null
+        },
+        "checklist-fill": {
+          "title": "填報檢核表",
+          "fallback": "checklist"
+        },
+        "checklist-detail": {
+          "title": "檢核表詳情",
+          "fallback": null
+        },
+        "checklist-manage": {
+          "title": "檢核表管理",
+          "fallback": "dashboard"
+        },
+        "unit-review": {
+          "title": "單位治理",
+          "fallback": "dashboard"
+        },
+        "training": {
+          "title": "資安教育訓練統計",
+          "fallback": null
+        },
+        "training-fill": {
+          "title": "填報資安教育訓練統計",
+          "fallback": "training"
+        },
+        "training-detail": {
+          "title": "資安教育訓練統計詳情",
+          "fallback": null
+        },
+        "training-roster": {
+          "title": "教育訓練名單管理",
+          "fallback": "training"
+        }
+      },
+      "matrix": {
+        "dashboard": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#dashboard"
+        },
+        "list": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#list"
+        },
+        "create": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "checklist": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#checklist"
+        },
+        "checklist-fill": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#checklist-fill"
+        },
+        "training": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#training"
+        },
+        "training-fill": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#training-fill"
+        },
+        "users": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "login-log": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "checklist-manage": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "unit-review": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "training-roster": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#training"
+        }
+      },
+      "mismatches": []
+    },
+    "viewer1": {
+      "title": "跨單位檢視者",
+      "whitelist": {
+        "dashboard": {
+          "title": "儀表板",
+          "fallback": null
+        },
+        "list": {
+          "title": "矯正單列表",
+          "fallback": null
+        },
+        "create": {
+          "title": "開立矯正單",
+          "fallback": "dashboard"
+        },
+        "detail": {
+          "title": "矯正單詳情",
+          "fallback": null
+        },
+        "respond": {
+          "title": "回填矯正措施",
+          "fallback": null
+        },
+        "tracking": {
+          "title": "追蹤監控",
+          "fallback": null
+        },
+        "users": {
+          "title": "帳號管理",
+          "fallback": "dashboard"
+        },
+        "login-log": {
+          "title": "登入紀錄",
+          "fallback": "dashboard"
+        },
+        "checklist": {
+          "title": "內稽檢核表",
+          "fallback": null
+        },
+        "checklist-fill": {
+          "title": "填報檢核表",
+          "fallback": "checklist"
+        },
+        "checklist-detail": {
+          "title": "檢核表詳情",
+          "fallback": null
+        },
+        "checklist-manage": {
+          "title": "檢核表管理",
+          "fallback": "dashboard"
+        },
+        "unit-review": {
+          "title": "單位治理",
+          "fallback": "dashboard"
+        },
+        "training": {
+          "title": "資安教育訓練統計",
+          "fallback": null
+        },
+        "training-fill": {
+          "title": "填報資安教育訓練統計",
+          "fallback": "training"
+        },
+        "training-detail": {
+          "title": "資安教育訓練統計詳情",
+          "fallback": null
+        },
+        "training-roster": {
+          "title": "教育訓練名單管理",
+          "fallback": "training"
+        }
+      },
+      "matrix": {
+        "dashboard": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#dashboard"
+        },
+        "list": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#list"
+        },
+        "create": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "checklist": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#checklist"
+        },
+        "checklist-fill": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#checklist"
+        },
+        "training": {
+          "expected": true,
+          "actual": true,
+          "finalHash": "#training"
+        },
+        "training-fill": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#training"
+        },
+        "users": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "login-log": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "checklist-manage": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "unit-review": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#dashboard"
+        },
+        "training-roster": {
+          "expected": false,
+          "actual": false,
+          "finalHash": "#training"
+        }
+      },
+      "mismatches": []
+    }
+  },
+  "steps": [
+    {
+      "id": "MATRIX-ADMIN",
+      "role": "最高管理者",
+      "title": "驗證路由權限矩陣",
+      "status": "passed",
+      "detail": "all routes matched expected permission matrix"
+    },
+    {
+      "id": "MATRIX-UNIT1",
+      "role": "單位窗口",
+      "title": "驗證路由權限矩陣",
+      "status": "passed",
+      "detail": "all routes matched expected permission matrix"
+    },
+    {
+      "id": "MATRIX-USER1",
+      "role": "單位代理窗口",
+      "title": "驗證路由權限矩陣",
+      "status": "passed",
+      "detail": "all routes matched expected permission matrix"
+    },
+    {
+      "id": "MATRIX-VIEWER1",
+      "role": "跨單位檢視者",
+      "title": "驗證路由權限矩陣",
+      "status": "passed",
+      "detail": "all routes matched expected permission matrix"
+    }
+  ],
+  "finishedAt": "2026-03-08T03:24:10.975Z",
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "consoleErrors": 0,
+    "pageErrors": 0
+  }
+}

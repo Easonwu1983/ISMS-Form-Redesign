@@ -1,6 +1,7 @@
 ﻿const path = require('path');
 const {
   attachDiagnostics,
+  createArtifactRun,
   createResultEnvelope,
   currentHash,
   finalizeResults,
@@ -13,7 +14,7 @@ const {
   writeJson
 } = require('./_role-test-utils.cjs');
 
-const OUT_DIR = path.join(process.cwd(), 'test-artifacts', 'role-flow-round3-2026-03-07');
+const OUT_DIR = createArtifactRun('role-flow-regression').outDir;
 const RESULT_PATH = path.join(OUT_DIR, 'permission-matrix.json');
 const ROUTES = ['dashboard', 'list', 'create', 'checklist', 'checklist-fill', 'training', 'training-fill', 'users', 'login-log', 'checklist-manage', 'unit-review', 'training-roster'];
 const ROLES = [
@@ -55,7 +56,7 @@ function isRouteAccessible(route, hash) {
   try {
     await resetApp(page);
     for (const role of ROLES) {
-      await runStep(results, 'MATRIX-' + role.id.toUpperCase(), role.title, '頝舐甈??拚', async () => {
+      await runStep(results, 'MATRIX-' + role.id.toUpperCase(), role.title, '驗證路由權限矩陣', async () => {
         await login(page, role.auth.username, role.auth.password);
         const whitelist = await page.evaluate(() => window._routeWhitelist ? window._routeWhitelist() : {});
         const matrix = {};

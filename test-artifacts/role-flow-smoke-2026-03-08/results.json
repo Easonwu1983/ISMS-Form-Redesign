@@ -1,0 +1,175 @@
+{
+  "startedAt": "2026-03-08T03:24:25.404Z",
+  "baseUrl": "http://127.0.0.1:8080/",
+  "steps": [
+    {
+      "id": "ADM-01",
+      "role": "最高管理者",
+      "title": "登入與管理權限",
+      "status": "passed",
+      "detail": "admin routes accessible; nav presence {\"#users\":1,\"#login-log\":1,\"#checklist-manage\":1,\"#unit-review\":1,\"#training-roster\":1}"
+    },
+    {
+      "id": "RP-01",
+      "role": "單位窗口",
+      "title": "登入與管理頁限制",
+      "status": "passed",
+      "detail": "reporter blocked from users and create routes"
+    },
+    {
+      "id": "ADM-02",
+      "role": "最高管理者",
+      "title": "建立矯正單",
+      "status": "passed",
+      "detail": "115-C-A30-935"
+    },
+    {
+      "id": "VW-01",
+      "role": "跨單位檢視者",
+      "title": "唯讀檢視與編輯限制",
+      "status": "passed",
+      "detail": "viewer can read case detail and is blocked from fill routes"
+    },
+    {
+      "id": "RP-02",
+      "role": "單位窗口代理",
+      "title": "同單位代理權限",
+      "status": "passed",
+      "detail": "same-unit proxy reporter is blocked from admin pages and can view same-unit case"
+    },
+    {
+      "id": "RP-03",
+      "role": "單位窗口",
+      "title": "回填矯正單",
+      "status": "passed",
+      "detail": "response submitted and stored"
+    },
+    {
+      "id": "RP-04",
+      "role": "單位窗口",
+      "title": "檢核表草稿導頁一致性",
+      "status": "passed",
+      "detail": "#checklist-fill/%E8%A8%88%E8%B3%87%E4%B8%AD-%E8%B3%87%E8%A8%8A%E7%B5%84-0001"
+    },
+    {
+      "id": "RP-05",
+      "role": "單位窗口",
+      "title": "檢核表正式送出",
+      "status": "passed",
+      "detail": "計資中-資訊組-0001"
+    },
+    {
+      "id": "RP-06",
+      "role": "單位窗口",
+      "title": "教育訓練草稿導頁一致性",
+      "status": "passed",
+      "detail": "#training-fill/TRN-0001"
+    },
+    {
+      "id": "RP-07",
+      "role": "單位窗口",
+      "title": "教育訓練正式送出",
+      "status": "passed",
+      "detail": "TRN-0001"
+    },
+    {
+      "id": "ADM-03",
+      "role": "最高管理者",
+      "title": "審核矯正單並轉入追蹤",
+      "status": "passed",
+      "detail": "moved to tracking stage"
+    },
+    {
+      "id": "RP-08",
+      "role": "單位窗口代理",
+      "title": "送出追蹤提報",
+      "status": "passed",
+      "detail": "tracking submission waiting for admin review"
+    },
+    {
+      "id": "ADM-04",
+      "role": "最高管理者",
+      "title": "審核追蹤提報並結案",
+      "status": "passed",
+      "detail": "tracking approved and case closed"
+    }
+  ],
+  "console": [
+    {
+      "type": "info",
+      "text": "[ISMS:create] submit start {handlerUnit: 計算機及資訊網路中心／資訊網路組, handlerName: 王經理}"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:create] validation passed"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:create] submit success {id: 115-C-A30-935, notify: true, handlerEmail: wang@company.com}"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:checklist] draft saved {id: 計資中-資訊組-0001, unit: 計算機及資訊網路中心／資訊網路組, status: 草稿}"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:checklist] submit start {id: 計資中-資訊組-0001, unit: 計算機及資訊網路中心／資訊網路組}"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:checklist] submit success {id: 計資中-資訊組-0001, unit: 計算機及資訊網路中心／資訊網路組, status: 已送出}"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:training] draft save start {id: null, unit: 計算機及資訊網路中心／資訊網路組, records: 3}"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:training] draft saved {id: TRN-0001, unit: 計算機及資訊網路中心／資訊網路組, status: 暫存}"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:training] submit start {id: TRN-0001, unit: 計算機及資訊網路中心／資訊網路組, records: 3}"
+    },
+    {
+      "type": "info",
+      "text": "[ISMS:training] submit success {id: TRN-0001, unit: 計算機及資訊網路中心／資訊網路組, status: 正式送出}"
+    }
+  ],
+  "pageErrors": [],
+  "artifacts": [
+    {
+      "type": "screenshot",
+      "path": "C:\\AI\\ISMS-Form-Redesign\\test-artifacts\\role-flow-smoke-2026-03-08\\screenshots\\admin-training-dashboard-initial.png"
+    },
+    {
+      "type": "screenshot",
+      "path": "C:\\AI\\ISMS-Form-Redesign\\test-artifacts\\role-flow-smoke-2026-03-08\\screenshots\\admin-training-dashboard-final.png"
+    }
+  ],
+  "context": {
+    "admin": {
+      "username": "admin",
+      "password": "admin123"
+    },
+    "reporter": {
+      "username": "unit1",
+      "password": "unit123"
+    },
+    "proxyReporter": {
+      "username": "user1",
+      "password": "user123"
+    },
+    "viewer": {
+      "username": "viewer1",
+      "password": "viewer123"
+    }
+  },
+  "finishedAt": "2026-03-08T03:24:56.185Z",
+  "summary": {
+    "passed": 13,
+    "failed": 0,
+    "pageErrors": 0,
+    "flowLogs": 10
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "startedAt": "2026-03-08T03:24:11.757Z",
+  "baseUrl": "http://127.0.0.1:8080/",
+  "console": [],
+  "pageErrors": [],
+  "steps": [
+    {
+      "id": "PROBE-ADM-01",
+      "role": "最高管理者",
+      "title": "建立矯正單",
+      "status": "passed",
+      "detail": "115-C-A30-836"
+    },
+    {
+      "id": "PROBE-RP-01",
+      "role": "單位窗口",
+      "title": "回填矯正措施",
+      "status": "passed",
+      "detail": "115-C-A30-836"
+    },
+    {
+      "id": "PROBE-RP-02",
+      "role": "單位窗口代理",
+      "title": "可檢視同單位案件",
+      "status": "passed",
+      "detail": "115-C-A30-836"
+    },
+    {
+      "id": "PROBE-VW-01",
+      "role": "跨單位檢視者",
+      "title": "可唯讀檢視並被阻擋填報",
+      "status": "passed",
+      "detail": "115-C-A30-836"
+    },
+    {
+      "id": "PROBE-ADM-02",
+      "role": "最高管理者",
+      "title": "可檢視案件與管理頁",
+      "status": "passed",
+      "detail": "115-C-A30-836"
+    }
+  ],
+  "context": {
+    "admin": {
+      "username": "admin",
+      "password": "admin123"
+    },
+    "reporter": {
+      "username": "unit1",
+      "password": "unit123"
+    },
+    "proxyReporter": {
+      "username": "user1",
+      "password": "user123"
+    },
+    "viewer": {
+      "username": "viewer1",
+      "password": "viewer123"
+    }
+  },
+  "finishedAt": "2026-03-08T03:24:24.640Z",
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "consoleErrors": 0,
+    "pageErrors": 0
+  }
+}

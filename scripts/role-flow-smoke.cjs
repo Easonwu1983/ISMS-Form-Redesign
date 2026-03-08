@@ -1,9 +1,9 @@
 ﻿const fs = require('fs');
 const path = require('path');
-const { launchBrowser } = require('./_role-test-utils.cjs');
+const { createArtifactRun, launchBrowser } = require('./_role-test-utils.cjs');
 
 const BASE_URL = 'http://127.0.0.1:8080/';
-const OUT_DIR = path.join(process.cwd(), 'test-artifacts', 'role-flow-smoke-2026-03-07');
+const OUT_DIR = createArtifactRun('role-flow-smoke').outDir;
 const SHOT_DIR = path.join(OUT_DIR, 'screenshots');
 const RESULT_PATH = path.join(OUT_DIR, 'results.json');
 const DUMMY_FILE_PATH = path.join(OUT_DIR, 'evidence.png');
@@ -493,3 +493,4 @@ function isoDate(offsetDays) {
   console.error(results.fatal);
   process.exit(1);
 });
+

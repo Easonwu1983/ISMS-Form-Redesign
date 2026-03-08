@@ -1,6 +1,6 @@
-# QA Regression Guide
+﻿# QA Regression Guide
 
-- Updated: 2026-03-07
+- Updated: 2026-03-08
 - Scope: `C:/AI/ISMS-Form-Redesign`
 - Runtime: static preview + Playwright layered tests
 
@@ -15,10 +15,10 @@ This project uses three regression layers so route permissions, role flow, and e
 - Command: `npm run test:role:permission`
 - Script: [C:\AI\ISMS-Form-Redesign\scripts\route-permission-matrix.cjs](C:\AI\ISMS-Form-Redesign\scripts\route-permission-matrix.cjs)
 - Purpose:
-  - Verify `admin / unit1 / user1` route access against the whitelist.
+  - Verify `admin / unit1 / user1 / viewer1` route access against the whitelist.
   - Detect route guard regressions and unauthorized access.
 - Output:
-  - [C:\AI\ISMS-Form-Redesign\test-artifacts\role-flow-round3-2026-03-07\permission-matrix.json](C:\AI\ISMS-Form-Redesign\test-artifacts\role-flow-round3-2026-03-07\permission-matrix.json)
+  - `test-artifacts/role-flow-regression-YYYY-MM-DD/permission-matrix.json`
 
 ### 2. Flow Probe
 
@@ -26,9 +26,9 @@ This project uses three regression layers so route permissions, role flow, and e
 - Script: [C:\AI\ISMS-Form-Redesign\scripts\role-flow-probe.cjs](C:\AI\ISMS-Form-Redesign\scripts\role-flow-probe.cjs)
 - Purpose:
   - Fast cross-role signal test.
-  - Validate the core sequence `unit admin create -> reporter respond -> admin inspect`.
+  - Validate the core sequence `admin create -> unit1 respond -> admin inspect`.
 - Output:
-  - [C:\AI\ISMS-Form-Redesign\test-artifacts\role-flow-round3-2026-03-07\flow-probe.json](C:\AI\ISMS-Form-Redesign\test-artifacts\role-flow-round3-2026-03-07\flow-probe.json)
+  - `test-artifacts/role-flow-regression-YYYY-MM-DD/flow-probe.json`
 
 ### 3. Full Smoke Flow
 
@@ -37,13 +37,15 @@ This project uses three regression layers so route permissions, role flow, and e
 - Purpose:
   - Run the full operational path:
   - `admin` management permissions
-  - `unit1` create CAR
-  - `user1` respond CAR
+  - `unit1` create CAR response flow
+  - `user1` same-unit proxy access
+  - `viewer1` read-only access
   - checklist draft + submit
   - training draft + submit
   - tracking submit + admin close
 - Output:
-  - [C:\AI\ISMS-Form-Redesign\test-artifacts\role-flow-smoke-2026-03-07\results.json](C:\AI\ISMS-Form-Redesign\test-artifacts\role-flow-smoke-2026-03-07\results.json)
+  - `test-artifacts/role-flow-smoke-YYYY-MM-DD/results.json`
+  - `test-artifacts/role-flow-smoke-YYYY-MM-DD/screenshots/*`
 
 ## Recommended Execution Order
 
@@ -132,6 +134,10 @@ npm run test:role:all
 3. New workflow stage:
    - extend smoke flow
    - keep probe short and focused
+
+4. New test run:
+   - outputs are written to a date-stamped artifact directory
+   - do not hardcode a dated output path in scripts
 
 ## Troubleshooting
 
