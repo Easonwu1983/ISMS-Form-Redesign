@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-08T08:02:54.329Z",
+  "startedAt": "2026-03-08T12:01:04.850Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "console": [],
   "pageErrors": [],
@@ -50,7 +50,7 @@
       "password": "unit123"
     }
   },
-  "finishedAt": "2026-03-08T08:03:10.248Z",
+  "finishedAt": "2026-03-08T12:01:20.180Z",
   "summary": {
     "passed": 5,
     "failed": 0,

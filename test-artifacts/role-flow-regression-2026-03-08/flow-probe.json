@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-03-08T08:02:40.718Z",
+  "startedAt": "2026-03-08T12:00:51.063Z",
   "baseUrl": "http://127.0.0.1:8080/",
   "console": [],
   "pageErrors": [],
@@ -58,7 +58,7 @@
       "password": "viewer123"
     }
   },
-  "finishedAt": "2026-03-08T08:02:53.585Z",
+  "finishedAt": "2026-03-08T12:01:04.072Z",
   "summary": {
     "passed": 5,
     "failed": 0,
