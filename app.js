@@ -15,6 +15,7 @@
   const TRAINING_GENERAL_LABEL = '資安通識（1年3小時）';
   const TRAINING_INFO_STAFF_LABEL = '資訊人員(含承辦委外資通系統)';
   const TRAINING_PROFESSIONAL_LABEL = '資安專業課程（1年3小時）';
+  const TRAINING_UNDO_WINDOW_MINUTES = 30;
   const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議'];
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
@@ -505,10 +506,89 @@
     return (Array.isArray(parents) ? parents : []).filter((parent) => categorizeTopLevelUnit(parent) === targetCategory);
   }
 
+  function normalizeUnitSearchText(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s\u3000]+/g, '')
+      .replace(/[／/]/g, '')
+      .replace(/[()（）．.、,，:：;；\-_'"]/g, '');
+  }
+
+  function buildUnitSearchEntry(unitValue) {
+    const value = String(unitValue || '').trim();
+    if (!value) return null;
+    const meta = getOfficialUnitMeta(value) || {};
+    const parsed = splitUnitValue(value);
+    const parent = parsed.parent || value;
+    const child = parsed.child || '';
+    const label = child || String(meta.name || parent).trim() || value;
+    const fullLabel = child ? `${parent}／${child}` : parent;
+    const category = categorizeTopLevelUnit(parent);
+    const code = String(meta.code || '').trim();
+    const normalizedCode = String(meta.normalizedCode || getUnitCode(value) || '').trim();
+    const keywords = [
+      value,
+      fullLabel,
+      label,
+      meta.name,
+      meta.fullName,
+      parent,
+      child,
+      code,
+      normalizedCode,
+      category
+    ].filter(Boolean).join(' ');
+    return {
+      value,
+      parent,
+      child,
+      category,
+      label,
+      fullLabel,
+      code,
+      normalizedCode,
+      searchText: normalizeUnitSearchText(keywords)
+    };
+  }
+
+  function getUnitSearchEntries(extraValues) {
+    const catalog = getOfficialUnitCatalog();
+    const seen = new Set();
+    const values = [];
+    (Array.isArray(catalog) ? catalog : []).forEach((entry) => {
+      const value = String(entry && entry.value || '').trim();
+      if (!value || seen.has(value)) return;
+      seen.add(value);
+      values.push(value);
+    });
+    getApprovedCustomUnits().forEach((value) => {
+      const safeValue = String(value || '').trim();
+      if (!safeValue || seen.has(safeValue)) return;
+      seen.add(safeValue);
+      values.push(safeValue);
+    });
+    (Array.isArray(extraValues) ? extraValues : []).forEach((value) => {
+      const safeValue = String(value || '').trim();
+      if (!safeValue || seen.has(safeValue)) return;
+      seen.add(safeValue);
+      values.push(safeValue);
+    });
+    return values
+      .map((value) => buildUnitSearchEntry(value))
+      .filter(Boolean)
+      .sort((a, b) => a.fullLabel.localeCompare(b.fullLabel, 'zh-Hant'));
+  }
+
   function buildUnitCascadeControl(baseId, selectedUnit, disabled, required) {
     const dis = disabled ? 'disabled' : '';
     const req = required ? 'required' : '';
     return `<div class="unit-cascade">
+      <div class="unit-cascade-search">
+        <input type="search" class="form-input unit-cascade-search-input" id="${baseId}-search" data-testid="${baseId}-search" placeholder="可搜尋單位名稱或代碼" autocomplete="off" ${dis}>
+        <div class="unit-cascade-search-results" id="${baseId}-search-results" hidden></div>
+        <div class="form-hint unit-cascade-search-hint">可直接輸入單位名稱或代碼，系統會自動帶入類別與層級。</div>
+      </div>
       <div class="unit-cascade-grid unit-cascade-grid--training" id="${baseId}-grid">
         <div class="unit-cascade-segment">
           <select class="form-select" id="${baseId}-category" data-testid="${baseId}-category" ${dis} ${req}></select>
@@ -529,6 +609,8 @@
 
   function initUnitCascade(baseId, initialValue, options) {
     const opts = options || {};
+    const searchEl = document.getElementById(`${baseId}-search`);
+    const searchResultsEl = document.getElementById(`${baseId}-search-results`);
     const categoryEl = document.getElementById(`${baseId}-category`);
     const parentEl = document.getElementById(`${baseId}-parent`);
     const childEl = document.getElementById(`${baseId}-child`);
@@ -541,6 +623,7 @@
     const allowCustom = isAdmin() && !opts.disabled && !!customWrap && !!customEl;
     const structure = getSelectableUnitStructure();
     const rawInitial = String(initialValue || hiddenEl.value || '').trim();
+    const searchEntries = getUnitSearchEntries(rawInitial ? [rawInitial] : []);
     const parsed = splitUnitValue(rawInitial);
     const knownParents = new Set(Object.keys(structure || {}));
     const isInitialCustom = allowCustom && !!rawInitial && !!parsed.parent && !knownParents.has(parsed.parent);
@@ -560,6 +643,67 @@
       customEl.required = !!enabled;
     };
 
+    const hideSearchResults = () => {
+      if (!searchResultsEl) return;
+      searchResultsEl.hidden = true;
+      searchResultsEl.innerHTML = '';
+    };
+
+    const syncSearchInput = () => {
+      if (!searchEl) return;
+      if (allowCustom && String(parentEl.value || '').trim() === UNIT_CUSTOM_VALUE) {
+        searchEl.value = String(customEl?.value || '').trim();
+        return;
+      }
+      const currentValue = String(hiddenEl.value || '').trim();
+      if (!currentValue) {
+        searchEl.value = '';
+        return;
+      }
+      const entry = searchEntries.find((item) => item.value === currentValue) || buildUnitSearchEntry(currentValue);
+      searchEl.value = entry ? entry.fullLabel : currentValue;
+    };
+
+    const applySelectedUnit = (unitValue) => {
+      const targetValue = String(unitValue || '').trim();
+      const target = splitUnitValue(targetValue);
+      const targetCategory = target.parent ? categorizeTopLevelUnit(target.parent) : '';
+      if (targetCategory) categoryEl.value = targetCategory;
+      renderParents(categoryEl.value, target.parent);
+      parentEl.value = target.parent;
+      renderChildren(target.parent, target.child);
+      if (!childEl.disabled) childEl.value = target.child || '';
+      syncHidden(true);
+      syncSearchInput();
+      hideSearchResults();
+    };
+
+    const renderSearchResults = (query) => {
+      if (!searchEl || !searchResultsEl) return;
+      const text = String(query || '').trim();
+      if (!text) {
+        hideSearchResults();
+        return;
+      }
+      const tokens = text.split(/\s+/).map((part) => normalizeUnitSearchText(part)).filter(Boolean);
+      const matches = searchEntries
+        .filter((entry) => tokens.every((token) => entry.searchText.includes(token)))
+        .slice(0, 8);
+      if (!matches.length) {
+        searchResultsEl.hidden = false;
+        searchResultsEl.innerHTML = '<div class="unit-cascade-search-empty">找不到符合的單位，仍可改用下方層級選擇。</div>';
+        return;
+      }
+      searchResultsEl.hidden = false;
+      searchResultsEl.innerHTML = matches.map((entry) => {
+        const meta = [entry.category, entry.code ? ('代碼 ' + entry.code) : '', entry.child ? entry.parent : ''].filter(Boolean).join(' · ');
+        return '<button type="button" class="unit-cascade-search-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(meta) + '</span></button>';
+      }).join('');
+      searchResultsEl.querySelectorAll('[data-unit-value]').forEach((button) => {
+        button.addEventListener('click', () => applySelectedUnit(button.dataset.unitValue));
+      });
+    };
+
     const syncHidden = (dispatchChange) => {
       const parent = String(parentEl.value || '').trim();
 
@@ -569,6 +713,7 @@
         childEl.innerHTML = '<option value="">\u81ea\u8a02\u55ae\u4f4d\u6a21\u5f0f</option>';
         childEl.disabled = true;
         hiddenEl.value = String(customEl.value || '').trim();
+        syncSearchInput();
         if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
         return;
       }
@@ -577,6 +722,7 @@
       const hasChildren = Array.isArray(structure[parent]) && structure[parent].length > 0;
       const child = (!childEl.disabled && hasChildren) ? String(childEl.value || '').trim() : '';
       hiddenEl.value = composeUnitValue(parent, child);
+      syncSearchInput();
       if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
     };
 
@@ -661,7 +807,32 @@
     renderChildren(parentEl.value, parsed.child);
     syncHidden(false);
 
+    if (searchEl) {
+      searchEl.addEventListener('input', (event) => renderSearchResults(event.target.value));
+      searchEl.addEventListener('focus', () => {
+        if (String(searchEl.value || '').trim()) renderSearchResults(searchEl.value);
+      });
+      searchEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          hideSearchResults();
+          return;
+        }
+        if (event.key === 'Enter') {
+          const firstMatch = searchResultsEl?.querySelector('[data-unit-value]');
+          if (firstMatch) {
+            event.preventDefault();
+            firstMatch.click();
+          }
+        }
+      });
+      searchEl.addEventListener('blur', () => {
+        window.setTimeout(hideSearchResults, 120);
+      });
+      syncSearchInput();
+    }
+
     if (opts.disabled) {
+      if (searchEl) searchEl.disabled = true;
       categoryEl.disabled = true;
       parentEl.disabled = true;
       childEl.disabled = true;
@@ -3285,6 +3456,7 @@ function renderTracking(id) {
       jobTitle: String((row && row.jobTitle) || '').trim(),
       source: ((row && row.source) === 'manual') ? 'manual' : 'import',
       createdBy: String((row && row.createdBy) || '系統').trim() || '系統',
+      createdByUsername: String((row && row.createdByUsername) || '').trim(),
       createdAt: (row && row.createdAt) || new Date().toISOString()
     };
   }
@@ -3490,10 +3662,16 @@ function renderTracking(id) {
       .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
   }
 
-  function addTrainingRosterPerson(unit, payload, source, actor) {
+  function addTrainingRosterPerson(unit, payload, source, actor, actorUsername) {
     const cleanUnit = String(unit || '').trim();
     const base = typeof payload === 'string' ? { name: payload } : (payload || {});
     const cleanName = String(base.name || '').trim();
+    const actorName = typeof actor === 'object'
+      ? String((actor && actor.name) || '').trim()
+      : String(actor || '').trim();
+    const actorUser = typeof actor === 'object'
+      ? String((actor && actor.username) || '').trim()
+      : String(actorUsername || '').trim();
     if (!cleanUnit || !cleanName) {
       return { added: false, updated: false, reason: '請先選擇單位並輸入姓名' };
     }
@@ -3505,7 +3683,8 @@ function renderTracking(id) {
       id: index >= 0 ? store.rosters[index].id : 'RST-' + String(store.nextRosterId).padStart(4, '0'),
       unit: cleanUnit,
       source: source || base.source || 'manual',
-      createdBy: index >= 0 ? store.rosters[index].createdBy : (actor || '系統'),
+      createdBy: index >= 0 ? store.rosters[index].createdBy : (actorName || '系統'),
+      createdByUsername: index >= 0 ? store.rosters[index].createdByUsername : actorUser,
       createdAt: index >= 0 ? store.rosters[index].createdAt : new Date().toISOString()
     }, cleanUnit);
 
@@ -3554,6 +3733,49 @@ function renderTracking(id) {
     const inScope = user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
     if (!inScope) return false;
     return form.status === TRAINING_STATUSES.DRAFT || form.status === TRAINING_STATUSES.RETURNED;
+  }
+
+  function canManageTrainingForm(form, user = currentUser()) {
+    if (!user || !form || isViewer(user)) return false;
+    return user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
+  }
+
+  function isTrainingManualRowOwner(row, user = currentUser()) {
+    if (!row || row.source !== 'manual' || !user) return false;
+    const ownerUsername = String(row.createdByUsername || '').trim();
+    const ownerName = String(row.createdBy || '').trim();
+    if (ownerUsername) return ownerUsername === user.username;
+    return !!ownerName && ownerName === user.name;
+  }
+
+  function canDeleteTrainingEditableRow(row, form, user = currentUser()) {
+    if (!row || row.source !== 'manual' || !user || isViewer(user)) return false;
+    const editable = !form || canEditTrainingForm(form);
+    if (!editable) return false;
+    return isTrainingManualRowOwner(row, user);
+  }
+
+  function getTrainingUndoRemainingMs(form, now = Date.now()) {
+    if (!form || !form.stepOneSubmittedAt) return 0;
+    const submittedAt = Date.parse(form.stepOneSubmittedAt);
+    if (!Number.isFinite(submittedAt)) return 0;
+    const deadline = submittedAt + (TRAINING_UNDO_WINDOW_MINUTES * 60 * 1000);
+    return Math.max(0, deadline - now);
+  }
+
+  function getTrainingUndoRemainingMinutes(form, now = Date.now()) {
+    const remainingMs = getTrainingUndoRemainingMs(form, now);
+    if (!remainingMs) return 0;
+    return Math.max(1, Math.ceil(remainingMs / 60000));
+  }
+
+  function canUndoTrainingForm(form, user = currentUser()) {
+    if (!form || !user || isViewer(user)) return false;
+    if (form.status !== TRAINING_STATUSES.PENDING_SIGNOFF) return false;
+    if (!canManageTrainingForm(form, user)) return false;
+    if (form.fillerUsername && form.fillerUsername !== user.username) return false;
+    if (form.printedAt || form.signoffUploadedAt || form.submittedAt) return false;
+    return getTrainingUndoRemainingMs(form) > 0;
   }
 
   function isTrainingVisible(form) {
@@ -3814,6 +4036,34 @@ function renderTracking(id) {
       + '</div>';
   }
 
+  window._trainingUndo = function (id) {
+    const form = getTrainingForm(id);
+    const user = currentUser();
+    if (!form || !user) return;
+    if (!canUndoTrainingForm(form, user)) {
+      toast('目前已無法撤回流程一，若需更正請由管理者退回', 'error');
+      return;
+    }
+    const remainingMinutes = getTrainingUndoRemainingMinutes(form);
+    if (!confirm('撤回後會回到可編修的草稿狀態，並中止後續簽核流程，確定要撤回嗎？')) return;
+    const now = new Date().toISOString();
+    updateTrainingForm(id, {
+      status: TRAINING_STATUSES.DRAFT,
+      updatedAt: now,
+      stepOneSubmittedAt: null,
+      printedAt: null,
+      signoffUploadedAt: null,
+      submittedAt: null,
+      history: [...(form.history || []), {
+        time: now,
+        action: '填報人撤回流程一，重新開放編修（剩餘撤回時限 ' + remainingMinutes + ' 分鐘）',
+        user: user.name
+      }]
+    });
+    toast('已撤回流程一，您可以繼續修改填報內容', 'info');
+    navigate('training-fill/' + id, { replace: true });
+  };
+
   window._trainingReturn = function (id) {
     if (!isAdmin()) {
       toast('僅最高管理員可退回填報單', 'error');
@@ -3883,6 +4133,7 @@ function renderTracking(id) {
       if (!form) return canFillTraining() ? '<a href="#training-fill" class="btn btn-sm btn-primary">開始填報</a>' : '—';
       const actions = ['<a href="#training-detail/' + form.id + '" class="btn btn-sm btn-secondary">檢視</a>'];
       if (canEditTrainingForm(form)) actions.push('<a href="#training-fill/' + form.id + '" class="btn btn-sm btn-primary">編修</a>');
+      if (canUndoTrainingForm(form)) actions.push('<button type="button" class="btn btn-sm btn-warning" onclick="window._trainingUndo(\'' + form.id + '\')">撤回流程一</button>');
       if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回更正</button>');
       return '<div class="training-table-actions">' + actions.join('') + '</div>';
     };
@@ -3953,11 +4204,11 @@ function renderTracking(id) {
           + '<td>' + buildFormActions(form) + '</td>'
           + '</tr>';
       }).join('') : '<tr><td colspan="8"><div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無填報單</div><div class="empty-state-desc">可先建立草稿，完成流程一後再進入簽核。</div></div></td></tr>';
-      contentHtml = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">我的填報單</span><div class="training-table-subtitle">流程一完成後內容會鎖定，後續請在詳情頁完成列印與簽核上傳。</div></div></div><div class="table-wrapper"><table><thead><tr><th>編號</th><th>填報單位</th><th>狀態</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      contentHtml = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">我的填報單</span><div class="training-table-subtitle">流程一完成後內容會先鎖定；若尚未列印簽核表，可在 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。</div></div></div><div class="table-wrapper"><table><thead><tr><th>編號</th><th>填報單位</th><th>狀態</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     }
 
     document.getElementById('app').innerHTML = '<div class="animate-in training-dashboard-page">'
-      + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">依流程一填報、流程二列印、流程三上傳簽核表完成整體申報。</p></div>' + toolbar + '</div>'
+      + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">依流程一填報、流程二列印、流程三上傳簽核表完成整體申報；流程一送出後若尚未列印，可於 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回。</p></div>' + toolbar + '</div>'
       + '<div class="stats-grid">'
       + '<div class="stat-card total"><div class="stat-icon">' + ic('graduation-cap') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">填報單數</div></div>'
       + '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + summary.submitted + '</div><div class="stat-label">已完成填報</div></div>'
@@ -3975,7 +4226,7 @@ function renderTracking(id) {
   function buildTrainingFillPage(params) {
     const { existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user } = params;
     return '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">此頁為流程一：逐人填報教育訓練完成情形。送出後即鎖定，後續請至詳情頁列印並上傳簽核表。</p></div><div class="training-toolbar-actions"><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
+      + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">此頁為流程一：逐人填報教育訓練完成情形。送出後會先鎖定；若尚未列印簽核表，可於 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。</p></div><div class="training-toolbar-actions"><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
       + (existing && existing.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(existing.returnReason || '未提供') + '</div>' : '')
       + (takeoverDraft ? '<div class="training-return-banner">' + ic('user-cog', 'icon-sm') + ' 此草稿原填報人為 ' + esc(existing.fillerName || '未指定') + '，本次儲存後將改由目前單位管理員 ' + esc(user.name) + ' 接手填報。</div>' : '')
       + '<div class="training-editor-layout">'
@@ -3984,7 +4235,7 @@ function renderTracking(id) {
       + '<div class="section-header">' + ic('info', 'icon-sm') + ' 基本資訊</div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計單位（一級）</label><input type="text" class="form-input" id="tr-stats-unit" value="' + esc(existing?.statsUnit || getTrainingStatsUnit(unitValue)) + '" readonly></div><div class="form-group"><label class="form-label form-required">填報單位</label>' + buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true) + '</div></div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
-      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填表日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="流程一完成後不可再自行修改，將改由詳情頁進入簽核流程。" readonly></div></div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填表日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="流程一送出後會先鎖定；若尚未列印簽核表，可於短時間內撤回。" readonly></div></div>'
       + '<div class="section-header">' + ic('users', 'icon-sm') + ' 人員清單</div>'
       + '<div class="training-editor-note">可先多選人員，再一次套用相同在職狀態與' + TRAINING_GENERAL_LABEL + '完成情形。' + TRAINING_PROFESSIONAL_LABEL + '僅在' + TRAINING_INFO_STAFF_LABEL + '為「是」時需要填寫。</div>'
       + '<div class="training-draft-status" id="training-draft-status">' + (existing ? (existing.status === TRAINING_STATUSES.DRAFT ? ('草稿上次儲存：' + fmtTime(existing.updatedAt || existing.createdAt)) : ('退回版本最後更新：' + fmtTime(existing.updatedAt || existing.createdAt))) : '尚未建立草稿') + '</div>'
@@ -3992,7 +4243,8 @@ function renderTracking(id) {
       + '<div id="training-summary" class="training-summary-grid training-summary-grid-wide"></div>'
       + '<div class="training-bulk-bar"><div class="training-bulk-count" id="training-selected-count">尚未選取人員</div><div class="training-bulk-controls"><select class="form-select" id="training-bulk-status"><option value="">套用在職狀態</option>' + TRAINING_EMPLOYEE_STATUS.map((status) => '<option value="' + esc(status) + '">' + esc(status) + '</option>').join('') + '</select><div class="training-bulk-general"><span>' + TRAINING_GENERAL_LABEL + '</span><div class="training-binary-group"><button type="button" class="training-binary-btn" data-bulk-general="是">✓</button><button type="button" class="training-binary-btn" data-bulk-general="否">✕</button></div></div><button type="button" class="btn btn-secondary" id="training-apply-bulk">' + ic('check-circle-2', 'icon-sm') + ' 套用到所選人員</button></div></div>'
       + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
-      + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
+      + '<div class="training-editor-note" style="margin-top:-4px">草稿或退回更正狀態下，可刪除自己手動新增的人員；正式名單與他人新增資料仍會保留。</div>'
+      + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th><th style="width:120px">操作</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
       + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('lock', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
       + '</form></div>'
       + '</div>'
@@ -4094,13 +4346,13 @@ function renderTracking(id) {
       const body = document.getElementById('training-rows-body');
       const visibleRows = getFilteredRows();
       if (!rowsState.length) {
-        body.innerHTML = '<tr><td colspan="12"><div class="empty-state" style="padding:28px"><div class="empty-state-title">此單位尚未建立名單</div><div class="empty-state-desc">請由管理者匯入名單，或由填報人新增名單外人員。</div></div></td></tr>';
+        body.innerHTML = '<tr><td colspan="13"><div class="empty-state" style="padding:28px"><div class="empty-state-title">此單位尚未建立名單</div><div class="empty-state-desc">請由管理者匯入名單，或由填報人新增名單外人員。</div></div></td></tr>';
         renderSummary();
         updateBulkSelectionText();
         return;
       }
       if (!visibleRows.length) {
-        body.innerHTML = '<tr><td colspan="12"><div class="empty-state" style="padding:28px"><div class="empty-state-title">沒有符合條件的人員</div><div class="empty-state-desc">請調整搜尋條件或取消「只看未完成或未填」。</div></div></td></tr>';
+        body.innerHTML = '<tr><td colspan="13"><div class="empty-state" style="padding:28px"><div class="empty-state-title">沒有符合條件的人員</div><div class="empty-state-desc">請調整搜尋條件或取消「只看未完成或未填」。</div></div></td></tr>';
         renderSummary();
         updateBulkSelectionText();
         return;
@@ -4110,9 +4362,13 @@ function renderTracking(id) {
         const key = getRowKey(row, index);
         const isActive = row.status === '在職';
         const professionalDisabled = !isActive || row.isInfoStaff !== '是';
+        const canDeleteRow = canDeleteTrainingEditableRow(row, existing, user);
         const professionalHtml = row.isInfoStaff === '否'
           ? '<span class="training-na-chip">不適用</span>'
           : renderTrainingBinaryButtons('completedProfessional', row.completedProfessional, index, professionalDisabled, '✓', '✕');
+        const actionHtml = canDeleteRow
+          ? '<div class="training-row-actions"><button type="button" class="btn btn-sm btn-danger training-row-delete" data-idx="' + index + '">' + ic('trash-2', 'btn-icon-svg') + '</button></div>'
+          : '<div class="training-row-actions"><span class="training-row-action-hint">' + (row.source === 'manual' ? '僅建立者可刪' : '正式名單') + '</span></div>';
         return '<tr>'
           + '<td><input type="checkbox" class="training-row-check" data-key="' + esc(key) + '" ' + (selectedKeys.has(key) ? 'checked' : '') + '></td>'
           + '<td>' + (visibleIndex + 1) + '</td>'
@@ -4126,6 +4382,7 @@ function renderTracking(id) {
           + '<td>' + professionalHtml + '</td>'
           + '<td><div class="training-cell-note">' + trainingDecisionBadge(row) + '<div class="training-cell-hint">' + esc(getTrainingRecordHint(row)) + '</div></div></td>'
           + '<td><input type="text" class="form-input training-row-note" data-idx="' + index + '" value="' + esc(row.note || '') + '" placeholder="可填補充說明或課程名稱"></td>'
+          + '<td>' + actionHtml + '</td>'
           + '</tr>';
       }).join('');
 
@@ -4170,6 +4427,24 @@ function renderTracking(id) {
           if (field === 'completedProfessional' && row.isInfoStaff !== '是') row.completedProfessional = '';
           rowsState[idx] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
           renderRows();
+        });
+      });
+
+      body.querySelectorAll('.training-row-delete').forEach((button) => {
+        button.addEventListener('click', () => {
+          const idx = Number(button.dataset.idx);
+          const row = rowsState[idx];
+          if (!row) return;
+          if (!canDeleteTrainingEditableRow(row, existing, user)) {
+            toast('目前只能刪除自己手動新增的人員', 'error');
+            return;
+          }
+          if (!confirm('確定刪除「' + row.name + '」嗎？這會一併從此單位名單移除。')) return;
+          if (row.rosterId) deleteTrainingRosterPerson(row.rosterId);
+          rowsState = rowsState.filter((_, rowIndex) => rowIndex !== idx);
+          selectedKeys.clear();
+          renderRows();
+          toast('已刪除「' + row.name + '」');
         });
       });
 
@@ -4322,12 +4597,13 @@ function renderTracking(id) {
         toast('請輸入要新增的人員姓名', 'error');
         return;
       }
-      const result = addTrainingRosterPerson(currentUnit, payload, 'manual', user.name);
+      const result = addTrainingRosterPerson(currentUnit, payload, 'manual', user);
       if (!result.added && !result.updated) {
         toast(result.reason, 'error');
         return;
       }
       rowsState = mergeTrainingRows(currentUnit, rowsState);
+      selectedKeys.clear();
       ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
         document.getElementById(idName).value = '';
       });
@@ -4366,6 +4642,8 @@ function renderTracking(id) {
 
     const user = currentUser();
     const canManage = !!user && !isViewer(user) && (user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
+    const canUndo = canUndoTrainingForm(form, user);
+    const undoRemainingMinutes = canUndo ? getTrainingUndoRemainingMinutes(form) : 0;
     let filesState = [...(form.signedFiles || [])];
     const summary = form.summary || computeTrainingSummary(form.records || []);
     const detailRows = (form.records || []).length
@@ -4374,10 +4652,11 @@ function renderTracking(id) {
     const timeline = (form.history || []).slice().reverse().map((item) => '<div class="timeline-item"><div class="timeline-time">' + fmtTime(item.time) + '</div><div class="timeline-text">' + esc(item.action) + ' · ' + esc(item.user || '系統') + '</div></div>').join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
     const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
     if (canEditTrainingForm(form)) actions.unshift('<a href="#training-fill/' + form.id + '" class="btn btn-primary">' + ic('edit-3', 'icon-sm') + ' 繼續填報</a>');
+    if (canUndo) actions.unshift('<button type="button" class="btn btn-warning" id="training-undo-step-one">' + ic('rotate-ccw', 'icon-sm') + ' 撤回流程一</button>');
     if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift('<button type="button" class="btn btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">' + ic('corner-up-left', 'icon-sm') + ' 退回更正</button>');
 
     const stepCards = [
-      ['流程一', '依人員填報教育訓練完成情形', form.stepOneSubmittedAt ? '已完成並鎖定' : '待完成', form.stepOneSubmittedAt ? fmtTime(form.stepOneSubmittedAt) : '完成後才可進入簽核'],
+      ['流程一', '依人員填報教育訓練完成情形', form.stepOneSubmittedAt ? '已完成並鎖定' : '待完成', form.stepOneSubmittedAt ? (canUndo ? ('可於剩餘 ' + undoRemainingMinutes + ' 分鐘內撤回；列印簽核表後將不可撤回') : fmtTime(form.stepOneSubmittedAt)) : '完成後才可進入簽核'],
       ['流程二', '列印簽核表', form.printedAt ? '已列印' : (form.status === TRAINING_STATUSES.DRAFT || form.status === TRAINING_STATUSES.RETURNED ? '待流程一完成' : '待列印'), form.printedAt ? fmtTime(form.printedAt) : '請列印後交主管簽核'],
       ['流程三', '上傳簽核掃描檔', form.status === TRAINING_STATUSES.SUBMITTED ? '已完成填報' : ((filesState.length || form.signoffUploadedAt) ? '已上傳，待完成送件' : '待上傳'), form.status === TRAINING_STATUSES.SUBMITTED ? fmtTime(form.submittedAt || form.updatedAt) : (form.signoffUploadedAt ? fmtTime(form.signoffUploadedAt) : '上傳後完成整體流程')]
     ].map((step) => '<div class="training-step-card"><div class="training-step-kicker">' + esc(step[0]) + '</div><div class="training-step-title">' + esc(step[1]) + '</div><div class="training-step-status">' + esc(step[2]) + '</div><div class="training-step-note">' + esc(step[3]) + '</div></div>').join('');
@@ -4389,6 +4668,7 @@ function renderTracking(id) {
     document.getElementById('app').innerHTML = '<div class="animate-in">'
       + '<div class="detail-header"><div><div class="detail-id detail-id-with-copy"><span>' + esc(form.id) + ' · ' + esc(form.trainingYear) + ' 年度</span>' + renderCopyIdButton(form.id, '教育訓練編號') + '</div><h1 class="detail-title">資安教育訓練統計 — ' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('building-2', 'icon-xs') + '</span>' + esc(form.unit) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('user', 'icon-xs') + '</span>' + esc(form.fillerName) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('calendar', 'icon-xs') + '</span>' + fmt(form.fillDate) + '</span>' + trainingStatusBadge(form.status) + '</div></div><div class="training-toolbar-actions">' + actions.join('') + '</div></div>'
       + (form.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(form.returnReason || '未提供') + '</div>' : '')
+      + (canUndo ? '<div class="training-undo-banner">' + ic('rotate-ccw', 'icon-sm') + '<div><strong>流程一剛完成，仍可撤回。</strong><div>尚未列印簽核表前，可在剩餘 ' + undoRemainingMinutes + ' 分鐘內撤回，回到可編修的草稿狀態。</div></div></div>' : '')
       + '<div class="card"><div class="card-header"><span class="card-title">流程概況</span></div><div class="training-step-grid">' + stepCards + '</div></div>'
       + '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div></div>'
       + '<div class="panel-grid-two panel-grid-spaced">'
@@ -4437,6 +4717,7 @@ function renderTracking(id) {
     }
 
     document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
+    document.getElementById('training-undo-step-one')?.addEventListener('click', () => window._trainingUndo(form.id));
     document.getElementById('training-print-detail')?.addEventListener('click', () => {
       if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && !form.printedAt) {
         const now = new Date().toISOString();
@@ -4562,7 +4843,7 @@ function renderTracking(id) {
       let updated = 0;
       let skipped = 0;
       entries.forEach((entry) => {
-        const result = addTrainingRosterPerson(unit, entry, 'import', currentUser().name);
+        const result = addTrainingRosterPerson(unit, entry, 'import', currentUser());
         if (result.added) added += 1;
         else if (result.updated) updated += 1;
         else skipped += 1;

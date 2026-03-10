@@ -5471,6 +5471,70 @@ tbody tr:hover {
   width: 100%;
 }
 
+.unit-cascade-search {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.unit-cascade-search-input {
+  padding-right: 16px;
+}
+
+.unit-cascade-search-results {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 0;
+  right: 0;
+  z-index: 24;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 20px 40px -24px rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(12px);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.unit-cascade-search-option {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.unit-cascade-search-option:hover,
+.unit-cascade-search-option:focus-visible {
+  background: #eff6ff;
+  outline: none;
+}
+
+.unit-cascade-search-option-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.unit-cascade-search-option-meta,
+.unit-cascade-search-empty,
+.unit-cascade-search-hint {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.unit-cascade-search-empty {
+  padding: 10px 12px;
+}
+
 .unit-cascade-grid--training {
   display: grid;
   width: 100%;
@@ -5606,7 +5670,7 @@ tbody tr:hover {
 }
 
 .training-record-table-wrap table {
-  min-width: 1780px;
+  min-width: 1900px;
 }
 
 .training-row-select,
@@ -5640,6 +5704,22 @@ tbody tr:hover {
   font-size: 0.78rem;
   line-height: 1.55;
   color: var(--text-muted);
+}
+
+.training-row-actions {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+}
+
+.training-row-action-hint {
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
 }
 
 .training-judgement {
@@ -5768,6 +5848,29 @@ tbody tr:hover {
 
 .training-signoff-files {
   margin-top: 0;
+}
+
+.training-undo-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 15px 18px;
+  border: 1px solid rgba(249, 115, 22, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.98), rgba(255, 237, 213, 0.98));
+  color: #9a3412;
+}
+
+.training-undo-banner strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.92rem;
+}
+
+.training-undo-banner svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .training-file-card {
