@@ -5467,9 +5467,14 @@ tbody tr:hover {
   font-weight: 600;
 }
 
+.unit-cascade {
+  width: 100%;
+}
+
 .unit-cascade-grid--training {
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.18fr) minmax(0, 1fr);
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
 }
 
