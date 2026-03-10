@@ -9,9 +9,12 @@
   const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
   const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員', REPORTER: '填報人', VIEWER: '跨單位檢視者' };
   const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter', [ROLES.VIEWER]: 'badge-viewer' };
-  const TRAINING_STATUSES = { DRAFT: '暫存', SUBMITTED: '正式送出', RETURNED: '退回更正' };
+  const TRAINING_STATUSES = { DRAFT: '暫存', PENDING_SIGNOFF: '待簽核', SUBMITTED: '已完成填報', RETURNED: '退回更正' };
   const TRAINING_EMPLOYEE_STATUS = ['在職', '離職', '退休', '留職停薪', '單位調職'];
   const TRAINING_BOOLEAN_OPTIONS = ['是', '否'];
+  const TRAINING_GENERAL_LABEL = '資安通識（1年3小時）';
+  const TRAINING_INFO_STAFF_LABEL = '資訊人員(含承辦委外資通系統)';
+  const TRAINING_PROFESSIONAL_LABEL = '資安專業課程（1年3小時）';
   const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議'];
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
@@ -484,13 +487,38 @@
     return c ? `${p}／${c}` : p;
   }
 
+  function categorizeTopLevelUnit(unitValue) {
+    const unit = String(unitValue || '').trim();
+    if (!unit) return '行政單位';
+    if (unit.includes('研究中心')) return '研究中心';
+    const academicKeywords = ['學院', '共同教育中心', '國際學院', '研究學院', '創新設計學院', '進修推廣學院', '附設醫院'];
+    return academicKeywords.some((keyword) => unit.includes(keyword)) ? '學術單位' : '行政單位';
+  }
+
+  function getTrainingUnitCategories() {
+    return ['行政單位', '學術單位', '研究中心'];
+  }
+
+  function getParentsByUnitCategory(parents, category) {
+    const targetCategory = String(category || '').trim();
+    if (!targetCategory) return [];
+    return (Array.isArray(parents) ? parents : []).filter((parent) => categorizeTopLevelUnit(parent) === targetCategory);
+  }
+
   function buildUnitCascadeControl(baseId, selectedUnit, disabled, required) {
     const dis = disabled ? 'disabled' : '';
     const req = required ? 'required' : '';
     return `<div class="unit-cascade">
-      <div class="unit-cascade-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <select class="form-select" id="${baseId}-parent" data-testid="${baseId}-parent" ${dis} ${req}></select>
-        <select class="form-select" id="${baseId}-child" data-testid="${baseId}-child" ${dis}></select>
+      <div class="unit-cascade-grid unit-cascade-grid--training" id="${baseId}-grid">
+        <div class="unit-cascade-segment">
+          <select class="form-select" id="${baseId}-category" data-testid="${baseId}-category" ${dis} ${req}></select>
+        </div>
+        <div class="unit-cascade-segment">
+          <select class="form-select" id="${baseId}-parent" data-testid="${baseId}-parent" ${dis} ${req}></select>
+        </div>
+        <div class="unit-cascade-child-wrap" id="${baseId}-child-wrap">
+          <select class="form-select" id="${baseId}-child" data-testid="${baseId}-child" ${dis}></select>
+        </div>
       </div>
       <div class="unit-cascade-custom" id="${baseId}-custom-wrap" style="display:none;margin-top:8px">
         <input type="text" class="form-input" id="${baseId}-custom" data-testid="${baseId}-custom" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
@@ -501,12 +529,14 @@
 
   function initUnitCascade(baseId, initialValue, options) {
     const opts = options || {};
+    const categoryEl = document.getElementById(`${baseId}-category`);
     const parentEl = document.getElementById(`${baseId}-parent`);
     const childEl = document.getElementById(`${baseId}-child`);
+    const childWrap = document.getElementById(`${baseId}-child-wrap`);
     const hiddenEl = document.getElementById(baseId);
     const customWrap = document.getElementById(`${baseId}-custom-wrap`);
     const customEl = document.getElementById(`${baseId}-custom`);
-    if (!parentEl || !childEl || !hiddenEl) return;
+    if (!categoryEl || !parentEl || !childEl || !hiddenEl) return;
 
     const allowCustom = isAdmin() && !opts.disabled && !!customWrap && !!customEl;
     const structure = getSelectableUnitStructure();
@@ -518,11 +548,11 @@
     const parentSet = new Set(knownParents);
     if (parsed.parent && !isInitialCustom) parentSet.add(parsed.parent);
     const parents = Array.from(parentSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    const initialCategory = parsed.parent ? categorizeTopLevelUnit(parsed.parent) : '';
 
-    parentEl.innerHTML =
-      '<option value="">\u8acb\u9078\u64c7\u4e00\u7d1a\u55ae\u4f4d</option>' +
-      parents.map((p) => `<option value="${esc(p)}">${esc(getUnitOptionLabel(p, p))}</option>`).join('') +
-      (allowCustom ? `<option value="${UNIT_CUSTOM_VALUE}">${UNIT_CUSTOM_LABEL}</option>` : '');
+    categoryEl.innerHTML =
+      '<option value="">選單位類別</option>' +
+      getTrainingUnitCategories().map((category) => `<option value="${esc(category)}">${esc(category)}</option>`).join('');
 
     const setCustomMode = (enabled) => {
       if (!customWrap || !customEl) return;
@@ -550,12 +580,34 @@
       if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
     };
 
+    const renderParents = (category, selectedParent) => {
+      const targetCategory = String(category || '').trim();
+      const parent = String(selectedParent || '').trim();
+      if (!targetCategory) {
+        parentEl.innerHTML = '<option value="">再選單位</option>';
+        parentEl.disabled = true;
+        if (childWrap) childWrap.style.display = 'none';
+        childEl.innerHTML = '<option value="">有二級單位再選</option>';
+        childEl.disabled = true;
+        return;
+      }
+      const categoryParents = getParentsByUnitCategory(parents, targetCategory);
+      const parentOptions = parent && !categoryParents.includes(parent) ? [parent].concat(categoryParents) : categoryParents;
+      parentEl.disabled = false;
+      parentEl.innerHTML =
+        '<option value="">請選擇單位</option>' +
+        parentOptions.map((item) => `<option value="${esc(item)}">${esc(getUnitOptionLabel(item, item))}</option>`).join('') +
+        (allowCustom ? `<option value="${UNIT_CUSTOM_VALUE}">${UNIT_CUSTOM_LABEL}</option>` : '');
+      if (parent) parentEl.value = parent;
+    };
+
     const renderChildren = (parent, selectedChild) => {
       const child = String(selectedChild || '').trim();
 
       if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
         childEl.innerHTML = '<option value="">\u81ea\u8a02\u55ae\u4f4d\u6a21\u5f0f</option>';
         childEl.disabled = true;
+        if (childWrap) childWrap.style.display = 'none';
         return;
       }
 
@@ -565,23 +617,31 @@
       if (!parent) {
         childEl.innerHTML = '<option value="">\u8acb\u5148\u9078\u64c7\u4e00\u7d1a\u55ae\u4f4d</option>';
         childEl.disabled = true;
+        if (childWrap) childWrap.style.display = 'none';
         return;
       }
 
       if (children.length === 0) {
         childEl.innerHTML = '<option value="">\u7121\u4e8c\u7d1a\u55ae\u4f4d</option>';
         childEl.disabled = true;
+        if (childWrap) childWrap.style.display = 'none';
         return;
       }
 
       childEl.disabled = false;
-      childEl.innerHTML = '<option value="">\u8acb\u9078\u64c7\u4e8c\u7d1a\u55ae\u4f4d\uff08\u9078\u586b\uff09</option>' + children.map((c) => {
+      if (childWrap) childWrap.style.display = '';
+      childEl.innerHTML = '<option value="">選二級單位（選填）</option>' + children.map((c) => {
         const unitValue = composeUnitValue(parent, c);
         return `<option value="${esc(c)}">${esc(getUnitOptionLabel(unitValue, c))}</option>`;
       }).join('');
       if (child) childEl.value = child;
     };
 
+    categoryEl.addEventListener('change', () => {
+      renderParents(categoryEl.value, '');
+      renderChildren('', '');
+      syncHidden(true);
+    });
     parentEl.addEventListener('change', () => {
       renderChildren(parentEl.value, '');
       syncHidden(true);
@@ -590,15 +650,19 @@
     if (allowCustom) customEl.addEventListener('input', () => syncHidden(true));
 
     if (isInitialCustom) {
+      categoryEl.value = initialCategory || '行政單位';
+      renderParents(categoryEl.value, UNIT_CUSTOM_VALUE);
       parentEl.value = UNIT_CUSTOM_VALUE;
       customEl.value = rawInitial;
-    } else if (parsed.parent) {
-      parentEl.value = parsed.parent;
+    } else {
+      if (initialCategory) categoryEl.value = initialCategory;
+      renderParents(categoryEl.value, parsed.parent);
     }
     renderChildren(parentEl.value, parsed.child);
     syncHidden(false);
 
     if (opts.disabled) {
+      categoryEl.disabled = true;
       parentEl.disabled = true;
       childEl.disabled = true;
       if (customEl) customEl.disabled = true;
@@ -3186,7 +3250,7 @@ function renderTracking(id) {
   };
 
   // ─── Training Hours Data Model ─────────────────────
-  const TRAINING_PROFESSIONAL_OPTIONS = ['是', '否', '無須'];
+  const TRAINING_PROFESSIONAL_OPTIONS = ['是', '否'];
 
   function emptyTrainingStore() {
     return { forms: [], rosters: [], nextFormId: 1, nextRosterId: 1 };
@@ -3260,7 +3324,7 @@ function renderTracking(id) {
       if (!TRAINING_BOOLEAN_OPTIONS.includes(completedGeneral)) completedGeneral = '';
       if (!TRAINING_BOOLEAN_OPTIONS.includes(isInfoStaff)) isInfoStaff = '';
       if (isInfoStaff === '否') {
-        completedProfessional = '無須';
+        completedProfessional = '';
       } else if (isInfoStaff === '是') {
         if (!TRAINING_BOOLEAN_OPTIONS.includes(completedProfessional)) completedProfessional = '';
       } else {
@@ -3295,6 +3359,16 @@ function renderTracking(id) {
     const records = Array.isArray(form && form.records)
       ? form.records.map((row) => normalizeTrainingRecordRow(row, unit))
       : [];
+    const rawStatus = String((form && form.status) || '').trim();
+    const legacyStatusMap = {
+      '正式送出': TRAINING_STATUSES.SUBMITTED,
+      '已完成填報': TRAINING_STATUSES.SUBMITTED,
+      '待列印簽核': TRAINING_STATUSES.PENDING_SIGNOFF,
+      '待簽核': TRAINING_STATUSES.PENDING_SIGNOFF
+    };
+    const normalizedStatus = Object.values(TRAINING_STATUSES).includes(rawStatus)
+      ? rawStatus
+      : (legacyStatusMap[rawStatus] || TRAINING_STATUSES.DRAFT);
     const normalized = {
       id: String((form && form.id) || '').trim(),
       unit,
@@ -3305,13 +3379,16 @@ function renderTracking(id) {
       submitterEmail: String((form && form.submitterEmail) || '').trim(),
       fillDate: (form && form.fillDate) || new Date().toISOString().split('T')[0],
       trainingYear: String((form && form.trainingYear) || String(new Date().getFullYear() - 1911)).trim(),
-      status: Object.values(TRAINING_STATUSES).includes(form && form.status) ? form.status : TRAINING_STATUSES.DRAFT,
+      status: normalizedStatus,
       records,
       summary: computeTrainingSummary(records),
       signedFiles: Array.isArray(form && form.signedFiles) ? form.signedFiles : [],
       returnReason: String((form && form.returnReason) || '').trim(),
       createdAt: (form && form.createdAt) || new Date().toISOString(),
       updatedAt: (form && form.updatedAt) || new Date().toISOString(),
+      stepOneSubmittedAt: (form && form.stepOneSubmittedAt) || ((normalizedStatus !== TRAINING_STATUSES.DRAFT && normalizedStatus !== TRAINING_STATUSES.RETURNED) ? ((form && form.submittedAt) || (form && form.updatedAt) || null) : null),
+      printedAt: (form && form.printedAt) || null,
+      signoffUploadedAt: (form && form.signoffUploadedAt) || null,
       submittedAt: (form && form.submittedAt) || null,
       history: Array.isArray(form && form.history) ? form.history : []
     };
@@ -3476,7 +3553,7 @@ function renderTracking(id) {
     if (isViewer(user)) return false;
     const inScope = user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
     if (!inScope) return false;
-    return form.status !== TRAINING_STATUSES.SUBMITTED;
+    return form.status === TRAINING_STATUSES.DRAFT || form.status === TRAINING_STATUSES.RETURNED;
   }
 
   function isTrainingVisible(form) {
@@ -3505,14 +3582,14 @@ function renderTracking(id) {
   function getTrainingRecordHint(record) {
     if (!record.status) return '請先選擇在職狀態';
     if (record.status !== '在職') return '非在職人員，不列入統計';
-    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.completedGeneral)) return '請填寫資安通識課程完成情形';
-    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.isInfoStaff)) return '請判定是否為資訊人員';
+    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.completedGeneral)) return '請填寫' + TRAINING_GENERAL_LABEL + '完成情形';
+    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.isInfoStaff)) return '請判定是否為' + TRAINING_INFO_STAFF_LABEL;
     if (record.isInfoStaff === '是' && !TRAINING_BOOLEAN_OPTIONS.includes(record.completedProfessional)) {
-      return '請填寫資安專業課程完成情形';
+      return '請填寫' + TRAINING_PROFESSIONAL_LABEL + '完成情形';
     }
     if (isTrainingRecordComplete(record)) return '已符合完成條件';
-    if (record.completedGeneral === '否') return '未完成資安通識課程';
-    if (record.isInfoStaff === '是' && record.completedProfessional === '否') return '待補資安專業課程';
+    if (record.completedGeneral === '否') return '未完成' + TRAINING_GENERAL_LABEL;
+    if (record.isInfoStaff === '是' && record.completedProfessional === '否') return '待補' + TRAINING_PROFESSIONAL_LABEL;
     return '尚未完成';
   }
 
@@ -3529,6 +3606,12 @@ function renderTracking(id) {
   function trainingDecisionBadge(record) {
     const meta = getTrainingDecisionMeta(record);
     return '<span class="training-judgement training-judgement--' + meta.tone + '">' + esc(meta.label) + '</span>';
+  }
+
+  function getTrainingProfessionalDisplay(record) {
+    if (!record || record.status !== '在職') return '—';
+    if (record.isInfoStaff === '否') return '不適用';
+    return record.completedProfessional || '—';
   }
 
   function computeTrainingSummary(records) {
@@ -3561,7 +3644,9 @@ function renderTracking(id) {
   }
 
   function trainingStatusBadge(status) {
-    const cls = status === TRAINING_STATUSES.SUBMITTED ? 'badge-closed' : (status === TRAINING_STATUSES.RETURNED ? 'badge-overdue' : 'badge-pending');
+    const cls = status === TRAINING_STATUSES.SUBMITTED
+      ? 'badge-closed'
+      : (status === TRAINING_STATUSES.RETURNED ? 'badge-overdue' : 'badge-pending');
     return '<span class="badge ' + cls + '"><span class="badge-dot"></span>' + status + '</span>';
   }
 
@@ -3576,16 +3661,19 @@ function renderTracking(id) {
     return text;
   }
 
-  function downloadCsv(filename, headers, rows) {
-    const lines = [headers.map(csvCell).join(',')].concat(rows.map((row) => row.map(csvCell).join(',')));
-    const csv = '\uFEFF' + lines.join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  function downloadWorkbook(filename, sheets) {
+    if (typeof window === 'undefined' || !window.XLSX) {
+      toast('Excel 模組尚未載入，請重新整理頁面後再試', 'error');
+      return false;
+    }
+    const workbook = window.XLSX.utils.book_new();
+    (Array.isArray(sheets) ? sheets : []).forEach((sheet, index) => {
+      const name = String(sheet?.name || `Sheet${index + 1}`).slice(0, 31) || `Sheet${index + 1}`;
+      const worksheet = window.XLSX.utils.aoa_to_sheet(Array.isArray(sheet?.rows) ? sheet.rows : []);
+      window.XLSX.utils.book_append_sheet(workbook, worksheet, name);
+    });
+    window.XLSX.writeFile(workbook, filename);
+    return true;
   }
 
   function exportTrainingSummaryCsv(forms, filename) {
@@ -3604,26 +3692,41 @@ function renderTracking(id) {
         summary.completedCount || 0,
         summary.incompleteCount || 0,
         (summary.completionRate || 0) + '%',
-        summary.infoStaffCount || 0,
-        summary.professionalPendingCount || 0,
         fmt(form.fillDate),
+        form.stepOneSubmittedAt ? fmtTime(form.stepOneSubmittedAt) : '',
         form.submittedAt ? fmtTime(form.submittedAt) : '',
         fmtTime(form.updatedAt)
       ];
     });
-    downloadCsv(filename || '資安教育訓練統計總表_' + new Date().toISOString().slice(0, 10) + '.csv', ['編號', '統計單位', '填報單位', '年度', '狀態', '經辦人', '聯絡電話', '聯絡信箱', '在職人數', '已完成', '未完成', '完成率', '資訊人員數', '待補專業課程', '填報日期', '正式送出時間', '最後更新'], rows);
+    downloadWorkbook(filename || ('資安教育訓練統計總表_' + new Date().toISOString().slice(0, 10) + '.xlsx'), [{
+      name: '統計總表',
+      rows: [['編號', '統計單位', '填報單位', '年度', '狀態', '經辦人', '聯絡電話', '聯絡信箱', '單位總人數(人)', '已完成人數(人)', '未完成人數(人)', '單位達成比率', '填表日期', '流程一完成時間', '整體完成時間', '最後更新']].concat(rows)
+    }]);
   }
 
   function exportTrainingDetailCsv(form) {
     const rows = (form.records || []).map((row, index) => [form.id, form.statsUnit || getTrainingStatsUnit(form.unit), form.unit, form.trainingYear, form.fillerName, index + 1, row.name, row.l1Unit || '', row.unitName || '', row.identity || '', row.jobTitle || '', row.status || '', row.completedGeneral || '', row.isInfoStaff || '', row.completedProfessional || '', getTrainingRecordHint(row), row.note || '']);
-    downloadCsv('資安教育訓練明細_' + form.id + '.csv', ['填報單編號', '統計單位', '填報單位', '年度', '經辦人', '序號', '姓名', '一級單位', '本職單位', '身分別', '職稱', '在職狀態', '資安通識', '資訊人員(含委外)', '資安專業課程', '判定說明', '備註'], rows);
+    downloadWorkbook('資安教育訓練明細_' + form.id + '.xlsx', [{
+      name: '逐人明細',
+      rows: [['填報單編號', '統計單位', '填報單位', '年度', '經辦人', '序號', '姓名', '一級單位', '本職單位', '身分別', '職稱', '在職狀態', TRAINING_GENERAL_LABEL, TRAINING_INFO_STAFF_LABEL, TRAINING_PROFESSIONAL_LABEL, '判定說明', '備註']].concat(rows)
+    }]);
+  }
+
+  function getRocDateParts(value) {
+    const date = value ? new Date(value) : new Date();
+    if (!Number.isFinite(date.getTime())) return { year: '', month: '', day: '' };
+    return {
+      year: String(date.getFullYear() - 1911),
+      month: String(date.getMonth() + 1),
+      day: String(date.getDate())
+    };
   }
 
   function buildTrainingPrintHtml(payload) {
     const summary = payload.summary || computeTrainingSummary(payload.records || []);
     const unitName = payload.statsUnit || getTrainingStatsUnit(payload.unit);
-    const fillDate = payload.fillDate ? fmt(payload.fillDate) : fmt(new Date().toISOString());
-    return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>資安教育訓練統計表</title><style>body{font-family:"Noto Sans TC",sans-serif;color:#111827;margin:0;padding:24px}.sheet{max-width:960px;margin:0 auto}h1{font-size:24px;text-align:center;margin:0 0 18px}.meta,.summary{width:100%;border-collapse:collapse;margin-bottom:18px}.meta th,.meta td,.summary th,.summary td{border:1px solid #111827;padding:10px 12px;font-size:14px}.meta th,.summary th{background:#f3f4f6;text-align:left;width:18%}.sign-box{border:2px solid #111827;height:120px;margin-top:24px;padding:12px;font-size:16px}.notes{font-size:12px;color:#374151;line-height:1.7;margin-top:18px}</style></head><body><div class="sheet"><h1>' + esc(payload.trainingYear || '') + ' 年度資安教育訓練統計表</h1><table class="meta"><tr><th>統計單位</th><td>' + esc(unitName || '未指定') + '</td><th>填報日期</th><td>' + esc(fillDate) + '</td></tr><tr><th>經辦人</th><td>' + esc(payload.fillerName || payload.submitterName || '') + '</td><th>聯絡電話</th><td>' + esc(payload.submitterPhone || '') + '</td></tr><tr><th>聯絡信箱</th><td colspan="3">' + esc(payload.submitterEmail || '') + '</td></tr></table><table class="summary"><tr><th>在職人數</th><th>已完成</th><th>未完成</th><th>完成率</th><th>資訊人員數</th><th>待補專業課程</th></tr><tr><td>' + (summary.activeCount || 0) + '</td><td>' + (summary.completedCount || 0) + '</td><td>' + (summary.incompleteCount || 0) + '</td><td>' + (summary.completionRate || 0) + '%</td><td>' + (summary.infoStaffCount || 0) + '</td><td>' + (summary.professionalPendingCount || 0) + '</td></tr></table><div class="sign-box">主管簽章區</div><div class="notes"><div>1. 僅統計在職人員；離職、退休、留職停薪、單位調職不列入完成率。</div><div>2. 一般人員需完成資安通識課程；資訊人員另需完成資安專業課程。</div><div>3. 列印簽核後，請回到系統上傳掃描檔並正式送出。</div></div></div></body></html>';
+    const rocDate = getRocDateParts(payload.fillDate);
+    return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>資安教育訓練簽核表</title><style>body{font-family:"Noto Sans TC",sans-serif;color:#111827;margin:0;padding:24px}.sheet{max-width:960px;margin:0 auto}h1{font-size:24px;text-align:center;margin:0 0 18px}.meta,.summary{width:100%;border-collapse:collapse;margin-bottom:18px}.meta th,.meta td,.summary th,.summary td{border:1px solid #111827;padding:10px 12px;font-size:14px;vertical-align:top}.meta th,.summary th{background:#f8fafc;text-align:left;width:18%}.summary-note{display:block;margin-top:4px;font-size:12px;color:#475569;font-weight:400}.statement,.notes{font-size:13px;line-height:1.8;color:#111827}.notes-title{font-weight:700;margin:14px 0 6px}.notes ol{padding-left:20px;margin:6px 0 0}.sign-row{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:end;margin-top:22px}.sign-box{border:2px solid #111827;height:120px;padding:12px;font-size:16px;display:flex;align-items:flex-start;justify-content:flex-start}</style></head><body><div class="sheet"><h1>' + esc(payload.trainingYear || '') + '年國立臺灣大學資通安全教育訓練執行情形</h1><table class="meta"><tr><th>一級單位</th><td>' + esc(unitName || '未指定') + '</td><th>填表日期</th><td>' + esc(rocDate.year) + '年' + esc(rocDate.month) + '月' + esc(rocDate.day) + '日</td></tr><tr><th>經辦人</th><td>' + esc(payload.fillerName || payload.submitterName || '') + '</td><th>聯絡電話</th><td>' + esc(payload.submitterPhone || '') + '</td></tr><tr><th>聯絡信箱</th><td colspan="3">' + esc(payload.submitterEmail || '') + '</td></tr></table><table class="summary"><tr><th>單位總人數(人)<span class="summary-note">（勿自行填寫）</span></th><th>單位達成比率<span class="summary-note">（勿自行填寫）</span></th><th>未完成人數(人)<span class="summary-note">（勿自行填寫）</span></th><th>已完成人數(人)<span class="summary-note">（勿自行填寫）</span></th></tr><tr><td>' + (summary.activeCount || 0) + '</td><td>' + (summary.completionRate || 0) + '%</td><td>' + (summary.incompleteCount || 0) + '</td><td>' + (summary.completedCount || 0) + '</td></tr></table><div class="statement">單位是否已留存單位人員教育訓練佐證：是，本單位已留存單位人員教育訓練佐證。</div><div class="notes"><div class="notes-title">資通安全教育訓練統計注意事項:</div><ol><li>此表單將會作為校內資通安全二方稽核依據,請單位確實辦理。</li><li>請單位自行留存單位人員教育訓練佐證,佐證將於資通安全二方稽核時抽查審閱。</li><li>教育訓練佐證應包含:人員姓名、人員職稱、已完成之課程名稱、認證時數之單位、認證時數、完成課程之日期。</li><li>教育訓練佐證範例(皆須含上述內容):課程證書、認證時數之單位往來信件截圖、相關教育訓練系統截圖(如:公務人員終身學習網站-個人資料夾-查詢學習時數、e等公務員學習平台-個人專區-學習紀錄查詢時數、臺灣大學資通盤點系統-其他服務-研習證明-證書清單)。</li><li>線上資安教育訓練資源可參考本校網站:https://isms.ntu.edu.tw/e-learning.html (網站路徑:計中網站-資安專區-資通安全管理-教育訓練-線上課程資源)。</li></ol></div><div class="sign-row"><div></div><div class="sign-box">一級主管</div></div></div></body></html>';
   }
 
   function printTrainingSheet(payload) {
@@ -3639,14 +3742,50 @@ function renderTracking(id) {
     setTimeout(() => win.print(), 250);
   }
 
+  function parseTrainingRosterCells(cells, unit) {
+    const clean = (Array.isArray(cells) ? cells : []).map((part) => String(part || '').trim());
+    const firstCell = String(clean[0] || '').replace(/^\uFEFF/, '');
+    if (!firstCell || firstCell === '姓名') return null;
+    return {
+      name: firstCell,
+      unitName: clean[1] || getTrainingJobUnit(unit),
+      identity: clean[2] || '',
+      jobTitle: clean[3] || ''
+    };
+  }
+
   function parseTrainingRosterImport(text, unit) {
-    return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+    return String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
       const parts = line.includes('\t') ? line.split('\t') : line.split(',');
-      const clean = parts.map((part) => String(part || '').trim());
-      const firstCell = String(clean[0] || '').replace(/^\uFEFF/, '');
-      if (firstCell === '姓名') return null;
-      return { name: firstCell, unitName: clean[1] || getTrainingJobUnit(unit), identity: clean[2] || '', jobTitle: clean[3] || '' };
+      return parseTrainingRosterCells(parts, unit);
     }).filter((row) => row && row.name);
+  }
+
+  function parseTrainingRosterWorkbook(file, unit) {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        resolve([]);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          if (typeof window === 'undefined' || !window.XLSX) throw new Error('Excel 模組尚未載入');
+          const workbook = window.XLSX.read(event.target.result, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          if (!firstSheetName) {
+            resolve([]);
+            return;
+          }
+          const rows = window.XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1, raw: false, defval: '' });
+          resolve(rows.map((cells) => parseTrainingRosterCells(cells, unit)).filter((row) => row && row.name));
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error('無法讀取匯入檔案'));
+      reader.readAsArrayBuffer(file);
+    });
   }
 
   function mergeTrainingRows(targetUnit, carryRows) {
@@ -3665,6 +3804,14 @@ function renderTracking(id) {
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
     return cards.map(([label, value, tone]) => '<div class="training-mini-card training-mini-card--' + tone + '"><div class="training-mini-label">' + label + '</div><div class="training-mini-value">' + value + '</div></div>').join('');
+  }
+
+  function renderTrainingBinaryButtons(field, value, index, disabled, yesLabel, noLabel) {
+    const dis = disabled ? 'disabled' : '';
+    return '<div class="training-binary-group" role="group">'
+      + '<button type="button" class="training-binary-btn ' + (value === '是' ? 'is-active is-yes' : '') + '" data-idx="' + index + '" data-field="' + field + '" data-value="是" ' + dis + '>' + esc(yesLabel || '✓') + '</button>'
+      + '<button type="button" class="training-binary-btn ' + (value === '否' ? 'is-active is-no' : '') + '" data-idx="' + index + '" data-field="' + field + '" data-value="否" ' + dis + '>' + esc(noLabel || '✕') + '</button>'
+      + '</div>';
   }
 
   window._trainingReturn = function (id) {
@@ -3718,255 +3865,109 @@ function renderTracking(id) {
   };
 
   function renderTraining() {
-    const forms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const visibleForms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const summary = {
-      total: forms.length,
-      draft: forms.filter((form) => form.status === TRAINING_STATUSES.DRAFT).length,
-      submitted: forms.filter((form) => form.status === TRAINING_STATUSES.SUBMITTED).length,
-      returned: forms.filter((form) => form.status === TRAINING_STATUSES.RETURNED).length,
-      avgCompletion: forms.length ? Math.round(forms.reduce((sum, form) => sum + Number(form.summary?.completionRate || 0), 0) / forms.length) : 0
+      total: visibleForms.length,
+      draft: visibleForms.filter((form) => form.status === TRAINING_STATUSES.DRAFT).length,
+      pending: visibleForms.filter((form) => form.status === TRAINING_STATUSES.PENDING_SIGNOFF).length,
+      submitted: visibleForms.filter((form) => form.status === TRAINING_STATUSES.SUBMITTED).length,
+      returned: visibleForms.filter((form) => form.status === TRAINING_STATUSES.RETURNED).length
     };
-    const latestUpdateLabel = forms.length ? fmtTime(forms[0].updatedAt) : 'No updates';
-
     const toolbar = '<div class="training-toolbar-actions">'
       + (canFillTraining() ? '<a href="#training-fill" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 新增填報</a>' : '')
-      + (forms.length ? '<button class="btn btn-secondary" id="training-export-all">' + ic('download', 'icon-sm') + ' 匯出 CSV</button>' : '')
+      + (visibleForms.length ? '<button class="btn btn-secondary" id="training-export-all">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>' : '')
       + (isAdmin() ? '<a href="#training-roster" class="btn btn-secondary">' + ic('users', 'icon-sm') + ' 名單管理</a>' : '')
       + '</div>';
 
-    const tableRows = forms.length ? forms.map((form) => {
-      const formSummary = form.summary || computeTrainingSummary(form.records || []);
+    const buildFormActions = (form) => {
+      if (!form) return canFillTraining() ? '<a href="#training-fill" class="btn btn-sm btn-primary">開始填報</a>' : '—';
       const actions = ['<a href="#training-detail/' + form.id + '" class="btn btn-sm btn-secondary">檢視</a>'];
       if (canEditTrainingForm(form)) actions.push('<a href="#training-fill/' + form.id + '" class="btn btn-sm btn-primary">編修</a>');
-      if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) {
-        actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回修正</button>');
-      }
-      return '<tr>'
-        + '<td class="record-id-col">' + renderCopyIdCell(form.id, '教育訓練編號', true) + '</td>'
-        + '<td>' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</td>'
-        + '<td>' + esc(form.unit) + '</td>'
-        + '<td>' + esc(form.fillerName) + '</td>'
-        + '<td>' + trainingStatusBadge(form.status) + '</td>'
-        + '<td>' + (formSummary.activeCount || 0) + '</td>'
-        + '<td>' + (formSummary.completedCount || 0) + '</td>'
-        + '<td>' + (formSummary.incompleteCount || 0) + '</td>'
-        + '<td><span class="training-rate-pill">' + (formSummary.completionRate || 0) + '%</span></td>'
-        + '<td>' + fmtTime(form.updatedAt) + '</td>'
-        + '<td><div class="training-table-actions">' + actions.join('') + '</div></td>'
-        + '</tr>';
-    }).join('') : '<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-state-icon">' + ic('graduation-cap') + '</div><div class="empty-state-title">No training reports yet</div><div class="empty-state-desc">Create a new report or import a roster to start the dashboard.</div></div></td></tr>';
-
-    const buildExecStatus = (label, tone) => '<span class="training-exec-status training-exec-status--' + tone + '">' + esc(label) + '</span>';
-    const buildMiniTrack = (value) => {
-      const safeValue = Math.max(0, Math.min(100, Number(value) || 0));
-      return '<div class="training-exec-mini-track"><span style="width:' + safeValue + '%"></span></div>';
+      if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回更正</button>');
+      return '<div class="training-table-actions">' + actions.join('') + '</div>';
     };
 
-    let dashboardPanel = '';
+    let contentHtml = '';
     if (isAdmin()) {
       const allForms = getAllTrainingForms();
-      const units = getTrainingUnits();
-      const latestByUnit = units.map((unit) => {
-        const latest = allForms.filter((form) => form.unit === unit).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
-        const unitSummary = latest ? (latest.summary || computeTrainingSummary(latest.records || [])) : computeTrainingSummary([]);
-        return { unit, latest, summary: unitSummary };
+      const latestByUnit = getTrainingUnits().map((unit) => {
+        const latest = allForms.filter((form) => form.unit === unit).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0] || null;
+        return {
+          unit,
+          latest,
+          summary: latest ? (latest.summary || computeTrainingSummary(latest.records || [])) : computeTrainingSummary([])
+        };
       }).sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
-      const submittedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED).length;
-      const schoolProgress = latestByUnit.length ? Math.round((submittedUnits / latestByUnit.length) * 100) : 0;
-      const pendingUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED).length;
-      const returnedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.RETURNED).length;
-      const draftUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.DRAFT).length;
-      const missingUnits = latestByUnit.filter((item) => !item.latest).length;
-      const totalActivePeople = latestByUnit.reduce((sum, item) => sum + Number(item.summary.activeCount || 0), 0);
-      const totalCompletedPeople = latestByUnit.reduce((sum, item) => sum + Number(item.summary.completedCount || 0), 0);
-      const overallCompletion = totalActivePeople > 0 ? Math.round((totalCompletedPeople / totalActivePeople) * 100) : 0;
-      const latestUnitAvgCompletion = latestByUnit.length ? Math.round(latestByUnit.reduce((sum, item) => sum + Number(item.summary.completionRate || 0), 0) / latestByUnit.length) : 0;
-      const groupedByParent = latestByUnit.reduce((groups, item) => {
-        const parsed = splitUnitValue(item.unit);
-        const parentUnit = String(parsed.parent || item.unit || '').trim();
-        if (!parentUnit) return groups;
-        if (!groups.has(parentUnit)) groups.set(parentUnit, []);
-        groups.get(parentUnit).push({ ...item, parsed });
-        return groups;
-      }, new Map());
-      const groupInsights = Array.from(groupedByParent.entries())
-        .sort((a, b) => a[0].localeCompare(b[0], 'zh-Hant'))
-        .map(([parentUnit, children]) => {
-          const sortedChildren = children.slice().sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
-          const activeCount = sortedChildren.reduce((sum, child) => sum + Number(child.summary.activeCount || 0), 0);
-          const completedCount = sortedChildren.reduce((sum, child) => sum + Number(child.summary.completedCount || 0), 0);
-          const parentCompletion = activeCount > 0 ? Math.round((completedCount / activeCount) * 100) : 0;
-          const submittedCount = sortedChildren.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.SUBMITTED).length;
-          const draftCount = sortedChildren.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.DRAFT).length;
-          const returnedCount = sortedChildren.filter((child) => child.latest && child.latest.status === TRAINING_STATUSES.RETURNED).length;
-          const totalCount = sortedChildren.length;
-          const followUpCount = Math.max(0, totalCount - submittedCount);
-          return {
-            parentUnit,
-            children: sortedChildren,
-            activeCount,
-            completedCount,
-            parentCompletion,
-            submittedCount,
-            draftCount,
-            returnedCount,
-            totalCount,
-            followUpCount
-          };
-        });
-      const recentUpdates = allForms.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 4);
-      const unitPriority = (item) => {
-        if (!item.latest) return 5;
-        if (item.latest.status === TRAINING_STATUSES.RETURNED) return 4;
-        if (item.latest.status === TRAINING_STATUSES.DRAFT) return 3;
-        if (item.latest.status !== TRAINING_STATUSES.SUBMITTED) return 2;
-        const completionRate = Number(item.summary.completionRate || 0);
-        if (completionRate < 100) return 1;
-        return 0;
-      };
-      const focusUnits = latestByUnit.slice()
-        .sort((a, b) => {
-          const priorityDiff = unitPriority(b) - unitPriority(a);
-          if (priorityDiff) return priorityDiff;
-          const completionDiff = Number(a.summary.completionRate || 0) - Number(b.summary.completionRate || 0);
-          if (completionDiff) return completionDiff;
-          return String(a.unit || '').localeCompare(String(b.unit || ''), 'zh-Hant');
-        })
-        .slice(0, 5);
-      const focusUnitsHtml = focusUnits.length ? focusUnits.map((item) => {
-        let tone = 'slate';
-        let label = '\u672a\u586b\u5831';
-        let note = '\u5c1a\u7121\u6700\u65b0\u586b\u5831\u7d00\u9304';
-        if (item.latest) {
-          if (item.latest.status === TRAINING_STATUSES.SUBMITTED) {
-            tone = 'green';
-            label = '\u5df2\u9001\u51fa';
-            note = '\u66f4\u65b0\u6642\u9593 ' + fmtTime(item.latest.updatedAt);
-          } else if (item.latest.status === TRAINING_STATUSES.RETURNED) {
-            tone = 'red';
-            label = '\u9000\u56de\u66f4\u6b63';
-            note = item.latest.returnReason ? '\u9000\u56de\u539f\u56e0\uff1a' + item.latest.returnReason : '\u9700\u4fee\u6b63\u5f8c\u91cd\u65b0\u9001\u51fa';
-          } else {
-            tone = 'amber';
-            label = '\u66ab\u5b58';
-            note = '\u66ab\u5b58\u6642\u9593 ' + fmtTime(item.latest.updatedAt);
-          }
-        }
-        const target = item.latest ? '#training-detail/' + item.latest.id : '#training-fill';
-        return '<a class="training-exec-list-item" href="' + target + '">'
-          + '<div class="training-exec-list-main"><div class="training-exec-list-head"><strong>' + esc(item.unit) + '</strong>' + buildExecStatus(label, tone) + '</div>'
-          + '<div class="training-exec-list-subtitle">' + esc(note) + '</div>'
-          + buildMiniTrack(item.summary.completionRate || 0)
-          + '</div><div class="training-exec-list-side"><div class="training-exec-list-value">' + (item.summary.completionRate || 0) + '%</div><div class="training-exec-list-caption">' + (item.summary.completedCount || 0) + ' / ' + (item.summary.activeCount || 0) + ' \u5728\u8077</div></div></a>';
-      }).join('') : '<div class="training-exec-empty">\u76ee\u524d\u6c92\u6709\u9700\u8981\u512a\u5148\u8655\u7406\u7684\u55ae\u4f4d\u3002</div>';
-      const parentLeaderboardHtml = groupInsights.length ? groupInsights
-        .slice()
-        .sort((a, b) => {
-          const followDiff = b.followUpCount - a.followUpCount;
-          if (followDiff) return followDiff;
-          const returnedDiff = b.returnedCount - a.returnedCount;
-          if (returnedDiff) return returnedDiff;
-          return a.parentCompletion - b.parentCompletion;
-        })
-        .slice(0, 5)
-        .map((group) => '<div class="training-exec-rank-item"><div class="training-exec-rank-head"><strong>' + esc(group.parentUnit) + '</strong><span>\u5df2\u9001\u51fa ' + group.submittedCount + ' / ' + group.totalCount + '</span></div>'
-          + buildMiniTrack(group.parentCompletion)
-          + '<div class="training-exec-rank-foot"><span>\u5f85\u8ffd\u8e64 ' + group.followUpCount + '</span><span>\u9000\u56de ' + group.returnedCount + '</span><span>' + group.parentCompletion + '%</span></div></div>')
-        .join('') : '<div class="training-exec-empty">\u76ee\u524d\u5c1a\u7121\u4e00\u7d1a\u55ae\u4f4d\u8cc7\u6599\u3002</div>';
-      const recentUpdatesHtml = recentUpdates.length ? recentUpdates.map((form) => '<a class="training-exec-update-item" href="#training-detail/' + form.id + '"><div class="training-exec-update-copy"><div class="training-exec-update-title">' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + ' / ' + esc(form.unit) + '</div><div class="training-exec-update-meta">' + esc(form.fillerName) + ' / ' + fmtTime(form.updatedAt) + '</div></div><div class="training-exec-update-side">' + trainingStatusBadge(form.status) + '</div></a>').join('') : '<div class="training-exec-empty">\u76ee\u524d\u6c92\u6709\u6700\u65b0\u52d5\u614b\u3002</div>';
-      let heroTitle = '\u6574\u9ad4\u586b\u5831\u7bc0\u594f\u7a69\u5b9a\uff0c\u53ef\u9032\u4e00\u6b65\u6aa2\u8996\u5b8c\u6210\u7387\u8207\u54c1\u8cea\u3002';
-      let heroDesc = '\u512a\u5148\u67e5\u770b\u4f4e\u5b8c\u6210\u7387\u7684\u4e00\u7d1a\u55ae\u4f4d\uff0c\u78ba\u8a8d\u586b\u5831\u9032\u5ea6\u8207\u5be6\u969b\u8a13\u7df4\u8986\u84cb\u662f\u5426\u4e00\u81f4\u3002';
-      if (returnedUnits > 0) {
-        heroTitle = '\u76ee\u524d\u6709 ' + returnedUnits + ' \u500b\u9000\u56de\u55ae\u4f4d\u9700\u512a\u5148\u8655\u7406\u3002';
-        heroDesc = '\u8acb\u5148\u5b8c\u6210\u9000\u56de\u4ef6\u4fee\u6b63\uff0c\u518d\u6536\u6582\u66ab\u5b58\u8207\u672a\u586b\u5831\u55ae\u4f4d\uff0c\u6062\u5fa9\u6574\u9ad4\u586b\u5831\u4fe1\u5fc3\u3002';
-      } else if (draftUnits > 0) {
-        heroTitle = '\u76ee\u524d\u4ecd\u6709 ' + draftUnits + ' \u500b\u55ae\u4f4d\u505c\u7559\u5728\u66ab\u5b58\u3002';
-        heroDesc = '\u5148\u63a8\u9032\u66ab\u5b58\u55ae\u4f4d\u6b63\u5f0f\u9001\u51fa\uff0c\u518d\u56de\u982d\u6aa2\u8996\u4f4e\u5b8c\u6210\u7387\u7fa4\u7d44\u3002';
-      } else if (missingUnits > 0) {
-        heroTitle = '\u76ee\u524d\u4ecd\u6709 ' + missingUnits + ' \u500b\u55ae\u4f4d\u5c1a\u672a\u586b\u5831\u3002';
-        heroDesc = '\u5148\u88dc\u9f4a\u4e00\u7d1a\u8207\u4e8c\u7d1a\u55ae\u4f4d\u586b\u5831\u5730\u5716\uff0c\u518d\u9032\u884c\u6a6b\u5411\u6bd4\u8f03\u3002';
-      }
-      const heroMetrics = [
-        ['\u4eba\u54e1\u5b8c\u6210\u7387', overallCompletion + '%', totalCompletedPeople + ' / ' + totalActivePeople + ' \u4f4d\u5728\u8077\u4eba\u54e1\u5b8c\u6210'],
-        ['\u55ae\u4f4d\u9001\u51fa\u7387', schoolProgress + '%', submittedUnits + ' / ' + latestByUnit.length + ' \u500b\u55ae\u4f4d\u5df2\u9001\u51fa'],
-        ['\u5e73\u5747\u5b8c\u6210\u7387', latestUnitAvgCompletion + '%', '\u4f9d\u5404\u55ae\u4f4d\u6700\u65b0\u7248\u672c\u7d71\u8a08']
-      ].map((entry) => '<div class="training-exec-hero-metric"><div class="training-exec-hero-label">' + entry[0] + '</div><div class="training-exec-hero-value">' + entry[1] + '</div><div class="training-exec-hero-note">' + entry[2] + '</div></div>').join('');
-      const heroTags = [
-        groupInsights.length + ' \u500b\u4e00\u7d1a\u55ae\u4f4d\u7fa4\u7d44',
-        '\u6700\u8fd1\u66f4\u65b0 ' + latestUpdateLabel,
-        pendingUnits + ' \u500b\u55ae\u4f4d\u5f85\u8ffd\u8e64'
-      ].map((text) => '<span class="training-exec-hero-tag">' + esc(text) + '</span>').join('');
-      const signalCards = [
-        ['\u5f85\u8ffd\u8e64\u55ae\u4f4d', pendingUnits, '\u5305\u542b\u66ab\u5b58\u3001\u9000\u56de\u8207\u672a\u586b\u5831\u55ae\u4f4d', 'amber'],
-        ['\u9000\u56de\u55ae\u4f4d', returnedUnits, '\u9700\u4fee\u6b63\u5f8c\u91cd\u65b0\u9001\u51fa', 'red'],
-        ['\u672a\u586b\u5831\u55ae\u4f4d', missingUnits, '\u76ee\u524d\u5c1a\u7121\u586b\u5831\u8cc7\u6599', 'slate'],
-        ['\u66ab\u5b58\u55ae\u4f4d', draftUnits, '\u5df2\u958b\u59cb\u586b\u5831\u4f46\u5c1a\u672a\u6b63\u5f0f\u9001\u51fa', 'blue']
-      ].map((entry) => '<div class="training-exec-signal training-exec-signal--' + entry[3] + '"><div class="training-exec-signal-label">' + entry[0] + '</div><div class="training-exec-signal-value">' + entry[1] + '</div><div class="training-exec-signal-note">' + entry[2] + '</div></div>').join('');
-      const buildChartRow = (label, statusHtml, completionRate, rowClass) => {
-        const safeRate = Math.max(0, Math.min(100, Number(completionRate) || 0));
-        return '<div class="training-chart-row ' + (rowClass || '') + '">'
-          + '<div class="training-chart-label" title="' + esc(label) + '">' + esc(label) + '</div>'
-          + '<div class="training-chart-track"><div class="training-chart-fill" style="width:' + safeRate + '%"></div></div>'
-          + '<div class="training-chart-meta"><div class="training-chart-status">' + statusHtml + '</div><div class="training-chart-rate">' + safeRate + '%</div></div>'
-          + '</div>';
-      };
-      const chartOverviewStats = [
-        ['\u4e00\u7d1a\u55ae\u4f4d\u7fa4\u7d44', groupInsights.length],
-        ['\u5168\u6578\u9001\u51fa', groupInsights.filter((group) => group.totalCount > 0 && group.submittedCount === group.totalCount).length],
-        ['\u5b8c\u6210\u4eba\u6578', totalCompletedPeople + ' / ' + totalActivePeople]
-      ].map((entry) => '<div class="training-chart-overview-stat"><span>' + entry[0] + '</span><strong>' + entry[1] + '</strong></div>').join('');
-      const chartIntro = '<div class="training-chart-overview"><div class="training-chart-overview-copy"><div class="training-chart-kicker">\u5c64\u7d1a\u7e3d\u89bd</div><div class="training-chart-subtitle">\u5148\u770b\u4e00\u7d1a\u55ae\u4f4d\u6574\u9ad4\u9032\u5ea6\uff0c\u518d\u5c55\u958b\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30\u3002</div></div><div class="training-chart-overview-side"><div class="training-chart-overview-stats">' + chartOverviewStats + '</div><div class="training-chart-legend"><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--live"></span>\u5b8c\u6210\u7387</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--submitted"></span>\u5df2\u9001\u51fa</span><span class="training-chart-legend-item"><span class="training-chart-legend-dot training-chart-legend-dot--pending"></span>\u5f85\u8ffd\u8e64</span></div></div></div>';
-      const chartRows = chartIntro + (groupInsights.length ? groupInsights.map((group) => {
-        const childRows = group.children.map((child) => {
-          const childLabel = String((child.parsed && child.parsed.child) || child.unit || '').trim() || group.parentUnit;
-          const childStatus = child.latest ? trainingStatusBadge(child.latest.status) : '<span class="training-inline-status">\u672a\u586b\u5831</span>';
-          return buildChartRow(childLabel, childStatus, child.summary.completionRate || 0, 'training-chart-row--child');
-        }).join('');
-        let parentStatus = '<span class="training-inline-status">\u672a\u586b\u5831</span>';
-        if (group.totalCount > 0 && group.submittedCount === group.totalCount) {
-          parentStatus = trainingStatusBadge(TRAINING_STATUSES.SUBMITTED);
-        } else if (group.returnedCount > 0) {
-          parentStatus = '<span class="training-inline-status">\u9000\u56de ' + group.returnedCount + '/' + group.totalCount + '</span>';
-        } else if (group.submittedCount > 0 || group.draftCount > 0) {
-          parentStatus = '<span class="training-inline-status">\u5df2\u9001\u51fa ' + group.submittedCount + '/' + group.totalCount + '</span>';
-        }
-        const parentRow = buildChartRow(group.parentUnit, parentStatus, group.parentCompletion, 'training-chart-row--parent');
-        const groupPills = '<div class="training-chart-pills">'
-          + '<div class="training-chart-pill"><span class="training-chart-pill-label">\u4e8c\u7d1a\u55ae\u4f4d</span><strong class="training-chart-pill-value">' + group.totalCount + '</strong></div>'
-          + '<div class="training-chart-pill training-chart-pill--success"><span class="training-chart-pill-label">\u5df2\u9001\u51fa</span><strong class="training-chart-pill-value">' + group.submittedCount + '</strong></div>'
-          + '<div class="training-chart-pill training-chart-pill--warning"><span class="training-chart-pill-label">\u5f85\u8ffd\u8e64</span><strong class="training-chart-pill-value">' + group.followUpCount + '</strong></div>'
-          + '<div class="training-chart-pill"><span class="training-chart-pill-label">\u5df2\u5b8c\u6210</span><strong class="training-chart-pill-value">' + group.completedCount + ' / ' + group.activeCount + '</strong></div>'
-          + '</div>';
-        return '<details class="training-chart-group"><summary class="training-chart-group-summary"><div class="training-chart-group-head"><div class="training-chart-group-main"><div class="training-chart-group-kicker">\u4e00\u7d1a\u55ae\u4f4d</div>' + parentRow + '</div><div class="training-chart-group-side">' + groupPills + '<span class="training-chart-toggle">\u5c55\u958b\u660e\u7d30</span></div></div></summary><div class="training-chart-children"><div class="training-chart-children-title">\u4e8c\u7d1a\u55ae\u4f4d</div><div class="training-chart-subgrid-head"><span>\u55ae\u4f4d</span><span>\u5b8c\u6210\u7387</span><span>\u72c0\u614b / \u6bd4\u4f8b</span></div>' + childRows + '</div></details>';
-      }).join('') : '<div class="empty-state" style="padding:24px"><div class="empty-state-title">\u76ee\u524d\u5c1a\u7121\u55ae\u4f4d\u8cc7\u6599</div></div>');
-      dashboardPanel = '<section class="training-exec-shell">'
-        + '<section class="training-exec-hero"><div class="training-exec-hero-grid"><div class="training-exec-hero-copy"><div class="training-exec-hero-kicker">\u6821\u7d1a\u7e3d\u89bd</div><h2 class="training-exec-hero-title">\u6821\u7d1a\u6559\u80b2\u8a13\u7df4\u57f7\u884c\u7e3d\u89bd</h2><p class="training-exec-hero-text">' + heroTitle + '</p><p class="training-exec-hero-subtext">' + heroDesc + '</p><div class="training-exec-hero-tags">' + heroTags + '</div><div class="training-exec-hero-metrics">' + heroMetrics + '</div></div><div class="training-exec-hero-aside"><div class="training-exec-hero-aside-card"><div class="training-exec-hero-aside-label">\u672c\u8f2a\u7126\u9ede</div><div class="training-exec-hero-aside-value">' + pendingUnits + ' \u500b\u55ae\u4f4d\u5f85\u8ffd\u8e64</div><div class="training-exec-hero-aside-copy">\u512a\u5148\u8655\u7406\u9000\u56de\u4ef6\uff0c\u5176\u6b21\u6536\u6582\u66ab\u5b58\u8207\u672a\u586b\u5831\u55ae\u4f4d\uff0c\u518d\u6aa2\u8996\u4f4e\u5b8c\u6210\u7387\u7fa4\u7d44\u3002</div></div><div class="training-exec-hero-orbit"><div class="training-exec-hero-orbit-ring"><span>' + schoolProgress + '%</span><small>\u9001\u51fa\u7387</small></div><div class="training-exec-hero-orbit-caption">\u4eba\u54e1\u5b8c\u6210\u7387 ' + overallCompletion + '%</div></div></div></div></section>'
-        + '<div class="training-exec-signals">' + signalCards + '</div>'
-        + '<div class="training-exec-panels">'
-        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">\u91cd\u9ede\u8ffd\u8e64</div><h3 class="training-exec-panel-title">\u512a\u5148\u8655\u7406\u55ae\u4f4d</h3></div><span class="training-exec-panel-badge">' + focusUnits.length + ' \u9805</span></div><div class="training-exec-list">' + focusUnitsHtml + '</div></div>'
-        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">\u4e00\u7d1a\u55ae\u4f4d</div><h3 class="training-exec-panel-title">\u7fa4\u7d44\u8ffd\u8e64</h3></div><span class="training-exec-panel-badge">' + groupInsights.length + ' \u7fa4</span></div><div class="training-exec-rank-list">' + parentLeaderboardHtml + '</div></div>'
-        + '<div class="training-exec-panel"><div class="training-exec-panel-head"><div><div class="training-exec-panel-kicker">\u6700\u65b0\u52d5\u614b</div><h3 class="training-exec-panel-title">\u6700\u8fd1\u66f4\u65b0</h3></div><span class="training-exec-panel-badge">' + recentUpdates.length + ' \u7b46</span></div><div class="training-exec-update-list">' + recentUpdatesHtml + '</div></div>'
-        + '</div>'
-        + '<div class="card training-chart-card"><div class="card-header"><div><span class="card-title">\u4e00\u7d1a\u55ae\u4f4d\u5b8c\u6210\u7387\u5730\u5716</span><div class="training-table-subtitle">\u9810\u8a2d\u50c5\u986f\u793a\u4e00\u7d1a\u55ae\u4f4d\u6458\u8981\uff0c\u9ede\u64ca\u5361\u7247\u5373\u53ef\u5c55\u958b\u4e8c\u7d1a\u55ae\u4f4d\u660e\u7d30\uff0c\u907f\u514d\u756b\u9762\u904e\u5ea6\u64c1\u64e0\u3002</div></div></div><div class="training-chart">' + chartRows + '</div></div>'
-        + '</section>';
+
+      const completedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED);
+      const incompleteUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED);
+      const completedRows = completedUnits.length ? completedUnits.map((item) => '<tr>'
+        + '<td>' + esc(item.latest.statsUnit || getTrainingStatsUnit(item.unit)) + '</td>'
+        + '<td>' + esc(item.unit) + '</td>'
+        + '<td>' + renderCopyIdCell(item.latest.id, '教育訓練編號', true) + '</td>'
+        + '<td>' + esc(item.latest.fillerName || '—') + '</td>'
+        + '<td>' + (item.summary.activeCount || 0) + '</td>'
+        + '<td>' + (item.summary.completedCount || 0) + '</td>'
+        + '<td>' + (item.summary.incompleteCount || 0) + '</td>'
+        + '<td><span class="training-rate-pill">' + (item.summary.completionRate || 0) + '%</span></td>'
+        + '<td>' + fmtTime(item.latest.submittedAt || item.latest.updatedAt) + '</td>'
+        + '<td>' + buildFormActions(item.latest) + '</td>'
+        + '</tr>').join('') : '<tr><td colspan="10"><div class="empty-state" style="padding:28px"><div class="empty-state-title">目前沒有已完成填報的單位</div></div></td></tr>';
+
+      const incompleteRows = incompleteUnits.length ? incompleteUnits.map((item) => {
+        const latest = item.latest;
+        const statusText = latest ? trainingStatusBadge(latest.status) : '<span class="training-inline-status">尚未填報</span>';
+        const note = !latest
+          ? '尚未建立填報單'
+          : (latest.status === TRAINING_STATUSES.PENDING_SIGNOFF
+            ? '流程一已完成，待列印與上傳簽核表'
+            : (latest.status === TRAINING_STATUSES.RETURNED ? ('退回原因：' + (latest.returnReason || '未提供')) : '尚在填寫中'));
+        return '<tr>'
+          + '<td>' + esc(item.unit) + '</td>'
+          + '<td>' + statusText + '</td>'
+          + '<td>' + (latest ? esc(latest.fillerName || '—') : '—') + '</td>'
+          + '<td>' + (item.summary.activeCount || 0) + '</td>'
+          + '<td>' + (item.summary.completedCount || 0) + '</td>'
+          + '<td><span class="training-rate-pill">' + (item.summary.completionRate || 0) + '%</span></td>'
+          + '<td>' + esc(note) + '</td>'
+          + '<td>' + (latest ? fmtTime(latest.updatedAt) : '—') + '</td>'
+          + '<td>' + buildFormActions(latest) + '</td>'
+          + '</tr>';
+      }).join('') : '<tr><td colspan="9"><div class="empty-state" style="padding:28px"><div class="empty-state-title">所有單位都已完成填報</div></div></td></tr>';
+
+      contentHtml = '<div class="training-dashboard-sections">'
+        + '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">已完成填報</span><div class="training-table-subtitle">填報清單已併入此區，方便直接查看已完成資料與下載。</div></div><span class="training-inline-status">' + completedUnits.length + ' 個單位</span></div><div class="table-wrapper"><table><thead><tr><th>統計單位</th><th>填報單位</th><th>編號</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>未完成</th><th>達成比率</th><th>完成時間</th><th>操作</th></tr></thead><tbody>' + completedRows + '</tbody></table></div></div>'
+        + '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">未完成填報</span><div class="training-table-subtitle">包含尚未填報、暫存、退回更正與待簽核中的單位。</div></div><span class="training-inline-status">' + incompleteUnits.length + ' 個單位</span></div><div class="table-wrapper"><table><thead><tr><th>填報單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + incompleteRows + '</tbody></table></div></div>'
+        + '</div>';
     } else {
-      const visibleFormsRate = summary.total ? Math.round((summary.submitted / summary.total) * 100) : 0;
-      const liteCards = [
-        ['\u53ef\u898b\u586b\u5831', summary.total, '\u4f60\u76ee\u524d\u53ef\u67e5\u770b\u7684\u586b\u5831\u6578\u91cf', 'blue'],
-        ['\u66ab\u5b58', summary.draft, '\u4ecd\u5f85\u6b63\u5f0f\u9001\u51fa', 'amber'],
-        ['\u5df2\u9001\u51fa', summary.submitted, '\u5df2\u5b8c\u6210\u586b\u5831\u6d41\u7a0b', 'green'],
-        ['\u9001\u51fa\u7387', visibleFormsRate + '%', '\u4f9d\u53ef\u898b\u586b\u5831\u8a08\u7b97', 'slate']
-      ].map((entry) => '<div class="training-lite-card training-lite-card--' + entry[3] + '"><div class="training-lite-label">' + entry[0] + '</div><div class="training-lite-value">' + entry[1] + '</div><div class="training-lite-note">' + entry[2] + '</div></div>').join('');
-      dashboardPanel = '<section class="training-lite-shell"><div class="training-lite-header"><div><div class="training-exec-panel-kicker">\u7e3d\u89bd</div><h2 class="training-lite-title">\u500b\u4eba\u53ef\u898b\u7bc4\u570d\u6458\u8981</h2></div><div class="training-lite-updated">\u66f4\u65b0\u6642\u9593 ' + latestUpdateLabel + '</div></div><div class="training-lite-grid">' + liteCards + '</div></section>';
+      const rows = visibleForms.length ? visibleForms.map((form) => {
+        const formSummary = form.summary || computeTrainingSummary(form.records || []);
+        return '<tr>'
+          + '<td>' + renderCopyIdCell(form.id, '教育訓練編號', true) + '</td>'
+          + '<td>' + esc(form.unit) + '</td>'
+          + '<td>' + trainingStatusBadge(form.status) + '</td>'
+          + '<td>' + (formSummary.activeCount || 0) + '</td>'
+          + '<td>' + (formSummary.completedCount || 0) + '</td>'
+          + '<td><span class="training-rate-pill">' + (formSummary.completionRate || 0) + '%</span></td>'
+          + '<td>' + fmtTime(form.updatedAt) + '</td>'
+          + '<td>' + buildFormActions(form) + '</td>'
+          + '</tr>';
+      }).join('') : '<tr><td colspan="8"><div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無填報單</div><div class="empty-state-desc">可先建立草稿，完成流程一後再進入簽核。</div></div></td></tr>';
+      contentHtml = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">我的填報單</span><div class="training-table-subtitle">流程一完成後內容會鎖定，後續請在詳情頁完成列印與簽核上傳。</div></div></div><div class="table-wrapper"><table><thead><tr><th>編號</th><th>填報單位</th><th>狀態</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     }
 
     document.getElementById('app').innerHTML = '<div class="animate-in training-dashboard-page">'
-      + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">Executive view for submission rhythm, unit completion, and training gaps.</p></div>' + toolbar + '</div>'
-      + dashboardPanel
-      + '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">填報清單</span><div class="training-table-subtitle">Keep the operational list below the dashboard so the first screen stays focused on decisions, not rows.</div></div></div><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>統計單位</th><th>填報單位</th><th>填報人</th><th>狀態</th><th>在職</th><th>已完成</th><th>未完成</th><th>完成率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>'
+      + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">依流程一填報、流程二列印、流程三上傳簽核表完成整體申報。</p></div>' + toolbar + '</div>'
+      + '<div class="stats-grid">'
+      + '<div class="stat-card total"><div class="stat-icon">' + ic('graduation-cap') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">填報單數</div></div>'
+      + '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + summary.submitted + '</div><div class="stat-label">已完成填報</div></div>'
+      + '<div class="stat-card pending"><div class="stat-icon">' + ic('clock-3') + '</div><div class="stat-value">' + summary.pending + '</div><div class="stat-label">待簽核</div></div>'
+      + '<div class="stat-card overdue"><div class="stat-icon">' + ic('rotate-ccw') + '</div><div class="stat-value">' + (summary.draft + summary.returned) + '</div><div class="stat-label">待補件 / 草稿</div></div>'
+      + '</div>'
+      + contentHtml
       + '</div>';
 
-    document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(forms));
+    document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(visibleForms));
     refreshIcons();
     bindCopyButtons();
   }
@@ -3974,7 +3975,7 @@ function renderTracking(id) {
   function buildTrainingFillPage(params) {
     const { existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user } = params;
     return '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">僅統計在職人員；資訊人員需同時完成通識與專業課程。進度可先暫存，正式送出後即鎖定。</p></div><div class="training-toolbar-actions"><button type="button" class="btn btn-secondary" id="training-print-draft">' + ic('printer', 'icon-sm') + ' 列印簽核表</button><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
+      + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">此頁為流程一：逐人填報教育訓練完成情形。送出後即鎖定，後續請至詳情頁列印並上傳簽核表。</p></div><div class="training-toolbar-actions"><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
       + (existing && existing.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(existing.returnReason || '未提供') + '</div>' : '')
       + (takeoverDraft ? '<div class="training-return-banner">' + ic('user-cog', 'icon-sm') + ' 此草稿原填報人為 ' + esc(existing.fillerName || '未指定') + '，本次儲存後將改由目前單位管理員 ' + esc(user.name) + ' 接手填報。</div>' : '')
       + '<div class="training-editor-layout">'
@@ -3983,24 +3984,22 @@ function renderTracking(id) {
       + '<div class="section-header">' + ic('info', 'icon-sm') + ' 基本資訊</div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計單位（一級）</label><input type="text" class="form-input" id="tr-stats-unit" value="' + esc(existing?.statsUnit || getTrainingStatsUnit(unitValue)) + '" readonly></div><div class="form-group"><label class="form-label form-required">填報單位</label>' + buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true) + '</div></div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
-      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="填報人可新增名單外人員，但不可刪除管理者匯入名單。" readonly></div></div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填表日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="流程一完成後不可再自行修改，將改由詳情頁進入簽核流程。" readonly></div></div>'
       + '<div class="section-header">' + ic('users', 'icon-sm') + ' 人員清單</div>'
-      + '<div class="training-editor-note">請逐人選擇在職狀態與課程完成情形。只有正式送出時會鎖定；若被退回，可繼續修正後重送。</div>'
-      + '<div class="training-draft-status" id="training-draft-status">' + (existing ? (existing.status === TRAINING_STATUSES.DRAFT ? ('\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)) : (existing.status === TRAINING_STATUSES.RETURNED ? ('\u9000\u56de\u7248\u672c\u6700\u5f8c\u66f4\u65b0\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)) : ('\u6700\u5f8c\u66f4\u65b0\uff1a' + fmtTime(existing.updatedAt || existing.createdAt)))) : '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f') + '</div>'
+      + '<div class="training-editor-note">可先多選人員，再一次套用相同在職狀態與' + TRAINING_GENERAL_LABEL + '完成情形。' + TRAINING_PROFESSIONAL_LABEL + '僅在' + TRAINING_INFO_STAFF_LABEL + '為「是」時需要填寫。</div>'
+      + '<div class="training-draft-status" id="training-draft-status">' + (existing ? (existing.status === TRAINING_STATUSES.DRAFT ? ('草稿上次儲存：' + fmtTime(existing.updatedAt || existing.createdAt)) : ('退回版本最後更新：' + fmtTime(existing.updatedAt || existing.createdAt))) : '尚未建立草稿') + '</div>'
       + '<div class="training-editor-toolbar"><label class="training-search-box"><span class="training-search-icon">' + ic('search', 'icon-sm') + '</span><input type="search" class="form-input" id="training-search" placeholder="搜尋姓名、本職單位、職稱"></label><label class="training-inline-check"><input type="checkbox" id="training-only-focus"> 只看未完成或未填</label></div>'
       + '<div id="training-summary" class="training-summary-grid training-summary-grid-wide"></div>'
+      + '<div class="training-bulk-bar"><div class="training-bulk-count" id="training-selected-count">尚未選取人員</div><div class="training-bulk-controls"><select class="form-select" id="training-bulk-status"><option value="">套用在職狀態</option>' + TRAINING_EMPLOYEE_STATUS.map((status) => '<option value="' + esc(status) + '">' + esc(status) + '</option>').join('') + '</select><div class="training-bulk-general"><span>' + TRAINING_GENERAL_LABEL + '</span><div class="training-binary-group"><button type="button" class="training-binary-btn" data-bulk-general="是">✓</button><button type="button" class="training-binary-btn" data-bulk-general="否">✕</button></div></div><button type="button" class="btn btn-secondary" id="training-apply-bulk">' + ic('check-circle-2', 'icon-sm') + ' 套用到所選人員</button></div></div>'
       + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
-      + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:68px">序號</th><th style="width:160px">姓名 / 來源</th><th style="min-width:160px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:130px">在職狀態</th><th style="width:130px">資安通識</th><th style="width:150px">資訊人員(含委外)</th><th style="width:140px">資安專業課程</th><th style="width:130px">判定</th><th style="min-width:220px">備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
-      + '<div class="section-header" style="margin-top:18px">' + ic('paperclip', 'icon-sm') + ' 上傳簽核後掃描檔</div>'
-      + '<div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div>'
-      + '<div class="file-preview-list" id="training-file-previews"></div>'
-      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('send', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
+      + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
+      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('lock', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
       + '</form></div>'
       + '</div>'
       + '</div>';
   }
 
-function renderTrainingFill(id) {
+  function renderTrainingFill(id) {
     if (!canFillTraining()) {
       navigate('training');
       return;
@@ -4019,78 +4018,50 @@ function renderTrainingFill(id) {
       return;
     }
     if (existing && !canEditTrainingForm(existing)) {
-      toast('此填報單已正式送出，需由管理者退回後才可修改', 'error');
+      toast('流程一已完成並鎖定，請改至詳情頁繼續簽核流程', 'error');
       navigate('training-detail/' + existing.id);
       return;
     }
 
-    const units = getTrainingUnits().slice();
-    getAuthorizedUnits(user).forEach((unit) => { if (unit && !units.includes(unit)) units.push(unit); });
-    if (existing?.unit && !units.includes(existing.unit)) units.push(existing.unit);
-    units.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
-
-    const unitValue = existing ? existing.unit : (isAdmin() ? (user.unit || units[0] || '') : (getScopedUnit(user) || user.unit));
+    const unitValue = existing ? existing.unit : (isAdmin() ? (user.unit || getTrainingUnits()[0] || '') : (getScopedUnit(user) || user.unit));
     const isUnitLocked = !!existing || !isAdmin();
     const takeoverDraft = !!(existing && existing.fillerUsername && existing.fillerUsername !== user.username && isUnitAdmin());
     let rowsState = mergeTrainingRows(unitValue, existing ? (existing.records || []) : []);
-    let signedFiles = existing ? [...(existing.signedFiles || [])] : [];
-    const submitLabel = existing && existing.status === TRAINING_STATUSES.RETURNED ? '更正後正式送出' : '正式送出';
+    const selectedKeys = new Set();
+    let bulkGeneralValue = '';
+    const submitLabel = existing && existing.status === TRAINING_STATUSES.RETURNED ? '完成更正並進入簽核' : '完成流程一並進入簽核';
 
     document.getElementById('app').innerHTML = buildTrainingFillPage({ existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user });
 
-    applyTestIds({
-      'tr-stats-unit': 'training-stats-unit',
-      'tr-phone': 'training-phone',
-      'tr-email': 'training-email',
-      'tr-year': 'training-year',
-      'tr-date': 'training-date',
-      'training-search': 'training-search',
-      'training-only-focus': 'training-only-focus',
-      'tr-new-name': 'training-new-name',
-      'tr-new-unit-name': 'training-new-unit-name',
-      'tr-new-identity': 'training-new-identity',
-      'tr-new-job-title': 'training-new-job-title',
-      'training-add-person': 'training-add-person',
-      'training-upload-zone': 'training-upload-zone',
-      'training-file-input': 'training-file-input'
-    });
-    applySelectorTestIds([
-      { selector: '#training-form button[type="submit"]', testId: 'training-submit' }
-    ]);
     const trainingForm = document.getElementById('training-form');
     const trainingFeedback = document.getElementById('training-feedback');
     const trainingDraftStatus = document.getElementById('training-draft-status');
 
+    function getRowKey(row, index) {
+      return row.rosterId ? ('roster:' + row.rosterId) : ('row:' + index + ':' + row.name);
+    }
+
     function setTrainingFeedback(state, title, details) {
-      if (!trainingFeedback) return;
       const lines = Array.isArray(details) ? details.filter(Boolean) : [];
       trainingFeedback.dataset.state = state || 'info';
       trainingFeedback.hidden = false;
-      trainingFeedback.innerHTML = `<div class="form-feedback-title">${esc(title || '')}</div>${lines.length ? `<div class="form-feedback-list">${lines.map((line) => `<span>${esc(line)}</span>`).join('')}</div>` : ''}`;
+      trainingFeedback.innerHTML = '<div class="form-feedback-title">' + esc(title || '') + '</div>' + (lines.length ? '<div class="form-feedback-list">' + lines.map((line) => '<span>' + esc(line) + '</span>').join('') + '</div>' : '');
     }
 
     function clearTrainingFeedback() {
-      if (!trainingFeedback) return;
       trainingFeedback.hidden = true;
       trainingFeedback.dataset.state = 'idle';
       trainingFeedback.innerHTML = '';
     }
 
     function updateTrainingDraftStatus(item) {
-      if (!trainingDraftStatus) return;
-      if (item && item.status === TRAINING_STATUSES.DRAFT) {
-        trainingDraftStatus.textContent = `\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a${fmtTime(item.updatedAt || item.createdAt)}`;
-        trainingDraftStatus.classList.add('is-saved');
-      } else if (item && item.status === TRAINING_STATUSES.RETURNED) {
-        trainingDraftStatus.textContent = `\u9000\u56de\u7248\u672c\u6700\u5f8c\u66f4\u65b0\uff1a${fmtTime(item.updatedAt || item.createdAt)}`;
-        trainingDraftStatus.classList.add('is-saved');
-      } else if (item) {
-        trainingDraftStatus.textContent = `\u6700\u5f8c\u66f4\u65b0\uff1a${fmtTime(item.updatedAt || item.createdAt)}`;
-        trainingDraftStatus.classList.add('is-saved');
-      } else {
-        trainingDraftStatus.textContent = '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f';
+      if (!item) {
+        trainingDraftStatus.textContent = '尚未建立草稿';
         trainingDraftStatus.classList.remove('is-saved');
+        return;
       }
+      trainingDraftStatus.textContent = (item.status === TRAINING_STATUSES.RETURNED ? '退回版本最後更新：' : '草稿上次儲存：') + fmtTime(item.updatedAt || item.createdAt);
+      trainingDraftStatus.classList.add('is-saved');
     }
 
     function syncStatsUnitField(unit) {
@@ -4098,8 +4069,15 @@ function renderTrainingFill(id) {
     }
 
     function renderSummary() {
-      const summary = computeTrainingSummary(rowsState);
-      document.getElementById('training-summary').innerHTML = buildTrainingSummaryCards(summary);
+      document.getElementById('training-summary').innerHTML = buildTrainingSummaryCards(computeTrainingSummary(rowsState));
+    }
+
+    function updateBulkSelectionText() {
+      const count = selectedKeys.size;
+      document.getElementById('training-selected-count').textContent = count ? ('已選取 ' + count + ' 位人員') : '尚未選取人員';
+      document.querySelectorAll('[data-bulk-general]').forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.bulkGeneral === bulkGeneralValue);
+      });
     }
 
     function getFilteredRows() {
@@ -4107,9 +4085,8 @@ function renderTrainingFill(id) {
       const focusOnly = !!document.getElementById('training-only-focus')?.checked;
       return rowsState.map((row, index) => ({ row, index })).filter(({ row }) => {
         const haystack = [row.name, row.unitName, row.identity, row.jobTitle].join(' ').toLowerCase();
-        const keywordMatch = !keyword || haystack.includes(keyword);
-        const focusMatch = !focusOnly || !isTrainingRecordComplete(row) || !isTrainingRecordReadyForSubmit(row);
-        return keywordMatch && focusMatch;
+        return (!keyword || haystack.includes(keyword))
+          && (!focusOnly || !isTrainingRecordComplete(row) || !isTrainingRecordReadyForSubmit(row));
       });
     }
 
@@ -4117,33 +4094,48 @@ function renderTrainingFill(id) {
       const body = document.getElementById('training-rows-body');
       const visibleRows = getFilteredRows();
       if (!rowsState.length) {
-        body.innerHTML = '<tr><td colspan="11"><div class="empty-state" style="padding:28px"><div class="empty-state-title">此單位尚未建立名單</div><div class="empty-state-desc">請由管理者匯入名單，或由填報人新增名單外人員。</div></div></td></tr>';
+        body.innerHTML = '<tr><td colspan="12"><div class="empty-state" style="padding:28px"><div class="empty-state-title">此單位尚未建立名單</div><div class="empty-state-desc">請由管理者匯入名單，或由填報人新增名單外人員。</div></div></td></tr>';
         renderSummary();
+        updateBulkSelectionText();
         return;
       }
       if (!visibleRows.length) {
-        body.innerHTML = '<tr><td colspan="11"><div class="empty-state" style="padding:28px"><div class="empty-state-title">沒有符合條件的人員</div><div class="empty-state-desc">請調整搜尋條件或取消「只看未完成或未填」。</div></div></td></tr>';
+        body.innerHTML = '<tr><td colspan="12"><div class="empty-state" style="padding:28px"><div class="empty-state-title">沒有符合條件的人員</div><div class="empty-state-desc">請調整搜尋條件或取消「只看未完成或未填」。</div></div></td></tr>';
         renderSummary();
+        updateBulkSelectionText();
         return;
       }
 
       body.innerHTML = visibleRows.map(({ row, index }, visibleIndex) => {
-        const professionalValue = row.isInfoStaff === '否' ? '無須' : (row.completedProfessional || '');
-        const professionalDisabled = row.status !== '在職' || row.isInfoStaff !== '是';
+        const key = getRowKey(row, index);
+        const isActive = row.status === '在職';
+        const professionalDisabled = !isActive || row.isInfoStaff !== '是';
+        const professionalHtml = row.isInfoStaff === '否'
+          ? '<span class="training-na-chip">不適用</span>'
+          : renderTrainingBinaryButtons('completedProfessional', row.completedProfessional, index, professionalDisabled, '✓', '✕');
         return '<tr>'
+          + '<td><input type="checkbox" class="training-row-check" data-key="' + esc(key) + '" ' + (selectedKeys.has(key) ? 'checked' : '') + '></td>'
           + '<td>' + (visibleIndex + 1) + '</td>'
           + '<td><div class="training-person-cell"><div class="training-person-name">' + esc(row.name) + '</div><span class="training-source-tag ' + (row.source === 'import' ? 'import' : 'manual') + '">' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</span></div></td>'
           + '<td>' + esc(row.unitName || '—') + '</td>'
           + '<td>' + esc(row.identity || '—') + '</td>'
           + '<td>' + esc(row.jobTitle || '—') + '</td>'
           + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="status">' + trainingSelectOptionsHtml(TRAINING_EMPLOYEE_STATUS, row.status, '請選擇') + '</select></td>'
-          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="completedGeneral" ' + (row.status === '在職' ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_OPTIONS, row.completedGeneral, '請選擇') + '</select></td>'
-          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="isInfoStaff" ' + (row.status === '在職' ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_OPTIONS, row.isInfoStaff, '請選擇') + '</select></td>'
-          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="completedProfessional" ' + (professionalDisabled ? 'disabled' : '') + '>' + trainingSelectOptionsHtml(TRAINING_PROFESSIONAL_OPTIONS, professionalValue, '請選擇') + '</select></td>'
+          + '<td>' + renderTrainingBinaryButtons('completedGeneral', row.completedGeneral, index, !isActive, '✓', '✕') + '</td>'
+          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="isInfoStaff" ' + (isActive ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_OPTIONS, row.isInfoStaff, '請選擇') + '</select></td>'
+          + '<td>' + professionalHtml + '</td>'
           + '<td><div class="training-cell-note">' + trainingDecisionBadge(row) + '<div class="training-cell-hint">' + esc(getTrainingRecordHint(row)) + '</div></div></td>'
           + '<td><input type="text" class="form-input training-row-note" data-idx="' + index + '" value="' + esc(row.note || '') + '" placeholder="可填補充說明或課程名稱"></td>'
           + '</tr>';
       }).join('');
+
+      body.querySelectorAll('.training-row-check').forEach((checkbox) => {
+        checkbox.addEventListener('change', (event) => {
+          const key = event.target.dataset.key;
+          if (event.target.checked) selectedKeys.add(key); else selectedKeys.delete(key);
+          updateBulkSelectionText();
+        });
+      });
 
       body.querySelectorAll('.training-row-select').forEach((element) => {
         element.addEventListener('change', (event) => {
@@ -4155,14 +4147,7 @@ function renderTrainingFill(id) {
             row.isInfoStaff = '';
             row.completedProfessional = '';
           }
-          if (field === 'isInfoStaff') {
-            if (row.isInfoStaff === '否') row.completedProfessional = '無須';
-            if (row.isInfoStaff === '是' && row.completedProfessional === '無須') row.completedProfessional = '';
-            if (!row.isInfoStaff) row.completedProfessional = '';
-          }
-          if (field === 'completedProfessional' && row.isInfoStaff !== '是') {
-            row.completedProfessional = row.isInfoStaff === '否' ? '無須' : '';
-          }
+          if (field === 'isInfoStaff' && row.isInfoStaff !== '是') row.completedProfessional = '';
           rowsState[Number(event.target.dataset.idx)] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
           renderRows();
         });
@@ -4174,59 +4159,35 @@ function renderTrainingFill(id) {
         });
       });
 
-      renderSummary();
-    }
-
-    function renderSignedFiles() {
-      const wrap = document.getElementById('training-file-previews');
-      if (!signedFiles.length) {
-        wrap.innerHTML = '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>';
-        return;
-      }
-      wrap.innerHTML = signedFiles.map((file, index) => {
-        const preview = file.type && file.type.startsWith('image/') ? '<img src="' + file.data + '" alt="' + esc(file.name) + '">' : '<div class="file-pdf-icon">' + ic('file-box') + '</div>';
-        return '<div class="file-preview-item">' + preview + '<div class="file-name">' + esc(file.name) + '</div><button type="button" class="file-remove" data-idx="' + index + '">✕</button></div>';
-      }).join('');
-      wrap.querySelectorAll('.file-remove').forEach((button) => {
-        button.addEventListener('click', (event) => {
-          signedFiles.splice(Number(event.target.dataset.idx), 1);
-          renderSignedFiles();
+      body.querySelectorAll('.training-binary-btn[data-field]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const idx = Number(button.dataset.idx);
+          const row = rowsState[idx];
+          if (!row) return;
+          const field = button.dataset.field;
+          const value = button.dataset.value;
+          row[field] = row[field] === value ? '' : value;
+          if (field === 'completedProfessional' && row.isInfoStaff !== '是') row.completedProfessional = '';
+          rowsState[idx] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
+          renderRows();
         });
       });
-      refreshIcons();
-    }
 
-    function handleFiles(files) {
-      Array.from(files).forEach((file) => {
-        if (file.size > 5 * 1024 * 1024) {
-          toast('「' + file.name + '」超過 5MB', 'error');
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          signedFiles.push({ name: file.name, type: file.type, data: evt.target.result });
-          renderSignedFiles();
-        };
-        reader.readAsDataURL(file);
-      });
+      const visibleKeys = visibleRows.map(({ row, index }) => getRowKey(row, index));
+      const allVisibleSelected = visibleKeys.length && visibleKeys.every((key) => selectedKeys.has(key));
+      document.getElementById('training-select-all').checked = !!allVisibleSelected;
+      renderSummary();
+      updateBulkSelectionText();
     }
 
     function collectRecords() {
+      const unit = document.getElementById('tr-unit').value;
       return rowsState.map((row) => normalizeTrainingRecordRow({
-        rosterId: row.rosterId || null,
-        unit: document.getElementById('tr-unit').value,
-        statsUnit: getTrainingStatsUnit(document.getElementById('tr-unit').value),
-        name: row.name,
-        unitName: row.unitName,
-        identity: row.identity,
-        jobTitle: row.jobTitle,
-        source: row.source || 'manual',
-        status: row.status,
-        completedGeneral: row.completedGeneral,
-        isInfoStaff: row.isInfoStaff,
-        completedProfessional: row.isInfoStaff === '否' ? '無須' : row.completedProfessional,
-        note: row.note || ''
-      }, document.getElementById('tr-unit').value));
+        ...row,
+        unit,
+        statsUnit: getTrainingStatsUnit(unit),
+        completedProfessional: row.isInfoStaff === '是' ? row.completedProfessional : ''
+      }, unit));
     }
 
     function validateSubmitPayload(records) {
@@ -4235,117 +4196,125 @@ function renderTrainingFill(id) {
       const email = document.getElementById('tr-email').value.trim();
       const year = document.getElementById('tr-year').value.trim();
       const fillDate = document.getElementById('tr-date').value;
-      if (!unit) return { message: '\u8acb\u5148\u9078\u64c7\u586b\u5831\u55ae\u4f4d', field: document.getElementById('tr-unit') };
-      if (!phone) return { message: '\u8acb\u586b\u5beb\u806f\u7d61\u96fb\u8a71', field: document.getElementById('tr-phone') };
-      if (!email) return { message: '\u8acb\u586b\u5beb\u806f\u7d61\u4fe1\u7bb1', field: document.getElementById('tr-email') };
-      if (!/^.+@.+\..+$/.test(email)) return { message: '\u806f\u7d61\u4fe1\u7bb1\u683c\u5f0f\u4e0d\u6b63\u78ba', field: document.getElementById('tr-email') };
-      if (!year) return { message: '\u8acb\u586b\u5beb\u8a13\u7df4\u5e74\u5ea6', field: document.getElementById('tr-year') };
-      if (!fillDate) return { message: '\u8acb\u586b\u5beb\u586b\u5831\u65e5\u671f', field: document.getElementById('tr-date') };
-      if (!records.length) return { message: '\u81f3\u5c11\u9700\u8981\u4e00\u7b46\u53d7\u8a13\u4eba\u54e1\u8cc7\u6599', field: document.getElementById('training-add-person') };
-      if (!signedFiles.length) return { message: '\u6b63\u5f0f\u9001\u51fa\u524d\u8acb\u4e0a\u50b3\u5df2\u7c3d\u6838\u9644\u4ef6', field: document.getElementById('training-upload-zone') };
+      if (!unit) return { message: '請先選擇填報單位', field: document.getElementById('tr-unit') };
+      if (!phone) return { message: '請填寫聯絡電話', field: document.getElementById('tr-phone') };
+      if (!email) return { message: '請填寫聯絡信箱', field: document.getElementById('tr-email') };
+      if (!/^.+@.+\..+$/.test(email)) return { message: '聯絡信箱格式不正確', field: document.getElementById('tr-email') };
+      if (!year) return { message: '請填寫統計年度', field: document.getElementById('tr-year') };
+      if (!fillDate) return { message: '請填寫填表日期', field: document.getElementById('tr-date') };
+      if (!records.length) return { message: '至少需要一筆受訓人員資料', field: document.getElementById('training-add-person') };
       const invalid = records.find((record) => !isTrainingRecordReadyForSubmit(record));
-      if (invalid) return { message: `\u8acb\u5148\u5b8c\u6210 ${invalid.name || '\u53d7\u8a13\u4eba\u54e1'} \u7684\u8a13\u7df4\u6b04\u4f4d`, field: document.getElementById('training-rows-body') };
+      if (invalid) return { message: '請先完成 ' + (invalid.name || '受訓人員') + ' 的訓練欄位', field: document.getElementById('training-rows-body') };
       return null;
     }
 
     function saveTrainingForm(targetStatus) {
       const now = new Date().toISOString();
-      const unitValue = document.getElementById('tr-unit').value;
+      const currentUnit = document.getElementById('tr-unit').value;
       const trainingYearValue = document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911);
       const fillDateValue = document.getElementById('tr-date').value;
-      const formId = existing ? existing.id : generateTrainingFormId(unitValue, trainingYearValue, fillDateValue);
+      const formId = existing ? existing.id : generateTrainingFormId(currentUnit, trainingYearValue, fillDateValue);
       const records = collectRecords();
-      const summary = computeTrainingSummary(records);
-      debugFlow('training', targetStatus === TRAINING_STATUSES.SUBMITTED ? 'submit start' : 'draft save start', { id: existing?.id || null, unit: unitValue, records: records.length });
-      setTrainingFeedback('info', targetStatus === TRAINING_STATUSES.SUBMITTED ? '\u6b63\u5728\u6aa2\u67e5\u6559\u80b2\u8a13\u7df4\u8cc7\u6599' : '\u6b63\u5728\u66ab\u5b58\u6559\u80b2\u8a13\u7df4\u8349\u7a3f', [targetStatus === TRAINING_STATUSES.SUBMITTED ? '\u6aa2\u6838\u806f\u7d61\u8cc7\u6599\u3001\u53d7\u8a13\u540d\u55ae\u8207\u7c3d\u6838\u9644\u4ef6\u3002' : '\u4fdd\u7559\u76ee\u524d\u7de8\u4fee\u5167\u5bb9\uff0c\u7a0d\u5f8c\u53ef\u56de\u4f86\u7e7c\u7e8c\u586b\u5beb\u3002']);
-      if (targetStatus === TRAINING_STATUSES.SUBMITTED) {
+      if (targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF) {
         const validationError = validateSubmitPayload(records);
         if (validationError) {
-          debugFlow('training', 'submit blocked', { message: validationError.message });
-          setTrainingFeedback('error', validationError.message, ['\u6b63\u5f0f\u9001\u51fa\u524d\uff0c\u8acb\u88dc\u9f4a\u806f\u7d61\u8cc7\u6599\u3001\u53d7\u8a13\u72c0\u614b\u8207\u7c3d\u6838\u9644\u4ef6\u3002']);
+          setTrainingFeedback('error', validationError.message, ['流程一完成前，請先補齊聯絡資訊與人員欄位。']);
           toast(validationError.message, 'error');
-          if (validationError.field && typeof validationError.field.scrollIntoView === 'function') validationError.field.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          if (validationError.field && typeof validationError.field.focus === 'function') validationError.field.focus();
           return;
         }
       }
-      const nextStatus = targetStatus === TRAINING_STATUSES.SUBMITTED ? TRAINING_STATUSES.SUBMITTED : ((existing && existing.status === TRAINING_STATUSES.RETURNED) ? TRAINING_STATUSES.RETURNED : TRAINING_STATUSES.DRAFT);
       const history = [...(existing?.history || [])];
       if (takeoverDraft) history.push({ time: now, action: '單位管理員接手編修草稿，填報人改為目前編修者', user: user.name });
-      history.push({ time: now, action: targetStatus === TRAINING_STATUSES.SUBMITTED ? '正式送出教育訓練統計' : '儲存教育訓練統計暫存', user: user.name });
+      history.push({ time: now, action: targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF ? '完成流程一並鎖定填報內容' : '儲存教育訓練統計暫存', user: user.name });
       upsertTrainingForm({
         id: formId,
-        unit: unitValue,
-        statsUnit: getTrainingStatsUnit(unitValue),
+        unit: currentUnit,
+        statsUnit: getTrainingStatsUnit(currentUnit),
         fillerName: user.name,
         fillerUsername: user.username,
         submitterPhone: document.getElementById('tr-phone').value.trim(),
         submitterEmail: document.getElementById('tr-email').value.trim(),
         fillDate: fillDateValue,
         trainingYear: trainingYearValue,
-        status: nextStatus,
+        status: targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF ? TRAINING_STATUSES.PENDING_SIGNOFF : ((existing && existing.status === TRAINING_STATUSES.RETURNED) ? TRAINING_STATUSES.RETURNED : TRAINING_STATUSES.DRAFT),
         records,
-        summary,
-        signedFiles,
-        returnReason: targetStatus === TRAINING_STATUSES.SUBMITTED ? '' : (existing?.returnReason || ''),
+        summary: computeTrainingSummary(records),
+        signedFiles: existing?.signedFiles || [],
+        returnReason: targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF ? '' : (existing?.returnReason || ''),
         createdAt: existing?.createdAt || now,
         updatedAt: now,
-        submittedAt: targetStatus === TRAINING_STATUSES.SUBMITTED ? now : (existing?.submittedAt || null),
+        stepOneSubmittedAt: targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF ? now : (existing?.stepOneSubmittedAt || null),
+        printedAt: existing?.printedAt || null,
+        signoffUploadedAt: existing?.signoffUploadedAt || null,
+        submittedAt: existing?.submittedAt || null,
         history
       });
-      toast(targetStatus === TRAINING_STATUSES.SUBMITTED ? ('填報單 ' + formId + ' 已正式送出') : ('填報單 ' + formId + ' 已儲存暫存'));
       existing = getTrainingForm(formId) || existing;
       updateTrainingDraftStatus(existing);
-      if (targetStatus === TRAINING_STATUSES.SUBMITTED) {
-        debugFlow('training', 'submit success', { id: formId, unit: existing?.unit || unitValue, status: existing?.status || TRAINING_STATUSES.SUBMITTED });
-        setTrainingFeedback('success', `\u6559\u80b2\u8a13\u7df4 ${formId} \u5df2\u6b63\u5f0f\u9001\u51fa`, ['\u7cfb\u7d71\u5df2\u5132\u5b58\u540d\u55ae\u8207\u7c3d\u6838\u9644\u4ef6\uff0c\u5373\u5c07\u5207\u63db\u81f3\u8a73\u60c5\u9801\u3002']);
+      if (targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF) {
+        toast('填報單 ' + formId + ' 已完成流程一並鎖定');
         navigate('training-detail/' + formId);
         return;
       }
-      debugFlow('training', 'draft saved', { id: formId, unit: existing?.unit || unitValue, status: existing?.status || TRAINING_STATUSES.DRAFT });
-      setTrainingFeedback('success', `\u8349\u7a3f ${formId} \u5df2\u66ab\u5b58`, ['\u9801\u9762\u6703\u4fdd\u6301\u5728\u76ee\u524d\u7de8\u4fee\u72c0\u614b\uff0c\u53ef\u76f4\u63a5\u7e7c\u7e8c\u4fee\u6539\u3002']);
+      toast('填報單 ' + formId + ' 已儲存暫存');
       navigate('training-fill/' + formId, { replace: true });
     }
 
-    document.getElementById('training-form').addEventListener('submit', (event) => {
-      event.preventDefault();
-      saveTrainingForm(TRAINING_STATUSES.SUBMITTED);
-    });
     document.getElementById('training-save-draft').addEventListener('click', () => saveTrainingForm(TRAINING_STATUSES.DRAFT));
-    document.getElementById('training-print-draft').addEventListener('click', () => {
-      const currentRecords = collectRecords();
-      printTrainingSheet({
-        unit: document.getElementById('tr-unit').value,
-        statsUnit: getTrainingStatsUnit(document.getElementById('tr-unit').value),
-        fillerName: user.name,
-        submitterPhone: document.getElementById('tr-phone').value.trim(),
-        submitterEmail: document.getElementById('tr-email').value.trim(),
-        fillDate: document.getElementById('tr-date').value,
-        trainingYear: document.getElementById('tr-year').value.trim(),
-        records: currentRecords,
-        summary: computeTrainingSummary(currentRecords)
-      });
+    trainingForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      saveTrainingForm(TRAINING_STATUSES.PENDING_SIGNOFF);
     });
-
-    initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });
-    if (!isUnitLocked) {
-      document.getElementById('tr-unit').addEventListener('change', (event) => {
-        syncStatsUnitField(event.target.value);
-        rowsState = mergeTrainingRows(event.target.value, rowsState);
-        renderRows();
-      });
-    }
-
     document.getElementById('training-search').addEventListener('input', renderRows);
     document.getElementById('training-only-focus').addEventListener('change', renderRows);
     trainingForm.addEventListener('input', clearTrainingFeedback);
     trainingForm.addEventListener('change', clearTrainingFeedback);
+    document.getElementById('training-select-all').addEventListener('change', (event) => {
+      getFilteredRows().forEach(({ row, index }) => {
+        const key = getRowKey(row, index);
+        if (event.target.checked) selectedKeys.add(key); else selectedKeys.delete(key);
+      });
+      renderRows();
+    });
+    document.querySelectorAll('[data-bulk-general]').forEach((button) => {
+      button.addEventListener('click', () => {
+        bulkGeneralValue = bulkGeneralValue === button.dataset.bulkGeneral ? '' : button.dataset.bulkGeneral;
+        updateBulkSelectionText();
+      });
+    });
+    document.getElementById('training-apply-bulk').addEventListener('click', () => {
+      if (!selectedKeys.size) {
+        toast('請先選取要套用的人員', 'error');
+        return;
+      }
+      const bulkStatus = document.getElementById('training-bulk-status').value;
+      if (!bulkStatus && !bulkGeneralValue) {
+        toast('請先選擇要套用的內容', 'error');
+        return;
+      }
+      rowsState = rowsState.map((row, index) => {
+        const key = getRowKey(row, index);
+        if (!selectedKeys.has(key)) return row;
+        const nextRow = { ...row };
+        if (bulkStatus) nextRow.status = bulkStatus;
+        if (nextRow.status !== '在職') {
+          nextRow.completedGeneral = '';
+          nextRow.isInfoStaff = '';
+          nextRow.completedProfessional = '';
+        } else if (bulkGeneralValue) {
+          nextRow.completedGeneral = bulkGeneralValue;
+        }
+        return normalizeTrainingRecordRow(nextRow, document.getElementById('tr-unit').value);
+      });
+      toast('已套用批次設定');
+      renderRows();
+    });
 
     document.getElementById('training-add-person').addEventListener('click', () => {
-      const unit = document.getElementById('tr-unit').value;
+      const currentUnit = document.getElementById('tr-unit').value;
       const payload = {
         name: document.getElementById('tr-new-name').value.trim(),
-        unitName: document.getElementById('tr-new-unit-name').value.trim() || getTrainingJobUnit(unit),
+        unitName: document.getElementById('tr-new-unit-name').value.trim() || getTrainingJobUnit(currentUnit),
         identity: document.getElementById('tr-new-identity').value.trim(),
         jobTitle: document.getElementById('tr-new-job-title').value.trim()
       };
@@ -4353,12 +4322,12 @@ function renderTrainingFill(id) {
         toast('請輸入要新增的人員姓名', 'error');
         return;
       }
-      const result = addTrainingRosterPerson(unit, payload, 'manual', user.name);
+      const result = addTrainingRosterPerson(currentUnit, payload, 'manual', user.name);
       if (!result.added && !result.updated) {
         toast(result.reason, 'error');
         return;
       }
-      rowsState = mergeTrainingRows(unit, rowsState);
+      rowsState = mergeTrainingRows(currentUnit, rowsState);
       ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
         document.getElementById(idName).value = '';
       });
@@ -4366,25 +4335,20 @@ function renderTrainingFill(id) {
       toast(result.updated ? result.reason : ('已新增「' + payload.name + '」到名單'));
     });
 
-    const fileInput = document.getElementById('training-file-input');
-    const uploadZone = document.getElementById('training-upload-zone');
-    fileInput.addEventListener('change', (event) => handleFiles(event.target.files));
-    uploadZone.addEventListener('dragover', (event) => {
-      event.preventDefault();
-      uploadZone.classList.add('dragover');
-    });
-    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-    uploadZone.addEventListener('drop', (event) => {
-      event.preventDefault();
-      uploadZone.classList.remove('dragover');
-      handleFiles(event.dataTransfer.files);
-    });
+    initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });
+    if (!isUnitLocked) {
+      document.getElementById('tr-unit').addEventListener('change', (event) => {
+        syncStatsUnitField(event.target.value);
+        rowsState = mergeTrainingRows(event.target.value, rowsState);
+        selectedKeys.clear();
+        renderRows();
+      });
+    }
 
-    renderRows();
-    renderSignedFiles();
     syncStatsUnitField(unitValue);
     updateTrainingDraftStatus(existing);
     clearTrainingFeedback();
+    renderRows();
     refreshIcons();
   }
 
@@ -4400,31 +4364,122 @@ function renderTrainingFill(id) {
       return;
     }
 
+    const user = currentUser();
+    const canManage = !!user && !isViewer(user) && (user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
+    let filesState = [...(form.signedFiles || [])];
     const summary = form.summary || computeTrainingSummary(form.records || []);
-    const records = form.records || [];
-    const detailRows = records.length ? records.map((row) => '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + esc(row.status || '—') + '</td><td>' + esc(row.completedGeneral || '—') + '</td><td>' + esc(row.isInfoStaff || '—') + '</td><td>' + esc(row.completedProfessional || (row.isInfoStaff === '否' ? '無須' : '—')) + '</td><td>' + trainingDecisionBadge(row) + '</td><td>' + esc(row.note || '') + '</td></tr>').join('') : '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無明細資料</div></div></td></tr>';
-    const files = form.signedFiles || [];
-    const fileHtml = files.length ? '<div class="file-preview-list">' + files.map((file) => file.type && file.type.startsWith('image/') ? '<div class="file-preview-item"><img src="' + file.data + '" alt="' + esc(file.name) + '"><div class="file-name">' + esc(file.name) + '</div></div>' : '<div class="file-preview-item"><div class="file-pdf-icon">' + ic('file-box') + '</div><div class="file-name">' + esc(file.name) + '</div></div>').join('') + '</div>' : '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>';
+    const detailRows = (form.records || []).length
+      ? (form.records || []).map((row) => '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + esc(row.status || '—') + '</td><td>' + esc(row.completedGeneral || '—') + '</td><td>' + esc(row.isInfoStaff || '—') + '</td><td>' + esc(getTrainingProfessionalDisplay(row)) + '</td><td>' + trainingDecisionBadge(row) + '</td><td>' + esc(row.note || '') + '</td></tr>').join('')
+      : '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無明細資料</div></div></td></tr>';
     const timeline = (form.history || []).slice().reverse().map((item) => '<div class="timeline-item"><div class="timeline-time">' + fmtTime(item.time) + '</div><div class="timeline-text">' + esc(item.action) + ' · ' + esc(item.user || '系統') + '</div></div>').join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
-
-    const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出 CSV</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
+    const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
     if (canEditTrainingForm(form)) actions.unshift('<a href="#training-fill/' + form.id + '" class="btn btn-primary">' + ic('edit-3', 'icon-sm') + ' 繼續填報</a>');
     if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift('<button type="button" class="btn btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">' + ic('corner-up-left', 'icon-sm') + ' 退回更正</button>');
 
+    const stepCards = [
+      ['流程一', '依人員填報教育訓練完成情形', form.stepOneSubmittedAt ? '已完成並鎖定' : '待完成', form.stepOneSubmittedAt ? fmtTime(form.stepOneSubmittedAt) : '完成後才可進入簽核'],
+      ['流程二', '列印簽核表', form.printedAt ? '已列印' : (form.status === TRAINING_STATUSES.DRAFT || form.status === TRAINING_STATUSES.RETURNED ? '待流程一完成' : '待列印'), form.printedAt ? fmtTime(form.printedAt) : '請列印後交主管簽核'],
+      ['流程三', '上傳簽核掃描檔', form.status === TRAINING_STATUSES.SUBMITTED ? '已完成填報' : ((filesState.length || form.signoffUploadedAt) ? '已上傳，待完成送件' : '待上傳'), form.status === TRAINING_STATUSES.SUBMITTED ? fmtTime(form.submittedAt || form.updatedAt) : (form.signoffUploadedAt ? fmtTime(form.signoffUploadedAt) : '上傳後完成整體流程')]
+    ].map((step) => '<div class="training-step-card"><div class="training-step-kicker">' + esc(step[0]) + '</div><div class="training-step-title">' + esc(step[1]) + '</div><div class="training-step-status">' + esc(step[2]) + '</div><div class="training-step-note">' + esc(step[3]) + '</div></div>').join('');
+
+    const uploadSection = (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && canManage)
+      ? '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">流程三：上傳簽核掃描檔</span></div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div><div class="file-preview-list training-signoff-files" id="training-file-previews"></div><div class="form-actions"><button type="button" class="btn btn-primary" id="training-finalize-submit">' + ic('check-circle-2', 'icon-sm') + ' 完成流程三並正式結束填報</button></div></div>'
+      : '';
+
     document.getElementById('app').innerHTML = '<div class="animate-in">'
-      + '<div class="detail-header"><div><div class="detail-id detail-id-with-copy">' + '<span>' + esc(form.id) + ' · ' + esc(form.trainingYear) + ' 年度</span>' + renderCopyIdButton(form.id, '教育訓練編號') + '</div><h1 class="detail-title">資安教育訓練統計 — ' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('building-2', 'icon-xs') + '</span>' + esc(form.unit) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('user', 'icon-xs') + '</span>' + esc(form.fillerName) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('calendar', 'icon-xs') + '</span>' + fmt(form.fillDate) + '</span>' + trainingStatusBadge(form.status) + '</div></div><div class="training-toolbar-actions">' + actions.join('') + '</div></div>'
+      + '<div class="detail-header"><div><div class="detail-id detail-id-with-copy"><span>' + esc(form.id) + ' · ' + esc(form.trainingYear) + ' 年度</span>' + renderCopyIdButton(form.id, '教育訓練編號') + '</div><h1 class="detail-title">資安教育訓練統計 — ' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('building-2', 'icon-xs') + '</span>' + esc(form.unit) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('user', 'icon-xs') + '</span>' + esc(form.fillerName) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('calendar', 'icon-xs') + '</span>' + fmt(form.fillDate) + '</span>' + trainingStatusBadge(form.status) + '</div></div><div class="training-toolbar-actions">' + actions.join('') + '</div></div>'
       + (form.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(form.returnReason || '未提供') + '</div>' : '')
-      + '<div class="card"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div></div>'
+      + '<div class="card"><div class="card-header"><span class="card-title">流程概況</span></div><div class="training-step-grid">' + stepCards + '</div></div>'
+      + '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div></div>'
       + '<div class="panel-grid-two panel-grid-spaced">'
-      + '<div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">統計單位</div><div class="detail-field-value">' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</div></div><div class="detail-field"><div class="detail-field-label">填報單位</div><div class="detail-field-value">' + esc(form.unit) + '</div></div><div class="detail-field"><div class="detail-field-label">經辦人</div><div class="detail-field-value">' + esc(form.fillerName) + '</div></div><div class="detail-field"><div class="detail-field-label">聯絡電話</div><div class="detail-field-value">' + esc(form.submitterPhone || '—') + '</div></div><div class="detail-field"><div class="detail-field-label">聯絡信箱</div><div class="detail-field-value">' + esc(form.submitterEmail || '—') + '</div></div><div class="detail-field"><div class="detail-field-label">正式送出時間</div><div class="detail-field-value">' + (form.submittedAt ? fmtTime(form.submittedAt) : '—') + '</div></div></div></div>'
-      + '<div class="card"><div class="card-header"><span class="card-title">簽核掃描檔</span></div>' + fileHtml + '</div>'
+      + '<div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">統計單位</div><div class="detail-field-value">' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</div></div><div class="detail-field"><div class="detail-field-label">填報單位</div><div class="detail-field-value">' + esc(form.unit) + '</div></div><div class="detail-field"><div class="detail-field-label">經辦人</div><div class="detail-field-value">' + esc(form.fillerName) + '</div></div><div class="detail-field"><div class="detail-field-label">聯絡電話</div><div class="detail-field-value">' + esc(form.submitterPhone || '—') + '</div></div><div class="detail-field"><div class="detail-field-label">聯絡信箱</div><div class="detail-field-value">' + esc(form.submitterEmail || '—') + '</div></div><div class="detail-field"><div class="detail-field-label">整體完成時間</div><div class="detail-field-value">' + (form.submittedAt ? fmtTime(form.submittedAt) : '—') + '</div></div></div></div>'
+      + '<div class="card"><div class="card-header"><span class="card-title">簽核掃描檔</span></div><div class="file-preview-list training-signoff-files" id="training-signed-files-readonly"></div></div>'
       + '</div>'
-      + '<div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">逐人明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>資安通識</th><th>資訊人員(含委外)</th><th>資安專業課程</th><th>判定</th><th>備註</th></tr></thead><tbody>' + detailRows + '</tbody></table></div></div>'
+      + uploadSection
+      + '<div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">逐人明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>' + TRAINING_GENERAL_LABEL + '</th><th>' + TRAINING_INFO_STAFF_LABEL + '</th><th>' + TRAINING_PROFESSIONAL_LABEL + '</th><th>判定</th><th>備註</th></tr></thead><tbody>' + detailRows + '</tbody></table></div></div>'
       + '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">歷程紀錄</span></div><div class="timeline">' + timeline + '</div></div>'
       + '</div>';
 
+    function renderSignedFiles(targetId, editable) {
+      const wrap = document.getElementById(targetId);
+      if (!wrap) return;
+      wrap.innerHTML = filesState.length ? filesState.map((file, index) => {
+        const preview = file.type && file.type.startsWith('image/')
+          ? '<img src="' + file.data + '" alt="' + esc(file.name) + '">'
+          : '<div class="file-pdf-icon">' + ic('file-box') + '</div>';
+        const actionsHtml = '<div class="training-file-actions"><a class="btn btn-sm btn-secondary" href="' + file.data + '" target="_blank" rel="noopener">預覽</a><a class="btn btn-sm btn-secondary" href="' + file.data + '" download="' + esc(file.name) + '">下載</a>' + (editable ? '<button type="button" class="btn btn-sm btn-danger training-file-remove" data-idx="' + index + '">移除</button>' : '') + '</div>';
+        return '<div class="file-preview-item training-file-card">' + preview + '<div class="file-name">' + esc(file.name) + '</div>' + actionsHtml + '</div>';
+      }).join('') : '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>';
+      wrap.querySelectorAll('.training-file-remove').forEach((button) => {
+        button.addEventListener('click', () => {
+          filesState.splice(Number(button.dataset.idx), 1);
+          renderSignedFiles(targetId, true);
+          renderSignedFiles('training-signed-files-readonly', false);
+        });
+      });
+      refreshIcons();
+    }
+
+    function handleFiles(files) {
+      Array.from(files).forEach((file) => {
+        if (file.size > 5 * 1024 * 1024) {
+          toast('「' + file.name + '」超過 5MB', 'error');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          filesState.push({ name: file.name, type: file.type, data: evt.target.result });
+          renderSignedFiles('training-file-previews', true);
+          renderSignedFiles('training-signed-files-readonly', false);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
     document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
-    document.getElementById('training-print-detail')?.addEventListener('click', () => printTrainingSheet(form));
+    document.getElementById('training-print-detail')?.addEventListener('click', () => {
+      if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && !form.printedAt) {
+        const now = new Date().toISOString();
+        updateTrainingForm(form.id, { printedAt: now, updatedAt: now, history: [...(form.history || []), { time: now, action: '列印簽核表', user: currentUser().name }] });
+        form.printedAt = now;
+      }
+      printTrainingSheet(form);
+    });
+    if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && canManage) {
+      const fileInput = document.getElementById('training-file-input');
+      const uploadZone = document.getElementById('training-upload-zone');
+      fileInput.addEventListener('change', (event) => handleFiles(event.target.files));
+      uploadZone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        uploadZone.classList.add('dragover');
+      });
+      uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+      uploadZone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        uploadZone.classList.remove('dragover');
+        handleFiles(event.dataTransfer.files);
+      });
+      document.getElementById('training-finalize-submit').addEventListener('click', () => {
+        if (!filesState.length) {
+          toast('請先上傳簽核掃描檔', 'error');
+          return;
+        }
+        const now = new Date().toISOString();
+        const latestForm = getTrainingForm(form.id) || form;
+        updateTrainingForm(form.id, {
+          status: TRAINING_STATUSES.SUBMITTED,
+          signedFiles: filesState,
+          signoffUploadedAt: now,
+          submittedAt: now,
+          updatedAt: now,
+          history: [...(latestForm.history || []), { time: now, action: '上傳簽核掃描檔並完成整體填報', user: currentUser().name }]
+        });
+        toast('已完成流程三，整體填報結束');
+        renderTrainingDetail(form.id);
+      });
+      renderSignedFiles('training-file-previews', true);
+    }
+    renderSignedFiles('training-signed-files-readonly', false);
     refreshIcons();
     bindCopyButtons();
   }
@@ -4433,9 +4488,7 @@ function renderTrainingFill(id) {
     if (!rosters.length) return '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>';
     return rosters.map((row) => '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" onclick="window._trainingDeleteRoster(\'' + row.id + '\')">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>').join('');
   }
-  function buildTrainingRosterImportCard() {
-    return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">支援每行一筆，格式可為「姓名」或「姓名,本職單位,身分別,職稱」，也可貼上 tab 分隔資料。</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, true) + '</div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師</textarea></div></div><div class="form-group"><label class="form-label form-required">匯入內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱" required></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
-  }
+
   function buildTrainingRosterPage(summary, rowsHtml) {
     return '<div class="animate-in">'
       + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div>'
@@ -4448,7 +4501,12 @@ function renderTrainingFill(id) {
       + '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>'
       + '</div>';
   }
-  function renderTrainingRoster() {
+
+  function buildTrainingRosterImportCard() {
+    return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">支援 Excel 檔（`.xlsx` / `.xls`）匯入，也可直接貼上 CSV / TSV。欄位順序：姓名、本職單位、身分別、職稱。</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, true) + '<div class="form-hint">先選類別，再選單位；若該單位有二級單位，第三格才會出現。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy"><strong>選擇 Excel / CSV 檔</strong><small>支援 `.xlsx`、`.xls`、`.csv`、`.tsv`</small></span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>姓名,本職單位,身分別,職稱\n王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
+  }
+
+  async function renderTrainingRoster() {
     if (!isAdmin()) {
       navigate('training');
       toast('僅管理者可管理名單', 'error');
@@ -4468,21 +4526,36 @@ function renderTrainingFill(id) {
     document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, rows);
 
     initUnitCascade('training-import-unit', '', { disabled: false });
-    applyTestIds({
-      'training-import-form': 'training-import-form',
-      'training-import-names': 'training-import-names'
+    const fileInput = document.getElementById('training-import-file');
+    const fileCopy = document.getElementById('training-import-file-copy');
+    fileInput?.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileCopy.innerHTML = file
+        ? '<strong>' + esc(file.name) + '</strong><small>已選取檔案，送出後將直接匯入</small>'
+        : '<strong>選擇 Excel / CSV 檔</strong><small>支援 `.xlsx`、`.xls`、`.csv`、`.tsv`</small>';
     });
-    document.getElementById('training-import-form').addEventListener('submit', (event) => {
+    document.getElementById('training-import-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       const unit = document.getElementById('training-import-unit').value;
       const raw = document.getElementById('training-import-names').value;
-      const entries = parseTrainingRosterImport(raw, unit);
+      const file = fileInput.files[0];
       if (!unit) {
         toast('請先選擇單位', 'error');
         return;
       }
+      let entries = [];
+      if (file) {
+        try {
+          entries = await parseTrainingRosterWorkbook(file, unit);
+        } catch (error) {
+          toast(error.message || 'Excel 匯入失敗', 'error');
+          return;
+        }
+      } else {
+        entries = parseTrainingRosterImport(raw, unit);
+      }
       if (!entries.length) {
-        toast('請至少輸入一筆名單資料', 'error');
+        toast('請提供至少一筆可匯入的人員資料', 'error');
         return;
       }
       let added = 0;
@@ -4573,3 +4646,4 @@ function renderTrainingFill(id) {
   refreshIcons();
 
 })();
+
