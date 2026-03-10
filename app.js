@@ -32,6 +32,27 @@
 
   const UNIT_CUSTOM_VALUE = '__unit_custom__';
   const UNIT_CUSTOM_LABEL = '其他（手動輸入）';
+  const UNIT_ADMIN_PRIMARY_WHITELIST = new Set([
+    '秘書室',
+    '教務處',
+    '學生事務處',
+    '總務處',
+    '研究發展處',
+    '國際事務處',
+    '財務管理處',
+    '圖書館',
+    '主計室',
+    '人事室',
+    '計算機及資訊網路中心',
+    '出版中心',
+    '環境保護暨職業安全衛生中心',
+    '研究誠信辦公室',
+    '法務處'
+  ]);
+  const UNIT_ACADEMIC_PRIMARY_WHITELIST = new Set([
+    '共同教育中心',
+    '進修推廣學院'
+  ]);
 
   function getOfficialUnits() {
     try {
@@ -488,12 +509,36 @@
     return c ? `${p}／${c}` : p;
   }
 
+  function getTopLevelUnitOfficialMeta(unitValue) {
+    const parsed = splitUnitValue(unitValue);
+    const parent = String(parsed.parent || unitValue || '').trim();
+    if (!parent) return null;
+    return getOfficialUnitMeta(parent) || getOfficialUnitMeta(unitValue) || null;
+  }
+
   function categorizeTopLevelUnit(unitValue) {
-    const unit = String(unitValue || '').trim();
+    const unit = String(splitUnitValue(unitValue).parent || unitValue || '').trim();
     if (!unit) return '行政單位';
-    if (unit.includes('研究中心')) return '研究中心';
+    if (UNIT_ADMIN_PRIMARY_WHITELIST.has(unit)) return '行政單位';
+    if (UNIT_ACADEMIC_PRIMARY_WHITELIST.has(unit)) return '學術單位';
+    const meta = getTopLevelUnitOfficialMeta(unit) || {};
+    const code = String(meta.topCode || meta.code || '').trim().toUpperCase();
     const academicKeywords = ['學院', '共同教育中心', '國際學院', '研究學院', '創新設計學院', '進修推廣學院', '附設醫院'];
-    return academicKeywords.some((keyword) => unit.includes(keyword)) ? '學術單位' : '行政單位';
+    if (academicKeywords.some((keyword) => unit.includes(keyword))) return '學術單位';
+    if (unit.includes('研究中心') || unit.includes('研究院')) return '研究中心';
+    if (/^0\.\d{2}$/.test(code)) {
+      const numeric = Number(code.slice(2));
+      if (numeric >= 51) return '學術單位';
+      if (unit.includes('中心') || unit.includes('委員會') || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
+        return '研究中心';
+      }
+      return '行政單位';
+    }
+    if (/^0\.[A-Z0-9]{2}$/.test(code)) return '研究中心';
+    if (unit.includes('中心') || unit.includes('委員會') || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
+      return '研究中心';
+    }
+    return '行政單位';
   }
 
   function getTrainingUnitCategories() {
@@ -1419,6 +1464,17 @@
   window._closeSidebar = function () { closeSidebar(); };
 
   // ─── Render: Dashboard ─────────────────────
+  function getCurrentNextTrackingDate(item) {
+    if (!item) return '';
+    const pendingDate = String(item.pendingTracking?.nextTrackDate || '').trim();
+    if (pendingDate) return pendingDate;
+    const latestTracked = (Array.isArray(item.trackings) ? item.trackings : [])
+      .slice()
+      .reverse()
+      .find((tracking) => String(tracking && tracking.nextTrackDate || '').trim());
+    return latestTracked ? String(latestTracked.nextTrackDate || '').trim() : '';
+  }
+
   function renderDashboard() {
     var items = getVisibleItems();
     var total = items.length;
@@ -1459,8 +1515,8 @@
 
     var recent = items.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
     var recentRows = recent.length ? recent.map(function (i) {
-      return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.problemDesc || '').substring(0, 34) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>';
-    }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">尚無矯正單</div></div></td></tr>';
+      return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.problemDesc || '').substring(0, 34) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(i)) + '</td></tr>';
+    }).join('') : '<tr><td colspan="6"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">尚無矯正單</div></div></td></tr>';
 
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     var nextDueItem = items.filter(function (i) { return i.status !== STATUSES.CLOSED && i.correctiveDueDate; }).sort(function (a, b) { return new Date(a.correctiveDueDate) - new Date(b.correctiveDueDate); })[0] || null;
@@ -1490,7 +1546,7 @@
       + '</div>'
       + '<div class="dashboard-grid">'
       + '<div class="card dashboard-panel dashboard-chart-panel"><div class="card-header"><span class="card-title">狀態分布</span></div><div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div></div>'
-      + '<div class="card dashboard-panel dashboard-table-panel"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + recentRows + '</tbody></table></div></div>'
+      + '<div class="card dashboard-panel dashboard-table-panel"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th></tr></thead><tbody>' + recentRows + '</tbody></table></div></div>'
       + '</div></div>';
     refreshIcons();
     bindCopyButtons();
@@ -1502,13 +1558,13 @@
     if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
     if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
     filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-    var rows = filtered.length ? filtered.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td></tr>'; }).join('') : '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
+    var rows = filtered.length ? filtered.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(i)) + '</td></tr>'; }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
     var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
       '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + items.length + ' 筆，顯示 ' + filtered.length + ' 筆</p></div>' + createBtn + '</div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
-      '<div class="card" style="padding:0;overflow:hidden;"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+      '<div class="card" style="padding:0;overflow:hidden;"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
     refreshIcons();
     bindCopyButtons();
     document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; renderList(); });
@@ -1854,7 +1910,12 @@ function renderCreate() {
     }
 
     const renderEvidenceList = (files, emptyText = '尚無佐證') => files && files.length
-      ? `<div class="file-preview-list">${files.map(ev => ev.type && ev.type.startsWith('image/') ? `<div class="file-preview-item"><img src="${ev.data}" alt="${esc(ev.name)}"><div class="file-name">${esc(ev.name)}</div></div>` : `<div class="file-preview-item"><div class="file-pdf-icon">${ic('file-box')}</div><div class="file-name">${esc(ev.name)}</div></div>`).join('')}</div>`
+      ? `<div class="file-preview-list">${files.map(ev => {
+        const preview = ev.type && ev.type.startsWith('image/')
+          ? `<img src="${ev.data}" alt="${esc(ev.name)}">`
+          : `<div class="file-pdf-icon">${ic('file-box')}</div>`;
+        return `<div class="file-preview-item">${preview}<div class="file-name">${esc(ev.name)}</div><div class="file-preview-actions"><a class="btn btn-sm btn-secondary" href="${ev.data}" target="_blank" rel="noopener">預覽</a><a class="btn btn-sm btn-secondary" href="${ev.data}" download="${esc(ev.name)}">下載</a></div></div>`;
+      }).join('')}</div>`
       : `<p style="color:var(--text-muted);font-size:.88rem">${emptyText}</p>`;
 
     const evHtml = renderEvidenceList(item.evidence, '尚無佐證');
@@ -1913,6 +1974,7 @@ function renderCreate() {
           <div class="detail-field"><div class="detail-field-label">處理人員</div><div class="detail-field-value">${esc(item.handlerName)}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理人員信箱</div><div class="detail-field-value">${item.handlerEmail ? '<a href="mailto:' + esc(item.handlerEmail) + '" style="color:var(--accent-primary);text-decoration:none">' + ic('mail', 'icon-xs') + ' ' + esc(item.handlerEmail) + '</a>' : '—'}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理日期</div><div class="detail-field-value">${fmt(item.handlerDate)}</div></div>
+          <div class="detail-field"><div class="detail-field-label">下一次追蹤日期</div><div class="detail-field-value">${fmt(getCurrentNextTrackingDate(item))}</div></div>
         </div></div>
       <div class="card" style="margin-top:20px"><div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
         <div class="detail-grid">
@@ -2124,6 +2186,7 @@ function renderRespond(id) {
         r.onload = e => { tempEv.push({ name: f.name, type: f.type, data: e.target.result }); updP(); };
         r.readAsDataURL(f);
       });
+      if (fi) fi.value = '';
     }
 
     function updP() {
@@ -2131,7 +2194,7 @@ function renderRespond(id) {
         const pv = e.type.startsWith('image/') ? `<img src="${e.data}" alt="${esc(e.name)}">` : `<div class="file-pdf-icon">${ic('file-box')}</div>`;
         return `<div class="file-preview-item">${pv}<div class="file-name">${esc(e.name)}</div><button type="button" class="file-remove" data-idx="${i}">移除</button></div>`;
       }).join('');
-      fp.querySelectorAll('.file-remove').forEach(b => b.addEventListener('click', e => { tempEv.splice(parseInt(e.target.dataset.idx, 10), 1); updP(); }));
+      fp.querySelectorAll('.file-remove').forEach(b => b.addEventListener('click', e => { tempEv.splice(parseInt(e.target.dataset.idx, 10), 1); if (fi) fi.value = ''; updP(); }));
       syncRespondSummary();
     }
 
@@ -2268,7 +2331,7 @@ function renderTracking(id) {
       summaryNext.textContent = nextInput.value ? fmt(nextInput.value) : '未指定';
       nextWrap.style.display = isContinue ? 'block' : 'none';
       nextInput.required = !!isContinue;
-      if (fileInput) fileInput.required = !!isClosable;
+      if (fileInput) fileInput.required = false;
       if (evidenceWrap) evidenceWrap.style.display = isClosable ? 'block' : 'none';
     }
 
@@ -2282,6 +2345,7 @@ function renderTracking(id) {
         };
         reader.readAsDataURL(file);
       });
+      if (fileInput) fileInput.value = '';
     }
 
     function updateTrackingPreviews() {
@@ -2293,6 +2357,7 @@ function renderTracking(id) {
       filePreviews.querySelectorAll('.file-remove').forEach((button) => {
         button.addEventListener('click', (event) => {
           tempEv.splice(parseInt(event.target.dataset.idx, 10), 1);
+          if (fileInput) fileInput.value = '';
           updateTrackingPreviews();
         });
       });
@@ -2738,6 +2803,17 @@ function renderTracking(id) {
     if (u.role === ROLES.ADMIN) return true;
     return hasUnitAccess(cl.unit, u) || isChecklistOwner(cl, u);
   }
+
+  function findExistingChecklistForUnitYear(unit, auditYear, excludeId) {
+    const safeUnit = String(unit || '').trim();
+    const safeYear = String(auditYear || '').trim();
+    const skipId = String(excludeId || '').trim();
+    if (!safeUnit || !safeYear) return null;
+    return getAllChecklists()
+      .filter((item) => item.unit === safeUnit && String(item.auditYear || '').trim() === safeYear && item.id !== skipId)
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))[0] || null;
+  }
+
   function getLatestEditableChecklistDraft() {
     const drafts = getVisibleChecklists().filter((c) => isChecklistDraftStatus(c.status) && canEditChecklist(c));
     drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
@@ -2787,6 +2863,16 @@ function renderTracking(id) {
     if (!canFillChecklist()) { navigate('checklist'); toast('\u60a8\u6c92\u6709\u586b\u5831\u6aa2\u6838\u8868\u6b0a\u9650', 'error'); return; }
 
     const u = currentUser();
+    const currentAuditYear = String(new Date().getFullYear() - 1911);
+    const defaultScopedUnit = getScopedUnit(u) || u.unit || '';
+    if (!id && u.role !== ROLES.ADMIN && defaultScopedUnit && getAuthorizedUnits(u).length <= 1) {
+      const duplicateChecklist = findExistingChecklistForUnitYear(defaultScopedUnit, currentAuditYear);
+      if (duplicateChecklist) {
+        toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
+        navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
+        return;
+      }
+    }
     let existing = id ? getChecklist(id) : getLatestEditableChecklistDraft();
     if (id && !existing) { navigate('checklist'); toast('\u627e\u4e0d\u5230\u8981\u7de8\u4fee\u7684\u6aa2\u6838\u8868', 'error'); return; }
     if (existing && !canEditChecklist(existing)) { navigate('checklist'); toast('\u9019\u4efd\u6aa2\u6838\u8868\u76ee\u524d\u4e0d\u53ef\u4fee\u6539', 'error'); return; }
@@ -2977,6 +3063,12 @@ function renderTracking(id) {
 
     function saveChecklistDraft() {
       const data = collectData('\u8349\u7a3f');
+      const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
+      if (duplicateChecklist) {
+        toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
+        navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
+        return;
+      }
       if (existing) updateChecklist(existing.id, data); else addChecklist(data);
       existing = getChecklist(data.id) || data;
       debugFlow('checklist', 'draft saved', { id: data.id, unit: data.unit, status: data.status });
@@ -3034,6 +3126,12 @@ function renderTracking(id) {
         return;
       }
       const data = collectData('\u5df2\u9001\u51fa');
+      const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
+      if (duplicateChecklist) {
+        toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
+        navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
+        return;
+      }
       if (existing) updateChecklist(existing.id, data); else addChecklist(data);
       existing = getChecklist(data.id) || data;
       debugFlow('checklist', 'submit success', { id: data.id, unit: data.unit, status: data.status });
@@ -3714,6 +3812,17 @@ function renderTracking(id) {
     saveTrainingStore(store);
   }
 
+  function updateTrainingRosterPerson(id, updates) {
+    const cleanId = String(id || '').trim();
+    if (!cleanId) return null;
+    const store = loadTrainingStore();
+    const index = store.rosters.findIndex((row) => row.id === cleanId);
+    if (index < 0) return null;
+    store.rosters[index] = normalizeTrainingRosterRow({ ...store.rosters[index], ...(updates || {}) }, store.rosters[index].unit);
+    saveTrainingStore(store);
+    return store.rosters[index];
+  }
+
   function getTrainingUnits() {
     return getSystemUnits();
   }
@@ -3783,6 +3892,16 @@ function renderTracking(id) {
     if (!user || !form) return false;
     if (hasGlobalReadScope(user)) return true;
     return hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
+  }
+
+  function findExistingTrainingFormForUnitYear(unit, trainingYear, excludeId) {
+    const safeUnit = String(unit || '').trim();
+    const safeYear = String(trainingYear || '').trim();
+    const skipId = String(excludeId || '').trim();
+    if (!safeUnit || !safeYear) return null;
+    return getAllTrainingForms()
+      .filter((form) => form.unit === safeUnit && String(form.trainingYear || '').trim() === safeYear && form.id !== skipId)
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))[0] || null;
   }
 
   function isTrainingRecordReadyForSubmit(record) {
@@ -3927,7 +4046,7 @@ function renderTracking(id) {
   }
 
   function exportTrainingDetailCsv(form) {
-    const rows = (form.records || []).map((row, index) => [form.id, form.statsUnit || getTrainingStatsUnit(form.unit), form.unit, form.trainingYear, form.fillerName, index + 1, row.name, row.l1Unit || '', row.unitName || '', row.identity || '', row.jobTitle || '', row.status || '', row.completedGeneral || '', row.isInfoStaff || '', row.completedProfessional || '', getTrainingRecordHint(row), row.note || '']);
+    const rows = (form.records || []).map((row, index) => [form.id, form.statsUnit || getTrainingStatsUnit(form.unit), form.unit, form.trainingYear, form.fillerName, index + 1, row.name, row.l1Unit || '', row.unitName || '', row.identity || '', row.jobTitle || '', row.status || '', row.completedGeneral || '', row.isInfoStaff || '', getTrainingProfessionalDisplay(row), getTrainingRecordHint(row), row.note || '']);
     downloadWorkbook('資安教育訓練明細_' + form.id + '.xlsx', [{
       name: '逐人明細',
       rows: [['填報單編號', '統計單位', '填報單位', '年度', '經辦人', '序號', '姓名', '一級單位', '本職單位', '身分別', '職稱', '在職狀態', TRAINING_GENERAL_LABEL, TRAINING_INFO_STAFF_LABEL, TRAINING_PROFESSIONAL_LABEL, '判定說明', '備註']].concat(rows)
@@ -3964,23 +4083,73 @@ function renderTracking(id) {
     setTimeout(() => win.print(), 250);
   }
 
-  function parseTrainingRosterCells(cells, unit) {
-    const clean = (Array.isArray(cells) ? cells : []).map((part) => String(part || '').trim());
-    const firstCell = String(clean[0] || '').replace(/^\uFEFF/, '');
+  function normalizeTrainingImportHeader(value) {
+    return String(value || '')
+      .replace(/^\uFEFF/, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s\u3000]+/g, '')
+      .replace(/[()（）]/g, '')
+      .replace(/[／/]/g, '')
+      .replace(/[._\-]/g, '');
+  }
+
+  function buildTrainingRosterHeaderMap(cells) {
+    const headerAliases = {
+      name: ['姓名', '人員姓名', 'name'],
+      unitName: ['本職單位', '服務單位', '單位', '本單位', '任職單位'],
+      identity: ['身分別', '身份別', '身分類別', '人員身分', '身份類別'],
+      jobTitle: ['職稱', '職務', 'title'],
+      unit: ['填報單位', '受填報單位', '單位代填', '歸屬單位'],
+      statsUnit: ['統計單位', '一級單位']
+    };
+    const normalizedCells = (Array.isArray(cells) ? cells : []).map((cell) => normalizeTrainingImportHeader(cell));
+    const map = {};
+    Object.keys(headerAliases).forEach((key) => {
+      const idx = normalizedCells.findIndex((cell) => headerAliases[key].some((alias) => cell === normalizeTrainingImportHeader(alias)));
+      if (idx >= 0) map[key] = idx;
+    });
+    return map.name >= 0 ? map : null;
+  }
+
+  function resolveTrainingImportTargetUnit(defaultUnit, rawUnit, rawStatsUnit) {
+    const selectedUnit = String(defaultUnit || '').trim();
+    const unitText = String(rawUnit || '').trim().replace(/\//g, '／');
+    const statsText = String(rawStatsUnit || '').trim().replace(/\//g, '／');
+    if (unitText) {
+      if (getOfficialUnitMeta(unitText) || getApprovedCustomUnits().includes(unitText)) return unitText;
+      if (statsText && getOfficialUnitMeta(composeUnitValue(statsText, unitText))) return composeUnitValue(statsText, unitText);
+    }
+    if (selectedUnit) return selectedUnit;
+    if (statsText) {
+      if (getOfficialUnitMeta(statsText) || getApprovedCustomUnits().includes(statsText)) return statsText;
+    }
+    return '';
+  }
+
+  function parseTrainingRosterCells(cells, unit, headerMap) {
+    const clean = (Array.isArray(cells) ? cells : []).map((part) => String(part || '').replace(/^\uFEFF/, '').trim());
+    const getCell = (key, fallbackIndex) => {
+      if (headerMap && Number.isInteger(headerMap[key])) return clean[headerMap[key]] || '';
+      return clean[fallbackIndex] || '';
+    };
+    const firstCell = getCell('name', 0);
     if (!firstCell || firstCell === '姓名') return null;
+    const importedUnit = resolveTrainingImportTargetUnit(unit, getCell('unit', -1), getCell('statsUnit', -1));
     return {
+      unit: importedUnit,
       name: firstCell,
-      unitName: clean[1] || getTrainingJobUnit(unit),
-      identity: clean[2] || '',
-      jobTitle: clean[3] || ''
+      unitName: getCell('unitName', 1) || getTrainingJobUnit(importedUnit || unit),
+      identity: getCell('identity', 2) || '',
+      jobTitle: getCell('jobTitle', 3) || ''
     };
   }
 
   function parseTrainingRosterImport(text, unit) {
-    return String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-      const parts = line.includes('\t') ? line.split('\t') : line.split(',');
-      return parseTrainingRosterCells(parts, unit);
-    }).filter((row) => row && row.name);
+    const rows = String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => (line.includes('\t') ? line.split('\t') : line.split(',')));
+    const headerMap = rows.length ? buildTrainingRosterHeaderMap(rows[0]) : null;
+    const dataRows = headerMap ? rows.slice(1) : rows;
+    return dataRows.map((parts) => parseTrainingRosterCells(parts, unit, headerMap)).filter((row) => row && row.name);
   }
 
   function parseTrainingRosterWorkbook(file, unit) {
@@ -4000,7 +4169,9 @@ function renderTracking(id) {
             return;
           }
           const rows = window.XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1, raw: false, defval: '' });
-          resolve(rows.map((cells) => parseTrainingRosterCells(cells, unit)).filter((row) => row && row.name));
+          const headerMap = rows.length ? buildTrainingRosterHeaderMap(rows[0]) : null;
+          const dataRows = headerMap ? rows.slice(1) : rows;
+          resolve(dataRows.map((cells) => parseTrainingRosterCells(cells, unit, headerMap)).filter((row) => row && row.name));
         } catch (error) {
           reject(error);
         }
@@ -4258,6 +4429,16 @@ function renderTracking(id) {
     }
 
     const user = currentUser();
+    const defaultTrainingYear = String(new Date().getFullYear() - 1911);
+    const lockedUserUnit = getScopedUnit(user) || user.unit || '';
+    if (!id && !isAdmin() && lockedUserUnit) {
+      const duplicateDraft = findExistingTrainingFormForUnitYear(lockedUserUnit, defaultTrainingYear);
+      if (duplicateDraft && isTrainingVisible(duplicateDraft)) {
+        toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
+        navigate(canEditTrainingForm(duplicateDraft) ? ('training-fill/' + duplicateDraft.id) : ('training-detail/' + duplicateDraft.id));
+        return;
+      }
+    }
     let existing = id ? getTrainingForm(id) : null;
     if (id && !existing) {
       toast('找不到填報單', 'error');
@@ -4320,6 +4501,23 @@ function renderTracking(id) {
       document.getElementById('tr-stats-unit').value = getTrainingStatsUnit(unit);
     }
 
+    function openExistingTrainingForm(form, message) {
+      if (!form) return false;
+      setTrainingFeedback('error', message, ['本年度同一填報單位只能維護一份教育訓練統計。']);
+      toast(message, 'error');
+      navigate(canEditTrainingForm(form) ? ('training-fill/' + form.id) : ('training-detail/' + form.id));
+      return true;
+    }
+
+    function persistEditableRosterRow(row) {
+      if (!row || !row.rosterId || !canDeleteTrainingEditableRow(row, existing, user)) return;
+      updateTrainingRosterPerson(row.rosterId, {
+        unitName: row.unitName,
+        identity: row.identity,
+        jobTitle: row.jobTitle
+      });
+    }
+
     function renderSummary() {
       document.getElementById('training-summary').innerHTML = buildTrainingSummaryCards(computeTrainingSummary(rowsState));
     }
@@ -4363,6 +4561,7 @@ function renderTracking(id) {
         const isActive = row.status === '在職';
         const professionalDisabled = !isActive || row.isInfoStaff !== '是';
         const canDeleteRow = canDeleteTrainingEditableRow(row, existing, user);
+        const editableMetaClass = canDeleteRow ? ' training-row-meta--editable' : '';
         const professionalHtml = row.isInfoStaff === '否'
           ? '<span class="training-na-chip">不適用</span>'
           : renderTrainingBinaryButtons('completedProfessional', row.completedProfessional, index, professionalDisabled, '✓', '✕');
@@ -4373,9 +4572,9 @@ function renderTracking(id) {
           + '<td><input type="checkbox" class="training-row-check" data-key="' + esc(key) + '" ' + (selectedKeys.has(key) ? 'checked' : '') + '></td>'
           + '<td>' + (visibleIndex + 1) + '</td>'
           + '<td><div class="training-person-cell"><div class="training-person-name">' + esc(row.name) + '</div><span class="training-source-tag ' + (row.source === 'import' ? 'import' : 'manual') + '">' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</span></div></td>'
-          + '<td>' + esc(row.unitName || '—') + '</td>'
-          + '<td>' + esc(row.identity || '—') + '</td>'
-          + '<td>' + esc(row.jobTitle || '—') + '</td>'
+          + '<td>' + (canDeleteRow ? '<input type="text" class="form-input training-row-meta' + editableMetaClass + '" data-idx="' + index + '" data-field="unitName" value="' + esc(row.unitName || '') + '" placeholder="本職單位">' : esc(row.unitName || '—')) + '</td>'
+          + '<td>' + (canDeleteRow ? '<input type="text" class="form-input training-row-meta' + editableMetaClass + '" data-idx="' + index + '" data-field="identity" value="' + esc(row.identity || '') + '" placeholder="身分別">' : esc(row.identity || '—')) + '</td>'
+          + '<td>' + (canDeleteRow ? '<input type="text" class="form-input training-row-meta' + editableMetaClass + '" data-idx="' + index + '" data-field="jobTitle" value="' + esc(row.jobTitle || '') + '" placeholder="職稱">' : esc(row.jobTitle || '—')) + '</td>'
           + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="status">' + trainingSelectOptionsHtml(TRAINING_EMPLOYEE_STATUS, row.status, '請選擇') + '</select></td>'
           + '<td>' + renderTrainingBinaryButtons('completedGeneral', row.completedGeneral, index, !isActive, '✓', '✕') + '</td>'
           + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="isInfoStaff" ' + (isActive ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_OPTIONS, row.isInfoStaff, '請選擇') + '</select></td>'
@@ -4407,6 +4606,22 @@ function renderTracking(id) {
           if (field === 'isInfoStaff' && row.isInfoStaff !== '是') row.completedProfessional = '';
           rowsState[Number(event.target.dataset.idx)] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
           renderRows();
+        });
+      });
+
+      body.querySelectorAll('.training-row-meta').forEach((element) => {
+        element.addEventListener('input', (event) => {
+          const idx = Number(event.target.dataset.idx);
+          const field = event.target.dataset.field;
+          if (!rowsState[idx] || !field) return;
+          rowsState[idx][field] = event.target.value;
+        });
+        element.addEventListener('change', (event) => {
+          const idx = Number(event.target.dataset.idx);
+          const field = event.target.dataset.field;
+          if (!rowsState[idx] || !field) return;
+          rowsState[idx] = normalizeTrainingRecordRow({ ...rowsState[idx], [field]: event.target.value }, document.getElementById('tr-unit').value);
+          persistEditableRosterRow(rowsState[idx]);
         });
       });
 
@@ -4488,6 +4703,11 @@ function renderTracking(id) {
       const currentUnit = document.getElementById('tr-unit').value;
       const trainingYearValue = document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911);
       const fillDateValue = document.getElementById('tr-date').value;
+      const duplicateForm = findExistingTrainingFormForUnitYear(currentUnit, trainingYearValue, existing?.id);
+      if (duplicateForm) {
+        openExistingTrainingForm(duplicateForm, '本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。');
+        return;
+      }
       const formId = existing ? existing.id : generateTrainingFormId(currentUnit, trainingYearValue, fillDateValue);
       const records = collectRecords();
       if (targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF) {
@@ -4693,6 +4913,8 @@ function renderTracking(id) {
       wrap.querySelectorAll('.training-file-remove').forEach((button) => {
         button.addEventListener('click', () => {
           filesState.splice(Number(button.dataset.idx), 1);
+          const targetInput = document.getElementById('training-file-input');
+          if (targetInput) targetInput.value = '';
           renderSignedFiles(targetId, true);
           renderSignedFiles('training-signed-files-readonly', false);
         });
@@ -4714,6 +4936,8 @@ function renderTracking(id) {
         };
         reader.readAsDataURL(file);
       });
+      const targetInput = document.getElementById('training-file-input');
+      if (targetInput) targetInput.value = '';
     }
 
     document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
@@ -4784,7 +5008,7 @@ function renderTracking(id) {
   }
 
   function buildTrainingRosterImportCard() {
-    return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">支援 Excel 檔（`.xlsx` / `.xls`）匯入，也可直接貼上 CSV / TSV。欄位順序：姓名、本職單位、身分別、職稱。</div><div class="form-row"><div class="form-group"><label class="form-label form-required">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, true) + '<div class="form-hint">先選類別，再選單位；若該單位有二級單位，第三格才會出現。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy"><strong>選擇 Excel / CSV 檔</strong><small>支援 `.xlsx`、`.xls`、`.csv`、`.tsv`</small></span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>姓名,本職單位,身分別,職稱\n王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
+    return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">支援 Excel 檔（`.xlsx` / `.xls`）匯入，也可直接貼上 CSV / TSV。預設欄位：姓名、本職單位、身分別、職稱；若檔案已含「填報單位」欄位，也會自動分流到對應單位。</div><div class="form-row"><div class="form-group"><label class="form-label">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, false) + '<div class="form-hint">可先指定單位當作預設值；若 Excel 內已有「填報單位」欄位，系統會優先使用檔案中的單位。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy"><strong>選擇 Excel / CSV 檔</strong><small>支援 `.xlsx`、`.xls`、`.csv`、`.tsv`</small></span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>姓名,本職單位,身分別,職稱\n王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
   }
 
   async function renderTrainingRoster() {
@@ -4820,10 +5044,6 @@ function renderTracking(id) {
       const unit = document.getElementById('training-import-unit').value;
       const raw = document.getElementById('training-import-names').value;
       const file = fileInput.files[0];
-      if (!unit) {
-        toast('請先選擇單位', 'error');
-        return;
-      }
       let entries = [];
       if (file) {
         try {
@@ -4839,11 +5059,16 @@ function renderTracking(id) {
         toast('請提供至少一筆可匯入的人員資料', 'error');
         return;
       }
+      if (entries.some((entry) => !String(entry.unit || unit || '').trim())) {
+        toast('請先選擇單位，或在匯入檔中提供「填報單位」欄位', 'error');
+        return;
+      }
       let added = 0;
       let updated = 0;
       let skipped = 0;
       entries.forEach((entry) => {
-        const result = addTrainingRosterPerson(unit, entry, 'import', currentUser());
+        const targetUnit = String(entry.unit || unit || '').trim();
+        const result = addTrainingRosterPerson(targetUnit, { ...entry, unit: targetUnit }, 'import', currentUser());
         if (result.added) added += 1;
         else if (result.updated) updated += 1;
         else skipped += 1;
