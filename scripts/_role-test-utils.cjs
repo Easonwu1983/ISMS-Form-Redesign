@@ -91,8 +91,13 @@ async function waitForHash(page, expected, timeout = 7000) {
   await page.waitForFunction((hash) => window.location.hash === hash, expected, { timeout });
 }
 
+async function waitForAppReady(page, timeout = 45000) {
+  await page.waitForFunction(() => window.__APP_READY__ === true, { timeout });
+}
+
 async function login(page, username, password) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await waitForAppReady(page);
   if (await page.locator('.btn-logout').count()) {
     await page.evaluate(() => window._logout());
   }
@@ -124,7 +129,8 @@ async function resetApp(page) {
       window.location.reload();
     })
   ]);
-  await page.waitForSelector('[data-testid="login-form"]');
+  await waitForAppReady(page);
+  await page.waitForSelector('[data-testid="login-form"]', { timeout: 45000 });
 }
 
 async function readJsonFromStorage(page, key) {

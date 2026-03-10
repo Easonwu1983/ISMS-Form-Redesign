@@ -14,3 +14,6 @@ local-preview.png
 node_modules/
 .codex-playwright/
 .npm-cache/
+test-artifacts/
+server.log
+server.pid

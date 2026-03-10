@@ -2,6 +2,7 @@
   "name": "isms-form-redesign",
   "private": true,
   "scripts": {
+    "preview:start": "node .codex-local-server.cjs",
     "nlm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notebooklm-cli.ps1",
     "nlm:doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notebooklm-workflow.ps1 doctor",
     "nlm:login": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notebooklm-workflow.ps1 login",
@@ -10,7 +11,14 @@
     "test:role:probe": "node scripts/role-flow-probe.cjs",
     "test:role:focus": "node scripts/admin-reporter-regression.cjs",
     "test:role:smoke": "node scripts/role-flow-smoke.cjs",
-    "test:role:all": "npm run test:role:permission && npm run test:role:probe && npm run test:role:focus && npm run test:role:smoke"
+    "test:role:all": "node scripts/run-test-suite.cjs role",
+    "test:training:optimization": "node scripts/training-optimization-regression.cjs",
+    "test:training:acceptance": "node scripts/training-flow-acceptance.cjs",
+    "test:training:all": "node scripts/run-test-suite.cjs training",
+    "test:all": "node scripts/run-test-suite.cjs all",
+    "test:role:all:local": "test-role-all-local.cmd",
+    "test:training:all:local": "test-training-all-local.cmd",
+    "test:all:local": "test-all-local.cmd"
   },
   "devDependencies": {
     "playwright": "1.58.2"

@@ -1,0 +1,53 @@
+const { spawn } = require('child_process');
+const path = require('path');
+
+const root = path.resolve(__dirname, '..');
+const node = process.execPath;
+const suites = {
+  role: [
+    'scripts/route-permission-matrix.cjs',
+    'scripts/role-flow-probe.cjs',
+    'scripts/admin-reporter-regression.cjs',
+    'scripts/role-flow-smoke.cjs'
+  ],
+  training: [
+    'scripts/training-optimization-regression.cjs',
+    'scripts/training-flow-acceptance.cjs'
+  ]
+};
+
+function runScript(scriptPath) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(node, [scriptPath], {
+      cwd: root,
+      stdio: 'inherit'
+    });
+    child.on('error', reject);
+    child.on('exit', (code) => resolve(code || 0));
+  });
+}
+
+async function main() {
+  const suite = String(process.argv[2] || '').trim();
+  if (!suite || !['role', 'training', 'all'].includes(suite)) {
+    console.error('Usage: node scripts/run-test-suite.cjs <role|training|all>');
+    process.exit(1);
+  }
+
+  const queue = suite === 'all'
+    ? suites.role.concat(suites.training)
+    : suites[suite];
+
+  for (const script of queue) {
+    const code = await runScript(script);
+    if (code !== 0) {
+      process.exit(code);
+      return;
+    }
+  }
+}
+
+main().catch((error) => {
+  console.error(error && error.stack ? error.stack : String(error));
+  process.exit(1);
+});

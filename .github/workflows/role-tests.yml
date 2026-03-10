@@ -1,4 +1,4 @@
-name: Role Flow QA
+name: Regression QA
 
 on:
   push:
@@ -43,8 +43,8 @@ jobs:
           cat server.log
           exit 1
 
-      - name: Run layered role tests
-        run: npm run test:role:all
+      - name: Run full regression suite
+        run: npm run test:all
 
       - name: Upload role-flow artifacts
         if: always()

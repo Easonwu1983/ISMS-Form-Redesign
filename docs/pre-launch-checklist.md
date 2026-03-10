@@ -63,8 +63,10 @@
 2. `npm run test:role:probe` 通過
 3. `npm run test:role:focus` 通過
 4. `npm run test:role:smoke` 通過
-5. `npm run test:role:all` 通過
-6. 所有新產物都落在帶日期的 `test-artifacts/` 目錄
+5. `npm run test:training:optimization` 通過
+6. `npm run test:training:acceptance` 通過
+7. `npm run test:all` 通過
+8. 所有新產物都落在帶日期的 `test-artifacts/` 目錄
 
 ## 八、上線前最後人工檢查
 
