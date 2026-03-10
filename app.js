@@ -1353,7 +1353,7 @@
           <div class="card editor-card"><form id="create-form" data-testid="create-form">
             <div class="form-feedback" id="create-feedback" data-state="idle" aria-live="polite" hidden></div>
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
-            <div class="form-row">
+            <div class="form-row form-row--create-meta">
               <div class="form-group"><label class="form-label">編號前綴</label><input type="text" class="form-input" id="f-docno" placeholder="選擇處理單位後自動帶入" readonly><p class="form-hint">系統依民國年與處理單位代碼帶入，例如 CAR-115-022。</p></div>
               <div class="form-group"><label class="form-label">案件編號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動產生，例如 CAR-115-022-1"><p class="form-hint">若留白，系統會在編號前綴後加上該單位流水號；若手動輸入，僅支援英數、連字號與底線。</p></div>
               <div class="form-group"><label class="form-label form-required">提報單位</label>${buildUnitCascadeControl('f-punit', getScopedUnit(u) || u.unit || '', true, true)}</div>

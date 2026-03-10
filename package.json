@@ -2,6 +2,10 @@
   "name": "isms-form-redesign",
   "private": true,
   "scripts": {
+    "nlm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notebooklm-cli.ps1",
+    "nlm:doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notebooklm-workflow.ps1 doctor",
+    "nlm:login": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notebooklm-workflow.ps1 login",
+    "nlm:help": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notebooklm-workflow.ps1 help",
     "test:role:permission": "node scripts/route-permission-matrix.cjs",
     "test:role:probe": "node scripts/role-flow-probe.cjs",
     "test:role:focus": "node scripts/admin-reporter-regression.cjs",
