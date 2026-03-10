@@ -3848,7 +3848,7 @@ tbody td:first-child {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 0.78fr) minmax(680px, 1.22fr);
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
   gap: 22px;
   align-items: start;
 }
@@ -6066,7 +6066,7 @@ tbody tr:hover {
 }
 
 .dashboard-grid {
-  grid-template-columns: minmax(360px, 0.82fr) minmax(760px, 1.18fr);
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
   gap: 22px;
   align-items: stretch;
 }
@@ -6390,7 +6390,7 @@ tbody tr:hover {
   }
 
   .dashboard-grid {
-    grid-template-columns: minmax(400px, 0.8fr) minmax(900px, 1.2fr);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   }
 
   .editor-shell {
