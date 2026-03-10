@@ -135,11 +135,11 @@ function getTrainingStore(page) {
       const rowCount = await page.locator('select[data-field="status"]').count();
       for (let index = 0; index < rowCount; index += 1) {
         await page.locator(`select[data-idx="${index}"][data-field="status"]`).selectOption({ index: 1 });
-        await page.locator(`button[data-idx="${index}"][data-field="completedGeneral"][data-value="是"]`).click();
+        await page.click(`[data-testid="training-binary-completedgeneral-${index}-yes"]`);
         await page.locator(`select[data-idx="${index}"][data-field="isInfoStaff"]`).selectOption({ index: 2 });
       }
 
-      await page.click('#training-form button[type="submit"]');
+      await page.click('[data-testid="training-submit"]');
       await page.waitForFunction(() => String(window.location.hash || '').startsWith('#training-detail/'));
       const trainingId = decodeURIComponent((await currentHash(page)).replace(/^#training-detail\//, ''));
 

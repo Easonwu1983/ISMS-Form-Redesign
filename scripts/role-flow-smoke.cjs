@@ -71,12 +71,12 @@ async function login(page, username, password) {
   if (await page.locator('.btn-logout').count()) {
     await page.evaluate(() => window._logout());
   }
-  await page.waitForSelector('#login-form');
-  await page.fill('#login-user', username);
-  await page.fill('#login-pass', password);
+  await page.waitForSelector('[data-testid="login-form"]');
+  await page.fill('[data-testid="login-user"]', username);
+  await page.fill('[data-testid="login-pass"]', password);
   await Promise.all([
     page.waitForFunction(() => !!document.querySelector('#app'), { timeout: 7000 }),
-    page.click('#login-form button[type="submit"]')
+    page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
   ]);
   await page.waitForTimeout(250);
 }
@@ -84,7 +84,7 @@ async function login(page, username, password) {
 async function logout(page) {
   if (await page.locator('.btn-logout').count()) {
     await page.click('.btn-logout');
-    await page.waitForSelector('#login-form');
+    await page.waitForSelector('[data-testid="login-form"]');
   }
 }
 
@@ -99,7 +99,7 @@ async function resetApp(page) {
       window.location.reload();
     })
   ]);
-  await page.waitForSelector('#login-form');
+  await page.waitForSelector('[data-testid="login-form"]');
 }
 
 async function selectByMatcher(page, selector, matcherSource) {
@@ -216,7 +216,7 @@ function isoDate(offsetDays) {
       });
       await Promise.all([
         page.waitForFunction(() => window.location.hash.startsWith('#detail/'), { timeout: 8000 }),
-        page.click('#create-form button[type="submit"]')
+        page.click('[data-testid="create-submit"]')
       ]);
       createdCarId = decodeURIComponent((await currentHash(page)).replace(/^#detail\//, ''));
       if (!/^CAR-\d{3}-[A-Z0-9]+-\d+$/.test(createdCarId)) {
@@ -271,7 +271,7 @@ function isoDate(offsetDays) {
       await page.fill('#r-risk', '若未持續驗證，後續版本可能再度出現流程中斷。');
       await Promise.all([
         waitForHash(page, '#detail/' + createdCarId),
-        page.click('#respond-form button[type="submit"]')
+        page.click('[data-testid="respond-submit"]')
       ]);
       const store = await getData(page);
       const item = (store.items || []).find((entry) => entry.id === createdCarId);
@@ -315,7 +315,7 @@ function isoDate(offsetDays) {
       if (!checklistId) throw new Error('missing checklist draft id');
       await Promise.all([
         waitForHash(page, '#checklist-detail/' + encodeURIComponent(checklistId)),
-        page.click('#checklist-form button[type="submit"]')
+        page.click('[data-testid="checklist-submit"]')
       ]);
       const store = await getChecklists(page);
       const item = (store.items || []).find((entry) => entry.id === checklistId);
@@ -381,7 +381,7 @@ function isoDate(offsetDays) {
         const infoLabel = index === 0 ? '是' : '否';
         await page.locator(`select[data-idx="${index}"][data-field="isInfoStaff"]`).selectOption({ label: infoLabel });
         if (infoLabel === '是') {
-          await page.locator(`button[data-idx="${index}"][data-field="completedProfessional"][data-value="是"]`).click();
+          await page.click(`[data-testid="training-binary-completedprofessional-${index}-yes"]`);
         }
       }
       await page.click('#training-save-draft');
@@ -416,11 +416,11 @@ function isoDate(offsetDays) {
       await login(page, 'admin', 'admin123');
       await gotoHash(page, 'detail/' + createdCarId);
       await page.waitForSelector('.detail-header');
-      const reviewButton = page.locator('button.btn-primary[onclick*="_cs"]').first();
+      const reviewButton = page.locator('[data-testid="case-transition-review"]');
       if (!await reviewButton.count()) throw new Error('review transition button not available');
       await reviewButton.click();
       await page.waitForTimeout(250);
-      const trackButton = page.locator('button.btn-warning[onclick*="_cs"]');
+      const trackButton = page.locator('[data-testid="case-transition-tracking"]');
       if (!await trackButton.count()) throw new Error('tracking transition button not available');
       await trackButton.click();
       await page.waitForTimeout(250);
@@ -449,7 +449,7 @@ function isoDate(offsetDays) {
       await page.setInputFiles('#tk-file-input', DUMMY_FILE_PATH);
       await Promise.all([
         waitForHash(page, '#detail/' + createdCarId),
-        page.click('#track-form button[type="submit"]')
+        page.click('[data-testid="tracking-submit"]')
       ]);
       const store = await getData(page);
       const item = (store.items || []).find((entry) => entry.id === createdCarId);
@@ -463,7 +463,7 @@ function isoDate(offsetDays) {
       await login(page, 'admin', 'admin123');
       await gotoHash(page, 'detail/' + createdCarId);
       await page.waitForSelector('.detail-header');
-      const approveButton = page.locator('button.btn-success[onclick*="_reviewTracking"]').first();
+      const approveButton = page.locator('[data-testid="case-tracking-approve-close"]');
       if (!await approveButton.count()) throw new Error('approve tracking button not found');
       await approveButton.click();
       await page.waitForTimeout(300);

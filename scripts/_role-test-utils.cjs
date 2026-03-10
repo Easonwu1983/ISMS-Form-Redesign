@@ -96,12 +96,12 @@ async function login(page, username, password) {
   if (await page.locator('.btn-logout').count()) {
     await page.evaluate(() => window._logout());
   }
-  await page.waitForSelector('#login-form');
-  await page.fill('#login-user', username);
-  await page.fill('#login-pass', password);
+  await page.waitForSelector('[data-testid="login-form"]');
+  await page.fill('[data-testid="login-user"]', username);
+  await page.fill('[data-testid="login-pass"]', password);
   await Promise.all([
     page.waitForFunction(() => !!document.querySelector('#app'), { timeout: 7000 }),
-    page.click('#login-form button[type="submit"]')
+    page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
   ]);
   await page.waitForTimeout(250);
 }
@@ -109,7 +109,7 @@ async function login(page, username, password) {
 async function logout(page) {
   if (await page.locator('.btn-logout').count()) {
     await page.click('.btn-logout');
-    await page.waitForSelector('#login-form');
+    await page.waitForSelector('[data-testid="login-form"]');
   }
 }
 
@@ -124,7 +124,7 @@ async function resetApp(page) {
       window.location.reload();
     })
   ]);
-  await page.waitForSelector('#login-form');
+  await page.waitForSelector('[data-testid="login-form"]');
 }
 
 async function readJsonFromStorage(page, key) {

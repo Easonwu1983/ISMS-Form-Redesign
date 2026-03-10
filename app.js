@@ -11,7 +11,8 @@
   const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter', [ROLES.VIEWER]: 'badge-viewer' };
   const TRAINING_STATUSES = { DRAFT: '暫存', PENDING_SIGNOFF: '待簽核', SUBMITTED: '已完成填報', RETURNED: '退回更正' };
   const TRAINING_EMPLOYEE_STATUS = ['在職', '離職', '退休', '留職停薪', '單位調職'];
-  const TRAINING_BOOLEAN_OPTIONS = ['是', '否'];
+  const TRAINING_BOOLEAN_OPTIONS = ['是', '否', '無須', '不適用'];
+  const TRAINING_BOOLEAN_SELECT_OPTIONS = ['是', '否'];
   const TRAINING_GENERAL_LABEL = '資安通識（1年3小時）';
   const TRAINING_INFO_STAFF_LABEL = '資訊人員(含承辦委外資通系統)';
   const TRAINING_PROFESSIONAL_LABEL = '資安專業課程（1年3小時）';
@@ -1368,6 +1369,27 @@
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
   }
+
+  function isTrainingBooleanValue(value) {
+    return TRAINING_BOOLEAN_SELECT_OPTIONS.includes(String(value || '').trim());
+  }
+
+  function isTrainingBooleanCompatibleValue(value) {
+    return TRAINING_BOOLEAN_OPTIONS.includes(String(value || '').trim());
+  }
+
+  function normalizeTrainingProfessionalValue(value) {
+    const safeValue = String(value || '').trim();
+    if (!isTrainingBooleanCompatibleValue(safeValue)) return '';
+    if (safeValue === '無須' || safeValue === '不適用') return '不適用';
+    return safeValue;
+  }
+
+  function getStoredTrainingProfessionalValue(record) {
+    if (!record || record.status !== '在職') return '';
+    if (record.isInfoStaff === '否') return '不適用';
+    return isTrainingBooleanValue(record.completedProfessional) ? record.completedProfessional : '';
+  }
   function mkChk(name, opts, sel) {
     return '<div class="checkbox-group" data-testid="' + name + '-group">' + opts.map((o, index) => {
       const key = toTestIdFragment(o) || String(index);
@@ -1385,11 +1407,11 @@
   function renderLogin() {
     document.body.innerHTML = '<div class="login-page"><div class="login-card">' +
       '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1>內部稽核管考追蹤系統</h1><p>ISMS Corrective Action Tracking</p></div>' +
-      '<div class="login-error" id="login-error">帳號或密碼錯誤</div>' +
-      '<div id="login-panel"><form class="login-form" id="login-form">' +
-      '<div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="login-user" placeholder="請輸入帳號" required autofocus></div>' +
-      '<div class="form-group"><label class="form-label">密碼</label><input type="password" class="form-input" id="login-pass" placeholder="請輸入密碼" required></div>' +
-      '<button type="submit" class="login-btn">登入系統 ' + ic('arrow-right', 'icon-sm') + '</button>' +
+      '<div class="login-error" id="login-error" data-testid="login-error">帳號或密碼錯誤</div>' +
+      '<div id="login-panel"><form class="login-form" id="login-form" data-testid="login-form">' +
+      '<div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="login-user" data-testid="login-user" placeholder="請輸入帳號" required autofocus></div>' +
+      '<div class="form-group"><label class="form-label">密碼</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" placeholder="請輸入密碼" required></div>' +
+      '<button type="submit" class="login-btn" data-testid="login-submit">登入系統 ' + ic('arrow-right', 'icon-sm') + '</button>' +
       '</form>' +
       '<p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">忘記密碼？</a></p></div>' +
       '<div id="forgot-panel" style="display:none">' +
@@ -1896,17 +1918,17 @@ function renderCreate() {
     const otag = isOverdue(item) ? ` <span class="badge badge-overdue"><span class="badge-dot"></span>已逾期</span>` : '';
     const cats = (item.category || []).map(c => `<span class="badge badge-category">${esc(c)}</span>`).join(' ');
     let btns = '';
-    if (canRespond) btns += `<a href="#respond/${item.id}" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 回填矯正措施</a>`;
-    if (item.status === STATUSES.PROPOSED && canReview()) btns += `<button class="btn btn-primary" onclick="window._cs('${item.id}','${STATUSES.REVIEWING}')">${ic('eye', 'icon-sm')} 進入審核</button>`;
+    if (canRespond) btns += `<a href="#respond/${item.id}" class="btn btn-primary" data-testid="case-respond">${ic('edit-3', 'icon-sm')} 回填矯正措施</a>`;
+    if (item.status === STATUSES.PROPOSED && canReview()) btns += `<button class="btn btn-primary" data-testid="case-transition-review" onclick="window._cs('${item.id}','${STATUSES.REVIEWING}')">${ic('eye', 'icon-sm')} 進入審核</button>`;
     if (item.status === STATUSES.REVIEWING && canReview()) {
-      btns += `<button class="btn btn-success" onclick="window._cs('${item.id}','${STATUSES.CLOSED}')">${ic('check', 'icon-sm')} 審核通過結案</button>`;
-      btns += `<button class="btn btn-warning" onclick="window._cs('${item.id}','${STATUSES.TRACKING}')">${ic('eye', 'icon-sm')} 轉為追蹤</button>`;
-      btns += `<button class="btn btn-danger" onclick="window._cs('${item.id}','${STATUSES.PENDING}')">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`;
+      btns += `<button class="btn btn-success" data-testid="case-transition-close" onclick="window._cs('${item.id}','${STATUSES.CLOSED}')">${ic('check', 'icon-sm')} 審核通過結案</button>`;
+      btns += `<button class="btn btn-warning" data-testid="case-transition-tracking" onclick="window._cs('${item.id}','${STATUSES.TRACKING}')">${ic('eye', 'icon-sm')} 轉為追蹤</button>`;
+      btns += `<button class="btn btn-danger" data-testid="case-transition-return" onclick="window._cs('${item.id}','${STATUSES.PENDING}')">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`;
     }
-    if (canFillTracking) btns += `<a href="#tracking/${item.id}" class="btn btn-primary">${ic('clipboard-check', 'icon-sm')} 填報追蹤結果</a>`;
+    if (canFillTracking) btns += `<a href="#tracking/${item.id}" class="btn btn-primary" data-testid="case-fill-tracking">${ic('clipboard-check', 'icon-sm')} 填報追蹤結果</a>`;
     if (canReviewTracking) {
-      btns += `<button class="btn btn-success" onclick="window._reviewTracking('${item.id}','close')">${ic('check', 'icon-sm')} 同意結案</button>`;
-      btns += `<button class="btn btn-warning" onclick="window._reviewTracking('${item.id}','continue')">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button>`;
+      btns += `<button class="btn btn-success" data-testid="case-tracking-approve-close" onclick="window._reviewTracking('${item.id}','close')">${ic('check', 'icon-sm')} 同意結案</button>`;
+      btns += `<button class="btn btn-warning" data-testid="case-tracking-approve-continue" onclick="window._reviewTracking('${item.id}','continue')">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button>`;
     }
 
     const renderEvidenceList = (files, emptyText = '尚無佐證') => files && files.length
@@ -1940,7 +1962,7 @@ function renderCreate() {
       <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(pending.execution || '')}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(pending.trackNote || '')}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次提報佐證</div>${renderEvidenceList(pending.evidence, '本次追蹤未附佐證')}</div>
-      ${canReviewTracking ? `<div class="form-actions"><button type="button" class="btn btn-success" onclick="window._reviewTracking('${item.id}','close')">${ic('check', 'icon-sm')} 同意結案</button><button type="button" class="btn btn-warning" onclick="window._reviewTracking('${item.id}','continue')">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button></div>` : `<div class="detail-section"><div class="detail-content" style="color:var(--text-muted)">${isHandler ? '已送出追蹤提報，待管理者審核。' : '目前已有追蹤提報待管理者審核。'}</div></div>`}
+      ${canReviewTracking ? `<div class="form-actions"><button type="button" class="btn btn-success" data-testid="pending-tracking-approve-close" onclick="window._reviewTracking('${item.id}','close')">${ic('check', 'icon-sm')} 同意結案</button><button type="button" class="btn btn-warning" data-testid="pending-tracking-approve-continue" onclick="window._reviewTracking('${item.id}','continue')">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button></div>` : `<div class="detail-section"><div class="detail-content" style="color:var(--text-muted)">${isHandler ? '已送出追蹤提報，待管理者審核。' : '目前已有追蹤提報待管理者審核。'}</div></div>`}
     </div>` : '';
 
     const tkHtml = (item.trackings || []).map((tk, i) => {
@@ -3565,38 +3587,34 @@ function renderTracking(id) {
       ? String(normalized.status || '').trim()
       : '';
 
-    let completedGeneral = TRAINING_BOOLEAN_OPTIONS.includes(String(normalized.completedGeneral || '').trim())
+    let completedGeneral = isTrainingBooleanValue(String(normalized.completedGeneral || '').trim())
       ? String(normalized.completedGeneral || '').trim()
       : '';
     if (!completedGeneral && status === '在職' && hasTrainingValue(normalized.hours)) {
       completedGeneral = Number(normalized.hours || 0) >= 3 ? '是' : '否';
     }
 
-    let isInfoStaff = TRAINING_BOOLEAN_OPTIONS.includes(String(normalized.isInfoStaff || '').trim())
+    let isInfoStaff = isTrainingBooleanValue(String(normalized.isInfoStaff || '').trim())
       ? String(normalized.isInfoStaff || '').trim()
       : '';
-    if (!isInfoStaff && TRAINING_BOOLEAN_OPTIONS.includes(String(normalized.outsourced || '').trim())) {
+    if (!isInfoStaff && isTrainingBooleanValue(String(normalized.outsourced || '').trim())) {
       isInfoStaff = String(normalized.outsourced || '').trim();
     }
 
-    let completedProfessional = ['是', '否', '無須'].includes(String(normalized.completedProfessional || '').trim())
-      ? String(normalized.completedProfessional || '').trim()
-      : '';
-    if (!completedProfessional && ['是', '否', '無須'].includes(String(normalized.completedInfo || '').trim())) {
-      completedProfessional = String(normalized.completedInfo || '').trim();
-    }
+    let completedProfessional = normalizeTrainingProfessionalValue(normalized.completedProfessional || '');
+    if (!completedProfessional) completedProfessional = normalizeTrainingProfessionalValue(normalized.completedInfo || '');
 
     if (status !== '在職') {
       completedGeneral = '';
       isInfoStaff = '';
       completedProfessional = '';
     } else {
-      if (!TRAINING_BOOLEAN_OPTIONS.includes(completedGeneral)) completedGeneral = '';
-      if (!TRAINING_BOOLEAN_OPTIONS.includes(isInfoStaff)) isInfoStaff = '';
+      if (!isTrainingBooleanValue(completedGeneral)) completedGeneral = '';
+      if (!isTrainingBooleanValue(isInfoStaff)) isInfoStaff = '';
       if (isInfoStaff === '否') {
-        completedProfessional = '';
+        completedProfessional = '不適用';
       } else if (isInfoStaff === '是') {
-        if (!TRAINING_BOOLEAN_OPTIONS.includes(completedProfessional)) completedProfessional = '';
+        if (!isTrainingBooleanValue(completedProfessional)) completedProfessional = '';
       } else {
         completedProfessional = '';
       }
@@ -3907,9 +3925,9 @@ function renderTracking(id) {
   function isTrainingRecordReadyForSubmit(record) {
     if (!record || !record.status) return false;
     if (record.status !== '在職') return true;
-    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.completedGeneral)) return false;
-    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.isInfoStaff)) return false;
-    if (record.isInfoStaff === '是') return TRAINING_BOOLEAN_OPTIONS.includes(record.completedProfessional);
+    if (!isTrainingBooleanValue(record.completedGeneral)) return false;
+    if (!isTrainingBooleanValue(record.isInfoStaff)) return false;
+    if (record.isInfoStaff === '是') return isTrainingBooleanValue(record.completedProfessional);
     return true;
   }
 
@@ -3923,9 +3941,9 @@ function renderTracking(id) {
   function getTrainingRecordHint(record) {
     if (!record.status) return '請先選擇在職狀態';
     if (record.status !== '在職') return '非在職人員，不列入統計';
-    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.completedGeneral)) return '請填寫' + TRAINING_GENERAL_LABEL + '完成情形';
-    if (!TRAINING_BOOLEAN_OPTIONS.includes(record.isInfoStaff)) return '請判定是否為' + TRAINING_INFO_STAFF_LABEL;
-    if (record.isInfoStaff === '是' && !TRAINING_BOOLEAN_OPTIONS.includes(record.completedProfessional)) {
+    if (!isTrainingBooleanValue(record.completedGeneral)) return '請填寫' + TRAINING_GENERAL_LABEL + '完成情形';
+    if (!isTrainingBooleanValue(record.isInfoStaff)) return '請判定是否為' + TRAINING_INFO_STAFF_LABEL;
+    if (record.isInfoStaff === '是' && !isTrainingBooleanValue(record.completedProfessional)) {
       return '請填寫' + TRAINING_PROFESSIONAL_LABEL + '完成情形';
     }
     if (isTrainingRecordComplete(record)) return '已符合完成條件';
@@ -3952,7 +3970,7 @@ function renderTracking(id) {
   function getTrainingProfessionalDisplay(record) {
     if (!record || record.status !== '在職') return '—';
     if (record.isInfoStaff === '否') return '不適用';
-    return record.completedProfessional || '—';
+    return normalizeTrainingProfessionalValue(record.completedProfessional || record.completedInfo || '') || '—';
   }
 
   function computeTrainingSummary(records) {
@@ -4201,9 +4219,10 @@ function renderTracking(id) {
 
   function renderTrainingBinaryButtons(field, value, index, disabled, yesLabel, noLabel) {
     const dis = disabled ? 'disabled' : '';
+    const testIdBase = 'training-binary-' + toTestIdFragment(field || 'field') + '-' + index;
     return '<div class="training-binary-group" role="group">'
-      + '<button type="button" class="training-binary-btn ' + (value === '是' ? 'is-active is-yes' : '') + '" data-idx="' + index + '" data-field="' + field + '" data-value="是" ' + dis + '>' + esc(yesLabel || '✓') + '</button>'
-      + '<button type="button" class="training-binary-btn ' + (value === '否' ? 'is-active is-no' : '') + '" data-idx="' + index + '" data-field="' + field + '" data-value="否" ' + dis + '>' + esc(noLabel || '✕') + '</button>'
+      + '<button type="button" class="training-binary-btn ' + (value === '是' ? 'is-active is-yes' : '') + '" data-testid="' + testIdBase + '-yes" data-idx="' + index + '" data-field="' + field + '" data-value="是" aria-label="' + esc(field + '-yes') + '" ' + dis + '>' + esc(yesLabel || '✓') + '</button>'
+      + '<button type="button" class="training-binary-btn ' + (value === '否' ? 'is-active is-no' : '') + '" data-testid="' + testIdBase + '-no" data-idx="' + index + '" data-field="' + field + '" data-value="否" aria-label="' + esc(field + '-no') + '" ' + dis + '>' + esc(noLabel || '✕') + '</button>'
       + '</div>';
   }
 
@@ -4416,7 +4435,7 @@ function renderTracking(id) {
       + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
       + '<div class="training-editor-note" style="margin-top:-4px">草稿或退回更正狀態下，可刪除自己手動新增的人員；正式名單與他人新增資料仍會保留。</div>'
       + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th><th style="width:120px">操作</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
-      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary">' + ic('lock', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
+      + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary" data-testid="training-submit">' + ic('lock', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
       + '</form></div>'
       + '</div>'
       + '</div>';
@@ -4577,7 +4596,7 @@ function renderTracking(id) {
           + '<td>' + (canDeleteRow ? '<input type="text" class="form-input training-row-meta' + editableMetaClass + '" data-idx="' + index + '" data-field="jobTitle" value="' + esc(row.jobTitle || '') + '" placeholder="職稱">' : esc(row.jobTitle || '—')) + '</td>'
           + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="status">' + trainingSelectOptionsHtml(TRAINING_EMPLOYEE_STATUS, row.status, '請選擇') + '</select></td>'
           + '<td>' + renderTrainingBinaryButtons('completedGeneral', row.completedGeneral, index, !isActive, '✓', '✕') + '</td>'
-          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="isInfoStaff" ' + (isActive ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_OPTIONS, row.isInfoStaff, '請選擇') + '</select></td>'
+          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="isInfoStaff" ' + (isActive ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_SELECT_OPTIONS, row.isInfoStaff, '請選擇') + '</select></td>'
           + '<td>' + professionalHtml + '</td>'
           + '<td><div class="training-cell-note">' + trainingDecisionBadge(row) + '<div class="training-cell-hint">' + esc(getTrainingRecordHint(row)) + '</div></div></td>'
           + '<td><input type="text" class="form-input training-row-note" data-idx="' + index + '" value="' + esc(row.note || '') + '" placeholder="可填補充說明或課程名稱"></td>'
@@ -4603,7 +4622,7 @@ function renderTracking(id) {
             row.isInfoStaff = '';
             row.completedProfessional = '';
           }
-          if (field === 'isInfoStaff' && row.isInfoStaff !== '是') row.completedProfessional = '';
+          if (field === 'isInfoStaff') row.completedProfessional = row.isInfoStaff === '否' ? '不適用' : '';
           rowsState[Number(event.target.dataset.idx)] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
           renderRows();
         });
@@ -4639,7 +4658,7 @@ function renderTracking(id) {
           const field = button.dataset.field;
           const value = button.dataset.value;
           row[field] = row[field] === value ? '' : value;
-          if (field === 'completedProfessional' && row.isInfoStaff !== '是') row.completedProfessional = '';
+          if (field === 'completedProfessional' && row.isInfoStaff !== '是') row.completedProfessional = row.isInfoStaff === '否' ? '不適用' : '';
           rowsState[idx] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
           renderRows();
         });
@@ -4676,7 +4695,7 @@ function renderTracking(id) {
         ...row,
         unit,
         statsUnit: getTrainingStatsUnit(unit),
-        completedProfessional: row.isInfoStaff === '是' ? row.completedProfessional : ''
+        completedProfessional: getStoredTrainingProfessionalValue(row)
       }, unit));
     }
 

@@ -185,7 +185,7 @@ async function populateTrainingFlowOne(page) {
     const infoValue = index === 0 ? '是' : '否';
     await page.locator(`select[data-idx="${index}"][data-field="isInfoStaff"]`).selectOption({ label: infoValue });
     if (infoValue === '是') {
-      await page.locator(`button[data-idx="${index}"][data-field="completedProfessional"][data-value="是"]`).click();
+      await page.click(`[data-testid="training-binary-completedprofessional-${index}-yes"]`);
     }
   }
 
@@ -233,7 +233,7 @@ async function populateTrainingFlowOne(page) {
         const copy = document.getElementById('training-import-file-copy');
         return !!copy && String(copy.textContent || '').includes('training-roster-import.xlsx');
       });
-      await page.click('#training-import-form button[type="submit"]');
+      await page.click('[data-testid="training-import-submit"]');
       await page.waitForFunction((names) => {
         const rows = Array.from(document.querySelectorAll('tbody tr')).map((row) => row.textContent || '');
         return names.every((name) => rows.some((text) => text.includes(name)));
@@ -271,7 +271,7 @@ async function populateTrainingFlowOne(page) {
       if (!trainingId) throw new Error('missing training draft id');
       await Promise.all([
         waitForHash(page, '#training-detail/' + trainingId),
-        page.click('#training-form button[type="submit"]')
+        page.click('[data-testid="training-submit"]')
       ]);
       const pendingForm = await getFormById(page, trainingId);
       if (!pendingForm || pendingForm.status !== '待簽核') throw new Error('training form did not move to pending signoff');

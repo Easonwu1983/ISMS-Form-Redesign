@@ -61,7 +61,7 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
       });
       await Promise.all([
         page.waitForFunction(() => window.location.hash.startsWith('#detail/'), { timeout: 8000 }),
-        page.click('#create-form button[type="submit"]')
+        page.click('[data-testid="create-submit"]')
       ]);
       carId = decodeURIComponent((await currentHash(page)).replace(/^#detail\//, ''));
       if (!/^CAR-\d{3}-[A-Z0-9]+-\d+$/.test(carId)) {
@@ -82,7 +82,7 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
       await page.fill('#r-elim', '根因消除措施測試資料');
       await Promise.all([
         waitForHash(page, '#detail/' + carId),
-        page.click('#respond-form button[type="submit"]')
+        page.click('[data-testid="respond-submit"]')
       ]);
       const item = await page.evaluate((id) => JSON.parse(localStorage.getItem('cats_data')).items.find((entry) => entry.id === id), carId);
       if (!item.correctiveAction || !item.rootCause || !item.rootElimination) {
@@ -97,9 +97,9 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'detail/' + carId);
       await page.waitForSelector('.detail-header');
-      await page.locator('button.btn-primary[onclick*="_cs"]').first().click();
+      await page.click('[data-testid="case-transition-review"]');
       await page.waitForTimeout(250);
-      await page.locator('button.btn-warning[onclick*="_cs"]').first().click();
+      await page.click('[data-testid="case-transition-tracking"]');
       await page.waitForTimeout(250);
       const item = await page.evaluate((id) => JSON.parse(localStorage.getItem('cats_data')).items.find((entry) => entry.id === id), carId);
       if (item.pendingTracking) throw new Error('pendingTracking should be empty before reporter submission');
@@ -123,7 +123,7 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
       await page.setInputFiles('#tk-file-input', FILE_PATH);
       await Promise.all([
         waitForHash(page, '#detail/' + carId),
-        page.click('#track-form button[type="submit"]')
+        page.click('[data-testid="tracking-submit"]')
       ]);
       const item = await page.evaluate((id) => JSON.parse(localStorage.getItem('cats_data')).items.find((entry) => entry.id === id), carId);
       if (!item.pendingTracking) throw new Error('pendingTracking missing after tracking submit');
@@ -136,7 +136,7 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'detail/' + carId);
       await page.waitForSelector('.detail-header');
-      await page.locator('button.btn-success[onclick*="_reviewTracking"]').first().click();
+      await page.click('[data-testid="case-tracking-approve-close"]');
       await page.waitForTimeout(300);
       const item = await page.evaluate((id) => JSON.parse(localStorage.getItem('cats_data')).items.find((entry) => entry.id === id), carId);
       if (!item.closedDate) throw new Error('closedDate missing after final approval');
