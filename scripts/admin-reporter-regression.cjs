@@ -2,6 +2,7 @@
 const path = require('path');
 const {
   attachDiagnostics,
+  chooseUnitForHandlerUsername,
   createArtifactRun,
   createResultEnvelope,
   currentHash,
@@ -19,39 +20,6 @@ const {
 const OUT_DIR = createArtifactRun('role-flow-focus').outDir;
 const RESULT_PATH = path.join(OUT_DIR, 'admin-reporter-regression.json');
 const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
-
-async function chooseUnitForHandlerUsername(page, baseId, handlerSelectId, username) {
-  await page.evaluate(({ baseId, handlerSelectId, username }) => {
-    const parentSelect = document.getElementById(baseId + '-parent');
-    const childSelect = document.getElementById(baseId + '-child');
-    const handlerSelect = document.getElementById(handlerSelectId);
-    if (!parentSelect || !childSelect || !handlerSelect) {
-      throw new Error(`Missing create-form selects for ${baseId}`);
-    }
-    const optionsWithoutPlaceholder = (select) => Array.from(select.options).filter((entry) => entry.value);
-    for (const parentOption of optionsWithoutPlaceholder(parentSelect)) {
-      parentSelect.value = parentOption.value;
-      parentSelect.dispatchEvent(new Event('change', { bubbles: true }));
-      const childOptions = optionsWithoutPlaceholder(childSelect);
-      if (!childOptions.length) {
-        const handlerOption = Array.from(handlerSelect.options).find((entry) => entry.dataset.username === username);
-        if (handlerOption) return;
-      }
-      for (const childOption of childOptions) {
-        childSelect.value = childOption.value;
-        childSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        const handlerOption = Array.from(handlerSelect.options).find((entry) => entry.dataset.username === username);
-        if (handlerOption) return;
-      }
-    }
-    const availableHandlers = Array.from(handlerSelect.options).map((entry) => ({
-      text: entry.textContent || '',
-      username: entry.dataset.username || ''
-    }));
-    throw new Error(`Unable to find handler ${username}: ${JSON.stringify(availableHandlers)}`);
-  }, { baseId, handlerSelectId, username });
-  await page.waitForTimeout(180);
-}
 
 (async () => {
   const results = createResultEnvelope({

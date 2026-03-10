@@ -6,10 +6,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>內部稽核管考追蹤系統 - Corrective Action Tracking</title>
   <meta name="description" content="國立臺灣大學內部稽核管考追蹤系統，提供矯正單管理、內稽檢核表、教育訓練時數統計與單位治理功能。">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css">
-  <script src="vendor/lucide.min.js"></script>
-  <script src="vendor/xlsx.full.min.js"></script>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <script>
+    (function () {
+      var cacheKey = String(Date.now());
+      var head = document.head;
+      window.__APP_ASSET_VERSION__ = cacheKey;
+
+      function appendLink(rel, href, type) {
+        var link = document.createElement('link');
+        link.rel = rel;
+        link.href = href + '?v=' + cacheKey;
+        if (type) link.type = type;
+        head.appendChild(link);
+      }
+
+      appendLink('icon', 'favicon.svg', 'image/svg+xml');
+      appendLink('stylesheet', 'styles.css');
+    })();
+  </script>
 </head>
 
 <body>
@@ -19,8 +36,36 @@
   <div class="toast-container" id="toast-container"></div>
   <div id="modal-root"></div>
 
-  <script src="units.js"></script>
-  <script src="app.js"></script>
+  <script>
+    (function () {
+      var cacheKey = window.__APP_ASSET_VERSION__ || String(Date.now());
+      var assets = [
+        'vendor/lucide.min.js',
+        'vendor/xlsx.full.min.js',
+        'units.js',
+        'app.js'
+      ];
+      var index = 0;
+
+      function loadNext() {
+        if (index >= assets.length) return;
+
+        var script = document.createElement('script');
+        script.src = assets[index] + '?v=' + cacheKey;
+        script.async = false;
+        script.onload = function () {
+          index += 1;
+          loadNext();
+        };
+        script.onerror = function () {
+          console.error('Failed to load asset:', script.src);
+        };
+        document.body.appendChild(script);
+      }
+
+      loadNext();
+    })();
+  </script>
 </body>
 
 </html>

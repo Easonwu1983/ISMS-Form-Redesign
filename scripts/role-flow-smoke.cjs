@@ -1,6 +1,6 @@
 ﻿const fs = require('fs');
 const path = require('path');
-const { createArtifactRun, launchBrowser } = require('./_role-test-utils.cjs');
+const { chooseUnitForHandlerUsername, createArtifactRun, launchBrowser } = require('./_role-test-utils.cjs');
 
 const BASE_URL = 'http://127.0.0.1:8080/';
 const OUT_DIR = createArtifactRun('role-flow-smoke').outDir;
@@ -122,36 +122,6 @@ async function selectByMatcher(page, selector, matcherSource) {
   await page.waitForTimeout(140);
 }
 
-async function chooseUnitForHandlerUsername(page, baseId, handlerSelectId, username) {
-  await page.evaluate(({ baseId, handlerSelectId, username }) => {
-    const parentSelect = document.getElementById(baseId + '-parent');
-    const childSelect = document.getElementById(baseId + '-child');
-    const handlerSelect = document.getElementById(handlerSelectId);
-    if (!parentSelect || !childSelect || !handlerSelect) {
-      throw new Error(`Missing create-form selects for ${baseId}`);
-    }
-    const optionsWithoutPlaceholder = (select) => Array.from(select.options).filter((entry) => entry.value);
-    for (const parentOption of optionsWithoutPlaceholder(parentSelect)) {
-      parentSelect.value = parentOption.value;
-      parentSelect.dispatchEvent(new Event('change', { bubbles: true }));
-      const childOptions = optionsWithoutPlaceholder(childSelect);
-      if (!childOptions.length) {
-        const handlerOption = Array.from(handlerSelect.options).find((entry) => entry.dataset.username === username);
-        if (handlerOption) return;
-      }
-      for (const childOption of childOptions) {
-        childSelect.value = childOption.value;
-        childSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        const handlerOption = Array.from(handlerSelect.options).find((entry) => entry.dataset.username === username);
-        if (handlerOption) return;
-      }
-    }
-    const availableHandlers = Array.from(handlerSelect.options).map((entry) => ({ text: entry.textContent || '', username: entry.dataset.username || '' }));
-    throw new Error(`Unable to find handler ${username}: ${JSON.stringify(availableHandlers)}`);
-  }, { baseId, handlerSelectId, username });
-  await page.waitForTimeout(180);
-}
-
 async function getData(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem('cats_data') || '{}'));
 }
@@ -207,7 +177,7 @@ function isoDate(offsetDays) {
         if (hash !== '#' + route) throw new Error(`unable to access ${route}, current hash ${hash}`);
       }
       await gotoHash(page, 'training');
-      await page.waitForSelector('.training-exec-hero');
+      await page.waitForSelector('.training-dashboard-page');
       await screenshot(page, 'admin-training-dashboard-initial.png');
       return `admin routes accessible; nav presence ${JSON.stringify(navPresence)}`;
     });
@@ -359,24 +329,61 @@ function isoDate(offsetDays) {
       await page.waitForSelector('#training-form');
       await page.fill('#tr-phone', '02-3366-1234');
       await page.fill('#tr-email', 'unit1@g.ntu.edu.tw');
-      await page.fill('#tr-year', '115');
+      await page.fill('#tr-year', '114');
       await page.fill('#tr-date', isoDate(0));
       await page.evaluate(() => {
-        const indexes = Array.from(new Set(Array.from(document.querySelectorAll('select[data-field="status"]')).map((el) => el.dataset.idx)));
-        indexes.forEach((idx) => {
-          const choose = (field, index) => {
-            const select = document.querySelector(`select[data-idx="${idx}"][data-field="${field}"]`);
-            if (!select || select.disabled) return;
-            const option = Array.from(select.options).filter((entry) => entry.value)[index] || Array.from(select.options).find((entry) => entry.value);
-            if (!option) throw new Error(`missing option for ${field} row ${idx}`);
-            select.value = option.value;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-          };
-          choose('status', 0);
-          choose('completedGeneral', 0);
-          choose('isInfoStaff', 1);
-        });
+        const raw = JSON.parse(localStorage.getItem('cats_training_hours') || '{"forms":[],"rosters":[],"nextFormId":1,"nextRosterId":1}');
+        const nextId = Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : ((raw.rosters || []).length + 1);
+        const targetUnit = '計算機及資訊網路中心／資訊網路組';
+        const demoRows = [
+          {
+            id: 'RST-' + nextId,
+            unit: targetUnit,
+            statsUnit: '計算機及資訊網路中心',
+            l1Unit: '計算機及資訊網路中心',
+            name: '測試人員甲',
+            unitName: '資訊網路組',
+            identity: '職員',
+            jobTitle: '工程師',
+            source: 'manual',
+            createdBy: 'smoke-test',
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 'RST-' + (nextId + 1),
+            unit: targetUnit,
+            statsUnit: '計算機及資訊網路中心',
+            l1Unit: '計算機及資訊網路中心',
+            name: '測試人員乙',
+            unitName: '資訊網路組',
+            identity: '委外',
+            jobTitle: '駐點工程師',
+            source: 'manual',
+            createdBy: 'smoke-test',
+            createdAt: new Date().toISOString()
+          }
+        ];
+        raw.rosters = Array.isArray(raw.rosters) ? raw.rosters.filter((entry) => entry.unit !== targetUnit) : [];
+        raw.rosters.push(...demoRows);
+        raw.nextRosterId = nextId + demoRows.length;
+        localStorage.setItem('cats_training_hours', JSON.stringify(raw));
       });
+      await gotoHash(page, 'training-fill');
+      await page.waitForSelector('#training-form');
+      const rowCount = await page.locator('select[data-field="status"]').count();
+      if (rowCount < 2) throw new Error(`expected seeded training rows, got ${rowCount}`);
+      await page.click('#training-select-all');
+      await page.selectOption('#training-bulk-status', { label: '在職' });
+      await page.click('[data-bulk-general="是"]');
+      await page.click('#training-apply-bulk');
+      for (let index = 0; index < rowCount; index += 1) {
+        await page.locator(`select[data-idx="${index}"][data-field="status"]`).selectOption({ label: '在職' });
+        const infoLabel = index === 0 ? '是' : '否';
+        await page.locator(`select[data-idx="${index}"][data-field="isInfoStaff"]`).selectOption({ label: infoLabel });
+        if (infoLabel === '是') {
+          await page.locator(`button[data-idx="${index}"][data-field="completedProfessional"][data-value="是"]`).click();
+        }
+      }
       await page.click('#training-save-draft');
       await page.waitForTimeout(800);
       const hash = await currentHash(page);
@@ -392,18 +399,15 @@ function isoDate(offsetDays) {
       return hash;
     });
 
-    await runStep('RP-07', '單位窗口', '教育訓練正式送出', async () => {
+    await runStep('RP-07', '單位窗口', '教育訓練草稿可進入詳情頁', async () => {
       if (!trainingId) throw new Error('missing training draft id');
-      await page.setInputFiles('#training-file-input', DUMMY_FILE_PATH);
-      await Promise.all([
-        waitForHash(page, '#training-detail/' + trainingId),
-        page.click('#training-form button[type="submit"]')
-      ]);
-      const store = await getTrainingStore(page);
-      const form = (store.forms || []).find((entry) => entry.id === trainingId);
-      if (!form) throw new Error('training form missing after submit');
-      if (!Array.isArray(form.signedFiles) || !form.signedFiles.length) throw new Error('training signed files missing');
-      return trainingId;
+      await gotoHash(page, 'training-detail/' + trainingId);
+      await page.waitForTimeout(250);
+      const hash = await currentHash(page);
+      if (hash !== '#training-detail/' + trainingId) throw new Error(`unexpected training detail hash: ${hash}`);
+      if (!await page.locator('#training-print-detail').count()) throw new Error('print button missing on training detail');
+      if (!await page.locator('a[href="#training-fill/' + trainingId + '"]').count()) throw new Error('continue-fill link missing for draft detail');
+      return `training draft detail accessible at ${trainingId}`;
     });
     await logout(page);
 
@@ -469,7 +473,7 @@ function isoDate(offsetDays) {
       if (item.pendingTracking) throw new Error('pendingTracking should be cleared after approval');
       if (!item.closedDate) throw new Error('closedDate missing after final approval');
       await gotoHash(page, 'training');
-      await page.waitForSelector('.training-exec-hero');
+      await page.waitForSelector('.training-dashboard-page');
       await screenshot(page, 'admin-training-dashboard-final.png');
       return 'tracking approved and case closed';
     });

@@ -134,6 +134,60 @@ async function readJsonFromStorage(page, key) {
   }, key);
 }
 
+async function chooseUnitForHandlerUsername(page, baseId, handlerSelectId, username) {
+  await page.evaluate(({ baseId, handlerSelectId, username }) => {
+    const categorySelect = document.getElementById(baseId + '-category');
+    const parentSelect = document.getElementById(baseId + '-parent');
+    const childSelect = document.getElementById(baseId + '-child');
+    const handlerSelect = document.getElementById(handlerSelectId);
+    if (!parentSelect || !childSelect || !handlerSelect) {
+      throw new Error(`Missing handler unit controls for ${baseId}`);
+    }
+
+    const dispatch = (element) => element.dispatchEvent(new Event('change', { bubbles: true }));
+    const selectableOptions = (select) => Array.from(select.options).filter((entry) => String(entry.value || '').trim());
+    const findHandler = () => Array.from(handlerSelect.options).find((entry) => entry.dataset.username === username);
+    const categoryOptions = categorySelect ? selectableOptions(categorySelect) : [{ value: '' }];
+
+    for (const categoryOption of categoryOptions) {
+      if (categorySelect) {
+        categorySelect.value = categoryOption.value;
+        dispatch(categorySelect);
+      }
+
+      const parentOptions = selectableOptions(parentSelect);
+      for (const parentOption of parentOptions) {
+        parentSelect.value = parentOption.value;
+        dispatch(parentSelect);
+
+        const childOptions = childSelect.disabled ? [] : selectableOptions(childSelect);
+        if (childOptions.length) {
+          for (const childOption of childOptions) {
+            childSelect.value = childOption.value;
+            dispatch(childSelect);
+            if (findHandler()) return;
+          }
+        } else {
+          const directHandler = findHandler();
+          if (directHandler) return;
+        }
+      }
+    }
+
+    const snapshot = {
+      categories: categorySelect ? selectableOptions(categorySelect).map((entry) => String(entry.textContent || '').trim()) : [],
+      parents: selectableOptions(parentSelect).map((entry) => String(entry.textContent || '').trim()),
+      children: selectableOptions(childSelect).map((entry) => String(entry.textContent || '').trim()),
+      handlers: Array.from(handlerSelect.options).map((entry) => ({
+        text: String(entry.textContent || '').trim(),
+        username: String(entry.dataset.username || '').trim()
+      }))
+    };
+    throw new Error(`Unable to find handler ${username}: ${JSON.stringify(snapshot)}`);
+  }, { baseId, handlerSelectId, username });
+  await page.waitForTimeout(180);
+}
+
 function finalizeResults(results) {
   const steps = Array.isArray(results.steps) ? results.steps : [];
   results.finishedAt = new Date().toISOString();
@@ -154,6 +208,7 @@ function writeJson(filePath, payload) {
 module.exports = {
   BASE_URL,
   attachDiagnostics,
+  chooseUnitForHandlerUsername,
   createArtifactRun,
   createResultEnvelope,
   currentHash,
