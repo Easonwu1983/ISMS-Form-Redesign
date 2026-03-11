@@ -47,6 +47,13 @@
 - Owns training undo-window and manual-row deletion policy
 - Keeps access-control decisions centralized instead of scattered across features
 
+### [workflow-support-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/workflow-support-module.js)
+
+- Owns shared record-number builders for corrective actions, checklists, and training forms
+- Owns training export, print, and roster-import parsing helpers
+- Owns seeded demo corrective-action bootstrap data
+- Keeps workflow support logic out of `app.js` and feature modules
+
 ### [case-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/case-module.js)
 
 - Corrective action dashboard
@@ -73,11 +80,10 @@
 ## What Still Lives In [app.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/app.js)
 
 - Shared constants and enums
-- Scoped record id builders and record numbering helpers
 - Store/module factories and dependency wiring
 - Module factories and route whitelist
 - Application bootstrap
-- Feature-adjacent utility functions that are still specific to checklist/training exports and seeded demo data
+- A smaller set of cross-feature utility functions that are still shared by multiple modules
 
 ## Why This Split Helps
 
@@ -101,11 +107,11 @@
 4. Split unit catalog, autocomplete, and custom-unit governance into `unit-module.js`.
 5. Split permission and visibility rules into `policy-module.js`.
 6. Split shared formatting and copy/test helpers into `ui-module.js`.
-7. Replace most route-facing feature dependencies in `app.js` with thin delegates.
+7. Split record numbering, training export/import/print helpers, and seed bootstrap into `workflow-support-module.js`.
+8. Replace most route-facing feature dependencies in `app.js` with thin delegates.
 
 ## Recommended Next Refactors
 
-1. Extract scoped record-id builders into a dedicated `record-module.js` if numbering logic keeps growing.
-2. Add migration diagnostics or an admin-only schema health panel.
-3. Continue converting long feature-specific `innerHTML` sections into smaller render partials.
-4. Clean up a few docs/pages that still display mojibake in some terminals due legacy encoding.
+1. Add migration diagnostics or an admin-only schema health panel.
+2. Continue converting long feature-specific `innerHTML` sections into smaller render partials.
+3. Clean up a few docs/pages that still display mojibake in some terminals due legacy encoding.
