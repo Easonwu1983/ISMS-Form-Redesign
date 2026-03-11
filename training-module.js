@@ -162,6 +162,35 @@
       + '</tr>';
   }
 
+  function buildTrainingStatCard(tone, iconName, value, label) {
+    return '<div class="stat-card ' + esc(tone) + '"><div class="stat-icon">' + ic(iconName) + '</div><div class="stat-value">' + esc(String(value)) + '</div><div class="stat-label">' + esc(label) + '</div></div>';
+  }
+
+  function buildTrainingRosterStats(summary) {
+    return ''
+      + buildTrainingStatCard('total', 'users', summary.total, '總名單筆數')
+      + buildTrainingStatCard('closed', 'download', summary.imported, '管理者匯入')
+      + buildTrainingStatCard('pending', 'user-plus', summary.manual, '填報新增');
+  }
+
+  function buildTrainingRosterRow(row) {
+    return '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>';
+  }
+
+  function buildTrainingRosterFileCopy(fileName) {
+    return fileName
+      ? '<strong>' + esc(fileName) + '</strong><small>已選取檔案，送出後將直接匯入</small>'
+      : '<strong>選擇 Excel / CSV 檔</strong><small>支援 `.xlsx`、`.xls`、`.csv`、`.tsv`</small>';
+  }
+
+  function buildTrainingRosterImportNote() {
+    return '支援 Excel 檔（`.xlsx` / `.xls`）匯入，也可直接貼上 CSV / TSV。預設欄位：姓名、本職單位、身分別、職稱；若檔案已含「填報單位」欄位，也會自動分流到對應單位。';
+  }
+
+  function buildTrainingRosterSampleCsv() {
+    return '姓名,本職單位,身分別,職稱\n王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師';
+  }
+
   function renderTrainingBinaryButtons(field, value, index, disabled, yesLabel, noLabel) {
     const dis = disabled ? 'disabled' : '';
     const testIdBase = 'training-binary-' + toTestIdFragment(field || 'field') + '-' + index;
@@ -936,25 +965,23 @@
   }
 
   function buildTrainingRosterRows(rosters) {
-    if (!rosters.length) return '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>';
-    return rosters.map((row) => '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>').join('');
+    if (!rosters.length) return buildTrainingEmptyTableRow(10, '尚無名單資料', '', 24);
+    return rosters.map((row) => buildTrainingRosterRow(row)).join('');
   }
 
   function buildTrainingRosterPage(summary, rowsHtml) {
     return '<div class="animate-in">'
       + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div>'
       + '<div class="stats-grid">'
-      + '<div class="stat-card total"><div class="stat-icon">' + ic('users') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">總名單筆數</div></div>'
-      + '<div class="stat-card closed"><div class="stat-icon">' + ic('download') + '</div><div class="stat-value">' + summary.imported + '</div><div class="stat-label">管理者匯入</div></div>'
-      + '<div class="stat-card pending"><div class="stat-icon">' + ic('user-plus') + '</div><div class="stat-value">' + summary.manual + '</div><div class="stat-label">填報新增</div></div>'
+      + buildTrainingRosterStats(summary)
       + '</div>'
       + buildTrainingRosterImportCard()
-      + '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>'
+      + '<div class="card" style="padding:0;overflow:hidden">' + buildTrainingTableMarkup('<th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th>', rowsHtml) + '</div>'
       + '</div>';
   }
 
   function buildTrainingRosterImportCard() {
-    return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">支援 Excel 檔（`.xlsx` / `.xls`）匯入，也可直接貼上 CSV / TSV。預設欄位：姓名、本職單位、身分別、職稱；若檔案已含「填報單位」欄位，也會自動分流到對應單位。</div><div class="form-row"><div class="form-group"><label class="form-label">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, false) + '<div class="form-hint">可先指定單位當作預設值；若 Excel 內已有「填報單位」欄位，系統會優先使用檔案中的單位。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy"><strong>選擇 Excel / CSV 檔</strong><small>支援 `.xlsx`、`.xls`、`.csv`、`.tsv`</small></span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>姓名,本職單位,身分別,職稱\n王小明,資訊網路組,職員,工程師\n陳小華,資訊網路組,委外,駐點工程師</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
+    return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">' + buildTrainingRosterImportNote() + '</div><div class="form-row"><div class="form-group"><label class="form-label">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, false) + '<div class="form-hint">可先指定單位當作預設值；若 Excel 內已有「填報單位」欄位，系統會優先使用檔案中的單位。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy">' + buildTrainingRosterFileCopy('') + '</span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>' + buildTrainingRosterSampleCsv() + '</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
   }
 
   async function renderTrainingRoster() {
@@ -981,9 +1008,7 @@
     const fileCopy = document.getElementById('training-import-file-copy');
     fileInput?.addEventListener('change', () => {
       const file = fileInput.files && fileInput.files[0];
-      fileCopy.innerHTML = file
-        ? '<strong>' + esc(file.name) + '</strong><small>已選取檔案，送出後將直接匯入</small>'
-        : '<strong>選擇 Excel / CSV 檔</strong><small>支援 `.xlsx`、`.xls`、`.csv`、`.tsv`</small>';
+      fileCopy.innerHTML = buildTrainingRosterFileCopy(file?.name || '');
     });
     document.getElementById('training-import-form').addEventListener('submit', async (event) => {
       event.preventDefault();
