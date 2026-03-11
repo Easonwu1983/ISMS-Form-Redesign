@@ -1,0 +1,676 @@
+(function () {
+  window.createDataModule = function createDataModule(deps) {
+    const {
+      DATA_KEY,
+      AUTH_KEY,
+      CHECKLIST_KEY,
+      TEMPLATE_KEY,
+      TRAINING_KEY,
+      LOGIN_LOG_KEY,
+      UNIT_REVIEW_KEY,
+      DEFAULT_USERS,
+      DEFAULT_CHECKLIST_SECTIONS,
+      ROLES,
+      CHECKLIST_STATUS_DRAFT,
+      CHECKLIST_STATUS_SUBMITTED,
+      TRAINING_STATUSES,
+      TRAINING_EMPLOYEE_STATUS,
+      getUnitCode,
+      buildCorrectionDocumentNo,
+      parseCorrectionAutoId,
+      getNextCorrectionSequence,
+      buildAutoCarIdByDocument,
+      buildChecklistDocumentNo,
+      parseChecklistId,
+      buildChecklistIdByDocument,
+      getNextChecklistSequence,
+      getTrainingStatsUnit,
+      getTrainingJobUnit,
+      hasTrainingValue,
+      isTrainingBooleanValue,
+      normalizeTrainingProfessionalValue,
+      computeTrainingSummary,
+      buildTrainingFormDocumentNo,
+      parseTrainingFormId,
+      buildTrainingFormIdByDocument,
+      getNextTrainingFormSequence
+    } = deps;
+
+    const STORAGE_CACHE = Object.create(null);
+
+    function readCachedJson(key, fallbackFactory) {
+      const raw = localStorage.getItem(key);
+      const hit = STORAGE_CACHE[key];
+      if (hit && hit.raw === raw) return hit.parsed;
+      if (raw !== null && raw !== undefined) {
+        try {
+          const parsed = JSON.parse(raw);
+          STORAGE_CACHE[key] = { raw, parsed };
+          return parsed;
+        } catch (_) { }
+      }
+      const fallback = fallbackFactory();
+      STORAGE_CACHE[key] = { raw: JSON.stringify(fallback), parsed: fallback };
+      return fallback;
+    }
+
+    function writeCachedJson(key, value) {
+      const raw = JSON.stringify(value);
+      STORAGE_CACHE[key] = { raw, parsed: value };
+      localStorage.setItem(key, raw);
+    }
+
+    function removeCachedJson(key) {
+      delete STORAGE_CACHE[key];
+      localStorage.removeItem(key);
+    }
+
+    function createDefaultData() {
+      return { items: [], users: DEFAULT_USERS.map((user) => ({ ...user })), nextId: 1 };
+    }
+
+    function normalizeCorrectionItem(item, normalizedItems) {
+      const next = { ...(item || {}) };
+      let changed = false;
+
+      const proposerUnitCode = getUnitCode(next.proposerUnit);
+      const handlerUnitCode = getUnitCode(next.handlerUnit);
+      const documentNo = buildCorrectionDocumentNo(next.handlerUnit, next.proposerDate || next.createdAt || next.updatedAt);
+
+      if (proposerUnitCode && next.proposerUnitCode !== proposerUnitCode) {
+        next.proposerUnitCode = proposerUnitCode;
+        changed = true;
+      }
+      if (handlerUnitCode && next.handlerUnitCode !== handlerUnitCode) {
+        next.handlerUnitCode = handlerUnitCode;
+        changed = true;
+      }
+      if (documentNo && next.documentNo !== documentNo) {
+        next.documentNo = documentNo;
+        changed = true;
+      }
+
+      const parsedAutoId = parseCorrectionAutoId(next.id);
+      if (parsedAutoId) {
+        if (next.documentNo !== parsedAutoId.documentNo) {
+          next.documentNo = parsedAutoId.documentNo;
+          changed = true;
+        }
+        if (next.caseSeq !== parsedAutoId.sequence) {
+          next.caseSeq = parsedAutoId.sequence;
+          changed = true;
+        }
+        return { item: next, changed };
+      }
+
+      if (/^CAR-\d+$/i.test(String(next.id || '').trim()) && documentNo) {
+        const sequence = getNextCorrectionSequence(documentNo, normalizedItems);
+        const autoId = buildAutoCarIdByDocument(documentNo, sequence);
+        if (next.id !== autoId) {
+          next.id = autoId;
+          changed = true;
+        }
+        if (next.caseSeq !== sequence) {
+          next.caseSeq = sequence;
+          changed = true;
+        }
+      }
+
+      return { item: next, changed };
+    }
+
+    function parseUserUnits(value) {
+      if (Array.isArray(value)) {
+        return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
+      }
+      if (typeof value === 'string') {
+        return Array.from(new Set(value.split(/\r?\n|,|;|\|/).map((entry) => String(entry || '').trim()).filter(Boolean)));
+      }
+      return [];
+    }
+
+    function normalizeUserRole(role) {
+      if (role === ROLES.ADMIN) return ROLES.ADMIN;
+      if (role === ROLES.VIEWER || String(role || '').trim().toLowerCase() === 'super_viewer') return ROLES.VIEWER;
+      if (role === ROLES.UNIT_ADMIN || role === ROLES.REPORTER) return role;
+      return ROLES.REPORTER;
+    }
+
+    function getAuthorizedUnits(user) {
+      const units = parseUserUnits(user?.units);
+      if (units.length) return units;
+      const unit = String(user?.unit || '').trim();
+      return unit ? [unit] : [];
+    }
+
+    function getActiveUnit(user) {
+      const units = getAuthorizedUnits(user);
+      if (!units.length) return '';
+      const candidate = String(user?.activeUnit || '').trim();
+      return units.includes(candidate) ? candidate : units[0];
+    }
+
+    function normalizeUserRecord(user) {
+      const role = normalizeUserRole(user?.role);
+      const units = getAuthorizedUnits(user);
+      return {
+        ...user,
+        role,
+        units,
+        unit: units[0] || '',
+        activeUnit: role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units })
+      };
+    }
+
+    function loadData() {
+      const data = readCachedJson(DATA_KEY, createDefaultData);
+      if (!Array.isArray(data.users)) data.users = DEFAULT_USERS.map((user) => ({ ...user }));
+      if (!Array.isArray(data.items)) data.items = [];
+      if (!Number.isFinite(Number(data.nextId))) data.nextId = 1;
+      let changed = false;
+      data.users = data.users.map((user) => normalizeUserRecord(user));
+      const normalizedItems = [];
+      data.items.forEach((item) => {
+        const normalized = normalizeCorrectionItem(item, normalizedItems);
+        normalizedItems.push(normalized.item);
+        if (normalized.changed) changed = true;
+      });
+      data.items = normalizedItems;
+      if (changed) saveData(data);
+      return data;
+    }
+
+    function saveData(data) { writeCachedJson(DATA_KEY, data); }
+    function getAllItems() { return loadData().items.slice(); }
+    function getItem(id) { return loadData().items.find((item) => item.id === id); }
+    function addItem(item) {
+      const data = loadData();
+      data.items.push(item);
+      saveData(data);
+    }
+    function updateItem(id, updates) {
+      const data = loadData();
+      const index = data.items.findIndex((item) => item.id === id);
+      if (index >= 0) {
+        data.items[index] = { ...data.items[index], ...updates };
+        saveData(data);
+      }
+    }
+    function getUsers() { return loadData().users.slice().map((user) => normalizeUserRecord(user)); }
+    function addUser(user) {
+      const data = loadData();
+      data.users.push(normalizeUserRecord(user));
+      saveData(data);
+    }
+    function updateUser(username, updates) {
+      const data = loadData();
+      const index = data.users.findIndex((user) => user.username === username);
+      if (index >= 0) {
+        data.users[index] = normalizeUserRecord({ ...data.users[index], ...updates });
+        saveData(data);
+      }
+    }
+    function deleteUser(username) {
+      const data = loadData();
+      data.users = data.users.filter((user) => user.username !== username);
+      saveData(data);
+    }
+    function findUser(username) {
+      const user = loadData().users.find((entry) => entry.username === username);
+      return user ? normalizeUserRecord(user) : null;
+    }
+    function findUserByEmail(email) {
+      const user = loadData().users.find((entry) => entry.email && entry.email.toLowerCase() === String(email || '').toLowerCase());
+      return user ? normalizeUserRecord(user) : null;
+    }
+
+    function loadLoginLogs() {
+      const logs = readCachedJson(LOGIN_LOG_KEY, () => []);
+      return Array.isArray(logs) ? logs : [];
+    }
+
+    function saveLoginLogs(logs) {
+      writeCachedJson(LOGIN_LOG_KEY, Array.isArray(logs) ? logs : []);
+    }
+
+    function addLoginLog(username, user, success) {
+      const logs = loadLoginLogs();
+      logs.push({
+        time: new Date().toISOString(),
+        username: String(username || '').trim(),
+        name: user?.name || '',
+        role: user?.role || '',
+        success: !!success
+      });
+      if (logs.length > 500) logs.splice(0, logs.length - 500);
+      saveLoginLogs(logs);
+    }
+
+    function clearLoginLogs() {
+      removeCachedJson(LOGIN_LOG_KEY);
+    }
+
+    function emptyUnitReviewStore() {
+      return { approvedUnits: [], history: [] };
+    }
+
+    function loadUnitReviewStore() {
+      const raw = readCachedJson(UNIT_REVIEW_KEY, emptyUnitReviewStore);
+      if (!raw || typeof raw !== 'object') return emptyUnitReviewStore();
+      if (!Array.isArray(raw.approvedUnits)) raw.approvedUnits = [];
+      if (!Array.isArray(raw.history)) raw.history = [];
+      return raw;
+    }
+
+    function saveUnitReviewStore(store) {
+      writeCachedJson(UNIT_REVIEW_KEY, store);
+    }
+
+    function cloneDefaultChecklistSections() {
+      return JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS));
+    }
+
+    function getChecklistSections() {
+      const saved = readCachedJson(TEMPLATE_KEY, cloneDefaultChecklistSections);
+      return Array.isArray(saved) && saved.length ? saved : cloneDefaultChecklistSections();
+    }
+
+    function saveChecklistSections(sections) {
+      writeCachedJson(TEMPLATE_KEY, Array.isArray(sections) ? sections : cloneDefaultChecklistSections());
+    }
+
+    function emptyChecklistStore() {
+      return { items: [], nextId: 1 };
+    }
+
+    function normalizeChecklistStatus(status) {
+      const value = String(status || '').trim();
+      const lower = value.toLowerCase();
+      if (!value || value === CHECKLIST_STATUS_DRAFT || lower === 'draft') return CHECKLIST_STATUS_DRAFT;
+      if (value === '已提交' || value === CHECKLIST_STATUS_SUBMITTED || lower === 'submitted') return CHECKLIST_STATUS_SUBMITTED;
+      return value;
+    }
+
+    function isChecklistDraftStatus(status) {
+      return normalizeChecklistStatus(status) === CHECKLIST_STATUS_DRAFT;
+    }
+
+    function normalizeChecklistItem(item) {
+      const base = item && typeof item === 'object' ? { ...item } : {};
+      base.status = normalizeChecklistStatus(base.status);
+      base.unit = String(base.unit || '').trim();
+      base.fillerName = String(base.fillerName || '').trim();
+      base.fillerUsername = String(base.fillerUsername || '').trim();
+      base.auditYear = String(base.auditYear || '').trim();
+      base.supervisor = String(base.supervisor || '').trim();
+      base.supervisorName = String(base.supervisorName || base.supervisor || '').trim();
+      base.supervisorTitle = String(base.supervisorTitle || '').trim();
+      base.signStatus = String(base.signStatus || (base.signDate ? '已簽核' : '待簽核')).trim() || (base.signDate ? '已簽核' : '待簽核');
+      base.signDate = base.signDate || '';
+      base.supervisorNote = String(base.supervisorNote || '').trim();
+      base.results = base.results && typeof base.results === 'object' ? base.results : {};
+      base.summary = base.summary && typeof base.summary === 'object' ? base.summary : { total: 0, conform: 0, partial: 0, nonConform: 0, na: 0 };
+      const parsedId = parseChecklistId(base.id);
+      if (parsedId) {
+        base.id = buildChecklistIdByDocument(parsedId.documentNo, parsedId.sequence);
+      }
+      return base;
+    }
+
+    function loadChecklists() {
+      const raw = readCachedJson(CHECKLIST_KEY, emptyChecklistStore);
+      if (!raw || typeof raw !== 'object') return emptyChecklistStore();
+      if (!Array.isArray(raw.items)) raw.items = [];
+      if (!Number.isFinite(raw.nextId)) raw.nextId = 1;
+      let changed = false;
+      const normalizedItems = [];
+      raw.items.forEach((item) => {
+        const normalized = normalizeChecklistItem(item);
+        const documentNo = buildChecklistDocumentNo(normalized.unit, normalized.auditYear, normalized.fillDate || normalized.updatedAt || normalized.createdAt);
+        const parsedId = parseChecklistId(normalized.id);
+        if (parsedId && normalized.id !== buildChecklistIdByDocument(parsedId.documentNo, parsedId.sequence)) {
+          normalized.id = buildChecklistIdByDocument(parsedId.documentNo, parsedId.sequence);
+          changed = true;
+        } else if ((!parsedId || !String(normalized.id || '').startsWith('CHK-')) && documentNo) {
+          const sequence = getNextChecklistSequence(documentNo, normalizedItems);
+          normalized.id = buildChecklistIdByDocument(documentNo, sequence);
+          changed = true;
+        }
+        normalizedItems.push(normalized);
+      });
+      raw.items = normalizedItems;
+      if (changed) saveChecklists(raw);
+      return raw;
+    }
+
+    function saveChecklists(store) { writeCachedJson(CHECKLIST_KEY, store); }
+    function getAllChecklists() { return loadChecklists().items.slice(); }
+    function getChecklist(id) { return loadChecklists().items.find((item) => item.id === id); }
+    function addChecklist(item) {
+      const store = loadChecklists();
+      store.items.push(normalizeChecklistItem(item));
+      saveChecklists(store);
+    }
+    function updateChecklist(id, updates) {
+      const store = loadChecklists();
+      const index = store.items.findIndex((item) => item.id === id);
+      if (index < 0) return false;
+      store.items[index] = normalizeChecklistItem({ ...store.items[index], ...updates });
+      saveChecklists(store);
+      return true;
+    }
+
+    function emptyTrainingStore() {
+      return { forms: [], rosters: [], nextFormId: 1, nextRosterId: 1 };
+    }
+
+    function normalizeTrainingRosterRow(row, fallbackUnit) {
+      const unit = String((row && row.unit) || fallbackUnit || '').trim();
+      const statsUnit = String((row && (row.statsUnit || row.l1Unit)) || getTrainingStatsUnit(unit)).trim();
+      const unitName = String((row && row.unitName) || getTrainingJobUnit(unit)).trim() || statsUnit;
+      return {
+        id: String((row && row.id) || '').trim(),
+        unit,
+        statsUnit,
+        l1Unit: statsUnit,
+        name: String((row && row.name) || '').trim(),
+        unitName,
+        identity: String((row && row.identity) || '').trim(),
+        jobTitle: String((row && row.jobTitle) || '').trim(),
+        source: ((row && row.source) === 'manual') ? 'manual' : 'import',
+        createdBy: String((row && row.createdBy) || '系統').trim() || '系統',
+        createdByUsername: String((row && row.createdByUsername) || '').trim(),
+        createdAt: (row && row.createdAt) || new Date().toISOString()
+      };
+    }
+
+    function normalizeTrainingRecordState(record) {
+      const normalized = { ...record };
+      const status = TRAINING_EMPLOYEE_STATUS.includes(String(normalized.status || '').trim())
+        ? String(normalized.status || '').trim()
+        : '';
+
+      let completedGeneral = isTrainingBooleanValue(String(normalized.completedGeneral || '').trim())
+        ? String(normalized.completedGeneral || '').trim()
+        : '';
+      if (!completedGeneral && status === '在職' && hasTrainingValue(normalized.hours)) {
+        completedGeneral = Number(normalized.hours || 0) >= 3 ? '是' : '否';
+      }
+
+      let isInfoStaff = isTrainingBooleanValue(String(normalized.isInfoStaff || '').trim())
+        ? String(normalized.isInfoStaff || '').trim()
+        : '';
+      if (!isInfoStaff && isTrainingBooleanValue(String(normalized.outsourced || '').trim())) {
+        isInfoStaff = String(normalized.outsourced || '').trim();
+      }
+
+      let completedProfessional = normalizeTrainingProfessionalValue(normalized.completedProfessional || '');
+      if (!completedProfessional) completedProfessional = normalizeTrainingProfessionalValue(normalized.completedInfo || '');
+
+      if (status !== '在職') {
+        completedGeneral = '';
+        isInfoStaff = '';
+        completedProfessional = '';
+      } else {
+        if (!isTrainingBooleanValue(completedGeneral)) completedGeneral = '';
+        if (!isTrainingBooleanValue(isInfoStaff)) isInfoStaff = '';
+        if (isInfoStaff === '否') {
+          completedProfessional = '不適用';
+        } else if (isInfoStaff === '是') {
+          if (!isTrainingBooleanValue(completedProfessional)) completedProfessional = '';
+        } else {
+          completedProfessional = '';
+        }
+      }
+
+      normalized.status = status;
+      normalized.completedGeneral = completedGeneral;
+      normalized.isInfoStaff = isInfoStaff;
+      normalized.completedProfessional = completedProfessional;
+      normalized.note = String(normalized.note || '').trim();
+      return normalized;
+    }
+
+    function normalizeTrainingRecordRow(row, fallbackUnit) {
+      const base = normalizeTrainingRosterRow(row, fallbackUnit);
+      return normalizeTrainingRecordState({
+        ...base,
+        rosterId: (row && row.rosterId) || null,
+        status: String((row && row.status) || '').trim(),
+        completedGeneral: String((row && row.completedGeneral) || '').trim(),
+        isInfoStaff: String((row && (row.isInfoStaff || row.outsourced)) || '').trim(),
+        completedProfessional: String((row && (row.completedProfessional || row.completedInfo)) || '').trim(),
+        note: String((row && row.note) || '').trim(),
+        hours: hasTrainingValue(row && row.hours) ? Number(row.hours) : ''
+      });
+    }
+
+    function normalizeTrainingForm(form) {
+      const unit = String((form && form.unit) || '').trim();
+      const records = Array.isArray(form && form.records)
+        ? form.records.map((row) => normalizeTrainingRecordRow(row, unit))
+        : [];
+      const rawStatus = String((form && form.status) || '').trim();
+      const legacyStatusMap = {
+        '正式送出': TRAINING_STATUSES.SUBMITTED,
+        '已完成填報': TRAINING_STATUSES.SUBMITTED,
+        '待列印簽核': TRAINING_STATUSES.PENDING_SIGNOFF,
+        '待簽核': TRAINING_STATUSES.PENDING_SIGNOFF
+      };
+      const normalizedStatus = Object.values(TRAINING_STATUSES).includes(rawStatus)
+        ? rawStatus
+        : (legacyStatusMap[rawStatus] || TRAINING_STATUSES.DRAFT);
+      const normalized = {
+        id: String((form && form.id) || '').trim(),
+        unit,
+        statsUnit: String((form && form.statsUnit) || getTrainingStatsUnit(unit)).trim(),
+        fillerName: String((form && form.fillerName) || '').trim(),
+        fillerUsername: String((form && form.fillerUsername) || '').trim(),
+        submitterPhone: String((form && form.submitterPhone) || '').trim(),
+        submitterEmail: String((form && form.submitterEmail) || '').trim(),
+        fillDate: (form && form.fillDate) || new Date().toISOString().split('T')[0],
+        trainingYear: String((form && form.trainingYear) || String(new Date().getFullYear() - 1911)).trim(),
+        status: normalizedStatus,
+        records,
+        summary: computeTrainingSummary(records),
+        signedFiles: Array.isArray(form && form.signedFiles) ? form.signedFiles : [],
+        returnReason: String((form && form.returnReason) || '').trim(),
+        createdAt: (form && form.createdAt) || new Date().toISOString(),
+        updatedAt: (form && form.updatedAt) || new Date().toISOString(),
+        stepOneSubmittedAt: (form && form.stepOneSubmittedAt) || ((normalizedStatus !== TRAINING_STATUSES.DRAFT && normalizedStatus !== TRAINING_STATUSES.RETURNED) ? ((form && form.submittedAt) || (form && form.updatedAt) || null) : null),
+        printedAt: (form && form.printedAt) || null,
+        signoffUploadedAt: (form && form.signoffUploadedAt) || null,
+        submittedAt: (form && form.submittedAt) || null,
+        history: Array.isArray(form && form.history) ? form.history : []
+      };
+      const parsedId = parseTrainingFormId(normalized.id);
+      if (parsedId) {
+        normalized.id = buildTrainingFormIdByDocument(parsedId.documentNo, parsedId.sequence);
+      }
+      return normalized;
+    }
+
+    function loadTrainingStore() {
+      const raw = readCachedJson(TRAINING_KEY, emptyTrainingStore);
+      if (!raw || typeof raw !== 'object') return emptyTrainingStore();
+      const store = {
+        forms: Array.isArray(raw.forms) ? raw.forms.map((form) => normalizeTrainingForm(form)) : [],
+        rosters: Array.isArray(raw.rosters) ? raw.rosters.map((row) => normalizeTrainingRosterRow(row, row.unit)) : [],
+        nextFormId: Number.isFinite(raw.nextFormId) ? raw.nextFormId : 1,
+        nextRosterId: Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : 1
+      };
+      let changed = false;
+      const normalizedForms = [];
+      store.forms.forEach((form) => {
+        const documentNo = buildTrainingFormDocumentNo(form.unit, form.trainingYear, form.fillDate || form.updatedAt || form.createdAt);
+        const parsedId = parseTrainingFormId(form.id);
+        if (parsedId && form.id !== buildTrainingFormIdByDocument(parsedId.documentNo, parsedId.sequence)) {
+          form.id = buildTrainingFormIdByDocument(parsedId.documentNo, parsedId.sequence);
+          changed = true;
+        } else if ((!parsedId || !String(form.id || '').startsWith('TRN-')) && documentNo) {
+          const sequence = getNextTrainingFormSequence(documentNo, normalizedForms);
+          form.id = buildTrainingFormIdByDocument(documentNo, sequence);
+          changed = true;
+        }
+        normalizedForms.push(form);
+      });
+      store.forms = normalizedForms;
+      if (changed) saveTrainingStore(store);
+      return store;
+    }
+
+    function saveTrainingStore(store) {
+      writeCachedJson(TRAINING_KEY, store);
+    }
+
+    function getAllTrainingForms() {
+      return loadTrainingStore().forms.slice();
+    }
+
+    function getTrainingForm(id) {
+      return loadTrainingStore().forms.find((form) => form.id === id);
+    }
+
+    function upsertTrainingForm(form) {
+      const store = loadTrainingStore();
+      const normalized = normalizeTrainingForm(form);
+      const index = store.forms.findIndex((item) => item.id === normalized.id);
+      if (index >= 0) store.forms[index] = normalized;
+      else store.forms.push(normalized);
+      saveTrainingStore(store);
+    }
+
+    function updateTrainingForm(id, updates) {
+      const store = loadTrainingStore();
+      const index = store.forms.findIndex((item) => item.id === id);
+      if (index < 0) return;
+      store.forms[index] = normalizeTrainingForm({ ...store.forms[index], ...updates });
+      saveTrainingStore(store);
+    }
+
+    function getAllTrainingRosters() {
+      return loadTrainingStore().rosters.slice();
+    }
+
+    function getTrainingRosterByUnit(unit) {
+      return getAllTrainingRosters()
+        .filter((row) => row.unit === unit)
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    }
+
+    function addTrainingRosterPerson(unit, payload, source, actor, actorUsername) {
+      const cleanUnit = String(unit || '').trim();
+      const base = typeof payload === 'string' ? { name: payload } : (payload || {});
+      const cleanName = String(base.name || '').trim();
+      const actorName = typeof actor === 'object'
+        ? String((actor && actor.name) || '').trim()
+        : String(actor || '').trim();
+      const actorUser = typeof actor === 'object'
+        ? String((actor && actor.username) || '').trim()
+        : String(actorUsername || '').trim();
+      if (!cleanUnit || !cleanName) {
+        return { added: false, updated: false, reason: '請先選擇單位並輸入姓名' };
+      }
+
+      const store = loadTrainingStore();
+      const index = store.rosters.findIndex((row) => row.unit === cleanUnit && row.name.toLowerCase() === cleanName.toLowerCase());
+      const nextRow = normalizeTrainingRosterRow({
+        ...base,
+        id: index >= 0 ? store.rosters[index].id : 'RST-' + String(store.nextRosterId).padStart(4, '0'),
+        unit: cleanUnit,
+        source: source || base.source || 'manual',
+        createdBy: index >= 0 ? store.rosters[index].createdBy : (actorName || '系統'),
+        createdByUsername: index >= 0 ? store.rosters[index].createdByUsername : actorUser,
+        createdAt: index >= 0 ? store.rosters[index].createdAt : new Date().toISOString()
+      }, cleanUnit);
+
+      if (index >= 0) {
+        const current = store.rosters[index];
+        const merged = { ...current, ...nextRow };
+        const changed = ['unitName', 'identity', 'jobTitle', 'statsUnit', 'l1Unit'].some(
+          (key) => String(current[key] || '') !== String(merged[key] || '')
+        );
+        if (changed) {
+          store.rosters[index] = merged;
+          saveTrainingStore(store);
+          return { added: false, updated: true, reason: `已更新 ${cleanName} 的名單資訊` };
+        }
+        return { added: false, updated: false, reason: `${cleanName} 已存在於該單位名單` };
+      }
+
+      store.nextRosterId += 1;
+      store.rosters.push(nextRow);
+      saveTrainingStore(store);
+      return { added: true, updated: false, id: nextRow.id };
+    }
+
+    function deleteTrainingRosterPerson(id) {
+      const store = loadTrainingStore();
+      store.rosters = store.rosters.filter((row) => row.id !== id);
+      saveTrainingStore(store);
+    }
+
+    function updateTrainingRosterPerson(id, updates) {
+      const cleanId = String(id || '').trim();
+      if (!cleanId) return null;
+      const store = loadTrainingStore();
+      const index = store.rosters.findIndex((row) => row.id === cleanId);
+      if (index < 0) return null;
+      store.rosters[index] = normalizeTrainingRosterRow({ ...store.rosters[index], ...(updates || {}) }, store.rosters[index].unit);
+      saveTrainingStore(store);
+      return store.rosters[index];
+    }
+
+    return {
+      parseUserUnits,
+      normalizeUserRole,
+      getAuthorizedUnits,
+      getActiveUnit,
+      normalizeUserRecord,
+      loadData,
+      saveData,
+      getAllItems,
+      getItem,
+      addItem,
+      updateItem,
+      getUsers,
+      addUser,
+      updateUser,
+      deleteUser,
+      findUser,
+      findUserByEmail,
+      loadLoginLogs,
+      saveLoginLogs,
+      addLoginLog,
+      clearLoginLogs,
+      loadUnitReviewStore,
+      saveUnitReviewStore,
+      getChecklistSections,
+      saveChecklistSections,
+      normalizeChecklistStatus,
+      isChecklistDraftStatus,
+      normalizeChecklistItem,
+      loadChecklists,
+      saveChecklists,
+      getAllChecklists,
+      getChecklist,
+      addChecklist,
+      updateChecklist,
+      normalizeTrainingRosterRow,
+      normalizeTrainingRecordState,
+      normalizeTrainingRecordRow,
+      normalizeTrainingForm,
+      loadTrainingStore,
+      saveTrainingStore,
+      getAllTrainingForms,
+      getTrainingForm,
+      upsertTrainingForm,
+      updateTrainingForm,
+      getAllTrainingRosters,
+      getTrainingRosterByUnit,
+      addTrainingRosterPerson,
+      deleteTrainingRosterPerson,
+      updateTrainingRosterPerson
+    };
+  };
+})();

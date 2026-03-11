@@ -12,6 +12,13 @@
 - Owns route dispatch entrypoint via `handleRoute()`
 - Owns mobile sidebar state and global shell handlers
 
+### [data-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/data-module.js)
+
+- Owns `localStorage` store access and cache
+- Owns data normalization for users, corrective actions, checklists, and training forms
+- Owns CRUD for correction data, checklist data, training data, unit review store, and login logs
+- Keeps persistence concerns out of feature and shell modules
+
 ### [case-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/case-module.js)
 
 - Corrective action dashboard
@@ -38,7 +45,6 @@
 ## What Still Lives In [app.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/app.js)
 
 - Shared constants and enums
-- `localStorage` data access and normalization
 - Authentication state helpers
 - Permission and unit-scope rules
 - Shared UI helpers such as `toast`, icon refresh, copy helpers, unit cascade helpers
@@ -54,7 +60,7 @@
 
 ## Recommended Next Refactors
 
-1. Extract storage and migration logic from `app.js` into a dedicated data module.
+1. Add a schema version and migration dispatcher for every persisted store in [data-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/data-module.js).
 2. Replace high-churn inline `onclick` actions with `data-action` event delegation.
-3. Add a schema version and migration dispatcher for every persisted store.
+3. Move auth/session bootstrap into a dedicated auth module.
 4. Clean up documentation files that still show encoding corruption in some terminals.
