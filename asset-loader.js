@@ -13,11 +13,13 @@
     'ui-module.js',
     'policy-module.js',
     'workflow-support-module.js',
+    'm365-api-client.js',
     'shell-module.js',
     'case-module.js',
     'admin-module.js',
     'checklist-module.js',
     'training-module.js',
+    'unit-contact-application-module.js',
     'app.js'
   ];
   var index = 0;

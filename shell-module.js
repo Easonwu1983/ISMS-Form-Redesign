@@ -36,6 +36,10 @@
 
     let isSidebarOpen = false;
 
+    function isPublicRoute(page) {
+      return !!(page && ROUTE_WHITELIST[page] && ROUTE_WHITELIST[page].public);
+    }
+
     function isMobileViewport() {
       if (window.matchMedia) return window.matchMedia('(max-width: 768px)').matches;
       return window.innerWidth <= 768;
@@ -63,6 +67,7 @@
         '<div class="form-group"><label class="form-label">密碼</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" placeholder="請輸入密碼" required></div>' +
         '<button type="submit" class="login-btn" data-testid="login-submit">登入系統 ' + ic('arrow-right', 'icon-sm') + '</button>' +
         '</form>' +
+        '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h3 class="login-entry-title">申請單位資安窗口</h3><p class="login-entry-text">各單位可先在線上送出窗口申請，後續再串接 M365 的審核、啟用與帳號綁定流程。</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">開始申請</a><a class="btn btn-secondary" href="#apply-unit-contact-status">查詢進度</a></div></div>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">忘記密碼？</a></p></div>' +
         '<div id="forgot-panel" style="display:none">' +
         '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h3></div>' +
@@ -186,12 +191,16 @@
     }
 
     function handleRoute() {
+      const route = getRoute();
+      const page = ROUTE_WHITELIST[route.page] ? route.page : 'dashboard';
+      if (isPublicRoute(page)) {
+        renderPublicPage(page, route.param);
+        return;
+      }
       if (!currentUser()) {
         renderLogin();
         return;
       }
-      const route = getRoute();
-      const page = ROUTE_WHITELIST[route.page] ? route.page : 'dashboard';
       if (!canAccessRoute(page)) {
         const fallback = getRouteFallback(page);
         const message = getRouteMeta(page).deniedMessage;
@@ -205,10 +214,16 @@
       getRouteMeta(page).render(route.param);
     }
 
+    function renderPublicPage(page, param) {
+      document.body.innerHTML = '<div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>內部稽核管考追蹤系統</strong><span>ISMS Corrective Action Tracking</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">回到系統</a>' : '<a class="btn btn-secondary" href="#">登入系統</a>') + '</div></header><main class="public-main" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div></div>';
+      getRouteMeta(page).render(param);
+      refreshIcons();
+    }
+
     function renderApp() {
       var u = currentUser();
       if (!u) {
-        renderLogin();
+        handleRoute();
         return;
       }
       document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';

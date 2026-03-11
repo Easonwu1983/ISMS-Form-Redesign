@@ -8,6 +8,7 @@
       TRAINING_KEY,
       LOGIN_LOG_KEY,
       UNIT_REVIEW_KEY,
+      UNIT_CONTACT_APP_KEY,
       DEFAULT_USERS,
       DEFAULT_CHECKLIST_SECTIONS,
       ROLES,
@@ -43,7 +44,8 @@
       [TEMPLATE_KEY]: 1,
       [TRAINING_KEY]: 1,
       [LOGIN_LOG_KEY]: 1,
-      [UNIT_REVIEW_KEY]: 1
+      [UNIT_REVIEW_KEY]: 1,
+      [UNIT_CONTACT_APP_KEY]: 1
     };
     const STORE_LABELS = {
       [DATA_KEY]: '矯正單與帳號資料',
@@ -53,6 +55,8 @@
       [LOGIN_LOG_KEY]: '登入紀錄',
       [UNIT_REVIEW_KEY]: '單位治理資料'
     };
+
+    STORE_LABELS[UNIT_CONTACT_APP_KEY] = '單位資安窗口申請';
 
     function getStoreVersion(key) {
       return Number(STORE_VERSIONS[key] || 1);
@@ -148,6 +152,14 @@
         : JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS));
     }
 
+    function migrateUnitContactApplicationStoreToV1(payload) {
+      const base = payload && typeof payload === 'object' ? payload : {};
+      return {
+        applications: Array.isArray(base.applications) ? base.applications : [],
+        nextId: Number.isFinite(Number(base.nextId)) ? Number(base.nextId) : 1
+      };
+    }
+
     const STORE_MIGRATIONS = {
       [DATA_KEY]: {
         1: migrateDataStoreToV1
@@ -166,6 +178,9 @@
       },
       [UNIT_REVIEW_KEY]: {
         1: migrateUnitReviewStoreToV1
+      },
+      [UNIT_CONTACT_APP_KEY]: {
+        1: migrateUnitContactApplicationStoreToV1
       }
     };
 
@@ -216,6 +231,7 @@
       readVersionedStore(TRAINING_KEY, emptyTrainingStore);
       readVersionedStore(LOGIN_LOG_KEY, () => []);
       readVersionedStore(UNIT_REVIEW_KEY, emptyUnitReviewStore);
+      readVersionedStore(UNIT_CONTACT_APP_KEY, emptyUnitContactApplicationStore);
     }
 
     function inspectRawStore(key) {
@@ -303,6 +319,14 @@
             shape: 'approvedUnits + history',
             recordCount: approved + history,
             summary: `${approved} 筆核准保留 / ${history} 筆治理紀錄`
+          };
+        }
+        case UNIT_CONTACT_APP_KEY: {
+          const applications = Array.isArray(payload && payload.applications) ? payload.applications.length : 0;
+          return {
+            shape: 'applications + nextId',
+            recordCount: applications,
+            summary: `${applications} 筆單位窗口申請`
           };
         }
         default:
@@ -566,6 +590,49 @@
 
     function emptyUnitReviewStore() {
       return { approvedUnits: [], history: [] };
+    }
+
+    function emptyUnitContactApplicationStore() {
+      return { applications: [], nextId: 1 };
+    }
+
+    function buildUnitContactApplicationId(sequence, createdAt) {
+      const date = createdAt ? new Date(createdAt) : new Date();
+      const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+      return 'UCA-' + String(safeDate.getFullYear()) + '-' + String(sequence || 1).padStart(4, '0');
+    }
+
+    function normalizeUnitContactApplication(application) {
+      const base = application && typeof application === 'object' ? application : {};
+      const submittedAt = base.submittedAt || new Date().toISOString();
+      const sequence = Number.isFinite(Number(base.sequence)) ? Number(base.sequence) : 1;
+      return {
+        id: String(base.id || buildUnitContactApplicationId(sequence, submittedAt)).trim(),
+        sequence,
+        applicantName: String(base.applicantName || '').trim(),
+        applicantEmail: String(base.applicantEmail || '').trim().toLowerCase(),
+        extensionNumber: String(base.extensionNumber || '').trim(),
+        unitCategory: String(base.unitCategory || '').trim(),
+        primaryUnit: String(base.primaryUnit || '').trim(),
+        secondaryUnit: String(base.secondaryUnit || '').trim(),
+        unitValue: String(base.unitValue || '').trim(),
+        unitCode: String(base.unitCode || '').trim(),
+        contactType: String(base.contactType || 'primary').trim(),
+        note: String(base.note || '').trim(),
+        status: String(base.status || 'pending_review').trim() || 'pending_review',
+        statusLabel: String(base.statusLabel || '').trim(),
+        statusDetail: String(base.statusDetail || '').trim(),
+        source: String(base.source || 'frontend').trim(),
+        backendMode: String(base.backendMode || 'local-emulator').trim(),
+        submittedAt,
+        updatedAt: base.updatedAt || submittedAt,
+        reviewedAt: base.reviewedAt || null,
+        reviewedBy: String(base.reviewedBy || '').trim(),
+        reviewComment: String(base.reviewComment || '').trim(),
+        activationSentAt: base.activationSentAt || null,
+        activatedAt: base.activatedAt || null,
+        externalUserId: String(base.externalUserId || '').trim()
+      };
     }
 
     function loadUnitReviewStore() {
@@ -935,6 +1002,69 @@
       return store.rosters[index];
     }
 
+    function loadUnitContactApplicationStore() {
+      const raw = readVersionedStore(UNIT_CONTACT_APP_KEY, emptyUnitContactApplicationStore);
+      if (!raw || typeof raw !== 'object') return emptyUnitContactApplicationStore();
+      const store = {
+        applications: Array.isArray(raw.applications) ? raw.applications.map((entry) => normalizeUnitContactApplication(entry)) : [],
+        nextId: Number.isFinite(Number(raw.nextId)) ? Number(raw.nextId) : 1
+      };
+      if (store.nextId < 1) store.nextId = 1;
+      return store;
+    }
+
+    function saveUnitContactApplicationStore(store) {
+      writeVersionedStore(UNIT_CONTACT_APP_KEY, store);
+    }
+
+    function getAllUnitContactApplications() {
+      return loadUnitContactApplicationStore().applications
+        .slice()
+        .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+    }
+
+    function getUnitContactApplication(id) {
+      const cleanId = String(id || '').trim();
+      if (!cleanId) return null;
+      return loadUnitContactApplicationStore().applications.find((entry) => entry.id === cleanId) || null;
+    }
+
+    function createUnitContactApplication(application) {
+      const store = loadUnitContactApplicationStore();
+      const sequence = Number.isFinite(Number(store.nextId)) ? Number(store.nextId) : 1;
+      const normalized = normalizeUnitContactApplication({
+        ...application,
+        sequence,
+        submittedAt: (application && application.submittedAt) || new Date().toISOString(),
+        updatedAt: (application && application.updatedAt) || new Date().toISOString()
+      });
+      store.applications.push(normalized);
+      store.nextId = sequence + 1;
+      saveUnitContactApplicationStore(store);
+      return normalized;
+    }
+
+    function updateUnitContactApplication(id, updates) {
+      const cleanId = String(id || '').trim();
+      if (!cleanId) return null;
+      const store = loadUnitContactApplicationStore();
+      const index = store.applications.findIndex((entry) => entry.id === cleanId);
+      if (index < 0) return null;
+      store.applications[index] = normalizeUnitContactApplication({
+        ...store.applications[index],
+        ...(updates || {}),
+        updatedAt: new Date().toISOString()
+      });
+      saveUnitContactApplicationStore(store);
+      return store.applications[index];
+    }
+
+    function findUnitContactApplicationsByEmail(email) {
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail) return [];
+      return getAllUnitContactApplications().filter((entry) => entry.applicantEmail === cleanEmail);
+    }
+
     function exportManagedStoreSnapshot() {
       return getManagedStoreKeys().reduce((acc, key) => {
         acc[key] = inspectRawStore(key).parsed;
@@ -991,8 +1121,14 @@
       getTrainingRosterByUnit,
       addTrainingRosterPerson,
       deleteTrainingRosterPerson,
-      updateTrainingRosterPerson
-      ,
+      updateTrainingRosterPerson,
+      loadUnitContactApplicationStore,
+      saveUnitContactApplicationStore,
+      getAllUnitContactApplications,
+      getUnitContactApplication,
+      createUnitContactApplication,
+      updateUnitContactApplication,
+      findUnitContactApplicationsByEmail,
       migrateAllStores,
       getStoreVersion,
       getSchemaHealth,

@@ -63,6 +63,18 @@
 - Owns seeded demo corrective-action bootstrap data
 - Keeps workflow support logic out of `app.js` and feature modules
 
+### [m365-api-client.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-api-client.js)
+
+- Owns the M365 integration seam for public unit-contact application flows
+- Starts with a local emulator mode so frontend flow can be built before SharePoint / Power Automate is connected
+- Will later absorb submit/status calls to SharePoint-backed APIs or Azure Function endpoints
+
+### [unit-contact-application-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/unit-contact-application-module.js)
+
+- Public homepage-adjacent flow for `申請單位資安窗口`
+- Owns the application form, success state, progress lookup, and activation handoff page
+- Reuses the existing unit cascade selector while staying accessible before login
+
 ### [case-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/case-module.js)
 
 - Corrective action dashboard
@@ -119,7 +131,8 @@
 6. Split shared formatting and copy/test helpers into `ui-module.js`.
 7. Split record numbering, training export/import/print helpers, and seed bootstrap into `workflow-support-module.js`.
 8. Split binary attachment persistence and preview rendering into `attachment-module.js`.
-9. Replace most route-facing feature dependencies in `app.js` with thin delegates.
+9. Split public unit-contact application flow into `unit-contact-application-module.js` with `m365-api-client.js` as the backend seam.
+10. Replace most route-facing feature dependencies in `app.js` with thin delegates.
 
 ## Recommended Next Refactors
 

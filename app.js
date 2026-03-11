@@ -6,7 +6,7 @@
   if (typeof window !== 'undefined') {
     window.__APP_READY__ = false;
   }
-  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template', TRAINING_KEY = 'cats_training_hours', LOGIN_LOG_KEY = 'cats_login_log', UNIT_REVIEW_KEY = 'cats_unit_review';
+  const DATA_KEY = 'cats_data', AUTH_KEY = 'cats_auth', CHECKLIST_KEY = 'cats_checklists', TEMPLATE_KEY = 'cats_checklist_template', TRAINING_KEY = 'cats_training_hours', LOGIN_LOG_KEY = 'cats_login_log', UNIT_REVIEW_KEY = 'cats_unit_review', UNIT_CONTACT_APP_KEY = 'cats_unit_contact_applications';
   const STATUSES = { CREATED: '開立', PENDING: '待矯正', PROPOSED: '已提案', REVIEWING: '審核中', TRACKING: '追蹤中', CLOSED: '結案' };
   const STATUS_CLASSES = { [STATUSES.CREATED]: 'created', [STATUSES.PENDING]: 'pending', [STATUSES.PROPOSED]: 'proposed', [STATUSES.REVIEWING]: 'reviewing', [STATUSES.TRACKING]: 'tracking', [STATUSES.CLOSED]: 'closed' };
   const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
@@ -22,6 +22,14 @@
   const TRAINING_INFO_STAFF_LABEL = '資訊人員(含承辦委外資通系統)';
   const TRAINING_PROFESSIONAL_LABEL = '資安專業課程（1年3小時）';
   const TRAINING_UNDO_WINDOW_MINUTES = 30;
+  const UNIT_CONTACT_APPLICATION_STATUSES = {
+    PENDING_REVIEW: 'pending_review',
+    RETURNED: 'returned',
+    APPROVED: 'approved',
+    REJECTED: 'rejected',
+    ACTIVATION_PENDING: 'activation_pending',
+    ACTIVE: 'active'
+  };
   const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議'];
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
@@ -84,6 +92,13 @@
 
   function loadUnitReviewStore() { return getDataModule().loadUnitReviewStore(); }
   function saveUnitReviewStore(store) { return getDataModule().saveUnitReviewStore(store); }
+  function loadUnitContactApplicationStore() { return getDataModule().loadUnitContactApplicationStore(); }
+  function saveUnitContactApplicationStore(store) { return getDataModule().saveUnitContactApplicationStore(store); }
+  function getAllUnitContactApplications() { return getDataModule().getAllUnitContactApplications(); }
+  function getUnitContactApplication(id) { return getDataModule().getUnitContactApplication(id); }
+  function createUnitContactApplication(application) { return getDataModule().createUnitContactApplication(application); }
+  function updateUnitContactApplication(id, updates) { return getDataModule().updateUnitContactApplication(id, updates); }
+  function findUnitContactApplicationsByEmail(email) { return getDataModule().findUnitContactApplicationsByEmail(email); }
 
   function formatUnitScopeSummary(scopes) { return getUnitModule().formatUnitScopeSummary(scopes); }
   function approveCustomUnit(unit, actor) { return getUnitModule().approveCustomUnit(unit, actor); }
@@ -377,6 +392,7 @@
       TRAINING_KEY,
       LOGIN_LOG_KEY,
       UNIT_REVIEW_KEY,
+      UNIT_CONTACT_APP_KEY,
       DEFAULT_USERS,
       DEFAULT_CHECKLIST_SECTIONS,
       ROLES,
@@ -691,6 +707,52 @@
     window._trainingModule = trainingModuleApi;
     return trainingModuleApi;
   }
+  let m365ApiClientApi = null;
+  function getM365ApiClient() {
+    if (m365ApiClientApi) return m365ApiClientApi;
+    if (typeof window === 'undefined' || typeof window.createM365ApiClient !== 'function') {
+      throw new Error('m365-api-client.js not loaded');
+    }
+    m365ApiClientApi = window.createM365ApiClient({
+      UNIT_CONTACT_APPLICATION_STATUSES,
+      createUnitContactApplication,
+      updateUnitContactApplication,
+      getUnitContactApplication,
+      getAllUnitContactApplications,
+      findUnitContactApplicationsByEmail,
+      getOfficialUnitMeta
+    });
+    window._m365ApiClient = m365ApiClientApi;
+    return m365ApiClientApi;
+  }
+  let unitContactApplicationModuleApi = null;
+  function getUnitContactApplicationModule() {
+    if (unitContactApplicationModuleApi) return unitContactApplicationModuleApi;
+    if (typeof window === 'undefined' || typeof window.createUnitContactApplicationModule !== 'function') {
+      throw new Error('unit-contact-application-module.js not loaded');
+    }
+    unitContactApplicationModuleApi = window.createUnitContactApplicationModule({
+      UNIT_CONTACT_APPLICATION_STATUSES,
+      navigate,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
+      toast,
+      esc,
+      ic,
+      fmtTime,
+      refreshIcons,
+      buildUnitCascadeControl,
+      initUnitCascade,
+      getUnitCode,
+      getM365ModeLabel: function () { return getM365ApiClient().getModeLabel(); },
+      getM365ModeKey: function () { return getM365ApiClient().getMode(); },
+      submitUnitContactApplication: function (payload) { return getM365ApiClient().submitUnitContactApplication(payload); },
+      getUnitContactApplication: function (id) { return getM365ApiClient().getUnitContactApplication(id); },
+      lookupUnitContactApplicationsByEmail: function (email) { return getM365ApiClient().lookupUnitContactApplicationsByEmail(email); }
+    });
+    window._unitContactApplicationModule = unitContactApplicationModuleApi;
+    return unitContactApplicationModuleApi;
+  }
   let shellModuleApi = null;
   function getShellModule() {
     if (shellModuleApi) return shellModuleApi;
@@ -734,6 +796,10 @@
     return shellModuleApi;
   }
   const ROUTE_WHITELIST = {
+    'apply-unit-contact': { title: '申請單位資安窗口', public: true, allow: () => true, fallback: 'apply-unit-contact', render: () => getUnitContactApplicationModule().renderApplyForm() },
+    'apply-unit-contact-success': { title: '申請已送出', public: true, allow: () => true, fallback: 'apply-unit-contact', render: (param) => getUnitContactApplicationModule().renderApplySuccess(param) },
+    'apply-unit-contact-status': { title: '查詢申請進度', public: true, allow: () => true, fallback: 'apply-unit-contact', render: () => getUnitContactApplicationModule().renderApplyStatus() },
+    'activate-unit-contact': { title: '啟用窗口帳號', public: true, allow: () => true, fallback: 'apply-unit-contact', render: (param) => getUnitContactApplicationModule().renderActivate(param) },
     dashboard: { title: '\u5100\u8868\u677f', allow: () => !!currentUser(), render: () => getCaseModule().renderDashboard() },
     list: { title: '\u77ef\u6b63\u55ae\u5217\u8868', allow: () => !!currentUser(), render: () => getCaseModule().renderList() },
     create: { title: '\u958b\u7acb\u77ef\u6b63\u55ae', allow: () => canCreateCAR(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u958b\u7acb\u77ef\u6b63\u55ae\u6b0a\u9650', render: () => getCaseModule().renderCreate() },
