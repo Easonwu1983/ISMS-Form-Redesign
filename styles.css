@@ -3981,6 +3981,20 @@ tbody td:first-child {
   border: 1px solid #bfdbfe;
 }
 
+.review-status-badge.error,
+.review-history-badge.schema-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.review-status-badge.missing,
+.review-history-badge.schema-missing {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
 .review-count-chip {
   background: #eff6ff;
   color: #1e40af;

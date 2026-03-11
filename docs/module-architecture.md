@@ -18,6 +18,7 @@
 - Owns data normalization for users, corrective actions, checklists, and training forms
 - Owns CRUD for correction data, checklist data, training data, unit review store, and login logs
 - Owns store schema versioning and migration dispatch for persisted data
+- Owns schema health diagnostics used by the admin health panel
 - Keeps persistence concerns out of feature and shell modules
 
 ### [auth-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/auth-module.js)
@@ -76,6 +77,7 @@
 - User management
 - Unit review
 - Login log
+- Schema health panel for admin diagnostics and migration repair
 
 ## What Still Lives In [app.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/app.js)
 
@@ -112,6 +114,6 @@
 
 ## Recommended Next Refactors
 
-1. Add migration diagnostics or an admin-only schema health panel.
-2. Continue converting long feature-specific `innerHTML` sections into smaller render partials.
-3. Clean up a few docs/pages that still display mojibake in some terminals due legacy encoding.
+1. Continue converting long feature-specific `innerHTML` sections into smaller render partials.
+2. Clean up a few docs/pages that still display mojibake in some terminals due legacy encoding.
+3. Consider exporting schema diagnostics for offline support bundles if operational troubleshooting grows.

@@ -20,6 +20,8 @@
       mergeCustomUnit,
       loadLoginLogs,
       clearLoginLogs,
+      getSchemaHealth,
+      migrateAllStores,
       navigate,
       toast,
       fmtTime,
@@ -195,6 +197,54 @@
     refreshIcons();
   }
 
+  function formatSchemaBytes(size) {
+    const value = Number(size || 0);
+    if (value >= 1024 * 1024) return (value / (1024 * 1024)).toFixed(2) + ' MB';
+    if (value >= 1024) return (value / 1024).toFixed(1) + ' KB';
+    return value + ' B';
+  }
+
+  function schemaStatusClass(status) {
+    if (status === 'healthy') return 'approved';
+    if (status === 'attention') return 'pending';
+    return status;
+  }
+
+  function schemaStatusBadge(store) {
+    return `<span class="review-status-badge ${schemaStatusClass(store.status)}">${esc(store.statusLabel)}</span>`;
+  }
+
+  function renderSchemaHealthIssueList(stores) {
+    const issues = stores.filter((store) => store.status !== 'healthy');
+    if (!issues.length) {
+      return `<div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">目前沒有待處理的 schema 問題</div><div class="empty-state-desc">所有受管 store 都已使用最新 envelope 與版本格式。</div></div>`;
+    }
+    return issues.map((store) => {
+      const detail = store.parseError
+        ? store.parseError
+        : (store.migrationNeeded
+          ? `目前版本 ${store.storedVersion === null ? '未知' : store.storedVersion}，預期版本 ${store.expectedVersion}`
+          : '尚未建立資料，系統將在首次寫入時補齊');
+      return `<div class="review-history-item"><div class="review-history-top"><span class="review-history-badge ${store.status === 'error' ? 'schema-error' : (store.status === 'missing' ? 'schema-missing' : 'merged')}">${esc(store.statusLabel)}</span><span class="review-history-time">${esc(store.key)}</span></div><div class="review-history-title">${esc(store.label)}</div><div class="review-history-meta">${esc(detail)}</div></div>`;
+    }).join('');
+  }
+
+  function renderSchemaHealth() {
+    if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可檢視資料健康資訊', 'error'); return; }
+    const health = getSchemaHealth();
+    const attentionCount = health.totals.attention + health.totals.error + health.totals.missing;
+    const rows = health.stores.map((store) => `<tr><td><div class="review-unit-name">${esc(store.label)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(store.key)}</div></td><td>${schemaStatusBadge(store)}</td><td>v${store.storedVersion === null ? '—' : store.storedVersion} / v${store.expectedVersion}</td><td>${store.hasEnvelope ? 'Versioned envelope' : (store.exists ? 'Legacy raw JSON' : 'Not created')}</td><td>${esc(store.summary)}</td><td>${store.recordCount}</td><td>${formatSchemaBytes(store.rawSize)}</td></tr>`).join('');
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">Schema Diagnostics</div><h1 class="page-title">資料健康檢查</h1><p class="page-subtitle">檢查各個 localStorage store 的 schema version、envelope 格式、資料筆數與 migration 狀態。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshSchemaHealth">${ic('refresh-cw', 'icon-sm')} 重新檢查</button><button type="button" class="btn btn-primary" data-action="admin.repairSchemaHealth">${ic('database', 'icon-sm')} 重跑 migration repair</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>本頁只提供診斷與安全補寫，不會刪除資料。最近檢查時間：<strong>${esc(fmtTime(health.generatedAt))}</strong></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('database')}</div><div class="stat-value">${health.totals.totalStores}</div><div class="stat-label">受管 Store</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${health.totals.healthy}</div><div class="stat-label">狀態正常</div></div><div class="stat-card pending"><div class="stat-icon">${ic('alert-triangle')}</div><div class="stat-value">${attentionCount}</div><div class="stat-label">待處理</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('rows-3')}</div><div class="stat-value">${health.totals.totalRecords}</div><div class="stat-label">總資料量</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">Store 狀態明細</span><span class="review-card-subtitle">版本、格式與資料量一覽</span></div><div class="table-wrapper"><table><thead><tr><th>Store</th><th>狀態</th><th>版本</th><th>格式</th><th>內容摘要</th><th>筆數</th><th>容量</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="card review-history-card"><div class="card-header"><span class="card-title">待處理項目</span><span class="review-card-subtitle">優先處理格式損毀與待升級資料</span></div><div class="review-history-list">${renderSchemaHealthIssueList(health.stores)}</div></div></div></div>`;
+    refreshIcons();
+  }
+
+  function handleRepairSchemaHealth() {
+    if (!isAdmin()) return;
+    migrateAllStores();
+    toast('已重新執行 schema migration repair');
+    renderSchemaHealth();
+  }
+
   registerActionHandlers('admin', {
     addUser: function () {
       showUserModal(null);
@@ -219,6 +269,12 @@
     },
     clearLoginLogs: function () {
       handleClearLoginLogs();
+    },
+    refreshSchemaHealth: function () {
+      renderSchemaHealth();
+    },
+    repairSchemaHealth: function () {
+      handleRepairSchemaHealth();
     }
   });
 
@@ -228,7 +284,8 @@
     return {
       renderUsers,
       renderUnitReview,
-      renderLoginLog
+      renderLoginLog,
+      renderSchemaHealth
     };
   };
 })();

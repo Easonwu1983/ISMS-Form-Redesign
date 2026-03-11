@@ -45,9 +45,21 @@
       [LOGIN_LOG_KEY]: 1,
       [UNIT_REVIEW_KEY]: 1
     };
+    const STORE_LABELS = {
+      [DATA_KEY]: '矯正單與帳號資料',
+      [CHECKLIST_KEY]: '內稽檢核表資料',
+      [TEMPLATE_KEY]: '檢核表題庫模板',
+      [TRAINING_KEY]: '教育訓練資料',
+      [LOGIN_LOG_KEY]: '登入紀錄',
+      [UNIT_REVIEW_KEY]: '單位治理資料'
+    };
 
     function getStoreVersion(key) {
       return Number(STORE_VERSIONS[key] || 1);
+    }
+
+    function getManagedStoreKeys() {
+      return Object.keys(STORE_VERSIONS);
     }
 
     function createStoreEnvelope(key, payload) {
@@ -204,6 +216,167 @@
       readVersionedStore(TRAINING_KEY, emptyTrainingStore);
       readVersionedStore(LOGIN_LOG_KEY, () => []);
       readVersionedStore(UNIT_REVIEW_KEY, emptyUnitReviewStore);
+    }
+
+    function inspectRawStore(key) {
+      const raw = localStorage.getItem(key);
+      if (raw === null || raw === undefined) {
+        return {
+          key,
+          exists: false,
+          raw,
+          parsed: null,
+          parseError: '',
+          rawSize: 0
+        };
+      }
+      try {
+        return {
+          key,
+          exists: true,
+          raw,
+          parsed: JSON.parse(raw),
+          parseError: '',
+          rawSize: raw.length
+        };
+      } catch (error) {
+        return {
+          key,
+          exists: true,
+          raw,
+          parsed: null,
+          parseError: String(error && error.message || 'JSON parse error'),
+          rawSize: raw.length
+        };
+      }
+    }
+
+    function summarizeStorePayload(key, payload) {
+      switch (key) {
+        case DATA_KEY: {
+          const items = Array.isArray(payload && payload.items) ? payload.items.length : 0;
+          const users = Array.isArray(payload && payload.users) ? payload.users.length : 0;
+          return {
+            shape: 'items + users',
+            recordCount: items + users,
+            summary: `${items} 筆矯正單 / ${users} 位使用者`
+          };
+        }
+        case CHECKLIST_KEY: {
+          const items = Array.isArray(payload && payload.items) ? payload.items.length : 0;
+          return {
+            shape: 'items + nextId',
+            recordCount: items,
+            summary: `${items} 份檢核表`
+          };
+        }
+        case TEMPLATE_KEY: {
+          const sections = Array.isArray(payload) ? payload : [];
+          const questions = sections.reduce((sum, section) => sum + (Array.isArray(section && section.items) ? section.items.length : 0), 0);
+          return {
+            shape: 'section[]',
+            recordCount: questions,
+            summary: `${sections.length} 個章節 / ${questions} 題`
+          };
+        }
+        case TRAINING_KEY: {
+          const forms = Array.isArray(payload && payload.forms) ? payload.forms.length : 0;
+          const rosters = Array.isArray(payload && payload.rosters) ? payload.rosters.length : 0;
+          return {
+            shape: 'forms + rosters',
+            recordCount: forms + rosters,
+            summary: `${forms} 張填報單 / ${rosters} 筆名單`
+          };
+        }
+        case LOGIN_LOG_KEY: {
+          const logs = Array.isArray(payload) ? payload.length : 0;
+          return {
+            shape: 'log[]',
+            recordCount: logs,
+            summary: `${logs} 筆登入事件`
+          };
+        }
+        case UNIT_REVIEW_KEY: {
+          const approved = Array.isArray(payload && payload.approvedUnits) ? payload.approvedUnits.length : 0;
+          const history = Array.isArray(payload && payload.history) ? payload.history.length : 0;
+          return {
+            shape: 'approvedUnits + history',
+            recordCount: approved + history,
+            summary: `${approved} 筆核准保留 / ${history} 筆治理紀錄`
+          };
+        }
+        default:
+          return {
+            shape: typeof payload,
+            recordCount: 0,
+            summary: '未知資料格式'
+          };
+      }
+    }
+
+    function getSchemaHealth() {
+      const stores = getManagedStoreKeys().map((key) => {
+        const rawInfo = inspectRawStore(key);
+        const expectedVersion = getStoreVersion(key);
+        const hasEnvelope = !!rawInfo.exists && !rawInfo.parseError && isStoreEnvelope(rawInfo.parsed);
+        const storedVersion = !rawInfo.exists
+          ? null
+          : (hasEnvelope ? Number(rawInfo.parsed.version) : (rawInfo.parseError ? null : 0));
+        const payload = hasEnvelope ? rawInfo.parsed.payload : rawInfo.parsed;
+        const migrationNeeded = !!rawInfo.exists && !rawInfo.parseError && (!hasEnvelope || storedVersion !== expectedVersion);
+        const diagnostics = rawInfo.parseError
+          ? { shape: 'invalid-json', recordCount: 0, summary: 'JSON 解析失敗' }
+          : summarizeStorePayload(key, payload);
+        let status = 'healthy';
+        let statusLabel = '正常';
+        if (rawInfo.parseError) {
+          status = 'error';
+          statusLabel = '損毀';
+        } else if (!rawInfo.exists) {
+          status = 'missing';
+          statusLabel = '尚未建立';
+        } else if (migrationNeeded) {
+          status = 'attention';
+          statusLabel = '待升級';
+        }
+        return {
+          key,
+          label: STORE_LABELS[key] || key,
+          exists: rawInfo.exists,
+          status,
+          statusLabel,
+          expectedVersion,
+          storedVersion,
+          hasEnvelope,
+          migrationNeeded,
+          parseError: rawInfo.parseError,
+          rawSize: rawInfo.rawSize,
+          shape: diagnostics.shape,
+          recordCount: diagnostics.recordCount,
+          summary: diagnostics.summary
+        };
+      });
+      const totals = stores.reduce((acc, store) => {
+        acc.totalStores += 1;
+        acc.totalRecords += Number(store.recordCount || 0);
+        if (store.status === 'healthy') acc.healthy += 1;
+        if (store.status === 'attention') acc.attention += 1;
+        if (store.status === 'error') acc.error += 1;
+        if (store.status === 'missing') acc.missing += 1;
+        return acc;
+      }, {
+        totalStores: 0,
+        totalRecords: 0,
+        healthy: 0,
+        attention: 0,
+        error: 0,
+        missing: 0
+      });
+      return {
+        generatedAt: new Date().toISOString(),
+        stores,
+        totals
+      };
     }
 
     function createDefaultData() {
@@ -814,7 +987,8 @@
       updateTrainingRosterPerson
       ,
       migrateAllStores,
-      getStoreVersion
+      getStoreVersion,
+      getSchemaHealth
     };
   };
 })();
