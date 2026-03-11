@@ -20,6 +20,11 @@ For this tenant, use:
 4. campus backend API
 5. admin-issued account handoff in the current system
 
+Deployment references:
+
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\campus-production-deployment-checklist.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\campus-production-deployment-checklist.md)
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\windows-service-backend-runbook.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\windows-service-backend-runbook.md)
+
 ## Why This Is The Recommended Path
 
 - SharePoint site-owner access is working
@@ -60,13 +65,17 @@ Set:
 ## Backend Bootstrap
 
 1. On the campus backend host, sign in once with CLI for Microsoft 365 using the site-owner account
-2. Start:
+2. Either run directly or install as a Windows service
+3. Direct start:
 
 ```powershell
 npm run m365:a3:campus-backend:start
 ```
 
-3. Verify:
+4. Windows service path:
+   - follow [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\windows-service-backend-runbook.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\windows-service-backend-runbook.md)
+
+5. Verify:
 
 ```text
 GET /api/unit-contact/health

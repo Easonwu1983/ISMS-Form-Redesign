@@ -18,3 +18,5 @@ test-artifacts/
 server.log
 server.pid
 .local-secrets/
+m365/campus-backend/runtime.local.json
+logs/

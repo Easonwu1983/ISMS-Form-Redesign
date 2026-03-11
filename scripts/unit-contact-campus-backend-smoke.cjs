@@ -81,7 +81,7 @@ async function cleanupApplicationById(applicationId) {
 
 (async () => {
   const results = createResultEnvelope({ steps: [] });
-  const backend = spawn(process.execPath, ['m365/campus-backend/server.cjs'], {
+  const backend = spawn(process.execPath, ['m365/campus-backend/service-host.cjs'], {
     cwd: ROOT,
     env: {
       ...process.env,

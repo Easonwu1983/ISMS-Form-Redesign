@@ -350,35 +350,50 @@ async function handleHealth(_req, res, origin) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
-  const origin = cleanText(req.headers.origin);
-  const url = new URL(req.url, `http://${req.headers.host}`);
+function createServer() {
+  return http.createServer(async (req, res) => {
+    const origin = cleanText(req.headers.origin);
+    const url = new URL(req.url, `http://${req.headers.host}`);
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, buildCorsHeaders(origin));
-    res.end();
-    return;
-  }
-
-  try {
-    if (url.pathname === '/api/unit-contact/health') {
-      await handleHealth(req, res, origin);
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, buildCorsHeaders(origin));
+      res.end();
       return;
     }
-    if (url.pathname === '/api/unit-contact/apply' && req.method === 'POST') {
-      await handleApply(req, res, origin);
-      return;
-    }
-    if (url.pathname === '/api/unit-contact/status' && (req.method === 'POST' || req.method === 'GET')) {
-      await handleLookup(req, res, origin, url);
-      return;
-    }
-    await writeJson(res, buildErrorResponse(new Error('Not found'), 'Not found', 404), origin);
-  } catch (error) {
-    await writeJson(res, buildErrorResponse(error, 'Unexpected backend error.', 500), origin);
-  }
-});
 
-server.listen(DEFAULT_PORT, () => {
-  console.log(`unit-contact-campus-backend listening on http://127.0.0.1:${DEFAULT_PORT}`);
-});
+    try {
+      if (url.pathname === '/api/unit-contact/health') {
+        await handleHealth(req, res, origin);
+        return;
+      }
+      if (url.pathname === '/api/unit-contact/apply' && req.method === 'POST') {
+        await handleApply(req, res, origin);
+        return;
+      }
+      if (url.pathname === '/api/unit-contact/status' && (req.method === 'POST' || req.method === 'GET')) {
+        await handleLookup(req, res, origin, url);
+        return;
+      }
+      await writeJson(res, buildErrorResponse(new Error('Not found'), 'Not found', 404), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Unexpected backend error.', 500), origin);
+    }
+  });
+}
+
+function startServer(port = DEFAULT_PORT) {
+  const server = createServer();
+  server.listen(port, () => {
+    console.log(`unit-contact-campus-backend listening on http://127.0.0.1:${port}`);
+  });
+  return server;
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  createServer,
+  startServer
+};
