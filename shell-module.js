@@ -29,6 +29,8 @@
       getAuthorizedUnits,
       getScopedUnit,
       switchCurrentUserUnit,
+      hasUnsavedChangesGuard,
+      confirmDiscardUnsavedChanges,
       registerActionHandlers
     } = deps;
 
@@ -215,7 +217,10 @@
     }
 
     registerActionHandlers('shell', {
-      logout: function () { logout(); },
+      logout: function () {
+        if (hasUnsavedChangesGuard() && !confirmDiscardUnsavedChanges('目前有未儲存的變更，確定要登出嗎？')) return;
+        logout();
+      },
       'toggle-sidebar': function () { toggleSidebar(); },
       'close-sidebar': function () { closeSidebar(); }
     });

@@ -935,6 +935,13 @@
       return store.rosters[index];
     }
 
+    function exportManagedStoreSnapshot() {
+      return getManagedStoreKeys().reduce((acc, key) => {
+        acc[key] = inspectRawStore(key).parsed;
+        return acc;
+      }, {});
+    }
+
     return {
       parseUserUnits,
       normalizeUserRole,
@@ -988,7 +995,8 @@
       ,
       migrateAllStores,
       getStoreVersion,
-      getSchemaHealth
+      getSchemaHealth,
+      exportManagedStoreSnapshot
     };
   };
 })();

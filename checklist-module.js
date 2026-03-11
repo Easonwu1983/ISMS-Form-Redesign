@@ -34,6 +34,8 @@
       registerActionHandlers,
       closeModalRoot,
       navigate,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
       toast,
       fmt,
       fmtTime,
@@ -96,6 +98,7 @@
       const duplicateChecklist = findExistingChecklistForUnitYear(defaultScopedUnit, currentAuditYear);
       if (duplicateChecklist) {
         toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
+        clearUnsavedChangesGuard();
         navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
         return;
       }
@@ -199,6 +202,12 @@
       { selector: '#checklist-form button[type="submit"]', testId: 'checklist-submit' }
     ]);
     initUnitCascade('cl-unit', selectedUnit, { disabled: checklistUnitLocked });
+    const checklistForm = document.getElementById('checklist-form');
+    clearUnsavedChangesGuard();
+
+    function markChecklistDirty() {
+      setUnsavedChangesGuard(true, '檢核表內容尚未儲存，確定要離開此頁嗎？');
+    }
 
     function syncChecklistMeta() {
       document.getElementById('cl-side-unit').textContent = document.getElementById('cl-unit').value || '未指定';
@@ -293,6 +302,7 @@
       const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
       if (duplicateChecklist) {
         toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
+        clearUnsavedChangesGuard();
         navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
         return;
       }
@@ -300,6 +310,7 @@
       existing = getChecklist(data.id) || data;
       debugFlow('checklist', 'draft saved', { id: data.id, unit: data.unit, status: data.status });
       updateChecklistDraftStatus(existing);
+      clearUnsavedChangesGuard();
       toast(`\u8349\u7a3f ${data.id} \u5df2\u66ab\u5b58`);
       navigate('checklist-fill/' + data.id, { replace: true });
     }
@@ -325,7 +336,7 @@
     updateProgress();
     updateChecklistDraftStatus(existing);
 
-    document.getElementById('checklist-form').addEventListener('submit', (event) => {
+    checklistForm.addEventListener('submit', (event) => {
       event.preventDefault();
       debugFlow('checklist', 'submit start', { id: existing?.id || null, unit: document.getElementById('cl-unit').value });
       const missing = [];
@@ -363,9 +374,13 @@
       existing = getChecklist(data.id) || data;
       debugFlow('checklist', 'submit success', { id: data.id, unit: data.unit, status: data.status });
       updateChecklistDraftStatus(existing);
+      clearUnsavedChangesGuard();
       toast(`\u6aa2\u6838\u8868 ${data.id} \u5df2\u6b63\u5f0f\u9001\u51fa`);
       navigate('checklist-detail/' + data.id);
     });
+
+    checklistForm.addEventListener('input', markChecklistDirty);
+    checklistForm.addEventListener('change', markChecklistDirty);
 
     document.getElementById('cl-save-draft')?.addEventListener('click', saveChecklistDraft);
     document.getElementById('cl-save-draft-inline').addEventListener('click', saveChecklistDraft);

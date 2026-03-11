@@ -2,6 +2,18 @@
   window.createUiModule = function createUiModule() {
     let iconRetryTimer = null;
     let iconRetryCount = 0;
+    let unsavedChangesActive = false;
+    let unsavedChangesMessage = '目前有未儲存的變更，確定要離開此頁嗎？';
+
+    if (typeof window !== 'undefined' && !window.__UNSAVED_CHANGES_GUARD__) {
+      window.addEventListener('beforeunload', function (event) {
+        if (!unsavedChangesActive) return;
+        event.preventDefault();
+        event.returnValue = unsavedChangesMessage;
+        return unsavedChangesMessage;
+      });
+      window.__UNSAVED_CHANGES_GUARD__ = true;
+    }
 
     function fmt(d) {
       if (!d) return '—';
@@ -169,6 +181,41 @@
       raf(() => lucideApi.createIcons());
     }
 
+    function setUnsavedChangesGuard(active, message) {
+      unsavedChangesActive = !!active;
+      if (message) unsavedChangesMessage = String(message);
+    }
+
+    function clearUnsavedChangesGuard() {
+      unsavedChangesActive = false;
+    }
+
+    function hasUnsavedChangesGuard() {
+      return !!unsavedChangesActive;
+    }
+
+    function confirmDiscardUnsavedChanges(message, clearOnConfirm = true) {
+      if (!unsavedChangesActive) return true;
+      const finalMessage = String(message || unsavedChangesMessage || '目前有未儲存的變更，確定要離開此頁嗎？');
+      const ok = window.confirm(finalMessage);
+      if (ok && clearOnConfirm) clearUnsavedChangesGuard();
+      return ok;
+    }
+
+    function downloadJson(filename, payload) {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => {
+        try { URL.revokeObjectURL(url); } catch (_) { }
+      }, 500);
+    }
+
     return {
       fmt,
       fmtTime,
@@ -186,7 +233,12 @@
       toTestIdFragment,
       mkChk,
       mkRadio,
-      refreshIcons
+      refreshIcons,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
+      hasUnsavedChangesGuard,
+      confirmDiscardUnsavedChanges,
+      downloadJson
     };
   };
 })();

@@ -18,6 +18,8 @@
       getAuthorizedUnits,
       getRoute,
       navigate,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
       toast,
       fmt,
       fmtTime,
@@ -39,6 +41,7 @@
       upsertTrainingForm,
       updateTrainingForm,
       addTrainingRosterPerson,
+      updateTrainingRosterPerson,
       deleteTrainingRoster: deleteTrainingRosterPerson,
       generateTrainingFormId,
       findExistingTrainingFormForUnitYear,
@@ -478,6 +481,18 @@
     const trainingForm = document.getElementById('training-form');
     const trainingFeedback = document.getElementById('training-feedback');
     const trainingDraftStatus = document.getElementById('training-draft-status');
+    clearUnsavedChangesGuard();
+
+    function markTrainingDirty() {
+      setUnsavedChangesGuard(true, '教育訓練填報內容尚未儲存，確定要離開此頁嗎？');
+    }
+
+    function shouldIgnoreTrainingDirtyTarget(target) {
+      if (!target || typeof target.closest !== 'function') return false;
+      if (target.closest('#training-search, #training-only-focus, #training-select-all, #training-bulk-status')) return true;
+      if (target.closest('.training-row-check')) return true;
+      return false;
+    }
 
     function getRowKey(row, index) {
       return row.rosterId ? ('roster:' + row.rosterId) : ('row:' + index + ':' + row.name);
@@ -514,6 +529,7 @@
       if (!form) return false;
       setTrainingFeedback('error', message, ['本年度同一填報單位只能維護一份教育訓練統計。']);
       toast(message, 'error');
+      clearUnsavedChangesGuard();
       navigate(canEditTrainingForm(form) ? ('training-fill/' + form.id) : ('training-detail/' + form.id));
       return true;
     }
@@ -594,6 +610,7 @@
           }
           if (field === 'isInfoStaff') row.completedProfessional = row.isInfoStaff === '否' ? '不適用' : '';
           rowsState[Number(event.target.dataset.idx)] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
+          markTrainingDirty();
           renderRows();
         });
       });
@@ -604,6 +621,7 @@
           const field = event.target.dataset.field;
           if (!rowsState[idx] || !field) return;
           rowsState[idx][field] = event.target.value;
+          markTrainingDirty();
         });
         element.addEventListener('change', (event) => {
           const idx = Number(event.target.dataset.idx);
@@ -611,12 +629,14 @@
           if (!rowsState[idx] || !field) return;
           rowsState[idx] = normalizeTrainingRecordRow({ ...rowsState[idx], [field]: event.target.value }, document.getElementById('tr-unit').value);
           persistEditableRosterRow(rowsState[idx]);
+          markTrainingDirty();
         });
       });
 
       body.querySelectorAll('.training-row-note').forEach((element) => {
         element.addEventListener('input', (event) => {
           rowsState[Number(event.target.dataset.idx)].note = event.target.value;
+          markTrainingDirty();
         });
       });
 
@@ -630,6 +650,7 @@
           row[field] = row[field] === value ? '' : value;
           if (field === 'completedProfessional' && row.isInfoStaff !== '是') row.completedProfessional = row.isInfoStaff === '否' ? '不適用' : '';
           rowsState[idx] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
+          markTrainingDirty();
           renderRows();
         });
       });
@@ -647,6 +668,7 @@
           if (row.rosterId) deleteTrainingRosterPerson(row.rosterId);
           rowsState = rowsState.filter((_, rowIndex) => rowIndex !== idx);
           selectedKeys.clear();
+          markTrainingDirty();
           renderRows();
           toast('已刪除「' + row.name + '」');
         });
@@ -735,6 +757,7 @@
       });
       existing = getTrainingForm(formId) || existing;
       updateTrainingDraftStatus(existing);
+      clearUnsavedChangesGuard();
       if (targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF) {
         toast('填報單 ' + formId + ' 已完成流程一並鎖定');
         navigate('training-detail/' + formId);
@@ -751,8 +774,14 @@
     });
     document.getElementById('training-search').addEventListener('input', renderRows);
     document.getElementById('training-only-focus').addEventListener('change', renderRows);
-    trainingForm.addEventListener('input', clearTrainingFeedback);
-    trainingForm.addEventListener('change', clearTrainingFeedback);
+    trainingForm.addEventListener('input', (event) => {
+      clearTrainingFeedback();
+      if (!shouldIgnoreTrainingDirtyTarget(event.target)) markTrainingDirty();
+    });
+    trainingForm.addEventListener('change', (event) => {
+      clearTrainingFeedback();
+      if (!shouldIgnoreTrainingDirtyTarget(event.target)) markTrainingDirty();
+    });
     document.getElementById('training-select-all').addEventListener('change', (event) => {
       getFilteredRows().forEach(({ row, index }) => {
         const key = getRowKey(row, index);
@@ -790,6 +819,7 @@
         }
         return normalizeTrainingRecordRow(nextRow, document.getElementById('tr-unit').value);
       });
+      markTrainingDirty();
       toast('已套用批次設定');
       renderRows();
     });
@@ -816,6 +846,7 @@
       ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
         document.getElementById(idName).value = '';
       });
+      markTrainingDirty();
       renderRows();
       toast(result.updated ? result.reason : ('已新增「' + payload.name + '」到名單'));
     });
@@ -826,6 +857,7 @@
         syncStatsUnitField(event.target.value);
         rowsState = mergeTrainingRows(event.target.value, rowsState);
         selectedKeys.clear();
+        markTrainingDirty();
         renderRows();
       });
     }
@@ -855,6 +887,12 @@
     const canUndo = canUndoTrainingForm(form, user);
     const undoRemainingMinutes = canUndo ? getTrainingUndoRemainingMinutes(form) : 0;
     let filesState = [...(form.signedFiles || [])];
+    clearUnsavedChangesGuard();
+
+    function markTrainingDetailDirty() {
+      setUnsavedChangesGuard(true, '簽核掃描檔尚未送出，確定要離開此頁嗎？');
+    }
+
     const summary = form.summary || computeTrainingSummary(form.records || []);
     const detailRows = buildTrainingDetailRows(form.records || []);
     const timeline = (form.history || []).slice().reverse().map((item) => '<div class="timeline-item"><div class="timeline-time">' + fmtTime(item.time) + '</div><div class="timeline-text">' + esc(item.action) + ' · ' + esc(item.user || '系統') + '</div></div>').join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
@@ -909,6 +947,7 @@
           revokeTransientUploadEntry(removed);
           const targetInput = document.getElementById('training-file-input');
           if (targetInput) targetInput.value = '';
+          markTrainingDetailDirty();
           renderSignedFiles(targetId, true);
           renderSignedFiles('training-signed-files-readonly', false);
         }
@@ -932,6 +971,7 @@
           ownerId: form.id
         }));
       });
+      if (batch.accepted.length) markTrainingDetailDirty();
       renderSignedFiles('training-file-previews', true);
       renderSignedFiles('training-signed-files-readonly', false);
       const targetInput = document.getElementById('training-file-input');
@@ -974,6 +1014,7 @@
           scope: 'training-signoff',
           ownerId: form.id
         });
+        clearUnsavedChangesGuard();
         updateTrainingForm(form.id, {
           status: TRAINING_STATUSES.SUBMITTED,
           signedFiles: persistedFiles,

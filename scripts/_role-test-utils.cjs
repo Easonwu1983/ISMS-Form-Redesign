@@ -77,8 +77,23 @@ async function runStep(results, id, role, title, fn) {
   }
 }
 
-async function gotoHash(page, hash) {
+async function acceptNextDialog(page, action = 'accept') {
+  const handler = async (dialog) => {
+    try {
+      if (action === 'dismiss') await dialog.dismiss();
+      else await dialog.accept();
+    } catch (_) {
+      // Ignore races if the page closes before the dialog is handled.
+    }
+  };
+  page.once('dialog', handler);
+}
+
+async function gotoHash(page, hash, options = {}) {
   const target = '#' + String(hash || '').replace(/^#/, '');
+  if (options.handleUnsaved !== false) {
+    await acceptNextDialog(page, options.dialogAction || 'accept');
+  }
   await page.evaluate((value) => { window.location.hash = value; }, target);
   await page.waitForTimeout(180);
 }
@@ -99,6 +114,7 @@ async function login(page, username, password) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
   if (await page.locator('.btn-logout').count()) {
+    await acceptNextDialog(page, 'accept');
     await page.click('.btn-logout');
     await page.waitForSelector('[data-testid="login-form"]');
   }
@@ -114,6 +130,7 @@ async function login(page, username, password) {
 
 async function logout(page) {
   if (await page.locator('.btn-logout').count()) {
+    await acceptNextDialog(page, 'accept');
     await page.click('.btn-logout');
     await page.waitForSelector('[data-testid="login-form"]');
   }

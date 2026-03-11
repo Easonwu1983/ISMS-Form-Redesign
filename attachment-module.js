@@ -172,6 +172,61 @@
       });
     }
 
+    function listStoredAttachments() {
+      return runStoreRequest('readonly', (store, resolve, reject, finish) => {
+        const request = store.getAll();
+        request.onsuccess = function () {
+          const records = Array.isArray(request.result) ? request.result : [];
+          finish(resolve, records.map((record) => ({
+            attachmentId: String(record && record.id || '').trim(),
+            name: String(record && record.name || '').trim(),
+            type: String(record && record.type || '').trim(),
+            size: Number(record && record.size || (record && record.blob && record.blob.size) || 0),
+            extension: String(record && record.extension || '').trim(),
+            signature: String(record && record.signature || '').trim(),
+            storedAt: String(record && record.storedAt || '').trim(),
+            scope: String(record && record.scope || '').trim(),
+            ownerId: String(record && record.ownerId || '').trim()
+          })));
+        };
+        request.onerror = function () {
+          finish(reject, request.error || new Error('Failed to list attachments'));
+        };
+      });
+    }
+
+    async function getAttachmentHealth(referencedIds) {
+      const records = await listStoredAttachments();
+      const referenced = new Set((Array.isArray(referencedIds) ? referencedIds : []).map((id) => String(id || '').trim()).filter(Boolean));
+      const orphaned = records.filter((record) => !referenced.has(record.attachmentId));
+      const linked = records.filter((record) => referenced.has(record.attachmentId));
+      return {
+        database: DB_NAME,
+        generatedAt: new Date().toISOString(),
+        totalAttachments: records.length,
+        referencedAttachments: linked.length,
+        orphanAttachments: orphaned.length,
+        totalBytes: records.reduce((sum, record) => sum + Number(record.size || 0), 0),
+        orphanBytes: orphaned.reduce((sum, record) => sum + Number(record.size || 0), 0),
+        records,
+        orphaned
+      };
+    }
+
+    async function pruneUnusedAttachments(referencedIds) {
+      const referenced = new Set((Array.isArray(referencedIds) ? referencedIds : []).map((id) => String(id || '').trim()).filter(Boolean));
+      const records = await listStoredAttachments();
+      const orphaned = records.filter((record) => !referenced.has(record.attachmentId));
+      for (const record of orphaned) {
+        await deleteStoredBlob(record.attachmentId);
+      }
+      return {
+        removedCount: orphaned.length,
+        removedBytes: orphaned.reduce((sum, record) => sum + Number(record.size || 0), 0),
+        removedIds: orphaned.map((record) => record.attachmentId)
+      };
+    }
+
     function cleanupContainerUrls(container) {
       const urls = CONTAINER_URLS.get(container) || [];
       urls.forEach((url) => {
@@ -418,8 +473,11 @@
       cleanupRenderedAttachmentUrls,
       createTransientUploadEntry,
       deleteStoredBlob,
+      getAttachmentHealth,
+      listStoredAttachments,
       migrateStoredAttachments,
       persistUploadedEntries,
+      pruneUnusedAttachments,
       readAttachmentPreviewData,
       renderAttachmentList,
       revokeTransientUploadEntry

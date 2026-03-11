@@ -35,6 +35,8 @@
       getScopedUnit,
       renderSidebar,
       navigate,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
       toast,
       fmt,
       fmtTime,
@@ -439,6 +441,11 @@ function renderCreate() {
 
     const createForm = document.getElementById('create-form');
     const createFeedback = document.getElementById('create-feedback');
+    clearUnsavedChangesGuard();
+
+    function markCreateDirty() {
+      setUnsavedChangesGuard(true, '開立矯正單內容尚未送出，確定要離開此頁嗎？');
+    }
     function focusCreateField(el) {
       if (!el || typeof el.focus !== 'function') return;
       const group = el.closest('.form-group') || el;
@@ -555,10 +562,17 @@ function renderCreate() {
       } else {
         toast(`矯正單 ${item.id} 已建立完成`);
       }
+      clearUnsavedChangesGuard();
       navigate('detail/' + item.id);
     });
-    createForm.addEventListener('input', clearCreateFeedback);
-    createForm.addEventListener('change', clearCreateFeedback);
+    createForm.addEventListener('input', function () {
+      clearCreateFeedback();
+      markCreateDirty();
+    });
+    createForm.addEventListener('change', function () {
+      clearCreateFeedback();
+      markCreateDirty();
+    });
   }
 
   function renderDetail(id) {
@@ -845,6 +859,12 @@ function renderRespond(id) {
     const summaryDue = document.getElementById('respond-summary-due');
     const summaryElimDue = document.getElementById('respond-summary-elimdue');
     const summaryFiles = document.getElementById('respond-summary-files');
+    const respondForm = document.getElementById('respond-form');
+    clearUnsavedChangesGuard();
+
+    function markRespondDirty() {
+      setUnsavedChangesGuard(true, '回填矯正措施尚未送出，確定要離開此頁嗎？');
+    }
 
     function syncRespondSummary() {
       summaryDue.textContent = dueInput.value ? fmt(dueInput.value) : '未指定';
@@ -868,6 +888,7 @@ function renderRespond(id) {
           ownerId: item.id
         }));
       });
+      if (batch.accepted.length) markRespondDirty();
       updP();
       if (fi) fi.value = '';
     }
@@ -883,6 +904,7 @@ function renderRespond(id) {
           const removed = tempEv.splice(index, 1)[0];
           revokeTransientUploadEntry(removed);
           if (fi) fi.value = '';
+          markRespondDirty();
           updP();
         }
       });
@@ -897,7 +919,10 @@ function renderRespond(id) {
     elimDueInput.addEventListener('change', syncRespondSummary);
     syncRespondSummary();
 
-    document.getElementById('respond-form').addEventListener('submit', async e => {
+    respondForm.addEventListener('input', markRespondDirty);
+    respondForm.addEventListener('change', markRespondDirty);
+
+    respondForm.addEventListener('submit', async e => {
       e.preventDefault();
       const ca = document.getElementById('r-action').value.trim();
       const rc = document.getElementById('r-root').value.trim();
@@ -911,6 +936,7 @@ function renderRespond(id) {
         scope: 'case-evidence',
         ownerId: id
       });
+      clearUnsavedChangesGuard();
       const upd = {
         correctiveAction: ca, correctiveDueDate: document.getElementById('r-due').value,
         rootCause: rc,
@@ -1018,6 +1044,12 @@ function renderTracking(id) {
     const fileInput = document.getElementById('tk-file-input');
     const filePreviews = document.getElementById('tk-file-previews');
     let tempEv = [];
+    const trackForm = document.getElementById('track-form');
+    clearUnsavedChangesGuard();
+
+    function markTrackingDirty() {
+      setUnsavedChangesGuard(true, '追蹤提報內容尚未送出，確定要離開此頁嗎？');
+    }
 
     function syncTrackingSummary() {
       summaryDate.textContent = dateInput.value ? fmt(dateInput.value) : '未指定';
@@ -1049,6 +1081,7 @@ function renderTracking(id) {
           ownerId: item.id
         }));
       });
+      if (batch.accepted.length) markTrackingDirty();
       updateTrackingPreviews();
       if (fileInput) fileInput.value = '';
     }
@@ -1065,6 +1098,7 @@ function renderTracking(id) {
           const removed = tempEv.splice(index, 1)[0];
           revokeTransientUploadEntry(removed);
           if (fileInput) fileInput.value = '';
+          markTrackingDirty();
           updateTrackingPreviews();
         }
       });
@@ -1081,7 +1115,10 @@ function renderTracking(id) {
     }
     syncTrackingSummary();
 
-    document.getElementById('track-form').addEventListener('submit', async e => {
+    trackForm.addEventListener('input', markTrackingDirty);
+    trackForm.addEventListener('change', markTrackingDirty);
+
+    trackForm.addEventListener('submit', async e => {
       e.preventDefault();
       const res = document.querySelector('input[name="tkResult"]:checked');
       if (!res) { toast('請選擇追蹤建議結果', 'error'); return; }
@@ -1098,6 +1135,7 @@ function renderTracking(id) {
         scope: 'tracking-evidence',
         ownerId: id
       });
+      clearUnsavedChangesGuard();
       const submission = {
         round,
         tracker: document.getElementById('tk-tracker').value,

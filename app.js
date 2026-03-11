@@ -171,6 +171,11 @@
   function applyTestIds(map) { return getUiModule().applyTestIds(map); }
   function applySelectorTestIds(entries) { return getUiModule().applySelectorTestIds(entries); }
   function debugFlow(scope, message, data) { return getUiModule().debugFlow(scope, message, data); }
+  function setUnsavedChangesGuard(active, message) { return getUiModule().setUnsavedChangesGuard(active, message); }
+  function clearUnsavedChangesGuard() { return getUiModule().clearUnsavedChangesGuard(); }
+  function hasUnsavedChangesGuard() { return getUiModule().hasUnsavedChangesGuard(); }
+  function confirmDiscardUnsavedChanges(message, clearOnConfirm) { return getUiModule().confirmDiscardUnsavedChanges(message, clearOnConfirm); }
+  function downloadJson(filename, payload) { return getUiModule().downloadJson(filename, payload); }
   const GLOBAL_ACTION_HANDLERS = Object.create(null);
   function registerActionHandlers(namespace, handlers) {
     const prefix = String(namespace || '').trim();
@@ -221,6 +226,9 @@
   }
   function navigate(h, options) {
     const opts = options || {};
+    if (!opts.allowDirtyNavigation && hasUnsavedChangesGuard()) {
+      if (!confirmDiscardUnsavedChanges(opts.unsavedMessage)) return;
+    }
     const target = '#' + String(h || '').replace(/^#/, '');
     if (window.location.hash === target) {
       if (opts.replace && window.history && typeof window.history.replaceState === 'function') {
@@ -450,12 +458,17 @@
       clearLoginLogs,
       getSchemaHealth: function () { return getDataModule().getSchemaHealth(); },
       migrateAllStores: function () { return getDataModule().migrateAllStores(); },
+      exportManagedStoreSnapshot: function () { return getDataModule().exportManagedStoreSnapshot(); },
+      getAttachmentHealth,
+      pruneOrphanAttachments,
+      exportSupportBundle,
       navigate,
       toast,
       fmtTime,
       esc,
       ic,
       refreshIcons,
+      downloadJson,
       buildUnitCascadeControl,
       initUnitCascade,
       registerActionHandlers,
@@ -505,6 +518,8 @@
       getScopedUnit,
       renderSidebar,
       navigate,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
       toast,
       fmt,
       fmtTime,
@@ -570,6 +585,8 @@
       saveChecklistSections,
       resetChecklistSections,
       navigate,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
       toast,
       fmt,
       fmtTime,
@@ -609,6 +626,8 @@
       getAuthorizedUnits,
       getRoute,
       navigate,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
       toast,
       fmt,
       fmtTime,
@@ -630,6 +649,7 @@
       upsertTrainingForm,
       updateTrainingForm,
       addTrainingRosterPerson,
+      updateTrainingRosterPerson,
       deleteTrainingRoster: deleteTrainingRosterPerson,
       generateTrainingFormId,
       findExistingTrainingFormForUnitYear,
@@ -706,6 +726,8 @@
       getAuthorizedUnits,
       getScopedUnit,
       switchCurrentUserUnit,
+      hasUnsavedChangesGuard,
+      confirmDiscardUnsavedChanges,
       registerActionHandlers
     });
     window._shellModule = shellModuleApi;
@@ -1116,6 +1138,38 @@
   function migrateStoredAttachments(entries, options) { return getAttachmentModule().migrateStoredAttachments(entries, options); }
   function renderAttachmentList(target, files, options) { return getAttachmentModule().renderAttachmentList(target, files, options); }
   function cleanupRenderedAttachmentUrls() { return getAttachmentModule().cleanupRenderedAttachmentUrls(); }
+  function collectReferencedAttachmentIds() {
+    const ids = new Set();
+    const pushFiles = function (files) {
+      (Array.isArray(files) ? files : []).forEach(function (file) {
+        const attachmentId = String(file && file.attachmentId || '').trim();
+        if (attachmentId) ids.add(attachmentId);
+      });
+    };
+    const data = loadData();
+    (data.items || []).forEach(function (item) {
+      pushFiles(item && item.evidence);
+      pushFiles(item && item.pendingTracking && item.pendingTracking.evidence);
+      (item && item.trackings || []).forEach(function (tracking) {
+        pushFiles(tracking && tracking.evidence);
+      });
+    });
+    const trainingStore = loadTrainingStore();
+    (trainingStore.forms || []).forEach(function (form) {
+      pushFiles(form && form.signedFiles);
+    });
+    return Array.from(ids);
+  }
+  function getAttachmentHealth() { return getAttachmentModule().getAttachmentHealth(collectReferencedAttachmentIds()); }
+  function pruneOrphanAttachments() { return getAttachmentModule().pruneUnusedAttachments(collectReferencedAttachmentIds()); }
+  async function exportSupportBundle() {
+    return {
+      generatedAt: new Date().toISOString(),
+      schemaHealth: getDataModule().getSchemaHealth(),
+      attachmentHealth: await getAttachmentHealth(),
+      stores: getDataModule().exportManagedStoreSnapshot()
+    };
+  }
   function csvCell(value) { return getWorkflowSupportModule().csvCell(value); }
   function downloadWorkbook(filename, sheets) { return getWorkflowSupportModule().downloadWorkbook(filename, sheets); }
   function exportTrainingSummaryCsv(forms, filename) { return getWorkflowSupportModule().exportTrainingSummaryCsv(forms, filename); }
@@ -1192,6 +1246,28 @@
     if (trainingChanged) saveTrainingStore(trainingStore);
   }
 
+  let lastStableHash = '';
+  let suppressHashGuard = false;
+  function handleHashChange() {
+    const nextHash = window.location.hash || '#dashboard';
+    if (suppressHashGuard) {
+      suppressHashGuard = false;
+      handleRoute();
+      lastStableHash = window.location.hash || '#dashboard';
+      return;
+    }
+    if (nextHash !== lastStableHash && hasUnsavedChangesGuard()) {
+      const ok = confirmDiscardUnsavedChanges('目前有未儲存的變更，確定要離開此頁嗎？');
+      if (!ok) {
+        suppressHashGuard = true;
+        window.history.replaceState(null, '', lastStableHash || '#dashboard');
+        return;
+      }
+    }
+    handleRoute();
+    lastStableHash = window.location.hash || '#dashboard';
+  }
+
   async function initApp() {
     installGlobalDelegation();
     getDataModule().migrateAllStores();
@@ -1199,10 +1275,11 @@
     ensurePrimaryAdminProfile();
     getTrainingModule().seedTrainingData();
     await migrateAttachmentStores();
-    window.addEventListener('hashchange', handleRoute);
+    window.addEventListener('hashchange', handleHashChange);
     window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
     window.addEventListener('load', refreshIcons);
     renderApp();
+    lastStableHash = window.location.hash || '#dashboard';
     refreshIcons();
     if (typeof window !== 'undefined') {
       window.__APP_READY__ = true;
