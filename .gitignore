@@ -19,4 +19,5 @@ server.log
 server.pid
 .local-secrets/
 m365/campus-backend/runtime.local.json
+m365-config.override.js
 logs/
