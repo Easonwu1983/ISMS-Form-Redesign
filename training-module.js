@@ -82,7 +82,22 @@
   function buildTrainingTableCard(title, subtitle, badgeText, headersHtml, rowsHtml) {
     const badge = badgeText ? '<span class="training-inline-status">' + badgeText + '</span>' : '';
     const subtitleHtml = subtitle ? '<div class="training-table-subtitle">' + subtitle + '</div>' : '';
-    return '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">' + title + '</span>' + subtitleHtml + '</div>' + badge + '</div><div class="table-wrapper"><table><thead><tr>' + headersHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
+    return '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">' + title + '</span>' + subtitleHtml + '</div>' + badge + '</div>' + buildTrainingTableMarkup(headersHtml, rowsHtml) + '</div>';
+  }
+
+  function buildTrainingSummarySection(summary) {
+    return '<div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div>';
+  }
+
+  function buildTrainingTableMarkup(headersHtml, rowsHtml, options) {
+    const opts = options || {};
+    const tbodyIdAttr = opts.tbodyId ? ' id="' + esc(opts.tbodyId) + '"' : '';
+    return '<div class="table-wrapper"><table><thead><tr>' + headersHtml + '</tr></thead><tbody' + tbodyIdAttr + '>' + rowsHtml + '</tbody></table></div>';
+  }
+
+  function buildTrainingEmptyTableRow(colspan, title, desc, padding) {
+    const descHtml = desc ? '<div class="empty-state-desc">' + esc(desc) + '</div>' : '';
+    return '<tr><td colspan="' + colspan + '"><div class="empty-state" style="padding:' + (padding || 24) + 'px"><div class="empty-state-title">' + esc(title) + '</div>' + descHtml + '</div></td></tr>';
   }
 
   function buildTrainingDetailField(label, value) {
@@ -103,6 +118,48 @@
 
   function buildTrainingStepCards(stepDefs) {
     return stepDefs.map((step) => '<div class="training-step-card"><div class="training-step-kicker">' + esc(step[0]) + '</div><div class="training-step-title">' + esc(step[1]) + '</div><div class="training-step-status">' + esc(step[2]) + '</div><div class="training-step-note">' + esc(step[3]) + '</div></div>').join('');
+  }
+
+  function buildTrainingDetailRow(row) {
+    return '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + esc(row.status || '—') + '</td><td>' + esc(row.completedGeneral || '—') + '</td><td>' + esc(row.isInfoStaff || '—') + '</td><td>' + esc(getTrainingProfessionalDisplay(row)) + '</td><td>' + trainingDecisionBadge(row) + '</td><td>' + esc(row.note || '') + '</td></tr>';
+  }
+
+  function buildTrainingDetailRows(records) {
+    if (!(records || []).length) return buildTrainingEmptyTableRow(10, '尚無明細資料', '', 24);
+    return records.map((row) => buildTrainingDetailRow(row)).join('');
+  }
+
+  function buildTrainingEditableMetaCell(row, index, field, canDeleteRow, editableMetaClass, placeholder) {
+    if (!canDeleteRow) return esc(row[field] || '—');
+    return '<input type="text" class="form-input training-row-meta' + editableMetaClass + '" data-idx="' + index + '" data-field="' + field + '" value="' + esc(row[field] || '') + '" placeholder="' + esc(placeholder) + '">';
+  }
+
+  function buildTrainingFillRow(params) {
+    const { row, index, visibleIndex, key, selected, canDeleteRow } = params;
+    const isActive = row.status === '在職';
+    const professionalDisabled = !isActive || row.isInfoStaff !== '是';
+    const editableMetaClass = canDeleteRow ? ' training-row-meta--editable' : '';
+    const professionalHtml = row.isInfoStaff === '否'
+      ? '<span class="training-na-chip">不適用</span>'
+      : renderTrainingBinaryButtons('completedProfessional', row.completedProfessional, index, professionalDisabled, '✓', '✕');
+    const actionHtml = canDeleteRow
+      ? '<div class="training-row-actions"><button type="button" class="btn btn-sm btn-danger training-row-delete" data-idx="' + index + '">' + ic('trash-2', 'btn-icon-svg') + '</button></div>'
+      : '<div class="training-row-actions"><span class="training-row-action-hint">' + (row.source === 'manual' ? '僅建立者可刪' : '正式名單') + '</span></div>';
+    return '<tr>'
+      + '<td><input type="checkbox" class="training-row-check" data-key="' + esc(key) + '" ' + (selected ? 'checked' : '') + '></td>'
+      + '<td>' + (visibleIndex + 1) + '</td>'
+      + '<td><div class="training-person-cell"><div class="training-person-name">' + esc(row.name) + '</div><span class="training-source-tag ' + (row.source === 'import' ? 'import' : 'manual') + '">' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</span></div></td>'
+      + '<td>' + buildTrainingEditableMetaCell(row, index, 'unitName', canDeleteRow, editableMetaClass, '本職單位') + '</td>'
+      + '<td>' + buildTrainingEditableMetaCell(row, index, 'identity', canDeleteRow, editableMetaClass, '身分別') + '</td>'
+      + '<td>' + buildTrainingEditableMetaCell(row, index, 'jobTitle', canDeleteRow, editableMetaClass, '職稱') + '</td>'
+      + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="status">' + trainingSelectOptionsHtml(TRAINING_EMPLOYEE_STATUS, row.status, '請選擇') + '</select></td>'
+      + '<td>' + renderTrainingBinaryButtons('completedGeneral', row.completedGeneral, index, !isActive, '✓', '✕') + '</td>'
+      + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="isInfoStaff" ' + (isActive ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_SELECT_OPTIONS, row.isInfoStaff, '請選擇') + '</select></td>'
+      + '<td>' + professionalHtml + '</td>'
+      + '<td><div class="training-cell-note">' + trainingDecisionBadge(row) + '<div class="training-cell-hint">' + esc(getTrainingRecordHint(row)) + '</div></div></td>'
+      + '<td><input type="text" class="form-input training-row-note" data-idx="' + index + '" value="' + esc(row.note || '') + '" placeholder="可填補充說明或課程名稱"></td>'
+      + '<td>' + actionHtml + '</td>'
+      + '</tr>';
   }
 
   function renderTrainingBinaryButtons(field, value, index, disabled, yesLabel, noLabel) {
@@ -315,11 +372,11 @@
       + '<div class="training-editor-note">可先多選人員，再一次套用相同在職狀態與' + TRAINING_GENERAL_LABEL + '完成情形。' + TRAINING_PROFESSIONAL_LABEL + '僅在' + TRAINING_INFO_STAFF_LABEL + '為「是」時需要填寫。</div>'
       + '<div class="training-draft-status" id="training-draft-status">' + (existing ? (existing.status === TRAINING_STATUSES.DRAFT ? ('草稿上次儲存：' + fmtTime(existing.updatedAt || existing.createdAt)) : ('退回版本最後更新：' + fmtTime(existing.updatedAt || existing.createdAt))) : '尚未建立草稿') + '</div>'
       + '<div class="training-editor-toolbar"><label class="training-search-box"><span class="training-search-icon">' + ic('search', 'icon-sm') + '</span><input type="search" class="form-input" id="training-search" placeholder="搜尋姓名、本職單位、職稱"></label><label class="training-inline-check"><input type="checkbox" id="training-only-focus"> 只看未完成或未填</label></div>'
-      + '<div id="training-summary" class="training-summary-grid training-summary-grid-wide"></div>'
+      + '<div id="training-summary">' + buildTrainingSummarySection(computeTrainingSummary(existing?.records || [])) + '</div>'
       + '<div class="training-bulk-bar"><div class="training-bulk-count" id="training-selected-count">尚未選取人員</div><div class="training-bulk-controls"><select class="form-select" id="training-bulk-status"><option value="">套用在職狀態</option>' + TRAINING_EMPLOYEE_STATUS.map((status) => '<option value="' + esc(status) + '">' + esc(status) + '</option>').join('') + '</select><div class="training-bulk-general"><span>' + TRAINING_GENERAL_LABEL + '</span><div class="training-binary-group"><button type="button" class="training-binary-btn" data-bulk-general="是">✓</button><button type="button" class="training-binary-btn" data-bulk-general="否">✕</button></div></div><button type="button" class="btn btn-secondary" id="training-apply-bulk">' + ic('check-circle-2', 'icon-sm') + ' 套用到所選人員</button></div></div>'
       + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
       + '<div class="training-editor-note" style="margin-top:-4px">草稿或退回更正狀態下，可刪除自己手動新增的人員；正式名單與他人新增資料仍會保留。</div>'
-      + '<div class="training-record-table-wrap"><div class="table-wrapper"><table><thead><tr><th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th><th style="width:120px">操作</th></tr></thead><tbody id="training-rows-body"></tbody></table></div></div>'
+      + '<div class="training-record-table-wrap">' + buildTrainingTableMarkup('<th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th><th style="width:120px">操作</th>', '', { tbodyId: 'training-rows-body' }) + '</div>'
       + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary" data-testid="training-submit">' + ic('lock', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
       + '</form></div>'
       + '</div>'
@@ -423,7 +480,7 @@
     }
 
     function renderSummary() {
-      document.getElementById('training-summary').innerHTML = buildTrainingSummaryCards(computeTrainingSummary(rowsState));
+      document.getElementById('training-summary').innerHTML = buildTrainingSummarySection(computeTrainingSummary(rowsState));
     }
 
     function updateBulkSelectionText() {
@@ -448,46 +505,26 @@
       const body = document.getElementById('training-rows-body');
       const visibleRows = getFilteredRows();
       if (!rowsState.length) {
-        body.innerHTML = '<tr><td colspan="13"><div class="empty-state" style="padding:28px"><div class="empty-state-title">此單位尚未建立名單</div><div class="empty-state-desc">請由管理者匯入名單，或由填報人新增名單外人員。</div></div></td></tr>';
+        body.innerHTML = buildTrainingEmptyTableRow(13, '此單位尚未建立名單', '請由管理者匯入名單，或由填報人新增名單外人員。', 28);
         renderSummary();
         updateBulkSelectionText();
         return;
       }
       if (!visibleRows.length) {
-        body.innerHTML = '<tr><td colspan="13"><div class="empty-state" style="padding:28px"><div class="empty-state-title">沒有符合條件的人員</div><div class="empty-state-desc">請調整搜尋條件或取消「只看未完成或未填」。</div></div></td></tr>';
+        body.innerHTML = buildTrainingEmptyTableRow(13, '沒有符合條件的人員', '請調整搜尋條件或取消「只看未完成或未填」。', 28);
         renderSummary();
         updateBulkSelectionText();
         return;
       }
 
-      body.innerHTML = visibleRows.map(({ row, index }, visibleIndex) => {
-        const key = getRowKey(row, index);
-        const isActive = row.status === '在職';
-        const professionalDisabled = !isActive || row.isInfoStaff !== '是';
-        const canDeleteRow = canDeleteTrainingEditableRow(row, existing, user);
-        const editableMetaClass = canDeleteRow ? ' training-row-meta--editable' : '';
-        const professionalHtml = row.isInfoStaff === '否'
-          ? '<span class="training-na-chip">不適用</span>'
-          : renderTrainingBinaryButtons('completedProfessional', row.completedProfessional, index, professionalDisabled, '✓', '✕');
-        const actionHtml = canDeleteRow
-          ? '<div class="training-row-actions"><button type="button" class="btn btn-sm btn-danger training-row-delete" data-idx="' + index + '">' + ic('trash-2', 'btn-icon-svg') + '</button></div>'
-          : '<div class="training-row-actions"><span class="training-row-action-hint">' + (row.source === 'manual' ? '僅建立者可刪' : '正式名單') + '</span></div>';
-        return '<tr>'
-          + '<td><input type="checkbox" class="training-row-check" data-key="' + esc(key) + '" ' + (selectedKeys.has(key) ? 'checked' : '') + '></td>'
-          + '<td>' + (visibleIndex + 1) + '</td>'
-          + '<td><div class="training-person-cell"><div class="training-person-name">' + esc(row.name) + '</div><span class="training-source-tag ' + (row.source === 'import' ? 'import' : 'manual') + '">' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</span></div></td>'
-          + '<td>' + (canDeleteRow ? '<input type="text" class="form-input training-row-meta' + editableMetaClass + '" data-idx="' + index + '" data-field="unitName" value="' + esc(row.unitName || '') + '" placeholder="本職單位">' : esc(row.unitName || '—')) + '</td>'
-          + '<td>' + (canDeleteRow ? '<input type="text" class="form-input training-row-meta' + editableMetaClass + '" data-idx="' + index + '" data-field="identity" value="' + esc(row.identity || '') + '" placeholder="身分別">' : esc(row.identity || '—')) + '</td>'
-          + '<td>' + (canDeleteRow ? '<input type="text" class="form-input training-row-meta' + editableMetaClass + '" data-idx="' + index + '" data-field="jobTitle" value="' + esc(row.jobTitle || '') + '" placeholder="職稱">' : esc(row.jobTitle || '—')) + '</td>'
-          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="status">' + trainingSelectOptionsHtml(TRAINING_EMPLOYEE_STATUS, row.status, '請選擇') + '</select></td>'
-          + '<td>' + renderTrainingBinaryButtons('completedGeneral', row.completedGeneral, index, !isActive, '✓', '✕') + '</td>'
-          + '<td><select class="form-select training-row-select" data-idx="' + index + '" data-field="isInfoStaff" ' + (isActive ? '' : 'disabled') + '>' + trainingSelectOptionsHtml(TRAINING_BOOLEAN_SELECT_OPTIONS, row.isInfoStaff, '請選擇') + '</select></td>'
-          + '<td>' + professionalHtml + '</td>'
-          + '<td><div class="training-cell-note">' + trainingDecisionBadge(row) + '<div class="training-cell-hint">' + esc(getTrainingRecordHint(row)) + '</div></div></td>'
-          + '<td><input type="text" class="form-input training-row-note" data-idx="' + index + '" value="' + esc(row.note || '') + '" placeholder="可填補充說明或課程名稱"></td>'
-          + '<td>' + actionHtml + '</td>'
-          + '</tr>';
-      }).join('');
+      body.innerHTML = visibleRows.map(({ row, index }, visibleIndex) => buildTrainingFillRow({
+        row,
+        index,
+        visibleIndex,
+        key: getRowKey(row, index),
+        selected: selectedKeys.has(getRowKey(row, index)),
+        canDeleteRow: canDeleteTrainingEditableRow(row, existing, user)
+      })).join('');
 
       body.querySelectorAll('.training-row-check').forEach((checkbox) => {
         checkbox.addEventListener('change', (event) => {
@@ -770,9 +807,7 @@
     const undoRemainingMinutes = canUndo ? getTrainingUndoRemainingMinutes(form) : 0;
     let filesState = [...(form.signedFiles || [])];
     const summary = form.summary || computeTrainingSummary(form.records || []);
-    const detailRows = (form.records || []).length
-      ? (form.records || []).map((row) => '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + esc(row.status || '—') + '</td><td>' + esc(row.completedGeneral || '—') + '</td><td>' + esc(row.isInfoStaff || '—') + '</td><td>' + esc(getTrainingProfessionalDisplay(row)) + '</td><td>' + trainingDecisionBadge(row) + '</td><td>' + esc(row.note || '') + '</td></tr>').join('')
-      : '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無明細資料</div></div></td></tr>';
+    const detailRows = buildTrainingDetailRows(form.records || []);
     const timeline = (form.history || []).slice().reverse().map((item) => '<div class="timeline-item"><div class="timeline-time">' + fmtTime(item.time) + '</div><div class="timeline-text">' + esc(item.action) + ' · ' + esc(item.user || '系統') + '</div></div>').join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
     const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
     if (canEditTrainingForm(form)) actions.unshift('<a href="#training-fill/' + form.id + '" class="btn btn-primary">' + ic('edit-3', 'icon-sm') + ' 繼續填報</a>');
@@ -794,7 +829,7 @@
       + (form.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(form.returnReason || '未提供') + '</div>' : '')
       + (canUndo ? '<div class="training-undo-banner">' + ic('rotate-ccw', 'icon-sm') + '<div><strong>流程一剛完成，仍可撤回。</strong><div>尚未列印簽核表前，可在剩餘 ' + undoRemainingMinutes + ' 分鐘內撤回，回到可編修的草稿狀態。</div></div></div>' : '')
       + buildTrainingCard('流程概況', '<div class="training-step-grid">' + stepCards + '</div>')
-      + buildTrainingCard('統計摘要', '<div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div>', { style: 'margin-top:20px' })
+      + buildTrainingCard('統計摘要', buildTrainingSummarySection(summary), { style: 'margin-top:20px' })
       + '<div class="panel-grid-two panel-grid-spaced">'
       + buildTrainingCard('填報資訊', buildTrainingDetailGrid([
         { label: '統計單位', value: form.statsUnit || getTrainingStatsUnit(form.unit) },
@@ -807,7 +842,7 @@
       + buildTrainingCard('簽核掃描檔', '<div class="file-preview-list training-signoff-files" id="training-signed-files-readonly"></div>')
       + '</div>'
       + uploadSection
-      + buildTrainingCard('逐人明細', '<div class="table-wrapper"><table><thead><tr><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>' + TRAINING_GENERAL_LABEL + '</th><th>' + TRAINING_INFO_STAFF_LABEL + '</th><th>' + TRAINING_PROFESSIONAL_LABEL + '</th><th>判定</th><th>備註</th></tr></thead><tbody>' + detailRows + '</tbody></table></div>', { style: 'margin-top:20px;padding:0;overflow:hidden', headerStyle: 'padding:16px 20px' })
+      + buildTrainingCard('逐人明細', buildTrainingTableMarkup('<th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>' + TRAINING_GENERAL_LABEL + '</th><th>' + TRAINING_INFO_STAFF_LABEL + '</th><th>' + TRAINING_PROFESSIONAL_LABEL + '</th><th>判定</th><th>備註</th>', detailRows), { style: 'margin-top:20px;padding:0;overflow:hidden', headerStyle: 'padding:16px 20px' })
       + buildTrainingCard('歷程紀錄', '<div class="timeline">' + timeline + '</div>', { style: 'margin-top:20px' })
       + '</div>';
 
