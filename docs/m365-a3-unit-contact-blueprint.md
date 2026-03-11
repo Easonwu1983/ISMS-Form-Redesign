@@ -1,86 +1,97 @@
 # M365 A3 Unit Contact Blueprint
 
-- Updated: 2026-03-11
-- Goal: ship a practical first version of `申請單位資安窗口` using only Microsoft 365 A3-included capabilities
+- Updated: 2026-03-12
+- Goal: ship a practical first version of `申請單位資安窗口` using Microsoft 365 A3 plus a campus-hosted frontend
+
+## Recommended Architecture
+
+For this tenant, the most practical A3 path is now:
+
+1. campus-hosted frontend from this repo
+2. SharePoint Lists as the source of truth
+3. campus-hosted backend API for `apply` and `status`
+4. existing system admin process for account handoff
+
+This path avoids the current Power Automate environment blocker while keeping the same frontend contract.
 
 ## What This Version Uses
 
 - campus-hosted frontend in this repo
 - SharePoint / Microsoft Lists
-- Power Automate for review and email notification
+- campus backend service:
+  - [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\campus-backend\server.cjs](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\campus-backend\server.cjs)
 - current app account model for actual login
 
 ## What This Version Avoids
 
+- tenant-wide Microsoft Graph application admin consent
 - Entra External ID
 - Azure Functions as a requirement
-- premium Power Platform connectors
-- public self-service identity provisioning
+- premium Power Platform dependency
 
-## A3-Ready Flow
+## Runtime Profiles
 
-1. Applicant fills `申請單位資安窗口`
-2. Frontend sends data to Power Automate HTTP trigger
-3. Flow writes `UnitContactApplications`
-4. 管理端審核申請
-5. 核准後由管理端建立或確認目前系統帳號
-6. Flow 寄出帳號開通 / 首次登入 / 改密碼說明
-7. 申請人在既有系統完成首次登入
-8. 管理端將該申請標記為 `active`
+- `localDemo`
+  - browser-only demo mode
+- `a3CampusBackend`
+  - recommended production path for this tenant
+- `a3SiteOwnerFlow`
+  - still valid if Power Automate environments become available
+- `a3CampusFlow`
+  - future option if tenant/admin setup improves
+- `azureFunctionCampus`
+  - future upgrade path
 
-## Recommended Status Meaning
+## End-to-End Business Flow
 
-- `pending_review`
-  - 已收件，等待人工審核
-- `returned`
-  - 退回補件
-- `approved`
-  - 已核准，等待管理端建帳或準備登入方式
-- `activation_pending`
-  - 已寄出帳號開通通知，等待申請人完成首次登入
-- `active`
-  - 帳號已開通，可正式使用
+1. Applicant opens `#apply-unit-contact`
+2. Frontend sends contract payload to campus backend
+3. Backend writes `UnitContactApplications`
+4. Backend writes `OpsAudit`
+5. Reviewer checks application in the current admin process
+6. Reviewer decides:
+   - approve
+   - return
+   - reject
+7. Admin creates or updates the current system account
+8. Admin sends first-login instructions
+9. Application status moves to:
+   - `pending_review`
+   - `returned`
+   - `approved`
+   - `activation_pending`
+   - `active`
+
+## Required SharePoint Lists
+
+- `UnitContactApplications`
+- `UnitAdmins`
+- `OpsAudit`
+
+Schema source:
+
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\sharepoint\unit-contact-lists.schema.json](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\sharepoint\unit-contact-lists.schema.json)
 
 ## Why This Fits A3
 
-- SharePoint Lists and Power Automate are included in Microsoft 365 A3
-- standard HTTP trigger + SharePoint actions are enough for this workflow
-- no premium identity product is required in the first phase
+- SharePoint Lists are included in A3
+- the current user already has delegated site-owner access
+- direct list write/read is working in this tenant
+- no tenant-wide admin consent is required for the production runtime
 
-## Practical Fallback If You Lack Tenant Admin
+## Supporting Docs
 
-If the project owner cannot obtain tenant-wide admin consent, use the delegated site-owner route instead:
-
-- get added as `Site Owner` on one SharePoint site
-- create the three lists in that site
-- let Power Automate write to those lists with the same delegated account
-- keep the frontend profile on `a3SiteOwnerFlow`
-
-Reference:
-[C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-site-owner-fallback.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-site-owner-fallback.md)
-
-## Suggested Operational Rule
-
-- one primary contact per unit
-- optional one backup contact
-- any replacement must go through review
-- do not email raw long-term passwords
-- if a temporary password must be used, send it through your approved internal process and require first-login password change
-
-## Repo Files To Use First
-
-- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\unit-contact-application-module.js](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\unit-contact-application-module.js)
-- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365-config.js](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365-config.js)
-- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\sharepoint\unit-contact-lists.schema.json](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\sharepoint\unit-contact-lists.schema.json)
-- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\power-automate\unit-contact-flows.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\power-automate\unit-contact-flows.md)
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-campus-backend.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-campus-backend.md)
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-site-owner-fallback.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-site-owner-fallback.md)
 - [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-unit-contact-go-live-runbook.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-unit-contact-go-live-runbook.md)
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-implementation-worksheet.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-implementation-worksheet.md)
 
 ## Future Upgrade Path
 
-When you later need stronger identity automation, you can keep the same frontend and upgrade the backend to:
+If later you gain cleaner platform options, the frontend can keep the same contract and move to:
 
-- Azure Function API
-- Entra / External ID
-- more automated account provisioning
+- Power Automate HTTP triggers
+- Azure Function
+- richer identity automation
 
-The public application flow and SharePoint records can stay mostly unchanged.
+The frontend pages and SharePoint workflow records can remain mostly unchanged.

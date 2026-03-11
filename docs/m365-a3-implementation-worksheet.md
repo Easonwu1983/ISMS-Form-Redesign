@@ -1,50 +1,52 @@
 # M365 A3 Implementation Worksheet
 
-- Updated: 2026-03-11
+- Updated: 2026-03-12
 - Purpose: collect the real values needed to switch this repo from demo mode to the A3 production path
 
 ## SharePoint
 
-- Site URL:
-- Site ID:
-- Site owner account added:
-- Applications list name:
-- Applications list id:
-- UnitAdmins list name:
-- UnitAdmins list id:
-- OpsAudit list name:
-- OpsAudit list id:
+- Site URL: https://ntums365.sharepoint.com/sites/ISMSFormsWorkspace
+- Site ID: ntums365.sharepoint.com,8c29bc46-e7a8-445f-84cf-6dc48609bca8,f9096dd2-df76-4e86-9986-a121bffaee87
+- Site owner account added: easonwu@m365.ntu.edu.tw
+- Applications list name: UnitContactApplications
+- Applications list id: b80533f7-b2a5-424f-8cee-4f743bb4779d
+- UnitAdmins list name: UnitAdmins
+- UnitAdmins list id: be2f5f0c-f954-4ade-b11b-8c34a2780498
+- OpsAudit list name: OpsAudit
+- OpsAudit list id: 8ab0e9f8-0ef2-421a-81b2-2a00f05fc233
 
 ## Power Automate
+
+- Environment discovery on 2026-03-12: `0 environments returned`
+- Decision: do not block delivery on Power Automate
+- Keep these fields only if Power Automate becomes available later:
 
 ### Submit flow
 
 - Flow name:
 - HTTP trigger URL:
-- Response body checked against:
-  [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\power-automate\http-trigger-apply-response.sample.json](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\power-automate\http-trigger-apply-response.sample.json)
 
 ### Lookup flow
 
 - Flow name:
 - HTTP trigger URL:
-- Response body checked against:
-  [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\power-automate\http-trigger-lookup-response.sample.json](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\power-automate\http-trigger-lookup-response.sample.json)
 
-### Review flow
+## Campus Backend
 
-- Flow name:
-- Reviewer mailbox:
-- Approval mailbox/group:
-- Return mail template ready: yes / no
-- Approval mail template ready: yes / no
+- Recommended profile: `a3CampusBackend`
+- Backend host URL:
+- Submit endpoint:
+- Lookup endpoint:
+- Health endpoint:
+- CLI site-owner account:
+- Backend service runtime owner:
+- CORS origins approved:
 
-### Account handoff flow
+## Account Handoff
 
-- Flow name:
 - Current system account creation owner:
 - Username rule:
-- Password/reset rule:
+- Password / reset rule:
 - First-login instructions approved: yes / no
 
 ## Frontend Deployment
@@ -63,8 +65,8 @@
 - Submit test application successful:
 - Lookup by email successful:
 - SharePoint row created:
-- Admin handoff email received:
-- First-login guidance verified:
+- Health endpoint reachable:
+- Admin handoff guidance verified:
 
 ## Final Switch
 
@@ -73,15 +75,8 @@ When all values above are ready:
 1. keep [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365-config.js](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365-config.js) in `localDemo`
 2. deploy `m365-config.override.js` to campus host
 3. set:
-   - `activeProfile: "a3SiteOwnerFlow"`
-   - `unitContactMode: "sharepoint-flow"`
+   - `activeProfile: "a3CampusBackend"`
+   - `unitContactMode: "m365-api"`
    - `unitContactSubmitEndpoint`
    - `unitContactStatusEndpoint`
 4. smoke test `#apply-unit-contact` and `#apply-unit-contact-status`
-
-## Site Owner Fallback Commands
-
-If you are using the non-admin A3 fallback path:
-
-1. `npm run m365:a3:site-owner:health`
-2. `npm run m365:a3:site-owner:provision`

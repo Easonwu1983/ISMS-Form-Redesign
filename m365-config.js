@@ -42,6 +42,17 @@
       sharePointSiteName: 'ISMS-Forms',
       sharePointProvisioningModel: 'delegated-site-owner'
     },
+    a3CampusBackend: {
+      label: 'A3 fallback: campus backend + SharePoint lists',
+      unitContactMode: 'm365-api',
+      unitContactSubmitEndpoint: '/api/unit-contact/apply',
+      unitContactStatusEndpoint: '/api/unit-contact/status',
+      unitContactActivationEndpoint: '#activate-unit-contact',
+      unitContactStatusLookupMethod: 'POST',
+      sharePointSiteUrl: 'https://YOUR-TENANT.sharepoint.com/sites/ISMSFormsWorkspace',
+      sharePointSiteName: 'ISMSFormsWorkspace',
+      sharePointProvisioningModel: 'delegated-site-owner'
+    },
     azureFunctionCampus: {
       label: 'Campus frontend + Azure Function backend',
       unitContactMode: 'm365-api',
@@ -55,6 +66,7 @@
   // Change only this value during deployment.
   // Recommended:
   // - local development: localDemo
+  // - A3 production without Power Automate environment: a3CampusBackend
   // - A3 production without tenant admin: a3SiteOwnerFlow
   // - A3 production with tenant admin: a3CampusFlow
   // - future upgrade: azureFunctionCampus

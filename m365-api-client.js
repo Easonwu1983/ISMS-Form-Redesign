@@ -77,7 +77,13 @@
 
     function getModeLabel() {
       const mode = getMode();
-      if (mode === 'm365-api') return 'M365 API 整合模式';
+      if (mode === 'm365-api') {
+        const config = getConfig();
+        if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
+          return 'A3 / Campus backend / SharePoint';
+        }
+        return 'M365 API 整合模式';
+      }
       if (mode === 'sharepoint-flow') {
         const config = getConfig();
         if (String(config.sharePointProvisioningModel || '').trim() === 'delegated-site-owner') {
