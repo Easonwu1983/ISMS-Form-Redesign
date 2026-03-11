@@ -66,6 +66,35 @@
     return '<tr data-route="detail/' + item.id + '"><td class="record-id-col">' + renderCopyIdCell(item.id, '矯正單號', true) + '</td><td>' + esc(item.deficiencyType) + '</td><td>' + esc(item.source) + '</td><td>' + renderCaseStatusCell(item, true) + '</td><td>' + esc(item.proposerName) + '</td><td>' + esc(item.handlerName) + '</td><td>' + fmt(item.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(item)) + '</td></tr>';
   }
 
+  function buildCaseCard(headerHtml, bodyHtml, options) {
+    var opts = options || {};
+    var styleAttr = opts.style ? ' style="' + opts.style + '"' : '';
+    var headerClass = opts.headerClass || 'card-header';
+    return '<div class="card"' + styleAttr + '>' + (headerHtml ? '<div class="' + headerClass + '">' + headerHtml + '</div>' : '') + bodyHtml + '</div>';
+  }
+
+  function buildCaseEvidenceList(files, emptyText) {
+    return files && files.length
+      ? '<div class="file-preview-list">' + files.map(function (ev) {
+        var preview = ev.type && ev.type.startsWith('image/')
+          ? '<img src="' + ev.data + '" alt="' + esc(ev.name) + '">'
+          : '<div class="file-pdf-icon">' + ic('file-box') + '</div>';
+        return '<div class="file-preview-item">' + preview + '<div class="file-name">' + esc(ev.name) + '</div><div class="file-preview-actions"><a class="btn btn-sm btn-secondary" href="' + ev.data + '" target="_blank" rel="noopener">預覽</a><a class="btn btn-sm btn-secondary" href="' + ev.data + '" download="' + esc(ev.name) + '">下載</a></div></div>';
+      }).join('') + '</div>'
+      : '<p style="color:var(--text-muted);font-size:.88rem">' + esc(emptyText || '尚未上傳文件') + '</p>';
+  }
+
+  function buildCaseTimeline(historyList) {
+    return (historyList || []).map(function (h, index, all) {
+      var actor = h.user || '';
+      if (!actor || actor === '蝟餌絞') {
+        var linked = all.slice(0, index).reverse().find(function (entry) { return entry.time === h.time && entry.user && entry.user !== '蝟餌絞'; });
+        if (linked) actor = linked.user;
+      }
+      return '<div class="timeline-item"><div class="timeline-time">' + fmtTime(h.time) + '</div><div class="timeline-text">' + esc(h.action) + (actor ? (' - ' + esc(actor)) : '') + '</div></div>';
+    }).reverse().join('');
+  }
+
   function renderDashboard() {
     var items = getVisibleItems();
     var total = items.length;
@@ -500,26 +529,9 @@ function renderCreate() {
       btns += `<button class="btn btn-warning" data-testid="case-tracking-approve-continue" data-action="case.reviewTracking" data-id="${item.id}" data-decision="continue">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button>`;
     }
 
-    const renderEvidenceList = (files, emptyText = '尚無佐證') => files && files.length
-      ? `<div class="file-preview-list">${files.map(ev => {
-        const preview = ev.type && ev.type.startsWith('image/')
-          ? `<img src="${ev.data}" alt="${esc(ev.name)}">`
-          : `<div class="file-pdf-icon">${ic('file-box')}</div>`;
-        return `<div class="file-preview-item">${preview}<div class="file-name">${esc(ev.name)}</div><div class="file-preview-actions"><a class="btn btn-sm btn-secondary" href="${ev.data}" target="_blank" rel="noopener">預覽</a><a class="btn btn-sm btn-secondary" href="${ev.data}" download="${esc(ev.name)}">下載</a></div></div>`;
-      }).join('')}</div>`
-      : `<p style="color:var(--text-muted);font-size:.88rem">${emptyText}</p>`;
-
+    const renderEvidenceList = buildCaseEvidenceList;
     const evHtml = renderEvidenceList(item.evidence, '尚無佐證');
-    const historyList = item.history || [];
-    const tl = historyList.map((h, index) => {
-      let actor = h.user || '';
-      if (!actor || actor === '系統') {
-        const linked = historyList.slice(0, index).reverse().find((entry) => entry.time === h.time && entry.user && entry.user !== '系統');
-        if (linked) actor = linked.user;
-      }
-      return `<div class="timeline-item"><div class="timeline-time">${fmtTime(h.time)}</div><div class="timeline-text">${esc(h.action)}${actor ? ` - ${esc(actor)}` : ''}</div></div>`;
-    }).reverse().join('');
-
+    const tl = buildCaseTimeline(item.history || []);
     const pendingTrackingHtml = pending ? `<div class="card" style="margin-top:20px;border-left:3px solid #0f766e;"><div class="card-header"><span class="card-title">${ic('hourglass', 'icon-sm')} 待管理者審核的追蹤提報</span></div>
       <div class="detail-grid">
         <div class="detail-field"><div class="detail-field-label">追蹤輪次</div><div class="detail-field-value">第 ${pending.round || ((item.trackings || []).length + 1)} 次</div></div>
@@ -590,10 +602,10 @@ function renderCreate() {
       ${item.rootElimination ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
         <div class="detail-section"><div class="detail-content">${esc(item.rootElimination)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.rootElimDueDate)}</div></div></div></div>` : ''}
-      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('paperclip', 'icon-sm')} 佐證文件</span></div>${evHtml}</div>
+      ${buildCaseCard('<span class="card-title">' + ic('paperclip', 'icon-sm') + ' 佐證文件</span>', evHtml, { style: 'margin-top:20px' })}
       ${pendingTrackingHtml}
-      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('git-branch', 'icon-sm')} 追蹤監控</span></div>${tkHtml}</div>
-      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('history', 'icon-sm')} 歷程紀錄</span></div><div class="timeline">${tl}</div></div>
+      ${buildCaseCard('<span class="card-title">' + ic('git-branch', 'icon-sm') + ' 追蹤監控</span>', tkHtml, { style: 'margin-top:20px' })}
+      ${buildCaseCard('<span class="card-title">' + ic('history', 'icon-sm') + ' 歷程紀錄</span>', '<div class="timeline">' + tl + '</div>', { style: 'margin-top:20px' })}
     </div>`;
     refreshIcons();
     bindCopyButtons();
