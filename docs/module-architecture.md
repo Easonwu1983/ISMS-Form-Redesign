@@ -27,6 +27,26 @@
 - Owns scoped unit switching for multi-unit users
 - Owns admin bootstrap repair for the primary administrator profile
 
+### [unit-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/unit-module.js)
+
+- Owns official unit catalog access and metadata lookup
+- Owns custom-unit governance, approval registry, and merge flow
+- Owns unit category classification and searchable cascade selector behavior
+- Keeps unit-specific rules and autocomplete logic out of `app.js`
+
+### [ui-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/ui-module.js)
+
+- Owns shared formatting helpers such as `fmt`, `fmtTime`, and icon rendering
+- Owns reusable UI helpers such as `toast`, copy-id interactions, test-id helpers, and checkbox/radio builders
+- Owns icon refresh bootstrap for Lucide
+
+### [policy-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/policy-module.js)
+
+- Owns role and permission policy helpers
+- Owns record visibility and editability rules for corrective actions, checklists, and training forms
+- Owns training undo-window and manual-row deletion policy
+- Keeps access-control decisions centralized instead of scattered across features
+
 ### [case-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/case-module.js)
 
 - Corrective action dashboard
@@ -53,11 +73,11 @@
 ## What Still Lives In [app.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/app.js)
 
 - Shared constants and enums
-- Authentication state helpers
-- Permission and unit-scope rules
-- Shared UI helpers such as `toast`, icon refresh, copy helpers, unit cascade helpers
+- Scoped record id builders and record numbering helpers
+- Store/module factories and dependency wiring
 - Module factories and route whitelist
 - Application bootstrap
+- Feature-adjacent utility functions that are still specific to checklist/training exports and seeded demo data
 
 ## Why This Split Helps
 
@@ -73,9 +93,19 @@
 - Rendered UI should prefer `data-action`, `data-route`, and `data-dismiss-modal` instead of inline `onclick`
 - This keeps module code testable and prevents `window._legacyHandler` globals from spreading again
 
+## Current Cleanup Checklist
+
+1. Split feature UI into dedicated `case / checklist / training / admin / shell` modules.
+2. Split persistence and migration into `data-module.js`.
+3. Split auth/session bootstrap into `auth-module.js`.
+4. Split unit catalog, autocomplete, and custom-unit governance into `unit-module.js`.
+5. Split permission and visibility rules into `policy-module.js`.
+6. Split shared formatting and copy/test helpers into `ui-module.js`.
+7. Replace most route-facing feature dependencies in `app.js` with thin delegates.
+
 ## Recommended Next Refactors
 
-1. Add migration diagnostics or a small admin-only schema health panel.
-2. Clean up documentation files that still show encoding corruption in some terminals.
-3. Start extracting repeated `innerHTML` builders into smaller render helpers or view partials.
-4. Consider moving role/permission policy helpers into a dedicated policy module.
+1. Extract scoped record-id builders into a dedicated `record-module.js` if numbering logic keeps growing.
+2. Add migration diagnostics or an admin-only schema health panel.
+3. Continue converting long feature-specific `innerHTML` sections into smaller render partials.
+4. Clean up a few docs/pages that still display mojibake in some terminals due legacy encoding.

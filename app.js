@@ -60,51 +60,12 @@
     '進修推廣學院'
   ]);
 
-  function getOfficialUnits() {
-    try {
-      if (typeof window !== 'undefined' && typeof window.getOfficialUnitList_ === 'function') {
-        const units = window.getOfficialUnitList_();
-        if (Array.isArray(units)) return units;
-      }
-    } catch (_) { }
-    return [];
-  }
-
-  function getOfficialUnitCatalog() {
-    try {
-      if (typeof window !== 'undefined' && typeof window.getOfficialUnitCatalog_ === 'function') {
-        const catalog = window.getOfficialUnitCatalog_();
-        if (Array.isArray(catalog)) return catalog;
-      }
-    } catch (_) { }
-    return [];
-  }
-
-  function getOfficialUnitMeta(unitValue) {
-    const value = String(unitValue || '').trim();
-    if (!value) return null;
-    try {
-      if (typeof window !== 'undefined' && typeof window.getOfficialUnitMeta_ === 'function') {
-        const meta = window.getOfficialUnitMeta_(value);
-        if (meta && typeof meta === 'object') return meta;
-      }
-    } catch (_) { }
-    return getOfficialUnitCatalog().find((entry) => entry && entry.value === value) || null;
-  }
-
-  function getUnitCode(unitValue) {
-    return String(getOfficialUnitMeta(unitValue)?.normalizedCode || '').trim();
-  }
-
-  function getUnitCodeWithDots(unitValue) {
-    return String(getOfficialUnitMeta(unitValue)?.code || '').trim();
-  }
-
-  function getUnitOptionLabel(unitValue, fallbackText) {
-    const meta = getOfficialUnitMeta(unitValue);
-    if (meta && meta.name) return meta.name;
-    return String(fallbackText || unitValue || '').trim();
-  }
+  function getOfficialUnits() { return getUnitModule().getOfficialUnits(); }
+  function getOfficialUnitCatalog() { return getUnitModule().getOfficialUnitCatalog(); }
+  function getOfficialUnitMeta(unitValue) { return getUnitModule().getOfficialUnitMeta(unitValue); }
+  function getUnitCode(unitValue) { return getUnitModule().getUnitCode(unitValue); }
+  function getUnitCodeWithDots(unitValue) { return getUnitModule().getUnitCodeWithDots(unitValue); }
+  function getUnitOptionLabel(unitValue, fallbackText) { return getUnitModule().getUnitOptionLabel(unitValue, fallbackText); }
 
   function getCorrectionYear(dateValue) {
     const raw = String(dateValue || '').trim();
@@ -187,709 +148,35 @@
     return max + 1;
   }
 
-  function getSystemUnits() {
-    const set = new Set(getOfficialUnits());
-    try {
-      const data = loadData();
-      (data.users || []).forEach((u) => { getAuthorizedUnits(u).forEach((unit) => set.add(String(unit))); });
-      (data.items || []).forEach((i) => {
-        if (i && i.proposerUnit) set.add(String(i.proposerUnit));
-        if (i && i.handlerUnit) set.add(String(i.handlerUnit));
-      });
-    } catch (_) { }
-    try {
-      const checks = loadChecklists();
-      (checks.items || []).forEach((c) => { if (c && c.unit) set.add(String(c.unit)); });
-    } catch (_) { }
-    try {
-      const tr = loadTrainingStore();
-      (tr.forms || []).forEach((f) => { if (f && f.unit) set.add(String(f.unit)); });
-      (tr.rosters || []).forEach((r) => { if (r && r.unit) set.add(String(r.unit)); });
-    } catch (_) { }
-    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
-  }
-
-  function getOfficialUnitSet() {
-    return new Set(getOfficialUnits());
-  }
-
-  function isOfficialUnit(unit) {
-    const value = String(unit || '').trim();
-    if (!value) return true;
-    return getOfficialUnitSet().has(value);
-  }
+  function getSystemUnits() { return getUnitModule().getSystemUnits(); }
+  function isOfficialUnit(unit) { return getUnitModule().isOfficialUnit(unit); }
 
   function loadUnitReviewStore() { return getDataModule().loadUnitReviewStore(); }
   function saveUnitReviewStore(store) { return getDataModule().saveUnitReviewStore(store); }
 
-  function formatUnitScopeSummary(scopes) {
-    const defs = [
-      ['users', '帳號'],
-      ['items', '矯正單'],
-      ['checklists', '檢核表'],
-      ['trainingForms', '訓練填報'],
-      ['trainingRosters', '名單']
-    ];
-    const parts = defs.filter(([key]) => scopes[key] > 0).map(([key, label]) => `${label} ${scopes[key]}`);
-    return parts.join('、') || '尚未使用';
-  }
-
-  function approveCustomUnit(unit, actor) {
-    const value = String(unit || '').trim();
-    if (!value) return false;
-
-    const now = new Date().toISOString();
-    const store = loadUnitReviewStore();
-    const existing = store.approvedUnits.find((entry) => entry.unit === value);
-    if (existing) {
-      existing.approvedAt = now;
-      existing.approvedBy = actor || '';
-    } else {
-      store.approvedUnits.push({ unit: value, approvedAt: now, approvedBy: actor || '' });
-    }
-    store.history.unshift({ type: 'approved', unit: value, targetUnit: '', actor: actor || '', time: now });
-    store.history = store.history.slice(0, 40);
-    saveUnitReviewStore(store);
-    return true;
-  }
-
-  function removeCustomUnitApproval(unit) {
-    const value = String(unit || '').trim();
-    if (!value) return;
-    const store = loadUnitReviewStore();
-    store.approvedUnits = store.approvedUnits.filter((entry) => entry.unit !== value);
-    saveUnitReviewStore(store);
-  }
-
-  function createUnitReferenceEntry(unit) {
-    return {
-      unit,
-      count: 0,
-      scopes: { users: 0, items: 0, checklists: 0, trainingForms: 0, trainingRosters: 0 },
-      references: []
-    };
-  }
-
-  function pushUnitReference(map, unit, scope, label) {
-    const value = String(unit || '').trim();
-    if (!value) return;
-
-    let entry = map.get(value);
-    if (!entry) {
-      entry = createUnitReferenceEntry(value);
-      map.set(value, entry);
-    }
-
-    entry.count += 1;
-    entry.scopes[scope] += 1;
-    if (entry.references.length < 24) entry.references.push(label);
-  }
-
-  function collectUnitReferences() {
-    const map = new Map();
-    const data = loadData();
-    const checklistStore = loadChecklists();
-    const trainingStore = loadTrainingStore();
-
-    (data.users || []).forEach((user) => {
-      getAuthorizedUnits(user).forEach((unit) => {
-        pushUnitReference(map, unit, 'users', `帳號 ${user.username} · ${user.name}`);
-      });
-    });
-
-    (data.items || []).forEach((item) => {
-      pushUnitReference(map, item.proposerUnit, 'items', `矯正單 ${item.id}（提出單位）`);
-      pushUnitReference(map, item.handlerUnit, 'items', `矯正單 ${item.id}（處理單位）`);
-    });
-
-    (checklistStore.items || []).forEach((item) => {
-      pushUnitReference(map, item.unit, 'checklists', `檢核表 ${item.id} · ${item.fillerName || '未填報'}`);
-    });
-
-    (trainingStore.forms || []).forEach((form) => {
-      pushUnitReference(map, form.unit, 'trainingForms', `教育訓練 ${form.id} · ${form.fillerName || '未填報'}`);
-    });
-
-    (trainingStore.rosters || []).forEach((row) => {
-      pushUnitReference(map, row.unit, 'trainingRosters', `教育訓練名單 · ${row.name}`);
-    });
-
-    return Array.from(map.values());
-  }
-
-  function getCustomUnitRegistry() {
-    const store = loadUnitReviewStore();
-    const approvedMap = new Map(store.approvedUnits.map((entry) => [entry.unit, entry]));
-    return collectUnitReferences()
-      .filter((entry) => !isOfficialUnit(entry.unit))
-      .map((entry) => ({
-        ...entry,
-        approval: approvedMap.get(entry.unit) || null,
-        status: approvedMap.has(entry.unit) ? 'approved' : 'pending'
-      }))
-      .sort((a, b) => {
-        if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
-        if (b.count !== a.count) return b.count - a.count;
-        return a.unit.localeCompare(b.unit, 'zh-Hant');
-      });
-  }
-
-  function syncSessionUnit(sourceUnit, targetUnit) {
-    return getAuthModule().syncSessionUnit(sourceUnit, targetUnit);
-  }
-
-  function mergeCustomUnit(sourceUnit, targetUnit, actor) {
-    const source = String(sourceUnit || '').trim();
-    const target = String(targetUnit || '').trim();
-    if (!source || !target || source === target) return null;
-
-    const now = new Date().toISOString();
-    const summary = { users: 0, items: 0, checklists: 0, trainingForms: 0, trainingRosters: 0 };
-
-    const data = loadData();
-    let dataChanged = false;
-    (data.users || []).forEach((user) => {
-      const units = getAuthorizedUnits(user);
-      if (units.includes(source)) {
-        user.units = units.map((unit) => unit === source ? target : unit);
-        user.unit = user.units[0] || '';
-        if (user.activeUnit === source) user.activeUnit = target;
-        summary.users += 1;
-        dataChanged = true;
-      }
-    });
-    (data.items || []).forEach((item) => {
-      let changed = false;
-      if (item.proposerUnit === source) {
-        item.proposerUnit = target;
-        changed = true;
-      }
-      if (item.handlerUnit === source) {
-        item.handlerUnit = target;
-        changed = true;
-      }
-      if (changed) {
-        item.updatedAt = now;
-        summary.items += 1;
-        dataChanged = true;
-      }
-    });
-    if (dataChanged) saveData(data);
-
-    const checklistStore = loadChecklists();
-    let checklistChanged = false;
-    (checklistStore.items || []).forEach((item) => {
-      if (item.unit === source) {
-        item.unit = target;
-        item.updatedAt = now;
-        summary.checklists += 1;
-        checklistChanged = true;
-      }
-    });
-    if (checklistChanged) saveChecklists(checklistStore);
-
-    const trainingStore = loadTrainingStore();
-    let trainingChanged = false;
-    (trainingStore.forms || []).forEach((form) => {
-      if (form.unit === source) {
-        form.unit = target;
-        form.updatedAt = now;
-        summary.trainingForms += 1;
-        trainingChanged = true;
-      }
-    });
-    (trainingStore.rosters || []).forEach((row) => {
-      if (row.unit === source) {
-        row.unit = target;
-        summary.trainingRosters += 1;
-        trainingChanged = true;
-      }
-    });
-    if (trainingChanged) saveTrainingStore(trainingStore);
-
-    syncSessionUnit(source, target);
-
-    const store = loadUnitReviewStore();
-    store.approvedUnits = store.approvedUnits.filter((entry) => entry.unit !== source);
-    if (!isOfficialUnit(target) && !store.approvedUnits.some((entry) => entry.unit === target)) {
-      store.approvedUnits.push({ unit: target, approvedAt: now, approvedBy: actor || '' });
-    }
-    store.history.unshift({
-      type: 'merged',
-      unit: source,
-      targetUnit: target,
-      actor: actor || '',
-      time: now,
-      summary
-    });
-    store.history = store.history.slice(0, 40);
-    saveUnitReviewStore(store);
-
-    return { ...summary, total: summary.users + summary.items + summary.checklists + summary.trainingForms + summary.trainingRosters };
-  }
-  function buildUnitOptions(units, selected, includeEmpty) {
-    const list = Array.isArray(units) ? units : [];
-    const safeSelected = String(selected || '');
-    const base = includeEmpty ? '<option value="">請選擇</option>' : '';
-    return base + list.map((u) => `<option value="${esc(u)}" ${safeSelected === u ? 'selected' : ''}>${esc(u)}</option>`).join('');
-  }
-
-  function getUnitStructureSafe() {
-    try {
-      if (typeof window !== 'undefined' && typeof window.getUnitStructure_ === 'function') {
-        const structure = window.getUnitStructure_();
-        if (structure && typeof structure === 'object') return structure;
-      }
-    } catch (_) { }
-    return {};
-  }
-
-  function getApprovedCustomUnits() {
-    const store = loadUnitReviewStore();
-    return (store.approvedUnits || [])
-      .map((entry) => String(entry && entry.unit || '').trim())
-      .filter(Boolean);
-  }
-
-  function getSelectableUnitStructure() {
-    const base = getUnitStructureSafe();
-    const merged = {};
-
-    Object.keys(base).forEach((parent) => {
-      merged[parent] = Array.isArray(base[parent]) ? [...base[parent]] : [];
-    });
-
-    getApprovedCustomUnits().forEach((unit) => {
-      const parsed = splitUnitValue(unit);
-      if (!parsed.parent) return;
-      if (!merged[parsed.parent]) merged[parsed.parent] = [];
-      if (parsed.child && !merged[parsed.parent].includes(parsed.child)) {
-        merged[parsed.parent].push(parsed.child);
-      }
-    });
-
-    Object.keys(merged).forEach((parent) => {
-      merged[parent] = merged[parent]
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
-    });
-
-    return merged;
-  }
-
-  function splitUnitValue(unitValue) {
-    const raw = String(unitValue || '').trim();
-    if (!raw) return { parent: '', child: '' };
-    const sep = raw.includes('／') ? '／' : (raw.includes('/') ? '/' : '');
-    if (!sep) return { parent: raw, child: '' };
-    const parts = raw.split(sep);
-    const parent = String(parts.shift() || '').trim();
-    const child = String(parts.join(sep) || '').trim();
-    return { parent, child };
-  }
-
-  function composeUnitValue(parent, child) {
-    const p = String(parent || '').trim();
-    const c = String(child || '').trim();
-    if (!p) return '';
-    return c ? `${p}／${c}` : p;
-  }
-
-  function getTopLevelUnitOfficialMeta(unitValue) {
-    const parsed = splitUnitValue(unitValue);
-    const parent = String(parsed.parent || unitValue || '').trim();
-    if (!parent) return null;
-    return getOfficialUnitMeta(parent) || getOfficialUnitMeta(unitValue) || null;
-  }
-
-  function categorizeTopLevelUnit(unitValue) {
-    const unit = String(splitUnitValue(unitValue).parent || unitValue || '').trim();
-    if (!unit) return '行政單位';
-    if (UNIT_ADMIN_PRIMARY_WHITELIST.has(unit)) return '行政單位';
-    if (UNIT_ACADEMIC_PRIMARY_WHITELIST.has(unit)) return '學術單位';
-    const meta = getTopLevelUnitOfficialMeta(unit) || {};
-    const code = String(meta.topCode || meta.code || '').trim().toUpperCase();
-    const academicKeywords = ['學院', '共同教育中心', '國際學院', '研究學院', '創新設計學院', '進修推廣學院', '附設醫院'];
-    if (academicKeywords.some((keyword) => unit.includes(keyword))) return '學術單位';
-    if (unit.includes('研究中心') || unit.includes('研究院')) return '研究中心';
-    if (/^0\.\d{2}$/.test(code)) {
-      const numeric = Number(code.slice(2));
-      if (numeric >= 51) return '學術單位';
-      if (unit.includes('中心') || unit.includes('委員會') || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
-        return '研究中心';
-      }
-      return '行政單位';
-    }
-    if (/^0\.[A-Z0-9]{2}$/.test(code)) return '研究中心';
-    if (unit.includes('中心') || unit.includes('委員會') || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
-      return '研究中心';
-    }
-    return '行政單位';
-  }
-
-  function getTrainingUnitCategories() {
-    return ['行政單位', '學術單位', '研究中心'];
-  }
-
-  function getParentsByUnitCategory(parents, category) {
-    const targetCategory = String(category || '').trim();
-    if (!targetCategory) return [];
-    return (Array.isArray(parents) ? parents : []).filter((parent) => categorizeTopLevelUnit(parent) === targetCategory);
-  }
-
-  function normalizeUnitSearchText(value) {
-    return String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[\s\u3000]+/g, '')
-      .replace(/[／/]/g, '')
-      .replace(/[()（）．.、,，:：;；\-_'"]/g, '');
-  }
-
-  function buildUnitSearchEntry(unitValue) {
-    const value = String(unitValue || '').trim();
-    if (!value) return null;
-    const meta = getOfficialUnitMeta(value) || {};
-    const parsed = splitUnitValue(value);
-    const parent = parsed.parent || value;
-    const child = parsed.child || '';
-    const label = child || String(meta.name || parent).trim() || value;
-    const fullLabel = child ? `${parent}／${child}` : parent;
-    const category = categorizeTopLevelUnit(parent);
-    const code = String(meta.code || '').trim();
-    const normalizedCode = String(meta.normalizedCode || getUnitCode(value) || '').trim();
-    const keywords = [
-      value,
-      fullLabel,
-      label,
-      meta.name,
-      meta.fullName,
-      parent,
-      child,
-      code,
-      normalizedCode,
-      category
-    ].filter(Boolean).join(' ');
-    return {
-      value,
-      parent,
-      child,
-      category,
-      label,
-      fullLabel,
-      code,
-      normalizedCode,
-      searchText: normalizeUnitSearchText(keywords)
-    };
-  }
-
-  function getUnitSearchEntries(extraValues) {
-    const catalog = getOfficialUnitCatalog();
-    const seen = new Set();
-    const values = [];
-    (Array.isArray(catalog) ? catalog : []).forEach((entry) => {
-      const value = String(entry && entry.value || '').trim();
-      if (!value || seen.has(value)) return;
-      seen.add(value);
-      values.push(value);
-    });
-    getApprovedCustomUnits().forEach((value) => {
-      const safeValue = String(value || '').trim();
-      if (!safeValue || seen.has(safeValue)) return;
-      seen.add(safeValue);
-      values.push(safeValue);
-    });
-    (Array.isArray(extraValues) ? extraValues : []).forEach((value) => {
-      const safeValue = String(value || '').trim();
-      if (!safeValue || seen.has(safeValue)) return;
-      seen.add(safeValue);
-      values.push(safeValue);
-    });
-    return values
-      .map((value) => buildUnitSearchEntry(value))
-      .filter(Boolean)
-      .sort((a, b) => a.fullLabel.localeCompare(b.fullLabel, 'zh-Hant'));
-  }
-
-  function buildUnitCascadeControl(baseId, selectedUnit, disabled, required) {
-    const dis = disabled ? 'disabled' : '';
-    const req = required ? 'required' : '';
-    return `<div class="unit-cascade">
-      <div class="unit-cascade-search">
-        <input type="search" class="form-input unit-cascade-search-input" id="${baseId}-search" data-testid="${baseId}-search" placeholder="可搜尋單位名稱或代碼" autocomplete="off" ${dis}>
-        <div class="unit-cascade-search-results" id="${baseId}-search-results" hidden></div>
-        <div class="form-hint unit-cascade-search-hint">可直接輸入單位名稱或代碼，系統會自動帶入類別與層級。</div>
-      </div>
-      <div class="unit-cascade-grid unit-cascade-grid--training" id="${baseId}-grid">
-        <div class="unit-cascade-segment">
-          <select class="form-select" id="${baseId}-category" data-testid="${baseId}-category" ${dis} ${req}></select>
-        </div>
-        <div class="unit-cascade-segment">
-          <select class="form-select" id="${baseId}-parent" data-testid="${baseId}-parent" ${dis} ${req}></select>
-        </div>
-        <div class="unit-cascade-child-wrap" id="${baseId}-child-wrap">
-          <select class="form-select" id="${baseId}-child" data-testid="${baseId}-child" ${dis}></select>
-        </div>
-      </div>
-      <div class="unit-cascade-custom" id="${baseId}-custom-wrap" style="display:none;margin-top:8px">
-        <input type="text" class="form-input" id="${baseId}-custom" data-testid="${baseId}-custom" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
-      </div>
-      <input type="hidden" id="${baseId}" data-testid="${baseId}" value="${esc(selectedUnit || '')}" />
-    </div>`;
-  }
-
-  function initUnitCascade(baseId, initialValue, options) {
-    const opts = options || {};
-    const searchEl = document.getElementById(`${baseId}-search`);
-    const searchResultsEl = document.getElementById(`${baseId}-search-results`);
-    const categoryEl = document.getElementById(`${baseId}-category`);
-    const parentEl = document.getElementById(`${baseId}-parent`);
-    const childEl = document.getElementById(`${baseId}-child`);
-    const childWrap = document.getElementById(`${baseId}-child-wrap`);
-    const hiddenEl = document.getElementById(baseId);
-    const customWrap = document.getElementById(`${baseId}-custom-wrap`);
-    const customEl = document.getElementById(`${baseId}-custom`);
-    if (!categoryEl || !parentEl || !childEl || !hiddenEl) return;
-
-    const allowCustom = isAdmin() && !opts.disabled && !!customWrap && !!customEl;
-    const structure = getSelectableUnitStructure();
-    const rawInitial = String(initialValue || hiddenEl.value || '').trim();
-    const searchEntries = getUnitSearchEntries(rawInitial ? [rawInitial] : []);
-    const parsed = splitUnitValue(rawInitial);
-    const knownParents = new Set(Object.keys(structure || {}));
-    const isInitialCustom = allowCustom && !!rawInitial && !!parsed.parent && !knownParents.has(parsed.parent);
-
-    const parentSet = new Set(knownParents);
-    if (parsed.parent && !isInitialCustom) parentSet.add(parsed.parent);
-    const parents = Array.from(parentSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
-    const initialCategory = parsed.parent ? categorizeTopLevelUnit(parsed.parent) : '';
-
-    categoryEl.innerHTML =
-      '<option value="">選單位類別</option>' +
-      getTrainingUnitCategories().map((category) => `<option value="${esc(category)}">${esc(category)}</option>`).join('');
-
-    const setCustomMode = (enabled) => {
-      if (!customWrap || !customEl) return;
-      customWrap.style.display = enabled ? 'block' : 'none';
-      customEl.required = !!enabled;
-    };
-
-    const hideSearchResults = () => {
-      if (!searchResultsEl) return;
-      searchResultsEl.hidden = true;
-      searchResultsEl.innerHTML = '';
-    };
-
-    const syncSearchInput = () => {
-      if (!searchEl) return;
-      if (allowCustom && String(parentEl.value || '').trim() === UNIT_CUSTOM_VALUE) {
-        searchEl.value = String(customEl?.value || '').trim();
-        return;
-      }
-      const currentValue = String(hiddenEl.value || '').trim();
-      if (!currentValue) {
-        searchEl.value = '';
-        return;
-      }
-      const entry = searchEntries.find((item) => item.value === currentValue) || buildUnitSearchEntry(currentValue);
-      searchEl.value = entry ? entry.fullLabel : currentValue;
-    };
-
-    const applySelectedUnit = (unitValue) => {
-      const targetValue = String(unitValue || '').trim();
-      const target = splitUnitValue(targetValue);
-      const targetCategory = target.parent ? categorizeTopLevelUnit(target.parent) : '';
-      if (targetCategory) categoryEl.value = targetCategory;
-      renderParents(categoryEl.value, target.parent);
-      parentEl.value = target.parent;
-      renderChildren(target.parent, target.child);
-      if (!childEl.disabled) childEl.value = target.child || '';
-      syncHidden(true);
-      syncSearchInput();
-      hideSearchResults();
-    };
-
-    const renderSearchResults = (query) => {
-      if (!searchEl || !searchResultsEl) return;
-      const text = String(query || '').trim();
-      if (!text) {
-        hideSearchResults();
-        return;
-      }
-      const tokens = text.split(/\s+/).map((part) => normalizeUnitSearchText(part)).filter(Boolean);
-      const matches = searchEntries
-        .filter((entry) => tokens.every((token) => entry.searchText.includes(token)))
-        .slice(0, 8);
-      if (!matches.length) {
-        searchResultsEl.hidden = false;
-        searchResultsEl.innerHTML = '<div class="unit-cascade-search-empty">找不到符合的單位，仍可改用下方層級選擇。</div>';
-        return;
-      }
-      searchResultsEl.hidden = false;
-      searchResultsEl.innerHTML = matches.map((entry) => {
-        const meta = [entry.category, entry.code ? ('代碼 ' + entry.code) : '', entry.child ? entry.parent : ''].filter(Boolean).join(' · ');
-        return '<button type="button" class="unit-cascade-search-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(meta) + '</span></button>';
-      }).join('');
-      searchResultsEl.querySelectorAll('[data-unit-value]').forEach((button) => {
-        button.addEventListener('click', () => applySelectedUnit(button.dataset.unitValue));
-      });
-    };
-
-    const syncHidden = (dispatchChange) => {
-      const parent = String(parentEl.value || '').trim();
-
-      if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
-        setCustomMode(true);
-        customEl.placeholder = '\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31';
-        childEl.innerHTML = '<option value="">\u81ea\u8a02\u55ae\u4f4d\u6a21\u5f0f</option>';
-        childEl.disabled = true;
-        hiddenEl.value = String(customEl.value || '').trim();
-        syncSearchInput();
-        if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
-        return;
-      }
-
-      setCustomMode(false);
-      const hasChildren = Array.isArray(structure[parent]) && structure[parent].length > 0;
-      const child = (!childEl.disabled && hasChildren) ? String(childEl.value || '').trim() : '';
-      hiddenEl.value = composeUnitValue(parent, child);
-      syncSearchInput();
-      if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
-    };
-
-    const renderParents = (category, selectedParent) => {
-      const targetCategory = String(category || '').trim();
-      const parent = String(selectedParent || '').trim();
-      if (!targetCategory) {
-        parentEl.innerHTML = '<option value="">再選單位</option>';
-        parentEl.disabled = true;
-        if (childWrap) childWrap.style.display = 'none';
-        childEl.innerHTML = '<option value="">有二級單位再選</option>';
-        childEl.disabled = true;
-        return;
-      }
-      const categoryParents = getParentsByUnitCategory(parents, targetCategory);
-      const parentOptions = parent && !categoryParents.includes(parent) ? [parent].concat(categoryParents) : categoryParents;
-      parentEl.disabled = false;
-      parentEl.innerHTML =
-        '<option value="">請選擇單位</option>' +
-        parentOptions.map((item) => `<option value="${esc(item)}">${esc(getUnitOptionLabel(item, item))}</option>`).join('') +
-        (allowCustom ? `<option value="${UNIT_CUSTOM_VALUE}">${UNIT_CUSTOM_LABEL}</option>` : '');
-      if (parent) parentEl.value = parent;
-    };
-
-    const renderChildren = (parent, selectedChild) => {
-      const child = String(selectedChild || '').trim();
-
-      if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
-        childEl.innerHTML = '<option value="">\u81ea\u8a02\u55ae\u4f4d\u6a21\u5f0f</option>';
-        childEl.disabled = true;
-        if (childWrap) childWrap.style.display = 'none';
-        return;
-      }
-
-      const children = Array.isArray(structure[parent]) ? [...structure[parent]] : [];
-      if (child && !children.includes(child)) children.unshift(child);
-
-      if (!parent) {
-        childEl.innerHTML = '<option value="">\u8acb\u5148\u9078\u64c7\u4e00\u7d1a\u55ae\u4f4d</option>';
-        childEl.disabled = true;
-        if (childWrap) childWrap.style.display = 'none';
-        return;
-      }
-
-      if (children.length === 0) {
-        childEl.innerHTML = '<option value="">\u7121\u4e8c\u7d1a\u55ae\u4f4d</option>';
-        childEl.disabled = true;
-        if (childWrap) childWrap.style.display = 'none';
-        return;
-      }
-
-      childEl.disabled = false;
-      if (childWrap) childWrap.style.display = '';
-      childEl.innerHTML = '<option value="">選二級單位（選填）</option>' + children.map((c) => {
-        const unitValue = composeUnitValue(parent, c);
-        return `<option value="${esc(c)}">${esc(getUnitOptionLabel(unitValue, c))}</option>`;
-      }).join('');
-      if (child) childEl.value = child;
-    };
-
-    categoryEl.addEventListener('change', () => {
-      renderParents(categoryEl.value, '');
-      renderChildren('', '');
-      syncHidden(true);
-    });
-    parentEl.addEventListener('change', () => {
-      renderChildren(parentEl.value, '');
-      syncHidden(true);
-    });
-    childEl.addEventListener('change', () => syncHidden(true));
-    if (allowCustom) customEl.addEventListener('input', () => syncHidden(true));
-
-    if (isInitialCustom) {
-      categoryEl.value = initialCategory || '行政單位';
-      renderParents(categoryEl.value, UNIT_CUSTOM_VALUE);
-      parentEl.value = UNIT_CUSTOM_VALUE;
-      customEl.value = rawInitial;
-    } else {
-      if (initialCategory) categoryEl.value = initialCategory;
-      renderParents(categoryEl.value, parsed.parent);
-    }
-    renderChildren(parentEl.value, parsed.child);
-    syncHidden(false);
-
-    if (searchEl) {
-      searchEl.addEventListener('input', (event) => renderSearchResults(event.target.value));
-      searchEl.addEventListener('focus', () => {
-        if (String(searchEl.value || '').trim()) renderSearchResults(searchEl.value);
-      });
-      searchEl.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-          hideSearchResults();
-          return;
-        }
-        if (event.key === 'Enter') {
-          const firstMatch = searchResultsEl?.querySelector('[data-unit-value]');
-          if (firstMatch) {
-            event.preventDefault();
-            firstMatch.click();
-          }
-        }
-      });
-      searchEl.addEventListener('blur', () => {
-        window.setTimeout(hideSearchResults, 120);
-      });
-      syncSearchInput();
-    }
-
-    if (opts.disabled) {
-      if (searchEl) searchEl.disabled = true;
-      categoryEl.disabled = true;
-      parentEl.disabled = true;
-      childEl.disabled = true;
-      if (customEl) customEl.disabled = true;
-    }
-  }
+  function formatUnitScopeSummary(scopes) { return getUnitModule().formatUnitScopeSummary(scopes); }
+  function approveCustomUnit(unit, actor) { return getUnitModule().approveCustomUnit(unit, actor); }
+  function getCustomUnitRegistry() { return getUnitModule().getCustomUnitRegistry(); }
+
+  function syncSessionUnit(sourceUnit, targetUnit) { return getAuthModule().syncSessionUnit(sourceUnit, targetUnit); }
+  function mergeCustomUnit(sourceUnit, targetUnit, actor) { return getUnitModule().mergeCustomUnit(sourceUnit, targetUnit, actor); }
+  function splitUnitValue(unitValue) { return getUnitModule().splitUnitValue(unitValue); }
+  function composeUnitValue(parent, child) { return getUnitModule().composeUnitValue(parent, child); }
+  function categorizeTopLevelUnit(unitValue) { return getUnitModule().categorizeTopLevelUnit(unitValue); }
+  function getTrainingUnitCategories() { return getUnitModule().getTrainingUnitCategories(); }
+  function getParentsByUnitCategory(parents, category) { return getUnitModule().getParentsByUnitCategory(parents, category); }
+  function buildUnitSearchEntry(unitValue) { return getUnitModule().buildUnitSearchEntry(unitValue); }
+  function getUnitSearchEntries(extraValues) { return getUnitModule().getUnitSearchEntries(extraValues); }
+  function buildUnitCascadeControl(baseId, selectedUnit, disabled, required) { return getUnitModule().buildUnitCascadeControl(baseId, selectedUnit, disabled, required); }
+  function initUnitCascade(baseId, initialValue, options) { return getUnitModule().initUnitCascade(baseId, initialValue, options); }
 
   function parseUserUnits(value) { return getDataModule().parseUserUnits(value); }
   function normalizeUserRole(role) { return getDataModule().normalizeUserRole(role); }
   function getAuthorizedUnits(user) { return getDataModule().getAuthorizedUnits(user); }
   function getActiveUnit(user) { return getDataModule().getActiveUnit(user); }
   function normalizeUserRecord(user) { return getDataModule().normalizeUserRecord(user); }
-  function hasGlobalReadScope(user = currentUser()) {
-    return !!user && (user.role === ROLES.ADMIN || user.role === ROLES.VIEWER);
-  }
-  function hasUnitAccess(unit, user = currentUser()) {
-    if (!user) return false;
-    const target = String(unit || '').trim();
-    if (!target) return true;
-    if (user.role === ROLES.ADMIN) return true;
-    if (user.role === ROLES.VIEWER) {
-      const scoped = getActiveUnit(user);
-      return !scoped || scoped === target;
-    }
-    return getAuthorizedUnits(user).includes(target);
-  }
+  function hasGlobalReadScope(user = currentUser()) { return getPolicyModule().hasGlobalReadScope(user); }
+  function hasUnitAccess(unit, user = currentUser()) { return getPolicyModule().hasUnitAccess(unit, user); }
   function canSwitchAuthorizedUnit(user = currentUser()) { return getAuthModule().canSwitchAuthorizedUnit(user); }
   function getScopedUnit(user = currentUser()) { return getAuthModule().getScopedUnit(user); }
   function switchCurrentUserUnit(unit) { return getAuthModule().switchCurrentUserUnit(unit); }
@@ -931,95 +218,28 @@
   function login(un, pw) { return getAuthModule().login(un, pw); }
   function logout() { getAuthModule().logout(); renderApp(); }
   function currentUser() { return getAuthModule().currentUser(); }
-  function isAdmin() { return currentUser()?.role === ROLES.ADMIN; }
-  function isUnitAdmin() { return currentUser()?.role === ROLES.UNIT_ADMIN; }
-  function isViewer(user = currentUser()) { return user?.role === ROLES.VIEWER; }
-  function canCreateCAR() { return isAdmin(); }
-  function canReview() { return isAdmin(); }
-  function canFillChecklist() { return !!currentUser() && !isViewer(); }
-  function canFillTraining() { return !!currentUser() && !isViewer(); }
-  function canManageUsers() { return isAdmin(); }
-  function fmt(d) { if (!d) return '—'; const x = new Date(d); return `${x.getFullYear()}/${String(x.getMonth() + 1).padStart(2, '0')}/${String(x.getDate()).padStart(2, '0')}`; }
-  function fmtTime(d) { if (!d) return '—'; const x = new Date(d); return `${fmt(d)} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; }
+  function isAdmin(user = currentUser()) { return getPolicyModule().isAdmin(user); }
+  function isUnitAdmin(user = currentUser()) { return getPolicyModule().isUnitAdmin(user); }
+  function isViewer(user = currentUser()) { return getPolicyModule().isViewer(user); }
+  function canCreateCAR(user = currentUser()) { return getPolicyModule().canCreateCAR(user); }
+  function canReview(user = currentUser()) { return getPolicyModule().canReview(user); }
+  function canFillChecklist(user = currentUser()) { return getPolicyModule().canFillChecklist(user); }
+  function canFillTraining(user = currentUser()) { return getPolicyModule().canFillTraining(user); }
+  function canManageUsers(user = currentUser()) { return getPolicyModule().canManageUsers(user); }
+  function fmt(d) { return getUiModule().fmt(d); }
+  function fmtTime(d) { return getUiModule().fmtTime(d); }
   function isOverdue(item) { return item.status !== STATUSES.CLOSED && item.correctiveDueDate && new Date(item.correctiveDueDate) < new Date(); }
-  function ic(n, c = '') { return `<i data-lucide="${n}" ${c ? 'class="' + c + '"' : ''}></i>`; }
-  function ntuLogo(c = '') { return '<span class="ntu-logo ' + c + '">NTU</span>'; }
-  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-  function toast(msg, type = 'success') { const c = document.getElementById('toast-container'); if (!c) return; const t = document.createElement('div'); t.className = `toast toast-${type}`; t.innerHTML = `<span class="toast-message">${esc(msg)}</span>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(40px)'; t.style.transition = 'all 300ms'; }, 2500); setTimeout(() => t.remove(), 2800); }
-  function renderCopyIdButton(value, label) {
-    const text = String(value || '').trim();
-    if (!text) return '';
-    const safeLabel = String(label || '編號').trim();
-    return `<button type="button" class="copy-id-btn" data-copy="${esc(text)}" data-copy-label="${esc(safeLabel)}" title="複製${esc(safeLabel)}" aria-label="複製${esc(safeLabel)}">${ic('copy', 'icon-xs')}</button>`;
-  }
-  function renderCopyIdCell(value, label, strong = false) {
-    const text = String(value || '').trim();
-    const classes = ['copy-id-cell'];
-    if (strong) classes.push('copy-id-cell--strong');
-    return `<div class="${classes.join(' ')}"><span class="copy-id-text">${esc(text || '—')}</span>${renderCopyIdButton(text, label)}</div>`;
-  }
-  function copyTextToClipboard(value, label = '編號') {
-    const text = String(value || '').trim();
-    if (!text) {
-      toast(`沒有可複製的${label}`, 'error');
-      return Promise.resolve(false);
-    }
-    const fallbackCopy = () => {
-      try {
-        const input = document.createElement('textarea');
-        input.value = text;
-        input.setAttribute('readonly', '');
-        input.style.position = 'fixed';
-        input.style.opacity = '0';
-        document.body.appendChild(input);
-        input.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(input);
-        if (!ok) throw new Error('copy command failed');
-        toast(`${label}已複製`);
-        return true;
-      } catch (_) {
-        toast(`${label}複製失敗`, 'error');
-        return false;
-      }
-    };
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      return navigator.clipboard.writeText(text).then(() => {
-        toast(`${label}已複製`);
-        return true;
-      }).catch(() => fallbackCopy());
-    }
-    return Promise.resolve(fallbackCopy());
-  }
-  function bindCopyButtons(root = document) {
-    root.querySelectorAll('.copy-id-btn:not([data-copy-bound])').forEach((button) => {
-      button.dataset.copyBound = '1';
-      button.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        copyTextToClipboard(button.dataset.copy || '', button.dataset.copyLabel || '編號');
-      });
-    });
-  }
-  function applyTestIds(map) {
-    Object.entries(map || {}).forEach(([id, testId]) => {
-      const el = document.getElementById(id);
-      if (el && testId) el.setAttribute('data-testid', testId);
-    });
-  }
-  function applySelectorTestIds(entries) {
-    (entries || []).forEach((entry) => {
-      const el = document.querySelector(entry.selector);
-      if (el && entry.testId) el.setAttribute('data-testid', entry.testId);
-    });
-  }
-  function debugFlow(scope, message, data) {
-    try {
-      if (!window.console || typeof window.console.info !== 'function') return;
-      if (data === undefined) window.console.info(`[ISMS:${scope}] ${message}`);
-      else window.console.info(`[ISMS:${scope}] ${message}`, data);
-    } catch (_) { }
-  }
+  function ic(n, c = '') { return getUiModule().ic(n, c); }
+  function ntuLogo(c = '') { return getUiModule().ntuLogo(c); }
+  function esc(s) { return getUiModule().esc(s); }
+  function toast(msg, type = 'success') { return getUiModule().toast(msg, type); }
+  function renderCopyIdButton(value, label) { return getUiModule().renderCopyIdButton(value, label); }
+  function renderCopyIdCell(value, label, strong = false) { return getUiModule().renderCopyIdCell(value, label, strong); }
+  function copyTextToClipboard(value, label = '編號') { return getUiModule().copyTextToClipboard(value, label); }
+  function bindCopyButtons(root = document) { return getUiModule().bindCopyButtons(root); }
+  function applyTestIds(map) { return getUiModule().applyTestIds(map); }
+  function applySelectorTestIds(entries) { return getUiModule().applySelectorTestIds(entries); }
+  function debugFlow(scope, message, data) { return getUiModule().debugFlow(scope, message, data); }
   const GLOBAL_ACTION_HANDLERS = Object.create(null);
   function registerActionHandlers(namespace, handlers) {
     const prefix = String(namespace || '').trim();
@@ -1094,6 +314,68 @@
     }
     return { page: p[0], param };
   }
+  let unitModuleApi = null;
+  function getUnitModule() {
+    if (unitModuleApi) return unitModuleApi;
+    if (typeof window === 'undefined' || typeof window.createUnitModule !== 'function') {
+      throw new Error('unit-module.js not loaded');
+    }
+    unitModuleApi = window.createUnitModule({
+      UNIT_CUSTOM_VALUE,
+      UNIT_CUSTOM_LABEL,
+      UNIT_ADMIN_PRIMARY_WHITELIST,
+      UNIT_ACADEMIC_PRIMARY_WHITELIST,
+      loadData: function () { return getDataModule().loadData(); },
+      saveData: function (data) { return getDataModule().saveData(data); },
+      loadChecklists: function () { return getDataModule().loadChecklists(); },
+      saveChecklists: function (store) { return getDataModule().saveChecklists(store); },
+      loadTrainingStore: function () { return getDataModule().loadTrainingStore(); },
+      saveTrainingStore: function (store) { return getDataModule().saveTrainingStore(store); },
+      loadUnitReviewStore: function () { return getDataModule().loadUnitReviewStore(); },
+      saveUnitReviewStore: function (store) { return getDataModule().saveUnitReviewStore(store); },
+      getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
+      syncSessionUnit: function (sourceUnit, targetUnit) { return getAuthModule().syncSessionUnit(sourceUnit, targetUnit); },
+      isAdmin: function () { return getPolicyModule().isAdmin(); },
+      esc: function (value) { return getUiModule().esc(value); }
+    });
+    window._unitModule = unitModuleApi;
+    return unitModuleApi;
+  }
+
+  let uiModuleApi = null;
+  function getUiModule() {
+    if (uiModuleApi) return uiModuleApi;
+    if (typeof window === 'undefined' || typeof window.createUiModule !== 'function') {
+      throw new Error('ui-module.js not loaded');
+    }
+    uiModuleApi = window.createUiModule();
+    window._uiModule = uiModuleApi;
+    return uiModuleApi;
+  }
+
+  let policyModuleApi = null;
+  function getPolicyModule() {
+    if (policyModuleApi) return policyModuleApi;
+    if (typeof window === 'undefined' || typeof window.createPolicyModule !== 'function') {
+      throw new Error('policy-module.js not loaded');
+    }
+    policyModuleApi = window.createPolicyModule({
+      ROLES,
+      STATUSES,
+      TRAINING_STATUSES,
+      TRAINING_UNDO_WINDOW_MINUTES,
+      currentUser: function () { return getAuthModule().currentUser(); },
+      getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
+      getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
+      getAllItems: function () { return getDataModule().getAllItems(); },
+      getAllChecklists: function () { return getDataModule().getAllChecklists(); },
+      getAllTrainingForms: function () { return getDataModule().getAllTrainingForms(); },
+      isChecklistDraftStatus: function (status) { return getDataModule().isChecklistDraftStatus(status); }
+    });
+    window._policyModule = policyModuleApi;
+    return policyModuleApi;
+  }
+
   let dataModuleApi = null;
   function getDataModule() {
     if (dataModuleApi) return dataModuleApi;
@@ -1470,62 +752,14 @@
       return acc;
     }, {});
   };
-  let iconRetryTimer = null;
-  let iconRetryCount = 0;
-  function refreshIcons() {
-    const lucideApi = window.lucide;
-    if (!lucideApi || typeof lucideApi.createIcons !== 'function') {
-      if (!iconRetryTimer && iconRetryCount < 20) {
-        iconRetryTimer = setTimeout(() => {
-          iconRetryTimer = null;
-          iconRetryCount += 1;
-          refreshIcons();
-        }, 120);
-      }
-      return;
-    }
-    iconRetryCount = 0;
-    if (iconRetryTimer) {
-      clearTimeout(iconRetryTimer);
-      iconRetryTimer = null;
-    }
-    const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
-    raf(() => lucideApi.createIcons());
-  }
-  function getVisibleItems() {
-    const u = currentUser();
-    if (!u) return [];
-    const all = getAllItems();
-    if (hasGlobalReadScope(u)) return all;
-    return all.filter((item) => hasUnitAccess(item.handlerUnit, u) || isItemHandler(item, u));
-  }
-  function canAccessItem(item) {
-    if (!item) return false;
-    const u = currentUser();
-    if (!u) return false;
-    if (hasGlobalReadScope(u)) return true;
-    return hasUnitAccess(item.handlerUnit, u) || isItemHandler(item, u);
-  }
-  function isItemHandler(item, user = currentUser()) {
-    if (!item || !user) return false;
-    if (hasUnitAccess(item.handlerUnit, user)) return true;
-    return item.handlerUsername ? item.handlerUsername === user.username : item.handlerName === user.name;
-  }
-  function canRespondItem(item, user = currentUser()) {
-    if (!item || !user) return false;
-    return item.status === STATUSES.PENDING && !isViewer(user) && (isItemHandler(item, user) || user.role === ROLES.ADMIN);
-  }
-  function canSubmitTracking(item, user = currentUser()) {
-    if (!item || !user) return false;
-    return item.status === STATUSES.TRACKING && !isViewer(user) && isItemHandler(item, user) && !item.pendingTracking;
-  }
+  function refreshIcons() { return getUiModule().refreshIcons(); }
+  function getVisibleItems(user = currentUser()) { return getPolicyModule().getVisibleItems(user); }
+  function canAccessItem(item, user = currentUser()) { return getPolicyModule().canAccessItem(item, user); }
+  function isItemHandler(item, user = currentUser()) { return getPolicyModule().isItemHandler(item, user); }
+  function canRespondItem(item, user = currentUser()) { return getPolicyModule().canRespondItem(item, user); }
+  function canSubmitTracking(item, user = currentUser()) { return getPolicyModule().canSubmitTracking(item, user); }
   
-  function toTestIdFragment(value) {
-    return String(value || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
+  function toTestIdFragment(value) { return getUiModule().toTestIdFragment(value); }
 
   function isTrainingBooleanValue(value) {
     return TRAINING_BOOLEAN_SELECT_OPTIONS.includes(String(value || '').trim());
@@ -1547,18 +781,8 @@
     if (record.isInfoStaff === '否') return '不適用';
     return isTrainingBooleanValue(record.completedProfessional) ? record.completedProfessional : '';
   }
-  function mkChk(name, opts, sel) {
-    return '<div class="checkbox-group" data-testid="' + name + '-group">' + opts.map((o, index) => {
-      const key = toTestIdFragment(o) || String(index);
-      return '<label class="chk-label" data-testid="' + name + '-option-' + key + '"><input type="checkbox" name="' + name + '" value="' + o + '" data-testid="' + name + '-input-' + key + '" ' + ((sel || []).includes(o) ? 'checked' : '') + '><span class="chk-box"></span>' + o + '</label>';
-    }).join('') + '</div>';
-  }
-  function mkRadio(name, opts, sel) {
-    return '<div class="radio-group" data-testid="' + name + '-group">' + opts.map((o, index) => {
-      const key = toTestIdFragment(o) || String(index);
-      return '<label class="radio-label" data-testid="' + name + '-option-' + key + '"><input type="radio" name="' + name + '" value="' + o + '" data-testid="' + name + '-input-' + key + '" ' + (sel === o ? 'checked' : '') + '><span class="radio-dot"></span>' + o + '</label>';
-    }).join('') + '</div>';
-  }
+  function mkChk(name, opts, sel) { return getUiModule().mkChk(name, opts, sel); }
+  function mkRadio(name, opts, sel) { return getUiModule().mkRadio(name, opts, sel); }
   function isMobileViewport() { return getShellModule().isMobileViewport(); }
   function closeSidebar() { return getShellModule().closeSidebar(); }
   function toggleSidebar() { return getShellModule().toggleSidebar(); }
@@ -1709,31 +933,10 @@
     if (!documentNo) throw new Error('請先選擇具正式代碼的受稽單位');
     return buildChecklistIdByDocument(documentNo, getNextChecklistSequence(documentNo, d.items));
   }
-  function isChecklistOwner(cl, user) {
-    const actor = user || currentUser();
-    if (!actor || !cl) return false;
-    if (cl.fillerUsername) return cl.fillerUsername === actor.username;
-    return cl.fillerName === actor.name;
-  }
-  function canAccessChecklist(cl) {
-    const u = currentUser();
-    if (!u || !cl) return false;
-    if (hasGlobalReadScope(u)) return true;
-    return hasUnitAccess(cl.unit, u) || isChecklistOwner(cl, u);
-  }
-  function getVisibleChecklists() {
-    const u = currentUser();
-    if (!u) return [];
-    const all = getAllChecklists();
-    if (hasGlobalReadScope(u)) return all;
-    return all.filter((item) => canAccessChecklist(item));
-  }
-  function canEditChecklist(cl) {
-    const u = currentUser();
-    if (!u || !cl || !isChecklistDraftStatus(cl.status) || !canFillChecklist()) return false;
-    if (u.role === ROLES.ADMIN) return true;
-    return hasUnitAccess(cl.unit, u) || isChecklistOwner(cl, u);
-  }
+  function isChecklistOwner(cl, user = currentUser()) { return getPolicyModule().isChecklistOwner(cl, user); }
+  function canAccessChecklist(cl, user = currentUser()) { return getPolicyModule().canAccessChecklist(cl, user); }
+  function getVisibleChecklists(user = currentUser()) { return getPolicyModule().getVisibleChecklists(user); }
+  function canEditChecklist(cl, user = currentUser()) { return getPolicyModule().canEditChecklist(cl, user); }
 
   function findExistingChecklistForUnitYear(unit, auditYear, excludeId) {
     const safeUnit = String(unit || '').trim();
@@ -1811,72 +1014,15 @@
     return getSystemUnits();
   }
 
-  function getVisibleTrainingForms() {
-    const user = currentUser();
-    if (!user) return [];
-    const forms = getAllTrainingForms();
-    if (hasGlobalReadScope(user)) return forms;
-    return forms.filter((form) => hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
-  }
-
-  function canEditTrainingForm(form) {
-    const user = currentUser();
-    if (!user || !form) return false;
-    if (isViewer(user)) return false;
-    const inScope = user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
-    if (!inScope) return false;
-    return form.status === TRAINING_STATUSES.DRAFT || form.status === TRAINING_STATUSES.RETURNED;
-  }
-
-  function canManageTrainingForm(form, user = currentUser()) {
-    if (!user || !form || isViewer(user)) return false;
-    return user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
-  }
-
-  function isTrainingManualRowOwner(row, user = currentUser()) {
-    if (!row || row.source !== 'manual' || !user) return false;
-    const ownerUsername = String(row.createdByUsername || '').trim();
-    const ownerName = String(row.createdBy || '').trim();
-    if (ownerUsername) return ownerUsername === user.username;
-    return !!ownerName && ownerName === user.name;
-  }
-
-  function canDeleteTrainingEditableRow(row, form, user = currentUser()) {
-    if (!row || row.source !== 'manual' || !user || isViewer(user)) return false;
-    const editable = !form || canEditTrainingForm(form);
-    if (!editable) return false;
-    return isTrainingManualRowOwner(row, user);
-  }
-
-  function getTrainingUndoRemainingMs(form, now = Date.now()) {
-    if (!form || !form.stepOneSubmittedAt) return 0;
-    const submittedAt = Date.parse(form.stepOneSubmittedAt);
-    if (!Number.isFinite(submittedAt)) return 0;
-    const deadline = submittedAt + (TRAINING_UNDO_WINDOW_MINUTES * 60 * 1000);
-    return Math.max(0, deadline - now);
-  }
-
-  function getTrainingUndoRemainingMinutes(form, now = Date.now()) {
-    const remainingMs = getTrainingUndoRemainingMs(form, now);
-    if (!remainingMs) return 0;
-    return Math.max(1, Math.ceil(remainingMs / 60000));
-  }
-
-  function canUndoTrainingForm(form, user = currentUser()) {
-    if (!form || !user || isViewer(user)) return false;
-    if (form.status !== TRAINING_STATUSES.PENDING_SIGNOFF) return false;
-    if (!canManageTrainingForm(form, user)) return false;
-    if (form.fillerUsername && form.fillerUsername !== user.username) return false;
-    if (form.printedAt || form.signoffUploadedAt || form.submittedAt) return false;
-    return getTrainingUndoRemainingMs(form) > 0;
-  }
-
-  function isTrainingVisible(form) {
-    const user = currentUser();
-    if (!user || !form) return false;
-    if (hasGlobalReadScope(user)) return true;
-    return hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
-  }
+  function getVisibleTrainingForms(user = currentUser()) { return getPolicyModule().getVisibleTrainingForms(user); }
+  function canEditTrainingForm(form, user = currentUser()) { return getPolicyModule().canEditTrainingForm(form, user); }
+  function canManageTrainingForm(form, user = currentUser()) { return getPolicyModule().canManageTrainingForm(form, user); }
+  function isTrainingManualRowOwner(row, user = currentUser()) { return getPolicyModule().isTrainingManualRowOwner(row, user); }
+  function canDeleteTrainingEditableRow(row, form, user = currentUser()) { return getPolicyModule().canDeleteTrainingEditableRow(row, form, user); }
+  function getTrainingUndoRemainingMs(form, now = Date.now()) { return getPolicyModule().getTrainingUndoRemainingMs(form, now); }
+  function getTrainingUndoRemainingMinutes(form, now = Date.now()) { return getPolicyModule().getTrainingUndoRemainingMinutes(form, now); }
+  function canUndoTrainingForm(form, user = currentUser()) { return getPolicyModule().canUndoTrainingForm(form, user); }
+  function isTrainingVisible(form, user = currentUser()) { return getPolicyModule().isTrainingVisible(form, user); }
 
   function findExistingTrainingFormForUnitYear(unit, trainingYear, excludeId) {
     const safeUnit = String(unit || '').trim();
