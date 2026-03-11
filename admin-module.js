@@ -27,7 +27,9 @@
       ic,
       refreshIcons,
       buildUnitCascadeControl,
-      initUnitCascade
+      initUnitCascade,
+      registerActionHandlers,
+      closeModalRoot
     } = deps;
 
     function formatUserUnitSummary(user) {
@@ -38,14 +40,14 @@
   function renderUsers() {
     if (!canManageUsers()) { navigate('dashboard'); return; }
     const users = getUsers();
-    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit || '未指定')}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="window._editUser('${u.username}')">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" onclick="window._delUser('${u.username}')">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要單位與多單位授權範圍</p></div><button class="btn btn-primary" onclick="window._addUser()">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
+    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit || '未指定')}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
       <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>主要單位</th><th>授權單位</th><th>信箱</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
   function showUserModal(eu) {
     const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root'); const units = getAuthorizedUnits(eu); const initUnit = units[0] || '';
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${title}</span><button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button></div><form id="user-form">
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${title}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="user-form">
       <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>
       <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
       <div class="form-group"><label class="form-label form-required">電子信箱</label><input type="email" class="form-input" id="u-email" value="${isE ? esc(eu.email || '') : ''}" required></div>
@@ -53,7 +55,7 @@
       <div class="form-group"><label class="form-label" id="u-unit-label">主要單位</label>${buildUnitCascadeControl('u-unit', initUnit, false, false)}</div></div>
       <div class="form-group"><label class="form-label">額外授權單位</label><textarea class="form-textarea" id="u-units" rows="4" placeholder="每行一個單位，可用於跨單位代理">${esc(units.slice(1).join('\n'))}</textarea><div class="form-hint">系統不另外做代理模組，直接以授權單位陣列決定可切換單位。</div></div>
       <div class="form-group"><label class="form-label ${isE ? '' : 'form-required'}">${isE ? '密碼（留空不修改）' : '密碼'}</label><input type="text" class="form-input" id="u-pass" ${isE ? '' : 'required'}></div>
-      <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-root').innerHTML=''">取消</button></div>
+      <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div>
     </form></div></div>`;
     initUnitCascade('u-unit', initUnit, { disabled: false });
     const roleEl = document.getElementById('u-role');
@@ -66,7 +68,7 @@
     }
     syncRoleFields();
     roleEl.addEventListener('change', syncRoleFields);
-    document.getElementById('modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
+    document.getElementById('modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) closeModalRoot(); });
     document.getElementById('user-form').addEventListener('submit', e => {
       e.preventDefault();
       const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), extraUnits = parseUserUnits(document.getElementById('u-units').value), pw = document.getElementById('u-pass').value;
@@ -76,12 +78,10 @@
       if (pw) payload.password = pw;
       if (isE) { updateUser(un, payload); toast('使用者已更新'); }
       else { if (findUser(un)) { toast('帳號已存在', 'error'); return; } addUser({ username: un, password: pw, ...payload }); toast('使用者已新增'); }
-      mr.innerHTML = ''; renderUsers(); refreshIcons();
+      closeModalRoot(); renderUsers(); refreshIcons();
     });
   }
-  window._addUser = () => showUserModal(null);
-  window._editUser = (un) => showUserModal(findUser(un));
-  window._delUser = (un) => { if (confirm(`確定刪除使用者「${un}」？`)) { deleteUser(un); toast('使用者已刪除'); renderUsers(); } };
+  function handleDeleteUser(un) { if (confirm(`確定刪除使用者「${un}」？`)) { deleteUser(un); toast('使用者已刪除'); renderUsers(); } }
   function unitReviewStatusBadge(entry) {
     const approved = entry.status === 'approved';
     return `<span class="review-status-badge ${approved ? 'approved' : 'pending'}">${approved ? '已核准保留' : '待審核'}</span>`;
@@ -113,8 +113,8 @@
       : '<li class="review-ref-item">目前沒有可顯示的引用明細</li>';
 
     const mr = document.getElementById('modal-root');
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal"><div class="modal-header"><span class="modal-title">自訂單位引用明細</span><button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button></div><div class="review-modal-head"><div class="review-unit-name">${esc(entry.unit)}</div><div class="review-modal-subtitle">共 ${entry.count} 筆引用，涵蓋 ${esc(formatUnitScopeSummary(entry.scopes))}</div></div><ul class="review-ref-list">${refs}</ul></div></div>`;
-    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal"><div class="modal-header"><span class="modal-title">自訂單位引用明細</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><div class="review-modal-head"><div class="review-unit-name">${esc(entry.unit)}</div><div class="review-modal-subtitle">共 ${entry.count} 筆引用，涵蓋 ${esc(formatUnitScopeSummary(entry.scopes))}</div></div><ul class="review-ref-list">${refs}</ul></div></div>`;
+    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalRoot(); });
   }
 
   function showUnitMergeModal(unit) {
@@ -122,9 +122,9 @@
     if (!entry) { toast('找不到此自訂單位', 'error'); return; }
 
     const mr = document.getElementById('modal-root');
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal"><div class="modal-header"><span class="modal-title">合併自訂單位</span><button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button></div><div class="review-callout compact"><span class="review-callout-icon">${ic('git-merge', 'icon-sm')}</span><div><strong>${esc(entry.unit)}</strong> 目前共有 ${entry.count} 筆引用，合併後會同步更新帳號、矯正單、檢核表與教育訓練資料。</div></div><form id="unit-merge-form"><div class="form-group"><label class="form-label">來源單位</label><input type="text" class="form-input" value="${esc(entry.unit)}" readonly></div><div class="form-group"><label class="form-label form-required">合併目標</label>${buildUnitCascadeControl('unit-merge-target', '', false, true)}<div class="form-hint">可選正式單位，或使用「其他」輸入新的標準名稱。</div></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('git-merge', 'icon-sm')} 立即合併</button><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-root').innerHTML=''">取消</button></div></form></div></div>`;
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal"><div class="modal-header"><span class="modal-title">合併自訂單位</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><div class="review-callout compact"><span class="review-callout-icon">${ic('git-merge', 'icon-sm')}</span><div><strong>${esc(entry.unit)}</strong> 目前共有 ${entry.count} 筆引用，合併後會同步更新帳號、矯正單、檢核表與教育訓練資料。</div></div><form id="unit-merge-form"><div class="form-group"><label class="form-label">來源單位</label><input type="text" class="form-input" value="${esc(entry.unit)}" readonly></div><div class="form-group"><label class="form-label form-required">合併目標</label>${buildUnitCascadeControl('unit-merge-target', '', false, true)}<div class="form-hint">可選正式單位，或使用「其他」輸入新的標準名稱。</div></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('git-merge', 'icon-sm')} 立即合併</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
     initUnitCascade('unit-merge-target', '', { disabled: false });
-    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
+    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalRoot(); });
     document.getElementById('unit-merge-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const target = document.getElementById('unit-merge-target').value.trim();
@@ -132,7 +132,7 @@
       if (target === entry.unit) { toast('來源與目標單位不能相同', 'error'); return; }
       const summary = mergeCustomUnit(entry.unit, target, currentUser().name);
       if (!summary) { toast('單位合併失敗', 'error'); return; }
-      mr.innerHTML = '';
+      closeModalRoot();
       toast(`已完成單位合併，共更新 ${summary.total} 筆資料`);
       renderUnitReview();
       refreshIcons();
@@ -154,8 +154,8 @@
       const sampleRefs = entry.references.slice(0, 2).map((ref) => `<span class="review-source-pill">${esc(ref)}</span>`).join('');
       const approveBtn = entry.status === 'approved'
         ? `<button type="button" class="btn btn-sm btn-secondary" disabled>${ic('shield-check', 'icon-sm')} 已核准</button>`
-        : `<button type="button" class="btn btn-sm btn-secondary" onclick="window._approveUnit('${encoded}')">${ic('shield-check', 'icon-sm')} 核准保留</button>`;
-      return `<tr><td><div class="review-unit-name">${esc(entry.unit)}</div></td><td>${unitReviewStatusBadge(entry)}</td><td><div class="review-count-chip">${entry.count} 筆</div></td><td><div class="review-scope-text">${esc(formatUnitScopeSummary(entry.scopes))}</div><div class="review-source-list">${sampleRefs}</div></td><td><div class="review-actions"><button type="button" class="btn btn-sm btn-ghost" onclick="window._viewUnitRefs('${encoded}')">${ic('list', 'icon-sm')} 檢視引用</button>${approveBtn}<button type="button" class="btn btn-sm btn-primary" onclick="window._mergeUnit('${encoded}')">${ic('git-merge', 'icon-sm')} 合併</button></div></td></tr>`;
+        : `<button type="button" class="btn btn-sm btn-secondary" data-action="admin.approveUnit" data-unit="${encoded}">${ic('shield-check', 'icon-sm')} 核准保留</button>`;
+      return `<tr><td><div class="review-unit-name">${esc(entry.unit)}</div></td><td>${unitReviewStatusBadge(entry)}</td><td><div class="review-count-chip">${entry.count} 筆</div></td><td><div class="review-scope-text">${esc(formatUnitScopeSummary(entry.scopes))}</div><div class="review-source-list">${sampleRefs}</div></td><td><div class="review-actions"><button type="button" class="btn btn-sm btn-ghost" data-action="admin.viewUnitRefs" data-unit="${encoded}">${ic('list', 'icon-sm')} 檢視引用</button>${approveBtn}<button type="button" class="btn btn-sm btn-primary" data-action="admin.mergeUnit" data-unit="${encoded}">${ic('git-merge', 'icon-sm')} 合併</button></div></td></tr>`;
     }).join('') : `<tr><td colspan="5"><div class="empty-state review-empty"><div class="empty-state-icon">${ic('badge-check')}</div><div class="empty-state-title">目前沒有待治理的自訂單位</div><div class="empty-state-desc">所有單位都已符合正式名錄，或已由最高管理員審核完成。</div></div></td></tr>`;
 
     const historyHtml = history.length ? history.map((entry) => {
@@ -163,28 +163,25 @@
       return `<div class="review-history-item"><div class="review-history-top"><span class="review-history-badge ${detail.badgeClass}">${detail.badgeText}</span><span class="review-history-time">${fmtTime(entry.time)}</span></div><div class="review-history-title">${esc(detail.title)}</div><div class="review-history-meta">${esc(detail.meta)}${entry.actor ? ` · ${esc(entry.actor)}` : ''}</div></div>`;
     }).join('') : `<div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">尚無治理紀錄</div></div>`;
 
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">System Governance</div><h1 class="page-title">自訂單位審核與合併</h1><p class="page-subtitle">集中處理最高管理員手動建立的自訂單位，已核准保留的名稱會回流到最高管理員的單位選單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" onclick="window._refreshUnitReview()">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('sparkles', 'icon-sm')}</span><div>建議優先處理<strong>待審核</strong>且引用次數高的自訂單位；若名稱合理但暫時不納入正式名錄，可先使用「核准保留」，系統會讓最高管理員之後可直接選用。</div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${registry.length}</div><div class="stat-label">自訂單位總數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${pendingCount}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('shield-check')}</div><div class="stat-value">${approvedCount}</div><div class="stat-label">已核准保留</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('git-merge')}</div><div class="stat-value">${recentMerged.length}</div><div class="stat-label">最近合併筆數</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">自訂單位清單</span><span class="review-card-subtitle">依待審核優先、引用次數排序</span></div><div class="table-wrapper"><table><thead><tr><th>單位名稱</th><th>狀態</th><th>引用數</th><th>使用位置</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="card review-history-card"><div class="card-header"><span class="card-title">最近治理紀錄</span><span class="review-card-subtitle">保留最近 8 筆操作</span></div><div class="review-history-list">${historyHtml}</div></div></div></div>`;
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">System Governance</div><h1 class="page-title">自訂單位審核與合併</h1><p class="page-subtitle">集中處理最高管理員手動建立的自訂單位，已核准保留的名稱會回流到最高管理員的單位選單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('sparkles', 'icon-sm')}</span><div>建議優先處理<strong>待審核</strong>且引用次數高的自訂單位；若名稱合理但暫時不納入正式名錄，可先使用「核准保留」，系統會讓最高管理員之後可直接選用。</div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${registry.length}</div><div class="stat-label">自訂單位總數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${pendingCount}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('shield-check')}</div><div class="stat-value">${approvedCount}</div><div class="stat-label">已核准保留</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('git-merge')}</div><div class="stat-value">${recentMerged.length}</div><div class="stat-label">最近合併筆數</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">自訂單位清單</span><span class="review-card-subtitle">依待審核優先、引用次數排序</span></div><div class="table-wrapper"><table><thead><tr><th>單位名稱</th><th>狀態</th><th>引用數</th><th>使用位置</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="card review-history-card"><div class="card-header"><span class="card-title">最近治理紀錄</span><span class="review-card-subtitle">保留最近 8 筆操作</span></div><div class="review-history-list">${historyHtml}</div></div></div></div>`;
     refreshIcons();
   }
 
-  window._refreshUnitReview = function () { renderUnitReview(); };
-  window._viewUnitRefs = function (encodedUnit) { showUnitReferenceModal(decodeURIComponent(encodedUnit)); };
-  window._approveUnit = function (encodedUnit) {
+  function handleApproveUnit(encodedUnit) {
     if (!isAdmin()) return;
     const unit = decodeURIComponent(encodedUnit);
     if (!confirm(`確定將「${unit}」核准保留為自訂單位？`)) return;
     approveCustomUnit(unit, currentUser().name);
     toast('自訂單位已核准保留，之後可於最高管理員單位選單直接選用');
     renderUnitReview();
-  };
-  window._mergeUnit = function (encodedUnit) { showUnitMergeModal(decodeURIComponent(encodedUnit)); };
-  window._clearLoginLogs = function () {
+  }
+  function handleClearLoginLogs() {
     if (!canManageUsers()) return;
     if (!confirm('確定清除所有登入紀錄？')) return;
     clearLoginLogs();
     toast('登入紀錄已清除', 'info');
     renderLoginLog();
-  };
+  }
 
   // ─── Render: Login Log ─────────────────────
   function renderLoginLog() {
@@ -194,9 +191,36 @@
       const status = log.success ? '<span style="color:#16a34a;font-weight:600">成功</span>' : '<span style="color:#dc2626;font-weight:600">失敗</span>';
       return `<tr><td>${fmtTime(log.time)}</td><td>${esc(log.username)}</td><td>${esc(log.name || '—')}</td><td>${esc(log.role || '—')}</td><td>${status}</td></tr>`;
     }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:36px"><div class="empty-state-title">尚無登入紀錄</div></div></td></tr>';
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">系統保存最近 500 筆登入成功與失敗事件</p></div><button type="button" class="btn btn-danger" onclick="window._clearLoginLogs()">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>角色</th><th>結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">系統保存最近 500 筆登入成功與失敗事件</p></div><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>角色</th><th>結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
+
+  registerActionHandlers('admin', {
+    addUser: function () {
+      showUserModal(null);
+    },
+    editUser: function ({ dataset }) {
+      showUserModal(findUser(dataset.username));
+    },
+    deleteUser: function ({ dataset }) {
+      handleDeleteUser(dataset.username);
+    },
+    refreshUnitReview: function () {
+      renderUnitReview();
+    },
+    viewUnitRefs: function ({ dataset }) {
+      showUnitReferenceModal(decodeURIComponent(dataset.unit));
+    },
+    approveUnit: function ({ dataset }) {
+      handleApproveUnit(dataset.unit);
+    },
+    mergeUnit: function ({ dataset }) {
+      showUnitMergeModal(decodeURIComponent(dataset.unit));
+    },
+    clearLoginLogs: function () {
+      handleClearLoginLogs();
+    }
+  });
 
   // ─── Checklist Data Model ─────────────────
   // ★ UPDATED: Added GCB (8.8), RDP control (8.9) to section 8; IoT control moved to section 9 (9.3)

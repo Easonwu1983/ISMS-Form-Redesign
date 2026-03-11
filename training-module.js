@@ -63,7 +63,8 @@
       parseTrainingRosterWorkbook,
       parseTrainingRosterImport,
       loadTrainingStore,
-      saveTrainingStore
+      saveTrainingStore,
+      registerActionHandlers
     } = deps;
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
@@ -79,7 +80,7 @@
       + '</div>';
   }
 
-  window._trainingUndo = function (id) {
+  function handleTrainingUndo(id) {
     const form = getTrainingForm(id);
     const user = currentUser();
     if (!form || !user) return;
@@ -105,9 +106,9 @@
     });
     toast('已撤回流程一，您可以繼續修改填報內容', 'info');
     navigate('training-fill/' + id, { replace: true });
-  };
+  }
 
-  window._trainingReturn = function (id) {
+  function handleTrainingReturn(id) {
     if (!isAdmin()) {
       toast('僅最高管理員可退回填報單', 'error');
       return;
@@ -130,9 +131,9 @@
     toast('已退回 ' + id + ' 供填報人更正', 'info');
     const route = getRoute();
     if (route.page === 'training-detail') renderTrainingDetail(id); else renderTraining();
-  };
+  }
 
-  window._trainingDeleteRoster = function (id) {
+  function handleTrainingDeleteRoster(id) {
     if (!isAdmin()) {
       toast('僅管理者可刪除名單', 'error');
       return;
@@ -143,19 +144,19 @@
     deleteTrainingRosterPerson(id);
     toast('名單已刪除', 'info');
     renderTrainingRoster();
-  };
+  }
 
-  window._trainingPrintDetail = function (id) {
+  function handleTrainingPrintDetail(id) {
     const form = getTrainingForm(id);
     if (!form) return;
     printTrainingSheet(form);
-  };
+  }
 
-  window._trainingExportDetailCsv = function (id) {
+  function handleTrainingExportDetailCsv(id) {
     const form = getTrainingForm(id);
     if (!form) return;
     exportTrainingDetailCsv(form);
-  };
+  }
 
   function renderTraining() {
     const visibleForms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -176,8 +177,8 @@
       if (!form) return canFillTraining() ? '<a href="#training-fill" class="btn btn-sm btn-primary">開始填報</a>' : '—';
       const actions = ['<a href="#training-detail/' + form.id + '" class="btn btn-sm btn-secondary">檢視</a>'];
       if (canEditTrainingForm(form)) actions.push('<a href="#training-fill/' + form.id + '" class="btn btn-sm btn-primary">編修</a>');
-      if (canUndoTrainingForm(form)) actions.push('<button type="button" class="btn btn-sm btn-warning" onclick="window._trainingUndo(\'' + form.id + '\')">撤回流程一</button>');
-      if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.push('<button type="button" class="btn btn-sm btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">退回更正</button>');
+      if (canUndoTrainingForm(form)) actions.push('<button type="button" class="btn btn-sm btn-warning" data-action="training.undo" data-id="' + esc(form.id) + '">撤回流程一</button>');
+      if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.push('<button type="button" class="btn btn-sm btn-danger" data-action="training.return" data-id="' + esc(form.id) + '">退回更正</button>');
       return '<div class="training-table-actions">' + actions.join('') + '</div>';
     };
 
@@ -745,7 +746,7 @@
     const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
     if (canEditTrainingForm(form)) actions.unshift('<a href="#training-fill/' + form.id + '" class="btn btn-primary">' + ic('edit-3', 'icon-sm') + ' 繼續填報</a>');
     if (canUndo) actions.unshift('<button type="button" class="btn btn-warning" id="training-undo-step-one">' + ic('rotate-ccw', 'icon-sm') + ' 撤回流程一</button>');
-    if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift('<button type="button" class="btn btn-danger" onclick="window._trainingReturn(\'' + form.id + '\')">' + ic('corner-up-left', 'icon-sm') + ' 退回更正</button>');
+    if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift('<button type="button" class="btn btn-danger" data-action="training.return" data-id="' + esc(form.id) + '">' + ic('corner-up-left', 'icon-sm') + ' 退回更正</button>');
 
     const stepCards = [
       ['流程一', '依人員填報教育訓練完成情形', form.stepOneSubmittedAt ? '已完成並鎖定' : '待完成', form.stepOneSubmittedAt ? (canUndo ? ('可於剩餘 ' + undoRemainingMinutes + ' 分鐘內撤回；列印簽核表後將不可撤回') : fmtTime(form.stepOneSubmittedAt)) : '完成後才可進入簽核'],
@@ -813,7 +814,7 @@
     }
 
     document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
-    document.getElementById('training-undo-step-one')?.addEventListener('click', () => window._trainingUndo(form.id));
+    document.getElementById('training-undo-step-one')?.addEventListener('click', () => handleTrainingUndo(form.id));
     document.getElementById('training-print-detail')?.addEventListener('click', () => {
       if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && !form.printedAt) {
         const now = new Date().toISOString();
@@ -863,7 +864,7 @@
 
   function buildTrainingRosterRows(rosters) {
     if (!rosters.length) return '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無名單資料</div></div></td></tr>';
-    return rosters.map((row) => '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" onclick="window._trainingDeleteRoster(\'' + row.id + '\')">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>').join('');
+    return rosters.map((row) => '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>').join('');
   }
 
   function buildTrainingRosterPage(summary, rowsHtml) {
@@ -979,6 +980,24 @@
     });
     saveTrainingStore(store);
   }
+    registerActionHandlers('training', {
+      undo: function ({ dataset }) {
+        handleTrainingUndo(dataset.id);
+      },
+      return: function ({ dataset }) {
+        handleTrainingReturn(dataset.id);
+      },
+      deleteRoster: function ({ dataset }) {
+        handleTrainingDeleteRoster(dataset.id);
+      },
+      printDetail: function ({ dataset }) {
+        handleTrainingPrintDetail(dataset.id);
+      },
+      exportDetail: function ({ dataset }) {
+        handleTrainingExportDetailCsv(dataset.id);
+      }
+    });
+
     return {
       renderTraining,
       renderTrainingFill,

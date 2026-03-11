@@ -30,6 +30,9 @@
       updateChecklist,
       getChecklistSections,
       saveChecklistSections,
+      resetChecklistSections,
+      registerActionHandlers,
+      closeModalRoot,
       navigate,
       toast,
       fmt,
@@ -53,7 +56,7 @@
       const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
       const statusCls = normalizeChecklistStatus(c.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
       const target = isChecklistDraftStatus(c.status) && canEditChecklist(c) ? `checklist-fill/${c.id}` : `checklist-detail/${c.id}`;
-      return `<tr onclick="location.hash='${target}'"><td class="record-id-col">${renderCopyIdCell(c.id, '檢核表編號', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
+      return `<tr data-route="${target}"><td class="record-id-col">${renderCopyIdCell(c.id, '檢核表編號', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年度</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
     }).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:60px"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">尚無檢核表紀錄</div><div class="empty-state-desc">登入使用者可點選「填報檢核表」開始填寫</div></div></td></tr>`;
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">國立臺灣大學內部資通安全稽核查檢表</p></div>${fillBtn}</div>
@@ -479,8 +482,8 @@
             <div class="cm-item-hint">💡 ${esc(item.hint || '（無提示）')}</div>
           </div>
           <div class="cm-item-actions">
-            <button class="btn btn-sm btn-secondary" onclick="window._cmEditItem(${si},${ii})" title="編輯">${ic('edit-2', 'btn-icon-svg')}</button>
-            <button class="btn btn-sm btn-danger" onclick="window._cmDelItem(${si},${ii})" title="刪除">${ic('trash-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯">${ic('edit-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除">${ic('trash-2', 'btn-icon-svg')}</button>
           </div>
         </div>`).join('');
 
@@ -493,9 +496,9 @@
             </div>
             <div class="cm-section-actions">
               <span class="cm-item-count">${sec.items.length} 題</span>
-              <button class="btn btn-sm btn-secondary" onclick="window._cmEditSection(${si})" title="編輯大項名稱">${ic('edit-2', 'btn-icon-svg')}</button>
-              <button class="btn btn-sm btn-primary" onclick="window._cmAddItem(${si})" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
-              <button class="btn btn-sm btn-danger" onclick="window._cmDelSection(${si})" title="刪除大項">${ic('trash-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="編輯大項名稱">${ic('edit-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${si}" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
+              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${si}" title="刪除大項">${ic('trash-2', 'btn-icon-svg')}</button>
             </div>
           </div>
           <div class="cm-items-wrap">${itemRows}</div>
@@ -509,8 +512,8 @@
           <p class="page-subtitle">共 ${getChecklistSectionsState().length} 大項 · ${totalItems} 題 — 可新增、編輯、刪除各大項及題目</p>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-secondary" onclick="window._cmResetDefault()">${ic('refresh-cw', 'icon-sm')} 恢復預設</button>
-          <button class="btn btn-primary" onclick="window._cmAddSection()">${ic('plus-circle', 'icon-sm')} 新增大項</button>
+          <button class="btn btn-secondary" data-action="checklist.resetDefault">${ic('refresh-cw', 'icon-sm')} 恢復預設</button>
+          <button class="btn btn-primary" data-action="checklist.addSection">${ic('plus-circle', 'icon-sm')} 新增大項</button>
         </div>
       </div>
 
@@ -543,8 +546,8 @@
             <div class="cm-item-hint">💡 ${esc(item.hint || '（無提示）')}</div>
           </div>
           <div class="cm-item-actions">
-            <button class="btn btn-sm btn-secondary" onclick="window._cmEditItem(${si},${ii})" title="編輯">${ic('edit-2', 'btn-icon-svg')}</button>
-            <button class="btn btn-sm btn-danger" onclick="window._cmDelItem(${si},${ii})" title="刪除">${ic('trash-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯">${ic('edit-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除">${ic('trash-2', 'btn-icon-svg')}</button>
           </div>
         </div>`).join('');
 
@@ -557,9 +560,9 @@
             </div>
             <div class="cm-section-actions">
               <span class="cm-item-count">${sec.items.length} 題</span>
-              <button class="btn btn-sm btn-secondary" onclick="window._cmEditSection(${si})" title="編輯大項名稱">${ic('edit-2', 'btn-icon-svg')}</button>
-              <button class="btn btn-sm btn-primary" onclick="window._cmAddItem(${si})" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
-              <button class="btn btn-sm btn-danger" onclick="window._cmDelSection(${si})" title="刪除大項">${ic('trash-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="編輯大項名稱">${ic('edit-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${si}" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
+              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${si}" title="刪除大項">${ic('trash-2', 'btn-icon-svg')}</button>
             </div>
           </div>
           <div class="cm-items-wrap">${itemRows}</div>
@@ -581,19 +584,19 @@
       <div class="modal" style="max-width:620px">
         <div class="modal-header">
           <span class="modal-title">${title}</span>
-          <button class="btn btn-ghost btn-icon" onclick="document.getElementById('modal-root').innerHTML=''">✕</button>
+          <button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button>
         </div>
         <form id="cm-modal-form">
           ${bodyHtml}
           <div class="form-actions">
             <button type="submit" class="btn btn-primary">${ic('save', 'icon-sm')} 儲存</button>
-            <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-root').innerHTML=''">取消</button>
+            <button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button>
           </div>
         </form>
       </div>
     </div>`;
-    document.getElementById('cm-modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) mr.innerHTML = ''; });
-    document.getElementById('cm-modal-form').addEventListener('submit', e => { e.preventDefault(); onSave(); mr.innerHTML = ''; _cmRefreshSections(); });
+    document.getElementById('cm-modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) closeModalRoot(); });
+    document.getElementById('cm-modal-form').addEventListener('submit', e => { e.preventDefault(); onSave(); closeModalRoot(); _cmRefreshSections(); });
     refreshIcons();
   }
 
@@ -610,7 +613,7 @@
   }
 
   // ── Add Section ──
-  window._cmAddSection = function () {
+  function cmAddSection() {
     _cmModal('新增大項', `
       <div class="form-group">
         <label class="form-label form-required">大項名稱</label>
@@ -626,7 +629,7 @@
   };
 
   // ── Edit Section ──
-  window._cmEditSection = function (si) {
+  function cmEditSection(si) {
     const secs = getChecklistSections();
     const sec = secs[si];
     _cmModal('編輯大項名稱', `
@@ -644,7 +647,7 @@
   };
 
   // ── Delete Section ──
-  window._cmDelSection = function (si) {
+  function cmDelSection(si) {
     const secs = getChecklistSections();
     if (!confirm(`確定刪除大項「${secs[si].section}」及其所有題目（共 ${secs[si].items.length} 題）？`)) return;
     secs.splice(si, 1);
@@ -654,7 +657,7 @@
   };
 
   // ── Add Item ──
-  window._cmAddItem = function (si) {
+  function cmAddItem(si) {
     const nextId = _cmNextItemId(si);
     _cmModal('新增題目', `
       <div class="form-row">
@@ -687,7 +690,7 @@
   };
 
   // ── Edit Item ──
-  window._cmEditItem = function (si, ii) {
+  function cmEditItem(si, ii) {
     const secs = getChecklistSections();
     const item = secs[si].items[ii];
     _cmModal('編輯題目', `
@@ -720,7 +723,7 @@
   };
 
   // ── Delete Item ──
-  window._cmDelItem = function (si, ii) {
+  function cmDelItem(si, ii) {
     const secs = getChecklistSections();
     const item = secs[si].items[ii];
     if (!confirm(`確定刪除題目「${item.id}」？`)) return;
@@ -731,12 +734,35 @@
   };
 
   // ── Reset to Default ──
-  window._cmResetDefault = function () {
+  function cmResetDefault() {
     if (!confirm('確定恢復為系統預設題目？目前所有自訂修改將會遺失。')) return;
-    localStorage.removeItem(TEMPLATE_KEY);
+    resetChecklistSections();
     toast('已恢復為系統預設', 'info');
     _cmRefreshSections();
   };
+  registerActionHandlers('checklist', {
+    addSection: function () {
+      cmAddSection();
+    },
+    editSection: function ({ dataset }) {
+      cmEditSection(Number(dataset.si));
+    },
+    deleteSection: function ({ dataset }) {
+      cmDelSection(Number(dataset.si));
+    },
+    addItem: function ({ dataset }) {
+      cmAddItem(Number(dataset.si));
+    },
+    editItem: function ({ dataset }) {
+      cmEditItem(Number(dataset.si), Number(dataset.ii));
+    },
+    deleteItem: function ({ dataset }) {
+      cmDelItem(Number(dataset.si), Number(dataset.ii));
+    },
+    resetDefault: function () {
+      cmResetDefault();
+    }
+  });
 
     return {
       renderChecklistList,

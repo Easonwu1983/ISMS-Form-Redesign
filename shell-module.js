@@ -30,7 +30,8 @@
       canSwitchAuthorizedUnit,
       getAuthorizedUnits,
       getScopedUnit,
-      switchCurrentUserUnit
+      switchCurrentUserUnit,
+      registerActionHandlers
     } = deps;
 
     let isSidebarOpen = false;
@@ -175,7 +176,7 @@
           '</select></label>';
       }
 
-      document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" onclick="window._toggleSidebar()" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + getRouteTitle(route.page) + '</span></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" onclick="window._logout()">登出</button></div>';
+      document.getElementById('header').innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="open menu">' + ic('menu') + '</button><span class="header-title">' + getRouteTitle(route.page) + '</span></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout">登出</button></div>';
 
       var switcher = document.getElementById('header-unit-switch');
       if (switcher) {
@@ -211,18 +212,16 @@
         renderLogin();
         return;
       }
-      document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" onclick="window._closeSidebar()"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
+      document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
       handleRoute();
       refreshIcons();
     }
 
-    function installGlobalHandlers() {
-      window._logout = function () { logout(); };
-      window._toggleSidebar = function () { toggleSidebar(); };
-      window._closeSidebar = function () { closeSidebar(); };
-    }
-
-    installGlobalHandlers();
+    registerActionHandlers('shell', {
+      logout: function () { logout(); },
+      'toggle-sidebar': function () { toggleSidebar(); },
+      'close-sidebar': function () { closeSidebar(); }
+    });
 
     return {
       renderLogin,

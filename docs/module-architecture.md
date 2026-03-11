@@ -59,9 +59,16 @@
 - Future migration from `innerHTML` to componentized rendering becomes incremental
 - NotebookLM context capture is easier because module boundaries are clearer
 
+## Interaction Contract
+
+- Shared click handling now lives in [app.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/app.js) via `installGlobalDelegation()`
+- Feature modules register handlers through `registerActionHandlers(namespace, handlers)`
+- Rendered UI should prefer `data-action`, `data-route`, and `data-dismiss-modal` instead of inline `onclick`
+- This keeps module code testable and prevents `window._legacyHandler` globals from spreading again
+
 ## Recommended Next Refactors
 
-1. Replace high-churn inline `onclick` actions with `data-action` event delegation.
-2. Move auth/session bootstrap into a dedicated auth module.
-3. Add migration diagnostics or a small admin-only schema health panel.
-4. Clean up documentation files that still show encoding corruption in some terminals.
+1. Move auth/session bootstrap into a dedicated auth module.
+2. Add migration diagnostics or a small admin-only schema health panel.
+3. Clean up documentation files that still show encoding corruption in some terminals.
+4. Start extracting repeated `innerHTML` builders into smaller render helpers or view partials.

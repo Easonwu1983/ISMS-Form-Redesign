@@ -48,7 +48,8 @@
       buildUnitCascadeControl,
       initUnitCascade,
       applyTestIds,
-      applySelectorTestIds
+      applySelectorTestIds,
+      registerActionHandlers
     } = deps;
 
   function renderDashboard() {
@@ -91,7 +92,7 @@
 
     var recent = items.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
     var recentRows = recent.length ? recent.map(function (i) {
-      return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.problemDesc || '').substring(0, 34) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(i)) + '</td></tr>';
+      return '<tr data-route="detail/' + i.id + '"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.problemDesc || '').substring(0, 34) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(i)) + '</td></tr>';
     }).join('') : '<tr><td colspan="6"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">尚無矯正單</div></div></td></tr>';
 
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
@@ -134,7 +135,7 @@
     if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
     if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
     filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-    var rows = filtered.length ? filtered.map(function (i) { return '<tr onclick="location.hash=\'detail/' + i.id + '\'"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(i)) + '</td></tr>'; }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
+    var rows = filtered.length ? filtered.map(function (i) { return '<tr data-route="detail/' + i.id + '"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(i)) + '</td></tr>'; }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
     var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
@@ -473,16 +474,16 @@ function renderCreate() {
     const cats = (item.category || []).map(c => `<span class="badge badge-category">${esc(c)}</span>`).join(' ');
     let btns = '';
     if (canRespond) btns += `<a href="#respond/${item.id}" class="btn btn-primary" data-testid="case-respond">${ic('edit-3', 'icon-sm')} 回填矯正措施</a>`;
-    if (item.status === STATUSES.PROPOSED && canReview()) btns += `<button class="btn btn-primary" data-testid="case-transition-review" onclick="window._cs('${item.id}','${STATUSES.REVIEWING}')">${ic('eye', 'icon-sm')} 進入審核</button>`;
+    if (item.status === STATUSES.PROPOSED && canReview()) btns += `<button class="btn btn-primary" data-testid="case-transition-review" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.REVIEWING}">${ic('eye', 'icon-sm')} 進入審核</button>`;
     if (item.status === STATUSES.REVIEWING && canReview()) {
-      btns += `<button class="btn btn-success" data-testid="case-transition-close" onclick="window._cs('${item.id}','${STATUSES.CLOSED}')">${ic('check', 'icon-sm')} 審核通過結案</button>`;
-      btns += `<button class="btn btn-warning" data-testid="case-transition-tracking" onclick="window._cs('${item.id}','${STATUSES.TRACKING}')">${ic('eye', 'icon-sm')} 轉為追蹤</button>`;
-      btns += `<button class="btn btn-danger" data-testid="case-transition-return" onclick="window._cs('${item.id}','${STATUSES.PENDING}')">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`;
+      btns += `<button class="btn btn-success" data-testid="case-transition-close" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.CLOSED}">${ic('check', 'icon-sm')} 審核通過結案</button>`;
+      btns += `<button class="btn btn-warning" data-testid="case-transition-tracking" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.TRACKING}">${ic('eye', 'icon-sm')} 轉為追蹤</button>`;
+      btns += `<button class="btn btn-danger" data-testid="case-transition-return" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.PENDING}">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`;
     }
     if (canFillTracking) btns += `<a href="#tracking/${item.id}" class="btn btn-primary" data-testid="case-fill-tracking">${ic('clipboard-check', 'icon-sm')} 填報追蹤結果</a>`;
     if (canReviewTracking) {
-      btns += `<button class="btn btn-success" data-testid="case-tracking-approve-close" onclick="window._reviewTracking('${item.id}','close')">${ic('check', 'icon-sm')} 同意結案</button>`;
-      btns += `<button class="btn btn-warning" data-testid="case-tracking-approve-continue" onclick="window._reviewTracking('${item.id}','continue')">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button>`;
+      btns += `<button class="btn btn-success" data-testid="case-tracking-approve-close" data-action="case.reviewTracking" data-id="${item.id}" data-decision="close">${ic('check', 'icon-sm')} 同意結案</button>`;
+      btns += `<button class="btn btn-warning" data-testid="case-tracking-approve-continue" data-action="case.reviewTracking" data-id="${item.id}" data-decision="continue">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button>`;
     }
 
     const renderEvidenceList = (files, emptyText = '尚無佐證') => files && files.length
@@ -516,7 +517,7 @@ function renderCreate() {
       <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(pending.execution || '')}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(pending.trackNote || '')}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次提報佐證</div>${renderEvidenceList(pending.evidence, '本次追蹤未附佐證')}</div>
-      ${canReviewTracking ? `<div class="form-actions"><button type="button" class="btn btn-success" data-testid="pending-tracking-approve-close" onclick="window._reviewTracking('${item.id}','close')">${ic('check', 'icon-sm')} 同意結案</button><button type="button" class="btn btn-warning" data-testid="pending-tracking-approve-continue" onclick="window._reviewTracking('${item.id}','continue')">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button></div>` : `<div class="detail-section"><div class="detail-content" style="color:var(--text-muted)">${isHandler ? '已送出追蹤提報，待管理者審核。' : '目前已有追蹤提報待管理者審核。'}</div></div>`}
+      ${canReviewTracking ? `<div class="form-actions"><button type="button" class="btn btn-success" data-testid="pending-tracking-approve-close" data-action="case.reviewTracking" data-id="${item.id}" data-decision="close">${ic('check', 'icon-sm')} 同意結案</button><button type="button" class="btn btn-warning" data-testid="pending-tracking-approve-continue" data-action="case.reviewTracking" data-id="${item.id}" data-decision="continue">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button></div>` : `<div class="detail-section"><div class="detail-content" style="color:var(--text-muted)">${isHandler ? '已送出追蹤提報，待管理者審核。' : '目前已有追蹤提報待管理者審核。'}</div></div>`}
     </div>` : '';
 
     const tkHtml = (item.trackings || []).map((tk, i) => {
@@ -585,7 +586,7 @@ function renderCreate() {
   }
 
   
-window._cs = function (id, ns) {
+function handleStatusTransition(id, ns) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
@@ -606,7 +607,7 @@ window._cs = function (id, ns) {
     refreshIcons();
   };
 
-  window._reviewTracking = function (id, decision) {
+  function handleReviewTracking(id, decision) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
@@ -997,6 +998,14 @@ function renderTracking(id) {
     if (!units.length) return '未指定';
     return units.join('、');
   }
+  registerActionHandlers('case', {
+    statusTransition: function ({ dataset }) {
+      handleStatusTransition(dataset.id, dataset.status);
+    },
+    reviewTracking: function ({ dataset }) {
+      handleReviewTracking(dataset.id, dataset.decision);
+    }
+  });
 
     return {
       renderDashboard,

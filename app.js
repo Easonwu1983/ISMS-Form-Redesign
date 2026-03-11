@@ -1088,6 +1088,54 @@
       else window.console.info(`[ISMS:${scope}] ${message}`, data);
     } catch (_) { }
   }
+  const GLOBAL_ACTION_HANDLERS = Object.create(null);
+  function registerActionHandlers(namespace, handlers) {
+    const prefix = String(namespace || '').trim();
+    Object.entries(handlers || {}).forEach(([name, handler]) => {
+      if (typeof handler !== 'function') return;
+      GLOBAL_ACTION_HANDLERS[prefix ? (prefix + '.' + name) : name] = handler;
+    });
+  }
+  function closeModalRoot() {
+    const modalRoot = document.getElementById('modal-root');
+    if (modalRoot) modalRoot.innerHTML = '';
+  }
+  let globalDelegationInstalled = false;
+  function installGlobalDelegation() {
+    if (globalDelegationInstalled || typeof document === 'undefined') return;
+    globalDelegationInstalled = true;
+    document.addEventListener('click', function (event) {
+      const actionEl = event.target.closest('[data-action]');
+      if (actionEl) {
+        const handler = GLOBAL_ACTION_HANDLERS[actionEl.dataset.action];
+        if (typeof handler === 'function') {
+          event.preventDefault();
+          handler({
+            event,
+            element: actionEl,
+            dataset: { ...actionEl.dataset }
+          });
+          return;
+        }
+      }
+      const dismissEl = event.target.closest('[data-dismiss-modal]');
+      if (dismissEl) {
+        event.preventDefault();
+        closeModalRoot();
+        return;
+      }
+      const routeEl = event.target.closest('[data-route]');
+      if (routeEl) {
+        const interactive = event.target.closest('a,button,input,select,textarea,label');
+        if (interactive && interactive !== routeEl) return;
+        const route = String(routeEl.dataset.route || '').trim();
+        if (route) {
+          event.preventDefault();
+          navigate(route);
+        }
+      }
+    });
+  }
   function navigate(h, options) {
     const opts = options || {};
     const target = '#' + String(h || '').replace(/^#/, '');
@@ -1191,7 +1239,9 @@
       ic,
       refreshIcons,
       buildUnitCascadeControl,
-      initUnitCascade
+      initUnitCascade,
+      registerActionHandlers,
+      closeModalRoot
     });
     window._adminModule = adminModuleApi;
     return adminModuleApi;
@@ -1250,7 +1300,8 @@
       buildUnitCascadeControl,
       initUnitCascade,
       applyTestIds,
-      applySelectorTestIds
+      applySelectorTestIds,
+      registerActionHandlers
     });
     window._caseModule = caseModuleApi;
     return caseModuleApi;
@@ -1291,6 +1342,7 @@
       updateChecklist,
       getChecklistSections,
       saveChecklistSections,
+      resetChecklistSections,
       navigate,
       toast,
       fmt,
@@ -1300,7 +1352,9 @@
       refreshIcons,
       bindCopyButtons,
       renderCopyIdCell,
-      renderCopyIdButton
+      renderCopyIdButton,
+      registerActionHandlers,
+      closeModalRoot
     });
     window._checklistModule = checklistModuleApi;
     return checklistModuleApi;
@@ -1339,6 +1393,8 @@
       refreshIcons,
       renderCopyIdCell,
       renderCopyIdButton,
+      hasUnitAccess,
+      isViewer,
       buildUnitCascadeControl,
       initUnitCascade,
       trainingSelectOptionsHtml,
@@ -1374,7 +1430,8 @@
       parseTrainingRosterWorkbook,
       parseTrainingRosterImport,
       loadTrainingStore,
-      saveTrainingStore
+      saveTrainingStore,
+      registerActionHandlers
     });
     window._trainingModule = trainingModuleApi;
     return trainingModuleApi;
@@ -1415,7 +1472,8 @@
       canSwitchAuthorizedUnit,
       getAuthorizedUnits,
       getScopedUnit,
-      switchCurrentUserUnit
+      switchCurrentUserUnit,
+      registerActionHandlers
     });
     window._shellModule = shellModuleApi;
     return shellModuleApi;
@@ -1650,6 +1708,7 @@
   // ─── Template management — stored in localStorage so admin can edit ───
   function getChecklistSections() { return getDataModule().getChecklistSections(); }
   function saveChecklistSections(sections) { return getDataModule().saveChecklistSections(sections); }
+  function resetChecklistSections() { return saveChecklistSections(JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS))); }
 
   // Dynamic alias used throughout the fill/detail views
   var CHECKLIST_SECTIONS;
@@ -2186,6 +2245,7 @@
   }
 
   // ─── Init ──────────────────────────────────
+  installGlobalDelegation();
   getDataModule().migrateAllStores();
   seedData();
   ensurePrimaryAdminProfile();
