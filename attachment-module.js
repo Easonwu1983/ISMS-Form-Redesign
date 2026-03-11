@@ -411,7 +411,7 @@
         const previewHtml = model.isImage && model.url
           ? '<img src="' + model.url + '" alt="' + esc(model.descriptor.name) + '">'
           : fileIconHtml;
-        const previewAction = model.url ? '<a class="btn btn-sm btn-secondary" href="' + model.url + '" target="_blank" rel="noopener">' + previewLabel + '</a>' : '';
+        const previewAction = model.url ? '<a class="btn btn-sm btn-secondary" href="' + model.url + '" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">' + previewLabel + '</a>' : '';
         const downloadAction = model.url ? '<a class="btn btn-sm btn-secondary" href="' + model.url + '" download="' + esc(model.descriptor.name) + '">' + downloadLabel + '</a>' : '';
         const removeAction = opts.editable ? '<button type="button" class="btn btn-sm btn-danger attachment-remove" data-idx="' + index + '">' + removeLabel + '</button>' : '';
         return '<div class="' + itemClass + '">' + previewHtml + '<div class="file-name">' + esc(model.descriptor.name || '未命名檔案') + '</div><div class="' + actionsClass + '">' + previewAction + downloadAction + removeAction + '</div></div>';
