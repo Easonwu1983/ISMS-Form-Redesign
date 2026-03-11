@@ -130,7 +130,11 @@ async function setChoice(page, testId, checked = true) {
     });
   } finally {
     await browser.close();
-    writeJson(RESULT_PATH, finalizeResults(results));
+    const finalized = finalizeResults(results);
+    writeJson(RESULT_PATH, finalized);
+    if (finalized.summary.failed || finalized.summary.pageErrors) {
+      process.exitCode = 1;
+    }
   }
 })().catch((error) => {
   console.error(error);

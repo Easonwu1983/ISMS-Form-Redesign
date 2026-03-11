@@ -8,6 +8,7 @@ const suites = {
     'scripts/route-permission-matrix.cjs',
     'scripts/role-flow-probe.cjs',
     'scripts/admin-reporter-regression.cjs',
+    'scripts/unit-admin-reporter-security-regression.cjs',
     'scripts/role-flow-smoke.cjs'
   ],
   training: [

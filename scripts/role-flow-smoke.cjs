@@ -123,15 +123,30 @@ async function selectByMatcher(page, selector, matcherSource) {
 }
 
 async function getData(page) {
-  return page.evaluate(() => JSON.parse(localStorage.getItem('cats_data') || '{}'));
+  return page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem('cats_data') || 'null');
+    return raw && typeof raw === 'object' && Number.isFinite(Number(raw.version)) && Object.prototype.hasOwnProperty.call(raw, 'payload')
+      ? raw.payload
+      : (raw || {});
+  });
 }
 
 async function getChecklists(page) {
-  return page.evaluate(() => JSON.parse(localStorage.getItem('cats_checklists') || '{"items":[]}'));
+  return page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem('cats_checklists') || 'null');
+    return raw && typeof raw === 'object' && Number.isFinite(Number(raw.version)) && Object.prototype.hasOwnProperty.call(raw, 'payload')
+      ? raw.payload
+      : (raw || { items: [] });
+  });
 }
 
 async function getTrainingStore(page) {
-  return page.evaluate(() => JSON.parse(localStorage.getItem('cats_training_hours') || '{"forms":[]}'));
+  return page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem('cats_training_hours') || 'null');
+    return raw && typeof raw === 'object' && Number.isFinite(Number(raw.version)) && Object.prototype.hasOwnProperty.call(raw, 'payload')
+      ? raw.payload
+      : (raw || { forms: [] });
+  });
 }
 
 function isoDate(offsetDays) {
@@ -486,6 +501,9 @@ function isoDate(offsetDays) {
       flowLogs: results.console.filter((entry) => entry.text.startsWith('[ISMS:')).length
     };
     fs.writeFileSync(RESULT_PATH, JSON.stringify(results, null, 2));
+    if (results.summary.failed || results.summary.pageErrors) {
+      process.exitCode = 1;
+    }
     await browser.close();
   }
 })().catch((error) => {

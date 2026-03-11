@@ -493,6 +493,7 @@
       navigate,
       toast,
       fmt,
+      fmtTime,
       esc,
       ic,
       mkChk,
@@ -505,6 +506,7 @@
       initUnitCascade,
       applyTestIds,
       applySelectorTestIds,
+      debugFlow,
       registerActionHandlers
     });
     window._caseModule = caseModuleApi;
@@ -605,6 +607,7 @@
       getTrainingForm,
       getAllTrainingForms,
       getAllTrainingRosters,
+      upsertTrainingForm,
       updateTrainingForm,
       addTrainingRosterPerson,
       deleteTrainingRoster: deleteTrainingRosterPerson,
@@ -627,6 +630,8 @@
       canUndoTrainingForm,
       getTrainingUndoRemainingMinutes,
       canDeleteTrainingEditableRow,
+      isTrainingRecordReadyForSubmit,
+      isTrainingRecordComplete,
       getStoredTrainingProfessionalValue,
       exportTrainingSummaryCsv,
       exportTrainingDetailCsv,

@@ -379,7 +379,11 @@ async function populateTrainingFlowOne(page) {
   } finally {
     await context.close();
     await browser.close();
-    writeJson(RESULT_PATH, finalizeResults(results));
+    const finalized = finalizeResults(results);
+    writeJson(RESULT_PATH, finalized);
+    if (finalized.summary.failed || finalized.summary.pageErrors) {
+      process.exitCode = 1;
+    }
   }
 })().catch((error) => {
   results.fatal = error && error.stack ? error.stack : String(error);

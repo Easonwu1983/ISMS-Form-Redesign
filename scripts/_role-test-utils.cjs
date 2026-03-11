@@ -136,7 +136,12 @@ async function resetApp(page) {
 async function readJsonFromStorage(page, key) {
   return page.evaluate((storageKey) => {
     const raw = localStorage.getItem(storageKey);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && Number.isFinite(Number(parsed.version)) && Object.prototype.hasOwnProperty.call(parsed, 'payload')) {
+      return parsed.payload;
+    }
+    return parsed;
   }, key);
 }
 

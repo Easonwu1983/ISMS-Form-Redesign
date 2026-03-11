@@ -16,7 +16,7 @@ const {
 
 const OUT_DIR = createArtifactRun('role-flow-regression').outDir;
 const RESULT_PATH = path.join(OUT_DIR, 'permission-matrix.json');
-const ROUTES = ['dashboard', 'list', 'create', 'checklist', 'checklist-fill', 'training', 'training-fill', 'users', 'login-log', 'checklist-manage', 'unit-review', 'training-roster'];
+const ROUTES = ['dashboard', 'list', 'create', 'checklist', 'checklist-fill', 'training', 'training-fill', 'users', 'login-log', 'schema-health', 'checklist-manage', 'unit-review', 'training-roster'];
 const ROLES = [
   {
     id: 'admin',

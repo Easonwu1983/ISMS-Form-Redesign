@@ -11,6 +11,7 @@ const {
   launchBrowser,
   login,
   logout,
+  readJsonFromStorage,
   resetApp,
   runStep,
   waitForHash,
@@ -20,6 +21,10 @@ const {
 const OUT_DIR = createArtifactRun('role-flow-focus').outDir;
 const RESULT_PATH = path.join(OUT_DIR, 'admin-reporter-regression.json');
 const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
+
+async function getDataStore(page) {
+  return await readJsonFromStorage(page, 'cats_data') || { items: [] };
+}
 
 (async () => {
   const results = createResultEnvelope({
@@ -84,7 +89,7 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
         waitForHash(page, '#detail/' + carId),
         page.click('[data-testid="respond-submit"]')
       ]);
-      const item = await page.evaluate((id) => JSON.parse(localStorage.getItem('cats_data')).items.find((entry) => entry.id === id), carId);
+      const item = (await getDataStore(page)).items.find((entry) => entry.id === carId);
       if (!item.correctiveAction || !item.rootCause || !item.rootElimination) {
         throw new Error('response fields were not persisted');
       }
@@ -101,7 +106,7 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
       await page.waitForTimeout(250);
       await page.click('[data-testid="case-transition-tracking"]');
       await page.waitForTimeout(250);
-      const item = await page.evaluate((id) => JSON.parse(localStorage.getItem('cats_data')).items.find((entry) => entry.id === id), carId);
+      const item = (await getDataStore(page)).items.find((entry) => entry.id === carId);
       if (item.pendingTracking) throw new Error('pendingTracking should be empty before reporter submission');
       return carId;
     });
@@ -125,7 +130,7 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
         waitForHash(page, '#detail/' + carId),
         page.click('[data-testid="tracking-submit"]')
       ]);
-      const item = await page.evaluate((id) => JSON.parse(localStorage.getItem('cats_data')).items.find((entry) => entry.id === id), carId);
+      const item = (await getDataStore(page)).items.find((entry) => entry.id === carId);
       if (!item.pendingTracking) throw new Error('pendingTracking missing after tracking submit');
       return carId;
     });
@@ -138,14 +143,18 @@ const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
       await page.waitForSelector('.detail-header');
       await page.click('[data-testid="case-tracking-approve-close"]');
       await page.waitForTimeout(300);
-      const item = await page.evaluate((id) => JSON.parse(localStorage.getItem('cats_data')).items.find((entry) => entry.id === id), carId);
+      const item = (await getDataStore(page)).items.find((entry) => entry.id === carId);
       if (!item.closedDate) throw new Error('closedDate missing after final approval');
       if (item.pendingTracking) throw new Error('pendingTracking should be cleared after final approval');
       return carId;
     });
   } finally {
     await browser.close();
-    writeJson(RESULT_PATH, finalizeResults(results));
+    const finalized = finalizeResults(results);
+    writeJson(RESULT_PATH, finalized);
+    if (finalized.summary.failed || finalized.summary.pageErrors) {
+      process.exitCode = 1;
+    }
   }
 })().catch((error) => {
   console.error(error);

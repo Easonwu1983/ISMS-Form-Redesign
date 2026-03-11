@@ -37,6 +37,7 @@
       navigate,
       toast,
       fmt,
+      fmtTime,
       esc,
       ic,
       mkChk,
@@ -49,6 +50,7 @@
       initUnitCascade,
       applyTestIds,
       applySelectorTestIds,
+      debugFlow,
       registerActionHandlers
     } = deps;
 
@@ -553,6 +555,7 @@ function renderCreate() {
 
   function renderDetail(id) {
     const item = getItem(id);
+    if (!item) { navigate('list'); toast('找不到矯正單', 'error'); return; }
     if (!item) { document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到矯正單</div><a href="#list" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`; return; }
     if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限檢視此矯正單', 'error'); return; }
     const u = currentUser();

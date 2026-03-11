@@ -10,6 +10,7 @@
     "test:role:permission": "node scripts/route-permission-matrix.cjs",
     "test:role:probe": "node scripts/role-flow-probe.cjs",
     "test:role:focus": "node scripts/admin-reporter-regression.cjs",
+    "test:role:unit-admin-reporter": "node scripts/unit-admin-reporter-security-regression.cjs",
     "test:role:smoke": "node scripts/role-flow-smoke.cjs",
     "test:role:all": "node scripts/run-test-suite.cjs role",
     "test:training:optimization": "node scripts/training-optimization-regression.cjs",
