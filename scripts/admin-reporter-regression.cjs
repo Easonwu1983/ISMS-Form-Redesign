@@ -20,7 +20,7 @@ const {
 
 const OUT_DIR = createArtifactRun('role-flow-focus').outDir;
 const RESULT_PATH = path.join(OUT_DIR, 'admin-reporter-regression.json');
-const FILE_PATH = path.join(process.cwd(), 'favicon.svg');
+const FILE_PATH = path.join(process.cwd(), 'local-preview.png');
 
 async function getDataStore(page) {
   return await readJsonFromStorage(page, 'cats_data') || { items: [] };
@@ -126,6 +126,7 @@ async function getDataStore(page) {
         option.dispatchEvent(new Event('change', { bubbles: true }));
       });
       await page.setInputFiles('#tk-file-input', FILE_PATH);
+      await page.waitForFunction(() => document.querySelectorAll('#tk-file-previews .file-preview-item').length === 1);
       await Promise.all([
         waitForHash(page, '#detail/' + carId),
         page.click('[data-testid="tracking-submit"]')

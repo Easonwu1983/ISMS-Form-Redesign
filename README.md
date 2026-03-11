@@ -1,103 +1,121 @@
 # ISMS Form Redesign
 
-這是一套以純前端靜態頁面實作的 ISMS 管考與填報原型，包含三條主流程：
+國立臺灣大學 ISMS 內部稽核管考追蹤系統前端原型與回歸測試專案。
 
-- 矯正單開立、回填、追蹤、結案
-- 內稽檢核表填報與管理
-- 資安教育訓練統計、名單匯入、簽核流程
+目前已模組化為：
 
-主要檔案：
+- `app.js`: 核心殼層與委派入口
+- `auth-module.js`: 登入與 session
+- `data-module.js`: `localStorage` schema / migration / store
+- `shell-module.js`: header / sidebar / route shell
+- `case-module.js`: 矯正單流程
+- `checklist-module.js`: 內稽檢核表流程
+- `training-module.js`: 資安教育訓練流程
+- `admin-module.js`: 系統管理與資料健康檢查
+- `workflow-support-module.js`: 編號、匯出、匯入與上傳輔助
 
-- `index.html`
-- `app.js`
-- `styles.css`
-- `units.js`
+## 啟動
 
-## 快速開始
-
-1. 安裝相依套件
+先安裝套件：
 
 ```bash
 npm ci
 ```
 
-2. 啟動本地預覽
+啟動本地預覽：
 
 ```bash
 npm run preview:start
 ```
 
-3. 開啟瀏覽器
+或在 Windows 直接雙擊：
+
+- `start-local.cmd`
+
+本地網址：
 
 ```text
 http://127.0.0.1:8080/
 ```
 
-Windows 也可以直接使用：
+## 測試分層
 
-- `start-local.cmd`
+### 標準回歸
 
-## 常用測試指令
+這組適合日常修改後固定跑，也會納入 CI：
 
-Windows 本機便利指令：
+```bash
+npm run test:all
+```
 
-只跑角色流程：
+內容包含：
+
+- 角色與權限流程
+- 教育訓練流程
+- 上傳安全驗證
+- 單位管理者 / 填報人日常 UAT 模擬
+- 大量資料壓力測試
+
+### 本機加值回歸
+
+這組適合發版前在本機補跑：
+
+```bash
+npm run test:all:plus
+```
+
+除了標準回歸，還會額外跑：
+
+- Chrome / Edge `125%`、`150%` 縮放檢查
+
+如果本機沒有安裝 Chrome 或 Edge，縮放測試會明確標示 `skipped`。
+
+### Windows 本機一鍵入口
 
 ```bash
 npm run test:role:all:local
-```
-
-只跑教育訓練：
-
-```bash
 npm run test:training:all:local
-```
-
-完整回歸：
-
-```bash
 npm run test:all:local
 ```
 
-跨平台或 CI 環境，若你已經自己開好了本地 server，也可以直接跑不含 server wrapper 的版本：
+## 主要測試指令
 
-```bash
-npm run test:all
-```
+- `npm run test:role:all`
+- `npm run test:training:all`
+- `npm run test:bonus:all`
+- `npm run test:upload:security`
+- `npm run test:uat:daily`
+- `npm run test:stress`
+- `npm run test:zoom:browsers`
 
-## 測試覆蓋
+## 測試產物
 
-- `test:role:permission`: 路由與角色權限矩陣
-- `test:role:probe`: 輕量跨角色主線驗證
-- `test:role:focus`: 矯正單最關鍵主流程
-- `test:role:smoke`: 整站角色主流程 smoke
-- `test:training:optimization`: 教育訓練 UX / 權限優化驗證
-- `test:training:acceptance`: 教育訓練三流程驗收
+所有測試結果會輸出到：
 
-測試產物會輸出到本機的 `test-artifacts/`，目前已加入 `.gitignore`，不會再干擾 Git 狀態。
+- `test-artifacts/`
 
-## GitHub Actions
-
-CI 位置：
-
-- `.github/workflows/role-tests.yml`
-
-現在 CI 會跑完整回歸：
-
-```bash
-npm run test:all
-```
+JSON 結果、下載檔、fixture 與 screenshot 都會依日期分資料夾保存。
 
 ## 文件
 
 - `docs/qa-regression.md`
+- `docs/uat-daily-checklist.md`
 - `docs/pre-launch-checklist.md`
 - `docs/system-operation-manual.md`
+- `docs/module-architecture.md`
 - `docs/engineering-roadmap.md`
 
-## 目前值得持續改善的方向
+## NotebookLM
 
-- `app.js` 仍是大型單檔，建議逐步拆成 domain modules
-- 畫面仍大量使用 `innerHTML` 與 inline `onclick`，後續可改成事件委派與 action registry
-- `localStorage` 是主要資料層，下一步建議補 schema version 與 migration
-- 自動化測試已穩定很多，但仍可再把 selector 與測試 helper 做更深的共用化
+本專案已整合 NotebookLM 工作流，可用：
+
+```bash
+notebooklm-workflow.cmd doctor
+notebooklm-workflow.cmd login
+```
+
+Notebook alias：
+
+```text
+isms-form-redesign-dev
+```

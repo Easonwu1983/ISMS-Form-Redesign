@@ -1,12 +1,21 @@
 # QA Regression Guide
 
-- Updated: 2026-03-10
+- Updated: 2026-03-11
 - Scope: `C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign`
-- Runtime: static preview + Playwright layered tests
+- Runtime: static preview + Playwright
 
 ## Goal
 
-這個專案目前把驗證切成六層，目的不是讓每次都跑最重的 smoke，而是讓權限、主流程、教育訓練流程可以分層定位問題。
+用分層回歸測試穩定覆蓋：
+
+- 角色權限
+- 矯正單主流程
+- 內稽檢核表主流程
+- 資安教育訓練三流程
+- 上傳安全
+- 大量資料壓力
+- 單位管理者 / 填報人日常協作
+- 多瀏覽器縮放與響應式檢查
 
 ## Test Layers
 
@@ -15,8 +24,8 @@
 - Command: `npm run test:role:permission`
 - Script: `scripts/route-permission-matrix.cjs`
 - Purpose:
-  - 驗證 `admin / unit1 / user1 / viewer1` 的路由權限
-  - 提早抓到 route guard 或 sidebar 權限回歸
+  - 驗證 `admin / unit1 / user1 / viewer1` 的 route guard
+  - 驗證 sidebar 顯示與禁止進入頁面
 - Output:
   - `test-artifacts/role-flow-regression-YYYY-MM-DD/permission-matrix.json`
 
@@ -25,8 +34,8 @@
 - Command: `npm run test:role:probe`
 - Script: `scripts/role-flow-probe.cjs`
 - Purpose:
-  - 快速驗證 `admin create -> unit respond -> admin inspect`
-  - 適合畫面調整後先確認主線還活著
+  - 驗證 `admin create -> unit respond -> admin inspect`
+  - 快速檢查主線資料流是否斷裂
 - Output:
   - `test-artifacts/role-flow-regression-YYYY-MM-DD/flow-probe.json`
 
@@ -35,7 +44,7 @@
 - Command: `npm run test:role:focus`
 - Script: `scripts/admin-reporter-regression.cjs`
 - Purpose:
-  - 驗證矯正單最關鍵業務主線
+  - 驗證矯正單主線完整收尾
   - Sequence:
     - admin create
     - unit1 respond
@@ -45,80 +54,130 @@
 - Output:
   - `test-artifacts/role-flow-focus-YYYY-MM-DD/admin-reporter-regression.json`
 
-### 4. Full Smoke Flow
+### 4. Unit Admin / Reporter Collaboration
+
+- Command: `npm run test:role:unit-admin-reporter`
+- Script: `scripts/unit-admin-reporter-security-regression.cjs`
+- Purpose:
+  - 驗證單位管理者與填報人的權限邊界
+  - 驗證不可越權查看、修改、關閉不屬於自己的資料
+- Output:
+  - `test-artifacts/unit-admin-reporter-security-YYYY-MM-DD/unit-admin-reporter-security.json`
+
+### 5. Full Smoke Flow
 
 - Command: `npm run test:role:smoke`
 - Script: `scripts/role-flow-smoke.cjs`
 - Purpose:
-  - 跑完整角色主線：
-  - admin 管理權限
-  - reporter / proxy / viewer 權限
-  - checklist 草稿與送出
-  - training 草稿與送出
-  - tracking submit + admin close
+  - 驗證主要頁面可開啟
+  - 驗證 admin / reporter / proxy / viewer 的主流程
+  - 驗證 checklist / training / tracking 的整體串接
 - Output:
   - `test-artifacts/role-flow-smoke-YYYY-MM-DD/results.json`
-  - `test-artifacts/role-flow-smoke-YYYY-MM-DD/screenshots/*`
 
-### 5. Training Optimization Regression
+### 6. Training Optimization Regression
 
 - Command: `npm run test:training:optimization`
 - Script: `scripts/training-optimization-regression.cjs`
 - Purpose:
-  - 驗證教育訓練模組的短流程 UX 改善
-  - 包含 autocomplete、草稿權限、撤回機制等
+  - 驗證教育訓練優化項
+  - 驗證單位 autocomplete、撤回、批次操作等功能
 - Output:
   - `test-artifacts/training-optimization-regression-YYYY-MM-DD/training-optimization-regression.json`
 
-### 6. Training Acceptance
+### 7. Training Acceptance
 
 - Command: `npm run test:training:acceptance`
 - Script: `scripts/training-flow-acceptance.cjs`
 - Purpose:
-  - 驗證教育訓練三流程：
-  - 流程一填報並鎖定
-  - 流程二列印簽核表
-  - 流程三上傳簽核檔並完成
+  - 驗證教育訓練三流程
+  - 流程一填報
+  - 流程二列印簽核
+  - 流程三上傳簽核檔
 - Output:
   - `test-artifacts/training-flow-acceptance-YYYY-MM-DD/training-flow-acceptance.json`
-  - `test-artifacts/training-flow-acceptance-YYYY-MM-DD/screenshots/*`
-  - `test-artifacts/training-flow-acceptance-YYYY-MM-DD/downloads/*`
+
+### 8. Upload Security Regression
+
+- Command: `npm run test:upload:security`
+- Script: `scripts/upload-security-regression.cjs`
+- Purpose:
+  - 驗證空檔、異常副檔名、超大檔、重複檔
+  - 驗證矯正單回覆、追蹤附件、教育訓練簽核檔、名單匯入檔
+- Output:
+  - `test-artifacts/upload-security-regression-YYYY-MM-DD/upload-security-regression.json`
+
+### 9. Daily UAT Flow
+
+- Command: `npm run test:uat:daily`
+- Script: `scripts/uat-daily-flow.cjs`
+- Purpose:
+  - 模擬 `單位管理者 + 填報人` 日常操作
+  - 覆蓋 checklist 草稿、training 流程一到流程三
+- Output:
+  - `test-artifacts/uat-daily-flow-YYYY-MM-DD/uat-daily-flow.json`
+
+### 10. Stress Regression
+
+- Command: `npm run test:stress`
+- Script: `scripts/stress-regression.cjs`
+- Purpose:
+  - 驗證大量名單匯入
+  - 驗證長歷程與多附件情境
+- Output:
+  - `test-artifacts/stress-regression-YYYY-MM-DD/stress-regression.json`
+
+### 11. Browser Zoom Regression
+
+- Command: `npm run test:zoom:browsers`
+- Script: `scripts/browser-zoom-regression.cjs`
+- Purpose:
+  - 驗證 Chrome / Edge 在 `125%`、`150%` 縮放下的主要頁面
+  - 驗證 dashboard、create、checklist-fill、training-fill、training-roster、schema-health
+- Note:
+  - 這是本機加值檢查，不納入 CI 必跑
+  - 若機器上沒有 Chrome 或 Edge，結果會標示 skipped
+- Output:
+  - `test-artifacts/browser-zoom-regression-YYYY-MM-DD/browser-zoom-regression.json`
 
 ## Recommended Execution Order
 
-1. `npm run test:role:permission`
-2. `npm run test:role:probe`
-3. `npm run test:role:focus`
-4. `npm run test:role:smoke`
-5. `npm run test:training:optimization`
-6. `npm run test:training:acceptance`
-
-如果要一次跑完：
+### Standard regression
 
 ```bash
 npm run test:all
 ```
 
+包含：
+
+1. role
+2. training
+3. bonus
+
+### Local plus regression
+
+```bash
+npm run test:all:plus
+```
+
+包含：
+
+1. `npm run test:all`
+2. `npm run test:zoom:browsers`
+
 ## Local Run
 
-Windows 本機最簡單的方式：
+Windows 可直接使用：
 
 ```bash
 npm run test:all:local
 ```
 
-這個指令會自動：
-
-1. 啟動本地靜態 server
-2. 等待 `http://127.0.0.1:8080/` 正常
-3. 跑完整回歸
-4. 關閉 server
-
-跨平台或 CI 風格的手動方式：
+如果只想先跑真人模擬與加值測試：
 
 ```bash
-npm run preview:start
-npm run test:all
+npm run test:bonus:all
+npm run test:zoom:browsers
 ```
 
 ## CI Run
@@ -136,27 +195,28 @@ npm run test:all
 
 ## Pass Criteria
 
-- 所有測試 summary 的 `failed = 0`
-- `consoleErrors = 0` 或 `pageErrors = 0`
-- 矯正單、檢核表、教育訓練三條主線都至少有一支腳本覆蓋通過
+- 所有 JSON summary 的 `failed = 0`
+- `consoleErrors = 0`
+- `pageErrors = 0`
+- 關鍵流程可完整走完且產物可下載
 
 ## Maintenance Rules
 
-1. 新 protected route：
+1. 新增 protected route 時：
    - 更新 route whitelist
-   - 更新 route permission matrix
+   - 更新 permission matrix
 
-2. 新關鍵欄位：
+2. 新增重要互動時：
    - 優先補 `data-testid`
-   - 再更新相關 regression script
+   - 更新對應 regression script
 
-3. 新 workflow stage：
-   - 先決定屬於 role flow 還是 training flow
-   - 再擴 probe / focus / smoke / acceptance
+3. 新增 workflow stage 時：
+   - 同步更新 role flow / training flow 測試
+   - 補 `probe / focus / smoke / acceptance / bonus`
 
-4. 新測試產物：
-   - 一律落在 `test-artifacts/` 帶日期資料夾
-   - 保持 repo 不追蹤這些產物
+4. 測試產物維護：
+   - `test-artifacts/` 不納入 Git
+   - 需要保存時再另外整理
 
 ## Troubleshooting
 
@@ -164,18 +224,16 @@ npm run test:all
 
 - Symptom: `ERR_CONNECTION_REFUSED`
 - Preferred fix:
-  - `npm run test:all:local`
-- Manual check:
-  - `npm run preview:start`
-  - `http://127.0.0.1:8080/` 回應 `200`
+  - `start-local.cmd`
+  - 或 `npm run preview:start`
 
 ### Selector timeout
 
-- 先檢查畫面上是否還有對應 `data-testid`
-- 若 UI 改版，優先更新 test id，不要退回脆弱 CSS selector
+- 先補 `data-testid`
+- 再更新腳本，不要只靠脆弱的 CSS selector
 
 ### Local passes but CI fails
 
-- 確認 Playwright 版本與 `package-lock.json` 一致
-- 檢查 CI 上傳的 `test-artifacts/` 與 `server.log`
-- 優先使用 route hash 或 DOM 狀態等待，不要盲目加 sleep
+- 檢查 Playwright 版本與 `package-lock.json`
+- 檢查 CI artifact 裡的 `server.log`
+- 確認新頁面 route 與 DOM ready 條件已納入 helper

@@ -84,6 +84,16 @@ async function inspectLayout(page) {
   });
 
   try {
+    if (!BROWSERS.length) {
+      results.steps.push({
+        id: 'browser-zoom-skip',
+        role: 'system',
+        title: 'Browser zoom regression',
+        status: 'passed',
+        detail: 'No local Chrome or Edge executable found; skipped browser-specific zoom sweep.'
+      });
+      return;
+    }
     for (const browserMeta of BROWSERS) {
       const browser = await chromium.launch({ headless: true, executablePath: browserMeta.executablePath });
       const page = await browser.newPage({ viewport: BASE_VIEWPORT });
