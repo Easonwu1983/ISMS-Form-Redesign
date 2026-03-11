@@ -71,6 +71,40 @@
     return cards.map(([label, value, tone]) => '<div class="training-mini-card training-mini-card--' + tone + '"><div class="training-mini-label">' + label + '</div><div class="training-mini-value">' + value + '</div></div>').join('');
   }
 
+  function buildTrainingOverviewStats(summary) {
+    return ''
+      + '<div class="stat-card total"><div class="stat-icon">' + ic('graduation-cap') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">填報單數</div></div>'
+      + '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + summary.submitted + '</div><div class="stat-label">已完成填報</div></div>'
+      + '<div class="stat-card pending"><div class="stat-icon">' + ic('clock-3') + '</div><div class="stat-value">' + summary.pending + '</div><div class="stat-label">待簽核</div></div>'
+      + '<div class="stat-card overdue"><div class="stat-icon">' + ic('rotate-ccw') + '</div><div class="stat-value">' + (summary.draft + summary.returned) + '</div><div class="stat-label">待補件 / 草稿</div></div>';
+  }
+
+  function buildTrainingTableCard(title, subtitle, badgeText, headersHtml, rowsHtml) {
+    const badge = badgeText ? '<span class="training-inline-status">' + badgeText + '</span>' : '';
+    const subtitleHtml = subtitle ? '<div class="training-table-subtitle">' + subtitle + '</div>' : '';
+    return '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">' + title + '</span>' + subtitleHtml + '</div>' + badge + '</div><div class="table-wrapper"><table><thead><tr>' + headersHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
+  }
+
+  function buildTrainingDetailField(label, value) {
+    const displayValue = value === undefined || value === null || value === '' ? '—' : value;
+    return '<div class="detail-field"><div class="detail-field-label">' + esc(label) + '</div><div class="detail-field-value">' + esc(displayValue) + '</div></div>';
+  }
+
+  function buildTrainingDetailGrid(fields) {
+    return '<div class="detail-grid">' + fields.map((field) => buildTrainingDetailField(field.label, field.value)).join('') + '</div>';
+  }
+
+  function buildTrainingCard(title, bodyHtml, options) {
+    const opts = options || {};
+    const styleAttr = opts.style ? ' style="' + opts.style + '"' : '';
+    const headerStyleAttr = opts.headerStyle ? ' style="' + opts.headerStyle + '"' : '';
+    return '<div class="card"' + styleAttr + '><div class="card-header"' + headerStyleAttr + '><span class="card-title">' + title + '</span></div>' + bodyHtml + '</div>';
+  }
+
+  function buildTrainingStepCards(stepDefs) {
+    return stepDefs.map((step) => '<div class="training-step-card"><div class="training-step-kicker">' + esc(step[0]) + '</div><div class="training-step-title">' + esc(step[1]) + '</div><div class="training-step-status">' + esc(step[2]) + '</div><div class="training-step-note">' + esc(step[3]) + '</div></div>').join('');
+  }
+
   function renderTrainingBinaryButtons(field, value, index, disabled, yesLabel, noLabel) {
     const dis = disabled ? 'disabled' : '';
     const testIdBase = 'training-binary-' + toTestIdFragment(field || 'field') + '-' + index;
@@ -231,8 +265,8 @@
       }).join('') : '<tr><td colspan="9"><div class="empty-state" style="padding:28px"><div class="empty-state-title">所有單位都已完成填報</div></div></td></tr>';
 
       contentHtml = '<div class="training-dashboard-sections">'
-        + '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">已完成填報</span><div class="training-table-subtitle">填報清單已併入此區，方便直接查看已完成資料與下載。</div></div><span class="training-inline-status">' + completedUnits.length + ' 個單位</span></div><div class="table-wrapper"><table><thead><tr><th>統計單位</th><th>填報單位</th><th>編號</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>未完成</th><th>達成比率</th><th>完成時間</th><th>操作</th></tr></thead><tbody>' + completedRows + '</tbody></table></div></div>'
-        + '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">未完成填報</span><div class="training-table-subtitle">包含尚未填報、暫存、退回更正與待簽核中的單位。</div></div><span class="training-inline-status">' + incompleteUnits.length + ' 個單位</span></div><div class="table-wrapper"><table><thead><tr><th>填報單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + incompleteRows + '</tbody></table></div></div>'
+        + buildTrainingTableCard('已完成填報', '填報清單已併入此區，方便直接查看已完成資料與下載。', completedUnits.length + ' 個單位', '<th>統計單位</th><th>填報單位</th><th>編號</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>未完成</th><th>達成比率</th><th>完成時間</th><th>操作</th>', completedRows)
+        + buildTrainingTableCard('未完成填報', '包含尚未填報、暫存、退回更正與待簽核中的單位。', incompleteUnits.length + ' 個單位', '<th>填報單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th>', incompleteRows)
         + '</div>';
     } else {
       const rows = visibleForms.length ? visibleForms.map((form) => {
@@ -248,16 +282,13 @@
           + '<td>' + buildFormActions(form) + '</td>'
           + '</tr>';
       }).join('') : '<tr><td colspan="8"><div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無填報單</div><div class="empty-state-desc">可先建立草稿，完成流程一後再進入簽核。</div></div></td></tr>';
-      contentHtml = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">我的填報單</span><div class="training-table-subtitle">流程一完成後內容會先鎖定；若尚未列印簽核表，可在 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。</div></div></div><div class="table-wrapper"><table><thead><tr><th>編號</th><th>填報單位</th><th>狀態</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>最後更新</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      contentHtml = buildTrainingTableCard('我的填報單', '流程一完成後內容會先鎖定；若尚未列印簽核表，可在 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。', '', '<th>編號</th><th>填報單位</th><th>狀態</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>最後更新</th><th>操作</th>', rows);
     }
 
     document.getElementById('app').innerHTML = '<div class="animate-in training-dashboard-page">'
       + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">依流程一填報、流程二列印、流程三上傳簽核表完成整體申報；流程一送出後若尚未列印，可於 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回。</p></div>' + toolbar + '</div>'
       + '<div class="stats-grid">'
-      + '<div class="stat-card total"><div class="stat-icon">' + ic('graduation-cap') + '</div><div class="stat-value">' + summary.total + '</div><div class="stat-label">填報單數</div></div>'
-      + '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + summary.submitted + '</div><div class="stat-label">已完成填報</div></div>'
-      + '<div class="stat-card pending"><div class="stat-icon">' + ic('clock-3') + '</div><div class="stat-value">' + summary.pending + '</div><div class="stat-label">待簽核</div></div>'
-      + '<div class="stat-card overdue"><div class="stat-icon">' + ic('rotate-ccw') + '</div><div class="stat-value">' + (summary.draft + summary.returned) + '</div><div class="stat-label">待補件 / 草稿</div></div>'
+      + buildTrainingOverviewStats(summary)
       + '</div>'
       + contentHtml
       + '</div>';
@@ -748,11 +779,11 @@
     if (canUndo) actions.unshift('<button type="button" class="btn btn-warning" id="training-undo-step-one">' + ic('rotate-ccw', 'icon-sm') + ' 撤回流程一</button>');
     if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift('<button type="button" class="btn btn-danger" data-action="training.return" data-id="' + esc(form.id) + '">' + ic('corner-up-left', 'icon-sm') + ' 退回更正</button>');
 
-    const stepCards = [
+    const stepCards = buildTrainingStepCards([
       ['流程一', '依人員填報教育訓練完成情形', form.stepOneSubmittedAt ? '已完成並鎖定' : '待完成', form.stepOneSubmittedAt ? (canUndo ? ('可於剩餘 ' + undoRemainingMinutes + ' 分鐘內撤回；列印簽核表後將不可撤回') : fmtTime(form.stepOneSubmittedAt)) : '完成後才可進入簽核'],
       ['流程二', '列印簽核表', form.printedAt ? '已列印' : (form.status === TRAINING_STATUSES.DRAFT || form.status === TRAINING_STATUSES.RETURNED ? '待流程一完成' : '待列印'), form.printedAt ? fmtTime(form.printedAt) : '請列印後交主管簽核'],
       ['流程三', '上傳簽核掃描檔', form.status === TRAINING_STATUSES.SUBMITTED ? '已完成填報' : ((filesState.length || form.signoffUploadedAt) ? '已上傳，待完成送件' : '待上傳'), form.status === TRAINING_STATUSES.SUBMITTED ? fmtTime(form.submittedAt || form.updatedAt) : (form.signoffUploadedAt ? fmtTime(form.signoffUploadedAt) : '上傳後完成整體流程')]
-    ].map((step) => '<div class="training-step-card"><div class="training-step-kicker">' + esc(step[0]) + '</div><div class="training-step-title">' + esc(step[1]) + '</div><div class="training-step-status">' + esc(step[2]) + '</div><div class="training-step-note">' + esc(step[3]) + '</div></div>').join('');
+    ]);
 
     const uploadSection = (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && canManage)
       ? '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">流程三：上傳簽核掃描檔</span></div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div><div class="file-preview-list training-signoff-files" id="training-file-previews"></div><div class="form-actions"><button type="button" class="btn btn-primary" id="training-finalize-submit">' + ic('check-circle-2', 'icon-sm') + ' 完成流程三並正式結束填報</button></div></div>'
@@ -762,15 +793,22 @@
       + '<div class="detail-header"><div><div class="detail-id detail-id-with-copy"><span>' + esc(form.id) + ' · ' + esc(form.trainingYear) + ' 年度</span>' + renderCopyIdButton(form.id, '教育訓練編號') + '</div><h1 class="detail-title">資安教育訓練統計 — ' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</h1><div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('building-2', 'icon-xs') + '</span>' + esc(form.unit) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('user', 'icon-xs') + '</span>' + esc(form.fillerName) + '</span><span class="detail-meta-item"><span class="detail-meta-icon">' + ic('calendar', 'icon-xs') + '</span>' + fmt(form.fillDate) + '</span>' + trainingStatusBadge(form.status) + '</div></div><div class="training-toolbar-actions">' + actions.join('') + '</div></div>'
       + (form.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(form.returnReason || '未提供') + '</div>' : '')
       + (canUndo ? '<div class="training-undo-banner">' + ic('rotate-ccw', 'icon-sm') + '<div><strong>流程一剛完成，仍可撤回。</strong><div>尚未列印簽核表前，可在剩餘 ' + undoRemainingMinutes + ' 分鐘內撤回，回到可編修的草稿狀態。</div></div></div>' : '')
-      + '<div class="card"><div class="card-header"><span class="card-title">流程概況</span></div><div class="training-step-grid">' + stepCards + '</div></div>'
-      + '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">統計摘要</span></div><div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div></div>'
+      + buildTrainingCard('流程概況', '<div class="training-step-grid">' + stepCards + '</div>')
+      + buildTrainingCard('統計摘要', '<div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div>', { style: 'margin-top:20px' })
       + '<div class="panel-grid-two panel-grid-spaced">'
-      + '<div class="card"><div class="card-header"><span class="card-title">填報資訊</span></div><div class="detail-grid"><div class="detail-field"><div class="detail-field-label">統計單位</div><div class="detail-field-value">' + esc(form.statsUnit || getTrainingStatsUnit(form.unit)) + '</div></div><div class="detail-field"><div class="detail-field-label">填報單位</div><div class="detail-field-value">' + esc(form.unit) + '</div></div><div class="detail-field"><div class="detail-field-label">經辦人</div><div class="detail-field-value">' + esc(form.fillerName) + '</div></div><div class="detail-field"><div class="detail-field-label">聯絡電話</div><div class="detail-field-value">' + esc(form.submitterPhone || '—') + '</div></div><div class="detail-field"><div class="detail-field-label">聯絡信箱</div><div class="detail-field-value">' + esc(form.submitterEmail || '—') + '</div></div><div class="detail-field"><div class="detail-field-label">整體完成時間</div><div class="detail-field-value">' + (form.submittedAt ? fmtTime(form.submittedAt) : '—') + '</div></div></div></div>'
-      + '<div class="card"><div class="card-header"><span class="card-title">簽核掃描檔</span></div><div class="file-preview-list training-signoff-files" id="training-signed-files-readonly"></div></div>'
+      + buildTrainingCard('填報資訊', buildTrainingDetailGrid([
+        { label: '統計單位', value: form.statsUnit || getTrainingStatsUnit(form.unit) },
+        { label: '填報單位', value: form.unit },
+        { label: '經辦人', value: form.fillerName },
+        { label: '聯絡電話', value: form.submitterPhone || '—' },
+        { label: '聯絡信箱', value: form.submitterEmail || '—' },
+        { label: '整體完成時間', value: form.submittedAt ? fmtTime(form.submittedAt) : '—' }
+      ]))
+      + buildTrainingCard('簽核掃描檔', '<div class="file-preview-list training-signoff-files" id="training-signed-files-readonly"></div>')
       + '</div>'
       + uploadSection
-      + '<div class="card" style="margin-top:20px;padding:0;overflow:hidden"><div class="card-header" style="padding:16px 20px"><span class="card-title">逐人明細</span></div><div class="table-wrapper"><table><thead><tr><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>' + TRAINING_GENERAL_LABEL + '</th><th>' + TRAINING_INFO_STAFF_LABEL + '</th><th>' + TRAINING_PROFESSIONAL_LABEL + '</th><th>判定</th><th>備註</th></tr></thead><tbody>' + detailRows + '</tbody></table></div></div>'
-      + '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">歷程紀錄</span></div><div class="timeline">' + timeline + '</div></div>'
+      + buildTrainingCard('逐人明細', '<div class="table-wrapper"><table><thead><tr><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>' + TRAINING_GENERAL_LABEL + '</th><th>' + TRAINING_INFO_STAFF_LABEL + '</th><th>' + TRAINING_PROFESSIONAL_LABEL + '</th><th>判定</th><th>備註</th></tr></thead><tbody>' + detailRows + '</tbody></table></div>', { style: 'margin-top:20px;padding:0;overflow:hidden', headerStyle: 'padding:16px 20px' })
+      + buildTrainingCard('歷程紀錄', '<div class="timeline">' + timeline + '</div>', { style: 'margin-top:20px' })
       + '</div>';
 
     function renderSignedFiles(targetId, editable) {

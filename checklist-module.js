@@ -470,7 +470,7 @@
   function renderChecklistManageItem(item, si, ii) {
     return         `
         <div class="cm-item" data-si="${si}" data-ii="${ii}">
-          <div class="cm-item-drag" title="拖曳排序">⋮⋮</div>
+          <div class="cm-item-drag" title="拖曳排序">&#8942;&#8942;</div>
           <div class="cm-item-content">
             <div class="cm-item-row">
               <span class="cl-item-id" style="flex-shrink:0">${esc(item.id)}</span>
