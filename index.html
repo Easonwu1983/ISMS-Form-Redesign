@@ -43,6 +43,7 @@
         'vendor/lucide.min.js',
         'vendor/xlsx.full.min.js',
         'units.js',
+        'attachment-module.js',
         'data-module.js',
         'auth-module.js',
         'unit-module.js',
@@ -65,6 +66,15 @@
         script.src = assets[index] + '?v=' + cacheKey;
         script.async = false;
         script.onload = function () {
+          var pending = window.__APP_PENDING_ASSET_PROMISE__;
+          if (pending && typeof pending.then === 'function') {
+            window.__APP_PENDING_ASSET_PROMISE__ = null;
+            pending.finally(function () {
+              index += 1;
+              loadNext();
+            });
+            return;
+          }
           index += 1;
           loadNext();
         };

@@ -121,15 +121,30 @@ async function logout(page) {
 
 async function resetApp(page) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-    page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-      window.location.hash = '';
-      window.location.reload();
-    })
-  ]);
+  await page.evaluate(async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const knownNames = ['cats_attachments_v1'];
+    if (window.indexedDB) {
+      if (typeof window.indexedDB.databases === 'function') {
+        const dbs = await window.indexedDB.databases();
+        dbs.forEach((entry) => {
+          if (entry && entry.name) knownNames.push(entry.name);
+        });
+      }
+      const uniqueNames = Array.from(new Set(knownNames.filter(Boolean)));
+      for (const name of uniqueNames) {
+        await new Promise((resolve) => {
+          const request = window.indexedDB.deleteDatabase(name);
+          request.onsuccess = () => resolve();
+          request.onerror = () => resolve();
+          request.onblocked = () => resolve();
+        });
+      }
+    }
+    window.location.hash = '';
+  });
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
   await page.waitForSelector('[data-testid="login-form"]', { timeout: 45000 });
 }

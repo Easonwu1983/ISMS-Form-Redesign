@@ -22,7 +22,7 @@
     "test:stress": "node scripts/stress-regression.cjs",
     "test:upload:security": "node scripts/upload-security-regression.cjs",
     "test:all": "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs all\"",
-    "test:all:plus": "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs all\" && node scripts/browser-zoom-regression.cjs",
+    "test:all:plus": "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs all && node scripts/browser-zoom-regression.cjs\"",
     "test:role:all:local": "test-role-all-local.cmd",
     "test:training:all:local": "test-training-all-local.cmd",
     "test:all:local": "test-all-local.cmd"

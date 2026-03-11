@@ -284,6 +284,20 @@
     return uiModuleApi;
   }
 
+  let attachmentModuleApi = null;
+  function getAttachmentModule() {
+    if (attachmentModuleApi) return attachmentModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAttachmentModule !== 'function') {
+      throw new Error('attachment-module.js not loaded');
+    }
+    attachmentModuleApi = window.createAttachmentModule({
+      esc: function (value) { return getUiModule().esc(value); },
+      toast: function (message, type) { return getUiModule().toast(message, type); }
+    });
+    window._attachmentModule = attachmentModuleApi;
+    return attachmentModuleApi;
+  }
+
   let policyModuleApi = null;
   function getPolicyModule() {
     if (policyModuleApi) return policyModuleApi;
@@ -503,6 +517,11 @@
       renderCopyIdCell,
       renderCopyIdButton,
       prepareUploadBatch,
+      createTransientUploadEntry,
+      revokeTransientUploadEntry,
+      persistUploadedEntries,
+      renderAttachmentList,
+      cleanupRenderedAttachmentUrls,
       buildUnitCascadeControl,
       initUnitCascade,
       applyTestIds,
@@ -635,6 +654,11 @@
       isTrainingRecordComplete,
       getStoredTrainingProfessionalValue,
       prepareUploadBatch,
+      createTransientUploadEntry,
+      revokeTransientUploadEntry,
+      persistUploadedEntries,
+      renderAttachmentList,
+      cleanupRenderedAttachmentUrls,
       exportTrainingSummaryCsv,
       exportTrainingDetailCsv,
       printTrainingSheet,
@@ -1086,6 +1110,12 @@
   function buildUploadSignature(meta) { return getWorkflowSupportModule().buildUploadSignature(meta); }
   function validateUploadFile(file, options) { return getWorkflowSupportModule().validateUploadFile(file, options); }
   function prepareUploadBatch(existingFiles, incomingFiles, options) { return getWorkflowSupportModule().prepareUploadBatch(existingFiles, incomingFiles, options); }
+  function createTransientUploadEntry(file, meta, options) { return getAttachmentModule().createTransientUploadEntry(file, meta, options); }
+  function revokeTransientUploadEntry(entry) { return getAttachmentModule().revokeTransientUploadEntry(entry); }
+  function persistUploadedEntries(entries, options) { return getAttachmentModule().persistUploadedEntries(entries, options); }
+  function migrateStoredAttachments(entries, options) { return getAttachmentModule().migrateStoredAttachments(entries, options); }
+  function renderAttachmentList(target, files, options) { return getAttachmentModule().renderAttachmentList(target, files, options); }
+  function cleanupRenderedAttachmentUrls() { return getAttachmentModule().cleanupRenderedAttachmentUrls(); }
   function csvCell(value) { return getWorkflowSupportModule().csvCell(value); }
   function downloadWorkbook(filename, sheets) { return getWorkflowSupportModule().downloadWorkbook(filename, sheets); }
   function exportTrainingSummaryCsv(forms, filename) { return getWorkflowSupportModule().exportTrainingSummaryCsv(forms, filename); }
@@ -1107,19 +1137,85 @@
   // ─── Seed Data ─────────────────────────────
   function seedData() { return getWorkflowSupportModule().seedData(); }
 
-  // ─── Init ──────────────────────────────────
-  installGlobalDelegation();
-  getDataModule().migrateAllStores();
-  seedData();
-  ensurePrimaryAdminProfile();
-  getTrainingModule().seedTrainingData();
-  window.addEventListener('hashchange', handleRoute);
-  window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
-  window.addEventListener('load', refreshIcons);
-  renderApp();
-  refreshIcons();
-  if (typeof window !== 'undefined') {
-    window.__APP_READY__ = true;
+  async function migrateCaseAttachmentTree(item) {
+    if (!item || typeof item !== 'object') return false;
+    let changed = false;
+    const caseEvidence = await migrateStoredAttachments(item.evidence || [], { prefix: 'car', scope: 'case-evidence', ownerId: item.id });
+    if (caseEvidence.changed) {
+      item.evidence = caseEvidence.files;
+      changed = true;
+    }
+    if (item.pendingTracking && typeof item.pendingTracking === 'object') {
+      const pendingEvidence = await migrateStoredAttachments(item.pendingTracking.evidence || [], { prefix: 'trk', scope: 'tracking-evidence', ownerId: item.id });
+      if (pendingEvidence.changed) {
+        item.pendingTracking = { ...item.pendingTracking, evidence: pendingEvidence.files };
+        changed = true;
+      }
+    }
+    if (Array.isArray(item.trackings)) {
+      const nextTrackings = [];
+      let trackingsChanged = false;
+      for (const tracking of item.trackings) {
+        const migrated = await migrateStoredAttachments(tracking && tracking.evidence || [], { prefix: 'trk', scope: 'tracking-evidence', ownerId: item.id });
+        if (migrated.changed) {
+          nextTrackings.push({ ...tracking, evidence: migrated.files });
+          trackingsChanged = true;
+        } else {
+          nextTrackings.push(tracking);
+        }
+      }
+      if (trackingsChanged) {
+        item.trackings = nextTrackings;
+        changed = true;
+      }
+    }
+    return changed;
   }
+
+  async function migrateAttachmentStores() {
+    let dataChanged = false;
+    const data = loadData();
+    for (const item of data.items || []) {
+      if (await migrateCaseAttachmentTree(item)) dataChanged = true;
+    }
+    if (dataChanged) saveData(data);
+
+    let trainingChanged = false;
+    const trainingStore = loadTrainingStore();
+    for (const form of trainingStore.forms || []) {
+      const migrated = await migrateStoredAttachments(form && form.signedFiles || [], { prefix: 'trn', scope: 'training-signoff', ownerId: form.id });
+      if (migrated.changed) {
+        form.signedFiles = migrated.files;
+        trainingChanged = true;
+      }
+    }
+    if (trainingChanged) saveTrainingStore(trainingStore);
+  }
+
+  async function initApp() {
+    installGlobalDelegation();
+    getDataModule().migrateAllStores();
+    seedData();
+    ensurePrimaryAdminProfile();
+    getTrainingModule().seedTrainingData();
+    await migrateAttachmentStores();
+    window.addEventListener('hashchange', handleRoute);
+    window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
+    window.addEventListener('load', refreshIcons);
+    renderApp();
+    refreshIcons();
+    if (typeof window !== 'undefined') {
+      window.__APP_READY__ = true;
+    }
+  }
+
+  // ─── Init ──────────────────────────────────
+  initApp().catch(function (error) {
+    console.error(error && error.stack ? error.stack : String(error));
+    document.getElementById('app').innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">系統初始化失敗</div><div class="empty-state-desc">' + esc(String(error && error.message || error || '未知錯誤')) + '</div></div>';
+    if (typeof window !== 'undefined') {
+      window.__APP_READY__ = true;
+    }
+  });
 
 })();

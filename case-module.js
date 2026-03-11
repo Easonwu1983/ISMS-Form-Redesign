@@ -47,6 +47,11 @@
       renderCopyIdCell,
       renderCopyIdButton,
       prepareUploadBatch,
+      createTransientUploadEntry,
+      revokeTransientUploadEntry,
+      persistUploadedEntries,
+      renderAttachmentList,
+      cleanupRenderedAttachmentUrls,
       buildUnitCascadeControl,
       initUnitCascade,
       applyTestIds,
@@ -124,15 +129,17 @@
     return '<div class="' + classes + '">' + kickerHtml + titleHtml + textHtml + (opts.bodyHtml || '') + '</div>';
   }
 
-  function buildCaseEvidenceList(files, emptyText) {
-    return files && files.length
-      ? '<div class="file-preview-list">' + files.map(function (ev) {
-        var preview = ev.type && ev.type.startsWith('image/')
-          ? '<img src="' + ev.data + '" alt="' + esc(ev.name) + '">'
-          : '<div class="file-pdf-icon">' + ic('file-box') + '</div>';
-        return '<div class="file-preview-item">' + preview + '<div class="file-name">' + esc(ev.name) + '</div><div class="file-preview-actions"><a class="btn btn-sm btn-secondary" href="' + ev.data + '" target="_blank" rel="noopener">預覽</a><a class="btn btn-sm btn-secondary" href="' + ev.data + '" download="' + esc(ev.name) + '">下載</a></div></div>';
-      }).join('') + '</div>'
-      : '<p style="color:var(--text-muted);font-size:.88rem">' + esc(emptyText || '尚未上傳文件') + '</p>';
+  function buildCaseEvidenceSlot(slotId) {
+    return '<div class="file-preview-list" id="' + esc(slotId) + '"></div>';
+  }
+
+  function mountCaseEvidenceList(slotId, files, emptyText) {
+    return renderAttachmentList(slotId, files, {
+      emptyText: emptyText || '尚未上傳文件',
+      fileIconHtml: '<div class="file-pdf-icon">' + ic('file-box') + '</div>',
+      itemClass: 'file-preview-item',
+      actionsClass: 'file-preview-actions'
+    });
   }
 
   function buildCaseTimeline(historyList) {
@@ -557,8 +564,8 @@ function renderCreate() {
   function renderDetail(id) {
     const item = getItem(id);
     if (!item) { navigate('list'); toast('找不到矯正單', 'error'); return; }
-    if (!item) { document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到矯正單</div><a href="#list" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`; return; }
     if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限檢視此矯正單', 'error'); return; }
+    cleanupRenderedAttachmentUrls();
     const u = currentUser();
     const ci = STATUS_FLOW.indexOf(item.status);
     const isHandler = isItemHandler(item, u);
@@ -583,8 +590,9 @@ function renderCreate() {
       btns += `<button class="btn btn-warning" data-testid="case-tracking-approve-continue" data-action="case.reviewTracking" data-id="${item.id}" data-decision="continue">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button>`;
     }
 
-    const renderEvidenceList = buildCaseEvidenceList;
-    const evHtml = renderEvidenceList(item.evidence, '尚無佐證');
+    const evidenceMounts = [];
+    const mainEvidenceSlotId = 'case-evidence-main';
+    evidenceMounts.push({ id: mainEvidenceSlotId, files: item.evidence || [], emptyText: '尚無佐證' });
     const tl = buildCaseTimeline(item.history || []);
     const pendingTrackingHtml = pending ? `<div class="card" style="margin-top:20px;border-left:3px solid #0f766e;"><div class="card-header"><span class="card-title">${ic('hourglass', 'icon-sm')} 待管理者審核的追蹤提報</span></div>
       <div class="detail-grid">
@@ -596,14 +604,17 @@ function renderCreate() {
       </div>
       <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(pending.execution || '')}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(pending.trackNote || '')}</div></div>
-      <div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次提報佐證</div>${renderEvidenceList(pending.evidence, '本次追蹤未附佐證')}</div>
+      <div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次提報佐證</div>${buildCaseEvidenceSlot('case-pending-evidence')}</div>
       ${canReviewTracking ? `<div class="form-actions"><button type="button" class="btn btn-success" data-testid="pending-tracking-approve-close" data-action="case.reviewTracking" data-id="${item.id}" data-decision="close">${ic('check', 'icon-sm')} 同意結案</button><button type="button" class="btn btn-warning" data-testid="pending-tracking-approve-continue" data-action="case.reviewTracking" data-id="${item.id}" data-decision="continue">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button></div>` : `<div class="detail-section"><div class="detail-content" style="color:var(--text-muted)">${isHandler ? '已送出追蹤提報，待管理者審核。' : '目前已有追蹤提報待管理者審核。'}</div></div>`}
     </div>` : '';
+    if (pending) evidenceMounts.push({ id: 'case-pending-evidence', files: pending.evidence || [], emptyText: '本次追蹤未附佐證' });
 
     const tkHtml = (item.trackings || []).map((tk, i) => {
       const requestedHtml = tk.requestedResult ? `<div class="detail-section"><div class="detail-section-title">${ic('message-square', 'icon-sm')} 填報建議</div><div class="detail-content">${esc(tk.requestedResult)}</div></div>` : '';
       const nextHtml = tk.nextTrackDate ? `<div class="detail-field"><div class="detail-field-label">下一次追蹤日期</div><div class="detail-field-value">${fmt(tk.nextTrackDate)}</div></div>` : '';
-      const evidenceHtml = tk.evidence && tk.evidence.length ? `<div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次佐證</div>${renderEvidenceList(tk.evidence, '')}</div>` : '';
+      const evidenceSlotId = 'case-tracking-evidence-' + i;
+      const evidenceHtml = tk.evidence && tk.evidence.length ? `<div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次佐證</div>${buildCaseEvidenceSlot(evidenceSlotId)}</div>` : '';
+      if (tk.evidence && tk.evidence.length) evidenceMounts.push({ id: evidenceSlotId, files: tk.evidence || [], emptyText: '' });
       return `<div class="card" style="margin-bottom:16px;border-left:3px solid #f97316;"><div class="section-header">第 ${i + 1} 次追蹤 — ${fmt(tk.trackDate)}</div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">追蹤人</div><div class="detail-field-value">${esc(tk.tracker)}</div></div><div class="detail-field"><div class="detail-field-label">審核人</div><div class="detail-field-value">${esc(tk.reviewer || '—')}</div></div><div class="detail-field"><div class="detail-field-label">審核日期</div><div class="detail-field-value">${tk.reviewDate ? fmt(tk.reviewDate) : '—'}</div></div>${nextHtml}</div>
         <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(tk.execution)}</div></div>
@@ -656,13 +667,16 @@ function renderCreate() {
       ${item.rootElimination ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
         <div class="detail-section"><div class="detail-content">${esc(item.rootElimination)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.rootElimDueDate)}</div></div></div></div>` : ''}
-      ${buildCaseCard('<span class="card-title">' + ic('paperclip', 'icon-sm') + ' 佐證文件</span>', evHtml, { style: 'margin-top:20px' })}
+      ${buildCaseCard('<span class="card-title">' + ic('paperclip', 'icon-sm') + ' 佐證文件</span>', buildCaseEvidenceSlot(mainEvidenceSlotId), { style: 'margin-top:20px' })}
       ${pendingTrackingHtml}
       ${buildCaseCard('<span class="card-title">' + ic('git-branch', 'icon-sm') + ' 追蹤監控</span>', tkHtml, { style: 'margin-top:20px' })}
       ${buildCaseCard('<span class="card-title">' + ic('history', 'icon-sm') + ' 歷程紀錄</span>', '<div class="timeline">' + tl + '</div>', { style: 'margin-top:20px' })}
     </div>`;
     refreshIcons();
     bindCopyButtons();
+    Promise.all(evidenceMounts.map((entry) => mountCaseEvidenceList(entry.id, entry.files, entry.emptyText))).then(() => {
+      refreshIcons();
+    });
   }
 
   
@@ -802,6 +816,7 @@ function renderRespond(id) {
     if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限存取此矯正單', 'error'); return; }
     const canRespond = canRespondItem(item);
     if (!canRespond) { navigate('detail/' + id); toast('目前無法回覆這筆待矯正案件', 'error'); return; }
+    cleanupRenderedAttachmentUrls();
     let tempEv = [];
     document.getElementById('app').innerHTML = buildRespondPage(item);
     refreshIcons();
@@ -847,27 +862,30 @@ function renderRespond(id) {
       });
       batch.errors.forEach((message) => toast(message, 'error'));
       batch.accepted.forEach(({ file, meta }) => {
-        const r = new FileReader();
-        r.onload = e => { tempEv.push({ ...meta, data: e.target.result }); updP(); };
-        r.readAsDataURL(file);
+        tempEv.push(createTransientUploadEntry(file, meta, {
+          prefix: 'car',
+          scope: 'case-evidence',
+          ownerId: item.id
+        }));
       });
-      if (fi) fi.value = '';
-      return;
-      Array.from(files).forEach(f => {
-        if (f.size > 2 * 1024 * 1024) { toast(`${f.name} 超過 2MB`, 'error'); return; }
-        const r = new FileReader();
-        r.onload = e => { tempEv.push({ name: f.name, type: f.type, data: e.target.result }); updP(); };
-        r.readAsDataURL(f);
-      });
+      updP();
       if (fi) fi.value = '';
     }
 
     function updP() {
-      fp.innerHTML = tempEv.map((e, i) => {
-        const pv = e.type.startsWith('image/') ? `<img src="${e.data}" alt="${esc(e.name)}">` : `<div class="file-pdf-icon">${ic('file-box')}</div>`;
-        return `<div class="file-preview-item">${pv}<div class="file-name">${esc(e.name)}</div><button type="button" class="file-remove" data-idx="${i}">移除</button></div>`;
-      }).join('');
-      fp.querySelectorAll('.file-remove').forEach(b => b.addEventListener('click', e => { tempEv.splice(parseInt(e.target.dataset.idx, 10), 1); if (fi) fi.value = ''; updP(); }));
+      renderAttachmentList(fp, tempEv, {
+        editable: true,
+        emptyText: '尚未上傳文件',
+        fileIconHtml: '<div class="file-pdf-icon">' + ic('file-box') + '</div>',
+        itemClass: 'file-preview-item',
+        actionsClass: 'file-preview-actions',
+        onRemove: function (index) {
+          const removed = tempEv.splice(index, 1)[0];
+          revokeTransientUploadEntry(removed);
+          if (fi) fi.value = '';
+          updP();
+        }
+      });
       syncRespondSummary();
     }
 
@@ -879,7 +897,7 @@ function renderRespond(id) {
     elimDueInput.addEventListener('change', syncRespondSummary);
     syncRespondSummary();
 
-    document.getElementById('respond-form').addEventListener('submit', e => {
+    document.getElementById('respond-form').addEventListener('submit', async e => {
       e.preventDefault();
       const ca = document.getElementById('r-action').value.trim();
       const rc = document.getElementById('r-root').value.trim();
@@ -888,6 +906,11 @@ function renderRespond(id) {
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
       if (!li || !canAccessItem(li)) { toast('您沒有權限存取此矯正單', 'error'); navigate('list'); return; }
       if (!canRespondItem(li, u)) { toast('\u9019\u7b46\u6848\u4ef6\u76ee\u524d\u4e0d\u5141\u8a31\u9001\u51fa\u56de\u8986', 'error'); navigate('detail/' + id); return; }
+      const persistedEvidence = await persistUploadedEntries(tempEv, {
+        prefix: 'car',
+        scope: 'case-evidence',
+        ownerId: id
+      });
       const upd = {
         correctiveAction: ca, correctiveDueDate: document.getElementById('r-due').value,
         rootCause: rc,
@@ -897,7 +920,7 @@ function renderRespond(id) {
         riskAcceptDate: document.getElementById('r-riskdate').value || null,
         riskAssessDate: document.getElementById('r-riskassess').value || null,
         status: STATUSES.PROPOSED, updatedAt: now,
-        evidence: [...(li.evidence || []), ...tempEv],
+        evidence: [...(li.evidence || []), ...persistedEvidence],
         history: [...li.history, { time: now, action: `${u.name} 已回覆矯正措施`, user: u.name }, { time: now, action: `狀態變更為「${STATUSES.PROPOSED}」`, user: u.name }]
       };
       if (tempEv.length) upd.history.push({ time: now, action: `上傳 ${tempEv.length} 份佐證附件`, user: u.name });
@@ -966,6 +989,7 @@ function renderTracking(id) {
     if (!canAccessItem(item)) { navigate('list'); toast('您沒有權限存取此矯正單', 'error'); return; }
     if (item.pendingTracking) { navigate('detail/' + id); toast('目前已有待管理者審核的追蹤提報', 'error'); return; }
     if (!canSubmitTracking(item)) { navigate('detail/' + id); toast('目前由處理人員填報追蹤結果，管理者負責審核', 'error'); return; }
+    cleanupRenderedAttachmentUrls();
     const round = (item.trackings || []).length + 1;
     if (round > 3) { toast('系統目前最多支援 3 次追蹤', 'error'); navigate('detail/' + id); return; }
     document.getElementById('app').innerHTML = buildTrackingPage(item, round);
@@ -1019,39 +1043,30 @@ function renderTracking(id) {
       });
       batch.errors.forEach((message) => toast(message, 'error'));
       batch.accepted.forEach(({ file, meta }) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          tempEv.push({ ...meta, data: event.target.result });
-          updateTrackingPreviews();
-        };
-        reader.readAsDataURL(file);
+        tempEv.push(createTransientUploadEntry(file, meta, {
+          prefix: 'trk',
+          scope: 'tracking-evidence',
+          ownerId: item.id
+        }));
       });
-      if (fileInput) fileInput.value = '';
-      return;
-      Array.from(files).forEach((file) => {
-        if (file.size > 2 * 1024 * 1024) { toast(file.name + ' 超過 2MB', 'error'); return; }
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          tempEv.push({ name: file.name, type: file.type, data: event.target.result });
-          updateTrackingPreviews();
-        };
-        reader.readAsDataURL(file);
-      });
+      updateTrackingPreviews();
       if (fileInput) fileInput.value = '';
     }
 
     function updateTrackingPreviews() {
       if (!filePreviews) return;
-      filePreviews.innerHTML = tempEv.map((file, index) => {
-        const preview = file.type && file.type.startsWith('image/') ? '<img src="' + file.data + '" alt="' + esc(file.name) + '">' : '<div class="file-pdf-icon">' + ic('file-box') + '</div>';
-        return '<div class="file-preview-item">' + preview + '<div class="file-name">' + esc(file.name) + '</div><button type="button" class="file-remove" data-idx="' + index + '">移除</button></div>';
-      }).join('');
-      filePreviews.querySelectorAll('.file-remove').forEach((button) => {
-        button.addEventListener('click', (event) => {
-          tempEv.splice(parseInt(event.target.dataset.idx, 10), 1);
+      renderAttachmentList(filePreviews, tempEv, {
+        editable: true,
+        emptyText: '尚未上傳文件',
+        fileIconHtml: '<div class="file-pdf-icon">' + ic('file-box') + '</div>',
+        itemClass: 'file-preview-item',
+        actionsClass: 'file-preview-actions',
+        onRemove: function (index) {
+          const removed = tempEv.splice(index, 1)[0];
+          revokeTransientUploadEntry(removed);
           if (fileInput) fileInput.value = '';
           updateTrackingPreviews();
-        });
+        }
       });
     }
 
@@ -1066,7 +1081,7 @@ function renderTracking(id) {
     }
     syncTrackingSummary();
 
-    document.getElementById('track-form').addEventListener('submit', e => {
+    document.getElementById('track-form').addEventListener('submit', async e => {
       e.preventDefault();
       const res = document.querySelector('input[name="tkResult"]:checked');
       if (!res) { toast('請選擇追蹤建議結果', 'error'); return; }
@@ -1078,6 +1093,11 @@ function renderTracking(id) {
       const isContinue = res.value === '建議持續追蹤';
       if (isContinue && !document.getElementById('tk-next').value) { toast('選擇建議持續追蹤時，請填寫下一次追蹤日期', 'error'); return; }
       if (isClose && tempEv.length === 0) { toast('選擇擬請同意結案時，請上傳佐證資料', 'error'); return; }
+      const persistedEvidence = await persistUploadedEntries(tempEv, {
+        prefix: 'trk',
+        scope: 'tracking-evidence',
+        ownerId: id
+      });
       const submission = {
         round,
         tracker: document.getElementById('tk-tracker').value,
@@ -1086,7 +1106,7 @@ function renderTracking(id) {
         trackNote: document.getElementById('tk-note').value.trim(),
         result: res.value,
         nextTrackDate: isContinue ? (document.getElementById('tk-next').value || null) : null,
-        evidence: tempEv.slice(),
+        evidence: persistedEvidence,
         submittedAt: now
       };
       const history = [

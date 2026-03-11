@@ -63,6 +63,11 @@
       isTrainingRecordComplete,
       getStoredTrainingProfessionalValue,
       prepareUploadBatch,
+      createTransientUploadEntry,
+      revokeTransientUploadEntry,
+      persistUploadedEntries,
+      renderAttachmentList,
+      cleanupRenderedAttachmentUrls,
       exportTrainingSummaryCsv,
       exportTrainingDetailCsv,
       printTrainingSheet,
@@ -120,6 +125,14 @@
     const styleAttr = opts.style ? ' style="' + opts.style + '"' : '';
     const headerStyleAttr = opts.headerStyle ? ' style="' + opts.headerStyle + '"' : '';
     return '<div class="card"' + styleAttr + '><div class="card-header"' + headerStyleAttr + '><span class="card-title">' + title + '</span></div>' + bodyHtml + '</div>';
+  }
+
+  function buildTrainingFileSlot(slotId, extraClass) {
+    return '<div class="file-preview-list ' + esc(extraClass || '') + '" id="' + esc(slotId) + '"></div>';
+  }
+
+  function buildTrainingSignoffUploadCard() {
+    return '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">流程三：上傳簽核掃描檔</span></div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div>' + buildTrainingFileSlot('training-file-previews', 'training-signoff-files') + '<div class="form-actions"><button type="button" class="btn btn-primary" id="training-finalize-submit">' + ic('check-circle-2', 'icon-sm') + ' 完成流程三並正式結束填報</button></div></div>';
   }
 
   function buildTrainingStepCards(stepDefs) {
@@ -835,6 +848,7 @@
       toast('您沒有權限檢視此填報單', 'error');
       return;
     }
+    cleanupRenderedAttachmentUrls();
 
     const user = currentUser();
     const canManage = !!user && !isViewer(user) && (user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
@@ -856,7 +870,7 @@
     ]);
 
     const uploadSection = (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && canManage)
-      ? '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">流程三：上傳簽核掃描檔</span></div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div><div class="file-preview-list training-signoff-files" id="training-file-previews"></div><div class="form-actions"><button type="button" class="btn btn-primary" id="training-finalize-submit">' + ic('check-circle-2', 'icon-sm') + ' 完成流程三並正式結束填報</button></div></div>'
+      ? buildTrainingSignoffUploadCard()
       : '';
 
     document.getElementById('app').innerHTML = '<div class="animate-in">'
@@ -874,7 +888,7 @@
         { label: '聯絡信箱', value: form.submitterEmail || '—' },
         { label: '整體完成時間', value: form.submittedAt ? fmtTime(form.submittedAt) : '—' }
       ]))
-      + buildTrainingCard('簽核掃描檔', '<div class="file-preview-list training-signoff-files" id="training-signed-files-readonly"></div>')
+      + buildTrainingCard('簽核掃描檔', buildTrainingFileSlot('training-signed-files-readonly', 'training-signoff-files'))
       + '</div>'
       + uploadSection
       + buildTrainingCard('逐人明細', buildTrainingTableMarkup('<th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>' + TRAINING_GENERAL_LABEL + '</th><th>' + TRAINING_INFO_STAFF_LABEL + '</th><th>' + TRAINING_PROFESSIONAL_LABEL + '</th><th>判定</th><th>備註</th>', detailRows), { style: 'margin-top:20px;padding:0;overflow:hidden', headerStyle: 'padding:16px 20px' })
@@ -884,21 +898,20 @@
     function renderSignedFiles(targetId, editable) {
       const wrap = document.getElementById(targetId);
       if (!wrap) return;
-      wrap.innerHTML = filesState.length ? filesState.map((file, index) => {
-        const preview = file.type && file.type.startsWith('image/')
-          ? '<img src="' + file.data + '" alt="' + esc(file.name) + '">'
-          : '<div class="file-pdf-icon">' + ic('file-box') + '</div>';
-        const actionsHtml = '<div class="training-file-actions"><a class="btn btn-sm btn-secondary" href="' + file.data + '" target="_blank" rel="noopener">預覽</a><a class="btn btn-sm btn-secondary" href="' + file.data + '" download="' + esc(file.name) + '">下載</a>' + (editable ? '<button type="button" class="btn btn-sm btn-danger training-file-remove" data-idx="' + index + '">移除</button>' : '') + '</div>';
-        return '<div class="file-preview-item training-file-card">' + preview + '<div class="file-name">' + esc(file.name) + '</div>' + actionsHtml + '</div>';
-      }).join('') : '<p style="color:var(--text-muted);font-size:.88rem">尚未上傳簽核掃描檔</p>';
-      wrap.querySelectorAll('.training-file-remove').forEach((button) => {
-        button.addEventListener('click', () => {
-          filesState.splice(Number(button.dataset.idx), 1);
+      renderAttachmentList(wrap, filesState, {
+        editable,
+        emptyText: '尚未上傳簽核掃描檔',
+        fileIconHtml: '<div class="file-pdf-icon">' + ic('file-box') + '</div>',
+        itemClass: 'file-preview-item training-file-card',
+        actionsClass: 'training-file-actions',
+        onRemove: function (index) {
+          const removed = filesState.splice(Number(index), 1)[0];
+          revokeTransientUploadEntry(removed);
           const targetInput = document.getElementById('training-file-input');
           if (targetInput) targetInput.value = '';
           renderSignedFiles(targetId, true);
           renderSignedFiles('training-signed-files-readonly', false);
-        });
+        }
       });
       refreshIcons();
     }
@@ -913,17 +926,16 @@
       });
       batch.errors.forEach((message) => toast(message, 'error'));
       batch.accepted.forEach(({ file, meta }) => {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          filesState.push({ ...meta, data: evt.target.result });
-          renderSignedFiles('training-file-previews', true);
-          renderSignedFiles('training-signed-files-readonly', false);
-        };
-        reader.readAsDataURL(file);
+        filesState.push(createTransientUploadEntry(file, meta, {
+          prefix: 'trn',
+          scope: 'training-signoff',
+          ownerId: form.id
+        }));
       });
+      renderSignedFiles('training-file-previews', true);
+      renderSignedFiles('training-signed-files-readonly', false);
       const targetInput = document.getElementById('training-file-input');
       if (targetInput) targetInput.value = '';
-      return;
     }
 
     document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
@@ -950,16 +962,21 @@
         uploadZone.classList.remove('dragover');
         handleFiles(event.dataTransfer.files);
       });
-      document.getElementById('training-finalize-submit').addEventListener('click', () => {
+      document.getElementById('training-finalize-submit').addEventListener('click', async () => {
         if (!filesState.length) {
           toast('請先上傳簽核掃描檔', 'error');
           return;
         }
         const now = new Date().toISOString();
         const latestForm = getTrainingForm(form.id) || form;
+        const persistedFiles = await persistUploadedEntries(filesState, {
+          prefix: 'trn',
+          scope: 'training-signoff',
+          ownerId: form.id
+        });
         updateTrainingForm(form.id, {
           status: TRAINING_STATUSES.SUBMITTED,
-          signedFiles: filesState,
+          signedFiles: persistedFiles,
           signoffUploadedAt: now,
           submittedAt: now,
           updatedAt: now,

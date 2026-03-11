@@ -33,7 +33,15 @@
 - Owns official unit catalog access and metadata lookup
 - Owns custom-unit governance, approval registry, and merge flow
 - Owns unit category classification and searchable cascade selector behavior
+- Reads its official catalog from [units-data.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/units-data.json) through the thin loader [units.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/units.js)
 - Keeps unit-specific rules and autocomplete logic out of `app.js`
+
+### [attachment-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/attachment-module.js)
+
+- Owns IndexedDB-backed attachment persistence for corrective-action evidence and training signoff files
+- Owns migration from legacy inline base64 attachments into attachment descriptors
+- Owns reusable attachment preview rendering and object-URL cleanup
+- Keeps binary payloads out of `localStorage` and feature modules
 
 ### [ui-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/ui-module.js)
 
@@ -110,7 +118,8 @@
 5. Split permission and visibility rules into `policy-module.js`.
 6. Split shared formatting and copy/test helpers into `ui-module.js`.
 7. Split record numbering, training export/import/print helpers, and seed bootstrap into `workflow-support-module.js`.
-8. Replace most route-facing feature dependencies in `app.js` with thin delegates.
+8. Split binary attachment persistence and preview rendering into `attachment-module.js`.
+9. Replace most route-facing feature dependencies in `app.js` with thin delegates.
 
 ## Recommended Next Refactors
 

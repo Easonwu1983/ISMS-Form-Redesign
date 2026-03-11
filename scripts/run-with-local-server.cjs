@@ -53,21 +53,29 @@ async function main() {
     console.error('Usage: node scripts/run-with-local-server.cjs <command>');
     process.exit(1);
   }
+  const reuseExisting = await requestOk();
+  let outLog = null;
+  let errLog = null;
+  let server = null;
 
-  const outLog = fs.createWriteStream(outLogPath, { flags: 'a' });
-  const errLog = fs.createWriteStream(errLogPath, { flags: 'a' });
-  const server = spawn(process.execPath, ['.codex-local-server.cjs'], {
-    cwd: root,
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
+  if (!reuseExisting) {
+    outLog = fs.createWriteStream(outLogPath, { flags: 'a' });
+    errLog = fs.createWriteStream(errLogPath, { flags: 'a' });
+    server = spawn(process.execPath, ['.codex-local-server.cjs'], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
 
-  server.stdout.pipe(outLog);
-  server.stderr.pipe(errLog);
+    server.stdout.pipe(outLog);
+    server.stderr.pipe(errLog);
+  }
 
   try {
-    const started = await waitForServer();
-    if (!started) {
-      throw new Error(`Local server did not become ready at ${url}`);
+    if (!reuseExisting) {
+      const started = await waitForServer();
+      if (!started) {
+        throw new Error(`Local server did not become ready at ${url}`);
+      }
     }
 
     const child = spawn(rawCommand, {
@@ -83,9 +91,9 @@ async function main() {
 
     process.exitCode = exitCode;
   } finally {
-    await terminate(server);
-    outLog.end();
-    errLog.end();
+    if (server) await terminate(server);
+    if (outLog) outLog.end();
+    if (errLog) errLog.end();
   }
 }
 
