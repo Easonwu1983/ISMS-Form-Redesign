@@ -93,6 +93,34 @@
     return '<tr><td colspan="' + colspan + '"><div class="empty-state" style="padding:' + (padding || 32) + 'px"><div class="empty-state-icon">' + ic(iconName || 'inbox') + '</div><div class="empty-state-title">' + esc(title) + '</div></div></td></tr>';
   }
 
+  function buildEditorSummaryItems(items) {
+    return '<div class="editor-summary-list editor-summary-list--compact">' + items.map(function (item) {
+      var idAttr = item.id ? ' id="' + item.id + '"' : '';
+      return '<div class="editor-summary-item"><span>' + esc(item.label) + '</span><strong' + idAttr + '>' + item.value + '</strong></div>';
+    }).join('') + '</div>';
+  }
+
+  function buildEditorStepItems(items) {
+    return '<div class="editor-step-list">' + items.map(function (item, index) {
+      return '<div class="editor-step-item"><span class="editor-step-badge">' + (index + 1) + '</span><div><strong>' + esc(item.title) + '</strong><p>' + esc(item.text) + '</p></div></div>';
+    }).join('') + '</div>';
+  }
+
+  function buildEditorNoteItems(items) {
+    return '<div class="editor-note-list">' + items.map(function (item) {
+      return '<div class="editor-note-item"><span class="editor-note-dot"></span><span>' + item + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function buildEditorSideCard(options) {
+    var opts = options || {};
+    var classes = 'editor-side-card' + (opts.accent ? ' editor-side-card--accent' : '');
+    var kickerHtml = opts.kicker ? '<div class="editor-side-kicker">' + esc(opts.kicker) + '</div>' : '';
+    var titleHtml = opts.title ? '<div class="editor-side-title">' + esc(opts.title) + '</div>' : '';
+    var textHtml = opts.text ? '<div class="editor-side-text">' + esc(opts.text) + '</div>' : '';
+    return '<div class="' + classes + '">' + kickerHtml + titleHtml + textHtml + (opts.bodyHtml || '') + '</div>';
+  }
+
   function buildCaseEvidenceList(files, emptyText) {
     return files && files.length
       ? '<div class="file-preview-list">' + files.map(function (ev) {
@@ -214,6 +242,40 @@
 
   // ─── Render: Create ────────────────────────
   function buildCreatePage(u) {
+    var createAside = '<div class="editor-sticky">'
+      + buildEditorSideCard({
+        accent: true,
+        kicker: 'Issue Routing',
+        title: '開單摘要',
+        text: '右側摘要會跟著你的填寫內容即時更新，避免漏掉單號、指派與期限設定。',
+        bodyHtml: buildEditorSummaryItems([
+          { label: '編號前綴', value: '待指定', id: 'create-summary-docno' },
+          { label: '矯正單號', value: '自動編號', id: 'create-summary-id' },
+          { label: '提報單位', value: esc(getScopedUnit(u) || u.unit || '未指定'), id: 'create-summary-proposer' },
+          { label: '處理單位', value: '待指定', id: 'create-summary-handler-unit' },
+          { label: '處理人員', value: '待指定', id: 'create-summary-handler' },
+          { label: '預計完成', value: '未指定', id: 'create-summary-due' },
+          { label: '通知方式', value: '送出後寄送通知', id: 'create-summary-notify' }
+        ])
+      })
+      + buildEditorSideCard({
+        title: '流程節點',
+        bodyHtml: buildEditorStepItems([
+          { title: '建立矯正單', text: '填寫缺失、來源與改善期限，並指定處理單位與人員。' },
+          { title: '處理人員回覆', text: '承辦人填寫改善措施、根因與佐證資料後送審。' },
+          { title: '管理者審核追蹤', text: '管理者可核可、退回或進入追蹤，直到結案。' }
+        ])
+      })
+      + buildEditorSideCard({
+        title: '填寫提醒',
+        bodyHtml: buildEditorNoteItems([
+          '若要使用自訂單號，建議先依正式公文或管考序號命名，避免後續重複。',
+          '缺失描述請直接寫出現況、風險與影響範圍，後續追蹤會更清楚。',
+          '改善期限建議保留合理緩衝，避免剛送出就進入逾期狀態。'
+        ])
+      })
+      + '</div>';
+
     return `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">開立矯正單</h1><p class="page-subtitle">建立內部資通安全稽核矯正單，送出後即可進入處理與追蹤流程。</p></div></div>
       <div class="editor-shell editor-shell--car">
@@ -254,40 +316,7 @@
             <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出矯正單</button><a href="#list" class="btn btn-secondary">返回列表</a></div>
           </form></div>
         </section>
-        <aside class="editor-aside">
-          <div class="editor-sticky">
-            <div class="editor-side-card editor-side-card--accent">
-              <div class="editor-side-kicker">Issue Routing</div>
-              <div class="editor-side-title">開單摘要</div>
-              <div class="editor-side-text">右側摘要會跟著你的填寫內容即時更新，避免漏掉單號、指派與期限設定。</div>
-              <div class="editor-summary-list editor-summary-list--compact">
-                <div class="editor-summary-item"><span>編號前綴</span><strong id="create-summary-docno">待指定</strong></div>
-                <div class="editor-summary-item"><span>矯正單號</span><strong id="create-summary-id">自動編號</strong></div>
-                <div class="editor-summary-item"><span>提報單位</span><strong id="create-summary-proposer">${esc(getScopedUnit(u) || u.unit || '未指定')}</strong></div>
-                <div class="editor-summary-item"><span>處理單位</span><strong id="create-summary-handler-unit">待指定</strong></div>
-                <div class="editor-summary-item"><span>處理人員</span><strong id="create-summary-handler">待指定</strong></div>
-                <div class="editor-summary-item"><span>預計完成</span><strong id="create-summary-due">未指定</strong></div>
-                <div class="editor-summary-item"><span>通知方式</span><strong id="create-summary-notify">送出後寄送通知</strong></div>
-              </div>
-            </div>
-            <div class="editor-side-card">
-              <div class="editor-side-title">流程節點</div>
-              <div class="editor-step-list">
-                <div class="editor-step-item"><span class="editor-step-badge">1</span><div><strong>建立矯正單</strong><p>填寫缺失、來源與改善期限，並指定處理單位與人員。</p></div></div>
-                <div class="editor-step-item"><span class="editor-step-badge">2</span><div><strong>處理人員回覆</strong><p>承辦人填寫改善措施、根因與佐證資料後送審。</p></div></div>
-                <div class="editor-step-item"><span class="editor-step-badge">3</span><div><strong>管理者審核追蹤</strong><p>管理者可核可、退回或進入追蹤，直到結案。</p></div></div>
-              </div>
-            </div>
-            <div class="editor-side-card">
-              <div class="editor-side-title">填寫提醒</div>
-              <div class="editor-note-list">
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>若要使用自訂單號，建議先依正式公文或管考序號命名，避免後續重複。</span></div>
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>缺失描述請直接寫出現況、風險與影響範圍，後續追蹤會更清楚。</span></div>
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>改善期限建議保留合理緩衝，避免剛送出就進入逾期狀態。</span></div>
-              </div>
-            </div>
-          </div>
-        </aside>
+        <aside class="editor-aside">${createAside}</aside>
       </div></div>`;
   }
 
@@ -702,6 +731,37 @@ function handleStatusTransition(id, ns) {
   // ─── Render: Respond ───────────────────────
   
   function buildRespondPage(item) {
+    var respondAside = '<div class="editor-sticky">'
+      + buildEditorSideCard({
+        accent: true,
+        kicker: 'Response Summary',
+        title: '送審摘要',
+        text: '送出前先檢查期限、根因與附件是否完整，避免被退回補件。',
+        bodyHtml: buildEditorSummaryItems([
+          { label: '案件編號', value: esc(item.id) },
+          { label: '處理人員', value: esc(item.handlerName || currentUser().name) },
+          { label: '改善期限', value: item.correctiveDueDate ? fmt(item.correctiveDueDate) : '未指定', id: 'respond-summary-due' },
+          { label: '根因消除完成', value: item.rootElimDueDate ? fmt(item.rootElimDueDate) : '未指定', id: 'respond-summary-elimdue' },
+          { label: '附件數量', value: '0 份', id: 'respond-summary-files' }
+        ])
+      })
+      + buildEditorSideCard({
+        title: '送審前檢查',
+        bodyHtml: buildEditorStepItems([
+          { title: '措施要可驗證', text: '不要只寫「加強管理」，請明確寫出會執行的制度、流程或技術措施。' },
+          { title: '根因與改善要對應', text: '根因分析和消除措施必須互相對應，管理者才能快速判斷是否足以結案。' },
+          { title: '附件補足證據', text: '若有截圖、文件或簽核資料，這一階段就先補上，後續追蹤會更順。' }
+        ])
+      })
+      + buildEditorSideCard({
+        title: '風險接受說明',
+        bodyHtml: buildEditorNoteItems([
+          '只有在短期內無法完全消除根因時，才建議補充風險接受資訊。',
+          '若填寫風險接受人，建議同步補上接受日期與評估日期，資料會比較完整。'
+        ])
+      })
+      + '</div>';
+
     return `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">回覆矯正單</h1><p class="page-subtitle">${esc(item.id)} · ${esc((item.problemDesc || '').substring(0, 48))}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">返回單據</a></div>
       <div class="editor-shell editor-shell--respond">
@@ -729,37 +789,7 @@ function handleStatusTransition(id, ns) {
             <div class="form-actions"><button type="submit" class="btn btn-success">${ic('check-circle', 'icon-sm')} 送出回覆</button><a href="#detail/${item.id}" class="btn btn-secondary">取消返回</a></div>
           </form></div>
         </section>
-        <aside class="editor-aside">
-          <div class="editor-sticky">
-            <div class="editor-side-card editor-side-card--accent">
-              <div class="editor-side-kicker">Response Summary</div>
-              <div class="editor-side-title">送審摘要</div>
-              <div class="editor-side-text">送出前先檢查期限、根因與附件是否完整，避免被退回補件。</div>
-              <div class="editor-summary-list editor-summary-list--compact">
-                <div class="editor-summary-item"><span>案件編號</span><strong>${esc(item.id)}</strong></div>
-                <div class="editor-summary-item"><span>處理人員</span><strong>${esc(item.handlerName || currentUser().name)}</strong></div>
-                <div class="editor-summary-item"><span>改善期限</span><strong id="respond-summary-due">${item.correctiveDueDate ? fmt(item.correctiveDueDate) : '未指定'}</strong></div>
-                <div class="editor-summary-item"><span>根因消除完成</span><strong id="respond-summary-elimdue">${item.rootElimDueDate ? fmt(item.rootElimDueDate) : '未指定'}</strong></div>
-                <div class="editor-summary-item"><span>附件數量</span><strong id="respond-summary-files">0 份</strong></div>
-              </div>
-            </div>
-            <div class="editor-side-card">
-              <div class="editor-side-title">送審前檢查</div>
-              <div class="editor-step-list">
-                <div class="editor-step-item"><span class="editor-step-badge">1</span><div><strong>措施要可驗證</strong><p>不要只寫「加強管理」，請明確寫出會執行的制度、流程或技術措施。</p></div></div>
-                <div class="editor-step-item"><span class="editor-step-badge">2</span><div><strong>根因與改善要對應</strong><p>根因分析和消除措施必須互相對應，管理者才能快速判斷是否足以結案。</p></div></div>
-                <div class="editor-step-item"><span class="editor-step-badge">3</span><div><strong>附件補足證據</strong><p>若有截圖、文件或簽核資料，這一階段就先補上，後續追蹤會更順。</p></div></div>
-              </div>
-            </div>
-            <div class="editor-side-card">
-              <div class="editor-side-title">風險接受說明</div>
-              <div class="editor-note-list">
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>只有在短期內無法完全消除根因時，才建議補充風險接受資訊。</span></div>
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>若填寫風險接受人，建議同步補上接受日期與評估日期，資料會比較完整。</span></div>
-              </div>
-            </div>
-          </div>
-        </aside>
+        <aside class="editor-aside">${respondAside}</aside>
       </div></div>`;
   }
 
@@ -857,6 +887,38 @@ function renderRespond(id) {
   }
 
   function buildTrackingPage(item, round) {
+    var trackingAside = '<div class="editor-sticky">'
+      + buildEditorSideCard({
+        accent: true,
+        kicker: 'Tracking Summary',
+        title: '追蹤提報摘要',
+        text: '這一輪先由處理人員提出追蹤建議，再由管理者決定是否結案或繼續追蹤。',
+        bodyHtml: buildEditorSummaryItems([
+          { label: '案件編號', value: esc(item.id) },
+          { label: '追蹤輪次', value: '第 ' + round + ' 次' },
+          { label: '填報日期', value: fmt(new Date().toISOString().split('T')[0]), id: 'track-summary-date' },
+          { label: '提報建議', value: '待判定', id: 'track-summary-result' },
+          { label: '下一次追蹤', value: '未指定', id: 'track-summary-next' }
+        ])
+      })
+      + buildEditorSideCard({
+        title: '提報規則',
+        bodyHtml: buildEditorStepItems([
+          { title: '擬請同意結案', text: '只有改善措施已完成，且可提供佐證資料時才使用。' },
+          { title: '建議持續追蹤', text: '仍需補強或觀察時使用，必須填寫下一次追蹤日期。' },
+          { title: '管理者核定', text: '送出後會回到案件明細，由管理者決定同意結案或同意繼續追蹤。' }
+        ])
+      })
+      + buildEditorSideCard({
+        title: '案件脈絡',
+        bodyHtml: buildEditorNoteItems([
+          '目前案件狀態：' + esc(item.status),
+          '既有追蹤次數：' + esc(String((item.trackings || []).length)) + ' 次',
+          '處理人員：' + esc(item.handlerName || '未指定')
+        ])
+      })
+      + '</div>';
+
     return `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">第 ${round} 次追蹤提報</h1><p class="page-subtitle">${esc(item.id)} · ${esc(item.handlerName || '')}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">返回單據</a></div>
       <div class="editor-shell editor-shell--tracking">
@@ -876,38 +938,7 @@ function renderRespond(id) {
             <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出追蹤提報</button><a href="#detail/${item.id}" class="btn btn-secondary">取消返回</a></div>
           </form></div>
         </section>
-        <aside class="editor-aside">
-          <div class="editor-sticky">
-            <div class="editor-side-card editor-side-card--accent">
-              <div class="editor-side-kicker">Tracking Summary</div>
-              <div class="editor-side-title">追蹤提報摘要</div>
-              <div class="editor-side-text">這一輪先由處理人員提出追蹤建議，再由管理者決定是否結案或繼續追蹤。</div>
-              <div class="editor-summary-list editor-summary-list--compact">
-                <div class="editor-summary-item"><span>案件編號</span><strong>${esc(item.id)}</strong></div>
-                <div class="editor-summary-item"><span>追蹤輪次</span><strong>第 ${round} 次</strong></div>
-                <div class="editor-summary-item"><span>填報日期</span><strong id="track-summary-date">${fmt(new Date().toISOString().split('T')[0])}</strong></div>
-                <div class="editor-summary-item"><span>提報建議</span><strong id="track-summary-result">待判定</strong></div>
-                <div class="editor-summary-item"><span>下一次追蹤</span><strong id="track-summary-next">未指定</strong></div>
-              </div>
-            </div>
-            <div class="editor-side-card">
-              <div class="editor-side-title">提報規則</div>
-              <div class="editor-step-list">
-                <div class="editor-step-item"><span class="editor-step-badge">1</span><div><strong>擬請同意結案</strong><p>只有改善措施已完成，且可提供佐證資料時才使用。</p></div></div>
-                <div class="editor-step-item"><span class="editor-step-badge">2</span><div><strong>建議持續追蹤</strong><p>仍需補強或觀察時使用，必須填寫下一次追蹤日期。</p></div></div>
-                <div class="editor-step-item"><span class="editor-step-badge">3</span><div><strong>管理者核定</strong><p>送出後會回到案件明細，由管理者決定同意結案或同意繼續追蹤。</p></div></div>
-              </div>
-            </div>
-            <div class="editor-side-card">
-              <div class="editor-side-title">案件脈絡</div>
-              <div class="editor-note-list">
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>目前案件狀態：${esc(item.status)}</span></div>
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>既有追蹤次數：${(item.trackings || []).length} 次</span></div>
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>處理人員：${esc(item.handlerName || '未指定')}</span></div>
-              </div>
-            </div>
-          </div>
-        </aside>
+        <aside class="editor-aside">${trackingAside}</aside>
       </div></div>`;
   }
 
