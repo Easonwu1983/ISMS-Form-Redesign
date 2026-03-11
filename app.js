@@ -2186,6 +2186,7 @@
   }
 
   // ─── Init ──────────────────────────────────
+  getDataModule().migrateAllStores();
   seedData();
   ensurePrimaryAdminProfile();
   getTrainingModule().seedTrainingData();

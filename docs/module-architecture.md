@@ -17,6 +17,7 @@
 - Owns `localStorage` store access and cache
 - Owns data normalization for users, corrective actions, checklists, and training forms
 - Owns CRUD for correction data, checklist data, training data, unit review store, and login logs
+- Owns store schema versioning and migration dispatch for persisted data
 - Keeps persistence concerns out of feature and shell modules
 
 ### [case-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/case-module.js)
@@ -60,7 +61,7 @@
 
 ## Recommended Next Refactors
 
-1. Add a schema version and migration dispatcher for every persisted store in [data-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/data-module.js).
-2. Replace high-churn inline `onclick` actions with `data-action` event delegation.
-3. Move auth/session bootstrap into a dedicated auth module.
+1. Replace high-churn inline `onclick` actions with `data-action` event delegation.
+2. Move auth/session bootstrap into a dedicated auth module.
+3. Add migration diagnostics or a small admin-only schema health panel.
 4. Clean up documentation files that still show encoding corruption in some terminals.

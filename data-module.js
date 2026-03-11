@@ -37,6 +37,32 @@
     } = deps;
 
     const STORAGE_CACHE = Object.create(null);
+    const STORE_VERSIONS = {
+      [DATA_KEY]: 1,
+      [CHECKLIST_KEY]: 1,
+      [TEMPLATE_KEY]: 1,
+      [TRAINING_KEY]: 1,
+      [LOGIN_LOG_KEY]: 1,
+      [UNIT_REVIEW_KEY]: 1
+    };
+
+    function getStoreVersion(key) {
+      return Number(STORE_VERSIONS[key] || 1);
+    }
+
+    function createStoreEnvelope(key, payload) {
+      return {
+        version: getStoreVersion(key),
+        payload
+      };
+    }
+
+    function isStoreEnvelope(value) {
+      return !!value
+        && typeof value === 'object'
+        && Number.isFinite(Number(value.version))
+        && Object.prototype.hasOwnProperty.call(value, 'payload');
+    }
 
     function readCachedJson(key, fallbackFactory) {
       const raw = localStorage.getItem(key);
@@ -63,6 +89,121 @@
     function removeCachedJson(key) {
       delete STORAGE_CACHE[key];
       localStorage.removeItem(key);
+    }
+
+    function migrateDataStoreToV1(payload) {
+      const base = payload && typeof payload === 'object' ? payload : {};
+      return {
+        items: Array.isArray(base.items) ? base.items : [],
+        users: Array.isArray(base.users) ? base.users : DEFAULT_USERS.map((user) => ({ ...user })),
+        nextId: Number.isFinite(Number(base.nextId)) ? Number(base.nextId) : 1
+      };
+    }
+
+    function migrateChecklistStoreToV1(payload) {
+      const base = payload && typeof payload === 'object' ? payload : {};
+      return {
+        items: Array.isArray(base.items) ? base.items : [],
+        nextId: Number.isFinite(Number(base.nextId)) ? Number(base.nextId) : 1
+      };
+    }
+
+    function migrateTrainingStoreToV1(payload) {
+      const base = payload && typeof payload === 'object' ? payload : {};
+      return {
+        forms: Array.isArray(base.forms) ? base.forms : [],
+        rosters: Array.isArray(base.rosters) ? base.rosters : [],
+        nextFormId: Number.isFinite(Number(base.nextFormId)) ? Number(base.nextFormId) : 1,
+        nextRosterId: Number.isFinite(Number(base.nextRosterId)) ? Number(base.nextRosterId) : 1
+      };
+    }
+
+    function migrateLoginLogStoreToV1(payload) {
+      return Array.isArray(payload) ? payload : [];
+    }
+
+    function migrateUnitReviewStoreToV1(payload) {
+      const base = payload && typeof payload === 'object' ? payload : {};
+      return {
+        approvedUnits: Array.isArray(base.approvedUnits) ? base.approvedUnits : [],
+        history: Array.isArray(base.history) ? base.history : []
+      };
+    }
+
+    function migrateChecklistTemplateStoreToV1(payload) {
+      return Array.isArray(payload) && payload.length
+        ? payload
+        : JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS));
+    }
+
+    const STORE_MIGRATIONS = {
+      [DATA_KEY]: {
+        1: migrateDataStoreToV1
+      },
+      [CHECKLIST_KEY]: {
+        1: migrateChecklistStoreToV1
+      },
+      [TEMPLATE_KEY]: {
+        1: migrateChecklistTemplateStoreToV1
+      },
+      [TRAINING_KEY]: {
+        1: migrateTrainingStoreToV1
+      },
+      [LOGIN_LOG_KEY]: {
+        1: migrateLoginLogStoreToV1
+      },
+      [UNIT_REVIEW_KEY]: {
+        1: migrateUnitReviewStoreToV1
+      }
+    };
+
+    function runStoreMigrations(key, payload, fromVersion) {
+      const targetVersion = getStoreVersion(key);
+      const migrations = STORE_MIGRATIONS[key] || {};
+      let nextValue = payload;
+      let version = Number.isFinite(Number(fromVersion)) ? Number(fromVersion) : 0;
+      let changed = false;
+
+      while (version < targetVersion) {
+        const nextVersion = version + 1;
+        const migrate = migrations[nextVersion];
+        nextValue = typeof migrate === 'function' ? migrate(nextValue) : nextValue;
+        version = nextVersion;
+        changed = true;
+      }
+
+      return {
+        value: nextValue,
+        version,
+        changed
+      };
+    }
+
+    function readVersionedStore(key, fallbackFactory) {
+      const fallback = typeof fallbackFactory === 'function' ? fallbackFactory : (() => undefined);
+      const hadStoredValue = localStorage.getItem(key) !== null;
+      const rawValue = readCachedJson(key, () => createStoreEnvelope(key, fallback()));
+      const envelope = isStoreEnvelope(rawValue)
+        ? rawValue
+        : { version: 0, payload: rawValue };
+      const migrated = runStoreMigrations(key, envelope.payload, envelope.version);
+      if (!hadStoredValue || !isStoreEnvelope(rawValue) || migrated.changed || envelope.version !== getStoreVersion(key)) {
+        writeVersionedStore(key, migrated.value);
+      }
+      return migrated.value;
+    }
+
+    function writeVersionedStore(key, payload) {
+      writeCachedJson(key, createStoreEnvelope(key, payload));
+    }
+
+    function migrateAllStores() {
+      readVersionedStore(DATA_KEY, createDefaultData);
+      readVersionedStore(CHECKLIST_KEY, emptyChecklistStore);
+      readVersionedStore(TEMPLATE_KEY, cloneDefaultChecklistSections);
+      readVersionedStore(TRAINING_KEY, emptyTrainingStore);
+      readVersionedStore(LOGIN_LOG_KEY, () => []);
+      readVersionedStore(UNIT_REVIEW_KEY, emptyUnitReviewStore);
     }
 
     function createDefaultData() {
@@ -163,7 +304,7 @@
     }
 
     function loadData() {
-      const data = readCachedJson(DATA_KEY, createDefaultData);
+      const data = readVersionedStore(DATA_KEY, createDefaultData);
       if (!Array.isArray(data.users)) data.users = DEFAULT_USERS.map((user) => ({ ...user }));
       if (!Array.isArray(data.items)) data.items = [];
       if (!Number.isFinite(Number(data.nextId))) data.nextId = 1;
@@ -180,7 +321,7 @@
       return data;
     }
 
-    function saveData(data) { writeCachedJson(DATA_KEY, data); }
+    function saveData(data) { writeVersionedStore(DATA_KEY, data); }
     function getAllItems() { return loadData().items.slice(); }
     function getItem(id) { return loadData().items.find((item) => item.id === id); }
     function addItem(item) {
@@ -225,12 +366,12 @@
     }
 
     function loadLoginLogs() {
-      const logs = readCachedJson(LOGIN_LOG_KEY, () => []);
+      const logs = readVersionedStore(LOGIN_LOG_KEY, () => []);
       return Array.isArray(logs) ? logs : [];
     }
 
     function saveLoginLogs(logs) {
-      writeCachedJson(LOGIN_LOG_KEY, Array.isArray(logs) ? logs : []);
+      writeVersionedStore(LOGIN_LOG_KEY, Array.isArray(logs) ? logs : []);
     }
 
     function addLoginLog(username, user, success) {
@@ -255,7 +396,7 @@
     }
 
     function loadUnitReviewStore() {
-      const raw = readCachedJson(UNIT_REVIEW_KEY, emptyUnitReviewStore);
+      const raw = readVersionedStore(UNIT_REVIEW_KEY, emptyUnitReviewStore);
       if (!raw || typeof raw !== 'object') return emptyUnitReviewStore();
       if (!Array.isArray(raw.approvedUnits)) raw.approvedUnits = [];
       if (!Array.isArray(raw.history)) raw.history = [];
@@ -263,7 +404,7 @@
     }
 
     function saveUnitReviewStore(store) {
-      writeCachedJson(UNIT_REVIEW_KEY, store);
+      writeVersionedStore(UNIT_REVIEW_KEY, store);
     }
 
     function cloneDefaultChecklistSections() {
@@ -271,12 +412,12 @@
     }
 
     function getChecklistSections() {
-      const saved = readCachedJson(TEMPLATE_KEY, cloneDefaultChecklistSections);
+      const saved = readVersionedStore(TEMPLATE_KEY, cloneDefaultChecklistSections);
       return Array.isArray(saved) && saved.length ? saved : cloneDefaultChecklistSections();
     }
 
     function saveChecklistSections(sections) {
-      writeCachedJson(TEMPLATE_KEY, Array.isArray(sections) ? sections : cloneDefaultChecklistSections());
+      writeVersionedStore(TEMPLATE_KEY, Array.isArray(sections) ? sections : cloneDefaultChecklistSections());
     }
 
     function emptyChecklistStore() {
@@ -318,7 +459,7 @@
     }
 
     function loadChecklists() {
-      const raw = readCachedJson(CHECKLIST_KEY, emptyChecklistStore);
+      const raw = readVersionedStore(CHECKLIST_KEY, emptyChecklistStore);
       if (!raw || typeof raw !== 'object') return emptyChecklistStore();
       if (!Array.isArray(raw.items)) raw.items = [];
       if (!Number.isFinite(raw.nextId)) raw.nextId = 1;
@@ -343,7 +484,7 @@
       return raw;
     }
 
-    function saveChecklists(store) { writeCachedJson(CHECKLIST_KEY, store); }
+    function saveChecklists(store) { writeVersionedStore(CHECKLIST_KEY, store); }
     function getAllChecklists() { return loadChecklists().items.slice(); }
     function getChecklist(id) { return loadChecklists().items.find((item) => item.id === id); }
     function addChecklist(item) {
@@ -491,7 +632,7 @@
     }
 
     function loadTrainingStore() {
-      const raw = readCachedJson(TRAINING_KEY, emptyTrainingStore);
+      const raw = readVersionedStore(TRAINING_KEY, emptyTrainingStore);
       if (!raw || typeof raw !== 'object') return emptyTrainingStore();
       const store = {
         forms: Array.isArray(raw.forms) ? raw.forms.map((form) => normalizeTrainingForm(form)) : [],
@@ -520,7 +661,7 @@
     }
 
     function saveTrainingStore(store) {
-      writeCachedJson(TRAINING_KEY, store);
+      writeVersionedStore(TRAINING_KEY, store);
     }
 
     function getAllTrainingForms() {
@@ -671,6 +812,9 @@
       addTrainingRosterPerson,
       deleteTrainingRosterPerson,
       updateTrainingRosterPerson
+      ,
+      migrateAllStores,
+      getStoreVersion
     };
   };
 })();
