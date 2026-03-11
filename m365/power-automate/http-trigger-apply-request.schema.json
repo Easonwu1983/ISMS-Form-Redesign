@@ -1,0 +1,85 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "const": "unit-contact.apply"
+    },
+    "requestId": {
+      "type": "string"
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "frontendOrigin": {
+          "type": "string"
+        },
+        "frontendHash": {
+          "type": "string"
+        },
+        "sentAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "source",
+        "sentAt"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "applicantName": {
+          "type": "string"
+        },
+        "applicantEmail": {
+          "type": "string"
+        },
+        "extensionNumber": {
+          "type": "string"
+        },
+        "unitCategory": {
+          "type": "string"
+        },
+        "primaryUnit": {
+          "type": "string"
+        },
+        "secondaryUnit": {
+          "type": "string"
+        },
+        "unitValue": {
+          "type": "string"
+        },
+        "unitCode": {
+          "type": "string"
+        },
+        "contactType": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "applicantName",
+        "applicantEmail",
+        "extensionNumber",
+        "unitValue",
+        "unitCode"
+      ]
+    }
+  },
+  "required": [
+    "action",
+    "requestId",
+    "context",
+    "payload"
+  ]
+}

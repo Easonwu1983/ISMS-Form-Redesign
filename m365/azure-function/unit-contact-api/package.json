@@ -1,0 +1,14 @@
+{
+  "name": "isms-unit-contact-api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Azure Functions template for ISMS unit contact application endpoints",
+  "main": "src/functions.js",
+  "scripts": {
+    "start": "func start",
+    "check": "node --check src/functions.js && node --check src/handlers.js && node --check src/shared/contract.js && node --check src/shared/mock-store.js && node --check src/shared/sharepoint-repository.js"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.6.0"
+  }
+}

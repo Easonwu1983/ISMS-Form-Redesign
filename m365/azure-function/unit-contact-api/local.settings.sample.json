@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "UNIT_CONTACT_REPOSITORY": "mock",
+    "MS_TENANT_ID": "",
+    "MS_CLIENT_ID": "",
+    "MS_CLIENT_SECRET": "",
+    "MS_GRAPH_SCOPE": "https://graph.microsoft.com/.default",
+    "SHAREPOINT_SITE_ID": "",
+    "SHAREPOINT_APPLICATIONS_LIST_ID": ""
+  }
+}

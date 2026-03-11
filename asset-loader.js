@@ -6,6 +6,7 @@
     'vendor/lucide.min.js',
     'vendor/xlsx.full.min.js',
     'units.js',
+    'm365-config.js',
     'attachment-module.js',
     'data-module.js',
     'auth-module.js',

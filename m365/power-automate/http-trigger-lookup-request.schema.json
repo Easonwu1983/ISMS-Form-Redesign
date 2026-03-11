@@ -1,0 +1,54 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "const": "unit-contact.lookup"
+    },
+    "requestId": {
+      "type": "string"
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "frontendOrigin": {
+          "type": "string"
+        },
+        "frontendHash": {
+          "type": "string"
+        },
+        "sentAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "source",
+        "sentAt"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "email"
+      ]
+    }
+  },
+  "required": [
+    "action",
+    "requestId",
+    "context",
+    "payload"
+  ]
+}

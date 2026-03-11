@@ -1,0 +1,74 @@
+{
+  "version": "2026-03-11",
+  "site": {
+    "name": "ISMS-Forms",
+    "purpose": "ISMS unit contact application, approval, activation, and audit backend"
+  },
+  "lists": [
+    {
+      "name": "UnitContactApplications",
+      "description": "Public-facing applications for new unit information security contacts",
+      "recommendedIndexes": ["ApplicationId", "ApplicantEmail", "UnitCode", "Status", "SubmittedAt"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use ApplicationId as the display title" },
+        { "name": "ApplicationId", "type": "singleLineText", "required": true, "unique": true },
+        { "name": "ApplicantName", "type": "singleLineText", "required": true },
+        { "name": "ApplicantEmail", "type": "singleLineText", "required": true },
+        { "name": "ExtensionNumber", "type": "singleLineText", "required": true },
+        { "name": "UnitCategory", "type": "choice", "required": true, "choices": ["行政單位", "學術單位", "研究中心"] },
+        { "name": "PrimaryUnitCode", "type": "singleLineText", "required": true },
+        { "name": "PrimaryUnitName", "type": "singleLineText", "required": true },
+        { "name": "SecondaryUnitCode", "type": "singleLineText", "required": false },
+        { "name": "SecondaryUnitName", "type": "singleLineText", "required": false },
+        { "name": "UnitCode", "type": "singleLineText", "required": true, "notes": "Normalized final unit code used by app authorization" },
+        { "name": "UnitValue", "type": "singleLineText", "required": true, "notes": "Normalized full unit label shown in frontend" },
+        { "name": "ContactType", "type": "choice", "required": true, "choices": ["primary", "backup"] },
+        { "name": "Status", "type": "choice", "required": true, "choices": ["pending_review", "returned", "approved", "rejected", "activation_pending", "active"] },
+        { "name": "SubmittedAt", "type": "dateTime", "required": true },
+        { "name": "ReviewedAt", "type": "dateTime", "required": false },
+        { "name": "ReviewedBy", "type": "singleLineText", "required": false },
+        { "name": "ReviewComment", "type": "multipleLinesText", "required": false },
+        { "name": "ActivationSentAt", "type": "dateTime", "required": false },
+        { "name": "ActivatedAt", "type": "dateTime", "required": false },
+        { "name": "ExternalUserId", "type": "singleLineText", "required": false, "notes": "Entra object id or External ID account id" },
+        { "name": "Source", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] },
+        { "name": "BackendMode", "type": "choice", "required": true, "choices": ["local-emulator", "sharepoint-flow", "m365-api"] },
+        { "name": "Note", "type": "multipleLinesText", "required": false }
+      ]
+    },
+    {
+      "name": "UnitAdmins",
+      "description": "Active or pending contact identities bound to a unit",
+      "recommendedIndexes": ["Email", "UnitCode", "Status", "ExternalUserId"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "DisplayName or Email" },
+        { "name": "ExternalUserId", "type": "singleLineText", "required": false },
+        { "name": "DisplayName", "type": "singleLineText", "required": true },
+        { "name": "Email", "type": "singleLineText", "required": true },
+        { "name": "ExtensionNumber", "type": "singleLineText", "required": false },
+        { "name": "UnitCode", "type": "singleLineText", "required": true },
+        { "name": "UnitName", "type": "singleLineText", "required": true },
+        { "name": "ContactType", "type": "choice", "required": true, "choices": ["primary", "backup"] },
+        { "name": "Status", "type": "choice", "required": true, "choices": ["pending_activation", "active", "disabled", "revoked"] },
+        { "name": "ActivatedAt", "type": "dateTime", "required": false },
+        { "name": "LastLoginAt", "type": "dateTime", "required": false },
+        { "name": "LastApplicationId", "type": "singleLineText", "required": false }
+      ]
+    },
+    {
+      "name": "OpsAudit",
+      "description": "Operational and security audit trail for application, review, activation, and maintenance actions",
+      "recommendedIndexes": ["EventType", "ActorEmail", "TargetEmail", "UnitCode", "OccurredAt"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "Human-readable event title" },
+        { "name": "EventType", "type": "singleLineText", "required": true },
+        { "name": "ActorEmail", "type": "singleLineText", "required": false },
+        { "name": "TargetEmail", "type": "singleLineText", "required": false },
+        { "name": "UnitCode", "type": "singleLineText", "required": false },
+        { "name": "RecordId", "type": "singleLineText", "required": false },
+        { "name": "OccurredAt", "type": "dateTime", "required": true },
+        { "name": "PayloadJson", "type": "multipleLinesText", "required": false, "notes": "Compact JSON payload for troubleshooting" }
+      ]
+    }
+  ]
+}

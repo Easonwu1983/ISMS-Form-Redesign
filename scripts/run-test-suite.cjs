@@ -18,6 +18,7 @@ const suites = {
   bonus: [
     'scripts/upload-security-regression.cjs',
     'scripts/security-regression.cjs',
+    'scripts/unit-contact-public-smoke.cjs',
     'scripts/uat-daily-flow.cjs',
     'scripts/stress-regression.cjs'
   ]

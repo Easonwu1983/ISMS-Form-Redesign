@@ -17,6 +17,7 @@
     "test:training:acceptance": "node scripts/training-flow-acceptance.cjs",
     "test:training:all": "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs training\"",
     "test:bonus:all": "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs bonus\"",
+    "test:unit-contact:smoke": "node scripts/run-with-local-server.cjs \"node scripts/unit-contact-public-smoke.cjs\"",
     "test:security": "node scripts/run-with-local-server.cjs \"node scripts/security-regression.cjs\"",
     "test:uat:daily": "node scripts/uat-daily-flow.cjs",
     "test:zoom:browsers": "node scripts/browser-zoom-regression.cjs",
