@@ -70,6 +70,12 @@ Confirm:
 - [ ] Recovery actions are set
 - [ ] Service runs under the chosen M365 Windows account
 
+If admin rights are not available on the campus host:
+
+- [ ] Per-user logon fallback task installed
+- [ ] Fallback task tested under the intended Windows account
+- [ ] Backend still starts on sign-in and reaches `/api/unit-contact/health`
+
 ## 6. Frontend Override
 
 Copy:
