@@ -62,6 +62,7 @@
       isTrainingRecordReadyForSubmit,
       isTrainingRecordComplete,
       getStoredTrainingProfessionalValue,
+      prepareUploadBatch,
       exportTrainingSummaryCsv,
       exportTrainingDetailCsv,
       printTrainingSheet,
@@ -903,14 +904,18 @@
     }
 
     function handleFiles(files) {
-      Array.from(files).forEach((file) => {
-        if (file.size > 5 * 1024 * 1024) {
-          toast('「' + file.name + '」超過 5MB', 'error');
-          return;
-        }
+      const batch = prepareUploadBatch(filesState, files, {
+        fileLabel: '簽核掃描檔',
+        maxSize: 5 * 1024 * 1024,
+        maxSizeLabel: '5MB',
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+        allowedMimeTypes: ['image/*', 'application/pdf']
+      });
+      batch.errors.forEach((message) => toast(message, 'error'));
+      batch.accepted.forEach(({ file, meta }) => {
         const reader = new FileReader();
         reader.onload = (evt) => {
-          filesState.push({ name: file.name, type: file.type, data: evt.target.result });
+          filesState.push({ ...meta, data: evt.target.result });
           renderSignedFiles('training-file-previews', true);
           renderSignedFiles('training-signed-files-readonly', false);
         };
@@ -918,6 +923,7 @@
       });
       const targetInput = document.getElementById('training-file-input');
       if (targetInput) targetInput.value = '';
+      return;
     }
 
     document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
@@ -1013,7 +1019,23 @@
     const fileCopy = document.getElementById('training-import-file-copy');
     fileInput?.addEventListener('change', () => {
       const file = fileInput.files && fileInput.files[0];
-      fileCopy.innerHTML = buildTrainingRosterFileCopy(file?.name || '');
+      if (!file) {
+        fileCopy.innerHTML = buildTrainingRosterFileCopy('');
+        return;
+      }
+      const batch = prepareUploadBatch([], [file], {
+        fileLabel: '名單匯入檔',
+        maxSize: 10 * 1024 * 1024,
+        maxSizeLabel: '10MB',
+        allowedExtensions: ['xlsx', 'xls', 'csv', 'tsv']
+      });
+      if (!batch.accepted.length) {
+        batch.errors.forEach((message) => toast(message, 'error'));
+        fileInput.value = '';
+        fileCopy.innerHTML = buildTrainingRosterFileCopy('');
+        return;
+      }
+      fileCopy.innerHTML = buildTrainingRosterFileCopy(file.name || '');
     });
     document.getElementById('training-import-form').addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -1022,8 +1044,18 @@
       const file = fileInput.files[0];
       let entries = [];
       if (file) {
+        const batch = prepareUploadBatch([], [file], {
+          fileLabel: '名單匯入檔',
+          maxSize: 10 * 1024 * 1024,
+          maxSizeLabel: '10MB',
+          allowedExtensions: ['xlsx', 'xls', 'csv', 'tsv']
+        });
+        if (!batch.accepted.length) {
+          batch.errors.forEach((message) => toast(message, 'error'));
+          return;
+        }
         try {
-          entries = await parseTrainingRosterWorkbook(file, unit);
+          entries = await parseTrainingRosterWorkbook(batch.accepted[0].file, unit);
         } catch (error) {
           toast(error.message || 'Excel 匯入失敗', 'error');
           return;

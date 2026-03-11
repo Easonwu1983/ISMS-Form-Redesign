@@ -99,7 +99,8 @@ async function login(page, username, password) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
   if (await page.locator('.btn-logout').count()) {
-    await page.evaluate(() => window._logout());
+    await page.click('.btn-logout');
+    await page.waitForSelector('[data-testid="login-form"]');
   }
   await page.waitForSelector('[data-testid="login-form"]');
   await page.fill('[data-testid="login-user"]', username);

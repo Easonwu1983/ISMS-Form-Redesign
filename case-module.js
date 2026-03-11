@@ -46,6 +46,7 @@
       bindCopyButtons,
       renderCopyIdCell,
       renderCopyIdButton,
+      prepareUploadBatch,
       buildUnitCascadeControl,
       initUnitCascade,
       applyTestIds,
@@ -837,6 +838,21 @@ function renderRespond(id) {
     }
 
     function handleF(files) {
+      const batch = prepareUploadBatch(tempEv, files, {
+        fileLabel: '佐證檔案',
+        maxSize: 2 * 1024 * 1024,
+        maxSizeLabel: '2MB',
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+        allowedMimeTypes: ['image/*', 'application/pdf']
+      });
+      batch.errors.forEach((message) => toast(message, 'error'));
+      batch.accepted.forEach(({ file, meta }) => {
+        const r = new FileReader();
+        r.onload = e => { tempEv.push({ ...meta, data: e.target.result }); updP(); };
+        r.readAsDataURL(file);
+      });
+      if (fi) fi.value = '';
+      return;
       Array.from(files).forEach(f => {
         if (f.size > 2 * 1024 * 1024) { toast(`${f.name} 超過 2MB`, 'error'); return; }
         const r = new FileReader();
@@ -994,6 +1010,24 @@ function renderTracking(id) {
     }
 
     function handleTrackingFiles(files) {
+      const batch = prepareUploadBatch(tempEv, files, {
+        fileLabel: '結案佐證',
+        maxSize: 2 * 1024 * 1024,
+        maxSizeLabel: '2MB',
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+        allowedMimeTypes: ['image/*', 'application/pdf']
+      });
+      batch.errors.forEach((message) => toast(message, 'error'));
+      batch.accepted.forEach(({ file, meta }) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          tempEv.push({ ...meta, data: event.target.result });
+          updateTrackingPreviews();
+        };
+        reader.readAsDataURL(file);
+      });
+      if (fileInput) fileInput.value = '';
+      return;
       Array.from(files).forEach((file) => {
         if (file.size > 2 * 1024 * 1024) { toast(file.name + ' 超過 2MB', 'error'); return; }
         const reader = new FileReader();

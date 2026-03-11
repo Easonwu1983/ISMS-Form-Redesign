@@ -502,6 +502,7 @@
       bindCopyButtons,
       renderCopyIdCell,
       renderCopyIdButton,
+      prepareUploadBatch,
       buildUnitCascadeControl,
       initUnitCascade,
       applyTestIds,
@@ -633,6 +634,7 @@
       isTrainingRecordReadyForSubmit,
       isTrainingRecordComplete,
       getStoredTrainingProfessionalValue,
+      prepareUploadBatch,
       exportTrainingSummaryCsv,
       exportTrainingDetailCsv,
       printTrainingSheet,
@@ -1080,6 +1082,10 @@
     return base + options.map((option) => '<option value="' + esc(option) + '" ' + (selected === option ? 'selected' : '') + '>' + esc(option) + '</option>').join('');
   }
 
+  function getFileExtension(name) { return getWorkflowSupportModule().getFileExtension(name); }
+  function buildUploadSignature(meta) { return getWorkflowSupportModule().buildUploadSignature(meta); }
+  function validateUploadFile(file, options) { return getWorkflowSupportModule().validateUploadFile(file, options); }
+  function prepareUploadBatch(existingFiles, incomingFiles, options) { return getWorkflowSupportModule().prepareUploadBatch(existingFiles, incomingFiles, options); }
   function csvCell(value) { return getWorkflowSupportModule().csvCell(value); }
   function downloadWorkbook(filename, sheets) { return getWorkflowSupportModule().downloadWorkbook(filename, sheets); }
   function exportTrainingSummaryCsv(forms, filename) { return getWorkflowSupportModule().exportTrainingSummaryCsv(forms, filename); }
