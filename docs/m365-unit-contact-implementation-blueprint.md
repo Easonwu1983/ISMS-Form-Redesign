@@ -3,9 +3,17 @@
 - Updated: 2026-03-11
 - Scope: add a "申請單位資安窗口" flow to the existing frontend, keep the frontend hosted on campus, and move identity/workflow/data persistence to M365-backed services.
 
+> Current recommendation:
+> launch the A3-ready version first with SharePoint + Power Automate.
+> See [docs/m365-a3-unit-contact-blueprint.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-unit-contact-blueprint.md).
+> This document remains the future-state blueprint for a later Azure / Entra upgrade.
+
 ## Executive Summary
 
-This project can move to a practical hybrid architecture:
+This project can move to a practical hybrid architecture.
+
+For the first production cut under Microsoft 365 A3, use the lighter A3 path.
+For later upgrades, use the target architecture below.
 
 1. Keep the current frontend as the campus-facing SPA.
 2. Add a new public/internal entry on the homepage for `申請單位資安窗口`.

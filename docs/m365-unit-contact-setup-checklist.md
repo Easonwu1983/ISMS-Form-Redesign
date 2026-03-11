@@ -33,6 +33,7 @@
 Update [m365-config.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-config.js):
 
 1. choose `ACTIVE_PROFILE`
+   - recommended now: `a3CampusFlow`
 2. fill the profile endpoints:
    - `unitContactSubmitEndpoint`
    - `unitContactStatusEndpoint`
@@ -57,11 +58,11 @@ Choose one:
 1. Decide Pattern A or Pattern B from [docs/m365-unit-contact-implementation-blueprint.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-unit-contact-implementation-blueprint.md).
 2. Preferred:
    - approve
-   - send activation link
-   - user sets own password
+   - admin prepares current-system account
+   - send first-login / password-reset guidance
 3. Fallback:
    - admin creates account
-   - send temporary password
+   - send temporary password through approved internal process
    - force change on first sign-in
 
 ## Repo Files Already Prepared
@@ -74,6 +75,8 @@ Choose one:
   - [m365-config.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-config.js)
 - Azure Function template:
   - [m365/azure-function/unit-contact-api/README.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/azure-function/unit-contact-api/README.md)
+- A3 first-cut blueprint:
+  - [docs/m365-a3-unit-contact-blueprint.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-unit-contact-blueprint.md)
 - Architecture:
   - [docs/m365-unit-contact-implementation-blueprint.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-unit-contact-implementation-blueprint.md)
 - API contract:

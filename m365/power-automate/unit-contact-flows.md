@@ -66,7 +66,7 @@
    - send rejection email
    - insert `OpsAudit` row `unit_contact.application_rejected`
 
-## Flow 3: Send Activation
+## Flow 3: Issue Account Handoff Notice
 
 ### Trigger
 
@@ -75,25 +75,34 @@
 
 ### Actions
 
-1. Build activation URL.
-2. Send activation email to applicant.
-3. Update `ActivationSentAt`.
+1. Confirm how this applicant will sign in to the current system.
+2. If the current app still uses local accounts:
+   - create or update the account through the existing admin process
+   - prepare `AppUsername`
+   - prepare first-login or password-reset instructions
+3. Update these columns on `UnitContactApplications`:
+   - `ProvisionedAt`
+   - `ProvisionedBy`
+   - `ProvisioningNote`
+   - `AppUsername`
+   - `ActivationSentAt`
 4. Update `Status` to `activation_pending`.
-5. Insert `OpsAudit` row `unit_contact.activation_sent`.
+5. Send the account handoff email to the applicant.
+6. Insert `OpsAudit` row `unit_contact.activation_sent`.
 
-## Flow 4: Post-Activation Binding
+## Flow 4: First Login Confirmed
 
 ### Trigger
 
-- from Azure Function callback
-- or manual admin action after Entra user creation/first login
+- user confirms login success
+- or admin manually confirms the account handoff is complete
 
 ### Actions
 
 1. Update `UnitContactApplications`:
    - `ActivatedAt`
-   - `ExternalUserId`
    - `Status = active`
+   - optional `ExternalUserId` if you later upgrade the identity model
 2. Upsert `UnitAdmins`
 3. Insert `OpsAudit` row `unit_contact.activated`
 
@@ -110,7 +119,7 @@
 
 ### Actions
 
-1. Send reminder email.
+1. Send reminder email about account handoff or first login.
 2. Insert `OpsAudit` row `unit_contact.activation_reminder`.
 
 ## Recommended Review Mailbox Inputs

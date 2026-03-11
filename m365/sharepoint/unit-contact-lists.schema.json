@@ -2,12 +2,12 @@
   "version": "2026-03-11",
   "site": {
     "name": "ISMS-Forms",
-    "purpose": "ISMS unit contact application, approval, activation, and audit backend"
+    "purpose": "ISMS unit contact application, approval, account handoff, and audit backend"
   },
   "lists": [
     {
       "name": "UnitContactApplications",
-      "description": "Public-facing applications for new unit information security contacts",
+      "description": "Public-facing applications for new unit information security contacts in the A3-ready workflow",
       "recommendedIndexes": ["ApplicationId", "ApplicantEmail", "UnitCode", "Status", "SubmittedAt"],
       "columns": [
         { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use ApplicationId as the display title" },
@@ -28,9 +28,13 @@
         { "name": "ReviewedAt", "type": "dateTime", "required": false },
         { "name": "ReviewedBy", "type": "singleLineText", "required": false },
         { "name": "ReviewComment", "type": "multipleLinesText", "required": false },
-        { "name": "ActivationSentAt", "type": "dateTime", "required": false },
+        { "name": "ActivationSentAt", "type": "dateTime", "required": false, "notes": "For A3 V1 this means account handoff notice sent" },
         { "name": "ActivatedAt", "type": "dateTime", "required": false },
-        { "name": "ExternalUserId", "type": "singleLineText", "required": false, "notes": "Entra object id or External ID account id" },
+        { "name": "ProvisionedAt", "type": "dateTime", "required": false, "notes": "When the app account or login path was prepared by admin" },
+        { "name": "ProvisionedBy", "type": "singleLineText", "required": false },
+        { "name": "ProvisioningNote", "type": "multipleLinesText", "required": false, "notes": "How the applicant should complete first sign-in or password reset" },
+        { "name": "AppUsername", "type": "singleLineText", "required": false, "notes": "Current app username if the A3 flow issues a local account" },
+        { "name": "ExternalUserId", "type": "singleLineText", "required": false, "notes": "Reserved for future Azure / External ID upgrade" },
         { "name": "Source", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] },
         { "name": "BackendMode", "type": "choice", "required": true, "choices": ["local-emulator", "sharepoint-flow", "m365-api"] },
         { "name": "Note", "type": "multipleLinesText", "required": false }
@@ -39,12 +43,13 @@
     {
       "name": "UnitAdmins",
       "description": "Active or pending contact identities bound to a unit",
-      "recommendedIndexes": ["Email", "UnitCode", "Status", "ExternalUserId"],
+      "recommendedIndexes": ["Email", "UnitCode", "Status", "ExternalUserId", "AppUsername"],
       "columns": [
         { "name": "Title", "type": "singleLineText", "required": true, "notes": "DisplayName or Email" },
         { "name": "ExternalUserId", "type": "singleLineText", "required": false },
         { "name": "DisplayName", "type": "singleLineText", "required": true },
         { "name": "Email", "type": "singleLineText", "required": true },
+        { "name": "AppUsername", "type": "singleLineText", "required": false, "notes": "Current app username in the A3-ready version" },
         { "name": "ExtensionNumber", "type": "singleLineText", "required": false },
         { "name": "UnitCode", "type": "singleLineText", "required": true },
         { "name": "UnitName", "type": "singleLineText", "required": true },

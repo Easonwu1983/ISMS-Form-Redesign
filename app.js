@@ -799,7 +799,7 @@
     'apply-unit-contact': { title: '申請單位資安窗口', public: true, allow: () => true, fallback: 'apply-unit-contact', render: () => getUnitContactApplicationModule().renderApplyForm() },
     'apply-unit-contact-success': { title: '申請已送出', public: true, allow: () => true, fallback: 'apply-unit-contact', render: (param) => getUnitContactApplicationModule().renderApplySuccess(param) },
     'apply-unit-contact-status': { title: '查詢申請進度', public: true, allow: () => true, fallback: 'apply-unit-contact', render: () => getUnitContactApplicationModule().renderApplyStatus() },
-    'activate-unit-contact': { title: '啟用窗口帳號', public: true, allow: () => true, fallback: 'apply-unit-contact', render: (param) => getUnitContactApplicationModule().renderActivate(param) },
+    'activate-unit-contact': { title: '窗口帳號開通', public: true, allow: () => true, fallback: 'apply-unit-contact', render: (param) => getUnitContactApplicationModule().renderActivate(param) },
     dashboard: { title: '\u5100\u8868\u677f', allow: () => !!currentUser(), render: () => getCaseModule().renderDashboard() },
     list: { title: '\u77ef\u6b63\u55ae\u5217\u8868', allow: () => !!currentUser(), render: () => getCaseModule().renderList() },
     create: { title: '\u958b\u7acb\u77ef\u6b63\u55ae', allow: () => canCreateCAR(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u958b\u7acb\u77ef\u6b63\u55ae\u6b0a\u9650', render: () => getCaseModule().renderCreate() },

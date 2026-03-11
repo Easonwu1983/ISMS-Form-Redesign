@@ -58,8 +58,8 @@
     function buildModeNotice() {
       const modeKey = getM365ModeKey();
       const description = modeKey === 'local-emulator'
-        ? '目前先以校內前端驗證模式收件，後續會直接切換到 SharePoint / Power Automate 與 Entra 流程。'
-        : '目前已接上 M365 流程，送出後會依後端設定進入審核與啟用。';
+        ? '目前先以校內前端驗證模式收件，後續會切換到 A3 可落地的 SharePoint / Power Automate 流程。'
+        : '目前已接上 M365 流程，送出後會進入人工審核、建帳通知與首次登入交接。';
       return ''
         + '<div class="unit-contact-mode-banner">'
         + '<div class="unit-contact-mode-icon">' + ic('shield-check', 'icon-lg') + '</div>'
@@ -162,7 +162,7 @@
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請流程</div>'
         + buildStepCard('1. 送出申請', '先填單位、姓名、分機與信箱，系統會產生申請編號。')
         + buildStepCard('2. 管理端審核', '資安管理端確認單位與窗口資格，必要時會退回補件。')
-        + buildStepCard('3. 啟用帳號', '核准後寄送啟用資訊，使用者自行設定密碼後即可登入。')
+        + buildStepCard('3. 帳號開通', '核准後由管理端建立或開通帳號，再寄送首次登入或改密碼說明。')
         + '</div>'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 這版先完成什麼</div>'
         + '<ul class="unit-contact-checklist">'
@@ -229,7 +229,7 @@
         + buildPublicHero(
           'Application Created',
           '申請已送出',
-          '系統已建立申請編號。接下來會依後端設定進入人工審核，再發送啟用資訊。',
+          '系統已建立申請編號。接下來會依 A3 流程進入人工審核，再由管理端寄送帳號開通資訊。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢進度</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
@@ -237,7 +237,7 @@
         + '<div class="card unit-contact-success-card">'
         + '<div class="unit-contact-success-mark">' + ic('badge-check', 'icon-xl') + '</div>'
         + buildApplicationSummary(application)
-        + '<div class="unit-contact-success-note">請保留申請編號與申請信箱。正式串接 M365 後，系統會改由信件寄送啟用資訊，不再直接寄發明碼密碼。</div>'
+        + '<div class="unit-contact-success-note">請保留申請編號與申請信箱。A3 版會由管理端審核後寄送帳號開通或首次登入說明，不在前端直接發送明碼密碼。</div>'
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">用信箱查詢進度</a><a class="btn btn-ghost" href="#apply-unit-contact">再送另一筆申請</a></div>'
         + '</div></div></div></section>';
       refreshIcons();
@@ -253,7 +253,7 @@
         + buildPublicHero(
           'Application Status',
           '查詢申請進度',
-          '輸入申請時使用的信箱，即可查看目前待審、退回補件或待啟用狀態。',
+          '輸入申請時使用的信箱，即可查看目前待審、退回補件、待建帳或已開通狀態。',
           '<a class="btn btn-secondary" href="#apply-unit-contact">' + ic('arrow-left', 'icon-sm') + ' 返回申請頁</a>'
         )
         + '<div class="unit-contact-layout">'
@@ -271,7 +271,7 @@
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('info', 'icon-sm') + ' 查詢提醒</div>'
         + '<ul class="unit-contact-checklist">'
         + '<li>同一信箱可以查到自己送出的所有申請</li>'
-        + '<li>正式上線後會顯示 M365 啟用與審核進度</li>'
+        + '<li>正式上線後會顯示審核、建帳與帳號開通進度</li>'
         + '<li>若審核退回，會顯示待補件狀態與說明</li>'
         + '</ul></div></aside>'
         + '</div></section>';
@@ -318,16 +318,16 @@
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          'Activation Handoff',
-          '窗口帳號啟用說明',
-          '這裡會作為後續接上 Entra External ID 的啟用交接頁。正式版會由核准信件直接帶入此頁。',
+          'Account Handoff',
+          '窗口帳號開通說明',
+          'A3 版會把這頁作為管理端寄出帳號開通通知後的交接頁，可放首次登入與改密碼指引。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢目前申請狀態</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-side-card">'
-        + '<div class="section-header">' + ic('key', 'icon-sm') + ' 後續接法</div>'
-        + '<div class="unit-contact-activation-copy">正式串接後，核准的申請會從 M365 寄出啟用連結，申請人自行設定密碼，首次登入後再回寫對應單位與角色。</div>'
+        + '<div class="section-header">' + ic('key', 'icon-sm') + ' A3 交接方式</div>'
+        + '<div class="unit-contact-activation-copy">正式串接後，核准的申請會由管理端建立或確認帳號，再由 M365 信件寄送首次登入、改密碼或開通說明。未來若升級到 Azure / External ID，再把這頁改成真正的自助啟用流程即可。</div>'
         + (application ? buildApplicationSummary(application) : '')
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact">返回申請頁</a></div>'
         + '</div></div></div></section>';

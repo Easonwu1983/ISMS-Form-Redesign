@@ -28,6 +28,9 @@ Configured in [m365-config.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redes
 - `unitContactSharedHeaders`
 - `unitContactActivationEndpoint`
 
+For the A3-ready version, `unitContactActivationEndpoint` is optional and can be
+used as an account handoff page rather than a self-service identity endpoint.
+
 ## Contract Version
 
 - `2026-03-11`
@@ -221,6 +224,10 @@ Recommended mapping from list columns to response fields:
 - `ReviewedBy -> reviewedBy`
 - `ReviewComment -> reviewComment`
 - `ActivationSentAt -> activationSentAt`
+- `ProvisionedAt -> provisionedAt` optional
+- `ProvisionedBy -> provisionedBy` optional
+- `ProvisioningNote -> provisioningNote` optional
+- `AppUsername -> appUsername` optional
 - `ActivatedAt -> activatedAt`
 - `ExternalUserId -> externalUserId`
 

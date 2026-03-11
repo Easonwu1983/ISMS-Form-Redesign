@@ -24,8 +24,8 @@
       unitContactSubmitEndpoint: '',
       unitContactStatusEndpoint: ''
     },
-    sharePointFlowCampus: {
-      label: 'Campus frontend + Power Automate HTTP trigger',
+    a3CampusFlow: {
+      label: 'A3-ready campus frontend + SharePoint / Power Automate',
       unitContactMode: 'sharepoint-flow',
       unitContactSubmitEndpoint: 'https://YOUR-POWER-AUTOMATE-ENDPOINT-HOST/workflows/.../triggers/manual/paths/invoke',
       unitContactStatusEndpoint: 'https://YOUR-POWER-AUTOMATE-ENDPOINT-HOST/workflows/.../triggers/manual/paths/invoke',
@@ -45,9 +45,11 @@
   // Change only this value during deployment.
   // Recommended:
   // - local development: localDemo
-  // - production with Power Automate: sharePointFlowCampus
-  // - production with Azure Function: azureFunctionCampus
+  // - A3 production: a3CampusFlow
+  // - future upgrade: azureFunctionCampus
   const ACTIVE_PROFILE = 'localDemo';
+
+  DEPLOYMENT_PROFILES.sharePointFlowCampus = DEPLOYMENT_PROFILES.a3CampusFlow;
 
   const selectedProfile = DEPLOYMENT_PROFILES[ACTIVE_PROFILE] || DEPLOYMENT_PROFILES.localDemo;
 

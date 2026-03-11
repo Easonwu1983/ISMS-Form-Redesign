@@ -10,6 +10,19 @@
 Turn the public `申請單位資安窗口` flow from local demo mode into a real
 campus-hosted service backed by M365.
 
+## Recommended First Cut For Your License
+
+For Microsoft 365 A3, the recommended first production path is:
+
+1. campus frontend in this repo
+2. `a3CampusFlow` profile
+3. SharePoint Lists
+4. Power Automate HTTP trigger + review flows
+5. admin-issued account handoff in the current system
+
+Reference:
+[docs/m365-a3-unit-contact-blueprint.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-unit-contact-blueprint.md)
+
 ## Deployment Paths
 
 Choose one backend path:
@@ -29,14 +42,14 @@ Edit [m365-config.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-
 
 - `ACTIVE_PROFILE = "localDemo"`
   - local demo only
-- `ACTIVE_PROFILE = "sharePointFlowCampus"`
+- `ACTIVE_PROFILE = "a3CampusFlow"`
   - production via Power Automate
 - `ACTIVE_PROFILE = "azureFunctionCampus"`
   - production via Azure Function
 
 Then replace the placeholder URLs in the selected profile.
 
-## Option A: Power Automate Go-Live
+## Option A: A3 Power Automate Go-Live
 
 1. Create the SharePoint lists from:
    [m365/sharepoint/unit-contact-lists.schema.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/sharepoint/unit-contact-lists.schema.json)
@@ -51,11 +64,15 @@ Then replace the placeholder URLs in the selected profile.
 5. Put the generated trigger URLs into:
    - `unitContactSubmitEndpoint`
    - `unitContactStatusEndpoint`
-6. Switch `ACTIVE_PROFILE` to `sharePointFlowCampus`
+6. Switch `ACTIVE_PROFILE` to `a3CampusFlow`
 7. Test:
    - submit one fake application
    - lookup by email
    - verify SharePoint row is written
+8. Confirm the admin side can:
+   - create or update the current app account
+   - send first-login or password-reset instructions
+   - mark the application as `activation_pending`
 
 ## Option B: Azure Function Go-Live
 
@@ -108,7 +125,7 @@ Then replace the placeholder URLs in the selected profile.
 
 For your current project stage, I recommend this order:
 
-1. Launch with `sharePointFlowCampus`
+1. Launch with `a3CampusFlow`
 2. Validate end-to-end business flow with a small set of units
 3. If the workflow grows more complex, move to `azureFunctionCampus`
 
