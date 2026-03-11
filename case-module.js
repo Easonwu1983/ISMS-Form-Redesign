@@ -73,6 +73,26 @@
     return '<div class="card"' + styleAttr + '>' + (headerHtml ? '<div class="' + headerClass + '">' + headerHtml + '</div>' : '') + bodyHtml + '</div>';
   }
 
+  function buildCaseTableMarkup(headersHtml, rowsHtml) {
+    return '<div class="table-wrapper"><table><thead><tr>' + headersHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+  }
+
+  function buildCaseStatCard(tone, iconName, value, label) {
+    return '<div class="stat-card ' + esc(tone) + '"><div class="stat-icon">' + ic(iconName) + '</div><div class="stat-value">' + esc(String(value)) + '</div><div class="stat-label">' + esc(label) + '</div></div>';
+  }
+
+  function buildCaseTableCard(title, headersHtml, rowsHtml, options) {
+    var opts = options || {};
+    var headerHtml = '<span class="card-title">' + title + '</span>' + (opts.actionHtml || '');
+    var cardStyle = opts.cardStyle || '';
+    var headerClass = opts.headerClass || 'card-header';
+    return buildCaseCard(headerHtml, buildCaseTableMarkup(headersHtml, rowsHtml), { style: cardStyle, headerClass: headerClass });
+  }
+
+  function buildCaseEmptyTableRow(colspan, iconName, title, padding) {
+    return '<tr><td colspan="' + colspan + '"><div class="empty-state" style="padding:' + (padding || 32) + 'px"><div class="empty-state-icon">' + ic(iconName || 'inbox') + '</div><div class="empty-state-title">' + esc(title) + '</div></div></td></tr>';
+  }
+
   function buildCaseEvidenceList(files, emptyText) {
     return files && files.length
       ? '<div class="file-preview-list">' + files.map(function (ev) {
@@ -136,7 +156,7 @@
     var recent = items.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
     var recentRows = recent.length ? recent.map(function (i) {
       return renderDashboardTableRow(i);
-    }).join('') : '<tr><td colspan="6"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">沒有矯正單資料</div></div></td></tr>';
+    }).join('') : buildCaseEmptyTableRow(6, 'inbox', '沒有矯正單資料', 40);
 
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     var nextDueItem = items.filter(function (i) { return i.status !== STATUSES.CLOSED && i.correctiveDueDate; }).sort(function (a, b) { return new Date(a.correctiveDueDate) - new Date(b.correctiveDueDate); })[0] || null;
@@ -159,15 +179,16 @@
     document.getElementById('app').innerHTML = '<div class="animate-in">'
       + '<section class="dashboard-hero"><div class="dashboard-hero-grid"><div class="dashboard-hero-copy"><div class="dashboard-hero-eyebrow">Internal Audit Operations</div><h1 class="dashboard-hero-title">儀表板</h1><p class="dashboard-hero-text">集中掌握矯正單進度、逾期風險與最近活動，讓主管與承辦人可以在同一個入口快速判斷優先順序。</p><div class="dashboard-meta-row">' + heroMeta + '</div><div class="dashboard-hero-actions">' + createBtn + '</div></div>' + heroSide + '</div></section>'
       + '<div class="stats-grid">'
-      + '<div class="stat-card total"><div class="stat-icon">' + ic('files') + '</div><div class="stat-value">' + total + '</div><div class="stat-label">矯正單總數</div></div>'
-      + '<div class="stat-card pending"><div class="stat-icon">' + ic('clock') + '</div><div class="stat-value">' + pending + '</div><div class="stat-label">待矯正</div></div>'
-      + '<div class="stat-card overdue"><div class="stat-icon">' + ic('alert-triangle') + '</div><div class="stat-value">' + overdue + '</div><div class="stat-label">已逾期</div></div>'
-      + '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + closedM + '</div><div class="stat-label">本月結案</div></div>'
+      + buildCaseStatCard('total', 'files', total, '矯正單總數')
+      + buildCaseStatCard('pending', 'clock', pending, '待矯正')
+      + buildCaseStatCard('overdue', 'alert-triangle', overdue, '已逾期')
+      + buildCaseStatCard('closed', 'check-circle-2', closedM, '本月結案')
       + '</div>'
       + '<div class="dashboard-grid">'
-      + '<div class="card dashboard-panel dashboard-chart-panel"><div class="card-header"><span class="card-title">狀態分布</span></div><div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div></div>'
-      + '<div class="card dashboard-panel dashboard-table-panel"><div class="card-header"><span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a></div><div class="table-wrapper"><table><thead><tr><th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th></tr></thead><tbody>' + recentRows + '</tbody></table></div></div>'
+      + buildCaseCard('<span class="card-title">狀態分布</span>', '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { headerClass: 'card-header dashboard-panel dashboard-chart-panel' })
+      + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', headerClass: 'card-header dashboard-panel dashboard-table-panel' })
       + '</div></div>';
+
     refreshIcons();
     bindCopyButtons();
   }
@@ -178,13 +199,13 @@
     if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
     if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
     filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-    var rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
+    var rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : buildCaseEmptyTableRow(8, 'search', '沒有符合條件的矯正單');
     var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
       '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + items.length + ' 筆，顯示 ' + filtered.length + ' 筆</p></div>' + createBtn + '</div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
-      '<div class="card" style="padding:0;overflow:hidden;"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+      buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', rows), { style: 'padding:0;overflow:hidden;' }) + '</div>';
     refreshIcons();
     bindCopyButtons();
     document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; renderList(); });
