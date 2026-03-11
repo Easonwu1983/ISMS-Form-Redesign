@@ -47,6 +47,18 @@
 - standard HTTP trigger + SharePoint actions are enough for this workflow
 - no premium identity product is required in the first phase
 
+## Practical Fallback If You Lack Tenant Admin
+
+If the project owner cannot obtain tenant-wide admin consent, use the delegated site-owner route instead:
+
+- get added as `Site Owner` on one SharePoint site
+- create the three lists in that site
+- let Power Automate write to those lists with the same delegated account
+- keep the frontend profile on `a3SiteOwnerFlow`
+
+Reference:
+[C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-site-owner-fallback.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\m365-a3-site-owner-fallback.md)
+
 ## Suggested Operational Rule
 
 - one primary contact per unit

@@ -17,3 +17,4 @@ node_modules/
 test-artifacts/
 server.log
 server.pid
+.local-secrets/

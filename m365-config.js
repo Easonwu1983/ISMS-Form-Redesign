@@ -32,6 +32,16 @@
       unitContactStatusLookupMethod: 'POST',
       sharePointSiteUrl: 'https://YOUR-TENANT.sharepoint.com/sites/ISMS-Forms'
     },
+    a3SiteOwnerFlow: {
+      label: 'A3 fallback: site owner + SharePoint / Power Automate',
+      unitContactMode: 'sharepoint-flow',
+      unitContactSubmitEndpoint: 'https://YOUR-POWER-AUTOMATE-ENDPOINT-HOST/workflows/.../triggers/manual/paths/invoke',
+      unitContactStatusEndpoint: 'https://YOUR-POWER-AUTOMATE-ENDPOINT-HOST/workflows/.../triggers/manual/paths/invoke',
+      unitContactStatusLookupMethod: 'POST',
+      sharePointSiteUrl: 'https://YOUR-TENANT.sharepoint.com/sites/ISMS-Forms',
+      sharePointSiteName: 'ISMS-Forms',
+      sharePointProvisioningModel: 'delegated-site-owner'
+    },
     azureFunctionCampus: {
       label: 'Campus frontend + Azure Function backend',
       unitContactMode: 'm365-api',
@@ -45,7 +55,8 @@
   // Change only this value during deployment.
   // Recommended:
   // - local development: localDemo
-  // - A3 production: a3CampusFlow
+  // - A3 production without tenant admin: a3SiteOwnerFlow
+  // - A3 production with tenant admin: a3CampusFlow
   // - future upgrade: azureFunctionCampus
   const ACTIVE_PROFILE = 'localDemo';
 

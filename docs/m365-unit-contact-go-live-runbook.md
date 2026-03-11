@@ -15,13 +15,14 @@ campus-hosted service backed by M365.
 For Microsoft 365 A3, the recommended first production path is:
 
 1. campus frontend in this repo
-2. `a3CampusFlow` profile
+2. `a3SiteOwnerFlow` profile
 3. SharePoint Lists
 4. Power Automate HTTP trigger + review flows
 5. admin-issued account handoff in the current system
 
 Reference:
 [docs/m365-a3-unit-contact-blueprint.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-unit-contact-blueprint.md)
+[docs/m365-a3-site-owner-fallback.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-site-owner-fallback.md)
 
 ## Deployment Paths
 
@@ -30,7 +31,7 @@ Choose one backend path:
 1. `sharepoint-flow`
    - frontend posts directly to Power Automate HTTP triggers
    - fastest to deliver
-   - best when流程主要由 M365 維運人員管理
+   - best when you have SharePoint site owner rights but do not have tenant-wide admin consent
 2. `m365-api`
    - frontend posts to Azure Function
    - Azure Function writes to SharePoint and later可再擴充審核、啟用、Graph 整合
@@ -42,6 +43,8 @@ Edit [m365-config.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-
 
 - `ACTIVE_PROFILE = "localDemo"`
   - local demo only
+- `ACTIVE_PROFILE = "a3SiteOwnerFlow"`
+  - production via Power Automate with delegated site-owner provisioning
 - `ACTIVE_PROFILE = "a3CampusFlow"`
   - production via Power Automate
 - `ACTIVE_PROFILE = "azureFunctionCampus"`
@@ -75,7 +78,7 @@ Preferred campus deployment method:
 5. Put the generated trigger URLs into:
    - `unitContactSubmitEndpoint`
    - `unitContactStatusEndpoint`
-6. Switch `ACTIVE_PROFILE` to `a3CampusFlow`
+6. Switch `ACTIVE_PROFILE` to `a3SiteOwnerFlow` or `a3CampusFlow`
 7. Test:
    - submit one fake application
    - lookup by email
@@ -86,6 +89,36 @@ Preferred campus deployment method:
    - mark the application as `activation_pending`
 9. Record the real values in:
    [docs/m365-a3-implementation-worksheet.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-implementation-worksheet.md)
+
+## Automated Backend Bootstrap
+
+For tenant-side backend preparation from this repo:
+
+1. Prepare app credentials in a local-only file or environment variables:
+   - `M365_A3_TENANT_ID`
+   - `M365_A3_CLIENT_ID`
+   - `M365_A3_CLIENT_SECRET`
+   - optional `M365_A3_SITE_ID`
+2. Run `npm run m365:a3:health`
+   - verifies whether Graph application permissions have been admin-consented
+3. Run `npm run m365:a3:provision`
+   - creates the SharePoint lists defined in
+     [m365/sharepoint/unit-contact-lists.schema.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/sharepoint/unit-contact-lists.schema.json)
+4. If health reports missing roles, complete admin consent first, then rerun the two commands
+
+## Site Owner Fallback Bootstrap
+
+If tenant-wide admin consent is not available:
+
+1. get added as `Site Owner` on the target SharePoint site
+2. set `M365_A3_SITE_URL` or keep the site URL in local backend config
+3. run `npm run m365:a3:site-owner:health`
+4. run `npm run m365:a3:site-owner:provision`
+5. switch frontend override to `a3SiteOwnerFlow`
+
+Reference:
+[docs/m365-a3-site-owner-fallback.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-site-owner-fallback.md)
+[docs/m365-a3-site-owner-request-template.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-site-owner-request-template.md)
 
 ## Option B: Azure Function Go-Live
 
@@ -138,8 +171,9 @@ Preferred campus deployment method:
 
 For your current project stage, I recommend this order:
 
-1. Launch with `a3CampusFlow`
+1. Launch with `a3SiteOwnerFlow`
 2. Validate end-to-end business flow with a small set of units
-3. If the workflow grows more complex, move to `azureFunctionCampus`
+3. If tenant admin consent becomes available, optionally move to `a3CampusFlow`
+4. If the workflow grows more complex, move to `azureFunctionCampus`
 
 This keeps the first rollout faster, while preserving a cleaner API upgrade path.

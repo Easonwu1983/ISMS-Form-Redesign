@@ -6,6 +6,8 @@
 ## SharePoint
 
 - Site URL:
+- Site ID:
+- Site owner account added:
 - Applications list name:
 - Applications list id:
 - UnitAdmins list name:
@@ -71,8 +73,15 @@ When all values above are ready:
 1. keep [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365-config.js](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365-config.js) in `localDemo`
 2. deploy `m365-config.override.js` to campus host
 3. set:
-   - `activeProfile: "a3CampusFlow"`
+   - `activeProfile: "a3SiteOwnerFlow"`
    - `unitContactMode: "sharepoint-flow"`
    - `unitContactSubmitEndpoint`
    - `unitContactStatusEndpoint`
 4. smoke test `#apply-unit-contact` and `#apply-unit-contact-status`
+
+## Site Owner Fallback Commands
+
+If you are using the non-admin A3 fallback path:
+
+1. `npm run m365:a3:site-owner:health`
+2. `npm run m365:a3:site-owner:provision`

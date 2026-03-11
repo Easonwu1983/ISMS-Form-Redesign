@@ -78,7 +78,13 @@
     function getModeLabel() {
       const mode = getMode();
       if (mode === 'm365-api') return 'M365 API 整合模式';
-      if (mode === 'sharepoint-flow') return 'A3 / SharePoint / Power Automate 模式';
+      if (mode === 'sharepoint-flow') {
+        const config = getConfig();
+        if (String(config.sharePointProvisioningModel || '').trim() === 'delegated-site-owner') {
+          return 'A3 / SharePoint / Power Automate / Site Owner 模式';
+        }
+        return 'A3 / SharePoint / Power Automate 模式';
+      }
       return '前端驗證模式';
     }
 
