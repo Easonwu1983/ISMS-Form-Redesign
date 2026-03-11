@@ -463,31 +463,31 @@
     bindCopyButtons();
   }
 
-  function renderChecklistManage() {
-    if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可管理檢核表', 'error'); return; }
+  function getChecklistManageTotalItems() {
+    return getChecklistSectionsState().reduce((acc, s) => acc + s.items.length, 0);
+  }
 
-    const totalItems = getChecklistSectionsState().reduce((acc, s) => acc + s.items.length, 0);
-
-    // Build accordion UI for each section
-    let sectHtml = '';
-    getChecklistSectionsState().forEach((sec, si) => {
-      const itemRows = sec.items.map((item, ii) => `
+  function renderChecklistManageItem(item, si, ii) {
+    return         `
         <div class="cm-item" data-si="${si}" data-ii="${ii}">
-          <div class="cm-item-drag" title="拖曳排序">≡</div>
+          <div class="cm-item-drag" title="拖曳排序">⋮⋮</div>
           <div class="cm-item-content">
             <div class="cm-item-row">
               <span class="cl-item-id" style="flex-shrink:0">${esc(item.id)}</span>
               <span class="cm-item-text">${esc(item.text)}</span>
             </div>
-            <div class="cm-item-hint">💡 ${esc(item.hint || '（無提示）')}</div>
+            <div class="cm-item-hint">提示： ${esc(item.hint || '未提供提示')}</div>
           </div>
           <div class="cm-item-actions">
             <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯">${ic('edit-2', 'btn-icon-svg')}</button>
             <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除">${ic('trash-2', 'btn-icon-svg')}</button>
           </div>
-        </div>`).join('');
+        </div>`;
+  }
 
-      sectHtml += `
+  function renderChecklistManageSection(sec, si) {
+    const itemRows = sec.items.map((item, ii) => renderChecklistManageItem(item, si, ii)).join('');
+    return         `
         <div class="cm-section" data-si="${si}">
           <div class="cm-section-header">
             <div class="cm-section-title-wrap">
@@ -503,7 +503,16 @@
           </div>
           <div class="cm-items-wrap">${itemRows}</div>
         </div>`;
-    });
+  }
+
+  function buildChecklistManageSectionsHtml() {
+    return getChecklistSectionsState().map((sec, si) => renderChecklistManageSection(sec, si)).join('');
+  }
+
+  function renderChecklistManage() {
+    if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可管理檢核表', 'error'); return; }
+    const totalItems = getChecklistManageTotalItems();
+    const sectHtml = buildChecklistManageSectionsHtml();
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header">
@@ -532,46 +541,9 @@
   function _cmRefreshSections() {
     const wrap = document.getElementById('cm-sections-wrap');
     if (!wrap) { renderChecklistManage(); return; }
-
-    let sectHtml = '';
-    getChecklistSectionsState().forEach((sec, si) => {
-      const itemRows = sec.items.map((item, ii) => `
-        <div class="cm-item" data-si="${si}" data-ii="${ii}">
-          <div class="cm-item-drag" title="拖曳排序">≡</div>
-          <div class="cm-item-content">
-            <div class="cm-item-row">
-              <span class="cl-item-id" style="flex-shrink:0">${esc(item.id)}</span>
-              <span class="cm-item-text">${esc(item.text)}</span>
-            </div>
-            <div class="cm-item-hint">💡 ${esc(item.hint || '（無提示）')}</div>
-          </div>
-          <div class="cm-item-actions">
-            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯">${ic('edit-2', 'btn-icon-svg')}</button>
-            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除">${ic('trash-2', 'btn-icon-svg')}</button>
-          </div>
-        </div>`).join('');
-
-      sectHtml += `
-        <div class="cm-section" data-si="${si}">
-          <div class="cm-section-header">
-            <div class="cm-section-title-wrap">
-              <span class="cl-section-num">${si + 1}</span>
-              <span class="cm-section-name" id="cm-sname-${si}">${esc(sec.section)}</span>
-            </div>
-            <div class="cm-section-actions">
-              <span class="cm-item-count">${sec.items.length} 題</span>
-              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="編輯大項名稱">${ic('edit-2', 'btn-icon-svg')}</button>
-              <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${si}" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
-              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${si}" title="刪除大項">${ic('trash-2', 'btn-icon-svg')}</button>
-            </div>
-          </div>
-          <div class="cm-items-wrap">${itemRows}</div>
-        </div>`;
-    });
-
-    wrap.innerHTML = sectHtml;
+    wrap.innerHTML = buildChecklistManageSectionsHtml();
     // Update subtitle
-    const totalItems = getChecklistSectionsState().reduce((acc, s) => acc + s.items.length, 0);
+    const totalItems = getChecklistManageTotalItems();
     const subtitle = document.querySelector('.page-subtitle');
     if (subtitle) subtitle.textContent = `共 ${getChecklistSectionsState().length} 大項 · ${totalItems} 題 — 可新增、編輯、刪除各大項及題目`;
     refreshIcons();

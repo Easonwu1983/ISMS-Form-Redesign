@@ -7,9 +7,7 @@
       currentUser,
       login,
       logout,
-      findUserByEmail,
-      generatePassword,
-      updateUser,
+      resetPasswordByEmail,
       getVisibleItems,
       isOverdue,
       getRoute,
@@ -111,16 +109,14 @@
       document.getElementById('forgot-form').addEventListener('submit', function (e) {
         e.preventDefault();
         var email = document.getElementById('forgot-email').value.trim();
-        var user = findUserByEmail(email);
-        if (!user) {
+        var resetResult = resetPasswordByEmail(email);
+        if (!resetResult) {
           document.getElementById('forgot-error').classList.add('show');
           return;
         }
         document.getElementById('forgot-error').classList.remove('show');
-        var np = generatePassword();
-        updateUser(user.username, { password: np });
-        document.getElementById('reset-username').textContent = user.username;
-        document.getElementById('reset-newpass').textContent = np;
+        document.getElementById('reset-username').textContent = resetResult.user.username;
+        document.getElementById('reset-newpass').textContent = resetResult.password;
         document.getElementById('forgot-result').style.display = 'block';
         document.getElementById('forgot-form').style.display = 'none';
         toast('密碼已重設成功！', 'info');

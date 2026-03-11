@@ -20,6 +20,13 @@
 - Owns store schema versioning and migration dispatch for persisted data
 - Keeps persistence concerns out of feature and shell modules
 
+### [auth-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/auth-module.js)
+
+- Owns session storage reads and writes for authenticated user state
+- Owns login, logout, password reset helper, and current user hydration
+- Owns scoped unit switching for multi-unit users
+- Owns admin bootstrap repair for the primary administrator profile
+
 ### [case-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/case-module.js)
 
 - Corrective action dashboard
@@ -68,7 +75,7 @@
 
 ## Recommended Next Refactors
 
-1. Move auth/session bootstrap into a dedicated auth module.
-2. Add migration diagnostics or a small admin-only schema health panel.
-3. Clean up documentation files that still show encoding corruption in some terminals.
-4. Start extracting repeated `innerHTML` builders into smaller render helpers or view partials.
+1. Add migration diagnostics or a small admin-only schema health panel.
+2. Clean up documentation files that still show encoding corruption in some terminals.
+3. Start extracting repeated `innerHTML` builders into smaller render helpers or view partials.
+4. Consider moving role/permission policy helpers into a dedicated policy module.

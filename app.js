@@ -335,14 +335,7 @@
   }
 
   function syncSessionUnit(sourceUnit, targetUnit) {
-    try {
-      const raw = sessionStorage.getItem(AUTH_KEY);
-      if (!raw) return;
-      const auth = JSON.parse(raw);
-      if (!auth || auth.unit !== sourceUnit) return;
-      auth.unit = targetUnit;
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify(auth));
-    } catch (_) { }
+    return getAuthModule().syncSessionUnit(sourceUnit, targetUnit);
   }
 
   function mergeCustomUnit(sourceUnit, targetUnit, actor) {
@@ -897,23 +890,9 @@
     }
     return getAuthorizedUnits(user).includes(target);
   }
-  function canSwitchAuthorizedUnit(user = currentUser()) {
-    return !!user && user.role !== ROLES.ADMIN && getAuthorizedUnits(user).length > 1;
-  }
-  function getScopedUnit(user = currentUser()) {
-    if (!user) return '';
-    if (user.role === ROLES.ADMIN) return '';
-    return getActiveUnit(user);
-  }
-  function switchCurrentUserUnit(unit) {
-    const user = currentUser();
-    if (!user) return false;
-    const target = String(unit || '').trim();
-    if (!getAuthorizedUnits(user).includes(target)) return false;
-    const next = normalizeUserRecord({ ...user, activeUnit: target });
-    sessionStorage.setItem(AUTH_KEY, JSON.stringify(next));
-    return true;
-  }
+  function canSwitchAuthorizedUnit(user = currentUser()) { return getAuthModule().canSwitchAuthorizedUnit(user); }
+  function getScopedUnit(user = currentUser()) { return getAuthModule().getScopedUnit(user); }
+  function switchCurrentUserUnit(unit) { return getAuthModule().switchCurrentUserUnit(unit); }
   function loadData() { return getDataModule().loadData(); }
   function saveData(data) { return getDataModule().saveData(data); }
   function getAllItems() { return getDataModule().getAllItems(); }
@@ -942,63 +921,16 @@
   function deleteUser(username) { return getDataModule().deleteUser(username); }
   function findUser(username) { return getDataModule().findUser(username); }
   function findUserByEmail(email) { return getDataModule().findUserByEmail(email); }
-  function ensurePrimaryAdminProfile() {
-    const d = loadData();
-    if (!d || !Array.isArray(d.users)) return;
-
-    let changed = false;
-    let admin = d.users.find((u) => u.username === 'admin');
-    if (!admin) {
-      const defaultAdmin = DEFAULT_USERS.find((u) => u.username === 'admin');
-      if (defaultAdmin) {
-        admin = { ...defaultAdmin };
-        d.users.unshift(admin);
-        changed = true;
-      }
-    }
-
-    if (!admin) return;
-    if (admin.role !== ROLES.ADMIN) {
-      admin.role = ROLES.ADMIN;
-      changed = true;
-    }
-    if (admin.name !== '計算機及資訊網路中心') {
-      admin.name = '計算機及資訊網路中心';
-      changed = true;
-    }
-
-    if (changed) saveData(d);
-
-    try {
-      const rawAuth = sessionStorage.getItem(AUTH_KEY);
-      if (!rawAuth) return;
-      const auth = JSON.parse(rawAuth);
-      if (auth && auth.username === 'admin') {
-        auth.role = ROLES.ADMIN;
-        auth.name = '計算機及資訊網路中心';
-        sessionStorage.setItem(AUTH_KEY, JSON.stringify(auth));
-      }
-    } catch (_) { }
-  }
-
-  function generatePassword() { const c = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; let p = ''; for (let i = 0; i < 8; i++)p += c[Math.floor(Math.random() * c.length)]; return p; }
+  function ensurePrimaryAdminProfile() { return getAuthModule().ensurePrimaryAdminProfile(); }
+  function generatePassword() { return getAuthModule().generatePassword(); }
+  function resetPasswordByEmail(email) { return getAuthModule().resetPasswordByEmail(email); }
   function loadLoginLogs() { return getDataModule().loadLoginLogs(); }
   function saveLoginLogs(logs) { return getDataModule().saveLoginLogs(logs); }
   function addLoginLog(username, user, success) { return getDataModule().addLoginLog(username, user, success); }
   function clearLoginLogs() { return getDataModule().clearLoginLogs(); }
-  function login(un, pw) {
-    const u = findUser(un);
-    const ok = !!(u && u.password === pw);
-    addLoginLog(un, u, ok);
-    if (ok) {
-      const normalized = normalizeUserRecord(u);
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify(normalized));
-      return normalized;
-    }
-    return null;
-  }
-  function logout() { sessionStorage.removeItem(AUTH_KEY); renderApp(); }
-  function currentUser() { try { const user = JSON.parse(sessionStorage.getItem(AUTH_KEY)); return user ? normalizeUserRecord(user) : null; } catch { return null; } }
+  function login(un, pw) { return getAuthModule().login(un, pw); }
+  function logout() { getAuthModule().logout(); renderApp(); }
+  function currentUser() { return getAuthModule().currentUser(); }
   function isAdmin() { return currentUser()?.role === ROLES.ADMIN; }
   function isUnitAdmin() { return currentUser()?.role === ROLES.UNIT_ADMIN; }
   function isViewer(user = currentUser()) { return user?.role === ROLES.VIEWER; }
@@ -1205,6 +1137,29 @@
     });
     window._dataModule = dataModuleApi;
     return dataModuleApi;
+  }
+  let authModuleApi = null;
+  function getAuthModule() {
+    if (authModuleApi) return authModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAuthModule !== 'function') {
+      throw new Error('auth-module.js not loaded');
+    }
+    authModuleApi = window.createAuthModule({
+      AUTH_KEY,
+      ROLES,
+      DEFAULT_USERS,
+      loadData: function () { return getDataModule().loadData(); },
+      saveData: function (data) { return getDataModule().saveData(data); },
+      getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
+      getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
+      normalizeUserRecord: function (user) { return getDataModule().normalizeUserRecord(user); },
+      findUser: function (username) { return getDataModule().findUser(username); },
+      findUserByEmail: function (email) { return getDataModule().findUserByEmail(email); },
+      updateUser: function (username, updates) { return getDataModule().updateUser(username, updates); },
+      addLoginLog: function (username, user, success) { return getDataModule().addLoginLog(username, user, success); }
+    });
+    window._authModule = authModuleApi;
+    return authModuleApi;
   }
   let adminModuleApi = null;
   function getAdminModule() {
@@ -1449,9 +1404,7 @@
       currentUser,
       login,
       logout,
-      findUserByEmail,
-      generatePassword,
-      updateUser,
+      resetPasswordByEmail,
       getVisibleItems,
       isOverdue,
       getRoute,

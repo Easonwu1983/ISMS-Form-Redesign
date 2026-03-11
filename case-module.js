@@ -52,6 +52,20 @@
       registerActionHandlers
     } = deps;
 
+  function renderCaseStatusCell(item, useClosedGuard) {
+    var overdue = isOverdue(item);
+    var label = overdue && (!useClosedGuard || item.status !== STATUSES.CLOSED) ? '已逾期' : item.status;
+    return '<span class="badge badge-' + (overdue ? 'overdue' : STATUS_CLASSES[item.status]) + '"><span class="badge-dot"></span>' + label + '</span>';
+  }
+
+  function renderDashboardTableRow(item) {
+    return '<tr data-route="detail/' + item.id + '"><td class="record-id-col">' + renderCopyIdCell(item.id, '矯正單號', true) + '</td><td>' + esc(item.problemDesc || '').substring(0, 34) + '</td><td>' + renderCaseStatusCell(item, false) + '</td><td>' + esc(item.handlerName) + '</td><td>' + fmt(item.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(item)) + '</td></tr>';
+  }
+
+  function renderListTableRow(item) {
+    return '<tr data-route="detail/' + item.id + '"><td class="record-id-col">' + renderCopyIdCell(item.id, '矯正單號', true) + '</td><td>' + esc(item.deficiencyType) + '</td><td>' + esc(item.source) + '</td><td>' + renderCaseStatusCell(item, true) + '</td><td>' + esc(item.proposerName) + '</td><td>' + esc(item.handlerName) + '</td><td>' + fmt(item.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(item)) + '</td></tr>';
+  }
+
   function renderDashboard() {
     var items = getVisibleItems();
     var total = items.length;
@@ -92,8 +106,8 @@
 
     var recent = items.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
     var recentRows = recent.length ? recent.map(function (i) {
-      return '<tr data-route="detail/' + i.id + '"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.problemDesc || '').substring(0, 34) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) ? '已逾期' : i.status) + '</span></td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(i)) + '</td></tr>';
-    }).join('') : '<tr><td colspan="6"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">尚無矯正單</div></div></td></tr>';
+      return renderDashboardTableRow(i);
+    }).join('') : '<tr><td colspan="6"><div class="empty-state" style="padding:40px"><div class="empty-state-icon">' + ic('inbox') + '</div><div class="empty-state-title">沒有矯正單資料</div></div></td></tr>';
 
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     var nextDueItem = items.filter(function (i) { return i.status !== STATUSES.CLOSED && i.correctiveDueDate; }).sort(function (a, b) { return new Date(a.correctiveDueDate) - new Date(b.correctiveDueDate); })[0] || null;
@@ -135,7 +149,7 @@
     if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
     if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
     filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-    var rows = filtered.length ? filtered.map(function (i) { return '<tr data-route="detail/' + i.id + '"><td class="record-id-col">' + renderCopyIdCell(i.id, '矯正單號', true) + '</td><td>' + esc(i.deficiencyType) + '</td><td>' + esc(i.source) + '</td><td><span class="badge badge-' + (isOverdue(i) ? 'overdue' : STATUS_CLASSES[i.status]) + '"><span class="badge-dot"></span>' + (isOverdue(i) && i.status !== STATUSES.CLOSED ? '已逾期' : i.status) + '</span></td><td>' + esc(i.proposerName) + '</td><td>' + esc(i.handlerName) + '</td><td>' + fmt(i.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(i)) + '</td></tr>'; }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
+    var rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">' + ic('search') + '</div><div class="empty-state-title">沒有符合條件的矯正單</div></div></td></tr>';
     var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
