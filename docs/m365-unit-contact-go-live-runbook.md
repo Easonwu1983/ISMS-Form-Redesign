@@ -49,6 +49,14 @@ Edit [m365-config.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-
 
 Then replace the placeholder URLs in the selected profile.
 
+Preferred campus deployment method:
+
+1. keep `m365-config.js` in repo default mode
+2. deploy a local override file based on
+   [m365-config.override.sample.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-config.override.sample.js)
+3. rename it to `m365-config.override.js` on the campus host
+4. fill only the environment-specific endpoint values there
+
 ## Option A: A3 Power Automate Go-Live
 
 1. Create the SharePoint lists from:
@@ -61,6 +69,9 @@ Then replace the placeholder URLs in the selected profile.
    - [m365/power-automate/http-trigger-lookup-request.schema.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/power-automate/http-trigger-lookup-request.schema.json)
 4. Make the response body match:
    [docs/m365-unit-contact-api-contract.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-unit-contact-api-contract.md)
+   Suggested examples:
+   - [m365/power-automate/http-trigger-apply-response.sample.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/power-automate/http-trigger-apply-response.sample.json)
+   - [m365/power-automate/http-trigger-lookup-response.sample.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/power-automate/http-trigger-lookup-response.sample.json)
 5. Put the generated trigger URLs into:
    - `unitContactSubmitEndpoint`
    - `unitContactStatusEndpoint`
@@ -73,6 +84,8 @@ Then replace the placeholder URLs in the selected profile.
    - create or update the current app account
    - send first-login or password-reset instructions
    - mark the application as `activation_pending`
+9. Record the real values in:
+   [docs/m365-a3-implementation-worksheet.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-implementation-worksheet.md)
 
 ## Option B: Azure Function Go-Live
 

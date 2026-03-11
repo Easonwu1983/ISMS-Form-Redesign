@@ -7,6 +7,7 @@
     'vendor/xlsx.full.min.js',
     'units.js',
     'm365-config.js',
+    { src: 'm365-config.override.js', optional: true },
     'attachment-module.js',
     'data-module.js',
     'auth-module.js',
@@ -38,9 +39,12 @@
   function loadNextScript() {
     if (index >= assets.length) return;
     var mount = body || document.body || head;
+    var assetEntry = assets[index];
+    var assetSrc = typeof assetEntry === 'string' ? assetEntry : assetEntry.src;
+    var optional = !!(assetEntry && typeof assetEntry === 'object' && assetEntry.optional);
 
     var script = document.createElement('script');
-    script.src = assets[index] + '?v=' + cacheKey;
+    script.src = assetSrc + '?v=' + cacheKey;
     script.async = false;
     script.onload = function () {
       var pending = window.__APP_PENDING_ASSET_PROMISE__;
@@ -56,7 +60,11 @@
       loadNextScript();
     };
     script.onerror = function () {
-      console.error('Failed to load asset:', script.src);
+      if (!optional) {
+        console.error('Failed to load asset:', script.src);
+      }
+      index += 1;
+      loadNextScript();
     };
     mount.appendChild(script);
   }

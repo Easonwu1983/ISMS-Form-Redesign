@@ -52,11 +52,13 @@
   DEPLOYMENT_PROFILES.sharePointFlowCampus = DEPLOYMENT_PROFILES.a3CampusFlow;
 
   const selectedProfile = DEPLOYMENT_PROFILES[ACTIVE_PROFILE] || DEPLOYMENT_PROFILES.localDemo;
+  const runtimeOverride = window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__;
 
   window.__M365_UNIT_CONTACT_CONFIG__ = {
     ...BASE_CONFIG,
     ...selectedProfile,
-    activeProfile: ACTIVE_PROFILE,
+    ...(runtimeOverride && typeof runtimeOverride === 'object' ? runtimeOverride : {}),
+    activeProfile: (runtimeOverride && runtimeOverride.activeProfile) || ACTIVE_PROFILE,
     availableProfiles: Object.keys(DEPLOYMENT_PROFILES),
     deploymentChecklistDoc: 'docs/m365-unit-contact-go-live-runbook.md'
   };

@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "application": {
+    "id": "UCA-2026-0001",
+    "applicantName": "王小明",
+    "applicantEmail": "person@example.com",
+    "extensionNumber": "61234",
+    "unitCategory": "行政單位",
+    "primaryUnit": "計算機及資訊網路中心",
+    "secondaryUnit": "資訊網路組",
+    "unitValue": "計算機及資訊網路中心／資訊網路組",
+    "unitCode": "022.204",
+    "contactType": "primary",
+    "status": "pending_review",
+    "statusLabel": "待人工審核",
+    "statusDetail": "申請已收件，將由資安管理端確認單位與窗口資格。",
+    "submittedAt": "2026-03-11T11:11:11.111Z",
+    "updatedAt": "2026-03-11T11:11:11.111Z",
+    "provisionedAt": null,
+    "provisionedBy": "",
+    "provisioningNote": "",
+    "appUsername": "",
+    "activationSentAt": null,
+    "activatedAt": null
+  }
+}

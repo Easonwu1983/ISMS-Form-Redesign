@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "applications": [
+    {
+      "id": "UCA-2026-0001",
+      "applicantName": "王小明",
+      "applicantEmail": "person@example.com",
+      "extensionNumber": "61234",
+      "unitValue": "計算機及資訊網路中心／資訊網路組",
+      "unitCode": "022.204",
+      "contactType": "primary",
+      "status": "activation_pending",
+      "statusLabel": "待啟用",
+      "statusDetail": "帳號開通通知已寄出，請依信件完成首次登入或改密碼。",
+      "submittedAt": "2026-03-11T11:11:11.111Z",
+      "updatedAt": "2026-03-12T09:30:00.000Z",
+      "provisionedAt": "2026-03-12T09:15:00.000Z",
+      "provisionedBy": "admin@example.edu.tw",
+      "provisioningNote": "已建立帳號，請依信件說明進行首次登入與密碼更新。",
+      "appUsername": "unit022204",
+      "activationSentAt": "2026-03-12T09:30:00.000Z",
+      "activatedAt": null
+    }
+  ]
+}

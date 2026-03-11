@@ -11,6 +11,8 @@
 - or `When an item is created` on `UnitContactApplications`
 - Request schema:
   [http-trigger-apply-request.schema.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/power-automate/http-trigger-apply-request.schema.json)
+- Suggested success response:
+  [http-trigger-apply-response.sample.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/power-automate/http-trigger-apply-response.sample.json)
 
 ### Purpose
 
@@ -139,6 +141,12 @@
 - `unit_contact.activation_sent`
 - `unit_contact.activation_reminder`
 - `unit_contact.activated`
+
+## Lookup Endpoint Response
+
+When you build the lookup flow, align the body with:
+
+- [http-trigger-lookup-response.sample.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365/power-automate/http-trigger-lookup-response.sample.json)
 
 ## Optional Azure Function Alternative
 

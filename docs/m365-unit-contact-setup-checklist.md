@@ -42,6 +42,10 @@ Update [m365-config.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m36
 4. optional Entra app metadata
 5. align endpoint payload/response with [docs/m365-unit-contact-api-contract.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-unit-contact-api-contract.md)
 6. follow [docs/m365-unit-contact-go-live-runbook.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-unit-contact-go-live-runbook.md)
+7. preferred campus rollout:
+   - keep repo config on demo defaults
+   - deploy [m365-config.override.sample.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-config.override.sample.js) as `m365-config.override.js`
+8. record real values in [docs/m365-a3-implementation-worksheet.md](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/docs/m365-a3-implementation-worksheet.md)
 
 ## Phase 4: Endpoint Integration
 
