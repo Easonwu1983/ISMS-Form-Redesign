@@ -2,7 +2,9 @@
   window.createAttachmentModule = function createAttachmentModule(deps) {
     const {
       esc,
-      toast
+      toast,
+      getBackendMode,
+      fetchRemoteAttachmentDetail
     } = deps;
 
     const DB_NAME = 'cats_attachments_v1';
@@ -89,15 +91,26 @@
     function normalizeAttachmentDescriptor(entry, overrides) {
       const next = {
         attachmentId: String(entry && entry.attachmentId || overrides && overrides.attachmentId || '').trim(),
+        driveItemId: String(entry && entry.driveItemId || overrides && overrides.driveItemId || '').trim(),
         name: String(entry && entry.name || overrides && overrides.name || '').trim(),
-        type: String(entry && entry.type || overrides && overrides.type || '').trim(),
+        type: String(entry && (entry.type || entry.contentType) || overrides && (overrides.type || overrides.contentType) || '').trim(),
+        contentType: String(entry && (entry.contentType || entry.type) || overrides && (overrides.contentType || overrides.type) || '').trim(),
         size: Number(entry && entry.size || overrides && overrides.size || 0),
         extension: String(entry && entry.extension || overrides && overrides.extension || getFileExtension(entry && entry.name || '')).trim().toLowerCase(),
         signature: String(entry && entry.signature || overrides && overrides.signature || buildUploadSignature(entry || overrides || {})).trim(),
         storedAt: String(entry && entry.storedAt || overrides && overrides.storedAt || '').trim(),
+        uploadedAt: String(entry && entry.uploadedAt || overrides && overrides.uploadedAt || '').trim(),
         scope: String(entry && entry.scope || overrides && overrides.scope || '').trim(),
-        ownerId: String(entry && entry.ownerId || overrides && overrides.ownerId || '').trim()
+        ownerId: String(entry && entry.ownerId || overrides && overrides.ownerId || '').trim(),
+        recordType: String(entry && entry.recordType || overrides && overrides.recordType || '').trim(),
+        webUrl: String(entry && entry.webUrl || overrides && overrides.webUrl || '').trim(),
+        downloadUrl: String(entry && entry.downloadUrl || overrides && overrides.downloadUrl || '').trim(),
+        path: String(entry && entry.path || overrides && overrides.path || '').trim(),
+        storage: String(entry && entry.storage || overrides && overrides.storage || '').trim()
       };
+      if (!next.storedAt && next.uploadedAt) next.storedAt = next.uploadedAt;
+      if (!next.uploadedAt && next.storedAt) next.uploadedAt = next.storedAt;
+      if (!next.storage) next.storage = next.driveItemId || next.downloadUrl || next.webUrl ? 'm365' : 'local';
       return next;
     }
 
@@ -186,7 +199,8 @@
             signature: String(record && record.signature || '').trim(),
             storedAt: String(record && record.storedAt || '').trim(),
             scope: String(record && record.scope || '').trim(),
-            ownerId: String(record && record.ownerId || '').trim()
+            ownerId: String(record && record.ownerId || '').trim(),
+            storage: 'local'
           })));
         };
         request.onerror = function () {
@@ -329,8 +343,19 @@
       };
     }
 
+    async function resolveRemoteAttachmentDescriptor(descriptor) {
+      const detailFetcher = typeof fetchRemoteAttachmentDetail === 'function' ? fetchRemoteAttachmentDetail : null;
+      if (!descriptor || !descriptor.driveItemId || !detailFetcher) return descriptor;
+      try {
+        const remote = await detailFetcher(descriptor);
+        return normalizeAttachmentDescriptor(remote, descriptor);
+      } catch (_) {
+        return descriptor;
+      }
+    }
+
     async function buildRenderModel(entry) {
-      const descriptor = normalizeAttachmentDescriptor(entry);
+      const descriptor = await resolveRemoteAttachmentDescriptor(normalizeAttachmentDescriptor(entry));
       if (entry && entry.previewUrl) {
         return {
           entry,
@@ -345,6 +370,15 @@
           descriptor,
           url: entry.data,
           isImage: descriptor.type.startsWith('image/')
+        };
+      }
+      const remoteUrl = String(descriptor.downloadUrl || descriptor.webUrl || '').trim();
+      if (remoteUrl) {
+        return {
+          entry,
+          descriptor,
+          url: remoteUrl,
+          isImage: String(descriptor.contentType || descriptor.type || '').startsWith('image/')
         };
       }
       if (!descriptor.attachmentId) {
@@ -433,8 +467,12 @@
         return Promise.resolve(entry.data);
       }
       if (entry && entry.previewUrl) return Promise.resolve(entry.previewUrl);
-      if (!entry || !entry.attachmentId) return Promise.resolve('');
-      return readStoredBlob(entry.attachmentId).then((blob) => {
+      const descriptor = normalizeAttachmentDescriptor(entry);
+      if (descriptor.downloadUrl || descriptor.webUrl) {
+        return Promise.resolve(descriptor.downloadUrl || descriptor.webUrl);
+      }
+      if (!descriptor.attachmentId) return Promise.resolve('');
+      return readStoredBlob(descriptor.attachmentId).then((blob) => {
         if (!blob) return '';
         return URL.createObjectURL(blob);
       });
@@ -478,6 +516,7 @@
       migrateStoredAttachments,
       persistUploadedEntries,
       pruneUnusedAttachments,
+      readStoredBlob,
       readAttachmentPreviewData,
       renderAttachmentList,
       revokeTransientUploadEntry

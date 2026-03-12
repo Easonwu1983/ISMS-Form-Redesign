@@ -321,7 +321,9 @@
     }
     attachmentModuleApi = window.createAttachmentModule({
       esc: function (value) { return getUiModule().esc(value); },
-      toast: function (message, type) { return getUiModule().toast(message, type); }
+      toast: function (message, type) { return getUiModule().toast(message, type); },
+      getBackendMode: function () { return getAttachmentsMode(); },
+      fetchRemoteAttachmentDetail: function (entry) { return fetchRemoteAttachmentDetail(entry); }
     });
     window._attachmentModule = attachmentModuleApi;
     return attachmentModuleApi;
@@ -762,6 +764,11 @@
     LOGIN: 'auth.login',
     RESET_PASSWORD: 'auth.reset-password-by-email'
   };
+  const ATTACHMENT_CONTRACT_VERSION = '2026-03-13';
+  const ATTACHMENT_ACTIONS = {
+    UPLOAD: 'attachment.upload',
+    DELETE: 'attachment.delete'
+  };
   const systemUserRepositoryState = {
     mode: 'local-emulator',
     ready: false,
@@ -819,6 +826,27 @@
     const config = getRuntimeM365Config();
     if (config.authSharedHeaders && typeof config.authSharedHeaders === 'object') return config.authSharedHeaders;
     return getSystemUsersSharedHeaders();
+  }
+  function getAttachmentsMode() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.attachmentsMode || '').trim();
+    return explicit || 'local-emulator';
+  }
+  function getAttachmentsEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.attachmentsEndpoint || '').trim();
+    return explicit ? explicit.replace(/\/$/, '') : '';
+  }
+  function getAttachmentsHealthEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.attachmentsHealthEndpoint || '').trim();
+    if (explicit) return explicit;
+    const endpoint = getAttachmentsEndpoint();
+    return endpoint ? endpoint + '/health' : '';
+  }
+  function getAttachmentsSharedHeaders() {
+    const config = getRuntimeM365Config();
+    return config.attachmentsSharedHeaders && typeof config.attachmentsSharedHeaders === 'object' ? config.attachmentsSharedHeaders : {};
   }
   function buildSystemUserEnvelope(action, payload) {
     return {
@@ -929,6 +957,112 @@
         ...getAuthSharedHeaders(),
         ...((options && options.headers) || {})
       }
+    });
+  }
+  async function requestAttachmentJson(path, options) {
+    const endpoint = getAttachmentsEndpoint();
+    if (!endpoint) throw new Error('未設定 attachmentsEndpoint');
+    const suffix = String(path || '').trim();
+    const url = suffix ? (endpoint + suffix) : endpoint;
+    return requestSystemUserJson(url, {
+      ...(options || {}),
+      headers: {
+        'X-ISMS-Contract-Version': ATTACHMENT_CONTRACT_VERSION,
+        ...getAttachmentsSharedHeaders(),
+        ...((options && options.headers) || {})
+      }
+    });
+  }
+  function readBlobAsDataUrl(blob) {
+    return new Promise(function (resolve, reject) {
+      if (!(blob instanceof Blob)) {
+        reject(new Error('缺少附件內容'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result || '')); };
+      reader.onerror = function () { reject(reader.error || new Error('無法讀取附件內容')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+  async function resolveAttachmentBlob(entry) {
+    if (entry && entry.file instanceof Blob) return entry.file;
+    if (entry && typeof entry.data === 'string' && entry.data.startsWith('data:')) {
+      const match = entry.data.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+      if (!match) throw new Error('附件資料格式不正確');
+      const mime = String(match[1] || entry.type || 'application/octet-stream').trim();
+      const raw = match[2] ? atob(match[3] || '') : decodeURIComponent(match[3] || '');
+      const bytes = new Uint8Array(raw.length);
+      for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+      return new Blob([bytes], { type: mime });
+    }
+    if (entry && entry.attachmentId && !entry.driveItemId) {
+      const blob = await getAttachmentModule().readStoredBlob(entry.attachmentId);
+      if (blob) return blob;
+    }
+    return null;
+  }
+  function normalizeRemoteAttachmentDescriptor(item, fallback) {
+    const source = item && typeof item === 'object' ? item : {};
+    const base = fallback && typeof fallback === 'object' ? fallback : {};
+    const name = String(source.name || base.name || '').trim();
+    const contentType = String(source.contentType || source.type || base.contentType || base.type || '').trim();
+    const size = Number(source.size || base.size || 0);
+    return {
+      attachmentId: String(source.attachmentId || base.attachmentId || '').trim(),
+      driveItemId: String(source.driveItemId || base.driveItemId || '').trim(),
+      name: name,
+      type: contentType,
+      contentType: contentType,
+      size: size,
+      extension: String(source.extension || base.extension || getFileExtension(name)).trim().toLowerCase(),
+      signature: String(base.signature || buildUploadSignature({ name: name, type: contentType, size: size })).trim(),
+      storedAt: String(source.uploadedAt || source.storedAt || base.storedAt || new Date().toISOString()).trim(),
+      uploadedAt: String(source.uploadedAt || source.storedAt || base.storedAt || new Date().toISOString()).trim(),
+      scope: String(source.scope || base.scope || '').trim(),
+      ownerId: String(source.ownerId || base.ownerId || '').trim(),
+      recordType: String(source.recordType || base.recordType || base.scope || '').trim(),
+      webUrl: String(source.webUrl || base.webUrl || '').trim(),
+      downloadUrl: String(source.downloadUrl || base.downloadUrl || '').trim(),
+      path: String(source.path || base.path || '').trim(),
+      storage: 'm365'
+    };
+  }
+  async function fetchRemoteAttachmentDetail(entry) {
+    const descriptor = entry && typeof entry === 'object' ? entry : {};
+    const driveItemId = String(descriptor.driveItemId || '').trim();
+    if (!driveItemId) return descriptor;
+    const body = await requestAttachmentJson('/' + encodeURIComponent(driveItemId), { method: 'GET' });
+    return normalizeRemoteAttachmentDescriptor(body && body.item || {}, descriptor);
+  }
+  async function submitAttachmentUpload(entry, options) {
+    const blob = await resolveAttachmentBlob(entry);
+    if (!blob) throw new Error('找不到附件內容，無法上傳到 M365');
+    const dataUrl = await readBlobAsDataUrl(blob);
+    const contentBase64 = String(dataUrl.split(',')[1] || '').trim();
+    if (!contentBase64) throw new Error('附件內容轉換失敗');
+    const descriptor = entry && typeof entry === 'object' ? entry : {};
+    const opts = options && typeof options === 'object' ? options : {};
+    const body = await requestAttachmentJson('/upload', {
+      method: 'POST',
+      body: {
+        action: ATTACHMENT_ACTIONS.UPLOAD,
+        payload: {
+          attachmentId: String(descriptor.attachmentId || '').trim(),
+          fileName: String(descriptor.name || (entry && entry.file && entry.file.name) || 'attachment.bin').trim(),
+          contentType: String(descriptor.type || descriptor.contentType || blob.type || 'application/octet-stream').trim(),
+          contentBase64: contentBase64,
+          scope: String(opts.scope || descriptor.scope || '').trim(),
+          ownerId: String(opts.ownerId || descriptor.ownerId || '').trim(),
+          recordType: String(opts.recordType || descriptor.recordType || opts.scope || descriptor.scope || '').trim()
+        }
+      }
+    });
+    return normalizeRemoteAttachmentDescriptor(body && body.item || {}, {
+      ...descriptor,
+      scope: String(opts.scope || descriptor.scope || '').trim(),
+      ownerId: String(opts.ownerId || descriptor.ownerId || '').trim(),
+      recordType: String(opts.recordType || descriptor.recordType || opts.scope || descriptor.scope || '').trim()
     });
   }
   function mergeRemoteUsersIntoStore(items) {
@@ -2267,8 +2401,38 @@
   function prepareUploadBatch(existingFiles, incomingFiles, options) { return getWorkflowSupportModule().prepareUploadBatch(existingFiles, incomingFiles, options); }
   function createTransientUploadEntry(file, meta, options) { return getAttachmentModule().createTransientUploadEntry(file, meta, options); }
   function revokeTransientUploadEntry(entry) { return getAttachmentModule().revokeTransientUploadEntry(entry); }
-  function persistUploadedEntries(entries, options) { return getAttachmentModule().persistUploadedEntries(entries, options); }
-  function migrateStoredAttachments(entries, options) { return getAttachmentModule().migrateStoredAttachments(entries, options); }
+  async function persistUploadedEntries(entries, options) {
+    if (getAttachmentsMode() !== 'm365-api') return getAttachmentModule().persistUploadedEntries(entries, options);
+    const list = Array.isArray(entries) ? entries : [];
+    const persisted = [];
+    for (const entry of list) {
+      if (!entry) continue;
+      if (entry.driveItemId && !entry.file && !entry.data) {
+        persisted.push(normalizeRemoteAttachmentDescriptor(entry, entry));
+        continue;
+      }
+      const saved = await submitAttachmentUpload(entry, options);
+      if (entry.file || entry.previewUrl) revokeTransientUploadEntry(entry);
+      persisted.push(saved);
+    }
+    return persisted;
+  }
+  async function migrateStoredAttachments(entries, options) {
+    if (getAttachmentsMode() !== 'm365-api') return getAttachmentModule().migrateStoredAttachments(entries, options);
+    const list = Array.isArray(entries) ? entries : [];
+    let changed = false;
+    const files = [];
+    for (const entry of list) {
+      if (!entry) continue;
+      if (entry.driveItemId && !entry.file && !entry.data) {
+        files.push(normalizeRemoteAttachmentDescriptor(entry, entry));
+        continue;
+      }
+      changed = true;
+      files.push(await submitAttachmentUpload(entry, options));
+    }
+    return { files: files, changed: changed };
+  }
   function renderAttachmentList(target, files, options) { return getAttachmentModule().renderAttachmentList(target, files, options); }
   function cleanupRenderedAttachmentUrls() { return getAttachmentModule().cleanupRenderedAttachmentUrls(); }
   function collectReferencedAttachmentIds() {
