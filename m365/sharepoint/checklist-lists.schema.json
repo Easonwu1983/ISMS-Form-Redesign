@@ -1,0 +1,42 @@
+{
+  "version": "2026-03-12",
+  "site": {
+    "name": "ISMS-Forms",
+    "purpose": "Checklist submission records for internal audit"
+  },
+  "lists": [
+    {
+      "name": "Checklists",
+      "description": "Submitted and draft checklist records for internal audit forms",
+      "recommendedIndexes": ["ChecklistId", "DocumentNo", "UnitCode", "AuditYear", "FillerUsername", "Status", "UpdatedAt"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use ChecklistId as the display title" },
+        { "name": "ChecklistId", "type": "singleLineText", "required": true, "unique": true },
+        { "name": "DocumentNo", "type": "singleLineText", "required": false },
+        { "name": "ChecklistSeq", "type": "number", "required": false },
+        { "name": "Unit", "type": "singleLineText", "required": true },
+        { "name": "UnitCode", "type": "singleLineText", "required": false },
+        { "name": "FillerName", "type": "singleLineText", "required": true },
+        { "name": "FillerUsername", "type": "singleLineText", "required": false },
+        { "name": "FillDate", "type": "dateTime", "required": true },
+        { "name": "AuditYear", "type": "singleLineText", "required": true },
+        { "name": "SupervisorName", "type": "singleLineText", "required": false },
+        { "name": "SupervisorTitle", "type": "singleLineText", "required": false },
+        { "name": "SignStatus", "type": "choice", "required": true, "choices": ["\u5f85\u7c3d\u6838", "\u5df2\u7c3d\u6838"] },
+        { "name": "SignDate", "type": "dateTime", "required": false },
+        { "name": "SupervisorNote", "type": "multipleLinesText", "required": false },
+        { "name": "ResultsJson", "type": "multipleLinesText", "required": true, "notes": "JSON object keyed by checklist item id. Phase 1 stores the full answer map in a single field." },
+        { "name": "SummaryTotal", "type": "number", "required": true },
+        { "name": "SummaryConform", "type": "number", "required": true },
+        { "name": "SummaryPartial", "type": "number", "required": true },
+        { "name": "SummaryNonConform", "type": "number", "required": true },
+        { "name": "SummaryNa", "type": "number", "required": true },
+        { "name": "Status", "type": "choice", "required": true, "choices": ["\u8349\u7a3f", "\u5df2\u9001\u51fa"] },
+        { "name": "CreatedAt", "type": "dateTime", "required": true },
+        { "name": "UpdatedAt", "type": "dateTime", "required": true },
+        { "name": "BackendMode", "type": "choice", "required": true, "choices": ["a3-campus-backend"] },
+        { "name": "RecordSource", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] }
+      ]
+    }
+  ]
+}

@@ -17,6 +17,30 @@ This backend is the practical A3 fallback when:
 - `POST /api/unit-contact/apply`
 - `GET|POST /api/unit-contact/status`
 - `GET /api/unit-contact/health`
+- `GET /api/corrective-actions/health`
+- `GET /api/corrective-actions`
+- `GET /api/corrective-actions/:id`
+- `POST /api/corrective-actions`
+- `POST /api/corrective-actions/:id/respond`
+- `POST /api/corrective-actions/:id/review`
+- `POST /api/corrective-actions/:id/tracking-submit`
+- `POST /api/corrective-actions/:id/tracking-review`
+- `GET /api/checklists/health`
+- `GET /api/checklists`
+- `GET /api/checklists/:id`
+- `POST /api/checklists/:id/save-draft`
+- `POST /api/checklists/:id/submit`
+- `GET /api/training/health`
+- `GET /api/training/forms`
+- `GET /api/training/forms/:id`
+- `POST /api/training/forms/:id/save-draft`
+- `POST /api/training/forms/:id/submit-step-one`
+- `POST /api/training/forms/:id/finalize`
+- `POST /api/training/forms/:id/return`
+- `POST /api/training/forms/:id/undo`
+- `GET /api/training/rosters`
+- `POST /api/training/rosters/upsert`
+- `POST /api/training/rosters/:id/delete`
 
 The request and response contract stays aligned with:
 
@@ -37,6 +61,10 @@ The request and response contract stays aligned with:
 - `UNIT_CONTACT_APPLICATIONS_LIST`
 - `UNIT_CONTACT_UNITADMINS_LIST`
 - `UNIT_CONTACT_AUDIT_LIST`
+- `CORRECTIVE_ACTIONS_LIST`
+- `CHECKLISTS_LIST`
+- `TRAINING_FORMS_LIST`
+- `TRAINING_ROSTERS_LIST`
 
 The backend can also reuse the local-only file:
 

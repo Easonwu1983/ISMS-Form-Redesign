@@ -8,13 +8,27 @@
     unitContactSubmitEndpoint: 'https://YOUR-CAMPUS-HOST/api/unit-contact/apply',
     unitContactStatusEndpoint: 'https://YOUR-CAMPUS-HOST/api/unit-contact/status',
     unitContactStatusLookupMethod: 'POST',
+    correctiveActionsMode: 'm365-api',
+    correctiveActionsEndpoint: 'https://YOUR-CAMPUS-HOST/api/corrective-actions',
+    correctiveActionsHealthEndpoint: 'https://YOUR-CAMPUS-HOST/api/corrective-actions/health',
+    checklistMode: 'm365-api',
+    checklistEndpoint: 'https://YOUR-CAMPUS-HOST/api/checklists',
+    checklistHealthEndpoint: 'https://YOUR-CAMPUS-HOST/api/checklists/health',
+    trainingMode: 'm365-api',
+    trainingFormsEndpoint: 'https://YOUR-CAMPUS-HOST/api/training/forms',
+    trainingRostersEndpoint: 'https://YOUR-CAMPUS-HOST/api/training/rosters',
+    trainingHealthEndpoint: 'https://YOUR-CAMPUS-HOST/api/training/health',
     sharePointSiteUrl: 'https://YOUR-TENANT.sharepoint.com/sites/ISMSFormsWorkspace',
     sharePointSiteName: 'ISMSFormsWorkspace',
     sharePointProvisioningModel: 'delegated-site-owner',
     sharePointLists: {
       applications: 'UnitContactApplications',
       unitAdmins: 'UnitAdmins',
-      audit: 'OpsAudit'
+      audit: 'OpsAudit',
+      correctiveActions: 'CorrectiveActions',
+      checklists: 'Checklists',
+      trainingForms: 'TrainingForms',
+      trainingRosters: 'TrainingRosters'
     }
   };
 })();

@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createM365ApiClient = function createM365ApiClient(deps) {
     const {
       UNIT_CONTACT_APPLICATION_STATUSES,
@@ -11,6 +11,31 @@
     } = deps;
 
     const CONTRACT_VERSION = '2026-03-11';
+    const CORRECTIVE_ACTIONS_CONTRACT_VERSION = '2026-03-12';
+    const CHECKLISTS_CONTRACT_VERSION = '2026-03-12';
+    const TRAINING_CONTRACT_VERSION = '2026-03-12';
+    const CORRECTIVE_ACTION_ACTIONS = {
+      CREATE: 'corrective-action.create',
+      RESPOND: 'corrective-action.respond',
+      REVIEW: 'corrective-action.review',
+      TRACKING_SUBMIT: 'corrective-action.tracking.submit',
+      TRACKING_REVIEW: 'corrective-action.tracking.review'
+    };
+    const CHECKLIST_ACTIONS = {
+      SAVE_DRAFT: 'checklist.save-draft',
+      SUBMIT: 'checklist.submit'
+    };
+    const TRAINING_FORM_ACTIONS = {
+      SAVE_DRAFT: 'training.form.save-draft',
+      SUBMIT_STEP_ONE: 'training.form.submit-step-one',
+      FINALIZE: 'training.form.finalize',
+      RETURN: 'training.form.return',
+      UNDO: 'training.form.undo'
+    };
+    const TRAINING_ROSTER_ACTIONS = {
+      UPSERT: 'training.roster.upsert',
+      DELETE: 'training.roster.delete'
+    };
     const DEFAULT_CONFIG = {
       unitContactMode: 'local-emulator',
       unitContactSubmitEndpoint: '',
@@ -19,44 +44,71 @@
       unitContactRequestTimeoutMs: 15000,
       unitContactStatusLookupMethod: 'POST',
       unitContactStatusQueryParam: 'email',
-      unitContactSharedHeaders: {}
+      unitContactSharedHeaders: {},
+      correctiveActionsMode: 'local-emulator',
+      correctiveActionsEndpoint: '',
+      correctiveActionsHealthEndpoint: '',
+      correctiveActionsSharedHeaders: {},
+      checklistMode: 'local-emulator',
+      checklistEndpoint: '',
+      checklistHealthEndpoint: '',
+      checklistSharedHeaders: {},
+      trainingMode: 'local-emulator',
+      trainingFormsEndpoint: '',
+      trainingRostersEndpoint: '',
+      trainingHealthEndpoint: '',
+      trainingSharedHeaders: {}
     };
 
     const STATUS_META = {
       [UNIT_CONTACT_APPLICATION_STATUSES.PENDING_REVIEW]: {
-        label: '待人工審核',
+        label: '待審核',
         tone: 'pending',
-        detail: '申請已收件，將由資安管理端確認單位與窗口資格。'
+        detail: '申請已送出，等待管理者審核與啟用流程。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.RETURNED]: {
-        label: '待補件',
+        label: '退回補件',
         tone: 'attention',
-        detail: '管理端已退回申請，請依通知內容補齊資料。'
+        detail: '申請資料需要補充，請依退回意見修正後重新送出。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.APPROVED]: {
         label: '已核准',
         tone: 'approved',
-        detail: '申請已核准，系統將寄送啟用資訊。'
+        detail: '申請已核准，系統將進入帳號啟用程序。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.REJECTED]: {
-        label: '已婉拒',
+        label: '未核准',
         tone: 'danger',
-        detail: '申請未通過，若需協助請洽系統管理者。'
+        detail: '申請未通過，若需再申請請先與系統管理者確認。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.ACTIVATION_PENDING]: {
         label: '待啟用',
         tone: 'approved',
-        detail: '啟用通知已送出，請依信件完成帳號啟用。'
+        detail: '啟用通知已送出，等待申請人完成帳號啟用。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.ACTIVE]: {
         label: '已啟用',
         tone: 'live',
-        detail: '窗口帳號已完成啟用，可登入系統作業。'
+        detail: '申請已完成啟用，可直接使用系統。'
       }
     };
 
     function nowIso() {
       return new Date().toISOString();
+    }
+
+    function cleanText(value) {
+      return String(value || '').trim();
+    }
+
+    function cleanEmail(value) {
+      return cleanText(value).toLowerCase();
+    }
+
+    function cleanArray(value) {
+      return Array.isArray(value)
+        ? value.map((entry) => cleanText(entry)).filter(Boolean)
+        : [];
     }
 
     function makeRequestId(prefix) {
@@ -75,6 +127,21 @@
       return String(getConfig().unitContactMode || 'local-emulator').trim() || 'local-emulator';
     }
 
+    function getCorrectiveActionMode() {
+      const config = getConfig();
+      return String(config.correctiveActionsMode || '').trim() || (getMode() === 'm365-api' ? 'm365-api' : 'local-emulator');
+    }
+
+    function getChecklistMode() {
+      const config = getConfig();
+      return String(config.checklistMode || '').trim() || (getMode() === 'm365-api' ? 'm365-api' : 'local-emulator');
+    }
+
+    function getTrainingMode() {
+      const config = getConfig();
+      return String(config.trainingMode || '').trim() || (getMode() === 'm365-api' ? 'm365-api' : 'local-emulator');
+    }
+
     function getModeLabel() {
       const mode = getMode();
       if (mode === 'm365-api') {
@@ -82,7 +149,7 @@
         if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
           return 'A3 / Campus backend / SharePoint';
         }
-        return 'M365 API 整合模式';
+        return 'M365 API 模式';
       }
       if (mode === 'sharepoint-flow') {
         const config = getConfig();
@@ -91,14 +158,50 @@
         }
         return 'A3 / SharePoint / Power Automate 模式';
       }
-      return '前端驗證模式';
+      return '本機瀏覽器模式';
+    }
+
+    function getCorrectiveActionModeLabel() {
+      const mode = getCorrectiveActionMode();
+      if (mode === 'm365-api') {
+        const config = getConfig();
+        if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
+          return 'A3 / Campus backend / SharePoint';
+        }
+        return 'M365 corrective-actions API';
+      }
+      return '瀏覽器本地暫存';
+    }
+
+    function getChecklistModeLabel() {
+      const mode = getChecklistMode();
+      if (mode === 'm365-api') {
+        const config = getConfig();
+        if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
+          return 'A3 / Campus backend / SharePoint';
+        }
+        return 'M365 checklist API';
+      }
+      return '瀏覽器本地暫存';
+    }
+
+    function getTrainingModeLabel() {
+      const mode = getTrainingMode();
+      if (mode === 'm365-api') {
+        const config = getConfig();
+        if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
+          return 'A3 / Campus backend / SharePoint';
+        }
+        return 'M365 training API';
+      }
+      return '瀏覽器本地暫存';
     }
 
     function getStatusMeta(status) {
       return STATUS_META[String(status || '').trim()] || {
-        label: '處理中',
+        label: '待處理',
         tone: 'pending',
-        detail: '申請已建立，等待後續處理。'
+        detail: '申請狀態尚未定義，請稍後再查詢。'
       };
     }
 
@@ -113,17 +216,9 @@
       };
     }
 
-    function cleanText(value) {
-      return String(value || '').trim();
-    }
-
-    function cleanEmail(value) {
-      return cleanText(value).toLowerCase();
-    }
-
-    function buildClientContext() {
+    function buildClientContext(contractVersion) {
       return {
-        contractVersion: CONTRACT_VERSION,
+        contractVersion: cleanText(contractVersion) || CONTRACT_VERSION,
         source: 'isms-form-redesign-frontend',
         frontendOrigin: typeof window !== 'undefined' && window.location ? window.location.origin : '',
         frontendHash: typeof window !== 'undefined' && window.location ? String(window.location.hash || '') : '',
@@ -149,11 +244,11 @@
     }
 
     function assertApplicationPayload(payload) {
-      if (!payload.unitValue) throw new Error('請先選擇申請單位');
-      if (!payload.applicantName) throw new Error('請輸入姓名');
-      if (!payload.extensionNumber) throw new Error('請輸入分機');
-      if (!payload.applicantEmail) throw new Error('請輸入信箱');
-      if (!payload.unitCode) throw new Error('此單位尚未取得正式代碼，請先確認單位資料');
+      if (!payload.unitValue) throw new Error('請選擇申請單位');
+      if (!payload.applicantName) throw new Error('請填寫申請人姓名');
+      if (!payload.extensionNumber) throw new Error('請填寫分機');
+      if (!payload.applicantEmail) throw new Error('請填寫電子郵件');
+      if (!payload.unitCode) throw new Error('找不到對應的正式單位代碼，請先確認單位資料');
     }
 
     function assertNoDuplicateActiveApplication(payload) {
@@ -166,16 +261,16 @@
       ]);
       const duplicated = existing.find((entry) => entry.unitValue === payload.unitValue && activeStatuses.has(entry.status));
       if (duplicated) {
-        throw new Error('此信箱已存在同單位的進行中申請，請改用進度查詢或洽管理者處理。');
+        throw new Error('這個單位已存在進行中的聯絡人申請，請先查詢既有案件進度。');
       }
     }
 
-    function buildHeaders(extraHeaders) {
-      const config = getConfig();
+    function buildHeaders(extraHeaders, options) {
+      const opts = options && typeof options === 'object' ? options : {};
       return {
         'Content-Type': 'application/json',
-        'X-ISMS-Contract-Version': CONTRACT_VERSION,
-        ...(config.unitContactSharedHeaders || {}),
+        'X-ISMS-Contract-Version': cleanText(opts.contractVersion) || CONTRACT_VERSION,
+        ...(opts.sharedHeaders && typeof opts.sharedHeaders === 'object' ? opts.sharedHeaders : {}),
         ...(extraHeaders || {})
       };
     }
@@ -192,7 +287,10 @@
       try {
         const response = await fetch(url, {
           method: requestOptions.method || 'POST',
-          headers: buildHeaders(requestOptions.headers),
+          headers: buildHeaders(requestOptions.headers, {
+            contractVersion: requestOptions.contractVersion,
+            sharedHeaders: requestOptions.sharedHeaders
+          }),
           body: requestOptions.body ? JSON.stringify(requestOptions.body) : undefined,
           signal: controller ? controller.signal : undefined
         });
@@ -208,7 +306,7 @@
         }
         if (!response.ok) {
           const serverMessage = cleanText(parsed && (parsed.message || parsed.error || parsed.detail));
-          throw new Error(serverMessage || ('後端回應異常（HTTP ' + response.status + '）'));
+          throw new Error(serverMessage || ('HTTP ' + response.status));
         }
         return parsed || { ok: true };
       } catch (error) {
@@ -225,7 +323,7 @@
       return {
         action: 'unit-contact.apply',
         requestId: makeRequestId('uca'),
-        context: buildClientContext(),
+        context: buildClientContext(CONTRACT_VERSION),
         payload
       };
     }
@@ -234,8 +332,35 @@
       return {
         action: 'unit-contact.lookup',
         requestId: makeRequestId('ucl'),
-        context: buildClientContext(),
+        context: buildClientContext(CONTRACT_VERSION),
         payload: { email: cleanEmail(email) }
+      };
+    }
+
+    function buildCorrectiveActionEnvelope(action, payload) {
+      return {
+        action: cleanText(action),
+        requestId: makeRequestId('car'),
+        context: buildClientContext(CORRECTIVE_ACTIONS_CONTRACT_VERSION),
+        payload: payload && typeof payload === 'object' ? payload : {}
+      };
+    }
+
+    function buildChecklistEnvelope(action, payload) {
+      return {
+        action: cleanText(action),
+        requestId: makeRequestId('chk'),
+        context: buildClientContext(CHECKLISTS_CONTRACT_VERSION),
+        payload: payload && typeof payload === 'object' ? payload : {}
+      };
+    }
+
+    function buildTrainingEnvelope(action, payload) {
+      return {
+        action: cleanText(action),
+        requestId: makeRequestId('trn'),
+        context: buildClientContext(TRAINING_CONTRACT_VERSION),
+        payload: payload && typeof payload === 'object' ? payload : {}
       };
     }
 
@@ -295,17 +420,388 @@
       return single ? [single] : [];
     }
 
+    function normalizeCorrectiveAttachment(entry) {
+      const source = entry && typeof entry === 'object' ? entry : {};
+      return {
+        attachmentId: cleanText(source.attachmentId),
+        name: cleanText(source.name),
+        type: cleanText(source.type),
+        size: Number(source.size || 0),
+        extension: cleanText(source.extension).toLowerCase(),
+        signature: cleanText(source.signature),
+        storedAt: cleanText(source.storedAt),
+        scope: cleanText(source.scope),
+        ownerId: cleanText(source.ownerId)
+      };
+    }
+
+    function normalizeCorrectiveHistoryEntry(entry) {
+      const source = entry && typeof entry === 'object' ? entry : {};
+      return {
+        time: cleanText(source.time) || nowIso(),
+        action: cleanText(source.action),
+        user: cleanText(source.user)
+      };
+    }
+
+    function normalizeCorrectiveTracking(entry) {
+      const source = entry && typeof entry === 'object' ? entry : {};
+      return {
+        round: Number.isFinite(Number(source.round)) ? Number(source.round) : null,
+        tracker: cleanText(source.tracker),
+        trackDate: cleanText(source.trackDate) || null,
+        execution: cleanText(source.execution),
+        trackNote: cleanText(source.trackNote),
+        result: cleanText(source.result),
+        nextTrackDate: cleanText(source.nextTrackDate) || null,
+        evidence: (Array.isArray(source.evidence) ? source.evidence : []).map(normalizeCorrectiveAttachment),
+        submittedAt: cleanText(source.submittedAt) || null,
+        requestedResult: cleanText(source.requestedResult),
+        decision: cleanText(source.decision),
+        reviewer: cleanText(source.reviewer),
+        reviewDate: cleanText(source.reviewDate) || null,
+        reviewedAt: cleanText(source.reviewedAt) || null
+      };
+    }
+
+    function normalizeRemoteCorrectiveAction(record) {
+      const source = maybeFields(record && (record.item || record.data || record.result || record));
+      if (!source || typeof source !== 'object') return null;
+      const id = cleanText(source.id || source.caseId || source.CaseId || source.Title);
+      if (!id) return null;
+      return {
+        id,
+        documentNo: cleanText(source.documentNo || source.DocumentNo),
+        caseSeq: Number.isFinite(Number(source.caseSeq)) ? Number(source.caseSeq) : null,
+        proposerUnit: cleanText(source.proposerUnit || source.ProposerUnit),
+        proposerUnitCode: cleanText(source.proposerUnitCode || source.ProposerUnitCode),
+        proposerName: cleanText(source.proposerName || source.ProposerName),
+        proposerUsername: cleanText(source.proposerUsername || source.ProposerUsername),
+        proposerDate: cleanText(source.proposerDate || source.ProposerDate) || null,
+        handlerUnit: cleanText(source.handlerUnit || source.HandlerUnit),
+        handlerUnitCode: cleanText(source.handlerUnitCode || source.HandlerUnitCode),
+        handlerName: cleanText(source.handlerName || source.HandlerName),
+        handlerUsername: cleanText(source.handlerUsername || source.HandlerUsername),
+        handlerEmail: cleanEmail(source.handlerEmail || source.HandlerEmail),
+        handlerDate: cleanText(source.handlerDate || source.HandlerDate) || null,
+        deficiencyType: cleanText(source.deficiencyType || source.DeficiencyType),
+        source: cleanText(source.source || source.Source),
+        category: cleanArray(source.category || source.Category),
+        clause: cleanText(source.clause || source.Clause),
+        problemDesc: cleanText(source.problemDesc || source.ProblemDesc),
+        occurrence: cleanText(source.occurrence || source.Occurrence),
+        correctiveAction: cleanText(source.correctiveAction || source.CorrectiveAction),
+        correctiveDueDate: cleanText(source.correctiveDueDate || source.CorrectiveDueDate) || null,
+        rootCause: cleanText(source.rootCause || source.RootCause),
+        riskDesc: cleanText(source.riskDesc || source.RiskDesc),
+        riskAcceptor: cleanText(source.riskAcceptor || source.RiskAcceptor),
+        riskAcceptDate: cleanText(source.riskAcceptDate || source.RiskAcceptDate) || null,
+        riskAssessDate: cleanText(source.riskAssessDate || source.RiskAssessDate) || null,
+        rootElimination: cleanText(source.rootElimination || source.RootElimination),
+        rootElimDueDate: cleanText(source.rootElimDueDate || source.RootElimDueDate) || null,
+        reviewResult: cleanText(source.reviewResult || source.ReviewResult),
+        reviewNextDate: cleanText(source.reviewNextDate || source.ReviewNextDate) || null,
+        reviewer: cleanText(source.reviewer || source.Reviewer),
+        reviewDate: cleanText(source.reviewDate || source.ReviewDate) || null,
+        trackings: (Array.isArray(source.trackings) ? source.trackings : []).map(normalizeCorrectiveTracking),
+        pendingTracking: source.pendingTracking ? normalizeCorrectiveTracking(source.pendingTracking) : null,
+        status: cleanText(source.status || source.Status),
+        createdAt: cleanText(source.createdAt || source.CreatedAt) || nowIso(),
+        updatedAt: cleanText(source.updatedAt || source.UpdatedAt) || nowIso(),
+        closedDate: cleanText(source.closedDate || source.ClosedDate) || null,
+        evidence: (Array.isArray(source.evidence) ? source.evidence : []).map(normalizeCorrectiveAttachment),
+        history: (Array.isArray(source.history) ? source.history : []).map(normalizeCorrectiveHistoryEntry),
+        backendMode: getCorrectiveActionMode()
+      };
+    }
+
+    function normalizeRemoteCorrectiveActions(body) {
+      const candidateList = []
+        .concat(Array.isArray(body) ? body : [])
+        .concat(Array.isArray(body && body.items) ? body.items : [])
+        .concat(Array.isArray(body && body.value) ? body.value : [])
+        .concat(Array.isArray(body && body.data) ? body.data : []);
+      const list = candidateList
+        .map(normalizeRemoteCorrectiveAction)
+        .filter(Boolean);
+      if (list.length) return list;
+      const single = normalizeRemoteCorrectiveAction(body && (body.item || body.data || body.result || body));
+      return single ? [single] : [];
+    }
+
+    function normalizeChecklistResult(source) {
+      const base = source && typeof source === 'object' ? source : {};
+      return {
+        compliance: cleanText(base.compliance),
+        execution: cleanText(base.execution),
+        evidence: cleanText(base.evidence)
+      };
+    }
+
+    function normalizeChecklistResults(source) {
+      let base = source;
+      if (typeof base === 'string') {
+        try {
+          base = JSON.parse(base);
+        } catch (_) {
+          base = {};
+        }
+      }
+      base = base && typeof base === 'object' && !Array.isArray(base) ? base : {};
+      const next = {};
+      Object.keys(base).forEach((key) => {
+        const cleanKey = cleanText(key);
+        if (!cleanKey) return;
+        next[cleanKey] = normalizeChecklistResult(base[key]);
+      });
+      return next;
+    }
+
+    function normalizeRemoteChecklist(record) {
+      const source = maybeFields(record && (record.item || record.data || record.result || record));
+      if (!source || typeof source !== 'object') return null;
+      const id = cleanText(source.id || source.checklistId || source.ChecklistId || source.Title);
+      if (!id) return null;
+      const results = normalizeChecklistResults(source.results || source.ResultsJson);
+      return {
+        id,
+        documentNo: cleanText(source.documentNo || source.DocumentNo),
+        checklistSeq: Number.isFinite(Number(source.checklistSeq)) ? Number(source.checklistSeq) : (Number.isFinite(Number(source.ChecklistSeq)) ? Number(source.ChecklistSeq) : null),
+        unit: cleanText(source.unit || source.Unit),
+        unitCode: cleanText(source.unitCode || source.UnitCode),
+        fillerName: cleanText(source.fillerName || source.FillerName),
+        fillerUsername: cleanText(source.fillerUsername || source.FillerUsername),
+        fillDate: cleanText(source.fillDate || source.FillDate) || null,
+        auditYear: cleanText(source.auditYear || source.AuditYear),
+        supervisor: cleanText(source.supervisor || source.supervisorName || source.SupervisorName),
+        supervisorName: cleanText(source.supervisorName || source.SupervisorName || source.supervisor),
+        supervisorTitle: cleanText(source.supervisorTitle || source.SupervisorTitle),
+        signStatus: cleanText(source.signStatus || source.SignStatus),
+        signDate: cleanText(source.signDate || source.SignDate) || null,
+        supervisorNote: cleanText(source.supervisorNote || source.SupervisorNote),
+        results,
+        summary: {
+          total: Number.isFinite(Number(source.summary && source.summary.total)) ? Number(source.summary.total) : Number(source.SummaryTotal || 0),
+          conform: Number.isFinite(Number(source.summary && source.summary.conform)) ? Number(source.summary.conform) : Number(source.SummaryConform || 0),
+          partial: Number.isFinite(Number(source.summary && source.summary.partial)) ? Number(source.summary.partial) : Number(source.SummaryPartial || 0),
+          nonConform: Number.isFinite(Number(source.summary && source.summary.nonConform)) ? Number(source.summary.nonConform) : Number(source.SummaryNonConform || 0),
+          na: Number.isFinite(Number(source.summary && source.summary.na)) ? Number(source.summary.na) : Number(source.SummaryNa || 0)
+        },
+        status: cleanText(source.status || source.Status) || '\u8349\u7a3f',
+        createdAt: source.createdAt || source.CreatedAt || source.Created || nowIso(),
+        updatedAt: source.updatedAt || source.UpdatedAt || source.Modified || nowIso(),
+        backendMode: cleanText(source.backendMode || source.BackendMode) || getChecklistMode(),
+        recordSource: cleanText(source.recordSource || source.RecordSource) || 'remote'
+      };
+    }
+
+    function normalizeRemoteChecklists(body) {
+      const candidateList = []
+        .concat(Array.isArray(body) ? body : [])
+        .concat(Array.isArray(body && body.items) ? body.items : [])
+        .concat(Array.isArray(body && body.value) ? body.value : [])
+        .concat(Array.isArray(body && body.data) ? body.data : []);
+      const list = candidateList
+        .map(normalizeRemoteChecklist)
+        .filter(Boolean);
+      if (list.length) return list;
+      const single = normalizeRemoteChecklist(body && (body.item || body.data || body.result || body));
+      return single ? [single] : [];
+    }
+
+    function parseJsonValue(value, fallback) {
+      if (value === null || value === undefined || value === '') return typeof fallback === 'function' ? fallback() : fallback;
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value);
+        } catch (_) {
+          return typeof fallback === 'function' ? fallback() : fallback;
+        }
+      }
+      return value;
+    }
+
+    function normalizeTrainingAttachment(entry) {
+      const source = entry && typeof entry === 'object' ? entry : {};
+      return {
+        attachmentId: cleanText(source.attachmentId),
+        name: cleanText(source.name),
+        type: cleanText(source.type),
+        size: Number(source.size || 0),
+        extension: cleanText(source.extension).toLowerCase(),
+        signature: cleanText(source.signature),
+        storedAt: cleanText(source.storedAt),
+        scope: cleanText(source.scope),
+        ownerId: cleanText(source.ownerId)
+      };
+    }
+
+    function normalizeTrainingHistoryEntry(entry) {
+      const source = entry && typeof entry === 'object' ? entry : {};
+      return {
+        time: cleanText(source.time) || nowIso(),
+        action: cleanText(source.action),
+        user: cleanText(source.user)
+      };
+    }
+
+    function normalizeTrainingRecord(entry) {
+      const source = entry && typeof entry === 'object' ? entry : {};
+      return {
+        rosterId: cleanText(source.rosterId),
+        unit: cleanText(source.unit),
+        statsUnit: cleanText(source.statsUnit),
+        l1Unit: cleanText(source.l1Unit),
+        name: cleanText(source.name),
+        unitName: cleanText(source.unitName),
+        identity: cleanText(source.identity),
+        jobTitle: cleanText(source.jobTitle),
+        source: cleanText(source.source) || 'import',
+        status: cleanText(source.status),
+        completedGeneral: cleanText(source.completedGeneral),
+        isInfoStaff: cleanText(source.isInfoStaff),
+        completedProfessional: cleanText(source.completedProfessional),
+        note: cleanText(source.note),
+        hours: source.hours === '' ? '' : Number(source.hours || 0)
+      };
+    }
+
+    function normalizeTrainingRecords(value) {
+      const list = parseJsonValue(value, function () { return []; });
+      return Array.isArray(list) ? list.map(normalizeTrainingRecord) : [];
+    }
+
+    function normalizeTrainingSummary(value, source) {
+      const base = parseJsonValue(value, function () { return {}; });
+      const summary = base && typeof base === 'object' ? base : {};
+      return {
+        totalPeople: Number(summary.totalPeople || source.TotalPeople || 0),
+        activeCount: Number(summary.activeCount || source.ActiveCount || 0),
+        totalRoster: Number(summary.totalRoster || source.TotalRoster || 0),
+        inactiveCount: Number(summary.inactiveCount || source.InactiveCount || 0),
+        completedCount: Number(summary.completedCount || source.CompletedCount || 0),
+        readyCount: Number(summary.readyCount || source.ReadyCount || 0),
+        incompleteCount: Number(summary.incompleteCount || source.IncompleteCount || 0),
+        completionRate: Number(summary.completionRate || source.CompletionRate || 0),
+        reachRate: Number(summary.reachRate || source.ReachRate || 0),
+        reached: Number(summary.reached || source.Reached || 0),
+        infoStaffCount: Number(summary.infoStaffCount || source.InfoStaffCount || 0),
+        professionalPendingCount: Number(summary.professionalPendingCount || source.ProfessionalPendingCount || 0),
+        missingStatusCount: Number(summary.missingStatusCount || source.MissingStatusCount || 0),
+        missingFieldCount: Number(summary.missingFieldCount || source.MissingFieldCount || 0)
+      };
+    }
+
+    function normalizeTrainingAttachments(value) {
+      const list = parseJsonValue(value, function () { return []; });
+      return Array.isArray(list) ? list.map(normalizeTrainingAttachment) : [];
+    }
+
+    function normalizeTrainingHistory(value) {
+      const list = parseJsonValue(value, function () { return []; });
+      return Array.isArray(list) ? list.map(normalizeTrainingHistoryEntry) : [];
+    }
+
+    function normalizeRemoteTrainingForm(record) {
+      const source = maybeFields(record && (record.item || record.data || record.result || record));
+      if (!source || typeof source !== 'object') return null;
+      const id = cleanText(source.id || source.formId || source.FormId || source.Title);
+      if (!id) return null;
+      return {
+        id,
+        documentNo: cleanText(source.documentNo || source.DocumentNo),
+        formSeq: Number.isFinite(Number(source.formSeq)) ? Number(source.formSeq) : (Number.isFinite(Number(source.FormSeq)) ? Number(source.FormSeq) : null),
+        unit: cleanText(source.unit || source.Unit),
+        unitCode: cleanText(source.unitCode || source.UnitCode),
+        statsUnit: cleanText(source.statsUnit || source.StatsUnit),
+        fillerName: cleanText(source.fillerName || source.FillerName),
+        fillerUsername: cleanText(source.fillerUsername || source.FillerUsername),
+        submitterPhone: cleanText(source.submitterPhone || source.SubmitterPhone),
+        submitterEmail: cleanEmail(source.submitterEmail || source.SubmitterEmail),
+        fillDate: cleanText(source.fillDate || source.FillDate) || null,
+        trainingYear: cleanText(source.trainingYear || source.TrainingYear),
+        status: cleanText(source.status || source.Status) || '草稿',
+        records: normalizeTrainingRecords(source.records || source.RecordsJson),
+        summary: normalizeTrainingSummary(source.summary || source.SummaryJson, source),
+        signedFiles: normalizeTrainingAttachments(source.signedFiles || source.SignedFilesJson),
+        returnReason: cleanText(source.returnReason || source.ReturnReason),
+        createdAt: cleanText(source.createdAt || source.CreatedAt || source.Created) || nowIso(),
+        updatedAt: cleanText(source.updatedAt || source.UpdatedAt || source.Modified) || nowIso(),
+        stepOneSubmittedAt: cleanText(source.stepOneSubmittedAt || source.StepOneSubmittedAt) || null,
+        printedAt: cleanText(source.printedAt || source.PrintedAt) || null,
+        signoffUploadedAt: cleanText(source.signoffUploadedAt || source.SignoffUploadedAt) || null,
+        submittedAt: cleanText(source.submittedAt || source.SubmittedAt) || null,
+        history: normalizeTrainingHistory(source.history || source.HistoryJson),
+        backendMode: cleanText(source.backendMode || source.BackendMode) || getTrainingMode(),
+        recordSource: cleanText(source.recordSource || source.RecordSource) || 'remote'
+      };
+    }
+
+    function normalizeRemoteTrainingForms(body) {
+      const candidateList = []
+        .concat(Array.isArray(body) ? body : [])
+        .concat(Array.isArray(body && body.items) ? body.items : [])
+        .concat(Array.isArray(body && body.value) ? body.value : [])
+        .concat(Array.isArray(body && body.data) ? body.data : []);
+      const list = candidateList
+        .map(normalizeRemoteTrainingForm)
+        .filter(Boolean);
+      if (list.length) return list;
+      const single = normalizeRemoteTrainingForm(body && (body.item || body.data || body.result || body));
+      return single ? [single] : [];
+    }
+
+    function normalizeRemoteTrainingRoster(record) {
+      const source = maybeFields(record && (record.item || record.data || record.result || record));
+      if (!source || typeof source !== 'object') return null;
+      const id = cleanText(source.id || source.rosterId || source.RosterId || source.Title);
+      if (!id) return null;
+      return {
+        id,
+        unit: cleanText(source.unit || source.Unit),
+        statsUnit: cleanText(source.statsUnit || source.StatsUnit),
+        l1Unit: cleanText(source.l1Unit || source.L1Unit || source.statsUnit || source.StatsUnit),
+        name: cleanText(source.name || source.Name || source.Title),
+        unitName: cleanText(source.unitName || source.UnitName),
+        identity: cleanText(source.identity || source.Identity),
+        jobTitle: cleanText(source.jobTitle || source.JobTitle),
+        source: cleanText(source.source || source.Source) || 'import',
+        createdBy: cleanText(source.createdBy || source.CreatedBy),
+        createdByUsername: cleanText(source.createdByUsername || source.CreatedByUsername),
+        createdAt: cleanText(source.createdAt || source.CreatedAt || source.Created) || nowIso(),
+        updatedAt: cleanText(source.updatedAt || source.UpdatedAt || source.Modified) || nowIso(),
+        backendMode: cleanText(source.backendMode || source.BackendMode) || getTrainingMode(),
+        recordSource: cleanText(source.recordSource || source.RecordSource) || 'remote'
+      };
+    }
+
+    function normalizeRemoteTrainingRosters(body) {
+      const candidateList = []
+        .concat(Array.isArray(body) ? body : [])
+        .concat(Array.isArray(body && body.items) ? body.items : [])
+        .concat(Array.isArray(body && body.value) ? body.value : [])
+        .concat(Array.isArray(body && body.data) ? body.data : []);
+      const list = candidateList
+        .map(normalizeRemoteTrainingRoster)
+        .filter(Boolean);
+      if (list.length) return list;
+      const single = normalizeRemoteTrainingRoster(body && (body.item || body.data || body.result || body));
+      return single ? [single] : [];
+    }
+
     async function submitToRemote(normalizedPayload) {
       const config = getConfig();
       const endpoint = cleanText(config.unitContactSubmitEndpoint);
-      if (!endpoint) throw new Error('尚未設定 unitContactSubmitEndpoint');
+      if (!endpoint) throw new Error('未設定 unitContactSubmitEndpoint');
       const body = await requestJson(endpoint, {
         method: 'POST',
-        body: buildSubmitEnvelope(normalizedPayload)
+        body: buildSubmitEnvelope(normalizedPayload),
+        contractVersion: CONTRACT_VERSION,
+        sharedHeaders: config.unitContactSharedHeaders || {}
       });
       const applications = normalizeRemoteApplications(body);
       if (!applications.length) {
-        throw new Error('後端沒有回傳可辨識的申請資料');
+        throw new Error('遠端服務沒有回傳申請資料');
       }
       return {
         ok: true,
@@ -318,21 +814,504 @@
     async function lookupFromRemote(email) {
       const config = getConfig();
       const endpoint = cleanText(config.unitContactStatusEndpoint);
-      if (!endpoint) throw new Error('尚未設定 unitContactStatusEndpoint');
+      if (!endpoint) throw new Error('未設定 unitContactStatusEndpoint');
       const method = String(config.unitContactStatusLookupMethod || 'POST').trim().toUpperCase();
       let body;
       if (method === 'GET') {
         const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
         url.searchParams.set(String(config.unitContactStatusQueryParam || 'email'), cleanEmail(email));
         url.searchParams.set('contractVersion', CONTRACT_VERSION);
-        body = await requestJson(url.toString(), { method: 'GET' });
+        body = await requestJson(url.toString(), {
+          method: 'GET',
+          contractVersion: CONTRACT_VERSION,
+          sharedHeaders: config.unitContactSharedHeaders || {}
+        });
       } else {
         body = await requestJson(endpoint, {
           method: 'POST',
-          body: buildLookupEnvelope(email)
+          body: buildLookupEnvelope(email),
+          contractVersion: CONTRACT_VERSION,
+          sharedHeaders: config.unitContactSharedHeaders || {}
         });
       }
       return normalizeRemoteApplications(body);
+    }
+
+    function getCorrectiveActionsEndpoint() {
+      return cleanText(getConfig().correctiveActionsEndpoint).replace(/\/$/, '');
+    }
+
+    function getCorrectiveActionsHealthEndpoint() {
+      const config = getConfig();
+      const explicit = cleanText(config.correctiveActionsHealthEndpoint);
+      if (explicit) return explicit;
+      const endpoint = getCorrectiveActionsEndpoint();
+      return endpoint ? endpoint + '/health' : '';
+    }
+
+    function assertCorrectiveActionsEndpoint() {
+      const endpoint = getCorrectiveActionsEndpoint();
+      if (!endpoint) throw new Error('未設定 correctiveActionsEndpoint');
+      return endpoint;
+    }
+
+    function getCorrectiveActionsSharedHeaders() {
+      const config = getConfig();
+      return config.correctiveActionsSharedHeaders || {};
+    }
+
+    async function requestCorrectiveAction(path, options) {
+      const endpoint = assertCorrectiveActionsEndpoint();
+      return requestJson(endpoint + path, {
+        method: options && options.method || 'GET',
+        body: options && options.body,
+        contractVersion: CORRECTIVE_ACTIONS_CONTRACT_VERSION,
+        sharedHeaders: getCorrectiveActionsSharedHeaders()
+      });
+    }
+
+    async function getCorrectiveActionHealth() {
+      const endpoint = getCorrectiveActionsHealthEndpoint();
+      if (!endpoint) throw new Error('未設定 correctiveActionsHealthEndpoint');
+      return requestJson(endpoint, {
+        method: 'GET',
+        contractVersion: CORRECTIVE_ACTIONS_CONTRACT_VERSION,
+        sharedHeaders: getCorrectiveActionsSharedHeaders()
+      });
+    }
+
+    async function listCorrectiveActions(query) {
+      const endpoint = assertCorrectiveActionsEndpoint();
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const filters = query && typeof query === 'object' ? query : {};
+      Object.entries(filters).forEach(([key, value]) => {
+        const cleanValue = cleanText(value);
+        if (cleanValue) url.searchParams.set(key, cleanValue);
+      });
+      const body = await requestJson(url.toString(), {
+        method: 'GET',
+        contractVersion: CORRECTIVE_ACTIONS_CONTRACT_VERSION,
+        sharedHeaders: getCorrectiveActionsSharedHeaders()
+      });
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getCorrectiveActionMode(),
+        items: normalizeRemoteCorrectiveActions(body),
+        raw: body
+      };
+    }
+
+    async function getCorrectiveAction(id) {
+      const body = await requestCorrectiveAction('/' + encodeURIComponent(cleanText(id)), {
+        method: 'GET'
+      });
+      const items = normalizeRemoteCorrectiveActions(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getCorrectiveActionMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function createCorrectiveAction(payload) {
+      const body = await requestCorrectiveAction('', {
+        method: 'POST',
+        body: buildCorrectiveActionEnvelope(CORRECTIVE_ACTION_ACTIONS.CREATE, payload)
+      });
+      const items = normalizeRemoteCorrectiveActions(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getCorrectiveActionMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function respondCorrectiveAction(id, payload) {
+      const body = await requestCorrectiveAction('/' + encodeURIComponent(cleanText(id)) + '/respond', {
+        method: 'POST',
+        body: buildCorrectiveActionEnvelope(CORRECTIVE_ACTION_ACTIONS.RESPOND, payload)
+      });
+      const items = normalizeRemoteCorrectiveActions(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getCorrectiveActionMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function reviewCorrectiveAction(id, payload) {
+      const body = await requestCorrectiveAction('/' + encodeURIComponent(cleanText(id)) + '/review', {
+        method: 'POST',
+        body: buildCorrectiveActionEnvelope(CORRECTIVE_ACTION_ACTIONS.REVIEW, payload)
+      });
+      const items = normalizeRemoteCorrectiveActions(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getCorrectiveActionMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function submitCorrectiveActionTracking(id, payload) {
+      const body = await requestCorrectiveAction('/' + encodeURIComponent(cleanText(id)) + '/tracking-submit', {
+        method: 'POST',
+        body: buildCorrectiveActionEnvelope(CORRECTIVE_ACTION_ACTIONS.TRACKING_SUBMIT, payload)
+      });
+      const items = normalizeRemoteCorrectiveActions(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getCorrectiveActionMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function reviewCorrectiveActionTracking(id, payload) {
+      const body = await requestCorrectiveAction('/' + encodeURIComponent(cleanText(id)) + '/tracking-review', {
+        method: 'POST',
+        body: buildCorrectiveActionEnvelope(CORRECTIVE_ACTION_ACTIONS.TRACKING_REVIEW, payload)
+      });
+      const items = normalizeRemoteCorrectiveActions(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getCorrectiveActionMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    function getChecklistsEndpoint() {
+      return cleanText(getConfig().checklistEndpoint).replace(/\/$/, '');
+    }
+
+    function getChecklistHealthEndpoint() {
+      const config = getConfig();
+      const explicit = cleanText(config.checklistHealthEndpoint);
+      if (explicit) return explicit;
+      const endpoint = getChecklistsEndpoint();
+      return endpoint ? endpoint + '/health' : '';
+    }
+
+    function assertChecklistEndpoint() {
+      const endpoint = getChecklistsEndpoint();
+      if (!endpoint) throw new Error('未設定 checklistEndpoint');
+      return endpoint;
+    }
+
+    function getChecklistSharedHeaders() {
+      const config = getConfig();
+      return config.checklistSharedHeaders || {};
+    }
+
+    async function requestChecklist(path, options) {
+      const endpoint = assertChecklistEndpoint();
+      return requestJson(endpoint + path, {
+        method: options && options.method || 'GET',
+        body: options && options.body,
+        contractVersion: CHECKLISTS_CONTRACT_VERSION,
+        sharedHeaders: getChecklistSharedHeaders()
+      });
+    }
+
+    async function getChecklistHealth() {
+      const endpoint = getChecklistHealthEndpoint();
+      if (!endpoint) throw new Error('未設定 checklistHealthEndpoint');
+      return requestJson(endpoint, {
+        method: 'GET',
+        contractVersion: CHECKLISTS_CONTRACT_VERSION,
+        sharedHeaders: getChecklistSharedHeaders()
+      });
+    }
+
+    async function listChecklists(query) {
+      const endpoint = assertChecklistEndpoint();
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const filters = query && typeof query === 'object' ? query : {};
+      Object.entries(filters).forEach(([key, value]) => {
+        const cleanValue = cleanText(value);
+        if (cleanValue) url.searchParams.set(key, cleanValue);
+      });
+      const body = await requestJson(url.toString(), {
+        method: 'GET',
+        contractVersion: CHECKLISTS_CONTRACT_VERSION,
+        sharedHeaders: getChecklistSharedHeaders()
+      });
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getChecklistMode(),
+        items: normalizeRemoteChecklists(body),
+        raw: body
+      };
+    }
+
+    async function getChecklistRecord(id) {
+      const body = await requestChecklist('/' + encodeURIComponent(cleanText(id)), {
+        method: 'GET'
+      });
+      const items = normalizeRemoteChecklists(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getChecklistMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function saveChecklistDraft(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestChecklist('/' + encodeURIComponent(cleanId) + '/save-draft', {
+        method: 'POST',
+        body: buildChecklistEnvelope(CHECKLIST_ACTIONS.SAVE_DRAFT, payload)
+      });
+      const items = normalizeRemoteChecklists(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getChecklistMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function submitChecklist(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestChecklist('/' + encodeURIComponent(cleanId) + '/submit', {
+        method: 'POST',
+        body: buildChecklistEnvelope(CHECKLIST_ACTIONS.SUBMIT, payload)
+      });
+      const items = normalizeRemoteChecklists(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getChecklistMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    function getTrainingFormsEndpoint() {
+      return cleanText(getConfig().trainingFormsEndpoint).replace(/\/$/, '');
+    }
+
+    function getTrainingRostersEndpoint() {
+      return cleanText(getConfig().trainingRostersEndpoint).replace(/\/$/, '');
+    }
+
+    function getTrainingHealthEndpoint() {
+      const config = getConfig();
+      const explicit = cleanText(config.trainingHealthEndpoint);
+      if (explicit) return explicit;
+      const endpoint = getTrainingFormsEndpoint();
+      if (!endpoint) return '';
+      return endpoint.replace(/\/forms$/, '') + '/health';
+    }
+
+    function assertTrainingFormsEndpoint() {
+      const endpoint = getTrainingFormsEndpoint();
+      if (!endpoint) throw new Error('未設定 trainingFormsEndpoint');
+      return endpoint;
+    }
+
+    function assertTrainingRostersEndpoint() {
+      const endpoint = getTrainingRostersEndpoint();
+      if (!endpoint) throw new Error('未設定 trainingRostersEndpoint');
+      return endpoint;
+    }
+
+    function getTrainingSharedHeaders() {
+      const config = getConfig();
+      return config.trainingSharedHeaders || {};
+    }
+
+    async function requestTrainingForms(path, options) {
+      const endpoint = assertTrainingFormsEndpoint();
+      return requestJson(endpoint + path, {
+        method: options && options.method || 'GET',
+        body: options && options.body,
+        contractVersion: TRAINING_CONTRACT_VERSION,
+        sharedHeaders: getTrainingSharedHeaders()
+      });
+    }
+
+    async function requestTrainingRosters(path, options) {
+      const endpoint = assertTrainingRostersEndpoint();
+      return requestJson(endpoint + path, {
+        method: options && options.method || 'GET',
+        body: options && options.body,
+        contractVersion: TRAINING_CONTRACT_VERSION,
+        sharedHeaders: getTrainingSharedHeaders()
+      });
+    }
+
+    async function getTrainingHealth() {
+      const endpoint = getTrainingHealthEndpoint();
+      if (!endpoint) throw new Error('未設定 trainingHealthEndpoint');
+      return requestJson(endpoint, {
+        method: 'GET',
+        contractVersion: TRAINING_CONTRACT_VERSION,
+        sharedHeaders: getTrainingSharedHeaders()
+      });
+    }
+
+    async function listTrainingForms(query) {
+      const endpoint = assertTrainingFormsEndpoint();
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const filters = query && typeof query === 'object' ? query : {};
+      Object.entries(filters).forEach(([key, value]) => {
+        const cleanValue = cleanText(value);
+        if (cleanValue) url.searchParams.set(key, cleanValue);
+      });
+      const body = await requestJson(url.toString(), {
+        method: 'GET',
+        contractVersion: TRAINING_CONTRACT_VERSION,
+        sharedHeaders: getTrainingSharedHeaders()
+      });
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        items: normalizeRemoteTrainingForms(body),
+        raw: body
+      };
+    }
+
+    async function getTrainingFormRecord(id) {
+      const body = await requestTrainingForms('/' + encodeURIComponent(cleanText(id)), {
+        method: 'GET'
+      });
+      const items = normalizeRemoteTrainingForms(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function saveTrainingDraft(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestTrainingForms('/' + encodeURIComponent(cleanId) + '/save-draft', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_FORM_ACTIONS.SAVE_DRAFT, payload)
+      });
+      const items = normalizeRemoteTrainingForms(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function submitTrainingStepOne(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestTrainingForms('/' + encodeURIComponent(cleanId) + '/submit-step-one', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_FORM_ACTIONS.SUBMIT_STEP_ONE, payload)
+      });
+      const items = normalizeRemoteTrainingForms(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function finalizeTrainingForm(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestTrainingForms('/' + encodeURIComponent(cleanId) + '/finalize', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_FORM_ACTIONS.FINALIZE, payload)
+      });
+      const items = normalizeRemoteTrainingForms(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function returnTrainingForm(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestTrainingForms('/' + encodeURIComponent(cleanId) + '/return', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_FORM_ACTIONS.RETURN, payload)
+      });
+      const items = normalizeRemoteTrainingForms(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function undoTrainingForm(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestTrainingForms('/' + encodeURIComponent(cleanId) + '/undo', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_FORM_ACTIONS.UNDO, payload)
+      });
+      const items = normalizeRemoteTrainingForms(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function listTrainingRosters(query) {
+      const endpoint = assertTrainingRostersEndpoint();
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const filters = query && typeof query === 'object' ? query : {};
+      Object.entries(filters).forEach(([key, value]) => {
+        const cleanValue = cleanText(value);
+        if (cleanValue) url.searchParams.set(key, cleanValue);
+      });
+      const body = await requestJson(url.toString(), {
+        method: 'GET',
+        contractVersion: TRAINING_CONTRACT_VERSION,
+        sharedHeaders: getTrainingSharedHeaders()
+      });
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        items: normalizeRemoteTrainingRosters(body),
+        raw: body
+      };
+    }
+
+    async function upsertTrainingRoster(payload) {
+      const body = await requestTrainingRosters('/upsert', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_ROSTER_ACTIONS.UPSERT, payload)
+      });
+      const items = normalizeRemoteTrainingRosters(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function deleteTrainingRoster(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestTrainingRosters('/' + encodeURIComponent(cleanId) + '/delete', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_ROSTER_ACTIONS.DELETE, payload)
+      });
+      const items = normalizeRemoteTrainingRosters(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
     }
 
     async function submitUnitContactApplication(payload) {
@@ -396,12 +1375,24 @@
 
     return {
       CONTRACT_VERSION,
+      CORRECTIVE_ACTIONS_CONTRACT_VERSION,
+      CHECKLISTS_CONTRACT_VERSION,
+      TRAINING_CONTRACT_VERSION,
       getMode,
       getModeLabel,
+      getCorrectiveActionMode,
+      getCorrectiveActionModeLabel,
+      getChecklistMode,
+      getChecklistModeLabel,
+      getTrainingMode,
+      getTrainingModeLabel,
       getStatusMeta,
       buildActivationUrl,
       buildSubmitEnvelope,
       buildLookupEnvelope,
+      buildCorrectiveActionEnvelope,
+      buildChecklistEnvelope,
+      buildTrainingEnvelope,
       getUnitContactApplication: function (id) {
         return decorateApplication(getUnitContactApplication(id));
       },
@@ -410,7 +1401,31 @@
       },
       submitUnitContactApplication,
       lookupUnitContactApplicationsByEmail,
-      markActivationPending
+      markActivationPending,
+      getCorrectiveActionHealth,
+      listCorrectiveActions,
+      getCorrectiveAction,
+      createCorrectiveAction,
+      respondCorrectiveAction,
+      reviewCorrectiveAction,
+      submitCorrectiveActionTracking,
+      reviewCorrectiveActionTracking,
+      getChecklistHealth,
+      listChecklists,
+      getChecklistRecord,
+      saveChecklistDraft,
+      submitChecklist,
+      getTrainingHealth,
+      listTrainingForms,
+      getTrainingFormRecord,
+      saveTrainingDraft,
+      submitTrainingStepOne,
+      finalizeTrainingForm,
+      returnTrainingForm,
+      undoTrainingForm,
+      listTrainingRosters,
+      upsertTrainingRoster,
+      deleteTrainingRoster
     };
   };
 })();

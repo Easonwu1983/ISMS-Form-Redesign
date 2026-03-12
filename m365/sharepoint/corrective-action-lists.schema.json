@@ -1,0 +1,60 @@
+{
+  "version": "2026-03-12",
+  "site": {
+    "name": "ISMS-Forms",
+    "purpose": "Corrective action workflow, tracking review, and audit backend"
+  },
+  "lists": [
+    {
+      "name": "CorrectiveActions",
+      "description": "Main corrective action records for internal audit tracking",
+      "recommendedIndexes": ["CaseId", "DocumentNo", "HandlerUnitCode", "HandlerUsername", "Status", "UpdatedAt"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use CaseId as the display title" },
+        { "name": "CaseId", "type": "singleLineText", "required": true, "unique": true },
+        { "name": "DocumentNo", "type": "singleLineText", "required": false },
+        { "name": "CaseSeq", "type": "number", "required": false },
+        { "name": "ProposerUnit", "type": "singleLineText", "required": true },
+        { "name": "ProposerUnitCode", "type": "singleLineText", "required": false },
+        { "name": "ProposerName", "type": "singleLineText", "required": true },
+        { "name": "ProposerUsername", "type": "singleLineText", "required": false },
+        { "name": "ProposerDate", "type": "dateTime", "required": true },
+        { "name": "HandlerUnit", "type": "singleLineText", "required": true },
+        { "name": "HandlerUnitCode", "type": "singleLineText", "required": false },
+        { "name": "HandlerName", "type": "singleLineText", "required": true },
+        { "name": "HandlerUsername", "type": "singleLineText", "required": false },
+        { "name": "HandlerEmail", "type": "singleLineText", "required": false },
+        { "name": "HandlerDate", "type": "dateTime", "required": false },
+        { "name": "DeficiencyType", "type": "choice", "required": true, "choices": ["主要缺失", "次要缺失", "觀察", "建議"] },
+        { "name": "Source", "type": "choice", "required": true, "choices": ["內部稽核", "外部稽核", "教育部稽核", "資安事故", "系統變更", "使用者抱怨", "其他"] },
+        { "name": "CategoryJson", "type": "multipleLinesText", "required": true, "notes": "JSON array of category labels" },
+        { "name": "Clause", "type": "singleLineText", "required": false },
+        { "name": "ProblemDescription", "type": "multipleLinesText", "required": true },
+        { "name": "Occurrence", "type": "multipleLinesText", "required": true },
+        { "name": "CorrectiveAction", "type": "multipleLinesText", "required": false },
+        { "name": "CorrectiveDueDate", "type": "dateTime", "required": true },
+        { "name": "RootCause", "type": "multipleLinesText", "required": false },
+        { "name": "RiskDescription", "type": "multipleLinesText", "required": false },
+        { "name": "RiskAcceptor", "type": "singleLineText", "required": false },
+        { "name": "RiskAcceptDate", "type": "dateTime", "required": false },
+        { "name": "RiskAssessDate", "type": "dateTime", "required": false },
+        { "name": "RootElimination", "type": "multipleLinesText", "required": false },
+        { "name": "RootEliminationDueDate", "type": "dateTime", "required": false },
+        { "name": "ReviewResult", "type": "singleLineText", "required": false },
+        { "name": "ReviewNextDate", "type": "dateTime", "required": false },
+        { "name": "Reviewer", "type": "singleLineText", "required": false },
+        { "name": "ReviewDate", "type": "dateTime", "required": false },
+        { "name": "PendingTrackingJson", "type": "multipleLinesText", "required": false, "notes": "JSON object for the current submitted tracking waiting review" },
+        { "name": "TrackingsJson", "type": "multipleLinesText", "required": true, "notes": "JSON array of approved tracking history" },
+        { "name": "Status", "type": "choice", "required": true, "choices": ["待矯正", "已提案", "審核中", "追蹤中", "結案"] },
+        { "name": "CreatedAt", "type": "dateTime", "required": true },
+        { "name": "UpdatedAt", "type": "dateTime", "required": true },
+        { "name": "ClosedDate", "type": "dateTime", "required": false },
+        { "name": "EvidenceJson", "type": "multipleLinesText", "required": true, "notes": "JSON array of attachment descriptors. Binary file storage moves to document library in phase 2." },
+        { "name": "HistoryJson", "type": "multipleLinesText", "required": true, "notes": "JSON array used by the detail timeline" },
+        { "name": "BackendMode", "type": "choice", "required": true, "choices": ["a3-campus-backend"] },
+        { "name": "RecordSource", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] }
+      ]
+    }
+  ]
+}

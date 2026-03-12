@@ -213,11 +213,17 @@
         const handler = GLOBAL_ACTION_HANDLERS[actionEl.dataset.action];
         if (typeof handler === 'function') {
           event.preventDefault();
-          handler({
+          const result = handler({
             event,
             element: actionEl,
             dataset: { ...actionEl.dataset }
           });
+          if (result && typeof result.then === 'function') {
+            result.catch(function (error) {
+              console.error(error && error.stack ? error.stack : String(error));
+              toast(String(error && error.message || error || '操作失敗'), 'error');
+            });
+          }
           return;
         }
       }
@@ -555,6 +561,12 @@
       cleanupRenderedAttachmentUrls,
       buildUnitCascadeControl,
       initUnitCascade,
+      syncCorrectiveActionsFromM365,
+      submitCreateCase,
+      submitRespondCase,
+      submitReviewDecision,
+      submitTrackingSubmission,
+      submitTrackingReviewDecision,
       applyTestIds,
       applySelectorTestIds,
       debugFlow,
@@ -597,6 +609,9 @@
       generateChecklistIdForYear,
       addChecklist,
       updateChecklist,
+      syncChecklistsFromM365,
+      submitChecklistDraft,
+      submitChecklistForm,
       getChecklistSections,
       saveChecklistSections,
       resetChecklistSections,
@@ -680,6 +695,15 @@
       getTrainingStatsUnit,
       getTrainingJobUnit,
       getTrainingUnits,
+      syncTrainingFormsFromM365,
+      syncTrainingRostersFromM365,
+      submitTrainingDraft,
+      submitTrainingStepOne,
+      submitTrainingFinalize,
+      submitTrainingReturn,
+      submitTrainingUndo,
+      submitTrainingRosterUpsert,
+      submitTrainingRosterDelete,
       getVisibleTrainingForms,
       isTrainingVisible,
       canEditTrainingForm,
@@ -724,6 +748,621 @@
     });
     window._m365ApiClient = m365ApiClientApi;
     return m365ApiClientApi;
+  }
+  const correctiveActionRepositoryState = {
+    mode: 'local-emulator',
+    ready: false,
+    source: 'local',
+    lastSyncAt: '',
+    message: '',
+    error: ''
+  };
+  function setCorrectiveActionRepositoryState(patch) {
+    Object.assign(correctiveActionRepositoryState, patch || {});
+    return { ...correctiveActionRepositoryState };
+  }
+  function getCorrectiveActionRepositoryState() {
+    return { ...correctiveActionRepositoryState };
+  }
+  function mergeRemoteCorrectiveActionsIntoStore(items) {
+    const data = loadData();
+    const remoteMap = new Map();
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id) return;
+      remoteMap.set(id, item);
+    });
+    const merged = Array.from(remoteMap.values());
+    (data.items || []).forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id || remoteMap.has(id)) return;
+      merged.push(item);
+    });
+    data.items = merged;
+    saveData(data);
+    return data.items.slice();
+  }
+  function upsertCorrectiveActionInStore(item) {
+    if (!item || !item.id) return null;
+    const data = loadData();
+    const index = (data.items || []).findIndex(function (entry) { return entry.id === item.id; });
+    if (index >= 0) {
+      data.items[index] = item;
+    } else {
+      data.items.push(item);
+    }
+    saveData(data);
+    return item;
+  }
+  function persistLocalCorrectiveActionUpdate(id, updates) {
+    updateItem(id, updates);
+    return getItem(id);
+  }
+  function buildCorrectiveActionFallbackWarning(error) {
+    const detail = String(error && error.message || error || '').trim();
+    return detail ? ('M365 矯正單後端未就緒，已改用本機暫存：' + detail) : 'M365 矯正單後端未就緒，已改用本機暫存。';
+  }
+  async function syncCorrectiveActionsFromM365(options) {
+    const opts = options || {};
+    const client = getM365ApiClient();
+    const mode = client.getCorrectiveActionMode();
+    setCorrectiveActionRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (mode !== 'm365-api') {
+      return setCorrectiveActionRepositoryState({
+        ready: false,
+        message: '目前使用本機暫存模式',
+        error: ''
+      });
+    }
+    try {
+      const health = await client.getCorrectiveActionHealth();
+      if (health && health.ready === false) {
+        return setCorrectiveActionRepositoryState({
+          ready: false,
+          source: 'local-fallback',
+          message: String(health.message || 'M365 矯正單後端尚未就緒，系統維持本機資料模式'),
+          error: String(health.message || '')
+        });
+      }
+      const response = await client.listCorrectiveActions(opts.query);
+      mergeRemoteCorrectiveActionsIntoStore(response.items || []);
+      return setCorrectiveActionRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastSyncAt: new Date().toISOString(),
+        message: '已同步 M365 矯正單資料',
+        error: ''
+      });
+    } catch (error) {
+      return setCorrectiveActionRepositoryState({
+        ready: false,
+        source: 'local-fallback',
+        message: 'M365 矯正單後端尚未就緒，系統維持本機資料模式',
+        error: String(error && error.message || error || '')
+      });
+    }
+  }
+  async function submitCreateCase(item) {
+    const client = getM365ApiClient();
+    if (client.getCorrectiveActionMode() !== 'm365-api') {
+      addItem(item);
+      setCorrectiveActionRepositoryState({ mode: 'local-emulator', source: 'local', ready: false });
+      return { ok: true, item: getItem(item.id) || item, source: 'local' };
+    }
+    try {
+      const response = await client.createCorrectiveAction(item);
+      const stored = upsertCorrectiveActionInStore(response.item || item);
+      setCorrectiveActionRepositoryState({
+        mode: 'm365-api',
+        source: 'remote',
+        ready: true,
+        lastSyncAt: new Date().toISOString(),
+        message: '矯正單已寫入 M365',
+        error: ''
+      });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      addItem(item);
+      setCorrectiveActionRepositoryState({
+        mode: 'm365-api',
+        source: 'local-fallback',
+        ready: false,
+        message: 'M365 矯正單後端尚未就緒，已改用本機暫存',
+        error: String(error && error.message || error || '')
+      });
+      return { ok: true, item: getItem(item.id) || item, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
+    }
+  }
+  async function submitRespondCase(id, payload, fallbackUpdates) {
+    const client = getM365ApiClient();
+    if (client.getCorrectiveActionMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalCorrectiveActionUpdate(id, fallbackUpdates), source: 'local' };
+    }
+    try {
+      const response = await client.respondCorrectiveAction(id, payload);
+      const stored = upsertCorrectiveActionInStore(response.item || persistLocalCorrectiveActionUpdate(id, fallbackUpdates));
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '矯正單回覆已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
+    }
+  }
+  async function submitReviewDecision(id, payload, fallbackUpdates) {
+    const client = getM365ApiClient();
+    if (client.getCorrectiveActionMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalCorrectiveActionUpdate(id, fallbackUpdates), source: 'local' };
+    }
+    try {
+      const response = await client.reviewCorrectiveAction(id, payload);
+      const stored = upsertCorrectiveActionInStore(response.item || persistLocalCorrectiveActionUpdate(id, fallbackUpdates));
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '矯正單審核狀態已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
+    }
+  }
+  async function submitTrackingSubmission(id, payload, fallbackUpdates) {
+    const client = getM365ApiClient();
+    if (client.getCorrectiveActionMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalCorrectiveActionUpdate(id, fallbackUpdates), source: 'local' };
+    }
+    try {
+      const response = await client.submitCorrectiveActionTracking(id, payload);
+      const stored = upsertCorrectiveActionInStore(response.item || persistLocalCorrectiveActionUpdate(id, fallbackUpdates));
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '追蹤提報已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
+    }
+  }
+  async function submitTrackingReviewDecision(id, payload, fallbackUpdates) {
+    const client = getM365ApiClient();
+    if (client.getCorrectiveActionMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalCorrectiveActionUpdate(id, fallbackUpdates), source: 'local' };
+    }
+    try {
+      const response = await client.reviewCorrectiveActionTracking(id, payload);
+      const stored = upsertCorrectiveActionInStore(response.item || persistLocalCorrectiveActionUpdate(id, fallbackUpdates));
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '追蹤審核已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
+    }
+  }
+  const checklistRepositoryState = {
+    mode: 'local-emulator',
+    ready: false,
+    source: 'local',
+    lastSyncAt: '',
+    message: '',
+    error: ''
+  };
+  function setChecklistRepositoryState(patch) {
+    Object.assign(checklistRepositoryState, patch || {});
+    return { ...checklistRepositoryState };
+  }
+  function getChecklistRepositoryState() {
+    return { ...checklistRepositoryState };
+  }
+  function mergeRemoteChecklistsIntoStore(items) {
+    const store = loadChecklists();
+    const remoteMap = new Map();
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id) return;
+      remoteMap.set(id, item);
+    });
+    const merged = Array.from(remoteMap.values());
+    (store.items || []).forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id || remoteMap.has(id)) return;
+      merged.push(item);
+    });
+    store.items = merged;
+    saveChecklists(store);
+    return store.items.slice();
+  }
+  function upsertChecklistInStore(item) {
+    if (!item || !item.id) return null;
+    const store = loadChecklists();
+    const index = (store.items || []).findIndex(function (entry) { return entry.id === item.id; });
+    if (index >= 0) {
+      store.items[index] = item;
+    } else {
+      store.items.push(item);
+    }
+    saveChecklists(store);
+    return item;
+  }
+  function persistLocalChecklist(item) {
+    if (!item || !item.id) return null;
+    if (getChecklist(item.id)) {
+      updateChecklist(item.id, item);
+    } else {
+      addChecklist(item);
+    }
+    return getChecklist(item.id) || item;
+  }
+  function buildChecklistFallbackWarning(error) {
+    const detail = String(error && error.message || error || '').trim();
+    return detail ? ('M365 檢核表後端未就緒，已改用本機暫存：' + detail) : 'M365 檢核表後端未就緒，已改用本機暫存。';
+  }
+  async function syncChecklistsFromM365(options) {
+    const opts = options || {};
+    const client = getM365ApiClient();
+    const mode = client.getChecklistMode();
+    setChecklistRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (mode !== 'm365-api') {
+      return setChecklistRepositoryState({
+        ready: false,
+        message: '目前使用本機暫存模式',
+        error: ''
+      });
+    }
+    try {
+      const health = await client.getChecklistHealth();
+      if (health && health.ready === false) {
+        return setChecklistRepositoryState({
+          ready: false,
+          source: 'local-fallback',
+          message: String(health.message || 'M365 檢核表後端尚未就緒，系統維持本機資料模式'),
+          error: String(health.message || '')
+        });
+      }
+      const response = await client.listChecklists(opts.query);
+      mergeRemoteChecklistsIntoStore(response.items || []);
+      return setChecklistRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastSyncAt: new Date().toISOString(),
+        message: '已同步 M365 檢核表資料',
+        error: ''
+      });
+    } catch (error) {
+      return setChecklistRepositoryState({
+        ready: false,
+        source: 'local-fallback',
+        message: 'M365 檢核表後端尚未就緒，系統維持本機資料模式',
+        error: String(error && error.message || error || '')
+      });
+    }
+  }
+  async function submitChecklistDraft(payload) {
+    const client = getM365ApiClient();
+    const id = String(payload && payload.id || '').trim();
+    if (client.getChecklistMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalChecklist(payload), source: 'local' };
+    }
+    try {
+      const response = await client.saveChecklistDraft(id, payload);
+      const stored = upsertChecklistInStore(response.item || payload);
+      setChecklistRepositoryState({
+        mode: 'm365-api',
+        source: 'remote',
+        ready: true,
+        lastSyncAt: new Date().toISOString(),
+        message: '檢核表草稿已寫入 M365',
+        error: ''
+      });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalChecklist(payload);
+      setChecklistRepositoryState({
+        mode: 'm365-api',
+        source: 'local-fallback',
+        ready: false,
+        message: 'M365 檢核表後端尚未就緒，已改用本機暫存',
+        error: String(error && error.message || error || '')
+      });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildChecklistFallbackWarning(error) };
+    }
+  }
+  async function submitChecklistForm(payload) {
+    const client = getM365ApiClient();
+    const id = String(payload && payload.id || '').trim();
+    if (client.getChecklistMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalChecklist(payload), source: 'local' };
+    }
+    try {
+      const response = await client.submitChecklist(id, payload);
+      const stored = upsertChecklistInStore(response.item || payload);
+      setChecklistRepositoryState({
+        mode: 'm365-api',
+        source: 'remote',
+        ready: true,
+        lastSyncAt: new Date().toISOString(),
+        message: '檢核表已寫入 M365',
+        error: ''
+      });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalChecklist(payload);
+      setChecklistRepositoryState({
+        mode: 'm365-api',
+        source: 'local-fallback',
+        ready: false,
+        message: 'M365 檢核表後端尚未就緒，已改用本機暫存',
+        error: String(error && error.message || error || '')
+      });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildChecklistFallbackWarning(error) };
+    }
+  }
+  const trainingRepositoryState = {
+    mode: 'local-emulator',
+    ready: false,
+    source: 'local',
+    lastFormsSyncAt: '',
+    lastRostersSyncAt: '',
+    message: '',
+    error: ''
+  };
+  function setTrainingRepositoryState(patch) {
+    Object.assign(trainingRepositoryState, patch || {});
+    return { ...trainingRepositoryState };
+  }
+  function mergeRemoteTrainingFormsIntoStore(items) {
+    const store = loadTrainingStore();
+    const remoteMap = new Map();
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id) return;
+      remoteMap.set(id, item);
+    });
+    const merged = Array.from(remoteMap.values());
+    (store.forms || []).forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id || remoteMap.has(id)) return;
+      merged.push(item);
+    });
+    store.forms = merged;
+    saveTrainingStore(store);
+    return store.forms.slice();
+  }
+  function mergeRemoteTrainingRostersIntoStore(items) {
+    const store = loadTrainingStore();
+    const remoteMap = new Map();
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id) return;
+      remoteMap.set(id, item);
+    });
+    const merged = Array.from(remoteMap.values());
+    (store.rosters || []).forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id || remoteMap.has(id)) return;
+      merged.push(item);
+    });
+    store.rosters = merged;
+    saveTrainingStore(store);
+    return store.rosters.slice();
+  }
+  function upsertTrainingFormInStore(item) {
+    if (!item || !item.id) return null;
+    upsertTrainingForm(item);
+    return getTrainingForm(item.id) || item;
+  }
+  function upsertTrainingRosterInStore(item) {
+    if (!item || !item.id) return null;
+    const store = loadTrainingStore();
+    const index = (store.rosters || []).findIndex(function (entry) { return entry.id === item.id; });
+    if (index >= 0) {
+      store.rosters[index] = item;
+    } else {
+      store.rosters.push(item);
+    }
+    saveTrainingStore(store);
+    return loadTrainingStore().rosters.find(function (entry) { return entry.id === item.id; }) || item;
+  }
+  function deleteTrainingRosterFromStore(id) {
+    const cleanId = String(id || '').trim();
+    if (!cleanId) return;
+    deleteTrainingRosterPerson(cleanId);
+  }
+  function persistLocalTrainingForm(payload) {
+    return upsertTrainingFormInStore(payload);
+  }
+  function buildTrainingFallbackWarning(error) {
+    const detail = String(error && error.message || error || '').trim();
+    return detail ? ('M365 教育訓練後端未就緒，已改用本機暫存：' + detail) : 'M365 教育訓練後端未就緒，已改用本機暫存。';
+  }
+  async function syncTrainingFormsFromM365(options) {
+    const opts = options || {};
+    const client = getM365ApiClient();
+    const mode = client.getTrainingMode();
+    setTrainingRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (mode !== 'm365-api') {
+      return setTrainingRepositoryState({ ready: false, message: '目前使用本機暫存模式', error: '' });
+    }
+    try {
+      const health = await client.getTrainingHealth();
+      if (health && health.ready === false) {
+        return setTrainingRepositoryState({
+          ready: false,
+          source: 'local-fallback',
+          message: String(health.message || 'M365 教育訓練後端尚未就緒，系統維持本機資料模式'),
+          error: String(health.message || '')
+        });
+      }
+      const response = await client.listTrainingForms(opts.query);
+      mergeRemoteTrainingFormsIntoStore(response.items || []);
+      return setTrainingRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastFormsSyncAt: new Date().toISOString(),
+        message: '已同步 M365 教育訓練資料',
+        error: ''
+      });
+    } catch (error) {
+      return setTrainingRepositoryState({
+        ready: false,
+        source: 'local-fallback',
+        message: 'M365 教育訓練後端尚未就緒，系統維持本機資料模式',
+        error: String(error && error.message || error || '')
+      });
+    }
+  }
+  async function syncTrainingRostersFromM365(options) {
+    const opts = options || {};
+    const client = getM365ApiClient();
+    const mode = client.getTrainingMode();
+    setTrainingRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (mode !== 'm365-api') {
+      return setTrainingRepositoryState({ ready: false, message: '目前使用本機暫存模式', error: '' });
+    }
+    try {
+      const health = await client.getTrainingHealth();
+      if (health && health.ready === false) {
+        return setTrainingRepositoryState({
+          ready: false,
+          source: 'local-fallback',
+          message: String(health.message || 'M365 教育訓練後端尚未就緒，系統維持本機資料模式'),
+          error: String(health.message || '')
+        });
+      }
+      const response = await client.listTrainingRosters(opts.query);
+      mergeRemoteTrainingRostersIntoStore(response.items || []);
+      return setTrainingRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastRostersSyncAt: new Date().toISOString(),
+        message: '已同步 M365 教育訓練名單',
+        error: ''
+      });
+    } catch (error) {
+      return setTrainingRepositoryState({
+        ready: false,
+        source: 'local-fallback',
+        message: 'M365 教育訓練名單後端尚未就緒，系統維持本機資料模式',
+        error: String(error && error.message || error || '')
+      });
+    }
+  }
+  async function submitTrainingDraft(payload) {
+    const client = getM365ApiClient();
+    const id = String(payload && payload.id || '').trim();
+    if (client.getTrainingMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalTrainingForm(payload), source: 'local' };
+    }
+    try {
+      const response = await client.saveTrainingDraft(id, payload);
+      const stored = upsertTrainingFormInStore(response.item || payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練草稿已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalTrainingForm(payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingStepOne(payload) {
+    const client = getM365ApiClient();
+    const id = String(payload && payload.id || '').trim();
+    if (client.getTrainingMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalTrainingForm(payload), source: 'local' };
+    }
+    try {
+      const response = await client.submitTrainingStepOne(id, payload);
+      const stored = upsertTrainingFormInStore(response.item || payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練流程一已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalTrainingForm(payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingFinalize(payload) {
+    const client = getM365ApiClient();
+    const id = String(payload && payload.id || '').trim();
+    if (client.getTrainingMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalTrainingForm(payload), source: 'local' };
+    }
+    try {
+      const response = await client.finalizeTrainingForm(id, payload);
+      const stored = upsertTrainingFormInStore(response.item || payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練結案已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalTrainingForm(payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingReturn(payload) {
+    const client = getM365ApiClient();
+    const id = String(payload && payload.id || '').trim();
+    if (client.getTrainingMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalTrainingForm(payload), source: 'local' };
+    }
+    try {
+      const response = await client.returnTrainingForm(id, payload);
+      const stored = upsertTrainingFormInStore(response.item || payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練退回已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalTrainingForm(payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingUndo(payload) {
+    const client = getM365ApiClient();
+    const id = String(payload && payload.id || '').trim();
+    if (client.getTrainingMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalTrainingForm(payload), source: 'local' };
+    }
+    try {
+      const response = await client.undoTrainingForm(id, payload);
+      const stored = upsertTrainingFormInStore(response.item || payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練撤回已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = persistLocalTrainingForm(payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingRosterUpsert(payload) {
+    const client = getM365ApiClient();
+    if (client.getTrainingMode() !== 'm365-api') {
+      return { ok: true, item: upsertTrainingRosterInStore(payload), source: 'local' };
+    }
+    try {
+      const response = await client.upsertTrainingRoster(payload);
+      const stored = upsertTrainingRosterInStore(response.item || payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      const stored = upsertTrainingRosterInStore(payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingRosterDelete(id, payload) {
+    const client = getM365ApiClient();
+    const cleanId = String(id || (payload && payload.id) || '').trim();
+    if (client.getTrainingMode() !== 'm365-api') {
+      deleteTrainingRosterFromStore(cleanId);
+      return { ok: true, deletedId: cleanId, source: 'local' };
+    }
+    try {
+      await client.deleteTrainingRoster(cleanId, payload);
+      deleteTrainingRosterFromStore(cleanId);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單刪除已寫入 M365', error: '' });
+      return { ok: true, deletedId: cleanId, source: 'remote' };
+    } catch (error) {
+      deleteTrainingRosterFromStore(cleanId);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, deletedId: cleanId, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
   }
   let unitContactApplicationModuleApi = null;
   function getUnitContactApplicationModule() {
@@ -1341,6 +1980,10 @@
     ensurePrimaryAdminProfile();
     getTrainingModule().seedTrainingData();
     await migrateAttachmentStores();
+    await syncTrainingFormsFromM365({ silent: true });
+    await syncTrainingRostersFromM365({ silent: true });
+    await syncChecklistsFromM365({ silent: true });
+    await syncCorrectiveActionsFromM365({ silent: true });
     window.addEventListener('hashchange', handleHashChange);
     window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
     window.addEventListener('load', refreshIcons);

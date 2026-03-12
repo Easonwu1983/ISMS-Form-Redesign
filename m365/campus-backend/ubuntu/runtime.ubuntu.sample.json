@@ -8,7 +8,11 @@
   "lists": {
     "applications": "UnitContactApplications",
     "unitAdmins": "UnitAdmins",
-    "audit": "OpsAudit"
+    "audit": "OpsAudit",
+    "correctiveActions": "CorrectiveActions",
+    "checklists": "Checklists",
+    "trainingForms": "TrainingForms",
+    "trainingRosters": "TrainingRosters"
   },
   "logDir": "/var/log/isms-form-redesign"
 }

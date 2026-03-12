@@ -56,6 +56,12 @@
       cleanupRenderedAttachmentUrls,
       buildUnitCascadeControl,
       initUnitCascade,
+      syncCorrectiveActionsFromM365,
+      submitCreateCase,
+      submitRespondCase,
+      submitReviewDecision,
+      submitTrackingSubmission,
+      submitTrackingReviewDecision,
       applyTestIds,
       applySelectorTestIds,
       debugFlow,
@@ -493,7 +499,7 @@ function renderCreate() {
       return true;
     }
 
-    document.getElementById('create-form').addEventListener('submit', e => {
+    document.getElementById('create-form').addEventListener('submit', async e => {
       e.preventDefault();
       debugFlow('create', 'submit start', { handlerUnit: document.getElementById('f-hunit').value, handlerName: document.getElementById('f-hname').value });
       setCreateFeedback('info', '\u6b63\u5728\u6aa2\u67e5\u958b\u55ae\u8cc7\u6599', ['\u6aa2\u6838\u5fc5\u586b\u6b04\u4f4d\u3001\u8655\u7406\u55ae\u4f4d\u8207\u8655\u7406\u4eba\u8cc7\u8a0a\u3002']);
@@ -553,7 +559,8 @@ function renderCreate() {
       };
       const shouldNotify = document.getElementById('f-notify').checked;
       const hEmail = document.getElementById('f-hemail').value;
-      addItem(item);
+      const createResult = await submitCreateCase(item);
+      const storedItem = createResult && createResult.item ? createResult.item : item;
       debugFlow('create', 'submit success', { id: item.id, notify: shouldNotify, handlerEmail: hEmail || '' });
       if (shouldNotify && hEmail) {
         item.history.push({ time: now, action: `系統寄送指派通知至 ${hEmail}`, user: '系統' });
@@ -562,8 +569,9 @@ function renderCreate() {
       } else {
         toast(`矯正單 ${item.id} 已建立完成`);
       }
+      if (createResult && createResult.warning) toast(createResult.warning, 'info');
       clearUnsavedChangesGuard();
-      navigate('detail/' + item.id);
+      navigate('detail/' + storedItem.id);
     });
     createForm.addEventListener('input', function () {
       clearCreateFeedback();
@@ -694,37 +702,53 @@ function renderCreate() {
   }
 
   
-function handleStatusTransition(id, ns) {
+function getReviewDecisionByNextStatus(item, nextStatus) {
+    if (!item) return '';
+    if (item.status === STATUSES.PROPOSED && nextStatus === STATUSES.REVIEWING) return 'start_review';
+    if (item.status === STATUSES.REVIEWING && nextStatus === STATUSES.CLOSED) return 'close';
+    if (item.status === STATUSES.REVIEWING && nextStatus === STATUSES.TRACKING) return 'tracking';
+    if (item.status === STATUSES.REVIEWING && nextStatus === STATUSES.PENDING) return 'return';
+    return '';
+  }
+
+async function handleStatusTransition(id, ns) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
-    if (!canAccessItem(item) || !canReview()) { toast('您沒有變更狀態的權限', 'error'); return; }
+    if (!canAccessItem(item) || !canReview()) { toast('???????????', 'error'); return; }
     const allowedTransitions = {
       [STATUSES.PROPOSED]: [STATUSES.REVIEWING],
       [STATUSES.REVIEWING]: [STATUSES.CLOSED, STATUSES.TRACKING, STATUSES.PENDING]
     };
     const next = allowedTransitions[item.status] || [];
-    if (!next.includes(ns)) { toast(`不允許從「${item.status}」變更為「${ns}」`, 'error'); return; }
+    if (!next.includes(ns)) { toast(`?? ${item.status} ??????? ${ns}`, 'error'); return; }
+    const reviewDecision = getReviewDecisionByNextStatus(item, ns);
+    if (!reviewDecision) { toast('??????????', 'error'); return; }
     const now = new Date().toISOString();
-    const updates = { status: ns, updatedAt: now, pendingTracking: null, history: [...item.history, { time: now, action: `狀態變更為「${ns}」`, user: u.name }] };
+    const updates = { status: ns, updatedAt: now, pendingTracking: null, history: [...item.history, { time: now, action: `??????${ns}?`, user: u.name }] };
     updates.closedDate = ns === STATUSES.CLOSED ? now : null;
-    updateItem(id, updates);
-    toast(`狀態已變更為「${ns}」`);
+    const result = await submitReviewDecision(id, {
+      decision: reviewDecision,
+      actorName: u.name,
+      actorUsername: u.username
+    }, updates);
+    if (result && result.warning) toast(result.warning, 'info');
+    toast(`???? ${ns}`);
     renderDetail(id);
     renderSidebar();
     refreshIcons();
   };
 
-  function handleReviewTracking(id, decision) {
+  async function handleReviewTracking(id, decision) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
-    if (!(item.status === STATUSES.TRACKING && item.pendingTracking && canReview())) { toast('目前沒有可審核的追蹤提報', 'error'); return; }
+    if (!(item.status === STATUSES.TRACKING && item.pendingTracking && canReview())) { toast('????????????', 'error'); return; }
     const pending = item.pendingTracking;
     const round = pending.round || ((item.trackings || []).length + 1);
     const now = new Date().toISOString();
     const shouldClose = decision === 'close';
-    const finalResult = shouldClose ? '同意結案' : '同意繼續追蹤';
+    const finalResult = shouldClose ? '????' : '??????';
     const approvedTracking = {
       ...pending,
       requestedResult: pending.result,
@@ -736,16 +760,20 @@ function handleStatusTransition(id, ns) {
     };
     const history = [
       ...(item.history || []),
-      { time: now, action: `管理者審核第 ${round} 次追蹤提報`, user: u.name },
+      { time: now, action: `??? ${round} ?????`, user: u.name },
       { time: now, action: finalResult, user: u.name }
     ];
     if (!shouldClose && pending.nextTrackDate) {
-      history.push({ time: now, action: `下一次追蹤日期：${pending.nextTrackDate}`, user: u.name });
+      history.push({ time: now, action: `????????${pending.nextTrackDate}`, user: u.name });
     }
     if (pending.evidence && pending.evidence.length) {
-      history.push({ time: now, action: `追蹤佐證歸檔 ${pending.evidence.length} 份`, user: u.name });
+      history.push({ time: now, action: `???? ${pending.evidence.length} ?`, user: u.name });
     }
-    updateItem(id, {
+    const result = await submitTrackingReviewDecision(id, {
+      decision: shouldClose ? 'close' : 'continue',
+      actorName: u.name,
+      actorUsername: u.username
+    }, {
       trackings: [...(item.trackings || []), approvedTracking],
       pendingTracking: null,
       status: shouldClose ? STATUSES.CLOSED : STATUSES.TRACKING,
@@ -754,7 +782,8 @@ function handleStatusTransition(id, ns) {
       evidence: pending.evidence && pending.evidence.length ? [...(item.evidence || []), ...pending.evidence] : (item.evidence || []),
       history
     });
-    toast(shouldClose ? '已同意結案' : '已同意繼續追蹤');
+    if (result && result.warning) toast(result.warning, 'info');
+    toast(shouldClose ? '?????' : '???????');
     renderDetail(id);
     renderSidebar();
     refreshIcons();
@@ -927,10 +956,10 @@ function renderRespond(id) {
       const ca = document.getElementById('r-action').value.trim();
       const rc = document.getElementById('r-root').value.trim();
       const el = document.getElementById('r-elim').value.trim();
-      if (!ca || !rc || !el) { toast('請完整填寫矯正措施、根因分析與根因消除措施', 'error'); return; }
+      if (!ca || !rc || !el) { toast('?????????????????????', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
-      if (!li || !canAccessItem(li)) { toast('您沒有權限存取此矯正單', 'error'); navigate('list'); return; }
-      if (!canRespondItem(li, u)) { toast('\u9019\u7b46\u6848\u4ef6\u76ee\u524d\u4e0d\u5141\u8a31\u9001\u51fa\u56de\u8986', 'error'); navigate('detail/' + id); return; }
+      if (!li || !canAccessItem(li)) { toast('?????????????', 'error'); navigate('list'); return; }
+      if (!canRespondItem(li, u)) { toast('?????????????', 'error'); navigate('detail/' + id); return; }
       const persistedEvidence = await persistUploadedEntries(tempEv, {
         prefix: 'car',
         scope: 'case-evidence',
@@ -947,10 +976,26 @@ function renderRespond(id) {
         riskAssessDate: document.getElementById('r-riskassess').value || null,
         status: STATUSES.PROPOSED, updatedAt: now,
         evidence: [...(li.evidence || []), ...persistedEvidence],
-        history: [...li.history, { time: now, action: `${u.name} 已回覆矯正措施`, user: u.name }, { time: now, action: `狀態變更為「${STATUSES.PROPOSED}」`, user: u.name }]
+        history: [...li.history, { time: now, action: `${u.name} ???????`, user: u.name }, { time: now, action: `??????${STATUSES.PROPOSED}?`, user: u.name }]
       };
-      if (tempEv.length) upd.history.push({ time: now, action: `上傳 ${tempEv.length} 份佐證附件`, user: u.name });
-      updateItem(id, upd); toast('矯正措施回覆已正式送出'); navigate('detail/' + id);
+      if (tempEv.length) upd.history.push({ time: now, action: `?? ${tempEv.length} ?????`, user: u.name });
+      const result = await submitRespondCase(id, {
+        correctiveAction: ca,
+        correctiveDueDate: document.getElementById('r-due').value,
+        rootCause: rc,
+        rootElimination: el,
+        rootElimDueDate: document.getElementById('r-elimdue').value || null,
+        riskDesc: document.getElementById('r-risk').value.trim(),
+        riskAcceptor: document.getElementById('r-riskwho').value.trim(),
+        riskAcceptDate: document.getElementById('r-riskdate').value || null,
+        riskAssessDate: document.getElementById('r-riskassess').value || null,
+        evidence: persistedEvidence,
+        actorName: u.name,
+        actorUsername: u.username
+      }, upd);
+      if (result && result.warning) toast(result.warning, 'info');
+      toast('????????');
+      navigate('detail/' + id);
     });
   }
 
@@ -1121,15 +1166,15 @@ function renderTracking(id) {
     trackForm.addEventListener('submit', async e => {
       e.preventDefault();
       const res = document.querySelector('input[name="tkResult"]:checked');
-      if (!res) { toast('請選擇追蹤建議結果', 'error'); return; }
+      if (!res) { toast('??????????', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
-      if (!li || !canAccessItem(li)) { toast('您沒有權限存取此矯正單', 'error'); navigate('list'); return; }
-      if (li.pendingTracking) { toast('目前已有待管理者審核的追蹤提報', 'error'); navigate('detail/' + id); return; }
-      if (!canSubmitTracking(li, u)) { toast('目前只有處理人員可送出追蹤提報', 'error'); navigate('detail/' + id); return; }
-      const isClose = res.value === '擬請同意結案';
-      const isContinue = res.value === '建議持續追蹤';
-      if (isContinue && !document.getElementById('tk-next').value) { toast('選擇建議持續追蹤時，請填寫下一次追蹤日期', 'error'); return; }
-      if (isClose && tempEv.length === 0) { toast('選擇擬請同意結案時，請上傳佐證資料', 'error'); return; }
+      if (!li || !canAccessItem(li)) { toast('?????????????', 'error'); navigate('list'); return; }
+      if (li.pendingTracking) { toast('???????????????', 'error'); navigate('detail/' + id); return; }
+      if (!canSubmitTracking(li, u)) { toast('????????????????', 'error'); navigate('detail/' + id); return; }
+      const isClose = res.value === '??????';
+      const isContinue = res.value === '??????';
+      if (isContinue && !document.getElementById('tk-next').value) { toast('???????????????????', 'error'); return; }
+      if (isClose && tempEv.length === 0) { toast('??????????????????', 'error'); return; }
       const persistedEvidence = await persistUploadedEntries(tempEv, {
         prefix: 'trk',
         scope: 'tracking-evidence',
@@ -1149,22 +1194,32 @@ function renderTracking(id) {
       };
       const history = [
         ...(li.history || []),
-        { time: now, action: `提交第 ${round} 次追蹤提報`, user: u.name },
-        { time: now, action: `提報建議：${res.value}`, user: u.name }
+        { time: now, action: `??? ${round} ?????`, user: u.name },
+        { time: now, action: `?????${res.value}`, user: u.name }
       ];
-      if (submission.nextTrackDate) history.push({ time: now, action: `建議下一次追蹤日期：${submission.nextTrackDate}`, user: u.name });
-      if (submission.evidence.length) history.push({ time: now, action: `上傳 ${submission.evidence.length} 份追蹤佐證`, user: u.name });
-      updateItem(id, {
+      if (submission.nextTrackDate) history.push({ time: now, action: `????????${submission.nextTrackDate}`, user: u.name });
+      if (submission.evidence.length) history.push({ time: now, action: `?? ${submission.evidence.length} ?????`, user: u.name });
+      const result = await submitTrackingSubmission(id, {
+        tracker: submission.tracker,
+        trackDate: submission.trackDate,
+        execution: submission.execution,
+        trackNote: submission.trackNote,
+        result: submission.result,
+        nextTrackDate: submission.nextTrackDate,
+        evidence: submission.evidence,
+        actorName: u.name,
+        actorUsername: u.username
+      }, {
         pendingTracking: submission,
         updatedAt: now,
         history
       });
-      toast('追蹤提報已送出，待管理者審核');
+      if (result && result.warning) toast(result.warning, 'info');
+      toast('??????????????');
       navigate('detail/' + id);
     });
   }
 
-  
   function formatUserUnitSummary(user) {
     const units = getAuthorizedUnits(user);
     if (user?.role === ROLES.VIEWER && !units.length) return '全校唯讀';

@@ -16,6 +16,9 @@ const {
   validateActionEnvelope,
   validateApplyPayload
 } = require('../azure-function/unit-contact-api/src/shared/contract');
+const { createChecklistRouter } = require('./checklist-backend.cjs');
+const { createCorrectiveActionRouter } = require('./corrective-action-backend.cjs');
+const { createTrainingRouter } = require('./training-backend.cjs');
 const {
   GRAPH_ROOT,
   acquireDelegatedGraphTokenFromCli,
@@ -303,6 +306,30 @@ async function getHealth() {
   };
 }
 
+const checklistRouter = createChecklistRouter({
+  parseJsonBody,
+  writeJson,
+  graphRequest,
+  resolveSiteId,
+  getDelegatedToken
+});
+
+const correctiveActionRouter = createCorrectiveActionRouter({
+  parseJsonBody,
+  writeJson,
+  graphRequest,
+  resolveSiteId,
+  getDelegatedToken
+});
+
+const trainingRouter = createTrainingRouter({
+  parseJsonBody,
+  writeJson,
+  graphRequest,
+  resolveSiteId,
+  getDelegatedToken
+});
+
 async function handleApply(req, res, origin) {
   try {
     const envelope = await parseJsonBody(req);
@@ -372,6 +399,15 @@ function createServer() {
       }
       if (url.pathname === '/api/unit-contact/status' && (req.method === 'POST' || req.method === 'GET')) {
         await handleLookup(req, res, origin, url);
+        return;
+      }
+      if (await correctiveActionRouter.tryHandle(req, res, origin, url)) {
+        return;
+      }
+      if (await checklistRouter.tryHandle(req, res, origin, url)) {
+        return;
+      }
+      if (await trainingRouter.tryHandle(req, res, origin, url)) {
         return;
       }
       await writeJson(res, buildErrorResponse(new Error('Not found'), 'Not found', 404), origin);

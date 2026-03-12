@@ -56,6 +56,15 @@
       getTrainingStatsUnit,
       getTrainingJobUnit,
       getTrainingUnits,
+      syncTrainingFormsFromM365,
+      syncTrainingRostersFromM365,
+      submitTrainingDraft,
+      submitTrainingStepOne,
+      submitTrainingFinalize,
+      submitTrainingReturn,
+      submitTrainingUndo,
+      submitTrainingRosterUpsert,
+      submitTrainingRosterDelete,
       getVisibleTrainingForms,
       isTrainingVisible,
       canEditTrainingForm,
@@ -128,6 +137,15 @@
     const styleAttr = opts.style ? ' style="' + opts.style + '"' : '';
     const headerStyleAttr = opts.headerStyle ? ' style="' + opts.headerStyle + '"' : '';
     return '<div class="card"' + styleAttr + '><div class="card-header"' + headerStyleAttr + '><span class="card-title">' + title + '</span></div>' + bodyHtml + '</div>';
+  }
+
+  function showTrainingRepositoryFallback(result, successMessage) {
+    if (successMessage) {
+      toast(successMessage, 'info');
+    }
+    if (result && result.warning) {
+      toast(result.warning, 'info');
+    }
   }
 
   function buildTrainingFileSlot(slotId, extraClass) {
@@ -222,7 +240,7 @@
       + '</div>';
   }
 
-  function handleTrainingUndo(id) {
+  async function handleTrainingUndo(id) {
     const form = getTrainingForm(id);
     const user = currentUser();
     if (!form || !user) return;
@@ -233,7 +251,8 @@
     const remainingMinutes = getTrainingUndoRemainingMinutes(form);
     if (!confirm('撤回後會回到可編修的草稿狀態，並中止後續簽核流程，確定要撤回嗎？')) return;
     const now = new Date().toISOString();
-    updateTrainingForm(id, {
+    const payload = {
+      ...form,
       status: TRAINING_STATUSES.DRAFT,
       updatedAt: now,
       stepOneSubmittedAt: null,
@@ -245,12 +264,13 @@
         action: '填報人撤回流程一，重新開放編修（剩餘撤回時限 ' + remainingMinutes + ' 分鐘）',
         user: user.name
       }]
-    });
-    toast('已撤回流程一，您可以繼續修改填報內容', 'info');
+    };
+    const result = await submitTrainingUndo(payload);
+    showTrainingRepositoryFallback(result, '已撤回流程一，您可以繼續修改填報內容');
     navigate('training-fill/' + id, { replace: true });
   }
 
-  function handleTrainingReturn(id) {
+  async function handleTrainingReturn(id) {
     if (!isAdmin()) {
       toast('僅最高管理員可退回填報單', 'error');
       return;
@@ -269,13 +289,19 @@
       return;
     }
     const now = new Date().toISOString();
-    updateTrainingForm(id, { status: TRAINING_STATUSES.RETURNED, returnReason: trimmed, updatedAt: now, history: [...(form.history || []), { time: now, action: '管理者退回更正：' + trimmed, user: currentUser().name }] });
-    toast('已退回 ' + id + ' 供填報人更正', 'info');
+    const result = await submitTrainingReturn({
+      ...form,
+      status: TRAINING_STATUSES.RETURNED,
+      returnReason: trimmed,
+      updatedAt: now,
+      history: [...(form.history || []), { time: now, action: '管理者退回更正：' + trimmed, user: currentUser().name }]
+    });
+    showTrainingRepositoryFallback(result, '已退回 ' + id + ' 供填報人更正');
     const route = getRoute();
     if (route.page === 'training-detail') renderTrainingDetail(id); else renderTraining();
   }
 
-  function handleTrainingDeleteRoster(id) {
+  async function handleTrainingDeleteRoster(id) {
     if (!isAdmin()) {
       toast('僅管理者可刪除名單', 'error');
       return;
@@ -283,8 +309,12 @@
     const roster = getAllTrainingRosters().find((row) => row.id === id);
     if (!roster) return;
     if (!confirm('確定刪除 ' + roster.unit + ' 的 ' + roster.name + ' 嗎？已填報的歷史資料不會被刪除。')) return;
-    deleteTrainingRosterPerson(id);
-    toast('名單已刪除', 'info');
+    const result = await submitTrainingRosterDelete(id, {
+      id,
+      actorName: currentUser()?.name || '',
+      actorUsername: currentUser()?.username || ''
+    });
+    showTrainingRepositoryFallback(result, '名單已刪除');
     renderTrainingRoster();
   }
 
@@ -300,7 +330,10 @@
     exportTrainingDetailCsv(form);
   }
 
-  function renderTraining() {
+  async function renderTraining() {
+    try {
+      await syncTrainingFormsFromM365({ silent: true });
+    } catch (_) { }
     const visibleForms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const summary = {
       total: visibleForms.length,
@@ -709,7 +742,7 @@
       return null;
     }
 
-    function saveTrainingForm(targetStatus) {
+    async function saveTrainingForm(targetStatus) {
       const now = new Date().toISOString();
       const currentUnit = document.getElementById('tr-unit').value;
       const trainingYearValue = document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911);
@@ -732,7 +765,7 @@
       const history = [...(existing?.history || [])];
       if (takeoverDraft) history.push({ time: now, action: '單位管理員接手編修草稿，填報人改為目前編修者', user: user.name });
       history.push({ time: now, action: targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF ? '完成流程一並鎖定填報內容' : '儲存教育訓練統計暫存', user: user.name });
-      upsertTrainingForm({
+      const payload = {
         id: formId,
         unit: currentUnit,
         statsUnit: getTrainingStatsUnit(currentUnit),
@@ -754,23 +787,28 @@
         signoffUploadedAt: existing?.signoffUploadedAt || null,
         submittedAt: existing?.submittedAt || null,
         history
-      });
-      existing = getTrainingForm(formId) || existing;
+      };
+      const result = targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF
+        ? await submitTrainingStepOne(payload)
+        : await submitTrainingDraft(payload);
+      existing = (result && result.item) || getTrainingForm(formId) || existing;
       updateTrainingDraftStatus(existing);
       clearUnsavedChangesGuard();
       if (targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF) {
-        toast('填報單 ' + formId + ' 已完成流程一並鎖定');
+        showTrainingRepositoryFallback(result, '填報單 ' + formId + ' 已完成流程一並鎖定');
         navigate('training-detail/' + formId);
         return;
       }
-      toast('填報單 ' + formId + ' 已儲存暫存');
+      showTrainingRepositoryFallback(result, '填報單 ' + formId + ' 已儲存暫存');
       navigate('training-fill/' + formId, { replace: true });
     }
 
-    document.getElementById('training-save-draft').addEventListener('click', () => saveTrainingForm(TRAINING_STATUSES.DRAFT));
-    trainingForm.addEventListener('submit', (event) => {
+    document.getElementById('training-save-draft').addEventListener('click', async () => {
+      await saveTrainingForm(TRAINING_STATUSES.DRAFT);
+    });
+    trainingForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      saveTrainingForm(TRAINING_STATUSES.PENDING_SIGNOFF);
+      await saveTrainingForm(TRAINING_STATUSES.PENDING_SIGNOFF);
     });
     document.getElementById('training-search').addEventListener('input', renderRows);
     document.getElementById('training-only-focus').addEventListener('change', renderRows);
@@ -824,7 +862,7 @@
       renderRows();
     });
 
-    document.getElementById('training-add-person').addEventListener('click', () => {
+    document.getElementById('training-add-person').addEventListener('click', async () => {
       const currentUnit = document.getElementById('tr-unit').value;
       const payload = {
         name: document.getElementById('tr-new-name').value.trim(),
@@ -836,11 +874,20 @@
         toast('請輸入要新增的人員姓名', 'error');
         return;
       }
-      const result = addTrainingRosterPerson(currentUnit, payload, 'manual', user);
-      if (!result.added && !result.updated) {
-        toast(result.reason, 'error');
+      const fallbackResult = addTrainingRosterPerson(currentUnit, payload, 'manual', user);
+      if (!fallbackResult.added && !fallbackResult.updated) {
+        toast(fallbackResult.reason, 'error');
         return;
       }
+      const roster = getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
+      const result = roster ? await submitTrainingRosterUpsert({
+        ...roster,
+        source: 'manual',
+        createdBy: roster.createdBy || user.name,
+        createdByUsername: roster.createdByUsername || user.username,
+        actorName: user.name,
+        actorUsername: user.username
+      }) : { item: null };
       rowsState = mergeTrainingRows(currentUnit, rowsState);
       selectedKeys.clear();
       ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
@@ -848,7 +895,7 @@
       });
       markTrainingDirty();
       renderRows();
-      toast(result.updated ? result.reason : ('已新增「' + payload.name + '」到名單'));
+      showTrainingRepositoryFallback(result, fallbackResult.updated ? fallbackResult.reason : ('已新增「' + payload.name + '」到名單'));
     });
 
     initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });
@@ -1015,7 +1062,9 @@
           ownerId: form.id
         });
         clearUnsavedChangesGuard();
-        updateTrainingForm(form.id, {
+        const result = await submitTrainingFinalize({
+          ...latestForm,
+          id: form.id,
           status: TRAINING_STATUSES.SUBMITTED,
           signedFiles: persistedFiles,
           signoffUploadedAt: now,
@@ -1023,7 +1072,7 @@
           updatedAt: now,
           history: [...(latestForm.history || []), { time: now, action: '上傳簽核掃描檔並完成整體填報', user: currentUser().name }]
         });
-        toast('已完成流程三，整體填報結束');
+        showTrainingRepositoryFallback(result, '已完成流程三，整體填報結束');
         renderTrainingDetail(form.id);
       });
       renderSignedFiles('training-file-previews', true);
@@ -1059,6 +1108,9 @@
       toast('僅管理者可管理名單', 'error');
       return;
     }
+    try {
+      await syncTrainingRostersFromM365({ silent: true });
+    } catch (_) { }
 
     const rosters = getAllTrainingRosters().slice().sort((a, b) => {
       if (a.unit === b.unit) return a.name.localeCompare(b.name, 'zh-Hant');
@@ -1132,14 +1184,30 @@
       let added = 0;
       let updated = 0;
       let skipped = 0;
-      entries.forEach((entry) => {
+      let fallbackWarning = '';
+      for (const entry of entries) {
         const targetUnit = String(entry.unit || unit || '').trim();
-        const result = addTrainingRosterPerson(targetUnit, { ...entry, unit: targetUnit }, 'import', currentUser());
-        if (result.added) added += 1;
-        else if (result.updated) updated += 1;
-        else skipped += 1;
-      });
+        const fallbackResult = addTrainingRosterPerson(targetUnit, { ...entry, unit: targetUnit }, 'import', currentUser());
+        if (fallbackResult.added) added += 1;
+        else if (fallbackResult.updated) updated += 1;
+        else {
+          skipped += 1;
+          continue;
+        }
+        const roster = getAllTrainingRosters().find((row) => row.unit === targetUnit && row.name.toLowerCase() === String(entry.name || '').trim().toLowerCase());
+        if (!roster) continue;
+        const result = await submitTrainingRosterUpsert({
+          ...roster,
+          source: 'import',
+          createdBy: roster.createdBy || currentUser()?.name || '',
+          createdByUsername: roster.createdByUsername || currentUser()?.username || '',
+          actorName: currentUser()?.name || '',
+          actorUsername: currentUser()?.username || ''
+        });
+        if (!fallbackWarning && result && result.warning) fallbackWarning = result.warning;
+      }
       toast('匯入完成：新增 ' + added + ' 筆、更新 ' + updated + ' 筆、略過 ' + skipped + ' 筆');
+      if (fallbackWarning) toast(fallbackWarning, 'info');
       renderTrainingRoster();
     });
 

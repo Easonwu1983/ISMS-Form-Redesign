@@ -1,0 +1,70 @@
+{
+  "version": "2026-03-12",
+  "site": {
+    "name": "ISMS-Forms",
+    "purpose": "Training statistics forms and roster records"
+  },
+  "lists": [
+    {
+      "name": "TrainingForms",
+      "description": "Draft and submitted training statistics forms",
+      "recommendedIndexes": ["FormId", "DocumentNo", "UnitCode", "Unit", "StatsUnit", "TrainingYear", "FillerUsername", "Status", "UpdatedAt"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use FormId as display title" },
+        { "name": "FormId", "type": "singleLineText", "required": true, "unique": true },
+        { "name": "DocumentNo", "type": "singleLineText", "required": false },
+        { "name": "FormSeq", "type": "number", "required": false },
+        { "name": "Unit", "type": "singleLineText", "required": true },
+        { "name": "UnitCode", "type": "singleLineText", "required": false },
+        { "name": "StatsUnit", "type": "singleLineText", "required": false },
+        { "name": "FillerName", "type": "singleLineText", "required": true },
+        { "name": "FillerUsername", "type": "singleLineText", "required": false },
+        { "name": "SubmitterPhone", "type": "singleLineText", "required": false },
+        { "name": "SubmitterEmail", "type": "singleLineText", "required": false },
+        { "name": "FillDate", "type": "dateTime", "required": true },
+        { "name": "TrainingYear", "type": "singleLineText", "required": true },
+        { "name": "Status", "type": "choice", "required": true, "choices": ["暫存", "待簽核", "已完成填報", "退回更正"] },
+        { "name": "RecordsJson", "type": "multipleLinesText", "required": true, "notes": "Full per-person records payload, stored as JSON in phase 1." },
+        { "name": "SummaryJson", "type": "multipleLinesText", "required": true },
+        { "name": "ActiveCount", "type": "number", "required": true },
+        { "name": "CompletedCount", "type": "number", "required": true },
+        { "name": "IncompleteCount", "type": "number", "required": true },
+        { "name": "CompletionRate", "type": "number", "required": true },
+        { "name": "SignedFilesJson", "type": "multipleLinesText", "required": false },
+        { "name": "ReturnReason", "type": "multipleLinesText", "required": false },
+        { "name": "CreatedAt", "type": "dateTime", "required": true },
+        { "name": "UpdatedAt", "type": "dateTime", "required": true },
+        { "name": "StepOneSubmittedAt", "type": "dateTime", "required": false },
+        { "name": "PrintedAt", "type": "dateTime", "required": false },
+        { "name": "SignoffUploadedAt", "type": "dateTime", "required": false },
+        { "name": "SubmittedAt", "type": "dateTime", "required": false },
+        { "name": "HistoryJson", "type": "multipleLinesText", "required": true },
+        { "name": "BackendMode", "type": "choice", "required": true, "choices": ["a3-campus-backend"] },
+        { "name": "RecordSource", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] }
+      ]
+    },
+    {
+      "name": "TrainingRosters",
+      "description": "Imported and manually added training roster rows",
+      "recommendedIndexes": ["RosterId", "Unit", "StatsUnit", "Name", "Source", "UpdatedAt"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use Name as display title" },
+        { "name": "RosterId", "type": "singleLineText", "required": true, "unique": true },
+        { "name": "Unit", "type": "singleLineText", "required": true },
+        { "name": "StatsUnit", "type": "singleLineText", "required": false },
+        { "name": "L1Unit", "type": "singleLineText", "required": false },
+        { "name": "Name", "type": "singleLineText", "required": true },
+        { "name": "UnitName", "type": "singleLineText", "required": false },
+        { "name": "Identity", "type": "singleLineText", "required": false },
+        { "name": "JobTitle", "type": "singleLineText", "required": false },
+        { "name": "Source", "type": "choice", "required": true, "choices": ["import", "manual"] },
+        { "name": "CreatedBy", "type": "singleLineText", "required": false },
+        { "name": "CreatedByUsername", "type": "singleLineText", "required": false },
+        { "name": "CreatedAt", "type": "dateTime", "required": true },
+        { "name": "UpdatedAt", "type": "dateTime", "required": true },
+        { "name": "BackendMode", "type": "choice", "required": true, "choices": ["a3-campus-backend"] },
+        { "name": "RecordSource", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] }
+      ]
+    }
+  ]
+}

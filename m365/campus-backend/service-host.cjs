@@ -39,6 +39,18 @@ function applyEnvFromConfig(config) {
     if (config.lists.audit && !process.env.UNIT_CONTACT_AUDIT_LIST) {
       process.env.UNIT_CONTACT_AUDIT_LIST = String(config.lists.audit);
     }
+    if (config.lists.correctiveActions && !process.env.CORRECTIVE_ACTIONS_LIST) {
+      process.env.CORRECTIVE_ACTIONS_LIST = String(config.lists.correctiveActions);
+    }
+    if (config.lists.checklists && !process.env.CHECKLISTS_LIST) {
+      process.env.CHECKLISTS_LIST = String(config.lists.checklists);
+    }
+    if (config.lists.trainingForms && !process.env.TRAINING_FORMS_LIST) {
+      process.env.TRAINING_FORMS_LIST = String(config.lists.trainingForms);
+    }
+    if (config.lists.trainingRosters && !process.env.TRAINING_ROSTERS_LIST) {
+      process.env.TRAINING_ROSTERS_LIST = String(config.lists.trainingRosters);
+    }
   }
 }
 

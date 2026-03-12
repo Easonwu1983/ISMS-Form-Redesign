@@ -28,6 +28,9 @@
       generateChecklistIdForYear,
       addChecklist,
       updateChecklist,
+      syncChecklistsFromM365,
+      submitChecklistDraft,
+      submitChecklistForm,
       getChecklistSections,
       saveChecklistSections,
       resetChecklistSections,
@@ -52,6 +55,7 @@
     }
 
   function renderChecklistList() {
+    Promise.resolve(syncChecklistsFromM365({ silent: true })).catch(function () { });
     const checklists = getVisibleChecklists();
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     const rows = checklists.length ? checklists.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(c => {
@@ -297,7 +301,7 @@
       };
     }
 
-    function saveChecklistDraft() {
+    async function saveChecklistDraft() {
       const data = collectData('\u8349\u7a3f');
       const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
       if (duplicateChecklist) {
@@ -306,11 +310,12 @@
         navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
         return;
       }
-      if (existing) updateChecklist(existing.id, data); else addChecklist(data);
-      existing = getChecklist(data.id) || data;
+      const result = await submitChecklistDraft(data);
+      existing = result && result.item ? result.item : (getChecklist(data.id) || data);
       debugFlow('checklist', 'draft saved', { id: data.id, unit: data.unit, status: data.status });
       updateChecklistDraftStatus(existing);
       clearUnsavedChangesGuard();
+      if (result && result.warning) toast(result.warning, 'info');
       toast(`\u8349\u7a3f ${data.id} \u5df2\u66ab\u5b58`);
       navigate('checklist-fill/' + data.id, { replace: true });
     }
@@ -336,7 +341,7 @@
     updateProgress();
     updateChecklistDraftStatus(existing);
 
-    checklistForm.addEventListener('submit', (event) => {
+    checklistForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       debugFlow('checklist', 'submit start', { id: existing?.id || null, unit: document.getElementById('cl-unit').value });
       const missing = [];
@@ -370,11 +375,12 @@
         navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
         return;
       }
-      if (existing) updateChecklist(existing.id, data); else addChecklist(data);
-      existing = getChecklist(data.id) || data;
+      const result = await submitChecklistForm(data);
+      existing = result && result.item ? result.item : (getChecklist(data.id) || data);
       debugFlow('checklist', 'submit success', { id: data.id, unit: data.unit, status: data.status });
       updateChecklistDraftStatus(existing);
       clearUnsavedChangesGuard();
+      if (result && result.warning) toast(result.warning, 'info');
       toast(`\u6aa2\u6838\u8868 ${data.id} \u5df2\u6b63\u5f0f\u9001\u51fa`);
       navigate('checklist-detail/' + data.id);
     });
