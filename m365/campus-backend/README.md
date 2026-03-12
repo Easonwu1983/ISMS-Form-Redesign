@@ -1,4 +1,4 @@
-# Unit Contact Campus Backend
+﻿# Unit Contact Campus Backend
 
 - Runtime: Node.js on the campus host
 - Purpose: provide `apply` and `status` endpoints without requiring Power Automate environments or tenant-wide admin consent
@@ -38,9 +38,16 @@ This backend is the practical A3 fallback when:
 - `POST /api/training/forms/:id/finalize`
 - `POST /api/training/forms/:id/return`
 - `POST /api/training/forms/:id/undo`
+- `POST /api/training/forms/:id/delete`
 - `GET /api/training/rosters`
 - `POST /api/training/rosters/upsert`
 - `POST /api/training/rosters/:id/delete`
+- `GET /api/system-users/health`
+- `GET /api/system-users`
+- `GET /api/system-users/:username`
+- `POST /api/system-users/upsert`
+- `POST /api/system-users/:username/delete`
+- `POST /api/system-users/:username/reset-password`
 
 The request and response contract stays aligned with:
 
@@ -65,6 +72,7 @@ The request and response contract stays aligned with:
 - `CHECKLISTS_LIST`
 - `TRAINING_FORMS_LIST`
 - `TRAINING_ROSTERS_LIST`
+- `SYSTEM_USERS_LIST`
 
 The backend can also reuse the local-only file:
 

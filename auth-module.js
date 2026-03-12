@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createAuthModule = function createAuthModule(deps) {
     const {
       AUTH_KEY,
@@ -110,8 +110,8 @@
         admin.role = ROLES.ADMIN;
         changed = true;
       }
-      if (admin.name !== '計算機及資訊網路中心') {
-        admin.name = '計算機及資訊網路中心';
+      if (admin.name !== '閮?璈?鞈?蝬脰楝銝剖?') {
+        admin.name = '閮?璈?鞈?蝬脰楝銝剖?';
         changed = true;
       }
 
@@ -119,7 +119,7 @@
 
       const auth = readAuthSession();
       if (auth && auth.username === 'admin') {
-        writeAuthSession({ ...auth, role: ROLES.ADMIN, name: '計算機及資訊網路中心' });
+        writeAuthSession({ ...auth, role: ROLES.ADMIN, name: '閮?璈?鞈?蝬脰楝銝剖?' });
       }
     }
 
@@ -148,3 +148,4 @@
     };
   };
 })();
+

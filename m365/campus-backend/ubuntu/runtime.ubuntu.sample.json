@@ -1,18 +1,19 @@
 {
-  "port": 8787,
-  "allowedOrigins": [
-    "https://YOUR-CAMPUS-FRONTEND"
-  ],
-  "sharePointSiteId": "ntums365.sharepoint.com,8c29bc46-e7a8-445f-84cf-6dc48609bca8,f9096dd2-df76-4e86-9986-a121bffaee87",
-  "sharePointSiteUrl": "https://ntums365.sharepoint.com/sites/ISMSFormsWorkspace",
-  "lists": {
-    "applications": "UnitContactApplications",
-    "unitAdmins": "UnitAdmins",
-    "audit": "OpsAudit",
-    "correctiveActions": "CorrectiveActions",
-    "checklists": "Checklists",
-    "trainingForms": "TrainingForms",
-    "trainingRosters": "TrainingRosters"
-  },
-  "logDir": "/var/log/isms-form-redesign"
+    "port":  8787,
+    "allowedOrigins":  [
+                           "https://YOUR-CAMPUS-FRONTEND"
+                       ],
+    "sharePointSiteId":  "ntums365.sharepoint.com,8c29bc46-e7a8-445f-84cf-6dc48609bca8,f9096dd2-df76-4e86-9986-a121bffaee87",
+    "sharePointSiteUrl":  "https://ntums365.sharepoint.com/sites/ISMSFormsWorkspace",
+    "lists":  {
+                  "applications":  "UnitContactApplications",
+                  "unitAdmins":  "UnitAdmins",
+                  "audit":  "OpsAudit",
+                  "correctiveActions":  "CorrectiveActions",
+                  "checklists":  "Checklists",
+                  "trainingForms":  "TrainingForms",
+                  "trainingRosters":  "TrainingRosters",
+                  "systemUsers":  "SystemUsers"
+              },
+    "logDir":  "/var/log/isms-form-redesign"
 }

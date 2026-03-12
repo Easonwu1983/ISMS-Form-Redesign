@@ -46,7 +46,7 @@
         { "name": "ReviewDate", "type": "dateTime", "required": false },
         { "name": "PendingTrackingJson", "type": "multipleLinesText", "required": false, "notes": "JSON object for the current submitted tracking waiting review" },
         { "name": "TrackingsJson", "type": "multipleLinesText", "required": true, "notes": "JSON array of approved tracking history" },
-        { "name": "Status", "type": "choice", "required": true, "choices": ["待矯正", "已提案", "審核中", "追蹤中", "結案"] },
+        { "name": "Status", "type": "choice", "required": true, "choices": ["開立", "待矯正", "已提案", "審核中", "追蹤中", "結案"] },
         { "name": "CreatedAt", "type": "dateTime", "required": true },
         { "name": "UpdatedAt", "type": "dateTime", "required": true },
         { "name": "ClosedDate", "type": "dateTime", "required": false },

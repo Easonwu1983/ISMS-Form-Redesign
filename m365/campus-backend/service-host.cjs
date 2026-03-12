@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 const { startServer } = require('./server.cjs');
 
@@ -50,6 +50,9 @@ function applyEnvFromConfig(config) {
     }
     if (config.lists.trainingRosters && !process.env.TRAINING_ROSTERS_LIST) {
       process.env.TRAINING_ROSTERS_LIST = String(config.lists.trainingRosters);
+    if (config.lists.systemUsers && !process.env.SYSTEM_USERS_LIST) {
+      process.env.SYSTEM_USERS_LIST = String(config.lists.systemUsers);
+    }
     }
   }
 }
@@ -120,3 +123,5 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (error) => {
   console.error('unhandledRejection', error && error.stack ? error.stack : error);
 });
+
+

@@ -138,14 +138,14 @@ function createTrainingRouter(deps) {
 
   async function getFormEntryById(formId) {
     const target = cleanText(formId);
-    if (!target) throw createError('缺少教育訓練編號。', 400);
+    if (!target) throw createError('Missing training form id', 400);
     const rows = await listAllForms();
     return rows.find((entry) => entry.item.id === target) || null;
   }
 
   async function getRosterEntryById(rosterId) {
     const target = cleanText(rosterId);
-    if (!target) throw createError('缺少名單編號。', 400);
+    if (!target) throw createError('Missing training roster id', 400);
     const rows = await listAllRosters();
     return rows.find((entry) => entry.item.id === target) || null;
   }
@@ -202,6 +202,12 @@ function createTrainingRouter(deps) {
       fields: mapTrainingRosterToGraphFields(normalized)
     });
     return { created: true, item: normalized };
+  }
+
+  async function deleteFormEntry(existingEntry) {
+    const siteId = await resolveSiteId();
+    const list = await resolveTrainingFormsList();
+    await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`);
   }
 
   async function deleteRosterEntry(existingEntry) {
@@ -313,28 +319,28 @@ function createTrainingRouter(deps) {
 
   function assertEditable(existing) {
     if (existing && existing.item.status === FORM_STATUSES.SUBMITTED) {
-      throw createError('教育訓練填報單已正式送出，無法再修改。', 409);
+      throw createError('Submitted training forms cannot be edited directly.', 409);
     }
   }
 
   function assertCanFinalize(existing) {
-    if (!existing) throw createError('找不到指定的教育訓練填報單。', 404);
+    if (!existing) throw createError('Training form not found', 404);
     if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) {
-      throw createError('只有待簽核的填報單可以完成整體送件。', 409);
+      throw createError('Only pending-signoff forms can be finalized.', 409);
     }
   }
 
   function assertCanReturn(existing) {
-    if (!existing) throw createError('找不到指定的教育訓練填報單。', 404);
+    if (!existing) throw createError('Training form not found', 404);
     if (existing.item.status !== FORM_STATUSES.SUBMITTED) {
-      throw createError('只有已完成填報的資料可以退回更正。', 409);
+      throw createError('Only submitted forms can be returned.', 409);
     }
   }
 
   function assertCanUndo(existing) {
-    if (!existing) throw createError('找不到指定的教育訓練填報單。', 404);
+    if (!existing) throw createError('Training form not found', 404);
     if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) {
-      throw createError('只有待簽核的填報單可以撤回。', 409);
+      throw createError('Only pending-signoff forms can be undone.', 409);
     }
   }
 
@@ -364,7 +370,7 @@ function createTrainingRouter(deps) {
     try {
       const existing = await getFormEntryById(formId);
       if (!existing) {
-        throw createError('找不到指定的教育訓練填報單。', 404);
+        throw createError('Training form not found', 404);
       }
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
@@ -388,12 +394,12 @@ function createTrainingRouter(deps) {
       validateActionEnvelope(envelope, action);
       const payload = normalizeTrainingFormPayload(envelope.payload);
       if (cleanText(formId) !== cleanText(payload.id)) {
-        throw createError('路由編號與 payload 編號不一致。', 400);
+        throw createError('Route form id and payload id do not match', 400);
       }
       validateTrainingFormPayload(payload, options.validation || {});
       const duplicate = await findDuplicateForm(payload.unit, payload.trainingYear, payload.id);
       if (duplicate) {
-        throw createError('同年度填報單已存在，請直接續編原資料。', 409);
+        throw createError('Another training form already exists for this unit and year', 409);
       }
 
       const actor = actorLabel(payload, (existing && existing.item && existing.item.fillerName) || payload.fillerName);
@@ -438,6 +444,40 @@ function createTrainingRouter(deps) {
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to write training form.', 500), origin);
+    }
+  }
+
+  async function handleFormDelete(req, res, origin, formId) {
+    try {
+      const existing = await getFormEntryById(formId);
+      if (!existing) {
+        throw createError('Training form not found', 404);
+      }
+      const envelope = await parseJsonBody(req);
+      validateActionEnvelope(envelope, FORM_ACTIONS.DELETE);
+      const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
+      const now = new Date().toISOString();
+      await deleteFormEntry(existing);
+      await createAuditRow({
+        eventType: 'training.form_deleted',
+        actorEmail: cleanText(payload.actorEmail),
+        targetEmail: cleanText(existing.item.submitterEmail),
+        unitCode: cleanText(existing.item.unitCode),
+        recordId: existing.item.id,
+        occurredAt: now,
+        payloadJson: JSON.stringify({
+          action: FORM_ACTIONS.DELETE,
+          actor: actorLabel(payload, existing.item.fillerName),
+          status: existing.item.status
+        })
+      });
+      await writeJson(res, buildJsonResponse(200, {
+        ok: true,
+        deletedId: existing.item.id,
+        contractVersion: CONTRACT_VERSION
+      }), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to delete training form.', 500), origin);
     }
   }
 
@@ -502,7 +542,7 @@ function createTrainingRouter(deps) {
     try {
       const existing = await getRosterEntryById(rosterId);
       if (!existing) {
-        throw createError('找不到指定的名單資料。', 404);
+        throw createError('Training roster not found', 404);
       }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ROSTER_ACTIONS.DELETE);
@@ -535,15 +575,15 @@ function createTrainingRouter(deps) {
 
   function buildDraftHistory(existingItem, actor, now) {
     if (existingItem && existingItem.status === FORM_STATUSES.RETURNED) {
-      return appendHistory(existingItem.history, '儲存退回更正中的教育訓練草稿', actor, now);
+      return appendHistory(existingItem.history, 'Returned form saved as draft again', actor, now);
     }
-    return appendHistory(existingItem && existingItem.history, existingItem ? '儲存教育訓練統計暫存' : '建立教育訓練統計草稿', actor, now);
+    return appendHistory(existingItem && existingItem.history, existingItem ? 'Training form draft updated' : 'Training form draft created', actor, now);
   }
 
   function tryHandle(req, res, origin, url) {
     const formCollectionMatch = url.pathname.match(/^\/api\/training\/forms\/?$/);
     const formDetailMatch = url.pathname.match(/^\/api\/training\/forms\/([^/]+)\/?$/);
-    const formActionMatch = url.pathname.match(/^\/api\/training\/forms\/([^/]+)\/(save-draft|submit-step-one|finalize|return|undo)\/?$/);
+    const formActionMatch = url.pathname.match(/^\/api\/training\/forms\/([^/]+)\/(save-draft|submit-step-one|finalize|return|undo|delete)\/?$/);
     const rosterCollectionMatch = url.pathname.match(/^\/api\/training\/rosters\/?$/);
     const rosterUpsertMatch = url.pathname.match(/^\/api\/training\/rosters\/upsert\/?$/);
     const rosterDeleteMatch = url.pathname.match(/^\/api\/training\/rosters\/([^/]+)\/delete\/?$/);
@@ -597,7 +637,7 @@ function createTrainingRouter(deps) {
             };
           },
           buildHistory: function (existingItem, _payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, '完成流程一並鎖定填報內容', actor, now);
+            return appendHistory(existingItem && existingItem.history, 'Training step one submitted', actor, now);
           },
           eventType: 'training.form_step_one_submitted'
         }).then(() => true);
@@ -617,7 +657,7 @@ function createTrainingRouter(deps) {
             };
           },
           buildHistory: function (existingItem, _payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, '上傳簽核掃描檔並完成整體填報', actor, now);
+            return appendHistory(existingItem && existingItem.history, 'Training form finalized', actor, now);
           },
           eventType: 'training.form_finalized'
         }).then(() => true);
@@ -630,7 +670,7 @@ function createTrainingRouter(deps) {
             return FORM_STATUSES.RETURNED;
           },
           buildHistory: function (existingItem, payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, '管理者退回更正：' + cleanText(payload.returnReason), actor, now);
+            return appendHistory(existingItem && existingItem.history, 'Training form returned: ' + cleanText(payload.returnReason), actor, now);
           },
           eventType: 'training.form_returned'
         }).then(() => true);
@@ -653,12 +693,14 @@ function createTrainingRouter(deps) {
             };
           },
           buildHistory: function (existingItem, _payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, '填報人撤回流程一，重新開放編修', actor, now);
+            return appendHistory(existingItem && existingItem.history, 'Training form undone back to draft', actor, now);
           },
           eventType: 'training.form_undone'
         }).then(() => true);
       }
-    }
+      if (actionName === 'delete') {
+        return handleFormDelete(req, res, origin, formId).then(() => true);
+      }    }
     if (rosterCollectionMatch && req.method === 'GET') {
       return handleRosterList(req, res, origin, url).then(() => true);
     }
@@ -679,3 +721,4 @@ function createTrainingRouter(deps) {
 module.exports = {
   createTrainingRouter
 };
+

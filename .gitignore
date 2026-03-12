@@ -23,3 +23,10 @@ m365-config.override.js
 logs/
 .runtime/
 tmp-*
+.codex-backend.err.log
+.codex-backend.log
+.codex-runtime.local.json
+.codex-runtime.pid
+.codex-runtime.stderr.log
+.codex-runtime.stdout.log
+.codex-runtime-logs/

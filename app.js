@@ -749,6 +749,303 @@
     window._m365ApiClient = m365ApiClientApi;
     return m365ApiClientApi;
   }
+  const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
+  const SYSTEM_USER_ACTIONS = {
+    UPSERT: 'system-user.upsert',
+    DELETE: 'system-user.delete',
+    RESET_PASSWORD: 'system-user.reset-password'
+  };
+  const systemUserRepositoryState = {
+    mode: 'local-emulator',
+    ready: false,
+    source: 'local',
+    lastSyncAt: '',
+    message: '',
+    error: ''
+  };
+  function setSystemUserRepositoryState(patch) {
+    Object.assign(systemUserRepositoryState, patch || {});
+    return { ...systemUserRepositoryState };
+  }
+  function getRuntimeM365Config() {
+    return (typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__) || {};
+  }
+  function getSystemUsersMode() {
+    const config = getRuntimeM365Config();
+    return String(config.systemUsersMode || '').trim() || 'local-emulator';
+  }
+  function getSystemUsersEndpoint() {
+    return String(getRuntimeM365Config().systemUsersEndpoint || '').trim().replace(/\/$/, '');
+  }
+  function getSystemUsersHealthEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.systemUsersHealthEndpoint || '').trim();
+    if (explicit) return explicit;
+    const endpoint = getSystemUsersEndpoint();
+    return endpoint ? endpoint + '/health' : '';
+  }
+  function getSystemUsersSharedHeaders() {
+    const config = getRuntimeM365Config();
+    return config.systemUsersSharedHeaders && typeof config.systemUsersSharedHeaders === 'object' ? config.systemUsersSharedHeaders : {};
+  }
+  function buildSystemUserEnvelope(action, payload) {
+    return {
+      action: String(action || '').trim(),
+      payload: payload && typeof payload === 'object' ? payload : {},
+      clientContext: {
+        contractVersion: SYSTEM_USERS_CONTRACT_VERSION,
+        source: 'isms-form-redesign-frontend',
+        frontendOrigin: typeof window !== 'undefined' && window.location ? window.location.origin : '',
+        frontendHash: typeof window !== 'undefined' && window.location ? String(window.location.hash || '') : '',
+        sentAt: new Date().toISOString()
+      }
+    };
+  }
+  function parseUserUnitsFromRemote(value) {
+    if (Array.isArray(value)) return value.map(function (entry) { return String(entry || '').trim(); }).filter(Boolean);
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed.map(function (entry) { return String(entry || '').trim(); }).filter(Boolean);
+      } catch (_) {}
+    }
+    return parseUserUnits(value);
+  }
+  function normalizeRemoteSystemUserRecord(record) {
+    const source = record && record.fields ? record.fields : (record && (record.item || record.data || record.result || record));
+    if (!source || typeof source !== 'object') return null;
+    const username = String(source.username || source.userName || source.UserName || source.Title || '').trim();
+    if (!username) return null;
+    const units = parseUserUnitsFromRemote(source.units || source.authorizedUnits || source.AuthorizedUnitsJson);
+    const role = normalizeUserRole(source.role || source.Role);
+    const unit = String(source.unit || source.primaryUnit || source.PrimaryUnit || units[0] || '').trim();
+    if (unit && units.indexOf(unit) < 0) units.unshift(unit);
+    return normalizeUserRecord({
+      username: username,
+      password: String(source.password || source.Password || '').trim(),
+      name: String(source.name || source.displayName || source.DisplayName || '').trim(),
+      email: String(source.email || source.Email || '').trim().toLowerCase(),
+      role: role,
+      unit: unit,
+      units: units,
+      activeUnit: role === ROLES.ADMIN ? '' : String(source.activeUnit || source.ActiveUnit || unit).trim(),
+      createdAt: String(source.createdAt || source.CreatedAt || '').trim(),
+      updatedAt: String(source.updatedAt || source.UpdatedAt || '').trim(),
+      backendMode: String(source.backendMode || source.BackendMode || 'a3-campus-backend').trim(),
+      recordSource: String(source.recordSource || source.RecordSource || 'remote').trim()
+    });
+  }
+  function normalizeRemoteSystemUsers(body) {
+    const candidates = []
+      .concat(Array.isArray(body) ? body : [])
+      .concat(Array.isArray(body && body.items) ? body.items : [])
+      .concat(Array.isArray(body && body.value) ? body.value : [])
+      .concat(Array.isArray(body && body.data) ? body.data : []);
+    const items = candidates.map(normalizeRemoteSystemUserRecord).filter(Boolean);
+    if (items.length) return items;
+    const single = normalizeRemoteSystemUserRecord(body && (body.item || body.data || body.result || body));
+    return single ? [single] : [];
+  }
+  async function requestSystemUserJson(url, options) {
+    const requestOptions = options || {};
+    const config = getRuntimeM365Config();
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutMs = Number(config.unitContactRequestTimeoutMs || 15000);
+    let timeoutId = null;
+    if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
+    try {
+      const response = await fetch(url, {
+        method: requestOptions.method || 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ISMS-Contract-Version': SYSTEM_USERS_CONTRACT_VERSION,
+          ...getSystemUsersSharedHeaders(),
+          ...(requestOptions.headers || {})
+        },
+        body: requestOptions.body ? JSON.stringify(requestOptions.body) : undefined,
+        signal: controller ? controller.signal : undefined
+      });
+      const rawText = await response.text();
+      let parsed = null;
+      if (rawText) {
+        try {
+          parsed = JSON.parse(rawText);
+        } catch (_) {
+          parsed = { ok: false, message: rawText };
+        }
+      }
+      if (!response.ok) {
+        throw new Error(String(parsed && (parsed.message || parsed.error || parsed.detail) || ('HTTP ' + response.status)).trim());
+      }
+      return parsed || { ok: true };
+    } catch (error) {
+      if (error && error.name === 'AbortError') throw new Error('連線逾時，請稍後再試');
+      throw error;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+  function mergeRemoteUsersIntoStore(items) {
+    const data = loadData();
+    const remoteMap = new Map();
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      const username = String(item && item.username || '').trim().toLowerCase();
+      if (!username) return;
+      remoteMap.set(username, normalizeUserRecord(item));
+    });
+    const merged = Array.from(remoteMap.values());
+    (data.users || []).forEach(function (user) {
+      const username = String(user && user.username || '').trim().toLowerCase();
+      if (!username || remoteMap.has(username)) return;
+      merged.push(normalizeUserRecord(user));
+    });
+    data.users = merged;
+    saveData(data);
+    return data.users.slice();
+  }
+  function upsertSystemUserInStore(item) {
+    if (!item || !item.username) return null;
+    const data = loadData();
+    const normalized = normalizeUserRecord(item);
+    const index = (data.users || []).findIndex(function (entry) { return entry.username === normalized.username; });
+    if (index >= 0) data.users[index] = normalized;
+    else data.users.push(normalized);
+    saveData(data);
+    return findUser(normalized.username) || normalized;
+  }
+  function deleteSystemUserFromStore(username) {
+    const cleanUsername = String(username || '').trim();
+    if (!cleanUsername) return;
+    deleteUser(cleanUsername);
+  }
+  function buildSystemUserFallbackWarning(error) {
+    const detail = String(error && error.message || error || '').trim();
+    return detail ? ('M365 帳號後端未就緒，已改用本機暫存：' + detail) : 'M365 帳號後端未就緒，已改用本機暫存。';
+  }
+  async function syncUsersFromM365(options) {
+    const opts = options || {};
+    const mode = getSystemUsersMode();
+    setSystemUserRepositoryState({ mode: mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (mode !== 'm365-api') {
+      return setSystemUserRepositoryState({ ready: false, message: '目前使用本機帳號模式', error: '' });
+    }
+    try {
+      const healthEndpoint = getSystemUsersHealthEndpoint();
+      if (healthEndpoint) {
+        const health = await requestSystemUserJson(healthEndpoint, { method: 'GET' });
+        if (health && health.ready === false) {
+          return setSystemUserRepositoryState({
+            ready: false,
+            source: 'local-fallback',
+            message: String(health.message || 'M365 帳號後端尚未就緒，系統維持本機資料模式'),
+            error: String(health.message || '')
+          });
+        }
+      }
+      const endpoint = getSystemUsersEndpoint();
+      if (!endpoint) throw new Error('未設定 systemUsersEndpoint');
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const filters = opts.query && typeof opts.query === 'object' ? opts.query : {};
+      Object.keys(filters).forEach(function (key) {
+        const cleanValue = String(filters[key] || '').trim();
+        if (cleanValue) url.searchParams.set(key, cleanValue);
+      });
+      const body = await requestSystemUserJson(url.toString(), { method: 'GET' });
+      mergeRemoteUsersIntoStore(normalizeRemoteSystemUsers(body));
+      return setSystemUserRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastSyncAt: new Date().toISOString(),
+        message: '已同步 M365 帳號資料',
+        error: ''
+      });
+    } catch (error) {
+      return setSystemUserRepositoryState({
+        ready: false,
+        source: 'local-fallback',
+        message: 'M365 帳號後端尚未就緒，系統維持本機資料模式',
+        error: String(error && error.message || error || '')
+      });
+    }
+  }
+  async function submitUserUpsert(payload) {
+    const incoming = payload && typeof payload === 'object' ? payload : {};
+    const username = String(incoming.username || '').trim();
+    const existing = username ? findUser(username) : null;
+    const requestPayload = normalizeUserRecord({
+      ...(existing || {}),
+      ...incoming,
+      username: username,
+      password: String(incoming.password || (existing && existing.password) || '').trim()
+    });
+    if (!requestPayload.username) throw new Error('缺少帳號');
+    if (!requestPayload.password) throw new Error('缺少密碼');
+    if (getSystemUsersMode() !== 'm365-api') {
+      if (existing) updateUser(requestPayload.username, requestPayload);
+      else addUser(requestPayload);
+      return { ok: true, item: findUser(requestPayload.username) || requestPayload, source: 'local' };
+    }
+    try {
+      const body = await requestSystemUserJson(getSystemUsersEndpoint() + '/upsert', {
+        method: 'POST',
+        body: buildSystemUserEnvelope(SYSTEM_USER_ACTIONS.UPSERT, requestPayload)
+      });
+      const stored = upsertSystemUserInStore(normalizeRemoteSystemUsers(body)[0] || requestPayload);
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '帳號資料已寫入 M365', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      if (existing) updateUser(requestPayload.username, requestPayload);
+      else addUser(requestPayload);
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: findUser(requestPayload.username) || requestPayload, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
+    }
+  }
+  async function submitUserDelete(username, payload) {
+    const cleanUsername = String(username || (payload && payload.username) || '').trim();
+    if (!cleanUsername) throw new Error('缺少帳號');
+    if (getSystemUsersMode() !== 'm365-api') {
+      deleteSystemUserFromStore(cleanUsername);
+      return { ok: true, deletedId: cleanUsername, source: 'local' };
+    }
+    try {
+      await requestSystemUserJson(getSystemUsersEndpoint() + '/' + encodeURIComponent(cleanUsername) + '/delete', {
+        method: 'POST',
+        body: buildSystemUserEnvelope(SYSTEM_USER_ACTIONS.DELETE, payload && typeof payload === 'object' ? payload : {})
+      });
+      deleteSystemUserFromStore(cleanUsername);
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '帳號刪除已寫入 M365', error: '' });
+      return { ok: true, deletedId: cleanUsername, source: 'remote' };
+    } catch (error) {
+      deleteSystemUserFromStore(cleanUsername);
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, deletedId: cleanUsername, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
+    }
+  }
+  async function submitUserResetPassword(payload) {
+    const input = payload && typeof payload === 'object' ? payload : {};
+    const matchedUser = input.username ? findUser(input.username) : findUserByEmail(input.email);
+    const username = String(input.username || (matchedUser && matchedUser.username) || '').trim();
+    if (!username) return null;
+    const fallbackPassword = String(input.password || '').trim() || generatePassword();
+    if (getSystemUsersMode() !== 'm365-api') {
+      updateUser(username, { password: fallbackPassword });
+      return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local' };
+    }
+    try {
+      const body = await requestSystemUserJson(getSystemUsersEndpoint() + '/' + encodeURIComponent(username) + '/reset-password', {
+        method: 'POST',
+        body: buildSystemUserEnvelope(SYSTEM_USER_ACTIONS.RESET_PASSWORD, input)
+      });
+      const item = normalizeRemoteSystemUsers(body)[0] || { ...(matchedUser || {}), username: username, password: String(body && body.password || fallbackPassword).trim() };
+      const stored = upsertSystemUserInStore({ ...item, password: String(body && body.password || item.password || fallbackPassword).trim() });
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '密碼重設已寫入 M365', error: '' });
+      return { user: stored, password: String(body && body.password || fallbackPassword).trim(), source: 'remote' };
+    } catch (error) {
+      updateUser(username, { password: fallbackPassword });
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
+    }
+  }
   const correctiveActionRepositoryState = {
     mode: 'local-emulator',
     ready: false,
@@ -1978,6 +2275,7 @@
     getDataModule().migrateAllStores();
     seedData();
     ensurePrimaryAdminProfile();
+    await syncUsersFromM365({ silent: true });
     getTrainingModule().seedTrainingData();
     await migrateAttachmentStores();
     await syncTrainingFormsFromM365({ silent: true });
@@ -2005,3 +2303,4 @@
   });
 
 })();
+

@@ -67,12 +67,12 @@ function createError(message, statusCode) {
 
 function validateActionEnvelope(envelope, expectedAction) {
   if (!envelope || typeof envelope !== 'object') {
-    throw createError('缺少 request envelope。', 400);
+    throw createError('無效的 request envelope。', 400);
   }
   const action = cleanText(envelope.action);
   if (!action) throw createError('缺少 action。', 400);
   if (expectedAction && action !== expectedAction) {
-    throw createError('action 與預期流程不一致。', 400);
+    throw createError('action 與 API 路由不相符。', 400);
   }
 }
 
@@ -411,9 +411,9 @@ function normalizeTrackingReviewPayload(payload) {
 }
 
 function validateCreatePayload(payload) {
-  if (!payload.id) throw createError('缺少矯正單號。', 400);
+  if (!payload.id) throw createError('缺少矯正單編號。', 400);
   if (!payload.proposerUnit) throw createError('缺少提報單位。', 400);
-  if (!payload.proposerName) throw createError('缺少提報人。', 400);
+  if (!payload.proposerName) throw createError('缺少提報人姓名。', 400);
   if (!payload.proposerDate) throw createError('缺少提報日期。', 400);
   if (!payload.handlerUnit) throw createError('缺少處理單位。', 400);
   if (!payload.handlerName) throw createError('缺少處理人員。', 400);
@@ -421,39 +421,39 @@ function validateCreatePayload(payload) {
   if (!payload.source) throw createError('缺少來源。', 400);
   if (!payload.category.length) throw createError('至少要有一個分類。', 400);
   if (!payload.problemDesc) throw createError('缺少問題描述。', 400);
-  if (!payload.occurrence) throw createError('缺少發生說明。', 400);
+  if (!payload.occurrence) throw createError('缺少缺失說明。', 400);
   if (!payload.correctiveDueDate) throw createError('缺少改善期限。', 400);
 }
 
 function validateRespondPayload(payload) {
-  if (!payload.correctiveAction) throw createError('缺少矯正措施。', 400);
+  if (!payload.correctiveAction) throw createError('缺少改善措施。', 400);
   if (!payload.rootCause) throw createError('缺少根因分析。', 400);
-  if (!payload.rootElimination) throw createError('缺少根因改善措施。', 400);
+  if (!payload.rootElimination) throw createError('缺少根因消除措施。', 400);
 }
 
 function validateReviewPayload(payload) {
   if (!Object.values(REVIEW_DECISIONS).includes(payload.decision)) {
-    throw createError('審核決定不正確。', 400);
+    throw createError('審核決定無效。', 400);
   }
 }
 
 function validateTrackingSubmitPayload(payload) {
-  if (!payload.tracker) throw createError('缺少追蹤人員。', 400);
+  if (!payload.tracker) throw createError('缺少追蹤填報人。', 400);
   if (!payload.trackDate) throw createError('缺少追蹤日期。', 400);
   if (!payload.execution) throw createError('缺少改善措施執行情形。', 400);
-  if (!payload.trackNote) throw createError('缺少追蹤觀察說明。', 400);
+  if (!payload.trackNote) throw createError('缺少追蹤觀察與說明。', 400);
   if (!payload.result) throw createError('缺少追蹤建議。', 400);
   if (payload.result === TRACKING_RESULTS.CONTINUE && !payload.nextTrackDate) {
-    throw createError('建議持續追蹤時必須填寫下一次追蹤日期。', 400);
+    throw createError('建議持續追蹤時，必須填寫下一次追蹤日期。', 400);
   }
   if (payload.result === TRACKING_RESULTS.REQUEST_CLOSE && !payload.evidence.length) {
-    throw createError('擬請同意結案時必須上傳佐證資料。', 400);
+    throw createError('擬請同意結案時，必須上傳佐證資料。', 400);
   }
 }
 
 function validateTrackingReviewPayload(payload) {
   if (!Object.values(TRACKING_REVIEW_DECISIONS).includes(payload.decision)) {
-    throw createError('追蹤審核決定不正確。', 400);
+    throw createError('追蹤審核決定無效。', 400);
   }
 }
 

@@ -8,38 +8,19 @@
         { name: 'DocumentNo', type: 'singleLineText', required: false },
         { name: 'CaseSeq', type: 'number', required: false },
         { name: 'ProposerUnit', type: 'singleLineText', required: true },
-        { name: 'ProposerUnitCode', type: 'singleLineText', required: false },
         { name: 'ProposerName', type: 'singleLineText', required: true },
-        { name: 'ProposerUsername', type: 'singleLineText', required: false },
-        { name: 'ProposerDate', type: 'dateTime', required: false },
         { name: 'HandlerUnit', type: 'singleLineText', required: true },
-        { name: 'HandlerUnitCode', type: 'singleLineText', required: false },
         { name: 'HandlerName', type: 'singleLineText', required: true },
-        { name: 'HandlerUsername', type: 'singleLineText', required: false },
-        { name: 'HandlerEmail', type: 'singleLineText', required: false },
-        { name: 'HandlerDate', type: 'dateTime', required: false },
-        { name: 'DeficiencyType', type: 'singleLineText', required: false },
-        { name: 'Source', type: 'singleLineText', required: false },
+        { name: 'DeficiencyType', type: 'choice', required: true, choices: ['\u4e3b\u8981\u7f3a\u5931', '\u6b21\u8981\u7f3a\u5931', '\u89c0\u5bdf', '\u5efa\u8b70'] },
+        { name: 'Source', type: 'choice', required: true, choices: ['\u5167\u90e8\u7a3d\u6838', '\u5916\u90e8\u7a3d\u6838', '\u6559\u80b2\u90e8\u7a3d\u6838', '\u8cc7\u5b89\u4e8b\u6545', '\u7cfb\u7d71\u8b8a\u66f4', '\u4f7f\u7528\u8005\u62b1\u6028', '\u5176\u4ed6'] },
         { name: 'CategoryJson', type: 'multipleLinesText', required: true },
-        { name: 'Clause', type: 'singleLineText', required: false },
-        { name: 'ProblemDescription', type: 'multipleLinesText', required: false },
-        { name: 'Occurrence', type: 'multipleLinesText', required: false },
+        { name: 'ProblemDescription', type: 'multipleLinesText', required: true },
+        { name: 'Occurrence', type: 'multipleLinesText', required: true },
         { name: 'CorrectiveAction', type: 'multipleLinesText', required: false },
         { name: 'CorrectiveDueDate', type: 'dateTime', required: false },
-        { name: 'RootCause', type: 'multipleLinesText', required: false },
-        { name: 'RiskDescription', type: 'multipleLinesText', required: false },
-        { name: 'RiskAcceptor', type: 'singleLineText', required: false },
-        { name: 'RiskAcceptDate', type: 'dateTime', required: false },
-        { name: 'RiskAssessDate', type: 'dateTime', required: false },
-        { name: 'RootElimination', type: 'multipleLinesText', required: false },
-        { name: 'RootEliminationDueDate', type: 'dateTime', required: false },
-        { name: 'ReviewResult', type: 'singleLineText', required: false },
-        { name: 'ReviewNextDate', type: 'dateTime', required: false },
-        { name: 'Reviewer', type: 'singleLineText', required: false },
-        { name: 'ReviewDate', type: 'dateTime', required: false },
         { name: 'PendingTrackingJson', type: 'multipleLinesText', required: false },
         { name: 'TrackingsJson', type: 'multipleLinesText', required: true },
-        { name: 'Status', type: 'choice', required: true, choices: ['開立', '待矯正', '已提案', '審核中', '追蹤中', '結案'] },
+        { name: 'Status', type: 'choice', required: true, choices: ['\u958b\u7acb', '\u5f85\u77ef\u6b63', '\u5df2\u63d0\u6848', '\u5be9\u6838\u4e2d', '\u8ffd\u8e64\u4e2d', '\u7d50\u6848'] },
         { name: 'CreatedAt', type: 'dateTime', required: true },
         { name: 'UpdatedAt', type: 'dateTime', required: true },
         { name: 'ClosedDate', type: 'dateTime', required: false },
@@ -64,7 +45,7 @@
         { name: 'AuditYear', type: 'singleLineText', required: true },
         { name: 'SupervisorName', type: 'singleLineText', required: false },
         { name: 'SupervisorTitle', type: 'singleLineText', required: false },
-        { name: 'SignStatus', type: 'choice', required: true, choices: ['待簽核', '已簽核'] },
+        { name: 'SignStatus', type: 'choice', required: true, choices: ['\u5f85\u7c3d\u6838', '\u5df2\u7c3d\u6838'] },
         { name: 'SignDate', type: 'dateTime', required: false },
         { name: 'SupervisorNote', type: 'multipleLinesText', required: false },
         { name: 'ResultsJson', type: 'multipleLinesText', required: true },
@@ -73,7 +54,7 @@
         { name: 'SummaryPartial', type: 'number', required: true },
         { name: 'SummaryNonConform', type: 'number', required: true },
         { name: 'SummaryNa', type: 'number', required: true },
-        { name: 'Status', type: 'choice', required: true, choices: ['草稿', '已送出'] },
+        { name: 'Status', type: 'choice', required: true, choices: ['\u8349\u7a3f', '\u5df2\u9001\u51fa'] },
         { name: 'CreatedAt', type: 'dateTime', required: true },
         { name: 'UpdatedAt', type: 'dateTime', required: true },
         { name: 'BackendMode', type: 'choice', required: true, choices: ['a3-campus-backend'] },
@@ -96,7 +77,7 @@
         { name: 'SubmitterEmail', type: 'singleLineText', required: false },
         { name: 'FillDate', type: 'dateTime', required: true },
         { name: 'TrainingYear', type: 'singleLineText', required: true },
-        { name: 'Status', type: 'choice', required: true, choices: ['暫存', '待簽核', '已完成填報', '退回更正'] },
+        { name: 'Status', type: 'choice', required: true, choices: ['\u66ab\u5b58', '\u5f85\u7c3d\u6838', '\u5df2\u5b8c\u6210\u586b\u5831', '\u9000\u56de\u66f4\u6b63'] },
         { name: 'RecordsJson', type: 'multipleLinesText', required: true },
         { name: 'SummaryJson', type: 'multipleLinesText', required: true },
         { name: 'ActiveCount', type: 'number', required: true },
@@ -131,6 +112,24 @@
         { name: 'Source', type: 'choice', required: true, choices: ['import', 'manual'] },
         { name: 'CreatedBy', type: 'singleLineText', required: false },
         { name: 'CreatedByUsername', type: 'singleLineText', required: false },
+        { name: 'CreatedAt', type: 'dateTime', required: true },
+        { name: 'UpdatedAt', type: 'dateTime', required: true },
+        { name: 'BackendMode', type: 'choice', required: true, choices: ['a3-campus-backend'] },
+        { name: 'RecordSource', type: 'choice', required: true, choices: ['frontend', 'manual', 'migration'] }
+      ]
+    },
+    {
+      name: 'SystemUsers',
+      description: 'System user accounts and authorized unit scopes',
+      columns: [
+        { name: 'UserName', type: 'singleLineText', required: true },
+        { name: 'Password', type: 'singleLineText', required: true },
+        { name: 'DisplayName', type: 'singleLineText', required: true },
+        { name: 'Email', type: 'singleLineText', required: true },
+        { name: 'Role', type: 'choice', required: true, choices: ['\u6700\u9ad8\u7ba1\u7406\u54e1', '\u55ae\u4f4d\u7ba1\u7406\u54e1', '\u586b\u5831\u4eba', '\u8de8\u55ae\u4f4d\u6aa2\u8996\u8005'] },
+        { name: 'PrimaryUnit', type: 'singleLineText', required: false },
+        { name: 'AuthorizedUnitsJson', type: 'multipleLinesText', required: true },
+        { name: 'ActiveUnit', type: 'singleLineText', required: false },
         { name: 'CreatedAt', type: 'dateTime', required: true },
         { name: 'UpdatedAt', type: 'dateTime', required: true },
         { name: 'BackendMode', type: 'choice', required: true, choices: ['a3-campus-backend'] },
@@ -184,13 +183,9 @@
   async function getDigest() {
     const response = await fetch(`${resolveWebAbsoluteUrl()}/_api/contextinfo`, {
       method: 'POST',
-      headers: {
-        Accept: 'application/json;odata=verbose'
-      }
+      headers: { Accept: 'application/json;odata=verbose' }
     });
-    if (!response.ok) {
-      throw new Error(`contextinfo failed: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`contextinfo failed: ${response.status}`);
     const data = await response.json();
     return data.d.GetContextWebInformation.FormDigestValue;
   }

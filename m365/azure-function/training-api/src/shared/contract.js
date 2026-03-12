@@ -7,7 +7,8 @@ const FORM_ACTIONS = {
   SUBMIT_STEP_ONE: 'training.form.submit-step-one',
   FINALIZE: 'training.form.finalize',
   RETURN: 'training.form.return',
-  UNDO: 'training.form.undo'
+  UNDO: 'training.form.undo',
+  DELETE: 'training.form.delete'
 };
 
 const ROSTER_ACTIONS = {
@@ -399,24 +400,24 @@ function validateActionEnvelope(envelope, expectedAction) {
 
 function validateTrainingFormPayload(payload, options) {
   const opts = options || {};
-  if (!cleanText(payload.id)) throw createError('缺少教育訓練編號。', 400);
+  if (!cleanText(payload.id)) throw createError('缺少教育訓練統計編號。', 400);
   if (!cleanText(payload.unit)) throw createError('缺少填報單位。', 400);
   if (!cleanText(payload.fillerName)) throw createError('缺少填報人姓名。', 400);
   if (!cleanText(payload.fillDate)) throw createError('缺少填報日期。', 400);
-  if (!cleanText(payload.trainingYear)) throw createError('缺少訓練年度。', 400);
+  if (!cleanText(payload.trainingYear)) throw createError('缺少統計年度。', 400);
   if (opts.requireRecords && (!Array.isArray(payload.records) || payload.records.length === 0)) {
-    throw createError('教育訓練明細不可為空。', 400);
+    throw createError('教育訓練統計至少要有一筆人員資料。', 400);
   }
   if (opts.requireSignedFiles && (!Array.isArray(payload.signedFiles) || payload.signedFiles.length === 0)) {
-    throw createError('完成整體填報前必須上傳簽核掃描檔。', 400);
+    throw createError('完成正式繳交前，必須上傳簽核掃描檔。', 400);
   }
   if (opts.requireReturnReason && !cleanText(payload.returnReason)) {
-    throw createError('退回更正時必須提供退回原因。', 400);
+    throw createError('退回更正時必須提供原因。', 400);
   }
 }
 
 function validateTrainingRosterPayload(payload) {
-  if (!cleanText(payload.unit)) throw createError('缺少名單單位。', 400);
+  if (!cleanText(payload.unit)) throw createError('缺少名單所屬單位。', 400);
   if (!cleanText(payload.name)) throw createError('缺少名單姓名。', 400);
 }
 

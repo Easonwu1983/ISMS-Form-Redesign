@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const BASE_CONFIG = {
     unitContactRequestTimeoutMs: 15000,
     unitContactStatusLookupMethod: 'POST',
@@ -17,6 +17,10 @@
     trainingRostersEndpoint: '',
     trainingHealthEndpoint: '',
     trainingSharedHeaders: {},
+    systemUsersMode: 'local-emulator',
+    systemUsersEndpoint: '',
+    systemUsersHealthEndpoint: '',
+    systemUsersSharedHeaders: {},
     unitContactActivationEndpoint: '',
     sharePointSiteName: 'ISMS-Forms',
     sharePointSiteUrl: '',
@@ -27,7 +31,8 @@
       correctiveActions: 'CorrectiveActions',
       checklists: 'Checklists',
       trainingForms: 'TrainingForms',
-      trainingRosters: 'TrainingRosters'
+      trainingRosters: 'TrainingRosters',
+      systemUsers: 'SystemUsers'
     },
     entraTenantId: '',
     entraClientId: '',
@@ -81,6 +86,9 @@
       trainingFormsEndpoint: '/api/training/forms',
       trainingRostersEndpoint: '/api/training/rosters',
       trainingHealthEndpoint: '/api/training/health',
+      systemUsersMode: 'm365-api',
+      systemUsersEndpoint: '/api/system-users',
+      systemUsersHealthEndpoint: '/api/system-users/health',
       unitContactActivationEndpoint: '#activate-unit-contact',
       unitContactStatusLookupMethod: 'POST',
       sharePointSiteUrl: 'https://YOUR-TENANT.sharepoint.com/sites/ISMSFormsWorkspace',
@@ -102,6 +110,9 @@
       trainingFormsEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/training/forms',
       trainingRostersEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/training/rosters',
       trainingHealthEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/training/health',
+      systemUsersMode: 'm365-api',
+      systemUsersEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/system-users',
+      systemUsersHealthEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/system-users/health',
       unitContactActivationEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/unit-contact/activate',
       sharePointSiteUrl: 'https://YOUR-TENANT.sharepoint.com/sites/ISMS-Forms'
     }
@@ -130,3 +141,4 @@
     deploymentChecklistDoc: 'docs/m365-unit-contact-go-live-runbook.md'
   };
 })();
+

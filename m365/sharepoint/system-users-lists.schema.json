@@ -1,0 +1,29 @@
+{
+  "version": "2026-03-12",
+  "site": {
+    "name": "ISMS-Forms",
+    "purpose": "System user and permission records"
+  },
+  "lists": [
+    {
+      "name": "SystemUsers",
+      "description": "System user accounts and authorized unit scopes",
+      "recommendedIndexes": ["UserName", "Email", "Role", "PrimaryUnit", "UpdatedAt"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use UserName as display title" },
+        { "name": "UserName", "type": "singleLineText", "required": true, "unique": true },
+        { "name": "Password", "type": "singleLineText", "required": true },
+        { "name": "DisplayName", "type": "singleLineText", "required": true },
+        { "name": "Email", "type": "singleLineText", "required": true },
+        { "name": "Role", "type": "choice", "required": true, "choices": ["最高管理員", "單位管理員", "填報人", "跨單位檢視者"] },
+        { "name": "PrimaryUnit", "type": "singleLineText", "required": false },
+        { "name": "AuthorizedUnitsJson", "type": "multipleLinesText", "required": true },
+        { "name": "ActiveUnit", "type": "singleLineText", "required": false },
+        { "name": "CreatedAt", "type": "dateTime", "required": true },
+        { "name": "UpdatedAt", "type": "dateTime", "required": true },
+        { "name": "BackendMode", "type": "choice", "required": true, "choices": ["a3-campus-backend"] },
+        { "name": "RecordSource", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] }
+      ]
+    }
+  ]
+}

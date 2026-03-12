@@ -1,4 +1,4 @@
-const http = require('http');
+﻿const http = require('http');
 const { URL } = require('url');
 
 const {
@@ -18,6 +18,7 @@ const {
 } = require('../azure-function/unit-contact-api/src/shared/contract');
 const { createChecklistRouter } = require('./checklist-backend.cjs');
 const { createCorrectiveActionRouter } = require('./corrective-action-backend.cjs');
+const { createSystemUserRouter } = require('./system-user-backend.cjs');
 const { createTrainingRouter } = require('./training-backend.cjs');
 const {
   GRAPH_ROOT,
@@ -330,6 +331,14 @@ const trainingRouter = createTrainingRouter({
   getDelegatedToken
 });
 
+const systemUserRouter = createSystemUserRouter({
+  parseJsonBody,
+  writeJson,
+  graphRequest,
+  resolveSiteId,
+  getDelegatedToken
+});
+
 async function handleApply(req, res, origin) {
   try {
     const envelope = await parseJsonBody(req);
@@ -410,6 +419,9 @@ function createServer() {
       if (await trainingRouter.tryHandle(req, res, origin, url)) {
         return;
       }
+      if (await systemUserRouter.tryHandle(req, res, origin, url)) {
+        return;
+      }
       await writeJson(res, buildErrorResponse(new Error('Not found'), 'Not found', 404), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Unexpected backend error.', 500), origin);
@@ -433,3 +445,5 @@ module.exports = {
   createServer,
   startServer
 };
+
+

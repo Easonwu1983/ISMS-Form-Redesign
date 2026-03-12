@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   // Copy this file to `m365-config.override.js` on the campus host
   // and fill in the real values there. The app will load it after
   // `m365-config.js` and merge these overrides at runtime.
@@ -18,6 +18,9 @@
     trainingFormsEndpoint: 'https://YOUR-CAMPUS-HOST/api/training/forms',
     trainingRostersEndpoint: 'https://YOUR-CAMPUS-HOST/api/training/rosters',
     trainingHealthEndpoint: 'https://YOUR-CAMPUS-HOST/api/training/health',
+    systemUsersMode: 'm365-api',
+    systemUsersEndpoint: 'https://YOUR-CAMPUS-HOST/api/system-users',
+    systemUsersHealthEndpoint: 'https://YOUR-CAMPUS-HOST/api/system-users/health',
     sharePointSiteUrl: 'https://YOUR-TENANT.sharepoint.com/sites/ISMSFormsWorkspace',
     sharePointSiteName: 'ISMSFormsWorkspace',
     sharePointProvisioningModel: 'delegated-site-owner',
@@ -28,7 +31,9 @@
       correctiveActions: 'CorrectiveActions',
       checklists: 'Checklists',
       trainingForms: 'TrainingForms',
-      trainingRosters: 'TrainingRosters'
+      trainingRosters: 'TrainingRosters',
+      systemUsers: 'SystemUsers'
     }
   };
 })();
+
