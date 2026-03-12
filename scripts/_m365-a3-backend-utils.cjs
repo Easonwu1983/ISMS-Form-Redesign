@@ -58,6 +58,29 @@ function decodeJwt(accessToken) {
   return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
 }
 
+function tryAcquireDelegatedToken(command, options = {}) {
+  try {
+    const accessToken = execSync(command, {
+      cwd: projectRoot(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...options
+    }).trim();
+
+    if (!accessToken) {
+      return null;
+    }
+
+    return {
+      accessToken,
+      decoded: decodeJwt(accessToken)
+    };
+  }
+  catch {
+    return null;
+  }
+}
+
 async function acquireGraphToken(config) {
   if (!config.tenantId || !config.clientId || !config.clientSecret) {
     throw new Error('Missing M365 A3 backend config. Set tenant/client/secret or create .local-secrets/m365-a3-backend.json');
@@ -88,19 +111,28 @@ async function acquireGraphToken(config) {
 }
 
 function acquireDelegatedGraphTokenFromCli() {
-  const accessToken = execSync(
-    'npx -y -p @pnp/cli-microsoft365 m365 util accesstoken get --resource https://graph.microsoft.com --output text',
-    {
-      cwd: projectRoot(),
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe']
-    }
-  ).trim();
+  const azureCliToken = tryAcquireDelegatedToken(
+    'az account get-access-token --resource-type ms-graph --query accessToken -o tsv'
+  );
+  if (azureCliToken) {
+    return azureCliToken;
+  }
 
-  return {
-    accessToken,
-    decoded: decodeJwt(accessToken)
-  };
+  const m365CliToken = tryAcquireDelegatedToken(
+    'm365 util accesstoken get --resource https://graph.microsoft.com --output text'
+  );
+  if (m365CliToken) {
+    return m365CliToken;
+  }
+
+  const npxM365CliToken = tryAcquireDelegatedToken(
+    'npx -y -p @pnp/cli-microsoft365 m365 util accesstoken get --resource https://graph.microsoft.com --output text'
+  );
+  if (npxM365CliToken) {
+    return npxM365CliToken;
+  }
+
+  throw new Error('Unable to acquire delegated Graph token from Azure CLI or CLI for Microsoft 365.');
 }
 
 async function graphGet(accessToken, url) {

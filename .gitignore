@@ -21,3 +21,5 @@ server.pid
 m365/campus-backend/runtime.local.json
 m365-config.override.js
 logs/
+.runtime/
+tmp-*
