@@ -10,9 +10,9 @@
       getAuthorizedUnits,
       parseUserUnits,
       findUser,
-      addUser,
-      updateUser,
-      deleteUser,
+      submitUserUpsert,
+      submitUserDelete,
+      syncUsersFromM365,
       getCustomUnitRegistry,
       loadUnitReviewStore,
       formatUnitScopeSummary,
@@ -76,19 +76,35 @@
     syncRoleFields();
     roleEl.addEventListener('change', syncRoleFields);
     document.getElementById('modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) closeModalRoot(); });
-    document.getElementById('user-form').addEventListener('submit', e => {
+    document.getElementById('user-form').addEventListener('submit', async e => {
       e.preventDefault();
       const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), extraUnits = parseUserUnits(document.getElementById('u-units').value), pw = document.getElementById('u-pass').value;
       const finalUnits = rl === ROLES.VIEWER ? Array.from(new Set([ut, ...extraUnits].filter(Boolean))) : Array.from(new Set([ut, ...extraUnits].filter(Boolean)));
       if (rl !== ROLES.VIEWER && !finalUnits.length) { toast('請至少指定一個授權單位', 'error'); return; }
       const payload = { name: nm, email: em, role: rl, unit: finalUnits[0] || '', units: finalUnits, activeUnit: finalUnits[0] || '' };
       if (pw) payload.password = pw;
-      if (isE) { updateUser(un, payload); toast('使用者已更新'); }
-      else { if (findUser(un)) { toast('帳號已存在', 'error'); return; } addUser({ username: un, password: pw, ...payload }); toast('使用者已新增'); }
-      closeModalRoot(); renderUsers(); refreshIcons();
+      try {
+        if (!isE && findUser(un)) { toast('帳號已存在', 'error'); return; }
+        await submitUserUpsert({ username: un, ...payload });
+        await syncUsersFromM365({ silent: true });
+        toast(isE ? '使用者已更新' : '使用者已新增');
+        closeModalRoot(); renderUsers(); refreshIcons();
+      } catch (error) {
+        toast(String(error && error.message || error || '使用者儲存失敗'), 'error');
+      }
     });
   }
-  function handleDeleteUser(un) { if (confirm(`確定刪除使用者「${un}」？`)) { deleteUser(un); toast('使用者已刪除'); renderUsers(); } }
+  async function handleDeleteUser(un) {
+    if (!confirm(`確定刪除使用者「${un}」？`)) return;
+    try {
+      await submitUserDelete(un, { actorName: currentUser() && currentUser().name, actorEmail: currentUser() && currentUser().email });
+      await syncUsersFromM365({ silent: true });
+      toast('使用者已刪除');
+      renderUsers();
+    } catch (error) {
+      toast(String(error && error.message || error || '使用者刪除失敗'), 'error');
+    }
+  }
   function unitReviewStatusBadge(entry) {
     const approved = entry.status === 'approved';
     return `<span class="review-status-badge ${approved ? 'approved' : 'pending'}">${approved ? '已核准保留' : '待審核'}</span>`;

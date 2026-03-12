@@ -11,9 +11,10 @@
                   "audit":  "OpsAudit",
                   "correctiveActions":  "CorrectiveActions",
                   "checklists":  "Checklists",
-                  "trainingForms":  "TrainingForms",
-                  "trainingRosters":  "TrainingRosters",
-                  "systemUsers":  "SystemUsers"
-              },
+    "trainingForms":  "TrainingForms",
+    "trainingRosters":  "TrainingRosters",
+    "systemUsers":  "SystemUsers"
+  },
+    "attachmentsLibrary": "ISMSAttachments",
     "logDir":  "C:\\ProgramData\\ISMSFormRedesign\\logs"
 }

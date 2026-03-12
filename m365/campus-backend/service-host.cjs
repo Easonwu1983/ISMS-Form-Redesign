@@ -50,10 +50,13 @@ function applyEnvFromConfig(config) {
     }
     if (config.lists.trainingRosters && !process.env.TRAINING_ROSTERS_LIST) {
       process.env.TRAINING_ROSTERS_LIST = String(config.lists.trainingRosters);
+    }
     if (config.lists.systemUsers && !process.env.SYSTEM_USERS_LIST) {
       process.env.SYSTEM_USERS_LIST = String(config.lists.systemUsers);
     }
-    }
+  }
+  if (config.attachmentsLibrary && !process.env.ATTACHMENTS_LIBRARY) {
+    process.env.ATTACHMENTS_LIBRARY = String(config.attachmentsLibrary);
   }
 }
 

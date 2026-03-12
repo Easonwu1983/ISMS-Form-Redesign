@@ -15,5 +15,6 @@
                   "trainingRosters":  "TrainingRosters",
                   "systemUsers":  "SystemUsers"
               },
+    "attachmentsLibrary":  "ISMSAttachments",
     "logDir":  "/var/log/isms-form-redesign"
 }

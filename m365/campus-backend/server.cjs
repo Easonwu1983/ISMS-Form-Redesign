@@ -18,6 +18,7 @@ const {
 } = require('../azure-function/unit-contact-api/src/shared/contract');
 const { createChecklistRouter } = require('./checklist-backend.cjs');
 const { createCorrectiveActionRouter } = require('./corrective-action-backend.cjs');
+const { createAttachmentRouter } = require('./attachment-backend.cjs');
 const { createSystemUserRouter } = require('./system-user-backend.cjs');
 const { createTrainingRouter } = require('./training-backend.cjs');
 const {
@@ -331,6 +332,14 @@ const trainingRouter = createTrainingRouter({
   getDelegatedToken
 });
 
+const attachmentRouter = createAttachmentRouter({
+  parseJsonBody,
+  writeJson,
+  graphRequest,
+  resolveSiteId,
+  getDelegatedToken
+});
+
 const systemUserRouter = createSystemUserRouter({
   parseJsonBody,
   writeJson,
@@ -417,6 +426,9 @@ function createServer() {
         return;
       }
       if (await trainingRouter.tryHandle(req, res, origin, url)) {
+        return;
+      }
+      if (await attachmentRouter.tryHandle(req, res, origin, url)) {
         return;
       }
       if (await systemUserRouter.tryHandle(req, res, origin, url)) {

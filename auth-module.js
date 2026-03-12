@@ -1,4 +1,4 @@
-ï»¿(function () {
+(function () {
   window.createAuthModule = function createAuthModule(deps) {
     const {
       AUTH_KEY,
@@ -12,7 +12,9 @@
       findUser,
       findUserByEmail,
       updateUser,
-      addLoginLog
+      addLoginLog,
+      loginWithBackend,
+      resetPasswordWithBackend
     } = deps;
 
     function readAuthSession() {
@@ -59,10 +61,25 @@
       return password;
     }
 
-    function login(username, password) {
-      const user = findUser(username);
-      const success = !!(user && user.password === password);
-      addLoginLog(username, user, success);
+    async function login(username, password) {
+      const cleanUsername = String(username || '').trim();
+      const cleanPassword = String(password || '');
+      if (typeof loginWithBackend === 'function') {
+        try {
+          const remoteUser = await loginWithBackend(cleanUsername, cleanPassword);
+          const success = !!remoteUser;
+          addLoginLog(cleanUsername, remoteUser, success);
+          if (!success) return null;
+          return writeAuthSession(remoteUser);
+        } catch (error) {
+          addLoginLog(cleanUsername, null, false);
+          throw error;
+        }
+      }
+
+      const user = findUser(cleanUsername);
+      const success = !!(user && user.password === cleanPassword);
+      addLoginLog(cleanUsername, user, success);
       if (!success) return null;
       return writeAuthSession(user);
     }
@@ -110,8 +127,8 @@
         admin.role = ROLES.ADMIN;
         changed = true;
       }
-      if (admin.name !== 'é–®ïˆ?ç’ˆî¸?éˆï‹¬?è¬è„°æ¥éŠå‰–?') {
-        admin.name = 'é–®ïˆ?ç’ˆî¸?éˆï‹¬?è¬è„°æ¥éŠå‰–?';
+      if (admin.name !== '­pºâ¾÷¤Î¸ê°Tºô¸ô¤¤¤ß') {
+        admin.name = '­pºâ¾÷¤Î¸ê°Tºô¸ô¤¤¤ß';
         changed = true;
       }
 
@@ -119,18 +136,22 @@
 
       const auth = readAuthSession();
       if (auth && auth.username === 'admin') {
-        writeAuthSession({ ...auth, role: ROLES.ADMIN, name: 'é–®ïˆ?ç’ˆî¸?éˆï‹¬?è¬è„°æ¥éŠå‰–?' });
+        writeAuthSession({ ...auth, role: ROLES.ADMIN, name: '­pºâ¾÷¤Î¸ê°Tºô¸ô¤¤¤ß' });
       }
     }
 
-    function resetPasswordByEmail(email) {
+    async function resetPasswordByEmail(email) {
+      if (typeof resetPasswordWithBackend === 'function') {
+        return resetPasswordWithBackend(email);
+      }
       const user = findUserByEmail(email);
       if (!user) return null;
       const nextPassword = generatePassword();
       updateUser(user.username, { password: nextPassword });
       return {
         user: normalizeUserRecord(user),
-        password: nextPassword
+        password: nextPassword,
+        source: 'local'
       };
     }
 
@@ -148,4 +169,3 @@
     };
   };
 })();
-

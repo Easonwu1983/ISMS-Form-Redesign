@@ -1,4 +1,4 @@
-﻿const {
+const {
   CONTRACT_VERSION,
   USER_ACTIONS,
   USER_ROLES,
@@ -15,6 +15,16 @@
   validateActionEnvelope,
   validateSystemUserPayload
 } = require('../azure-function/system-user-api/src/shared/contract');
+const {
+  CONTRACT_VERSION: AUTH_CONTRACT_VERSION,
+  AUTH_ACTIONS,
+  cleanEmail,
+  normalizeLoginPayload,
+  normalizeResetPasswordPayload,
+  validateActionEnvelope: validateAuthActionEnvelope,
+  validateLoginPayload,
+  validateResetPasswordPayload
+} = require('../azure-function/auth-api/src/shared/contract');
 
 function createSystemUserRouter(deps) {
   const {
@@ -100,13 +110,20 @@ function createSystemUserRouter(deps) {
     return rows.find((entry) => cleanText(entry.item.username).toLowerCase() === target) || null;
   }
 
+  async function getUserEntryByEmail(email) {
+    const target = cleanEmail(email);
+    if (!target) throw createError('Missing email', 400);
+    const rows = await listAllUsers();
+    return rows.find((entry) => cleanEmail(entry.item.email) === target) || null;
+  }
+
   async function findDuplicateEmail(email, excludeUsername) {
-    const targetEmail = cleanText(email).toLowerCase();
+    const targetEmail = cleanEmail(email);
     const skipUser = cleanText(excludeUsername).toLowerCase();
     if (!targetEmail) return null;
     const rows = await listAllUsers();
     return rows.find((entry) => (
-      cleanText(entry.item.email).toLowerCase() === targetEmail
+      cleanEmail(entry.item.email) === targetEmail
       && cleanText(entry.item.username).toLowerCase() !== skipUser
     )) || null;
   }
@@ -146,6 +163,10 @@ function createSystemUserRouter(deps) {
         PayloadJson: cleanText(input.payloadJson)
       }
     });
+  }
+
+  function sanitizeUserForClient(entry) {
+    return mapSystemUserForClient(entry);
   }
 
   function filterUsers(items, url) {
@@ -188,11 +209,27 @@ function createSystemUserRouter(deps) {
     return health;
   }
 
+  async function buildAuthHealth() {
+    const health = await buildHealth();
+    return {
+      ...health,
+      contractVersion: AUTH_CONTRACT_VERSION
+    };
+  }
+
   async function handleHealth(_req, res, origin) {
     try {
       await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read system-user backend health.', 500), origin);
+    }
+  }
+
+  async function handleAuthHealth(_req, res, origin) {
+    try {
+      await writeJson(res, buildJsonResponse(200, await buildAuthHealth()), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to read auth backend health.', 500), origin);
     }
   }
 
@@ -202,7 +239,7 @@ function createSystemUserRouter(deps) {
       const items = filterUsers(rows.map((entry) => entry.item), url);
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        items: items.map(mapSystemUserForClient),
+        items: items.map(sanitizeUserForClient),
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
@@ -216,7 +253,7 @@ function createSystemUserRouter(deps) {
       if (!existing) throw createError('System user not found', 404);
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        item: mapSystemUserForClient(existing.item),
+        item: sanitizeUserForClient(existing.item),
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
@@ -228,9 +265,14 @@ function createSystemUserRouter(deps) {
     try {
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, USER_ACTIONS.UPSERT);
-      const payload = normalizeSystemUserPayload(envelope.payload);
-      validateSystemUserPayload(payload, { requirePassword: true });
-      const existing = await getUserEntryByUsername(payload.username).catch(() => null);
+      const incoming = normalizeSystemUserPayload(envelope.payload);
+      const existing = await getUserEntryByUsername(incoming.username).catch(() => null);
+      const payload = {
+        ...(existing ? existing.item : {}),
+        ...incoming,
+        password: cleanText(incoming.password) || cleanText(existing && existing.item && existing.item.password)
+      };
+      validateSystemUserPayload(payload, { requirePassword: !existing });
       const emailDuplicate = await findDuplicateEmail(payload.email, payload.username);
       if (emailDuplicate) {
         throw createError('Another user already uses this email', 409);
@@ -253,7 +295,7 @@ function createSystemUserRouter(deps) {
       });
       await writeJson(res, buildJsonResponse(saved.created ? 201 : 200, {
         ok: true,
-        item: mapSystemUserForClient(saved.item),
+        item: sanitizeUserForClient(saved.item),
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
@@ -317,12 +359,81 @@ function createSystemUserRouter(deps) {
       });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        item: mapSystemUserForClient(saved.item),
+        item: sanitizeUserForClient(saved.item),
         password: nextPassword,
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to reset system user password.', 500), origin);
+    }
+  }
+
+  async function handleLogin(req, res, origin) {
+    try {
+      const envelope = await parseJsonBody(req);
+      validateAuthActionEnvelope(envelope, AUTH_ACTIONS.LOGIN);
+      const payload = normalizeLoginPayload(envelope.payload);
+      validateLoginPayload(payload);
+      const existing = await getUserEntryByUsername(payload.username).catch(() => null);
+      if (!existing || cleanText(existing.item.password) !== cleanText(payload.password)) {
+        await writeJson(res, buildJsonResponse(401, {
+          ok: false,
+          error: 'Invalid username or password',
+          contractVersion: AUTH_CONTRACT_VERSION
+        }), origin);
+        return;
+      }
+      await createAuditRow({
+        eventType: 'auth.login.success',
+        actorEmail: existing.item.email,
+        targetEmail: existing.item.email,
+        unitCode: '',
+        recordId: existing.item.username,
+        occurredAt: new Date().toISOString(),
+        payloadJson: JSON.stringify({ action: AUTH_ACTIONS.LOGIN })
+      });
+      await writeJson(res, buildJsonResponse(200, {
+        ok: true,
+        item: sanitizeUserForClient(existing.item),
+        contractVersion: AUTH_CONTRACT_VERSION
+      }), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to login.', 500), origin);
+    }
+  }
+
+  async function handleResetPasswordByEmail(req, res, origin) {
+    try {
+      const envelope = await parseJsonBody(req);
+      validateAuthActionEnvelope(envelope, AUTH_ACTIONS.RESET_PASSWORD);
+      const payload = normalizeResetPasswordPayload(envelope.payload);
+      validateResetPasswordPayload(payload);
+      const existing = await getUserEntryByEmail(payload.email);
+      if (!existing) throw createError('System user not found', 404);
+      const nextPassword = cleanText(payload.password) || generatePassword(8);
+      const now = new Date().toISOString();
+      const saved = await upsertUser(existing, {
+        ...existing.item,
+        password: nextPassword,
+        updatedAt: now
+      });
+      await createAuditRow({
+        eventType: 'auth.password-reset-by-email',
+        actorEmail: cleanText(payload.actorEmail),
+        targetEmail: saved.item.email,
+        unitCode: '',
+        recordId: saved.item.username,
+        occurredAt: now,
+        payloadJson: JSON.stringify({ action: AUTH_ACTIONS.RESET_PASSWORD, actorName: cleanText(payload.actorName) })
+      });
+      await writeJson(res, buildJsonResponse(200, {
+        ok: true,
+        item: sanitizeUserForClient(saved.item),
+        password: nextPassword,
+        contractVersion: AUTH_CONTRACT_VERSION
+      }), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to reset password by email.', 500), origin);
     }
   }
 
@@ -349,6 +460,15 @@ function createSystemUserRouter(deps) {
     if (resetMatch && req.method === 'POST') {
       return handleResetPassword(req, res, origin, routeUserName(resetMatch[1])).then(() => true);
     }
+    if (url.pathname === '/api/auth/health' && req.method === 'GET') {
+      return handleAuthHealth(req, res, origin).then(() => true);
+    }
+    if (url.pathname === '/api/auth/login' && req.method === 'POST') {
+      return handleLogin(req, res, origin).then(() => true);
+    }
+    if (url.pathname === '/api/auth/reset-password' && req.method === 'POST') {
+      return handleResetPasswordByEmail(req, res, origin).then(() => true);
+    }
     return Promise.resolve(false);
   }
 
@@ -360,5 +480,3 @@ function createSystemUserRouter(deps) {
 module.exports = {
   createSystemUserRouter
 };
-
-

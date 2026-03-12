@@ -93,7 +93,12 @@ function normalizeStoredSystemUser(entry) {
 }
 
 function mapSystemUserForClient(entry) {
-  return normalizeStoredSystemUser(entry);
+  const normalized = normalizeStoredSystemUser(entry);
+  return {
+    ...normalized,
+    password: '',
+    hasPassword: !!cleanText(normalized.password)
+  };
 }
 
 function mapSystemUserToGraphFields(entry) {

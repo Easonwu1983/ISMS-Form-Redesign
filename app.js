@@ -447,7 +447,9 @@
       findUser: function (username) { return getDataModule().findUser(username); },
       findUserByEmail: function (email) { return getDataModule().findUserByEmail(email); },
       updateUser: function (username, updates) { return getDataModule().updateUser(username, updates); },
-      addLoginLog: function (username, user, success) { return getDataModule().addLoginLog(username, user, success); }
+      addLoginLog: function (username, user, success) { return getDataModule().addLoginLog(username, user, success); },
+      loginWithBackend: submitBackendLogin,
+      resetPasswordWithBackend: submitAuthResetPasswordByEmail
     });
     window._authModule = authModuleApi;
     return authModuleApi;
@@ -468,9 +470,9 @@
       getAuthorizedUnits,
       parseUserUnits,
       findUser,
-      addUser,
-      updateUser,
-      deleteUser,
+      submitUserUpsert,
+      submitUserDelete,
+      syncUsersFromM365,
       getCustomUnitRegistry,
       loadUnitReviewStore,
       formatUnitScopeSummary,
@@ -755,6 +757,11 @@
     DELETE: 'system-user.delete',
     RESET_PASSWORD: 'system-user.reset-password'
   };
+  const AUTH_CONTRACT_VERSION = '2026-03-13';
+  const AUTH_ACTIONS = {
+    LOGIN: 'auth.login',
+    RESET_PASSWORD: 'auth.reset-password-by-email'
+  };
   const systemUserRepositoryState = {
     mode: 'local-emulator',
     ready: false,
@@ -787,6 +794,31 @@
   function getSystemUsersSharedHeaders() {
     const config = getRuntimeM365Config();
     return config.systemUsersSharedHeaders && typeof config.systemUsersSharedHeaders === 'object' ? config.systemUsersSharedHeaders : {};
+  }
+  function getAuthMode() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.authMode || '').trim();
+    if (explicit) return explicit;
+    return getSystemUsersMode() === 'm365-api' ? 'm365-api' : 'local-emulator';
+  }
+  function getAuthEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.authEndpoint || '').trim();
+    if (explicit) return explicit.replace(/\/$/, '');
+    const usersEndpoint = getSystemUsersEndpoint();
+    return usersEndpoint ? usersEndpoint.replace(/\/system-users$/, '/auth') : '';
+  }
+  function getAuthHealthEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.authHealthEndpoint || '').trim();
+    if (explicit) return explicit;
+    const endpoint = getAuthEndpoint();
+    return endpoint ? endpoint + '/health' : '';
+  }
+  function getAuthSharedHeaders() {
+    const config = getRuntimeM365Config();
+    if (config.authSharedHeaders && typeof config.authSharedHeaders === 'object') return config.authSharedHeaders;
+    return getSystemUsersSharedHeaders();
   }
   function buildSystemUserEnvelope(action, payload) {
     return {
@@ -885,6 +917,20 @@
       if (timeoutId) clearTimeout(timeoutId);
     }
   }
+  async function requestAuthJson(path, options) {
+    const endpoint = getAuthEndpoint();
+    if (!endpoint) throw new Error('未設定 authEndpoint');
+    const suffix = String(path || '').trim();
+    const url = suffix ? (endpoint + suffix) : endpoint;
+    return requestSystemUserJson(url, {
+      ...(options || {}),
+      headers: {
+        'X-ISMS-Contract-Version': AUTH_CONTRACT_VERSION,
+        ...getAuthSharedHeaders(),
+        ...((options && options.headers) || {})
+      }
+    });
+  }
   function mergeRemoteUsersIntoStore(items) {
     const data = loadData();
     const remoteMap = new Map();
@@ -979,9 +1025,14 @@
       password: String(incoming.password || (existing && existing.password) || '').trim()
     });
     if (!requestPayload.username) throw new Error('缺少帳號');
-    if (!requestPayload.password) throw new Error('缺少密碼');
+    if (!requestPayload.password && !existing) throw new Error('缺少密碼');
     if (getSystemUsersMode() !== 'm365-api') {
-      if (existing) updateUser(requestPayload.username, requestPayload);
+      if (existing) {
+        updateUser(requestPayload.username, {
+          ...requestPayload,
+          password: requestPayload.password || String(existing.password || '').trim()
+        });
+      }
       else addUser(requestPayload);
       return { ok: true, item: findUser(requestPayload.username) || requestPayload, source: 'local' };
     }
@@ -1044,6 +1095,86 @@
       updateUser(username, { password: fallbackPassword });
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
+    }
+  }
+  async function submitBackendLogin(username, password) {
+    const cleanUsername = String(username || '').trim();
+    const cleanPassword = String(password || '').trim();
+    if (!cleanUsername || !cleanPassword) return null;
+
+    if (getAuthMode() !== 'm365-api') {
+      const localUser = findUser(cleanUsername);
+      if (!localUser || String(localUser.password || '') !== cleanPassword) return null;
+      return normalizeUserRecord(localUser);
+    }
+
+    const healthEndpoint = getAuthHealthEndpoint();
+    if (healthEndpoint) {
+      const health = await requestAuthJson('/health', { method: 'GET' });
+      if (health && health.ready === false) {
+        throw new Error(String(health.message || 'M365 登入後端尚未就緒').trim());
+      }
+    }
+
+    try {
+      const body = await requestAuthJson('/login', {
+        method: 'POST',
+        body: {
+          action: AUTH_ACTIONS.LOGIN,
+          payload: {
+            username: cleanUsername,
+            password: cleanPassword
+          }
+        }
+      });
+      const item = normalizeRemoteSystemUsers(body)[0];
+      return item ? normalizeUserRecord(item) : null;
+    } catch (error) {
+      const message = String(error && error.message || error || '').trim();
+      if (message === 'Invalid username or password') return null;
+      throw error;
+    }
+  }
+  async function submitAuthResetPasswordByEmail(email) {
+    const cleanMail = String(email || '').trim().toLowerCase();
+    if (!cleanMail) return null;
+
+    if (getAuthMode() !== 'm365-api') {
+      return submitUserResetPassword({ email: cleanMail });
+    }
+
+    const healthEndpoint = getAuthHealthEndpoint();
+    if (healthEndpoint) {
+      const health = await requestAuthJson('/health', { method: 'GET' });
+      if (health && health.ready === false) {
+        throw new Error(String(health.message || 'M365 登入後端尚未就緒').trim());
+      }
+    }
+
+    try {
+      const body = await requestAuthJson('/reset-password', {
+        method: 'POST',
+        body: {
+          action: AUTH_ACTIONS.RESET_PASSWORD,
+          payload: {
+            email: cleanMail
+          }
+        }
+      });
+      const item = normalizeRemoteSystemUsers(body)[0] || { email: cleanMail };
+      const stored = upsertSystemUserInStore({
+        ...item,
+        password: String(body && body.password || '').trim()
+      });
+      return {
+        user: stored,
+        password: String(body && body.password || '').trim(),
+        source: 'remote'
+      };
+    } catch (error) {
+      const message = String(error && error.message || error || '').trim();
+      if (message === 'System user not found') return null;
+      throw error;
     }
   }
   const correctiveActionRepositoryState = {

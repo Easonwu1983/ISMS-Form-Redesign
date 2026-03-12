@@ -48,6 +48,13 @@ This backend is the practical A3 fallback when:
 - `POST /api/system-users/upsert`
 - `POST /api/system-users/:username/delete`
 - `POST /api/system-users/:username/reset-password`
+- `GET /api/auth/health`
+- `POST /api/auth/login`
+- `POST /api/auth/reset-password`
+- `GET /api/attachments/health`
+- `POST /api/attachments/upload`
+- `GET /api/attachments/:driveItemId`
+- `POST /api/attachments/:driveItemId/delete`
 
 The request and response contract stays aligned with:
 
@@ -73,6 +80,7 @@ The request and response contract stays aligned with:
 - `TRAINING_FORMS_LIST`
 - `TRAINING_ROSTERS_LIST`
 - `SYSTEM_USERS_LIST`
+- `ATTACHMENTS_LIBRARY`
 
 The backend can also reuse the local-only file:
 

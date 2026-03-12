@@ -1,0 +1,22 @@
+{
+  "libraries": [
+    {
+      "name": "ISMSAttachments",
+      "template": "documentLibrary",
+      "folders": [
+        "corrective-actions",
+        "checklists",
+        "training",
+        "misc"
+      ],
+      "columns": [
+        { "name": "AttachmentId", "type": "singleLineText", "required": false },
+        { "name": "Scope", "type": "choice", "required": false, "choices": ["corrective-actions", "checklists", "training", "misc"] },
+        { "name": "OwnerId", "type": "singleLineText", "required": false },
+        { "name": "RecordType", "type": "singleLineText", "required": false },
+        { "name": "ContentTypeHint", "type": "singleLineText", "required": false },
+        { "name": "UploadedAt", "type": "dateTime", "required": false }
+      ]
+    }
+  ]
+}

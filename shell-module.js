@@ -87,16 +87,21 @@
         '<tr><td>頝典雿炎閬?/td><td>viewer1</td><td>viewer123</td></tr>' +
         '</table></div></div></div><div class="toast-container" id="toast-container"></div>';
 
-      document.getElementById('login-form').addEventListener('submit', function (e) {
+      document.getElementById('login-form').addEventListener('submit', async function (e) {
         e.preventDefault();
         var u = document.getElementById('login-user').value.trim();
         var p = document.getElementById('login-pass').value;
-        var user = login(u, p);
-        if (user) {
-          toast('登入成功，歡迎 ' + user.name, 'success');
-          setTimeout(function () { renderApp(); }, 300);
-        } else {
+        try {
+          var user = await login(u, p);
+          if (user) {
+            toast('登入成功，歡迎 ' + user.name, 'success');
+            setTimeout(function () { renderApp(); }, 300);
+          } else {
+            document.getElementById('login-error').classList.add('show');
+          }
+        } catch (error) {
           document.getElementById('login-error').classList.add('show');
+          toast(String(error && error.message || error || '登入失敗'), 'error');
         }
       });
 
@@ -113,20 +118,25 @@
         document.getElementById('login-panel').style.display = 'block';
       });
 
-      document.getElementById('forgot-form').addEventListener('submit', function (e) {
+      document.getElementById('forgot-form').addEventListener('submit', async function (e) {
         e.preventDefault();
         var email = document.getElementById('forgot-email').value.trim();
-        var resetResult = resetPasswordByEmail(email);
-        if (!resetResult) {
+        try {
+          var resetResult = await resetPasswordByEmail(email);
+          if (!resetResult) {
+            document.getElementById('forgot-error').classList.add('show');
+            return;
+          }
+          document.getElementById('forgot-error').classList.remove('show');
+          document.getElementById('reset-username').textContent = resetResult.user.username;
+          document.getElementById('reset-newpass').textContent = resetResult.password;
+          document.getElementById('forgot-result').style.display = 'block';
+          document.getElementById('forgot-form').style.display = 'none';
+          toast('撖Ⅳ撌脤?閮剜???', 'info');
+        } catch (error) {
           document.getElementById('forgot-error').classList.add('show');
-          return;
+          toast(String(error && error.message || error || '密碼重設失敗'), 'error');
         }
-        document.getElementById('forgot-error').classList.remove('show');
-        document.getElementById('reset-username').textContent = resetResult.user.username;
-        document.getElementById('reset-newpass').textContent = resetResult.password;
-        document.getElementById('forgot-result').style.display = 'block';
-        document.getElementById('forgot-form').style.display = 'none';
-        toast('撖Ⅳ撌脤?閮剜???', 'info');
       });
 
       refreshIcons();
