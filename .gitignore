@@ -12,6 +12,8 @@ ssh_log2.txt
 .tmp-*
 local-preview.png
 node_modules/
+.codex-keepawake.pid
+scripts/keep-awake.ps1
 .codex-playwright/
 .npm-cache/
 test-artifacts/
