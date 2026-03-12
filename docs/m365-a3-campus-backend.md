@@ -27,6 +27,12 @@ In this tenant, SharePoint list provisioning works with the site-owner account, 
 - one campus host or Node service runtime
 - one signed-in site-owner service account on that backend host
 
+Host options that fit this project well:
+
+- NTU VM
+- dedicated Windows host + VirtualBox + Ubuntu Server VM
+- dedicated Windows host + Windows service fallback
+
 ## Runtime Profile
 
 Use frontend profile:
@@ -40,6 +46,10 @@ The simplest campus override is:
 ## Backend Entry
 
 - [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\campus-backend\server.cjs](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\m365\campus-backend\server.cjs)
+
+VirtualBox / Ubuntu VM path:
+
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\virtualbox-ubuntu-vm-deployment.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\virtualbox-ubuntu-vm-deployment.md)
 
 ## Validation
 

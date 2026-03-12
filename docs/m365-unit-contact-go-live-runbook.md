@@ -24,6 +24,8 @@ Deployment references:
 
 - [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\campus-production-deployment-checklist.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\campus-production-deployment-checklist.md)
 - [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\windows-service-backend-runbook.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\windows-service-backend-runbook.md)
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\virtualbox-ubuntu-vm-deployment.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\virtualbox-ubuntu-vm-deployment.md)
+- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\virtualbox-ubuntu-vm-one-hour-plan.md](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\docs\virtualbox-ubuntu-vm-one-hour-plan.md)
 
 ## Why This Is The Recommended Path
 

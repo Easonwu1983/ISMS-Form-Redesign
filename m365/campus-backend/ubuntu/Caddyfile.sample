@@ -1,0 +1,13 @@
+# Replace with the real internal hostname or campus domain.
+isms-unit-contact.internal {
+  encode zstd gzip
+
+  handle /api/* {
+    reverse_proxy 127.0.0.1:8787
+  }
+
+  handle {
+    root * /srv/isms-form-redesign
+    file_server
+  }
+}

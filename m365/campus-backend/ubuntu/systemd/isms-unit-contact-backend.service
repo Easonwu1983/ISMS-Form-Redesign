@@ -1,0 +1,17 @@
+[Unit]
+Description=ISMS Unit Contact Campus Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/isms-form-redesign
+ExecStart=/usr/bin/node /srv/isms-form-redesign/m365/campus-backend/service-host.cjs /srv/isms-form-redesign/m365/campus-backend/runtime.local.json
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+User=ismsbackend
+Group=ismsbackend
+
+[Install]
+WantedBy=multi-user.target
