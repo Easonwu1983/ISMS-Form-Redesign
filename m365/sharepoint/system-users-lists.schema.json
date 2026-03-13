@@ -1,5 +1,5 @@
 {
-  "version": "2026-03-12",
+  "version": "2026-03-13",
   "site": {
     "name": "ISMS-Forms",
     "purpose": "System user and permission records"
@@ -12,7 +12,8 @@
       "columns": [
         { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use UserName as display title" },
         { "name": "UserName", "type": "singleLineText", "required": true, "unique": true },
-        { "name": "Password", "type": "singleLineText", "required": true },
+        { "name": "Password", "type": "singleLineText", "required": true, "notes": "Legacy placeholder only; hashed secrets are stored in PasswordSecret." },
+        { "name": "PasswordSecret", "type": "multipleLinesText", "required": false },
         { "name": "DisplayName", "type": "singleLineText", "required": true },
         { "name": "Email", "type": "singleLineText", "required": true },
         { "name": "Role", "type": "choice", "required": true, "choices": ["最高管理員", "單位管理員", "填報人", "跨單位檢視者"] },
@@ -21,6 +22,11 @@
         { "name": "ActiveUnit", "type": "singleLineText", "required": false },
         { "name": "CreatedAt", "type": "dateTime", "required": true },
         { "name": "UpdatedAt", "type": "dateTime", "required": true },
+        { "name": "PasswordChangedAt", "type": "dateTime", "required": false },
+        { "name": "ResetTokenExpiresAt", "type": "dateTime", "required": false },
+        { "name": "ResetRequestedAt", "type": "dateTime", "required": false },
+        { "name": "MustChangePassword", "type": "choice", "required": true, "choices": ["true", "false"] },
+        { "name": "SessionVersion", "type": "number", "required": true },
         { "name": "BackendMode", "type": "choice", "required": true, "choices": ["a3-campus-backend"] },
         { "name": "RecordSource", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] }
       ]

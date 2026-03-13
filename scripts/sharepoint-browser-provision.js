@@ -124,6 +124,7 @@
       columns: [
         { name: 'UserName', type: 'singleLineText', required: true },
         { name: 'Password', type: 'singleLineText', required: true },
+        { name: 'PasswordSecret', type: 'multipleLinesText', required: false },
         { name: 'DisplayName', type: 'singleLineText', required: true },
         { name: 'Email', type: 'singleLineText', required: true },
         { name: 'Role', type: 'choice', required: true, choices: ['\u6700\u9ad8\u7ba1\u7406\u54e1', '\u55ae\u4f4d\u7ba1\u7406\u54e1', '\u586b\u5831\u4eba', '\u8de8\u55ae\u4f4d\u6aa2\u8996\u8005'] },
@@ -132,6 +133,11 @@
         { name: 'ActiveUnit', type: 'singleLineText', required: false },
         { name: 'CreatedAt', type: 'dateTime', required: true },
         { name: 'UpdatedAt', type: 'dateTime', required: true },
+        { name: 'PasswordChangedAt', type: 'dateTime', required: false },
+        { name: 'ResetTokenExpiresAt', type: 'dateTime', required: false },
+        { name: 'ResetRequestedAt', type: 'dateTime', required: false },
+        { name: 'MustChangePassword', type: 'choice', required: true, choices: ['true', 'false'] },
+        { name: 'SessionVersion', type: 'number', required: true },
         { name: 'BackendMode', type: 'choice', required: true, choices: ['a3-campus-backend'] },
         { name: 'RecordSource', type: 'choice', required: true, choices: ['frontend', 'manual', 'migration'] }
       ]

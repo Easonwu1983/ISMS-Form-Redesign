@@ -84,7 +84,7 @@ function normalizeSystemUserPayload(payload) {
   const activeUnit = role === USER_ROLES.ADMIN ? '' : (cleanText(base.activeUnit || base.ActiveUnit) || units[0] || '');
   return {
     username: cleanText(base.username || base.userName || base.UserName),
-    password: cleanText(base.password || base.Password),
+    password: cleanText(base.password || base.PasswordSecret || base.Password),
     name: cleanText(base.name || base.displayName || base.DisplayName),
     email: cleanEmail(base.email || base.Email),
     role,
@@ -184,10 +184,13 @@ function mapSystemUserForClient(entry) {
 
 function mapSystemUserToGraphFields(entry) {
   const item = normalizeStoredSystemUser(entry);
+  const passwordValue = cleanText(item.password);
+  const isStructuredPassword = passwordValue.startsWith('{');
   return {
     Title: item.username,
     UserName: item.username,
-    Password: item.password,
+    Password: isStructuredPassword ? '[stored in PasswordSecret]' : (passwordValue || '[stored in PasswordSecret]'),
+    PasswordSecret: isStructuredPassword ? passwordValue : '',
     DisplayName: item.name,
     Email: item.email,
     Role: item.role,
@@ -210,7 +213,7 @@ function mapGraphFieldsToSystemUser(fields) {
   const units = parseJsonField(fields.AuthorizedUnitsJson, function () { return []; });
   return normalizeStoredSystemUser({
     username: fields.UserName || fields.Title,
-    password: fields.Password,
+    password: fields.PasswordSecret || fields.Password,
     name: fields.DisplayName,
     email: fields.Email,
     role: fields.Role,
