@@ -7,7 +7,8 @@ const UPSTREAM_HOST = process.env.ISMS_UPSTREAM_HOST || '127.0.0.1';
 const UPSTREAM_PORT = Number(process.env.ISMS_UPSTREAM_PORT || 18080);
 const ALLOWED_IPV4_CIDRS = [
   '127.0.0.0/8',
-  '140.112.0.0/16'
+  '140.112.0.0/16',
+  '172.16.0.0/12'
 ];
 const ALLOWED_IPV6_PREFIXES = [
   '::1',
