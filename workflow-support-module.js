@@ -241,6 +241,117 @@
       return true;
     }
 
+    function downloadCsvFile(filename, rows) {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+      const lines = (Array.isArray(rows) ? rows : []).map((row) => {
+        if (!Array.isArray(row)) return String(row === null || row === undefined ? '' : row);
+        return row.map(csvCell).join(',');
+      });
+      const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(url);
+      return true;
+    }
+
+    function localeCompareZh(a, b) {
+      return String(a || '').localeCompare(String(b || ''), 'zh-Hant', { sensitivity: 'base', numeric: true });
+    }
+
+    function getTrainingSourceRank(row) {
+      return String(row && row.source || '').trim() === 'manual' ? 1 : 0;
+    }
+
+    function getTrainingSupervisorRank(row) {
+      const text = [row && row.identity, row && row.jobTitle]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .join(' ');
+      if (!text) return 999;
+      const rules = [
+        [/校長/, 0],
+        [/副校長/, 1],
+        [/院長/, 2],
+        [/副院長/, 3],
+        [/處長|館長|所長|主任|執行長/, 4],
+        [/副主任|副執行長|副處長|副所長/, 5],
+        [/組長|隊長|中心主管|主管/, 6],
+        [/副組長|副隊長|副主管/, 7],
+        [/經理|副理|秘書長|秘書/, 8]
+      ];
+      const matched = rules.find(([pattern]) => pattern.test(text));
+      return matched ? matched[1] : 999;
+    }
+
+    function compareTrainingRosterEntries(a, b) {
+      const sourceCompare = getTrainingSourceRank(a) - getTrainingSourceRank(b);
+      if (sourceCompare !== 0) return sourceCompare;
+
+      const unitCompare = localeCompareZh(a && (a.unitName || getTrainingJobUnit(a.unit)), b && (b.unitName || getTrainingJobUnit(b.unit)));
+      if (unitCompare !== 0) return unitCompare;
+
+      const identityCompare = localeCompareZh(a && a.identity, b && b.identity);
+      if (identityCompare !== 0) return identityCompare;
+
+      const supervisorCompare = getTrainingSupervisorRank(a) - getTrainingSupervisorRank(b);
+      if (supervisorCompare !== 0) return supervisorCompare;
+
+      const titleCompare = localeCompareZh(a && a.jobTitle, b && b.jobTitle);
+      if (titleCompare !== 0) return titleCompare;
+
+      return localeCompareZh(a && a.name, b && b.name);
+    }
+
+    function sortTrainingRosterEntries(rows) {
+      return (Array.isArray(rows) ? rows.slice() : []).sort(compareTrainingRosterEntries);
+    }
+
+    function formatTrainingExportDate(value) {
+      const date = value ? new Date(value) : new Date();
+      if (!Number.isFinite(date.getTime())) return new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      return [
+        String(date.getFullYear()),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0')
+      ].join('');
+    }
+
+    function formatTrainingExportTimestamp(value) {
+      const date = value ? new Date(value) : new Date();
+      if (!Number.isFinite(date.getTime())) return '';
+      return new Intl.DateTimeFormat('zh-TW', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      }).format(date);
+    }
+
+    function sanitizeTrainingFileNamePart(value, fallbackText) {
+      const cleaned = String(value || '').trim().replace(/[\\/:*?"<>|／]/g, '_');
+      return cleaned || String(fallbackText || '').trim() || '未指定';
+    }
+
+    function getTrainingDetailExportFilename(form) {
+      const unitName = sanitizeTrainingFileNamePart(form && form.unit, '未指定單位');
+      const fillerName = sanitizeTrainingFileNamePart(form && form.fillerName, '未知經辦人');
+      return '資安教育訓練統計表_' + unitName + '_' + fillerName + '_' + formatTrainingExportDate(new Date()) + '.csv';
+    }
+
+    function getTrainingProfessionalExportValue(record) {
+      if (!record || record.status !== '在職') return '';
+      if (record.isInfoStaff === '否') return '無須';
+      return String(getTrainingProfessionalDisplay(record) || '').trim();
+    }
+
     function exportTrainingSummaryCsv(forms, filename) {
       const rows = forms.map((form) => {
         const summary = form.summary || computeTrainingSummary(form.records || []);
@@ -270,29 +381,41 @@
     }
 
     function exportTrainingDetailCsv(form) {
-      const rows = (form.records || []).map((row, index) => [
-        form.id,
-        form.statsUnit || getTrainingStatsUnit(form.unit),
-        form.unit,
-        form.trainingYear,
-        form.fillerName,
+      const summary = form.summary || computeTrainingSummary(form.records || []);
+      const records = sortTrainingRosterEntries(form.records || []);
+      const trainingYear = String(form.trainingYear || new Date().getFullYear() - 1911).trim();
+      const rows = [
+        ['【' + trainingYear + '年國立臺灣大學資通安全教育訓練統計】'],
+        [],
+        ['【統計與經辦人資訊】'],
+        ['統計單位', '經辦人姓名', '經辦人電話', '經辦人信箱', '單位總人數(在職)', '未完成人數(在職)', '已完成人數(在職)', '達成率', '提交時間'],
+        [
+          form.statsUnit || getTrainingStatsUnit(form.unit) || '未指定單位',
+          form.fillerName || '未知經辦人',
+          form.submitterPhone || '',
+          form.submitterEmail || '',
+          summary.activeCount || 0,
+          summary.incompleteCount || 0,
+          summary.completedCount || 0,
+          (summary.completionRate || 0) + '%',
+          formatTrainingExportTimestamp(form.submittedAt || form.updatedAt || form.createdAt)
+        ],
+        [],
+        ['【人員申報明細】'],
+        ['項次', '員工姓名', '一級單位', '本職單位', '身分別', '職稱', '在職狀態', '是否完成資安通識(1年3hr)', '是否為資訊人員(含委外)', '是否完成資安專業課程(2年3hr)']
+      ].concat(records.map((row, index) => [
         index + 1,
-        row.name,
-        row.l1Unit || '',
+        row.name || '',
+        row.l1Unit || form.statsUnit || getTrainingStatsUnit(form.unit) || '',
         row.unitName || '',
         row.identity || '',
         row.jobTitle || '',
         row.status || '',
         row.completedGeneral || '',
         row.isInfoStaff || '',
-        getTrainingProfessionalDisplay(row),
-        getTrainingRecordHint(row),
-        row.note || ''
-      ]);
-      downloadWorkbook('資安教育訓練明細_' + form.id + '.xlsx', [{
-        name: '逐人明細',
-        rows: [['填報單編號', '統計單位', '填報單位', '年度', '經辦人', '序號', '姓名', '一級單位', '本職單位', '身分別', '職稱', '在職狀態', TRAINING_GENERAL_LABEL, TRAINING_INFO_STAFF_LABEL, TRAINING_PROFESSIONAL_LABEL, '判定說明', '備註']].concat(rows)
-      }]);
+        getTrainingProfessionalExportValue(row)
+      ]));
+      downloadCsvFile(getTrainingDetailExportFilename(form), rows);
     }
 
     function getRocDateParts(value) {
@@ -309,7 +432,7 @@
       const summary = payload.summary || computeTrainingSummary(payload.records || []);
       const unitName = payload.statsUnit || getTrainingStatsUnit(payload.unit);
       const rocDate = getRocDateParts(payload.fillDate);
-      return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>資安教育訓練簽核表</title><style>body{font-family:"Noto Sans TC",sans-serif;color:#111827;margin:0;padding:24px}.sheet{max-width:960px;margin:0 auto}h1{font-size:24px;text-align:center;margin:0 0 18px}.meta,.summary{width:100%;border-collapse:collapse;margin-bottom:18px}.meta th,.meta td,.summary th,.summary td{border:1px solid #111827;padding:10px 12px;font-size:14px;vertical-align:top}.meta th,.summary th{background:#f8fafc;text-align:left;width:18%}.summary-note{display:block;margin-top:4px;font-size:12px;color:#475569;font-weight:400}.statement,.notes{font-size:13px;line-height:1.8;color:#111827}.notes-title{font-weight:700;margin:14px 0 6px}.notes ol{padding-left:20px;margin:6px 0 0}.sign-row{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:end;margin-top:22px}.sign-box{border:2px solid #111827;height:120px;padding:12px;font-size:16px;display:flex;align-items:flex-start;justify-content:flex-start}</style></head><body><div class="sheet"><h1>' + esc(payload.trainingYear || '') + '年國立臺灣大學資通安全教育訓練執行情形</h1><table class="meta"><tr><th>一級單位</th><td>' + esc(unitName || '未指定') + '</td><th>填表日期</th><td>' + esc(rocDate.year) + '年' + esc(rocDate.month) + '月' + esc(rocDate.day) + '日</td></tr><tr><th>經辦人</th><td>' + esc(payload.fillerName || payload.submitterName || '') + '</td><th>聯絡電話</th><td>' + esc(payload.submitterPhone || '') + '</td></tr><tr><th>聯絡信箱</th><td colspan="3">' + esc(payload.submitterEmail || '') + '</td></tr></table><table class="summary"><tr><th>單位總人數(人)<span class="summary-note">（勿自行填寫）</span></th><th>單位達成比率<span class="summary-note">（勿自行填寫）</span></th><th>未完成人數(人)<span class="summary-note">（勿自行填寫）</span></th><th>已完成人數(人)<span class="summary-note">（勿自行填寫）</span></th></tr><tr><td>' + (summary.activeCount || 0) + '</td><td>' + (summary.completionRate || 0) + '%</td><td>' + (summary.incompleteCount || 0) + '</td><td>' + (summary.completedCount || 0) + '</td></tr></table><div class="statement">單位是否已留存單位人員教育訓練佐證：是，本單位已留存單位人員教育訓練佐證。</div><div class="notes"><div class="notes-title">資通安全教育訓練統計注意事項:</div><ol><li>此表單將會作為校內資通安全二方稽核依據,請單位確實辦理。</li><li>請單位自行留存單位人員教育訓練佐證,佐證將於資通安全二方稽核時抽查審閱。</li><li>教育訓練佐證應包含:人員姓名、人員職稱、已完成之課程名稱、認證時數之單位、認證時數、完成課程之日期。</li><li>教育訓練佐證範例(皆須含上述內容):課程證書、認證時數之單位往來信件截圖、相關教育訓練系統截圖(如:公務人員終身學習網站-個人資料夾-查詢學習時數、e等公務員學習平台-個人專區-學習紀錄查詢時數、臺灣大學資通盤點系統-其他服務-研習證明-證書清單)。</li><li>線上資安教育訓練資源可參考本校網站:https://isms.ntu.edu.tw/e-learning.html (網站路徑:計中網站-資安專區-資通安全管理-教育訓練-線上課程資源)。</li></ol></div><div class="sign-row"><div></div><div class="sign-box">一級主管</div></div></div></body></html>';
+      return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>資安教育訓練簽核表</title><style>body{font-family:"Noto Sans TC",sans-serif;color:#111827;margin:0;padding:24px}.sheet{max-width:960px;margin:0 auto}h1{font-size:24px;text-align:center;margin:0 0 18px}.meta,.summary,.confirm-table{width:100%;border-collapse:collapse;margin-bottom:18px}.meta th,.meta td,.summary th,.summary td,.confirm-table th,.confirm-table td{border:1px solid #111827;padding:10px 12px;font-size:14px;vertical-align:top}.meta th,.summary th,.confirm-table th{background:#f8fafc;text-align:left;width:18%}.summary-note{display:block;margin-top:4px;font-size:12px;color:#475569;font-weight:400}.confirm-check{display:inline-flex;align-items:center;gap:10px;font-weight:600}.checkbox-box{display:inline-block;width:18px;height:18px;border:1.5px solid #111827;box-sizing:border-box}.notes{font-size:13px;line-height:1.8;color:#111827}.notes-title{font-weight:700;margin:14px 0 6px}.notes ol{padding-left:20px;margin:6px 0 0}.sign-row{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:end;margin-top:22px}.sign-box{border:2px solid #111827;height:120px;padding:12px;font-size:16px;display:flex;align-items:flex-start;justify-content:flex-start}</style></head><body><div class="sheet"><h1>' + esc(payload.trainingYear || '') + '年國立臺灣大學資通安全教育訓練執行情形</h1><table class="meta"><tr><th>一級單位</th><td>' + esc(unitName || '未指定') + '</td><th>填表日期</th><td>' + esc(rocDate.year) + '年' + esc(rocDate.month) + '月' + esc(rocDate.day) + '日</td></tr><tr><th>經辦人</th><td>' + esc(payload.fillerName || payload.submitterName || '') + '</td><th>聯絡電話</th><td>' + esc(payload.submitterPhone || '') + '</td></tr><tr><th>聯絡信箱</th><td colspan="3">' + esc(payload.submitterEmail || '') + '</td></tr></table><table class="summary"><tr><th>單位總人數(人)<span class="summary-note">（勿自行填寫）</span></th><th>單位達成比率<span class="summary-note">（勿自行填寫）</span></th><th>未完成人數(人)<span class="summary-note">（勿自行填寫）</span></th><th>已完成人數(人)<span class="summary-note">（勿自行填寫）</span></th></tr><tr><td>' + (summary.activeCount || 0) + '</td><td>' + (summary.completionRate || 0) + '%</td><td>' + (summary.incompleteCount || 0) + '</td><td>' + (summary.completedCount || 0) + '</td></tr></table><table class="confirm-table"><tr><th>單位是否已留存單位人員教育訓練佐證</th><td><span class="confirm-check"><span class="checkbox-box"></span><span>是，本單位已留存單位人員教育訓練佐證。</span></span></td></tr></table><div class="notes"><div class="notes-title">資通安全教育訓練統計注意事項:</div><ol><li>此表單將會作為校內資通安全二方稽核依據，請單位確實辦理。</li><li>請單位自行留存單位人員教育訓練佐證，佐證將於資通安全二方稽核時抽查審閱。</li><li>教育訓練佐證應包含：人員姓名、人員職稱、已完成之課程名稱、認證時數之單位、認證時數、完成課程之日期。</li><li>教育訓練佐證範例（皆須含上述內容）：課程證書、認證時數之單位往來信件截圖、相關教育訓練系統截圖（如：公務人員終身學習網站、e 等公務員學習平台、臺灣大學資通盤點系統等）。</li><li>線上資安教育訓練資源可參考本校網站：https://isms.ntu.edu.tw/e-learning.html</li></ol></div><div class="sign-row"><div></div><div class="sign-box">一級主管</div></div></div></body></html>';
     }
 
     function printTrainingSheet(payload) {
@@ -452,7 +575,7 @@
         const exists = rosterRows.some((item) => (row.rosterId && item.rosterId === row.rosterId) || item.name === row.name);
         if (!exists) rosterRows.push(normalizeTrainingRecordRow(row, targetUnit || row.unit));
       });
-      return rosterRows.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+      return sortTrainingRosterEntries(rosterRows);
     }
 
     function seedData() {
@@ -502,7 +625,10 @@
       buildUploadSignature,
       validateUploadFile,
       prepareUploadBatch,
+      compareTrainingRosterEntries,
+      sortTrainingRosterEntries,
       csvCell,
+      downloadCsvFile,
       downloadWorkbook,
       exportTrainingSummaryCsv,
       exportTrainingDetailCsv,

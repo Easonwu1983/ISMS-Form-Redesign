@@ -3,8 +3,9 @@
   // and fill in the real values there. The app will load it after
   // `m365-config.js` and merge these overrides at runtime.
   window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__ = {
-    activeProfile: 'a3CampusBackend',
-    unitContactMode: 'm365-api',
+  activeProfile: 'a3CampusBackend',
+  strictRemoteData: true,
+  unitContactMode: 'm365-api',
     unitContactSubmitEndpoint: 'https://YOUR-CAMPUS-HOST/api/unit-contact/apply',
     unitContactStatusEndpoint: 'https://YOUR-CAMPUS-HOST/api/unit-contact/status',
     unitContactStatusLookupMethod: 'POST',

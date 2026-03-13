@@ -1,8 +1,10 @@
-const CONTRACT_VERSION = '2026-03-13';
+﻿const CONTRACT_VERSION = '2026-03-13';
 
 const AUTH_ACTIONS = {
   LOGIN: 'auth.login',
-  RESET_PASSWORD: 'auth.reset-password-by-email'
+  REQUEST_RESET: 'auth.request-reset',
+  REDEEM_RESET: 'auth.redeem-reset',
+  CHANGE_PASSWORD: 'auth.change-password'
 };
 
 function cleanText(value) {
@@ -30,6 +32,13 @@ function validateActionEnvelope(envelope, expectedAction) {
   }
 }
 
+function validateNextPassword(password, fieldName) {
+  const label = cleanText(fieldName) || 'password';
+  const value = cleanText(password);
+  if (!value) throw createError('Missing ' + label, 400);
+  if (value.length < 8) throw createError('Password must be at least 8 characters', 400);
+}
+
 function normalizeLoginPayload(payload) {
   const base = payload && typeof payload === 'object' ? payload : {};
   return {
@@ -43,18 +52,50 @@ function validateLoginPayload(payload) {
   if (!cleanText(payload.password)) throw createError('Missing password', 400);
 }
 
-function normalizeResetPasswordPayload(payload) {
+function normalizeRequestResetPayload(payload) {
   const base = payload && typeof payload === 'object' ? payload : {};
   return {
+    username: cleanText(base.username || base.userName || base.UserName),
     email: cleanEmail(base.email || base.Email),
-    password: cleanText(base.password || base.Password),
     actorEmail: cleanEmail(base.actorEmail || base.ActorEmail),
     actorName: cleanText(base.actorName || base.ActorName)
   };
 }
 
-function validateResetPasswordPayload(payload) {
+function validateRequestResetPayload(payload) {
+  if (!cleanText(payload.username)) throw createError('Missing username', 400);
   if (!cleanEmail(payload.email)) throw createError('Missing email', 400);
+}
+
+function normalizeRedeemResetPayload(payload) {
+  const base = payload && typeof payload === 'object' ? payload : {};
+  return {
+    username: cleanText(base.username || base.userName || base.UserName),
+    token: cleanText(base.token || base.resetToken || base.ResetToken),
+    newPassword: cleanText(base.newPassword || base.password || base.Password)
+  };
+}
+
+function validateRedeemResetPayload(payload) {
+  if (!cleanText(payload.username)) throw createError('Missing username', 400);
+  if (!cleanText(payload.token)) throw createError('Missing reset token', 400);
+  validateNextPassword(payload.newPassword, 'new password');
+}
+
+function normalizeChangePasswordPayload(payload) {
+  const base = payload && typeof payload === 'object' ? payload : {};
+  return {
+    username: cleanText(base.username || base.userName || base.UserName),
+    currentPassword: cleanText(base.currentPassword || base.password || base.Password),
+    newPassword: cleanText(base.newPassword || base.NextPassword),
+    sessionToken: cleanText(base.sessionToken || base.token || base.SessionToken)
+  };
+}
+
+function validateChangePasswordPayload(payload) {
+  if (!cleanText(payload.username)) throw createError('Missing username', 400);
+  if (!cleanText(payload.currentPassword)) throw createError('Missing current password', 400);
+  validateNextPassword(payload.newPassword, 'new password');
 }
 
 module.exports = {
@@ -64,8 +105,13 @@ module.exports = {
   cleanEmail,
   createError,
   normalizeLoginPayload,
-  normalizeResetPasswordPayload,
+  normalizeRequestResetPayload,
+  normalizeRedeemResetPayload,
+  normalizeChangePasswordPayload,
   validateActionEnvelope,
   validateLoginPayload,
-  validateResetPasswordPayload
+  validateRequestResetPayload,
+  validateRedeemResetPayload,
+  validateChangePasswordPayload,
+  validateNextPassword
 };

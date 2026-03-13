@@ -8,6 +8,8 @@
       login,
       logout,
       resetPasswordByEmail,
+      redeemResetPassword,
+      changePassword,
       getVisibleItems,
       isOverdue,
       getRoute,
@@ -69,15 +71,21 @@
         '</form>' +
         '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h3 class="login-entry-title">申請單位管理人員</h3><p class="login-entry-text">如需新增或異動各單位管理窗口，請先送出 M365 單位管理人申請，再由系統管理者建立登入帳號。</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">前往申請</a><a class="btn btn-secondary" href="#apply-unit-contact-status">查詢進度</a></div></div>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">忘記密碼？</a></p></div>' +
+        '<div id="change-panel" style="display:none">' +
+        '<div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">首次登入需變更密碼</h3></div>' +
+        '<div class="login-error" id="change-error">密碼變更失敗</div>' +
+        '<form class="login-form" id="change-form"><input type="hidden" id="change-username"><input type="hidden" id="change-current-password"><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="change-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="change-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' 立即更新密碼</button></form>' +
+        '<p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
         '<div id="forgot-panel" style="display:none">' +
         '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h3></div>' +
-        '<div class="login-error" id="forgot-error">找不到對應電子信箱的帳號</div>' +
-        '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">註冊電子信箱</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入帳號綁定的電子信箱" required></div>' +
-        '<button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 產生新密碼</button></form>' +
-        '<div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;text-align:center">' +
-        '<p style="font-size:.88rem;color:#15803d;font-weight:600">密碼已重設成功</p>' +
+        '<div class="login-error" id="forgot-error">找不到符合帳號與信箱的使用者</div>' +
+        '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="forgot-username" placeholder="請輸入帳號" required></div><div class="form-group"><label class="form-label">註冊電子信箱</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入帳號綁定的電子信箱" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 取得重設代碼</button></form>' +
+        '<div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px">' +
+        '<p style="font-size:.88rem;color:#0f172a;font-weight:600">已產生一次性重設代碼</p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary)">帳號：<strong id="reset-username"></strong></p>' +
-        '<p style="font-size:1.1rem;font-weight:700;color:var(--text-heading);margin-top:6px;font-family:monospace;background:#f0f2f7;padding:8px;border-radius:8px" id="reset-newpass"></p></div>' +
+        '<p style="font-size:.82rem;color:var(--text-secondary)">有效期限：<strong id="reset-expire"></strong></p>' +
+        '<p style="font-size:1.1rem;font-weight:700;color:var(--text-heading);margin-top:6px;font-family:monospace;background:#f0f2f7;padding:8px;border-radius:8px" id="reset-token"></p>' +
+        '<form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><input type="hidden" id="redeem-token"><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="redeem-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="redeem-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' 完成重設</button></form></div>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
         '<div class="login-hint"><p>測試帳號</p><table>' +
         '<tr><th>角色</th><th>帳號</th><th>密碼</th></tr>' +
@@ -87,6 +95,17 @@
         '<tr><td>跨單位檢視者</td><td>viewer1</td><td>viewer123</td></tr>' +
         '</table></div></div></div><div class="toast-container" id="toast-container"></div>';
 
+      function switchPanel(target) {
+        ['login-panel', 'forgot-panel', 'change-panel'].forEach(function (id) {
+          var panel = document.getElementById(id);
+          if (panel) panel.style.display = id === target ? 'block' : 'none';
+        });
+        ['login-error', 'forgot-error', 'change-error'].forEach(function (id) {
+          var errorEl = document.getElementById(id);
+          if (errorEl) errorEl.classList.remove('show');
+        });
+      }
+
       document.getElementById('login-form').addEventListener('submit', async function (e) {
         e.preventDefault();
         var u = document.getElementById('login-user').value.trim();
@@ -94,6 +113,13 @@
         try {
           var user = await login(u, p);
           if (user) {
+            if (user.mustChangePassword) {
+              document.getElementById('change-username').value = u;
+              document.getElementById('change-current-password').value = p;
+              switchPanel('change-panel');
+              toast('請先變更密碼後再進入系統', 'info');
+              return;
+            }
             toast('登入成功，歡迎 ' + user.name, 'success');
             setTimeout(function () { renderApp(); }, 300);
           } else {
@@ -105,37 +131,93 @@
         }
       });
 
+      document.getElementById('change-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var username = document.getElementById('change-username').value.trim();
+        var currentPassword = document.getElementById('change-current-password').value;
+        var nextPassword = document.getElementById('change-pass').value;
+        var confirmPassword = document.getElementById('change-pass-confirm').value;
+        if (nextPassword !== confirmPassword) {
+          document.getElementById('change-error').textContent = '兩次輸入的新密碼不一致';
+          document.getElementById('change-error').classList.add('show');
+          return;
+        }
+        try {
+          var updatedUser = await changePassword({ username: username, currentPassword: currentPassword, newPassword: nextPassword });
+          if (!updatedUser) {
+            document.getElementById('change-error').textContent = '密碼變更失敗';
+            document.getElementById('change-error').classList.add('show');
+            return;
+          }
+          toast('密碼已更新，請重新登入系統', 'success');
+          switchPanel('login-panel');
+          document.getElementById('login-user').value = username;
+          document.getElementById('login-pass').value = '';
+        } catch (error) {
+          document.getElementById('change-error').textContent = String(error && error.message || error || '密碼變更失敗');
+          document.getElementById('change-error').classList.add('show');
+        }
+      });
+
       document.getElementById('forgot-link').addEventListener('click', function (e) {
         e.preventDefault();
-        document.getElementById('login-panel').style.display = 'none';
-        document.getElementById('login-error').classList.remove('show');
-        document.getElementById('forgot-panel').style.display = 'block';
+        switchPanel('forgot-panel');
       });
 
       document.getElementById('back-login-link').addEventListener('click', function (e) {
         e.preventDefault();
-        document.getElementById('forgot-panel').style.display = 'none';
-        document.getElementById('login-panel').style.display = 'block';
+        switchPanel('login-panel');
+      });
+
+      document.getElementById('change-back-login-link').addEventListener('click', function (e) {
+        e.preventDefault();
+        switchPanel('login-panel');
       });
 
       document.getElementById('forgot-form').addEventListener('submit', async function (e) {
         e.preventDefault();
+        var username = document.getElementById('forgot-username').value.trim();
         var email = document.getElementById('forgot-email').value.trim();
         try {
-          var resetResult = await resetPasswordByEmail(email);
+          var resetResult = await resetPasswordByEmail({ username: username, email: email });
           if (!resetResult) {
             document.getElementById('forgot-error').classList.add('show');
             return;
           }
           document.getElementById('forgot-error').classList.remove('show');
           document.getElementById('reset-username').textContent = resetResult.user.username;
-          document.getElementById('reset-newpass').textContent = resetResult.password;
+          document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || '依系統設定';
+          document.getElementById('reset-token').textContent = resetResult.resetToken || resetResult.password || '';
+          document.getElementById('redeem-username').value = resetResult.user.username;
+          document.getElementById('redeem-token').value = resetResult.resetToken || 'LOCAL-RESET';
           document.getElementById('forgot-result').style.display = 'block';
-          document.getElementById('forgot-form').style.display = 'none';
-          toast('撖Ⅳ撌脤?閮剜???', 'info');
+          toast('已產生一次性重設代碼', 'info');
         } catch (error) {
+          document.getElementById('forgot-error').textContent = String(error && error.message || error || '密碼重設失敗');
           document.getElementById('forgot-error').classList.add('show');
-          toast(String(error && error.message || error || '密碼重設失敗'), 'error');
+        }
+      });
+
+      document.getElementById('redeem-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var username = document.getElementById('redeem-username').value.trim();
+        var token = document.getElementById('redeem-token').value.trim();
+        var nextPassword = document.getElementById('redeem-pass').value;
+        var confirmPassword = document.getElementById('redeem-pass-confirm').value;
+        if (nextPassword !== confirmPassword) {
+          toast('兩次輸入的新密碼不一致', 'error');
+          return;
+        }
+        try {
+          var user = await redeemResetPassword({ username: username, token: token, newPassword: nextPassword });
+          if (!user) {
+            toast('重設代碼無效或已過期', 'error');
+            return;
+          }
+          toast('密碼已重設並完成登入', 'success');
+          setTimeout(function () { renderApp(); }, 300);
+        } catch (error) {
+          toast(String(error && error.message || error || '重設密碼失敗'), 'error');
         }
       });
 

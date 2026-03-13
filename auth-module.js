@@ -1,4 +1,4 @@
-(function () {
+Ôªø(function () {
   window.createAuthModule = function createAuthModule(deps) {
     const {
       AUTH_KEY,
@@ -14,8 +14,12 @@
       updateUser,
       addLoginLog,
       loginWithBackend,
-      resetPasswordWithBackend
+      resetPasswordWithBackend,
+      redeemResetPasswordWithBackend,
+      changePasswordWithBackend
     } = deps;
+
+    const PRIMARY_ADMIN_NAME = 'Ë®àÁÆóÊ©üÂèäË≥áË®äÁ∂≤Ë∑Ø‰∏≠ÂøÉ';
 
     function readAuthSession() {
       try {
@@ -49,7 +53,33 @@
 
     function currentUser() {
       const user = readAuthSession();
-      return user ? normalizeUserRecord(user) : null;
+      if (!user) return null;
+      const expiresAt = String(user.sessionExpiresAt || '').trim();
+      if (expiresAt) {
+        const expiresAtMs = Date.parse(expiresAt);
+        if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+          sessionStorage.removeItem(AUTH_KEY);
+          return null;
+        }
+      }
+      const normalized = normalizeUserRecord(user);
+      const canonical = normalized.username ? findUser(normalized.username) : null;
+      if (canonical) {
+        const merged = normalizeUserRecord({
+          ...canonical,
+          ...normalized,
+          ...(normalized.username === 'admin' ? { name: PRIMARY_ADMIN_NAME, role: ROLES.ADMIN } : {}),
+          activeUnit: normalized.activeUnit || canonical.activeUnit || ''
+        });
+        if (JSON.stringify(merged) !== JSON.stringify(normalized)) writeAuthSession(merged);
+        return merged;
+      }
+      if (normalized.username === 'admin' && normalized.name !== PRIMARY_ADMIN_NAME) {
+        const repaired = normalizeUserRecord({ ...normalized, name: PRIMARY_ADMIN_NAME, role: ROLES.ADMIN, activeUnit: '' });
+        writeAuthSession(repaired);
+        return repaired;
+      }
+      return normalized;
     }
 
     function generatePassword() {
@@ -127,8 +157,8 @@
         admin.role = ROLES.ADMIN;
         changed = true;
       }
-      if (admin.name !== '≠p∫‚æ˜§Œ∏Í∞T∫Ù∏Ù§§§ﬂ') {
-        admin.name = '≠p∫‚æ˜§Œ∏Í∞T∫Ù∏Ù§§§ﬂ';
+      if (admin.name !== PRIMARY_ADMIN_NAME) {
+        admin.name = PRIMARY_ADMIN_NAME;
         changed = true;
       }
 
@@ -136,23 +166,51 @@
 
       const auth = readAuthSession();
       if (auth && auth.username === 'admin') {
-        writeAuthSession({ ...auth, role: ROLES.ADMIN, name: '≠p∫‚æ˜§Œ∏Í∞T∫Ù∏Ù§§§ﬂ' });
+        writeAuthSession({ ...auth, role: ROLES.ADMIN, name: PRIMARY_ADMIN_NAME });
       }
     }
 
-    async function resetPasswordByEmail(email) {
+    async function resetPasswordByEmail(input) {
+      const payload = input && typeof input === 'object' ? input : { email: input };
       if (typeof resetPasswordWithBackend === 'function') {
-        return resetPasswordWithBackend(email);
+        return resetPasswordWithBackend(payload);
       }
-      const user = findUserByEmail(email);
+      const user = findUserByEmail(payload.email);
       if (!user) return null;
       const nextPassword = generatePassword();
-      updateUser(user.username, { password: nextPassword });
+      updateUser(user.username, { password: nextPassword, mustChangePassword: true });
       return {
         user: normalizeUserRecord(user),
         password: nextPassword,
         source: 'local'
       };
+    }
+
+    async function redeemResetPassword(payload) {
+      const input = payload && typeof payload === 'object' ? payload : {};
+      if (typeof redeemResetPasswordWithBackend === 'function') {
+        const user = await redeemResetPasswordWithBackend(input);
+        return user ? writeAuthSession(user) : null;
+      }
+      const matched = findUser(input.username);
+      if (!matched || String(input.token || '').trim() !== 'LOCAL-RESET') return null;
+      updateUser(matched.username, { password: String(input.newPassword || '').trim(), mustChangePassword: false });
+      return writeAuthSession({ ...matched, password: '', mustChangePassword: false });
+    }
+
+    async function changePassword(payload) {
+      const input = payload && typeof payload === 'object' ? payload : {};
+      if (typeof changePasswordWithBackend === 'function') {
+        const user = await changePasswordWithBackend({
+          ...input,
+          sessionToken: currentUser() && currentUser().sessionToken
+        });
+        return user ? writeAuthSession(user) : null;
+      }
+      const matched = findUser(input.username);
+      if (!matched || String(matched.password || '') !== String(input.currentPassword || '')) return null;
+      updateUser(matched.username, { password: String(input.newPassword || '').trim(), mustChangePassword: false });
+      return writeAuthSession({ ...matched, password: '', mustChangePassword: false });
     }
 
     return {
@@ -165,7 +223,9 @@
       getScopedUnit,
       switchCurrentUserUnit,
       ensurePrimaryAdminProfile,
-      resetPasswordByEmail
+      resetPasswordByEmail,
+      redeemResetPassword,
+      changePassword
     };
   };
 })();

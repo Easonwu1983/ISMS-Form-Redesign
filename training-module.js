@@ -56,6 +56,7 @@
       getTrainingStatsUnit,
       getTrainingJobUnit,
       getTrainingUnits,
+      sortTrainingRosterEntries,
       syncTrainingFormsFromM365,
       syncTrainingRostersFromM365,
       submitTrainingDraft,
@@ -100,6 +101,19 @@
       + '<div class="stat-card closed"><div class="stat-icon">' + ic('check-circle-2') + '</div><div class="stat-value">' + summary.submitted + '</div><div class="stat-label">已完成填報</div></div>'
       + '<div class="stat-card pending"><div class="stat-icon">' + ic('clock-3') + '</div><div class="stat-value">' + summary.pending + '</div><div class="stat-label">待簽核</div></div>'
       + '<div class="stat-card overdue"><div class="stat-icon">' + ic('rotate-ccw') + '</div><div class="stat-value">' + (summary.draft + summary.returned) + '</div><div class="stat-label">待補件 / 草稿</div></div>';
+  }
+
+  function getTrainingDashboardUnits() {
+    const unitSet = new Set();
+    getTrainingUnits().forEach((unit) => {
+      const statsUnit = String(getTrainingStatsUnit(unit) || '').trim();
+      if (statsUnit) unitSet.add(statsUnit);
+    });
+    getAllTrainingForms().forEach((form) => {
+      const statsUnit = String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim();
+      if (statsUnit) unitSet.add(statsUnit);
+    });
+    return Array.from(unitSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   }
 
   function buildTrainingTableCard(title, subtitle, badgeText, headersHtml, rowsHtml) {
@@ -360,8 +374,10 @@
     let contentHtml = '';
     if (isAdmin()) {
       const allForms = getAllTrainingForms();
-      const latestByUnit = getTrainingUnits().map((unit) => {
-        const latest = allForms.filter((form) => form.unit === unit).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0] || null;
+      const latestByUnit = getTrainingDashboardUnits().map((unit) => {
+        const latest = allForms
+          .filter((form) => String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim() === unit)
+          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0] || null;
         return {
           unit,
           latest,
@@ -407,7 +423,7 @@
 
       contentHtml = '<div class="training-dashboard-sections">'
         + buildTrainingTableCard('已完成填報', '填報清單已併入此區，方便直接查看已完成資料與下載。', completedUnits.length + ' 個單位', '<th>統計單位</th><th>填報單位</th><th>編號</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>未完成</th><th>達成比率</th><th>完成時間</th><th>操作</th>', completedRows)
-        + buildTrainingTableCard('未完成填報', '包含尚未填報、暫存、退回更正與待簽核中的單位。', incompleteUnits.length + ' 個單位', '<th>填報單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th>', incompleteRows)
+        + buildTrainingTableCard('未完成填報', '此區僅列一級單位，包含尚未填報、暫存、退回更正與待簽核中的單位。', incompleteUnits.length + ' 個單位', '<th>一級單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th>', incompleteRows)
         + '</div>';
     } else {
       const rows = visibleForms.length ? visibleForms.map((form) => {
@@ -662,7 +678,9 @@
           if (!rowsState[idx] || !field) return;
           rowsState[idx] = normalizeTrainingRecordRow({ ...rowsState[idx], [field]: event.target.value }, document.getElementById('tr-unit').value);
           persistEditableRosterRow(rowsState[idx]);
+          rowsState = sortTrainingRosterEntries(rowsState);
           markTrainingDirty();
+          renderRows();
         });
       });
 
@@ -943,7 +961,7 @@
     const summary = form.summary || computeTrainingSummary(form.records || []);
     const detailRows = buildTrainingDetailRows(form.records || []);
     const timeline = (form.history || []).slice().reverse().map((item) => '<div class="timeline-item"><div class="timeline-time">' + fmtTime(item.time) + '</div><div class="timeline-text">' + esc(item.action) + ' · ' + esc(item.user || '系統') + '</div></div>').join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
-    const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
+      const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出明細 CSV</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
     if (canEditTrainingForm(form)) actions.unshift('<a href="#training-fill/' + form.id + '" class="btn btn-primary">' + ic('edit-3', 'icon-sm') + ' 繼續填報</a>');
     if (canUndo) actions.unshift('<button type="button" class="btn btn-warning" id="training-undo-step-one">' + ic('rotate-ccw', 'icon-sm') + ' 撤回流程一</button>');
     if (isAdmin() && form.status === TRAINING_STATUSES.SUBMITTED) actions.unshift('<button type="button" class="btn btn-danger" data-action="training.return" data-id="' + esc(form.id) + '">' + ic('corner-up-left', 'icon-sm') + ' 退回更正</button>');
@@ -1112,9 +1130,12 @@
       await syncTrainingRostersFromM365({ silent: true });
     } catch (_) { }
 
-    const rosters = getAllTrainingRosters().slice().sort((a, b) => {
-      if (a.unit === b.unit) return a.name.localeCompare(b.name, 'zh-Hant');
-      return a.unit.localeCompare(b.unit, 'zh-Hant');
+    const rosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
+      const statsCompare = String(a.statsUnit || getTrainingStatsUnit(a.unit)).localeCompare(String(b.statsUnit || getTrainingStatsUnit(b.unit)), 'zh-Hant');
+      if (statsCompare !== 0) return statsCompare;
+      const unitCompare = String(a.unit || '').localeCompare(String(b.unit || ''), 'zh-Hant');
+      if (unitCompare !== 0) return unitCompare;
+      return 0;
     });
     const summary = {
       total: rosters.length,

@@ -157,6 +157,8 @@
   function ensurePrimaryAdminProfile() { return getAuthModule().ensurePrimaryAdminProfile(); }
   function generatePassword() { return getAuthModule().generatePassword(); }
   function resetPasswordByEmail(email) { return getAuthModule().resetPasswordByEmail(email); }
+  function redeemResetPassword(payload) { return getAuthModule().redeemResetPassword(payload); }
+  function changePassword(payload) { return getAuthModule().changePassword(payload); }
   function loadLoginLogs() { return getDataModule().loadLoginLogs(); }
   function saveLoginLogs(logs) { return getDataModule().saveLoginLogs(logs); }
   function addLoginLog(username, user, success) { return getDataModule().addLoginLog(username, user, success); }
@@ -451,7 +453,9 @@
       updateUser: function (username, updates) { return getDataModule().updateUser(username, updates); },
       addLoginLog: function (username, user, success) { return getDataModule().addLoginLog(username, user, success); },
       loginWithBackend: submitBackendLogin,
-      resetPasswordWithBackend: submitAuthResetPasswordByEmail
+      resetPasswordWithBackend: submitAuthResetPasswordByEmail,
+      redeemResetPasswordWithBackend: submitAuthRedeemResetPassword,
+      changePasswordWithBackend: submitAuthChangePassword
     });
     window._authModule = authModuleApi;
     return authModuleApi;
@@ -705,6 +709,7 @@
       getTrainingStatsUnit,
       getTrainingJobUnit,
       getTrainingUnits,
+      sortTrainingRosterEntries,
       syncTrainingFormsFromM365,
       syncTrainingRostersFromM365,
       submitTrainingDraft,
@@ -768,7 +773,9 @@
   const AUTH_CONTRACT_VERSION = '2026-03-13';
   const AUTH_ACTIONS = {
     LOGIN: 'auth.login',
-    RESET_PASSWORD: 'auth.reset-password-by-email'
+    REQUEST_RESET: 'auth.request-reset',
+    REDEEM_RESET: 'auth.redeem-reset',
+    CHANGE_PASSWORD: 'auth.change-password'
   };
   const ATTACHMENT_CONTRACT_VERSION = '2026-03-13';
   const ATTACHMENT_ACTIONS = {
@@ -789,6 +796,15 @@
   }
   function getRuntimeM365Config() {
     return (typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__) || {};
+  }
+  function isStrictRemoteDataMode() {
+    const config = getRuntimeM365Config();
+    if (config.strictRemoteData === true) return true;
+    return String(config.activeProfile || '').trim() === 'a3CampusBackend';
+  }
+  function buildStrictRemoteError(label, error) {
+    const detail = String(error && error.message || error || '').trim();
+    return detail ? (label + '失敗，正式模式已停用本機暫存：' + detail) : (label + '失敗，正式模式已停用本機暫存');
   }
   function getSystemUsersMode() {
     const config = getRuntimeM365Config();
@@ -897,6 +913,12 @@
       activeUnit: role === ROLES.ADMIN ? '' : String(source.activeUnit || source.ActiveUnit || unit).trim(),
       createdAt: String(source.createdAt || source.CreatedAt || '').trim(),
       updatedAt: String(source.updatedAt || source.UpdatedAt || '').trim(),
+      passwordChangedAt: String(source.passwordChangedAt || source.PasswordChangedAt || '').trim(),
+      resetTokenExpiresAt: String(source.resetTokenExpiresAt || source.ResetTokenExpiresAt || '').trim(),
+      mustChangePassword: source.mustChangePassword === true || String(source.MustChangePassword || '').trim().toLowerCase() === 'true',
+      sessionVersion: Number.isFinite(Number(source.sessionVersion || source.SessionVersion)) ? Number(source.sessionVersion || source.SessionVersion) : 1,
+      sessionToken: String(source.sessionToken || source.SessionToken || '').trim(),
+      sessionExpiresAt: String(source.sessionExpiresAt || source.SessionExpiresAt || '').trim(),
       backendMode: String(source.backendMode || source.BackendMode || 'a3-campus-backend').trim(),
       recordSource: String(source.recordSource || source.RecordSource || 'remote').trim()
     });
@@ -1071,7 +1093,8 @@
       recordType: String(opts.recordType || descriptor.recordType || opts.scope || descriptor.scope || '').trim()
     });
   }
-  function mergeRemoteUsersIntoStore(items) {
+  function mergeRemoteUsersIntoStore(items, options) {
+    const strict = !!(options && options.strict);
     const data = loadData();
     const remoteMap = new Map();
     (Array.isArray(items) ? items : []).forEach(function (item) {
@@ -1080,11 +1103,13 @@
       remoteMap.set(username, normalizeUserRecord(item));
     });
     const merged = Array.from(remoteMap.values());
-    (data.users || []).forEach(function (user) {
-      const username = String(user && user.username || '').trim().toLowerCase();
-      if (!username || remoteMap.has(username)) return;
-      merged.push(normalizeUserRecord(user));
-    });
+    if (!strict) {
+      (data.users || []).forEach(function (user) {
+        const username = String(user && user.username || '').trim().toLowerCase();
+        if (!username || remoteMap.has(username)) return;
+        merged.push(normalizeUserRecord(user));
+      });
+    }
     data.users = merged;
     saveData(data);
     return data.users.slice();
@@ -1111,6 +1136,7 @@
   async function syncUsersFromM365(options) {
     const opts = options || {};
     const mode = getSystemUsersMode();
+    const strict = isStrictRemoteDataMode();
     setSystemUserRepositoryState({ mode: mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setSystemUserRepositoryState({ ready: false, message: '目前使用本機帳號模式', error: '' });
@@ -1122,8 +1148,10 @@
         if (health && health.ready === false) {
           return setSystemUserRepositoryState({
             ready: false,
-            source: 'local-fallback',
-            message: String(health.message || 'M365 帳號後端尚未就緒，系統維持本機資料模式'),
+            source: strict ? 'remote-error' : 'local-fallback',
+            message: strict
+              ? String(health.message || 'M365 帳號後端尚未就緒，正式模式已停用本機暫存')
+              : String(health.message || 'M365 帳號後端尚未就緒，系統維持本機資料模式'),
             error: String(health.message || '')
           });
         }
@@ -1137,7 +1165,7 @@
         if (cleanValue) url.searchParams.set(key, cleanValue);
       });
       const body = await requestSystemUserJson(url.toString(), { method: 'GET' });
-      mergeRemoteUsersIntoStore(normalizeRemoteSystemUsers(body));
+      mergeRemoteUsersIntoStore(normalizeRemoteSystemUsers(body), { strict: strict });
       return setSystemUserRepositoryState({
         ready: true,
         source: 'remote',
@@ -1148,8 +1176,8 @@
     } catch (error) {
       return setSystemUserRepositoryState({
         ready: false,
-        source: 'local-fallback',
-        message: 'M365 帳號後端尚未就緒，系統維持本機資料模式',
+        source: strict ? 'remote-error' : 'local-fallback',
+        message: strict ? 'M365 帳號後端連線失敗，正式模式已停用本機暫存' : 'M365 帳號後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -1185,6 +1213,10 @@
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '帳號資料已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 帳號寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('帳號資料寫入', error));
+      }
       if (existing) updateUser(requestPayload.username, requestPayload);
       else addUser(requestPayload);
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
@@ -1207,6 +1239,10 @@
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '帳號刪除已寫入 M365', error: '' });
       return { ok: true, deletedId: cleanUsername, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 帳號刪除失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('帳號刪除', error));
+      }
       deleteSystemUserFromStore(cleanUsername);
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, deletedId: cleanUsername, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
@@ -1217,8 +1253,8 @@
     const matchedUser = input.username ? findUser(input.username) : findUserByEmail(input.email);
     const username = String(input.username || (matchedUser && matchedUser.username) || '').trim();
     if (!username) return null;
-    const fallbackPassword = String(input.password || '').trim() || generatePassword();
     if (getSystemUsersMode() !== 'm365-api') {
+      const fallbackPassword = String(input.password || '').trim() || generatePassword();
       updateUser(username, { password: fallbackPassword });
       return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local' };
     }
@@ -1227,11 +1263,21 @@
         method: 'POST',
         body: buildSystemUserEnvelope(SYSTEM_USER_ACTIONS.RESET_PASSWORD, input)
       });
-      const item = normalizeRemoteSystemUsers(body)[0] || { ...(matchedUser || {}), username: username, password: String(body && body.password || fallbackPassword).trim() };
-      const stored = upsertSystemUserInStore({ ...item, password: String(body && body.password || item.password || fallbackPassword).trim() });
-      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '密碼重設已寫入 M365', error: '' });
-      return { user: stored, password: String(body && body.password || fallbackPassword).trim(), source: 'remote' };
+      const item = normalizeRemoteSystemUsers(body)[0] || { ...(matchedUser || {}), username: username };
+      const stored = upsertSystemUserInStore(item);
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '密碼重設代碼已寫入 M365', error: '' });
+      return {
+        user: stored,
+        resetToken: String(body && body.resetToken || '').trim(),
+        resetTokenExpiresAt: String(body && body.resetTokenExpiresAt || '').trim(),
+        source: 'remote'
+      };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '重設密碼失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('重設密碼', error));
+      }
+      const fallbackPassword = String(input.password || '').trim() || generatePassword();
       updateUser(username, { password: fallbackPassword });
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
@@ -1268,7 +1314,13 @@
         }
       });
       const item = normalizeRemoteSystemUsers(body)[0];
-      return item ? normalizeUserRecord(item) : null;
+      if (!item) return null;
+      return normalizeUserRecord({
+        ...item,
+        sessionToken: String(body && body.session && body.session.token || '').trim(),
+        sessionExpiresAt: String(body && body.session && body.session.expiresAt || '').trim(),
+        mustChangePassword: body && body.mustChangePassword === true
+      });
     } catch (error) {
       const message = String(error && error.message || error || '').trim();
       if (message === 'Invalid username or password') return null;
@@ -1276,8 +1328,10 @@
     }
   }
   async function submitAuthResetPasswordByEmail(email) {
-    const cleanMail = String(email || '').trim().toLowerCase();
-    if (!cleanMail) return null;
+    const input = email && typeof email === 'object' ? email : { email: email };
+    const cleanMail = String(input.email || '').trim().toLowerCase();
+    const cleanUsername = String(input.username || '').trim();
+    if (!cleanMail || !cleanUsername) return null;
 
     if (getAuthMode() !== 'm365-api') {
       return submitUserResetPassword({ email: cleanMail });
@@ -1292,23 +1346,22 @@
     }
 
     try {
-      const body = await requestAuthJson('/reset-password', {
+      const body = await requestAuthJson('/request-reset', {
         method: 'POST',
         body: {
-          action: AUTH_ACTIONS.RESET_PASSWORD,
+          action: AUTH_ACTIONS.REQUEST_RESET,
           payload: {
+            username: cleanUsername,
             email: cleanMail
           }
         }
       });
-      const item = normalizeRemoteSystemUsers(body)[0] || { email: cleanMail };
-      const stored = upsertSystemUserInStore({
-        ...item,
-        password: String(body && body.password || '').trim()
-      });
+      const item = normalizeRemoteSystemUsers(body)[0] || { email: cleanMail, username: cleanUsername };
+      const stored = upsertSystemUserInStore(item);
       return {
         user: stored,
-        password: String(body && body.password || '').trim(),
+        resetToken: String(body && body.resetToken || '').trim(),
+        resetTokenExpiresAt: String(body && body.resetTokenExpiresAt || '').trim(),
         source: 'remote'
       };
     } catch (error) {
@@ -1316,6 +1369,55 @@
       if (message === 'System user not found') return null;
       throw error;
     }
+  }
+  async function submitAuthRedeemResetPassword(payload) {
+    const input = payload && typeof payload === 'object' ? payload : {};
+    const username = String(input.username || '').trim();
+    const token = String(input.token || '').trim();
+    const newPassword = String(input.newPassword || '').trim();
+    if (!username || !token || !newPassword) return null;
+    const body = await requestAuthJson('/redeem-reset', {
+      method: 'POST',
+      body: {
+        action: AUTH_ACTIONS.REDEEM_RESET,
+        payload: { username: username, token: token, newPassword: newPassword }
+      }
+    });
+    const item = normalizeRemoteSystemUsers(body)[0];
+    if (!item) return null;
+    return normalizeUserRecord({
+      ...item,
+      sessionToken: String(body && body.session && body.session.token || '').trim(),
+      sessionExpiresAt: String(body && body.session && body.session.expiresAt || '').trim(),
+      mustChangePassword: body && body.mustChangePassword === true
+    });
+  }
+  async function submitAuthChangePassword(payload) {
+    const input = payload && typeof payload === 'object' ? payload : {};
+    const username = String(input.username || '').trim();
+    const currentPassword = String(input.currentPassword || '').trim();
+    const newPassword = String(input.newPassword || '').trim();
+    if (!username || !currentPassword || !newPassword) return null;
+    const body = await requestAuthJson('/change-password', {
+      method: 'POST',
+      body: {
+        action: AUTH_ACTIONS.CHANGE_PASSWORD,
+        payload: {
+          username: username,
+          currentPassword: currentPassword,
+          newPassword: newPassword,
+          sessionToken: String(input.sessionToken || '').trim()
+        }
+      }
+    });
+    const item = normalizeRemoteSystemUsers(body)[0];
+    if (!item) return null;
+    return normalizeUserRecord({
+      ...item,
+      sessionToken: String(body && body.session && body.session.token || '').trim(),
+      sessionExpiresAt: String(body && body.session && body.session.expiresAt || '').trim(),
+      mustChangePassword: body && body.mustChangePassword === true
+    });
   }
   const correctiveActionRepositoryState = {
     mode: 'local-emulator',
@@ -1332,7 +1434,8 @@
   function getCorrectiveActionRepositoryState() {
     return { ...correctiveActionRepositoryState };
   }
-  function mergeRemoteCorrectiveActionsIntoStore(items) {
+  function mergeRemoteCorrectiveActionsIntoStore(items, options) {
+    const strict = !!(options && options.strict);
     const data = loadData();
     const remoteMap = new Map();
     (Array.isArray(items) ? items : []).forEach(function (item) {
@@ -1341,11 +1444,13 @@
       remoteMap.set(id, item);
     });
     const merged = Array.from(remoteMap.values());
-    (data.items || []).forEach(function (item) {
-      const id = String(item && item.id || '').trim();
-      if (!id || remoteMap.has(id)) return;
-      merged.push(item);
-    });
+    if (!strict) {
+      (data.items || []).forEach(function (item) {
+        const id = String(item && item.id || '').trim();
+        if (!id || remoteMap.has(id)) return;
+        merged.push(item);
+      });
+    }
     data.items = merged;
     saveData(data);
     return data.items.slice();
@@ -1374,6 +1479,7 @@
     const opts = options || {};
     const client = getM365ApiClient();
     const mode = client.getCorrectiveActionMode();
+    const strict = isStrictRemoteDataMode();
     setCorrectiveActionRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setCorrectiveActionRepositoryState({
@@ -1387,13 +1493,13 @@
       if (health && health.ready === false) {
         return setCorrectiveActionRepositoryState({
           ready: false,
-          source: 'local-fallback',
-          message: String(health.message || 'M365 矯正單後端尚未就緒，系統維持本機資料模式'),
+          source: strict ? 'remote-error' : 'local-fallback',
+          message: strict ? String(health.message || 'M365 矯正單後端尚未就緒，正式模式已停用本機暫存') : String(health.message || 'M365 矯正單後端尚未就緒，系統維持本機資料模式'),
           error: String(health.message || '')
         });
       }
       const response = await client.listCorrectiveActions(opts.query);
-      mergeRemoteCorrectiveActionsIntoStore(response.items || []);
+      mergeRemoteCorrectiveActionsIntoStore(response.items || [], { strict: strict });
       return setCorrectiveActionRepositoryState({
         ready: true,
         source: 'remote',
@@ -1404,8 +1510,8 @@
     } catch (error) {
       return setCorrectiveActionRepositoryState({
         ready: false,
-        source: 'local-fallback',
-        message: 'M365 矯正單後端尚未就緒，系統維持本機資料模式',
+        source: strict ? 'remote-error' : 'local-fallback',
+        message: strict ? 'M365 矯正單後端連線失敗，正式模式已停用本機暫存' : 'M365 矯正單後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -1430,6 +1536,10 @@
       });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 矯正單寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('矯正單建立', error));
+      }
       addItem(item);
       setCorrectiveActionRepositoryState({
         mode: 'm365-api',
@@ -1452,6 +1562,10 @@
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '矯正單回覆已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 矯正單回覆失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('矯正單回覆', error));
+      }
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
@@ -1468,6 +1582,10 @@
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '矯正單審核狀態已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 矯正單審核失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('矯正單審核', error));
+      }
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
@@ -1484,6 +1602,10 @@
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '追蹤提報已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 追蹤提報失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('追蹤提報', error));
+      }
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
@@ -1500,6 +1622,10 @@
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '追蹤審核已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 追蹤審核失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('追蹤審核', error));
+      }
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
@@ -1520,7 +1646,8 @@
   function getChecklistRepositoryState() {
     return { ...checklistRepositoryState };
   }
-  function mergeRemoteChecklistsIntoStore(items) {
+  function mergeRemoteChecklistsIntoStore(items, options) {
+    const strict = !!(options && options.strict);
     const store = loadChecklists();
     const remoteMap = new Map();
     (Array.isArray(items) ? items : []).forEach(function (item) {
@@ -1529,11 +1656,13 @@
       remoteMap.set(id, item);
     });
     const merged = Array.from(remoteMap.values());
-    (store.items || []).forEach(function (item) {
-      const id = String(item && item.id || '').trim();
-      if (!id || remoteMap.has(id)) return;
-      merged.push(item);
-    });
+    if (!strict) {
+      (store.items || []).forEach(function (item) {
+        const id = String(item && item.id || '').trim();
+        if (!id || remoteMap.has(id)) return;
+        merged.push(item);
+      });
+    }
     store.items = merged;
     saveChecklists(store);
     return store.items.slice();
@@ -1567,6 +1696,7 @@
     const opts = options || {};
     const client = getM365ApiClient();
     const mode = client.getChecklistMode();
+    const strict = isStrictRemoteDataMode();
     setChecklistRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setChecklistRepositoryState({
@@ -1580,13 +1710,13 @@
       if (health && health.ready === false) {
         return setChecklistRepositoryState({
           ready: false,
-          source: 'local-fallback',
-          message: String(health.message || 'M365 檢核表後端尚未就緒，系統維持本機資料模式'),
+          source: strict ? 'remote-error' : 'local-fallback',
+          message: strict ? String(health.message || 'M365 檢核表後端尚未就緒，正式模式已停用本機暫存') : String(health.message || 'M365 檢核表後端尚未就緒，系統維持本機資料模式'),
           error: String(health.message || '')
         });
       }
       const response = await client.listChecklists(opts.query);
-      mergeRemoteChecklistsIntoStore(response.items || []);
+      mergeRemoteChecklistsIntoStore(response.items || [], { strict: strict });
       return setChecklistRepositoryState({
         ready: true,
         source: 'remote',
@@ -1597,8 +1727,8 @@
     } catch (error) {
       return setChecklistRepositoryState({
         ready: false,
-        source: 'local-fallback',
-        message: 'M365 檢核表後端尚未就緒，系統維持本機資料模式',
+        source: strict ? 'remote-error' : 'local-fallback',
+        message: strict ? 'M365 檢核表後端連線失敗，正式模式已停用本機暫存' : 'M365 檢核表後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -1622,6 +1752,10 @@
       });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setChecklistRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 檢核表草稿儲存失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('檢核表草稿儲存', error));
+      }
       const stored = persistLocalChecklist(payload);
       setChecklistRepositoryState({
         mode: 'm365-api',
@@ -1652,6 +1786,10 @@
       });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setChecklistRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 檢核表送出失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('檢核表送出', error));
+      }
       const stored = persistLocalChecklist(payload);
       setChecklistRepositoryState({
         mode: 'm365-api',
@@ -1676,7 +1814,8 @@
     Object.assign(trainingRepositoryState, patch || {});
     return { ...trainingRepositoryState };
   }
-  function mergeRemoteTrainingFormsIntoStore(items) {
+  function mergeRemoteTrainingFormsIntoStore(items, options) {
+    const strict = !!(options && options.strict);
     const store = loadTrainingStore();
     const remoteMap = new Map();
     (Array.isArray(items) ? items : []).forEach(function (item) {
@@ -1685,16 +1824,19 @@
       remoteMap.set(id, item);
     });
     const merged = Array.from(remoteMap.values());
-    (store.forms || []).forEach(function (item) {
-      const id = String(item && item.id || '').trim();
-      if (!id || remoteMap.has(id)) return;
-      merged.push(item);
-    });
+    if (!strict) {
+      (store.forms || []).forEach(function (item) {
+        const id = String(item && item.id || '').trim();
+        if (!id || remoteMap.has(id)) return;
+        merged.push(item);
+      });
+    }
     store.forms = merged;
     saveTrainingStore(store);
     return store.forms.slice();
   }
-  function mergeRemoteTrainingRostersIntoStore(items) {
+  function mergeRemoteTrainingRostersIntoStore(items, options) {
+    const strict = !!(options && options.strict);
     const store = loadTrainingStore();
     const remoteMap = new Map();
     (Array.isArray(items) ? items : []).forEach(function (item) {
@@ -1703,11 +1845,13 @@
       remoteMap.set(id, item);
     });
     const merged = Array.from(remoteMap.values());
-    (store.rosters || []).forEach(function (item) {
-      const id = String(item && item.id || '').trim();
-      if (!id || remoteMap.has(id)) return;
-      merged.push(item);
-    });
+    if (!strict) {
+      (store.rosters || []).forEach(function (item) {
+        const id = String(item && item.id || '').trim();
+        if (!id || remoteMap.has(id)) return;
+        merged.push(item);
+      });
+    }
     store.rosters = merged;
     saveTrainingStore(store);
     return store.rosters.slice();
@@ -1745,6 +1889,7 @@
     const opts = options || {};
     const client = getM365ApiClient();
     const mode = client.getTrainingMode();
+    const strict = isStrictRemoteDataMode();
     setTrainingRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setTrainingRepositoryState({ ready: false, message: '目前使用本機暫存模式', error: '' });
@@ -1754,13 +1899,13 @@
       if (health && health.ready === false) {
         return setTrainingRepositoryState({
           ready: false,
-          source: 'local-fallback',
-          message: String(health.message || 'M365 教育訓練後端尚未就緒，系統維持本機資料模式'),
+          source: strict ? 'remote-error' : 'local-fallback',
+          message: strict ? String(health.message || 'M365 教育訓練後端尚未就緒，正式模式已停用本機暫存') : String(health.message || 'M365 教育訓練後端尚未就緒，系統維持本機資料模式'),
           error: String(health.message || '')
         });
       }
       const response = await client.listTrainingForms(opts.query);
-      mergeRemoteTrainingFormsIntoStore(response.items || []);
+      mergeRemoteTrainingFormsIntoStore(response.items || [], { strict: strict });
       return setTrainingRepositoryState({
         ready: true,
         source: 'remote',
@@ -1771,8 +1916,8 @@
     } catch (error) {
       return setTrainingRepositoryState({
         ready: false,
-        source: 'local-fallback',
-        message: 'M365 教育訓練後端尚未就緒，系統維持本機資料模式',
+        source: strict ? 'remote-error' : 'local-fallback',
+        message: strict ? 'M365 教育訓練後端連線失敗，正式模式已停用本機暫存' : 'M365 教育訓練後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -1781,6 +1926,7 @@
     const opts = options || {};
     const client = getM365ApiClient();
     const mode = client.getTrainingMode();
+    const strict = isStrictRemoteDataMode();
     setTrainingRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setTrainingRepositoryState({ ready: false, message: '目前使用本機暫存模式', error: '' });
@@ -1790,13 +1936,13 @@
       if (health && health.ready === false) {
         return setTrainingRepositoryState({
           ready: false,
-          source: 'local-fallback',
-          message: String(health.message || 'M365 教育訓練後端尚未就緒，系統維持本機資料模式'),
+          source: strict ? 'remote-error' : 'local-fallback',
+          message: strict ? String(health.message || 'M365 教育訓練後端尚未就緒，正式模式已停用本機暫存') : String(health.message || 'M365 教育訓練後端尚未就緒，系統維持本機資料模式'),
           error: String(health.message || '')
         });
       }
       const response = await client.listTrainingRosters(opts.query);
-      mergeRemoteTrainingRostersIntoStore(response.items || []);
+      mergeRemoteTrainingRostersIntoStore(response.items || [], { strict: strict });
       return setTrainingRepositoryState({
         ready: true,
         source: 'remote',
@@ -1807,8 +1953,8 @@
     } catch (error) {
       return setTrainingRepositoryState({
         ready: false,
-        source: 'local-fallback',
-        message: 'M365 教育訓練名單後端尚未就緒，系統維持本機資料模式',
+        source: strict ? 'remote-error' : 'local-fallback',
+        message: strict ? 'M365 教育訓練名單後端連線失敗，正式模式已停用本機暫存' : 'M365 教育訓練名單後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -1825,6 +1971,10 @@
       setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練草稿已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練草稿儲存失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練草稿儲存', error));
+      }
       const stored = persistLocalTrainingForm(payload);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
@@ -1842,6 +1992,10 @@
       setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練流程一已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練流程一送出失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練流程一送出', error));
+      }
       const stored = persistLocalTrainingForm(payload);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
@@ -1859,6 +2013,10 @@
       setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練結案已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練結案失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練結案', error));
+      }
       const stored = persistLocalTrainingForm(payload);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
@@ -1876,6 +2034,10 @@
       setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練退回已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練退回失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練退回', error));
+      }
       const stored = persistLocalTrainingForm(payload);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
@@ -1893,6 +2055,10 @@
       setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練撤回已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練撤回失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練撤回', error));
+      }
       const stored = persistLocalTrainingForm(payload);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
@@ -1909,6 +2075,10 @@
       setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練名單寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練名單寫入', error));
+      }
       const stored = upsertTrainingRosterInStore(payload);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
@@ -1927,6 +2097,10 @@
       setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單刪除已寫入 M365', error: '' });
       return { ok: true, deletedId: cleanId, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練名單刪除失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練名單刪除', error));
+      }
       deleteTrainingRosterFromStore(cleanId);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, deletedId: cleanId, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
@@ -1974,6 +2148,8 @@
       login,
       logout,
       resetPasswordByEmail,
+      redeemResetPassword,
+      changePassword,
       getVisibleItems,
       isOverdue,
       getRoute,
@@ -2500,6 +2676,7 @@
   function getRocDateParts(value) { return getWorkflowSupportModule().getRocDateParts(value); }
   function buildTrainingPrintHtml(payload) { return getWorkflowSupportModule().buildTrainingPrintHtml(payload); }
   function printTrainingSheet(payload) { return getWorkflowSupportModule().printTrainingSheet(payload); }
+  function sortTrainingRosterEntries(rows) { return getWorkflowSupportModule().sortTrainingRosterEntries(rows); }
   function normalizeTrainingImportHeader(value) { return getWorkflowSupportModule().normalizeTrainingImportHeader(value); }
   function buildTrainingRosterHeaderMap(cells) { return getWorkflowSupportModule().buildTrainingRosterHeaderMap(cells); }
   function resolveTrainingImportTargetUnit(defaultUnit, rawUnit, rawStatsUnit) { return getWorkflowSupportModule().resolveTrainingImportTargetUnit(defaultUnit, rawUnit, rawStatsUnit); }

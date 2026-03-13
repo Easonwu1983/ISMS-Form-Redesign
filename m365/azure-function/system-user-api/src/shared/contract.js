@@ -1,4 +1,4 @@
-﻿const CONTRACT_VERSION = '2026-03-12';
+﻿const CONTRACT_VERSION = '2026-03-13';
 
 const USER_ACTIONS = {
   LIST: 'system-user.list',
@@ -93,6 +93,13 @@ function normalizeSystemUserPayload(payload) {
     activeUnit,
     createdAt: cleanText(base.createdAt || base.CreatedAt),
     updatedAt: cleanText(base.updatedAt || base.UpdatedAt),
+    passwordChangedAt: cleanText(base.passwordChangedAt || base.PasswordChangedAt),
+    resetTokenExpiresAt: cleanText(base.resetTokenExpiresAt || base.ResetTokenExpiresAt),
+    resetRequestedAt: cleanText(base.resetRequestedAt || base.ResetRequestedAt),
+    mustChangePassword: base.mustChangePassword === true || cleanText(base.MustChangePassword).toLowerCase() === 'true',
+    sessionVersion: Number.isFinite(Number(base.sessionVersion || base.SessionVersion))
+      ? Number(base.sessionVersion || base.SessionVersion)
+      : 1,
     backendMode: cleanText(base.backendMode || base.BackendMode) || 'a3-campus-backend',
     recordSource: cleanText(base.recordSource || base.RecordSource) || 'frontend'
   };
@@ -102,14 +109,76 @@ function normalizeStoredSystemUser(entry) {
   return normalizeSystemUserPayload(entry);
 }
 
+function readStoredPasswordState(value) {
+  const raw = cleanText(value);
+  if (!raw) {
+    return {
+      raw: '',
+      hasPassword: false,
+      legacy: false,
+      scheme: '',
+      mustChangePassword: false,
+      passwordChangedAt: '',
+      resetTokenHash: '',
+      resetTokenExpiresAt: '',
+      resetRequestedAt: '',
+      sessionVersion: 1
+    };
+  }
+
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        raw,
+        hasPassword: !!cleanText(parsed.hash || parsed.password || parsed.plaintext || raw),
+        legacy: cleanText(parsed.scheme) === 'legacy-plain',
+        scheme: cleanText(parsed.scheme || ''),
+        salt: cleanText(parsed.salt || ''),
+        hash: cleanText(parsed.hash || ''),
+        plaintext: cleanText(parsed.plaintext || ''),
+        mustChangePassword: parsed.mustChangePassword === true,
+        passwordChangedAt: cleanText(parsed.passwordChangedAt || ''),
+        resetTokenHash: cleanText(parsed.resetTokenHash || ''),
+        resetTokenExpiresAt: cleanText(parsed.resetTokenExpiresAt || ''),
+        resetRequestedAt: cleanText(parsed.resetRequestedAt || ''),
+        sessionVersion: Number.isFinite(Number(parsed.sessionVersion)) ? Number(parsed.sessionVersion) : 1
+      };
+    } catch (_) {
+      // fall through to legacy handling
+    }
+  }
+
+  return {
+    raw,
+    hasPassword: true,
+    legacy: true,
+    scheme: 'legacy-plain',
+    salt: '',
+    hash: '',
+    plaintext: raw,
+    mustChangePassword: false,
+    passwordChangedAt: '',
+    resetTokenHash: '',
+    resetTokenExpiresAt: '',
+    resetRequestedAt: '',
+    sessionVersion: 1
+  };
+}
+
 function mapSystemUserForClient(entry) {
   const normalized = normalizeStoredSystemUser(entry);
+  const passwordState = readStoredPasswordState(normalized.password);
   const displayName = cleanText(normalized.name) || DEFAULT_DISPLAY_NAME_BY_USERNAME[cleanText(normalized.username)] || cleanText(normalized.username);
   return {
     ...normalized,
     name: displayName,
     password: '',
-    hasPassword: !!cleanText(normalized.password)
+    hasPassword: passwordState.hasPassword,
+    mustChangePassword: passwordState.mustChangePassword,
+    passwordChangedAt: passwordState.passwordChangedAt,
+    resetTokenExpiresAt: passwordState.resetTokenExpiresAt,
+    sessionVersion: passwordState.sessionVersion
   };
 }
 
@@ -127,6 +196,11 @@ function mapSystemUserToGraphFields(entry) {
     ActiveUnit: item.activeUnit,
     CreatedAt: item.createdAt || null,
     UpdatedAt: item.updatedAt || null,
+    PasswordChangedAt: item.passwordChangedAt || null,
+    ResetTokenExpiresAt: item.resetTokenExpiresAt || null,
+    ResetRequestedAt: item.resetRequestedAt || null,
+    MustChangePassword: item.mustChangePassword ? 'true' : 'false',
+    SessionVersion: Number.isFinite(Number(item.sessionVersion)) ? Number(item.sessionVersion) : 1,
     BackendMode: item.backendMode,
     RecordSource: item.recordSource
   };
@@ -145,6 +219,11 @@ function mapGraphFieldsToSystemUser(fields) {
     activeUnit: fields.ActiveUnit,
     createdAt: fields.CreatedAt,
     updatedAt: fields.UpdatedAt,
+    passwordChangedAt: fields.PasswordChangedAt,
+    resetTokenExpiresAt: fields.ResetTokenExpiresAt,
+    resetRequestedAt: fields.ResetRequestedAt,
+    mustChangePassword: fields.MustChangePassword,
+    sessionVersion: fields.SessionVersion,
     backendMode: fields.BackendMode,
     recordSource: fields.RecordSource
   });
@@ -228,6 +307,7 @@ module.exports = {
   normalizeStoredSystemUser,
   normalizeSystemUserPayload,
   parseUserUnits,
+  readStoredPasswordState,
   validateActionEnvelope,
   validateSystemUserPayload
 };

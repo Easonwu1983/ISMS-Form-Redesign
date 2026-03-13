@@ -81,6 +81,7 @@
     },
     a3CampusBackend: {
       label: 'A3 fallback: campus backend + SharePoint lists',
+      strictRemoteData: true,
       unitContactMode: 'm365-api',
       unitContactSubmitEndpoint: '/api/unit-contact/apply',
       unitContactStatusEndpoint: '/api/unit-contact/status',
@@ -100,7 +101,7 @@
       systemUsersMode: 'm365-api',
       systemUsersEndpoint: '/api/system-users',
       systemUsersHealthEndpoint: '/api/system-users/health',
-      attachmentsMode: 'local-emulator',
+      attachmentsMode: 'm365-api',
       attachmentsEndpoint: '/api/attachments',
       attachmentsHealthEndpoint: '/api/attachments/health',
       unitContactActivationEndpoint: '#activate-unit-contact',
@@ -111,6 +112,7 @@
     },
     azureFunctionCampus: {
       label: 'Campus frontend + Azure Function backend',
+      strictRemoteData: true,
       unitContactMode: 'm365-api',
       unitContactSubmitEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/unit-contact/apply',
       unitContactStatusEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/unit-contact/status',
@@ -130,7 +132,7 @@
       systemUsersMode: 'm365-api',
       systemUsersEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/system-users',
       systemUsersHealthEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/system-users/health',
-      attachmentsMode: 'local-emulator',
+      attachmentsMode: 'm365-api',
       attachmentsEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/attachments',
       attachmentsHealthEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/attachments/health',
       unitContactActivationEndpoint: 'https://YOUR-FUNCTION-APP.azurewebsites.net/api/unit-contact/activate',
