@@ -616,6 +616,12 @@
       syncChecklistsFromM365,
       submitChecklistDraft,
       submitChecklistForm,
+      prepareUploadBatch,
+      createTransientUploadEntry,
+      revokeTransientUploadEntry,
+      persistUploadedEntries,
+      renderAttachmentList,
+      cleanupRenderedAttachmentUrls,
       getChecklistSections,
       saveChecklistSections,
       resetChecklistSections,
@@ -2422,16 +2428,36 @@
     const list = Array.isArray(entries) ? entries : [];
     let changed = false;
     const files = [];
+    const errors = [];
     for (const entry of list) {
       if (!entry) continue;
-      if (entry.driveItemId && !entry.file && !entry.data) {
+      if ((entry.driveItemId || entry.downloadUrl || entry.webUrl) && !entry.file && !entry.data) {
         files.push(normalizeRemoteAttachmentDescriptor(entry, entry));
         continue;
       }
-      changed = true;
-      files.push(await submitAttachmentUpload(entry, options));
+      if (!entry.file && !entry.data && !entry.previewUrl && entry.attachmentId) {
+        const storedBlob = await getAttachmentModule().readStoredBlob(entry.attachmentId);
+        if (!storedBlob) {
+          files.push(normalizeRemoteAttachmentDescriptor(entry, entry));
+          continue;
+        }
+      }
+      try {
+        changed = true;
+        files.push(await submitAttachmentUpload(entry, options));
+      } catch (error) {
+        const message = String(error && error.message || error || 'attachment-migration-failed');
+        console.warn('[attachment-migration]', message, entry && entry.name ? entry.name : '');
+        errors.push({
+          name: String(entry && entry.name || '').trim(),
+          scope: String(options && options.scope || '').trim(),
+          ownerId: String(options && options.ownerId || '').trim(),
+          message
+        });
+        files.push(normalizeRemoteAttachmentDescriptor(entry, entry));
+      }
     }
-    return { files: files, changed: changed };
+    return { files: files, changed: changed, errors: errors };
   }
   function renderAttachmentList(target, files, options) { return getAttachmentModule().renderAttachmentList(target, files, options); }
   function cleanupRenderedAttachmentUrls() { return getAttachmentModule().cleanupRenderedAttachmentUrls(); }
@@ -2489,19 +2515,22 @@
   function seedData() { return getWorkflowSupportModule().seedData(); }
 
   async function migrateCaseAttachmentTree(item) {
-    if (!item || typeof item !== 'object') return false;
+    if (!item || typeof item !== 'object') return { changed: false, errors: [] };
     let changed = false;
+    const errors = [];
     const caseEvidence = await migrateStoredAttachments(item.evidence || [], { prefix: 'car', scope: 'case-evidence', ownerId: item.id });
     if (caseEvidence.changed) {
       item.evidence = caseEvidence.files;
       changed = true;
     }
+    if (Array.isArray(caseEvidence.errors) && caseEvidence.errors.length) errors.push.apply(errors, caseEvidence.errors);
     if (item.pendingTracking && typeof item.pendingTracking === 'object') {
       const pendingEvidence = await migrateStoredAttachments(item.pendingTracking.evidence || [], { prefix: 'trk', scope: 'tracking-evidence', ownerId: item.id });
       if (pendingEvidence.changed) {
         item.pendingTracking = { ...item.pendingTracking, evidence: pendingEvidence.files };
         changed = true;
       }
+      if (Array.isArray(pendingEvidence.errors) && pendingEvidence.errors.length) errors.push.apply(errors, pendingEvidence.errors);
     }
     if (Array.isArray(item.trackings)) {
       const nextTrackings = [];
@@ -2514,20 +2543,24 @@
         } else {
           nextTrackings.push(tracking);
         }
+        if (Array.isArray(migrated.errors) && migrated.errors.length) errors.push.apply(errors, migrated.errors);
       }
       if (trackingsChanged) {
         item.trackings = nextTrackings;
         changed = true;
       }
     }
-    return changed;
+    return { changed, errors };
   }
 
   async function migrateAttachmentStores() {
     let dataChanged = false;
+    const migrationErrors = [];
     const data = loadData();
     for (const item of data.items || []) {
-      if (await migrateCaseAttachmentTree(item)) dataChanged = true;
+      const migratedItem = await migrateCaseAttachmentTree(item);
+      if (migratedItem.changed) dataChanged = true;
+      if (Array.isArray(migratedItem.errors) && migratedItem.errors.length) migrationErrors.push.apply(migrationErrors, migratedItem.errors);
     }
     if (dataChanged) saveData(data);
 
@@ -2539,8 +2572,12 @@
         form.signedFiles = migrated.files;
         trainingChanged = true;
       }
+      if (Array.isArray(migrated.errors) && migrated.errors.length) migrationErrors.push.apply(migrationErrors, migrated.errors);
     }
     if (trainingChanged) saveTrainingStore(trainingStore);
+    if (typeof window !== 'undefined') {
+      window.__ATTACHMENT_MIGRATION_ERRORS__ = migrationErrors;
+    }
   }
 
   let lastStableHash = '';

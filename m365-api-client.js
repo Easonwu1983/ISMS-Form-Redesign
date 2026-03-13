@@ -424,14 +424,22 @@
       const source = entry && typeof entry === 'object' ? entry : {};
       return {
         attachmentId: cleanText(source.attachmentId),
+        driveItemId: cleanText(source.driveItemId),
         name: cleanText(source.name),
-        type: cleanText(source.type),
+        type: cleanText(source.type || source.contentType),
+        contentType: cleanText(source.contentType || source.type),
         size: Number(source.size || 0),
         extension: cleanText(source.extension).toLowerCase(),
         signature: cleanText(source.signature),
         storedAt: cleanText(source.storedAt),
+        uploadedAt: cleanText(source.uploadedAt || source.storedAt),
         scope: cleanText(source.scope),
-        ownerId: cleanText(source.ownerId)
+        ownerId: cleanText(source.ownerId),
+        recordType: cleanText(source.recordType),
+        webUrl: cleanText(source.webUrl),
+        downloadUrl: cleanText(source.downloadUrl),
+        path: cleanText(source.path),
+        storage: cleanText(source.storage) || (cleanText(source.driveItemId) || cleanText(source.downloadUrl) || cleanText(source.webUrl) ? 'm365' : '')
       };
     }
 
@@ -534,7 +542,8 @@
       return {
         compliance: cleanText(base.compliance),
         execution: cleanText(base.execution),
-        evidence: cleanText(base.evidence)
+        evidence: cleanText(base.evidence),
+        evidenceFiles: (Array.isArray(base.evidenceFiles) ? base.evidenceFiles : []).map(normalizeTrainingAttachment)
       };
     }
 
@@ -625,14 +634,22 @@
       const source = entry && typeof entry === 'object' ? entry : {};
       return {
         attachmentId: cleanText(source.attachmentId),
+        driveItemId: cleanText(source.driveItemId),
         name: cleanText(source.name),
-        type: cleanText(source.type),
+        type: cleanText(source.type || source.contentType),
+        contentType: cleanText(source.contentType || source.type),
         size: Number(source.size || 0),
         extension: cleanText(source.extension).toLowerCase(),
         signature: cleanText(source.signature),
         storedAt: cleanText(source.storedAt),
+        uploadedAt: cleanText(source.uploadedAt || source.storedAt),
         scope: cleanText(source.scope),
-        ownerId: cleanText(source.ownerId)
+        ownerId: cleanText(source.ownerId),
+        recordType: cleanText(source.recordType),
+        webUrl: cleanText(source.webUrl),
+        downloadUrl: cleanText(source.downloadUrl),
+        path: cleanText(source.path),
+        storage: cleanText(source.storage) || (cleanText(source.driveItemId) || cleanText(source.downloadUrl) || cleanText(source.webUrl) ? 'm365' : '')
       };
     }
 

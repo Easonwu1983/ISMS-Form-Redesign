@@ -14,6 +14,16 @@ const USER_ROLES = {
   REPORTER: '填報人',
   VIEWER: '跨單位檢視者'
 };
+const DEFAULT_DISPLAY_NAME_BY_USERNAME = {
+  admin: '計算機及資訊網路中心',
+  unit1: '王經理',
+  unit2: '張稽核員',
+  user1: '李工程師',
+  user2: '陳資安主管',
+  user3: '黃工程師',
+  user4: '劉文管人員',
+  viewer1: '跨單位檢視者'
+};
 
 const PASSWORD_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
 
@@ -94,8 +104,10 @@ function normalizeStoredSystemUser(entry) {
 
 function mapSystemUserForClient(entry) {
   const normalized = normalizeStoredSystemUser(entry);
+  const displayName = cleanText(normalized.name) || DEFAULT_DISPLAY_NAME_BY_USERNAME[cleanText(normalized.username)] || cleanText(normalized.username);
   return {
     ...normalized,
+    name: displayName,
     password: '',
     hasPassword: !!cleanText(normalized.password)
   };

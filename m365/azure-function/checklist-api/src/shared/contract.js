@@ -46,12 +46,38 @@ function normalizeNumber(value) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+function normalizeAttachment(entry) {
+  const base = entry && typeof entry === 'object' ? entry : {};
+  return {
+    attachmentId: cleanText(base.attachmentId),
+    driveItemId: cleanText(base.driveItemId),
+    name: cleanText(base.name),
+    type: cleanText(base.type || base.contentType),
+    contentType: cleanText(base.contentType || base.type),
+    size: Number.isFinite(Number(base.size)) ? Number(base.size) : 0,
+    extension: cleanText(base.extension).toLowerCase(),
+    signature: cleanText(base.signature),
+    storedAt: cleanText(base.storedAt),
+    uploadedAt: cleanText(base.uploadedAt || base.storedAt),
+    scope: cleanText(base.scope),
+    ownerId: cleanText(base.ownerId),
+    recordType: cleanText(base.recordType),
+    webUrl: cleanText(base.webUrl),
+    downloadUrl: cleanText(base.downloadUrl),
+    path: cleanText(base.path),
+    storage: cleanText(base.storage) || (cleanText(base.driveItemId) || cleanText(base.downloadUrl) || cleanText(base.webUrl) ? 'm365' : '')
+  };
+}
+
 function normalizeChecklistResult(entry) {
   const base = entry && typeof entry === 'object' ? entry : {};
   return {
     compliance: cleanText(base.compliance),
     execution: cleanText(base.execution),
-    evidence: cleanText(base.evidence)
+    evidence: cleanText(base.evidence),
+    evidenceFiles: Array.isArray(base.evidenceFiles)
+      ? base.evidenceFiles.map(normalizeAttachment).filter((item) => item.attachmentId || item.name)
+      : normalizeJsonField(base.evidenceFiles, () => []).map(normalizeAttachment).filter((item) => item.attachmentId || item.name)
   };
 }
 

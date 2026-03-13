@@ -31,6 +31,12 @@
       syncChecklistsFromM365,
       submitChecklistDraft,
       submitChecklistForm,
+      prepareUploadBatch,
+      createTransientUploadEntry,
+      revokeTransientUploadEntry,
+      persistUploadedEntries,
+      renderAttachmentList,
+      cleanupRenderedAttachmentUrls,
       getChecklistSections,
       saveChecklistSections,
       resetChecklistSections,
@@ -52,6 +58,23 @@
 
     function getChecklistSectionsState() {
       return getChecklistSections();
+    }
+
+    function getChecklistEvidenceFiles(saved) {
+      return Array.isArray(saved && saved.evidenceFiles) ? saved.evidenceFiles.slice() : [];
+    }
+
+    function buildChecklistEvidencePreviewSlot(itemId, extraClass) {
+      return `<div class="file-preview-list checklist-evidence-preview ${esc(extraClass || '')}" id="cl-files-${itemId}"></div>`;
+    }
+
+    function buildChecklistEvidenceReadonlySlot(itemId) {
+      return `<div class="file-preview-list checklist-evidence-preview checklist-evidence-preview--readonly" id="cl-detail-files-${itemId}"></div>`;
+    }
+
+    function buildChecklistEvidenceUpload(item, saved) {
+      const existingCount = getChecklistEvidenceFiles(saved).length;
+      return `<div class="form-group cl-evidence-upload-group"><label class="form-label">佐證檔案</label><label class="training-file-input checklist-file-input"><input type="file" id="cl-file-${item.id}" data-item-id="${item.id}" multiple accept="image/*,.pdf"><span class="training-file-input-copy"><strong>選擇佐證檔</strong><small>${existingCount ? `目前已有 ${existingCount} 份佐證檔` : '支援 JPG / PNG / PDF，單檔上限 5MB'}</small></span></label>${buildChecklistEvidencePreviewSlot(item.id, 'checklist-evidence-files')}</div>`;
     }
 
   function renderChecklistList() {
@@ -81,6 +104,7 @@
         <div class="cl-fields">
           <div class="form-group"><label class="form-label">\u57f7\u884c\u60c5\u5f62\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2">${esc(saved.execution || '')}</textarea></div>
           <div class="form-group"><label class="form-label">\u4f50\u8b49\u8cc7\u6599\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="\u4f8b\u5982\u6587\u4ef6\u540d\u7a31\u3001\u756b\u9762\u622a\u5716\u3001\u8def\u5f91\u6216\u88dc\u5145\u8aaa\u660e" rows="2">${esc(saved.evidence || '')}</textarea></div>
+          ${buildChecklistEvidenceUpload(item, saved)}
         </div>
       </div>
     </div>`;
@@ -93,6 +117,7 @@
   }
 
   function renderChecklistFill(id) {
+    cleanupRenderedAttachmentUrls();
     if (!canFillChecklist()) { navigate('checklist'); toast('\u60a8\u6c92\u6709\u586b\u5831\u6aa2\u6838\u8868\u6b0a\u9650', 'error'); return; }
 
     const u = currentUser();
@@ -207,6 +232,10 @@
     ]);
     initUnitCascade('cl-unit', selectedUnit, { disabled: checklistUnitLocked });
     const checklistForm = document.getElementById('checklist-form');
+    const evidenceFilesState = new Map();
+    getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
+      evidenceFilesState.set(item.id, getChecklistEvidenceFiles(existing?.results?.[item.id] || {}));
+    }));
     clearUnsavedChangesGuard();
 
     function markChecklistDirty() {
@@ -218,6 +247,68 @@
       document.getElementById('cl-side-date').textContent = document.getElementById('cl-date').value ? fmt(document.getElementById('cl-date').value) : '未指定';
       document.getElementById('cl-side-year').textContent = document.getElementById('cl-year').value || '未指定';
       document.getElementById('cl-side-sign-status').textContent = document.getElementById('cl-sign-status').value || '待簽核';
+    }
+
+    function getChecklistOwnerId() {
+      const unitValue = checklistUnitLocked ? (getScopedUnit(u) || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
+      const fillDateValue = document.getElementById('cl-date').value;
+      const auditYearValue = document.getElementById('cl-year').value;
+      return existing ? existing.id : generateChecklistIdForYear(unitValue, auditYearValue, fillDateValue);
+    }
+
+    function renderChecklistEvidenceFiles(itemId, editable) {
+      const target = document.getElementById(editable ? `cl-files-${itemId}` : `cl-detail-files-${itemId}`);
+      if (!target) return;
+      renderAttachmentList(target, evidenceFilesState.get(itemId) || [], {
+        editable,
+        emptyText: editable ? '\u5c1a\u672a\u4e0a\u50b3\u4f50\u8b49\u6a94' : '',
+        emptyHtml: editable ? undefined : '',
+        fileIconHtml: '<div class="file-pdf-icon">' + ic('file-box') + '</div>',
+        itemClass: 'file-preview-item checklist-file-card',
+        actionsClass: 'checklist-file-actions',
+        onRemove: function (index) {
+          const list = evidenceFilesState.get(itemId) || [];
+          const removed = list.splice(Number(index), 1)[0];
+          evidenceFilesState.set(itemId, list);
+          revokeTransientUploadEntry(removed);
+          const input = document.getElementById(`cl-file-${itemId}`);
+          if (input) input.value = '';
+          markChecklistDirty();
+          renderChecklistEvidenceFiles(itemId, true);
+        }
+      });
+      refreshIcons();
+    }
+
+    function initializeChecklistEvidenceInputs() {
+      getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
+        renderChecklistEvidenceFiles(item.id, true);
+        const input = document.getElementById(`cl-file-${item.id}`);
+        if (!input) return;
+        input.addEventListener('change', function (event) {
+          const currentFiles = evidenceFilesState.get(item.id) || [];
+          const batch = prepareUploadBatch(currentFiles, event.target.files, {
+            fileLabel: `${item.id} \u4f50\u8b49\u6a94`,
+            maxSize: 5 * 1024 * 1024,
+            maxSizeLabel: '5MB',
+            allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+            allowedMimeTypes: ['image/*', 'application/pdf']
+          });
+          batch.errors.forEach((message) => toast(message, 'error'));
+          batch.accepted.forEach(({ file, meta }) => {
+            currentFiles.push(createTransientUploadEntry(file, meta, {
+              prefix: 'chk',
+              scope: 'checklist-evidence',
+              ownerId: getChecklistOwnerId(),
+              recordType: 'checklist-evidence'
+            }));
+          });
+          evidenceFilesState.set(item.id, currentFiles);
+          event.target.value = '';
+          if (batch.accepted.length) markChecklistDirty();
+          renderChecklistEvidenceFiles(item.id, true);
+        });
+      }));
     }
 
     function updateChecklistDraftStatus(item) {
@@ -257,9 +348,10 @@
       document.getElementById('cl-side-na').textContent = String(counts[COMPLIANCE_OPTS[3]]);
     }
 
-    function collectData(status) {
+    async function collectData(status) {
       const results = {};
       let conform = 0, partial = 0, nonConform = 0, na = 0, total = 0;
+      const ownerId = getChecklistOwnerId();
       getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
         const sel = document.querySelector(`input[name="cl-${item.id}"]:checked`);
         const compliance = sel ? sel.value : '';
@@ -274,6 +366,16 @@
         else if (compliance === COMPLIANCE_OPTS[2]) nonConform += 1;
         else if (compliance === COMPLIANCE_OPTS[3]) na += 1;
       }));
+      for (const item of getChecklistSectionsState().flatMap((sec) => sec.items)) {
+        const persistedFiles = await persistUploadedEntries(evidenceFilesState.get(item.id) || [], {
+          prefix: 'chk',
+          scope: 'checklist-evidence',
+          ownerId,
+          recordType: 'checklist-evidence'
+        });
+        evidenceFilesState.set(item.id, persistedFiles);
+        results[item.id].evidenceFiles = persistedFiles;
+      }
       const now = new Date().toISOString();
       const supervisorNameValue = document.getElementById('cl-supervisor-name').value.trim();
       const supervisorTitleValue = document.getElementById('cl-supervisor-title').value.trim();
@@ -302,7 +404,7 @@
     }
 
     async function saveChecklistDraft() {
-      const data = collectData('\u8349\u7a3f');
+      const data = await collectData('\u8349\u7a3f');
       const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
       if (duplicateChecklist) {
         toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
@@ -340,6 +442,7 @@
     syncChecklistMeta();
     updateProgress();
     updateChecklistDraftStatus(existing);
+    initializeChecklistEvidenceInputs();
 
     checklistForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -368,7 +471,7 @@
         missingMeta.el.focus();
         return;
       }
-      const data = collectData('\u5df2\u9001\u51fa');
+      const data = await collectData('\u5df2\u9001\u51fa');
       const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
       if (duplicateChecklist) {
         toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
@@ -394,6 +497,7 @@
   }
 
   function renderChecklistDetail(id) {
+    cleanupRenderedAttachmentUrls();
     const cl = getChecklist(id);
     if (!cl) {
       document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到檢核表</div><a href="#checklist" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`;
@@ -439,6 +543,7 @@
         rows += `<div class="cl-detail-item"><div class="cl-detail-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span><span class="cl-compliance-badge cl-badge-${compCls}">${esc(comp)}</span></div>`;
         if (r.execution) rows += `<div class="cl-detail-field"><span class="cl-detail-label">執行情形：</span>${esc(r.execution)}</div>`;
         if (r.evidence) rows += `<div class="cl-detail-field"><span class="cl-detail-label">佐證說明：</span>${esc(r.evidence)}</div>`;
+        if (Array.isArray(r.evidenceFiles) && r.evidenceFiles.length) rows += `<div class=\"cl-detail-field cl-detail-field--files\"><span class=\"cl-detail-label\">?????</span>${buildChecklistEvidenceReadonlySlot(item.id)}</div>`;
         rows += '</div>';
       });
       sectDetail += `<div class="cl-detail-section"><div class="cl-detail-section-title">${esc(sec.section)}</div>${rows}</div>`;
@@ -480,6 +585,19 @@
       ${issueHtml}
       <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 檢核結果明細</span></div>${sectDetail}</div>
     </div>`;
+    getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
+      const result = cl.results?.[item.id] || {};
+      if (!Array.isArray(result.evidenceFiles) || !result.evidenceFiles.length) return;
+      const target = document.getElementById(`cl-detail-files-${item.id}`);
+      if (!target) return;
+      renderAttachmentList(target, result.evidenceFiles, {
+        editable: false,
+        emptyHtml: '',
+        fileIconHtml: '<div class="file-pdf-icon">' + ic('file-box') + '</div>',
+        itemClass: 'file-preview-item checklist-file-card',
+        actionsClass: 'checklist-file-actions'
+      });
+    }));
     refreshIcons();
     bindCopyButtons();
   }

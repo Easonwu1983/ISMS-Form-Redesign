@@ -80,14 +80,22 @@ function normalizeAttachment(entry) {
   const base = entry && typeof entry === 'object' ? entry : {};
   return {
     attachmentId: cleanText(base.attachmentId),
+    driveItemId: cleanText(base.driveItemId),
     name: cleanText(base.name),
-    type: cleanText(base.type),
+    type: cleanText(base.type || base.contentType),
+    contentType: cleanText(base.contentType || base.type),
     size: Number.isFinite(Number(base.size)) ? Number(base.size) : 0,
     extension: cleanText(base.extension).toLowerCase(),
     signature: cleanText(base.signature),
     storedAt: cleanText(base.storedAt),
+    uploadedAt: cleanText(base.uploadedAt || base.storedAt),
     scope: cleanText(base.scope),
-    ownerId: cleanText(base.ownerId)
+    ownerId: cleanText(base.ownerId),
+    recordType: cleanText(base.recordType),
+    webUrl: cleanText(base.webUrl),
+    downloadUrl: cleanText(base.downloadUrl),
+    path: cleanText(base.path),
+    storage: cleanText(base.storage) || (cleanText(base.driveItemId) || cleanText(base.downloadUrl) || cleanText(base.webUrl) ? 'm365' : '')
   };
 }
 
