@@ -7,11 +7,13 @@
       TRAINING_UNDO_WINDOW_MINUTES,
       currentUser,
       getAuthorizedUnits,
+      getReviewUnits,
       getActiveUnit,
       getAllItems,
       getAllChecklists,
       getAllTrainingForms,
-      isChecklistDraftStatus
+      isChecklistDraftStatus,
+      isReviewScopeEnforced
     } = deps;
 
     function isAdmin(user = currentUser()) {
@@ -47,7 +49,29 @@
     }
 
     function canReview(user = currentUser()) {
-      return isAdmin(user);
+      if (isAdmin(user)) return true;
+      if (!isUnitAdmin(user)) return false;
+      if (!isReviewScopeEnforced()) return true;
+      return getReviewUnits(user).length > 0;
+    }
+
+    function hasReviewScope(unit, user = currentUser()) {
+      if (!user) return false;
+      if (isAdmin(user)) return true;
+      if (!isUnitAdmin(user)) return false;
+      if (!isReviewScopeEnforced()) return true;
+      const target = String(unit || '').trim();
+      const reviewUnits = getReviewUnits(user);
+      if (!target) return reviewUnits.length > 0;
+      return reviewUnits.includes(target);
+    }
+
+    function canReviewItem(item, user = currentUser()) {
+      if (!item || !user) return false;
+      if (isAdmin(user)) return true;
+      if (!isUnitAdmin(user)) return false;
+      if (!isReviewScopeEnforced()) return true;
+      return hasReviewScope(item.handlerUnit || item.proposerUnit || '', user);
     }
 
     function canFillChecklist(user = currentUser()) {
@@ -184,6 +208,7 @@
       hasUnitAccess,
       canCreateCAR,
       canReview,
+      canReviewItem,
       canFillChecklist,
       canFillTraining,
       canManageUsers,

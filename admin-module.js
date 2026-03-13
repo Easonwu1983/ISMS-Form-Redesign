@@ -8,11 +8,14 @@
       canManageUsers,
       getUsers,
       getAuthorizedUnits,
+      getReviewUnits,
       parseUserUnits,
       findUser,
       submitUserUpsert,
       submitUserDelete,
       syncUsersFromM365,
+      submitReviewScopeReplace,
+      syncReviewScopesFromM365,
       getCustomUnitRegistry,
       loadUnitReviewStore,
       formatUnitScopeSummary,
@@ -44,16 +47,21 @@
       return units.length ? units.join('、') : '未指定';
     }
 
+    function formatUserReviewUnitSummary(user) {
+      const units = getReviewUnits(user);
+      return units.length ? units.join('、') : '沿用既有審核邏輯';
+    }
+
   function renderUsers() {
     if (!canManageUsers()) { navigate('dashboard'); return; }
     const users = getUsers();
-    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit || '未指定')}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
+    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${ROLE_BADGE[u.role]}">${u.role}</span></td><td>${esc(u.unit || '未指定')}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
     document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
-      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>主要單位</th><th>授權單位</th><th>信箱</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>主要單位</th><th>授權單位</th><th>可審核單位</th><th>信箱</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
   function showUserModal(eu) {
-    const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root'); const units = getAuthorizedUnits(eu); const initUnit = units[0] || '';
+    const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root'); const units = getAuthorizedUnits(eu); const reviewUnits = getReviewUnits(eu); const initUnit = units[0] || '';
     mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${title}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="user-form">
       <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>
       <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
@@ -61,6 +69,7 @@
       <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.REPORTER}" ${isE && eu.role === ROLES.REPORTER ? 'selected' : ''}>填報人</option><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.VIEWER}" ${isE && eu.role === ROLES.VIEWER ? 'selected' : ''}>跨單位檢視者</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option></select></div>
       <div class="form-group"><label class="form-label" id="u-unit-label">主要單位</label>${buildUnitCascadeControl('u-unit', initUnit, false, false)}</div></div>
       <div class="form-group"><label class="form-label">額外授權單位</label><textarea class="form-textarea" id="u-units" rows="4" placeholder="每行一個單位，可用於跨單位代理">${esc(units.slice(1).join('\n'))}</textarea><div class="form-hint">系統不另外做代理模組，直接以授權單位陣列決定可切換單位。</div></div>
+      <div class="form-group"><label class="form-label">可審核單位</label><textarea class="form-textarea" id="u-review-units" rows="4" placeholder="每行一個單位。留空代表沿用既有審核邏輯。">${esc(reviewUnits.join('\n'))}</textarea><div class="form-hint">僅當角色為單位管理員時生效。啟用後，該帳號只能審核列出的單位。</div></div>
       <div class="form-group"><label class="form-label ${isE ? '' : 'form-required'}">${isE ? '密碼（留空不修改）' : '密碼'}</label><input type="text" class="form-input" id="u-pass" ${isE ? '' : 'required'}></div>
       <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div>
     </form></div></div>`;
@@ -78,7 +87,7 @@
     document.getElementById('modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) closeModalRoot(); });
     document.getElementById('user-form').addEventListener('submit', async e => {
       e.preventDefault();
-      const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), extraUnits = parseUserUnits(document.getElementById('u-units').value), pw = document.getElementById('u-pass').value;
+      const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), extraUnits = parseUserUnits(document.getElementById('u-units').value), reviewScopeUnits = parseUserUnits(document.getElementById('u-review-units').value), pw = document.getElementById('u-pass').value;
       const finalUnits = rl === ROLES.VIEWER ? Array.from(new Set([ut, ...extraUnits].filter(Boolean))) : Array.from(new Set([ut, ...extraUnits].filter(Boolean)));
       if (rl !== ROLES.VIEWER && !finalUnits.length) { toast('請至少指定一個授權單位', 'error'); return; }
       const payload = { name: nm, email: em, role: rl, unit: finalUnits[0] || '', units: finalUnits, activeUnit: finalUnits[0] || '' };
@@ -87,6 +96,13 @@
         if (!isE && findUser(un)) { toast('帳號已存在', 'error'); return; }
         await submitUserUpsert({ username: un, ...payload });
         await syncUsersFromM365({ silent: true });
+        await submitReviewScopeReplace({
+          username: un,
+          units: rl === ROLES.UNIT_ADMIN ? reviewScopeUnits : [],
+          actorName: currentUser() && currentUser().name,
+          actorEmail: currentUser() && currentUser().email
+        });
+        await syncReviewScopesFromM365({ silent: true });
         toast(isE ? '使用者已更新' : '使用者已新增');
         closeModalRoot(); renderUsers(); refreshIcons();
       } catch (error) {
@@ -99,6 +115,13 @@
     try {
       await submitUserDelete(un, { actorName: currentUser() && currentUser().name, actorEmail: currentUser() && currentUser().email });
       await syncUsersFromM365({ silent: true });
+      await submitReviewScopeReplace({
+        username: un,
+        units: [],
+        actorName: currentUser() && currentUser().name,
+        actorEmail: currentUser() && currentUser().email
+      });
+      await syncReviewScopesFromM365({ silent: true });
       toast('使用者已刪除');
       renderUsers();
     } catch (error) {

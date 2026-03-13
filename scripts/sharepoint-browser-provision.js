@@ -141,6 +141,19 @@
         { name: 'BackendMode', type: 'choice', required: true, choices: ['a3-campus-backend'] },
         { name: 'RecordSource', type: 'choice', required: true, choices: ['frontend', 'manual', 'migration'] }
       ]
+    },
+    {
+      name: 'UnitReviewScopes',
+      description: 'Reviewable unit scopes assigned to unit administrators',
+      columns: [
+        { name: 'ScopeId', type: 'singleLineText', required: true },
+        { name: 'UserName', type: 'singleLineText', required: true },
+        { name: 'UnitValue', type: 'singleLineText', required: true },
+        { name: 'CreatedAt', type: 'dateTime', required: true },
+        { name: 'UpdatedAt', type: 'dateTime', required: true },
+        { name: 'BackendMode', type: 'choice', required: true, choices: ['a3-campus-backend'] },
+        { name: 'RecordSource', type: 'choice', required: true, choices: ['frontend', 'manual', 'migration'] }
+      ]
     }
   ];
 

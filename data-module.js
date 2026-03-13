@@ -481,6 +481,10 @@
       return unit ? [unit] : [];
     }
 
+    function getReviewUnits(user) {
+      return parseUserUnits(user?.reviewUnits || user?.reviewScopes || user?.reviewScopeUnits);
+    }
+
     function getActiveUnit(user) {
       const units = getAuthorizedUnits(user);
       if (!units.length) return '';
@@ -491,10 +495,12 @@
     function normalizeUserRecord(user) {
       const role = normalizeUserRole(user?.role);
       const units = getAuthorizedUnits(user);
+      const reviewUnits = getReviewUnits(user);
       return {
         ...user,
         role,
         units,
+        reviewUnits,
         unit: units[0] || '',
         activeUnit: role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units })
       };
@@ -1076,6 +1082,7 @@
       parseUserUnits,
       normalizeUserRole,
       getAuthorizedUnits,
+      getReviewUnits,
       getActiveUnit,
       normalizeUserRecord,
       loadData,

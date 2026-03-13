@@ -119,6 +119,7 @@
   function parseUserUnits(value) { return getDataModule().parseUserUnits(value); }
   function normalizeUserRole(role) { return getDataModule().normalizeUserRole(role); }
   function getAuthorizedUnits(user) { return getDataModule().getAuthorizedUnits(user); }
+  function getReviewUnits(user) { return getDataModule().getReviewUnits(user); }
   function getActiveUnit(user) { return getDataModule().getActiveUnit(user); }
   function normalizeUserRecord(user) { return getDataModule().normalizeUserRecord(user); }
   function hasGlobalReadScope(user = currentUser()) { return getPolicyModule().hasGlobalReadScope(user); }
@@ -171,6 +172,7 @@
   function isViewer(user = currentUser()) { return getPolicyModule().isViewer(user); }
   function canCreateCAR(user = currentUser()) { return getPolicyModule().canCreateCAR(user); }
   function canReview(user = currentUser()) { return getPolicyModule().canReview(user); }
+  function canReviewItem(item, user = currentUser()) { return getPolicyModule().canReviewItem(item, user); }
   function canFillChecklist(user = currentUser()) { return getPolicyModule().canFillChecklist(user); }
   function canFillTraining(user = currentUser()) { return getPolicyModule().canFillTraining(user); }
   function canManageUsers(user = currentUser()) { return getPolicyModule().canManageUsers(user); }
@@ -344,11 +346,13 @@
       TRAINING_UNDO_WINDOW_MINUTES,
       currentUser: function () { return getAuthModule().currentUser(); },
       getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
+      getReviewUnits: function (user) { return getDataModule().getReviewUnits(user); },
       getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
       getAllItems: function () { return getDataModule().getAllItems(); },
       getAllChecklists: function () { return getDataModule().getAllChecklists(); },
       getAllTrainingForms: function () { return getDataModule().getAllTrainingForms(); },
-      isChecklistDraftStatus: function (status) { return getDataModule().isChecklistDraftStatus(status); }
+      isChecklistDraftStatus: function (status) { return getDataModule().isChecklistDraftStatus(status); },
+      isReviewScopeEnforced: function () { return getReviewScopeRepositoryState().ready === true && getReviewScopesMode() === 'm365-api'; }
     });
     window._policyModule = policyModuleApi;
     return policyModuleApi;
@@ -474,11 +478,14 @@
       canManageUsers,
       getUsers,
       getAuthorizedUnits,
+      getReviewUnits,
       parseUserUnits,
       findUser,
       submitUserUpsert,
       submitUserDelete,
       syncUsersFromM365,
+      submitReviewScopeReplace,
+      syncReviewScopesFromM365,
       getCustomUnitRegistry,
       loadUnitReviewStore,
       formatUnitScopeSummary,
@@ -522,9 +529,10 @@
       CATEGORIES,
       ROLES,
       currentUser,
-      canCreateCAR,
-      canReview,
-      canAccessItem,
+        canCreateCAR,
+        canReview,
+        canReviewItem,
+        canAccessItem,
       canRespondItem,
       canSubmitTracking,
       isItemHandler,
@@ -765,18 +773,22 @@
     return m365ApiClientApi;
   }
   const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
+  const REVIEW_SCOPE_CONTRACT_VERSION = '2026-03-13';
   const SYSTEM_USER_ACTIONS = {
     UPSERT: 'system-user.upsert',
     DELETE: 'system-user.delete',
     RESET_PASSWORD: 'system-user.reset-password'
   };
   const AUTH_CONTRACT_VERSION = '2026-03-13';
-  const AUTH_ACTIONS = {
-    LOGIN: 'auth.login',
-    REQUEST_RESET: 'auth.request-reset',
-    REDEEM_RESET: 'auth.redeem-reset',
-    CHANGE_PASSWORD: 'auth.change-password'
-  };
+    const AUTH_ACTIONS = {
+      LOGIN: 'auth.login',
+      REQUEST_RESET: 'auth.request-reset',
+      REDEEM_RESET: 'auth.redeem-reset',
+      CHANGE_PASSWORD: 'auth.change-password'
+    };
+    const REVIEW_SCOPE_ACTIONS = {
+      REPLACE: 'review-scope.replace'
+    };
   const ATTACHMENT_CONTRACT_VERSION = '2026-03-13';
   const ATTACHMENT_ACTIONS = {
     UPLOAD: 'attachment.upload',
@@ -823,6 +835,29 @@
   function getSystemUsersSharedHeaders() {
     const config = getRuntimeM365Config();
     return config.systemUsersSharedHeaders && typeof config.systemUsersSharedHeaders === 'object' ? config.systemUsersSharedHeaders : {};
+  }
+  function getReviewScopesMode() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.reviewScopesMode || '').trim();
+    return explicit || (getSystemUsersMode() === 'm365-api' ? 'm365-api' : 'local-emulator');
+  }
+  function getReviewScopesEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.reviewScopesEndpoint || '').trim();
+    if (explicit) return explicit.replace(/\/$/, '');
+    return '';
+  }
+  function getReviewScopesHealthEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.reviewScopesHealthEndpoint || '').trim();
+    if (explicit) return explicit;
+    const endpoint = getReviewScopesEndpoint();
+    return endpoint ? endpoint + '/health' : '';
+  }
+  function getReviewScopesSharedHeaders() {
+    const config = getRuntimeM365Config();
+    if (config.reviewScopesSharedHeaders && typeof config.reviewScopesSharedHeaders === 'object') return config.reviewScopesSharedHeaders;
+    return getSystemUsersSharedHeaders();
   }
   function getAuthMode() {
     const config = getRuntimeM365Config();
@@ -987,6 +1022,20 @@
       }
     });
   }
+  async function requestReviewScopeJson(path, options) {
+    const endpoint = getReviewScopesEndpoint();
+    if (!endpoint) throw new Error('未設定 reviewScopesEndpoint');
+    const suffix = String(path || '').trim();
+    const url = suffix ? (endpoint + suffix) : endpoint;
+    return requestSystemUserJson(url, {
+      ...(options || {}),
+      headers: {
+        'X-ISMS-Contract-Version': REVIEW_SCOPE_CONTRACT_VERSION,
+        ...getReviewScopesSharedHeaders(),
+        ...((options && options.headers) || {})
+      }
+    });
+  }
   async function requestAttachmentJson(path, options) {
     const endpoint = getAttachmentsEndpoint();
     if (!endpoint) throw new Error('未設定 attachmentsEndpoint');
@@ -1096,11 +1145,17 @@
   function mergeRemoteUsersIntoStore(items, options) {
     const strict = !!(options && options.strict);
     const data = loadData();
+    const existingReviewUnits = new Map((data.users || []).map(function (user) {
+      return [String(user && user.username || '').trim().toLowerCase(), getReviewUnits(user)];
+    }));
     const remoteMap = new Map();
     (Array.isArray(items) ? items : []).forEach(function (item) {
       const username = String(item && item.username || '').trim().toLowerCase();
       if (!username) return;
-      remoteMap.set(username, normalizeUserRecord(item));
+      remoteMap.set(username, normalizeUserRecord({
+        ...item,
+        reviewUnits: getReviewUnits(item).length ? getReviewUnits(item) : (existingReviewUnits.get(username) || [])
+      }));
     });
     const merged = Array.from(remoteMap.values());
     if (!strict) {
@@ -1114,10 +1169,58 @@
     saveData(data);
     return data.users.slice();
   }
+  function normalizeRemoteReviewScopeRecord(record) {
+    const source = record && record.fields ? record.fields : (record && (record.item || record.data || record.result || record));
+    if (!source || typeof source !== 'object') return null;
+    const username = String(source.username || source.userName || source.UserName || '').trim();
+    const unit = String(source.unit || source.unitValue || source.UnitValue || '').trim();
+    if (!username || !unit) return null;
+    return {
+      username: username,
+      unit: unit,
+      createdAt: String(source.createdAt || source.CreatedAt || '').trim(),
+      updatedAt: String(source.updatedAt || source.UpdatedAt || '').trim(),
+      backendMode: String(source.backendMode || source.BackendMode || 'a3-campus-backend').trim(),
+      recordSource: String(source.recordSource || source.RecordSource || 'remote').trim()
+    };
+  }
+  function normalizeRemoteReviewScopeRecords(body) {
+    const candidates = []
+      .concat(Array.isArray(body) ? body : [])
+      .concat(Array.isArray(body && body.items) ? body.items : [])
+      .concat(Array.isArray(body && body.value) ? body.value : [])
+      .concat(Array.isArray(body && body.data) ? body.data : []);
+    return candidates.map(normalizeRemoteReviewScopeRecord).filter(Boolean);
+  }
+  function mergeReviewScopesIntoUsers(scopeItems) {
+    const data = loadData();
+    const scopeMap = new Map();
+    (Array.isArray(scopeItems) ? scopeItems : []).forEach(function (entry) {
+      const username = String(entry && entry.username || '').trim().toLowerCase();
+      const unit = String(entry && entry.unit || '').trim();
+      if (!username || !unit) return;
+      if (!scopeMap.has(username)) scopeMap.set(username, []);
+      if (scopeMap.get(username).indexOf(unit) < 0) scopeMap.get(username).push(unit);
+    });
+    data.users = (data.users || []).map(function (user) {
+      const username = String(user && user.username || '').trim().toLowerCase();
+      return normalizeUserRecord({
+        ...user,
+        reviewUnits: scopeMap.get(username) || []
+      });
+    });
+    saveData(data);
+    return data.users.slice();
+  }
   function upsertSystemUserInStore(item) {
     if (!item || !item.username) return null;
     const data = loadData();
-    const normalized = normalizeUserRecord(item);
+    const existing = (data.users || []).find(function (entry) { return entry.username === item.username; });
+    const normalized = normalizeUserRecord({
+      ...(existing || {}),
+      ...item,
+      reviewUnits: getReviewUnits(item).length ? getReviewUnits(item) : getReviewUnits(existing)
+    });
     const index = (data.users || []).findIndex(function (entry) { return entry.username === normalized.username; });
     if (index >= 0) data.users[index] = normalized;
     else data.users.push(normalized);
@@ -1132,6 +1235,21 @@
   function buildSystemUserFallbackWarning(error) {
     const detail = String(error && error.message || error || '').trim();
     return detail ? ('M365 帳號後端未就緒，已改用本機暫存：' + detail) : 'M365 帳號後端未就緒，已改用本機暫存。';
+  }
+  const reviewScopeRepositoryState = {
+    mode: 'local-emulator',
+    ready: false,
+    source: 'local',
+    lastSyncAt: '',
+    message: '',
+    error: ''
+  };
+  function setReviewScopeRepositoryState(patch) {
+    Object.assign(reviewScopeRepositoryState, patch || {});
+    return { ...reviewScopeRepositoryState };
+  }
+  function getReviewScopeRepositoryState() {
+    return { ...reviewScopeRepositoryState };
   }
   async function syncUsersFromM365(options) {
     const opts = options || {};
@@ -1181,6 +1299,92 @@
         error: String(error && error.message || error || '')
       });
     }
+  }
+  async function syncReviewScopesFromM365(options) {
+    const opts = options || {};
+    const mode = getReviewScopesMode();
+    setReviewScopeRepositoryState({ mode: mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (mode !== 'm365-api') {
+      return setReviewScopeRepositoryState({ ready: false, message: '目前未啟用審核權限矩陣後端', error: '' });
+    }
+    try {
+      const healthEndpoint = getReviewScopesHealthEndpoint();
+      if (healthEndpoint) {
+        const health = await requestSystemUserJson(healthEndpoint, {
+          method: 'GET',
+          headers: {
+            'X-ISMS-Contract-Version': REVIEW_SCOPE_CONTRACT_VERSION,
+            ...getReviewScopesSharedHeaders()
+          }
+        });
+        if (health && health.ready === false) {
+          return setReviewScopeRepositoryState({
+            ready: false,
+            source: 'local-fallback',
+            message: String(health.message || '審核權限矩陣後端尚未就緒，系統維持既有審核邏輯'),
+            error: String(health.message || '')
+          });
+        }
+      }
+      const endpoint = getReviewScopesEndpoint();
+      if (!endpoint) throw new Error('未設定 reviewScopesEndpoint');
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const filters = opts.query && typeof opts.query === 'object' ? opts.query : {};
+      Object.keys(filters).forEach(function (key) {
+        const cleanValue = String(filters[key] || '').trim();
+        if (cleanValue) url.searchParams.set(key, cleanValue);
+      });
+      const body = await requestReviewScopeJson(url.toString(), { method: 'GET' });
+      mergeReviewScopesIntoUsers(normalizeRemoteReviewScopeRecords(body));
+      return setReviewScopeRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastSyncAt: new Date().toISOString(),
+        message: '已同步審核權限矩陣',
+        error: ''
+      });
+    } catch (error) {
+      return setReviewScopeRepositoryState({
+        ready: false,
+        source: 'local-fallback',
+        message: '審核權限矩陣後端未就緒，系統維持既有審核邏輯',
+        error: String(error && error.message || error || '')
+      });
+    }
+  }
+  async function submitReviewScopeReplace(payload) {
+    const input = payload && typeof payload === 'object' ? payload : {};
+    const username = String(input.username || '').trim();
+    const units = parseUserUnits((input.units || []).concat(String(input.unitsText || '').trim()));
+    if (!username) throw new Error('缺少帳號');
+    if (getReviewScopesMode() !== 'm365-api' || getReviewScopeRepositoryState().ready !== true) {
+      const existing = findUser(username);
+      if (!existing) return { ok: false, item: null, source: 'local' };
+      updateUser(username, { reviewUnits: units });
+      return { ok: true, item: findUser(username), source: 'local' };
+    }
+    const body = await requestReviewScopeJson('/replace', {
+      method: 'POST',
+      body: {
+        action: REVIEW_SCOPE_ACTIONS.REPLACE,
+        payload: {
+          username: username,
+          units: units,
+          actorName: String(input.actorName || '').trim(),
+          actorEmail: String(input.actorEmail || '').trim()
+        }
+      }
+    });
+    mergeReviewScopesIntoUsers(normalizeRemoteReviewScopeRecords(body));
+    setReviewScopeRepositoryState({
+      mode: 'm365-api',
+      source: 'remote',
+      ready: true,
+      lastSyncAt: new Date().toISOString(),
+      message: '審核權限矩陣已寫入 M365',
+      error: ''
+    });
+    return { ok: true, item: findUser(username), source: 'remote' };
   }
   async function submitUserUpsert(payload) {
     const incoming = payload && typeof payload === 'object' ? payload : {};
@@ -2783,9 +2987,10 @@
     installGlobalDelegation();
     getDataModule().migrateAllStores();
     seedData();
-    ensurePrimaryAdminProfile();
-    await syncUsersFromM365({ silent: true });
-    getTrainingModule().seedTrainingData();
+      ensurePrimaryAdminProfile();
+      await syncUsersFromM365({ silent: true });
+      await syncReviewScopesFromM365({ silent: true });
+      getTrainingModule().seedTrainingData();
     await migrateAttachmentStores();
     await syncTrainingFormsFromM365({ silent: true });
     await syncTrainingRostersFromM365({ silent: true });

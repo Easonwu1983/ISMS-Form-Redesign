@@ -54,6 +54,9 @@ function applyEnvFromConfig(config) {
     if (config.lists.systemUsers && !process.env.SYSTEM_USERS_LIST) {
       process.env.SYSTEM_USERS_LIST = String(config.lists.systemUsers);
     }
+    if (config.lists.reviewScopes && !process.env.REVIEW_SCOPES_LIST) {
+      process.env.REVIEW_SCOPES_LIST = String(config.lists.reviewScopes);
+    }
   }
   if (config.attachmentsLibrary && !process.env.ATTACHMENTS_LIBRARY) {
     process.env.ATTACHMENTS_LIBRARY = String(config.attachmentsLibrary);

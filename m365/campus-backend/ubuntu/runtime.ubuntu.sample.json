@@ -13,7 +13,8 @@
                   "checklists":  "Checklists",
                   "trainingForms":  "TrainingForms",
                   "trainingRosters":  "TrainingRosters",
-                  "systemUsers":  "SystemUsers"
+                  "systemUsers":  "SystemUsers",
+                  "reviewScopes":  "UnitReviewScopes"
               },
     "attachmentsLibrary":  "ISMSAttachments",
     "logDir":  "/var/log/isms-form-redesign"

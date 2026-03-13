@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createCaseModule = function createCaseModule(deps) {
     const {
       STATUSES,
@@ -11,6 +11,7 @@
       currentUser,
       canCreateCAR,
       canReview,
+      canReviewItem,
       canAccessItem,
       canRespondItem,
       canSubmitTracking,
@@ -616,15 +617,15 @@ function renderCreate() {
     const isHandler = isItemHandler(item, u);
     const canRespond = canRespondItem(item, u);
     const canFillTracking = canSubmitTracking(item, u);
-    const canReviewTracking = item.status === STATUSES.TRACKING && !!item.pendingTracking && canReview();
+    const canReviewTracking = item.status === STATUSES.TRACKING && !!item.pendingTracking && canReviewItem(item);
     const pending = item.pendingTracking || null;
     const stepper = STATUS_FLOW.map((s, i) => { let c = ''; if (i < ci) c = 'completed'; else if (i === ci) c = 'active'; return `<div class="stepper-step ${c}"><div class="stepper-circle">${i < ci ? '✓' : i + 1}</div><div class="stepper-label">${s}</div></div>`; }).join('');
     const otag = isOverdue(item) ? ` <span class="badge badge-overdue"><span class="badge-dot"></span>已逾期</span>` : '';
     const cats = (item.category || []).map(c => `<span class="badge badge-category">${esc(c)}</span>`).join(' ');
     let btns = '';
     if (canRespond) btns += `<a href="#respond/${item.id}" class="btn btn-primary" data-testid="case-respond">${ic('edit-3', 'icon-sm')} 回填矯正措施</a>`;
-    if (item.status === STATUSES.PROPOSED && canReview()) btns += `<button class="btn btn-primary" data-testid="case-transition-review" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.REVIEWING}">${ic('eye', 'icon-sm')} 進入審核</button>`;
-    if (item.status === STATUSES.REVIEWING && canReview()) {
+    if (item.status === STATUSES.PROPOSED && canReviewItem(item)) btns += `<button class="btn btn-primary" data-testid="case-transition-review" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.REVIEWING}">${ic('eye', 'icon-sm')} 進入審核</button>`;
+    if (item.status === STATUSES.REVIEWING && canReviewItem(item)) {
       btns += `<button class="btn btn-success" data-testid="case-transition-close" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.CLOSED}">${ic('check', 'icon-sm')} 審核通過結案</button>`;
       btns += `<button class="btn btn-warning" data-testid="case-transition-tracking" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.TRACKING}">${ic('eye', 'icon-sm')} 轉為追蹤</button>`;
       btns += `<button class="btn btn-danger" data-testid="case-transition-return" data-action="case.statusTransition" data-id="${item.id}" data-status="${STATUSES.PENDING}">${ic('corner-up-left', 'icon-sm')} 退回重填</button>`;
@@ -738,7 +739,7 @@ async function handleStatusTransition(id, ns) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
-    if (!canAccessItem(item) || !canReview()) { toast('???????????', 'error'); return; }
+    if (!canAccessItem(item) || !canReviewItem(item)) { toast('???????????', 'error'); return; }
     const allowedTransitions = {
       [STATUSES.PROPOSED]: [STATUSES.REVIEWING],
       [STATUSES.REVIEWING]: [STATUSES.CLOSED, STATUSES.TRACKING, STATUSES.PENDING]
@@ -766,7 +767,7 @@ async function handleStatusTransition(id, ns) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
-    if (!(item.status === STATUSES.TRACKING && item.pendingTracking && canReview())) { toast('????????????', 'error'); return; }
+    if (!(item.status === STATUSES.TRACKING && item.pendingTracking && canReviewItem(item))) { toast('????????????', 'error'); return; }
     const pending = item.pendingTracking;
     const round = pending.round || ((item.trackings || []).length + 1);
     const now = new Date().toISOString();

@@ -1,0 +1,24 @@
+{
+  "version": "2026-03-13",
+  "site": {
+    "name": "ISMS-Forms",
+    "purpose": "Review scope matrix for unit-admin approvals"
+  },
+  "lists": [
+    {
+      "name": "UnitReviewScopes",
+      "description": "Reviewable unit scopes assigned to unit administrators",
+      "recommendedIndexes": ["UserName", "UnitValue", "UpdatedAt"],
+      "columns": [
+        { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use ScopeId as display title" },
+        { "name": "ScopeId", "type": "singleLineText", "required": true, "unique": true },
+        { "name": "UserName", "type": "singleLineText", "required": true },
+        { "name": "UnitValue", "type": "singleLineText", "required": true },
+        { "name": "CreatedAt", "type": "dateTime", "required": true },
+        { "name": "UpdatedAt", "type": "dateTime", "required": true },
+        { "name": "BackendMode", "type": "choice", "required": true, "choices": ["a3-campus-backend"] },
+        { "name": "RecordSource", "type": "choice", "required": true, "choices": ["frontend", "manual", "migration"] }
+      ]
+    }
+  ]
+}

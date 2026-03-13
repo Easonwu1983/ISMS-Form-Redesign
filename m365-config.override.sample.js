@@ -25,6 +25,9 @@
     systemUsersMode: 'm365-api',
     systemUsersEndpoint: 'https://YOUR-CAMPUS-HOST/api/system-users',
     systemUsersHealthEndpoint: 'https://YOUR-CAMPUS-HOST/api/system-users/health',
+    reviewScopesMode: 'm365-api',
+    reviewScopesEndpoint: 'https://YOUR-CAMPUS-HOST/api/review-scopes',
+    reviewScopesHealthEndpoint: 'https://YOUR-CAMPUS-HOST/api/review-scopes/health',
     attachmentsMode: 'm365-api',
     attachmentsEndpoint: 'https://YOUR-CAMPUS-HOST/api/attachments',
     attachmentsHealthEndpoint: 'https://YOUR-CAMPUS-HOST/api/attachments/health',
@@ -39,7 +42,8 @@
       checklists: 'Checklists',
       trainingForms: 'TrainingForms',
       trainingRosters: 'TrainingRosters',
-      systemUsers: 'SystemUsers'
+      systemUsers: 'SystemUsers',
+      reviewScopes: 'UnitReviewScopes'
     }
   };
 })();
