@@ -11,7 +11,7 @@
       "recommendedIndexes": ["UserName", "UnitValue", "UpdatedAt"],
       "columns": [
         { "name": "Title", "type": "singleLineText", "required": true, "notes": "Use ScopeId as display title" },
-        { "name": "ScopeId", "type": "singleLineText", "required": true, "unique": true },
+        { "name": "ReviewScopeKey", "type": "singleLineText", "required": true, "unique": true },
         { "name": "UserName", "type": "singleLineText", "required": true },
         { "name": "UnitValue", "type": "singleLineText", "required": true },
         { "name": "CreatedAt", "type": "dateTime", "required": true },

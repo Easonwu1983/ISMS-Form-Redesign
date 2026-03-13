@@ -23,7 +23,8 @@ function createReviewScopeRouter(deps) {
   } = deps;
 
   const state = {
-    listMap: null
+    listMap: null,
+    listColumnsMap: new Map()
   };
 
   function getEnv(name, fallback) {
@@ -67,6 +68,29 @@ function createReviewScopeRouter(deps) {
 
   async function resolveAuditList() {
     return resolveNamedList(getAuditListName());
+  }
+
+  async function fetchListColumnNames(listId) {
+    const siteId = await resolveSiteId();
+    const body = await graphRequest('GET', `/sites/${siteId}/lists/${listId}/columns?$select=name`);
+    return new Set((Array.isArray(body && body.value) ? body.value : []).map((entry) => cleanText(entry && entry.name)).filter(Boolean));
+  }
+
+  async function resolveListColumnNames(listId) {
+    const cleanListId = cleanText(listId);
+    if (!cleanListId) return new Set();
+    if (!state.listColumnsMap.has(cleanListId)) {
+      state.listColumnsMap.set(cleanListId, await fetchListColumnNames(cleanListId));
+    }
+    return state.listColumnsMap.get(cleanListId);
+  }
+
+  function filterFieldsForExistingColumns(fields, existingNames) {
+    const allowed = existingNames instanceof Set ? existingNames : new Set();
+    return Object.entries(fields || {}).reduce((result, [key, value]) => {
+      if (key === 'Title' || allowed.has(key)) result[key] = value;
+      return result;
+    }, {});
   }
 
   async function listAllEntries() {
@@ -181,8 +205,9 @@ function createReviewScopeRouter(deps) {
 
   async function createEntry(listId, record) {
     const siteId = await resolveSiteId();
+    const columnNames = await resolveListColumnNames(listId);
     await graphRequest('POST', `/sites/${siteId}/lists/${listId}/items`, {
-      fields: mapReviewScopeToGraphFields(record)
+      fields: filterFieldsForExistingColumns(mapReviewScopeToGraphFields(record), columnNames)
     });
   }
 

@@ -86,7 +86,7 @@ function createReviewScopeRecord(payload, unit, now) {
 function mapReviewScopeToGraphFields(entry) {
   return {
     Title: cleanText(entry.id) || `${cleanText(entry.username)}::${cleanText(entry.unit)}`,
-    ScopeId: cleanText(entry.id) || `${cleanText(entry.username)}::${cleanText(entry.unit)}`,
+    ReviewScopeKey: cleanText(entry.id) || `${cleanText(entry.username)}::${cleanText(entry.unit)}`,
     UserName: cleanText(entry.username),
     UnitValue: cleanText(entry.unit),
     CreatedAt: cleanText(entry.createdAt) || null,
@@ -98,7 +98,7 @@ function mapReviewScopeToGraphFields(entry) {
 
 function mapGraphFieldsToReviewScope(fields) {
   return {
-    id: cleanText(fields.ScopeId || fields.Title),
+    id: cleanText(fields.ReviewScopeKey || fields.ScopeId || fields.Title),
     username: cleanText(fields.UserName),
     unit: cleanText(fields.UnitValue),
     createdAt: cleanText(fields.CreatedAt),

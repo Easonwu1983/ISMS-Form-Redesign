@@ -146,7 +146,7 @@
       name: 'UnitReviewScopes',
       description: 'Reviewable unit scopes assigned to unit administrators',
       columns: [
-        { name: 'ScopeId', type: 'singleLineText', required: true },
+        { name: 'ReviewScopeKey', type: 'singleLineText', required: true },
         { name: 'UserName', type: 'singleLineText', required: true },
         { name: 'UnitValue', type: 'singleLineText', required: true },
         { name: 'CreatedAt', type: 'dateTime', required: true },
