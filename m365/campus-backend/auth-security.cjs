@@ -3,6 +3,7 @@
 const PASSWORD_SCHEME = 'scrypt-v1';
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const RESET_TTL_MS = 15 * 60 * 1000;
+const SECRET_PREFIX = 'ps1';
 
 function cleanText(value) {
   return String(value || '').trim();
@@ -27,11 +28,25 @@ function stableEqual(left, right) {
 }
 
 function hashWithSalt(password, salt) {
-  return crypto.scryptSync(String(password || ''), String(salt || ''), 64).toString('base64');
+  return base64UrlEncode(crypto.scryptSync(String(password || ''), String(salt || ''), 64));
 }
 
 function sha256(value) {
-  return crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
+  return base64UrlEncode(crypto.createHash('sha256').update(String(value || ''), 'utf8').digest());
+}
+
+function toCompactTimestamp(value) {
+  const raw = cleanText(value);
+  if (!raw) return '';
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms.toString(36) : '';
+}
+
+function fromCompactTimestamp(value) {
+  const raw = cleanText(value);
+  if (!raw) return '';
+  const ms = Number.parseInt(raw, 36);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : '';
 }
 
 function parsePasswordSecret(rawValue) {
@@ -51,6 +66,24 @@ function parsePasswordSecret(rawValue) {
       resetTokenExpiresAt: '',
       resetRequestedAt: '',
       sessionVersion: 1
+    };
+  }
+  if (raw.startsWith(SECRET_PREFIX + '|')) {
+    const parts = raw.split('|');
+    return {
+      raw,
+      hasPassword: true,
+      legacy: false,
+      scheme: PASSWORD_SCHEME,
+      salt: cleanText(parts[1]),
+      hash: cleanText(parts[2]),
+      plaintext: '',
+      mustChangePassword: cleanText(parts[3]) === '1',
+      passwordChangedAt: fromCompactTimestamp(parts[4]),
+      resetTokenHash: cleanText(parts[5]),
+      resetTokenExpiresAt: fromCompactTimestamp(parts[6]),
+      resetRequestedAt: fromCompactTimestamp(parts[7]),
+      sessionVersion: Number.isFinite(Number(parts[8])) ? Number(parts[8]) : 1
     };
   }
   if (raw.startsWith('{')) {
@@ -93,17 +126,17 @@ function parsePasswordSecret(rawValue) {
 }
 
 function serializePasswordSecret(secret) {
-  return JSON.stringify({
-    scheme: PASSWORD_SCHEME,
-    salt: cleanText(secret.salt),
-    hash: cleanText(secret.hash),
-    mustChangePassword: secret.mustChangePassword === true,
-    passwordChangedAt: cleanText(secret.passwordChangedAt),
-    resetTokenHash: cleanText(secret.resetTokenHash),
-    resetTokenExpiresAt: cleanText(secret.resetTokenExpiresAt),
-    resetRequestedAt: cleanText(secret.resetRequestedAt),
-    sessionVersion: Number.isFinite(Number(secret.sessionVersion)) ? Number(secret.sessionVersion) : 1
-  });
+  return [
+    SECRET_PREFIX,
+    cleanText(secret.salt),
+    cleanText(secret.hash),
+    secret.mustChangePassword === true ? '1' : '0',
+    toCompactTimestamp(secret.passwordChangedAt),
+    cleanText(secret.resetTokenHash),
+    toCompactTimestamp(secret.resetTokenExpiresAt),
+    toCompactTimestamp(secret.resetRequestedAt),
+    Number.isFinite(Number(secret.sessionVersion)) ? String(Number(secret.sessionVersion)) : '1'
+  ].join('|');
 }
 
 function createPasswordSecret(password, options) {

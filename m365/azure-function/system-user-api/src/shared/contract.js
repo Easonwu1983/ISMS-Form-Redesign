@@ -26,6 +26,7 @@ const DEFAULT_DISPLAY_NAME_BY_USERNAME = {
 };
 
 const PASSWORD_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+const PASSWORD_SECRET_PREFIX = 'ps1';
 
 function cleanText(value) {
   return String(value || '').trim();
@@ -111,6 +112,12 @@ function normalizeStoredSystemUser(entry) {
 
 function readStoredPasswordState(value) {
   const raw = cleanText(value);
+  function compactTimestampToIso(input) {
+    const normalized = cleanText(input);
+    if (!normalized) return '';
+    const epochMs = Number.parseInt(normalized, 36);
+    return Number.isFinite(epochMs) ? new Date(epochMs).toISOString() : '';
+  }
   if (!raw) {
     return {
       raw: '',
@@ -123,6 +130,25 @@ function readStoredPasswordState(value) {
       resetTokenExpiresAt: '',
       resetRequestedAt: '',
       sessionVersion: 1
+    };
+  }
+
+  if (raw.startsWith(PASSWORD_SECRET_PREFIX + '|')) {
+    const parts = raw.split('|');
+    return {
+      raw,
+      hasPassword: true,
+      legacy: false,
+      scheme: 'scrypt-v1',
+      salt: cleanText(parts[1]),
+      hash: cleanText(parts[2]),
+      plaintext: '',
+      mustChangePassword: cleanText(parts[3]) === '1',
+      passwordChangedAt: compactTimestampToIso(parts[4]),
+      resetTokenHash: cleanText(parts[5]),
+      resetTokenExpiresAt: compactTimestampToIso(parts[6]),
+      resetRequestedAt: compactTimestampToIso(parts[7]),
+      sessionVersion: Number.isFinite(Number(parts[8])) ? Number(parts[8]) : 1
     };
   }
 
@@ -185,11 +211,11 @@ function mapSystemUserForClient(entry) {
 function mapSystemUserToGraphFields(entry) {
   const item = normalizeStoredSystemUser(entry);
   const passwordValue = cleanText(item.password);
-  const isStructuredPassword = passwordValue.startsWith('{');
+  const isStructuredPassword = passwordValue.startsWith('{') || passwordValue.startsWith(PASSWORD_SECRET_PREFIX + '|');
   return {
     Title: item.username,
     UserName: item.username,
-    Password: isStructuredPassword ? '[stored in PasswordSecret]' : (passwordValue || '[stored in PasswordSecret]'),
+    Password: passwordValue || '[no-password]',
     PasswordSecret: isStructuredPassword ? passwordValue : '',
     DisplayName: item.name,
     Email: item.email,

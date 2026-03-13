@@ -54,7 +54,8 @@ function createSystemUserRouter(deps) {
   } = deps;
 
   const state = {
-    listMap: null
+    listMap: null,
+    listColumnsMap: new Map()
   };
 
   function getEnv(name, fallback) {
@@ -127,6 +128,29 @@ function createSystemUserRouter(deps) {
     return list;
   }
 
+  async function fetchListColumnNames(listId) {
+    const siteId = await resolveSiteId();
+    const body = await graphRequest('GET', `/sites/${siteId}/lists/${listId}/columns?$select=name`);
+    return new Set((Array.isArray(body && body.value) ? body.value : []).map((entry) => cleanText(entry && entry.name)).filter(Boolean));
+  }
+
+  async function resolveListColumnNames(listId) {
+    const cleanListId = cleanText(listId);
+    if (!cleanListId) return new Set();
+    if (!state.listColumnsMap.has(cleanListId)) {
+      state.listColumnsMap.set(cleanListId, await fetchListColumnNames(cleanListId));
+    }
+    return state.listColumnsMap.get(cleanListId);
+  }
+
+  function filterFieldsForExistingColumns(fields, existingNames) {
+    const allowed = existingNames instanceof Set ? existingNames : new Set();
+    return Object.entries(fields || {}).reduce((result, [key, value]) => {
+      if (key === 'Title' || allowed.has(key)) result[key] = value;
+      return result;
+    }, {});
+  }
+
   function getUsersListName() {
     return getEnv('SYSTEM_USERS_LIST', 'SystemUsers');
   }
@@ -189,12 +213,14 @@ function createSystemUserRouter(deps) {
     const siteId = await resolveSiteId();
     const list = await resolveUsersList();
     const normalized = createSystemUserRecord(nextItem, nextItem.updatedAt || new Date().toISOString());
+    const columnNames = await resolveListColumnNames(list.id);
+    const graphFields = filterFieldsForExistingColumns(mapSystemUserToGraphFields(normalized), columnNames);
     if (existingEntry) {
-      await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapSystemUserToGraphFields(normalized));
+      await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, graphFields);
       return { created: false, item: normalized };
     }
     await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: mapSystemUserToGraphFields(normalized)
+      fields: graphFields
     });
     return { created: true, item: normalized };
   }
