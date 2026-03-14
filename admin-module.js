@@ -283,6 +283,72 @@
     return rows.slice(0, 10).map((entry) => `<div class="review-history-item"><div class="review-history-top"><span class="review-history-badge approved">${esc(entry.eventType || 'unknown')}</span><span class="review-history-time">${entry.count} 筆</span></div><div class="review-history-title">${esc(entry.eventType || 'unknown')}</div><div class="review-history-meta">事件類型統計</div></div>`).join('');
   }
 
+  function parseAuditPayload(entry) {
+    if (entry && entry.payload && typeof entry.payload === 'object') return entry.payload;
+    if (!entry || !entry.payloadJson) return {};
+    try {
+      const parsed = JSON.parse(entry.payloadJson);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function formatAuditValue(value) {
+    if (value === null || value === undefined || value === '') return '—';
+    if (Array.isArray(value)) {
+      if (!value.length) return '—';
+      return value.join('\n');
+    }
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch (_) {
+        return String(value);
+      }
+    }
+    return String(value);
+  }
+
+  function renderAuditDiffTable(changes) {
+    const entries = changes && typeof changes === 'object' ? Object.entries(changes) : [];
+    if (!entries.length) {
+      return `<div class="empty-state" style="padding:24px 18px"><div class="empty-state-title">本事件沒有欄位差異</div></div>`;
+    }
+    const rows = entries.map(([field, diff]) => `<tr><td style="font-weight:600;color:var(--text-primary)">${esc(field)}</td><td><pre style="margin:0;white-space:pre-wrap;font-family:inherit">${esc(formatAuditValue(diff && diff.before))}</pre></td><td><pre style="margin:0;white-space:pre-wrap;font-family:inherit">${esc(formatAuditValue(diff && diff.after))}</pre></td></tr>`).join('');
+    return `<div class="table-wrapper"><table><thead><tr><th>欄位</th><th>變更前</th><th>變更後</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function renderAuditObjectCard(title, value, badge) {
+    if (!value || (typeof value === 'object' && !Array.isArray(value) && !Object.keys(value).length)) return '';
+    return `<div class="card" style="padding:18px 20px"><div class="card-header"><span class="card-title">${esc(title)}</span>${badge ? `<span class="review-status-badge approved">${esc(badge)}</span>` : ''}</div><pre style="margin:0;white-space:pre-wrap;font-size:.84rem;line-height:1.65;color:var(--text-primary)">${esc(formatAuditValue(value))}</pre></div>`;
+  }
+
+  function showAuditEntryModal(indexValue) {
+    const index = Number(indexValue);
+    const entry = Number.isInteger(index) ? auditTrailState.items[index] : null;
+    if (!entry) {
+      toast('找不到對應的稽核紀錄', 'error');
+      return;
+    }
+    const payload = parseAuditPayload(entry);
+    const summaryBits = [
+      entry.actorEmail ? `操作人：${entry.actorEmail}` : '',
+      entry.targetEmail ? `目標：${entry.targetEmail}` : '',
+      entry.unitCode ? `單位：${entry.unitCode}` : '',
+      entry.recordId ? `編號：${entry.recordId}` : ''
+    ].filter(Boolean).join(' · ');
+    const metaRows = Object.entries(payload).filter(([key]) => !['changes', 'snapshot', 'deletedState', 'requested', 'duplicated', 'duplicatedChanges', 'summary'].includes(key));
+    const metaHtml = metaRows.length
+      ? `<div class="card" style="padding:18px 20px"><div class="card-header"><span class="card-title">事件附帶資訊</span></div><div class="table-wrapper"><table><tbody>${metaRows.map(([key, value]) => `<tr><th style="width:180px">${esc(key)}</th><td><pre style="margin:0;white-space:pre-wrap;font-family:inherit">${esc(formatAuditValue(value))}</pre></td></tr>`).join('')}</tbody></table></div></div>`
+      : '';
+    const mr = document.getElementById('modal-root');
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal" style="max-width:1040px"><div class="modal-header"><span class="modal-title">操作稽核差異檢視</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><div class="review-modal-head"><div class="review-unit-name">${esc(entry.eventType || 'unknown')}</div><div class="review-modal-subtitle">${esc(formatAuditOccurredAt(entry.occurredAt))}${summaryBits ? ` · ${esc(summaryBits)}` : ''}</div></div><div class="review-grid" style="grid-template-columns:minmax(0,1.35fr) minmax(300px,.85fr)"><div class="card review-table-card"><div class="card-header"><span class="card-title">欄位差異</span><span class="review-card-subtitle">${esc(entry.payloadPreview || entry.title || '後端 audit payload')}</span></div>${renderAuditDiffTable(payload.changes)}</div><div class="review-history-list" style="display:grid;gap:16px">${renderAuditObjectCard('快照資料', payload.snapshot, 'snapshot')}${renderAuditObjectCard('刪除前資料', payload.deletedState, 'deleted')}${renderAuditObjectCard('重複申請比對', payload.duplicated, 'duplicate')}${renderAuditObjectCard('查詢摘要', payload.summary, 'summary')}${renderAuditObjectCard('重複申請差異', payload.duplicatedChanges, 'diff')}${renderAuditObjectCard('請求內容', payload.requested, 'requested')}${metaHtml}<details class="card" style="padding:18px 20px"><summary style="cursor:pointer;font-weight:700;color:var(--text-primary)">原始 Payload JSON</summary><pre style="margin-top:14px;white-space:pre-wrap;font-size:.82rem;line-height:1.65">${esc(entry.payloadJson || '{}')}</pre></details></div></div></div></div>`;
+    document.getElementById('modal-bg').addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeModalRoot();
+    });
+  }
+
   async function loadAuditTrailData(filters) {
     const nextFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
     auditTrailState.loading = true;
@@ -323,13 +389,13 @@
     const eventTypeSelect = [`<option value="">全部事件</option>`]
       .concat(eventTypeOptions.map((value) => `<option value="${esc(value)}" ${state.filters.eventType === value ? 'selected' : ''}>${esc(value)}</option>`))
       .join('');
-    const rows = items.length ? items.map((entry) => `<tr><td>${formatAuditOccurredAt(entry.occurredAt)}</td><td><div style="font-weight:600;color:var(--text-primary)">${esc(entry.eventType || 'unknown')}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(entry.recordId || '—')}</div></td><td>${esc(entry.actorEmail || '—')}</td><td>${esc(entry.targetEmail || '—')}</td><td>${esc(entry.unitCode || '—')}</td><td style="max-width:420px;white-space:normal;line-height:1.55">${esc(entry.payloadPreview || entry.title || '—')}</td></tr>`).join('') : `<tr><td colspan="6"><div class="empty-state review-empty"><div class="empty-state-icon">${ic('scroll-text')}</div><div class="empty-state-title">目前查無符合條件的稽核紀錄</div><div class="empty-state-desc">可調整關鍵字、事件類型、單位代碼或紀錄編號後再查詢。</div></div></td></tr>`;
+    const rows = items.length ? items.map((entry, index) => `<tr><td>${formatAuditOccurredAt(entry.occurredAt)}</td><td><div style="font-weight:600;color:var(--text-primary)">${esc(entry.eventType || 'unknown')}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(entry.recordId || '—')}</div></td><td>${esc(entry.actorEmail || '—')}</td><td>${esc(entry.targetEmail || '—')}</td><td>${esc(entry.unitCode || '—')}</td><td style="max-width:360px;white-space:normal;line-height:1.55">${esc(entry.payloadPreview || entry.title || '—')}</td><td><button type="button" class="btn btn-sm btn-secondary" data-action="admin.viewAuditEntry" data-index="${index}">${ic('search', 'icon-sm')} 檢視差異</button></td></tr>`).join('') : `<tr><td colspan="7"><div class="empty-state review-empty"><div class="empty-state-icon">${ic('scroll-text')}</div><div class="empty-state-title">目前查無符合條件的稽核紀錄</div><div class="empty-state-desc">可調整關鍵字、事件類型、單位代碼或紀錄編號後再查詢。</div></div></td></tr>`;
     const filterSummary = `共 ${state.summary.total || 0} 筆 · ${state.summary.actorCount || 0} 位操作人 · 最近事件 ${formatAuditOccurredAt(state.summary.latestOccurredAt)}`;
     const healthBadge = health.ready === false
       ? `<span class="review-status-badge pending">後端未就緒</span>`
       : `<span class="review-status-badge approved">後端正常</span>`;
 
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">Audit Trail</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">查詢後端 session-aware authorization 與 M365 audit 寫入結果，協助管理者追查異動來源。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重新整理</button><button type="button" class="btn btn-secondary" data-action="admin.exportAuditTrail">${ic('download', 'icon-sm')} 匯出 JSON</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>${healthBadge} <strong style="margin-left:8px">${esc(filterSummary)}</strong><div class="review-card-subtitle" style="margin-top:6px">${esc(health.repository || '')}${health.actor && health.actor.tokenMode ? ` · token=${esc(health.actor.tokenMode)}` : ''}${health.message ? ` · ${esc(health.message)}` : ''}</div></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('scroll-text')}</div><div class="stat-value">${state.summary.total || 0}</div><div class="stat-label">符合條件事件</div></div><div class="stat-card closed"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${state.summary.actorCount || 0}</div><div class="stat-label">操作人數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('activity')}</div><div class="stat-value">${eventTypeOptions.length}</div><div class="stat-label">事件類型</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('clock-3')}</div><div class="stat-value">${state.summary.latestOccurredAt ? esc(formatAuditOccurredAt(state.summary.latestOccurredAt).slice(5, 16)) : '—'}</div><div class="stat-label">最近事件</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">稽核紀錄查詢</span><span class="review-card-subtitle">${esc(filterSummary)}</span></div><form id="audit-filter-form"><div class="panel-grid-two" style="margin-bottom:18px"><div class="form-group"><label class="form-label">關鍵字</label><input type="text" class="form-input" id="audit-keyword" value="${esc(state.filters.keyword)}" placeholder="事件類型、email、recordId、payload 關鍵字"></div><div class="form-group"><label class="form-label">事件類型</label><select class="form-select" id="audit-event-type">${eventTypeSelect}</select></div><div class="form-group"><label class="form-label">操作人 email</label><input type="text" class="form-input" id="audit-actor-email" value="${esc(state.filters.actorEmail)}" placeholder="actorEmail"></div><div class="form-group"><label class="form-label">單位代碼</label><input type="text" class="form-input" id="audit-unit-code" value="${esc(state.filters.unitCode)}" placeholder="unitCode"></div><div class="form-group"><label class="form-label">紀錄編號</label><input type="text" class="form-input" id="audit-record-id" value="${esc(state.filters.recordId)}" placeholder="recordId"></div><div class="form-group"><label class="form-label">筆數上限</label><select class="form-select" id="audit-limit"><option value="50" ${state.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${state.filters.limit === '100' ? 'selected' : ''}>100</option><option value="200" ${state.filters.limit === '200' ? 'selected' : ''}>200</option></select></div></div><div class="form-actions" style="justify-content:flex-start;margin-bottom:8px"><button type="submit" class="btn btn-primary">${ic('search', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetAuditTrailFilters">${ic('rotate-ccw', 'icon-sm')} 清空條件</button></div></form><div class="table-wrapper"><table><thead><tr><th>時間</th><th>事件</th><th>操作人</th><th>目標</th><th>單位</th><th>內容摘要</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="card review-history-card"><div class="card-header"><span class="card-title">事件分布</span><span class="review-card-subtitle">最近查詢摘要</span></div><div class="review-history-list">${formatAuditEventTypeSummary(state.summary)}</div></div></div></div>`;
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">Audit Trail</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">查詢後端 session-aware authorization 與 M365 audit 寫入結果，協助管理者追查異動來源。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重新整理</button><button type="button" class="btn btn-secondary" data-action="admin.exportAuditTrail">${ic('download', 'icon-sm')} 匯出 JSON</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>${healthBadge} <strong style="margin-left:8px">${esc(filterSummary)}</strong><div class="review-card-subtitle" style="margin-top:6px">${esc(health.repository || '')}${health.actor && health.actor.tokenMode ? ` · token=${esc(health.actor.tokenMode)}` : ''}${health.message ? ` · ${esc(health.message)}` : ''}</div></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('scroll-text')}</div><div class="stat-value">${state.summary.total || 0}</div><div class="stat-label">符合條件事件</div></div><div class="stat-card closed"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${state.summary.actorCount || 0}</div><div class="stat-label">操作人數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('activity')}</div><div class="stat-value">${eventTypeOptions.length}</div><div class="stat-label">事件類型</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('clock-3')}</div><div class="stat-value">${state.summary.latestOccurredAt ? esc(formatAuditOccurredAt(state.summary.latestOccurredAt).slice(5, 16)) : '—'}</div><div class="stat-label">最近事件</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">稽核紀錄查詢</span><span class="review-card-subtitle">${esc(filterSummary)}</span></div><form id="audit-filter-form"><div class="panel-grid-two" style="margin-bottom:18px"><div class="form-group"><label class="form-label">關鍵字</label><input type="text" class="form-input" id="audit-keyword" value="${esc(state.filters.keyword)}" placeholder="事件類型、email、recordId、payload 關鍵字"></div><div class="form-group"><label class="form-label">事件類型</label><select class="form-select" id="audit-event-type">${eventTypeSelect}</select></div><div class="form-group"><label class="form-label">操作人 email</label><input type="text" class="form-input" id="audit-actor-email" value="${esc(state.filters.actorEmail)}" placeholder="actorEmail"></div><div class="form-group"><label class="form-label">單位代碼</label><input type="text" class="form-input" id="audit-unit-code" value="${esc(state.filters.unitCode)}" placeholder="unitCode"></div><div class="form-group"><label class="form-label">紀錄編號</label><input type="text" class="form-input" id="audit-record-id" value="${esc(state.filters.recordId)}" placeholder="recordId"></div><div class="form-group"><label class="form-label">筆數上限</label><select class="form-select" id="audit-limit"><option value="50" ${state.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${state.filters.limit === '100' ? 'selected' : ''}>100</option><option value="200" ${state.filters.limit === '200' ? 'selected' : ''}>200</option></select></div></div><div class="form-actions" style="justify-content:flex-start;margin-bottom:8px"><button type="submit" class="btn btn-primary">${ic('search', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetAuditTrailFilters">${ic('rotate-ccw', 'icon-sm')} 清空條件</button></div></form><div class="table-wrapper"><table><thead><tr><th>時間</th><th>事件</th><th>操作人</th><th>目標</th><th>單位</th><th>內容摘要</th><th>差異</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="card review-history-card"><div class="card-header"><span class="card-title">事件分布</span><span class="review-card-subtitle">最近查詢摘要</span></div><div class="review-history-list">${formatAuditEventTypeSummary(state.summary)}</div></div></div></div>`;
     const form = document.getElementById('audit-filter-form');
     if (form) {
       form.addEventListener('submit', function (event) {
@@ -446,6 +512,9 @@
     },
     refreshAuditTrail: function () {
       renderAuditTrail(auditTrailState.filters);
+    },
+    viewAuditEntry: function ({ dataset }) {
+      showAuditEntryModal(dataset.index);
     },
     resetAuditTrailFilters: function () {
       renderAuditTrail({ ...DEFAULT_AUDIT_FILTERS });

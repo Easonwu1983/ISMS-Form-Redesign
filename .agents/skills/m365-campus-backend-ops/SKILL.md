@@ -114,6 +114,7 @@ Current expectation:
 ## When to read extra files
 
 - Deployment details: [references/known-good-runbook.md](references/known-good-runbook.md)
+- Reusable project bootstrap playbook: [`/docs/reusable-m365-cloudflare-project-bootstrap.md`](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/reusable-m365-cloudflare-project-bootstrap.md)
 - Full project runtime flow: [`/docs/project-execution-flow.md`](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/project-execution-flow.md)
 - Campus smoke script: [`/scripts/campus-live-regression-smoke.cjs`](/C:/Users/User/Playground/ISMS-Form-Redesign/scripts/campus-live-regression-smoke.cjs)
 

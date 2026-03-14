@@ -71,6 +71,20 @@ async function run() {
     const rows = await page.locator('table tbody tr').count();
     pushStep('audit-trail:loaded', true, `rows=${rows}`);
 
+    const diffButton = page.locator('button[data-action="admin.viewAuditEntry"]').first();
+    if (await diffButton.count()) {
+      await diffButton.click();
+      await page.waitForSelector('.modal .modal-title', { timeout: 15000 });
+      const modalTitle = await page.locator('.modal .modal-title').first().textContent();
+      if (!String(modalTitle || '').includes('操作稽核差異檢視')) {
+        throw new Error(`unexpected audit diff modal title: ${modalTitle || ''}`);
+      }
+      pushStep('audit-trail:diff-modal', true, modalTitle.trim());
+      await page.locator('[data-dismiss-modal]').first().click();
+    } else {
+      pushStep('audit-trail:diff-modal', true, 'no rows available for modal check');
+    }
+
     if (consoleErrors.length) {
       throw new Error(`console errors detected: ${consoleErrors.join(' | ')}`);
     }
