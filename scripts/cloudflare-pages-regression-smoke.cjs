@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 const { chromium } = require('./_playwright.cjs');
 
@@ -51,15 +51,22 @@ async function run() {
     pushStep('auth:login', true, 'admin login succeeded');
 
     await page.waitForTimeout(1200);
-    await page.waitForFunction(() => location.hash === '#dashboard' || !!document.querySelector('.page-title'), { timeout: 15000 });
-    const dashboardTitle = await page.locator('.page-title').first().textContent();
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('儀表板'));
+    }, { timeout: 20000 });
+    const dashboardTitle = await page.evaluate(() => {
+      const app = document.getElementById('app');
+      if (!app || !app.innerText) return '';
+      return app.innerText.split('\n').map((entry) => entry.trim()).find(Boolean) || '';
+    });
     if (!String(dashboardTitle || '').trim()) throw new Error('missing dashboard title');
     pushStep('dashboard:loaded', true, dashboardTitle.trim());
 
     await page.goto(`${BASE_URL}/#audit-trail`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForFunction(() => {
-      const title = document.querySelector('.page-title');
-      return title && title.textContent && title.textContent.includes('操作稽核軌跡');
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('操作稽核軌跡'));
     }, { timeout: 20000 });
     const rows = await page.locator('table tbody tr').count();
     pushStep('audit-trail:loaded', true, `rows=${rows}`);
