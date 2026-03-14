@@ -17,6 +17,12 @@ node scripts/build-homepage-ntu-package.cjs
 node scripts/build-homepage-ntu-package.cjs --public-user=easonwu --public-subdir=isms --backend-base=http://140.112.3.65:8088
 ```
 
+若要產出「Homepage 只做入口並自動導向校內系統」的版本：
+
+```powershell
+node scripts/build-homepage-ntu-package.cjs --mode=redirect --redirect-target=http://140.112.3.65:8088/
+```
+
 ## 會產出的檔案
 
 - `index.html`
@@ -28,6 +34,12 @@ node scripts/build-homepage-ntu-package.cjs --public-user=easonwu --public-subdi
 - `m365-config.js`
 - `m365-config.override.js`
 - `README-homepage-upload.txt`
+
+`redirect` 模式下：
+
+- `index.html` 會改成入口導向頁
+- 首頁會自動跳到指定 `redirect-target`
+- 同時保留手動按鈕，避免瀏覽器擋掉自動跳轉
 
 ## FTP 上傳設定
 
@@ -77,6 +89,12 @@ http://140.112.3.65:8088/api/...
 
 - 請先使用 `http://homepage.ntu.edu.tw/~帳號/子目錄/`
 - 不要先用 `https://homepage.ntu.edu.tw/...` 當正式入口
+
+若改用 `redirect` 模式：
+
+- Homepage 本身只提供入口頁
+- 可從 `https://homepage...` 自動導到 `http://140.112.3.65:8088/`
+- 這種做法不會在頁面內直接發 API，因此不會撞 mixed content
 
 ## 若要變成正式穩定入口
 
