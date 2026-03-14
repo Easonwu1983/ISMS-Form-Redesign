@@ -86,6 +86,10 @@ async function run() {
     const rows = await page.locator('button[data-action="admin.viewAuditEntry"]').count();
     pushStep('audit-trail:loaded', true, `rows=${rows}`);
 
+    await page.waitForFunction(() => document.querySelectorAll('.review-table-scroll-btn').length >= 2, { timeout: 15000 });
+    const auditScrollButtons = await page.locator('.review-table-scroll-btn').count();
+    pushStep('audit-trail:scroll-controls', true, `count=${auditScrollButtons}`);
+
     const diffButton = page.locator('button[data-action="admin.viewAuditEntry"]').first();
     if (await diffButton.count()) {
       await diffButton.click();
@@ -99,6 +103,18 @@ async function run() {
     } else {
       pushStep('audit-trail:diff-modal', true, 'no rows available for modal check');
     }
+
+    await page.goto(`${BASE_URL}/#schema-health`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('資料健康檢查'));
+    }, { timeout: 20000 });
+    await page.waitForFunction(() => document.querySelectorAll('.review-table-wrapper').length >= 1, { timeout: 15000 });
+    const schemaScrollButtons = await page.locator('.review-table-scroll-btn').count();
+    if (schemaScrollButtons < 2) {
+      throw new Error(`expected schema health scroll buttons, got ${schemaScrollButtons}`);
+    }
+    pushStep('schema-health:scroll-controls', true, `count=${schemaScrollButtons}`);
 
     await page.goto(`${BASE_URL}/#training`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForFunction(() => {
