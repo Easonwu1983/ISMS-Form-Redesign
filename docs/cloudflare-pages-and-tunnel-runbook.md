@@ -66,7 +66,31 @@ This script:
 2. rewrites `m365-config.override.js` to your tunnel hostname
 3. deploys to Cloudflare Pages with Wrangler
 
-## Step 4. Switch users to the Cloudflare Pages URL
+## Step 4. Publish the full-proxy Pages frontend
+
+Use the Pages HTTPS URL for internal testing after verifying:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-cloudflare-pages.ps1 -BackendBase https://YOUR-TUNNEL.trycloudflare.com -ProjectName isms-campus-portal -Mode full-proxy
+```
+
+This keeps users on the stable `pages.dev` URL and proxies `/api/*` through Pages to the current tunnel.
+
+## Step 5. One-step reboot recovery
+
+If the workstation reboots or the quick tunnel URL changes, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap-cloudflare-pages-live.ps1 -ProjectName isms-campus-portal
+```
+
+This will:
+
+1. start the quick tunnel if needed
+2. read the current `trycloudflare.com` URL
+3. republish Pages in `full-proxy` mode against that URL
+
+## Step 6. Switch users to the Cloudflare Pages URL
 
 Use the Pages HTTPS URL for internal testing after verifying:
 
@@ -102,7 +126,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\stop-cloudflare-quick-tunnel.
 
 Quick tunnel is good enough to start moving, but it is not the long-term endpoint for large-scale internal UAT because the hostname is temporary.
 
-When the quick tunnel hostname changes, republish the Pages entry with:
+When the quick tunnel hostname changes, republish the Pages site with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\refresh-cloudflare-quick-pages-entry.ps1

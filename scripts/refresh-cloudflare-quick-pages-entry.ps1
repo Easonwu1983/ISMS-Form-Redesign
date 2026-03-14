@@ -20,5 +20,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'de
     -BackendBase $quickTunnelUrl `
     -ProjectName $ProjectName `
     -Branch $Branch `
-    -Mode redirect `
-    -RedirectTarget ($quickTunnelUrl.TrimEnd('/') + '/')
+    -Mode full-proxy
