@@ -2,6 +2,8 @@
 
 const AUTH_ACTIONS = {
   LOGIN: 'auth.login',
+  VERIFY: 'auth.verify',
+  LOGOUT: 'auth.logout',
   REQUEST_RESET: 'auth.request-reset',
   REDEEM_RESET: 'auth.redeem-reset',
   CHANGE_PASSWORD: 'auth.change-password'

@@ -35,6 +35,7 @@ const {
   createPasswordSecret,
   createResetToken,
   createSessionToken,
+  invalidateSessions,
   parsePasswordSecret,
   serializePasswordSecret,
   verifyPassword,
@@ -56,7 +57,8 @@ function createSystemUserRouter(deps) {
 
   const state = {
     listMap: null,
-    listColumnsMap: new Map()
+    listColumnsMap: new Map(),
+    loginFailures: new Map()
   };
 
   function getEnv(name, fallback) {
@@ -69,6 +71,69 @@ function createSystemUserRouter(deps) {
   function getSessionTtlMs() {
     const raw = Number(process.env.AUTH_SESSION_TTL_MS || '');
     return Number.isFinite(raw) && raw > 0 ? raw : (8 * 60 * 60 * 1000);
+  }
+
+  function getLoginMaxFailedAttempts() {
+    const raw = Number(process.env.AUTH_MAX_FAILED_ATTEMPTS || '');
+    return Number.isFinite(raw) && raw > 0 ? raw : 5;
+  }
+
+  function getLoginLockoutMs() {
+    const raw = Number(process.env.AUTH_LOCKOUT_MS || '');
+    return Number.isFinite(raw) && raw > 0 ? raw : (15 * 60 * 1000);
+  }
+
+  function readClientAddress(req) {
+    const forwarded = cleanText(req && req.headers && req.headers['x-forwarded-for']);
+    if (forwarded) return cleanText(forwarded.split(',')[0]);
+    return cleanText(req && req.socket && req.socket.remoteAddress);
+  }
+
+  function buildLoginFailureKey(username) {
+    return cleanText(username).toLowerCase();
+  }
+
+  function getLoginFailureState(username) {
+    const key = buildLoginFailureKey(username);
+    const entry = state.loginFailures.get(key);
+    if (!entry) return { key, failedCount: 0, lockedUntil: '' };
+    const lockUntil = cleanText(entry.lockedUntil);
+    if (lockUntil) {
+      const lockUntilMs = Date.parse(lockUntil);
+      if (!Number.isFinite(lockUntilMs) || lockUntilMs <= Date.now()) {
+        state.loginFailures.delete(key);
+        return { key, failedCount: 0, lockedUntil: '' };
+      }
+    }
+    return {
+      key,
+      failedCount: Number.isFinite(Number(entry.failedCount)) ? Number(entry.failedCount) : 0,
+      lockedUntil
+    };
+  }
+
+  function registerFailedLogin(username) {
+    const snapshot = getLoginFailureState(username);
+    const failedCount = snapshot.failedCount + 1;
+    const maxAttempts = getLoginMaxFailedAttempts();
+    const lockedUntil = failedCount >= maxAttempts
+      ? new Date(Date.now() + getLoginLockoutMs()).toISOString()
+      : '';
+    const next = {
+      failedCount,
+      lockedUntil,
+      updatedAt: new Date().toISOString()
+    };
+    state.loginFailures.set(snapshot.key, next);
+    return {
+      ...next,
+      remainingAttempts: Math.max(0, maxAttempts - failedCount),
+      isLocked: !!lockedUntil
+    };
+  }
+
+  function clearFailedLogin(username) {
+    state.loginFailures.delete(buildLoginFailureKey(username));
   }
 
   function sanitizeUserForClient(entry) {
@@ -90,6 +155,21 @@ function createSystemUserRouter(deps) {
         sessionVersion: authState.sessionVersion || 1,
         ttlMs: getSessionTtlMs()
       }),
+      mustChangePassword: authState.mustChangePassword === true,
+      contractVersion: AUTH_CONTRACT_VERSION
+    };
+  }
+
+  function buildVerifyPayload(item, authz) {
+    const authState = readStoredPasswordState(item && item.password);
+    return {
+      ok: true,
+      item: sanitizeUserForClient(item),
+      session: {
+        token: cleanText(authz && authz.token),
+        expiresAt: cleanText(authz && authz.sessionPayload && authz.sessionPayload.exp),
+        payload: authz && authz.sessionPayload ? authz.sessionPayload : null
+      },
       mustChangePassword: authState.mustChangePassword === true,
       contractVersion: AUTH_CONTRACT_VERSION
     };
@@ -498,8 +578,33 @@ function createSystemUserRouter(deps) {
       validateAuthActionEnvelope(envelope, AUTH_ACTIONS.LOGIN);
       const payload = normalizeLoginPayload(envelope.payload);
       validateLoginPayload(payload);
+      const throttle = getLoginFailureState(payload.username);
+      if (throttle.lockedUntil) {
+        await createAuditRow({
+          eventType: 'auth.login.locked',
+          actorEmail: '',
+          targetEmail: '',
+          unitCode: '',
+          recordId: payload.username,
+          occurredAt: new Date().toISOString(),
+          payloadJson: JSON.stringify({
+            action: AUTH_ACTIONS.LOGIN,
+            reason: 'locked',
+            clientAddress: readClientAddress(req),
+            lockedUntil: throttle.lockedUntil
+          })
+        });
+        await writeJson(res, buildJsonResponse(429, {
+          ok: false,
+          error: 'Too many failed login attempts. Please try again later.',
+          lockedUntil: throttle.lockedUntil,
+          contractVersion: AUTH_CONTRACT_VERSION
+        }), origin);
+        return;
+      }
       const existing = await getUserEntryByUsername(payload.username).catch(() => null);
       if (!existing) {
+        const nextThrottle = registerFailedLogin(payload.username);
         await createAuditRow({
           eventType: 'auth.login.failed',
           actorEmail: '',
@@ -507,17 +612,25 @@ function createSystemUserRouter(deps) {
           unitCode: '',
           recordId: payload.username,
           occurredAt: new Date().toISOString(),
-          payloadJson: JSON.stringify({ action: AUTH_ACTIONS.LOGIN, reason: 'user-not-found' })
+          payloadJson: JSON.stringify({
+            action: AUTH_ACTIONS.LOGIN,
+            reason: 'user-not-found',
+            clientAddress: readClientAddress(req),
+            failedCount: nextThrottle.failedCount,
+            lockedUntil: nextThrottle.lockedUntil
+          })
         });
-        await writeJson(res, buildJsonResponse(401, {
+        await writeJson(res, buildJsonResponse(nextThrottle.isLocked ? 429 : 401, {
           ok: false,
-          error: 'Invalid username or password',
+          error: nextThrottle.isLocked ? 'Too many failed login attempts. Please try again later.' : 'Invalid username or password',
+          lockedUntil: nextThrottle.lockedUntil,
           contractVersion: AUTH_CONTRACT_VERSION
         }), origin);
         return;
       }
       const verification = verifyPassword(payload.password, existing.item.password);
       if (!verification.ok) {
+        const nextThrottle = registerFailedLogin(existing.item.username);
         await createAuditRow({
           eventType: 'auth.login.failed',
           actorEmail: '',
@@ -525,11 +638,18 @@ function createSystemUserRouter(deps) {
           unitCode: '',
           recordId: existing.item.username,
           occurredAt: new Date().toISOString(),
-          payloadJson: JSON.stringify({ action: AUTH_ACTIONS.LOGIN, reason: 'invalid-password' })
+          payloadJson: JSON.stringify({
+            action: AUTH_ACTIONS.LOGIN,
+            reason: 'invalid-password',
+            clientAddress: readClientAddress(req),
+            failedCount: nextThrottle.failedCount,
+            lockedUntil: nextThrottle.lockedUntil
+          })
         });
-        await writeJson(res, buildJsonResponse(401, {
+        await writeJson(res, buildJsonResponse(nextThrottle.isLocked ? 429 : 401, {
           ok: false,
-          error: 'Invalid username or password',
+          error: nextThrottle.isLocked ? 'Too many failed login attempts. Please try again later.' : 'Invalid username or password',
+          lockedUntil: nextThrottle.lockedUntil,
           contractVersion: AUTH_CONTRACT_VERSION
         }), origin);
         return;
@@ -548,6 +668,7 @@ function createSystemUserRouter(deps) {
           updatedAt: new Date().toISOString()
         });
       }
+      clearFailedLogin(resolvedEntry.item.username);
       await createAuditRow({
         eventType: 'auth.login.success',
         actorEmail: resolvedEntry.item.email,
@@ -563,6 +684,55 @@ function createSystemUserRouter(deps) {
       await writeJson(res, buildJsonResponse(200, buildLoginPayload(resolvedEntry.item)), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to login.', 500), origin);
+    }
+  }
+
+  async function handleVerify(req, res, origin) {
+    try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      const existing = await getUserEntryByUsername(authz.username);
+      if (!existing) throw createError('System user not found', 404);
+      await writeJson(res, buildJsonResponse(200, buildVerifyPayload(existing.item, authz)), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to verify session.', 500), origin);
+    }
+  }
+
+  async function handleLogout(req, res, origin) {
+    try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      const existing = await getUserEntryByUsername(authz.username);
+      if (!existing) throw createError('System user not found', 404);
+      const now = new Date().toISOString();
+      const nextSecret = invalidateSessions(existing.item.password, { updatedAt: now });
+      const saved = await upsertUser(existing, {
+        ...existing.item,
+        password: serializePasswordSecret(nextSecret),
+        sessionVersion: nextSecret.sessionVersion,
+        updatedAt: now
+      });
+      clearFailedLogin(saved.item.username);
+      await createAuditRow({
+        eventType: 'auth.logout',
+        actorEmail: saved.item.email,
+        targetEmail: saved.item.email,
+        unitCode: '',
+        recordId: saved.item.username,
+        occurredAt: now,
+        payloadJson: JSON.stringify({
+          action: AUTH_ACTIONS.LOGOUT,
+          previousSessionVersion: Number(authz.sessionPayload && authz.sessionPayload.sessionVersion || 1),
+          nextSessionVersion: nextSecret.sessionVersion
+        })
+      });
+      await writeJson(res, buildJsonResponse(200, {
+        ok: true,
+        username: saved.item.username,
+        loggedOut: true,
+        contractVersion: AUTH_CONTRACT_VERSION
+      }), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to logout.', 500), origin);
     }
   }
 
@@ -721,6 +891,12 @@ function createSystemUserRouter(deps) {
     }
     if (url.pathname === '/api/auth/login' && req.method === 'POST') {
       return handleLogin(req, res, origin).then(() => true);
+    }
+    if (url.pathname === '/api/auth/verify' && req.method === 'GET') {
+      return handleVerify(req, res, origin).then(() => true);
+    }
+    if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
+      return handleLogout(req, res, origin).then(() => true);
     }
     if (url.pathname === '/api/auth/request-reset' && req.method === 'POST') {
       return handleRequestReset(req, res, origin).then(() => true);

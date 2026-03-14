@@ -238,6 +238,30 @@ function changePassword(rawSecret, newPassword, options) {
   });
 }
 
+function invalidateSessions(rawSecret, options) {
+  const base = parsePasswordSecret(rawSecret);
+  const nextSessionVersion = (Number.isFinite(Number(base.sessionVersion)) ? Number(base.sessionVersion) : 1) + 1;
+  const now = cleanText(options && options.updatedAt) || new Date().toISOString();
+  if (base.legacy) {
+    return createPasswordSecret(base.plaintext || base.raw, {
+      mustChangePassword: base.mustChangePassword === true,
+      sessionVersion: nextSessionVersion,
+      passwordChangedAt: cleanText(base.passwordChangedAt) || now
+    });
+  }
+  return {
+    scheme: base.scheme || PASSWORD_SCHEME,
+    salt: cleanText(base.salt),
+    hash: cleanText(base.hash),
+    mustChangePassword: base.mustChangePassword === true,
+    passwordChangedAt: cleanText(base.passwordChangedAt) || now,
+    resetTokenHash: '',
+    resetTokenExpiresAt: '',
+    resetRequestedAt: '',
+    sessionVersion: nextSessionVersion
+  };
+}
+
 function createSessionToken(user, secret, options) {
   const opts = options || {};
   const now = Date.now();
@@ -287,6 +311,7 @@ module.exports = {
   verifyResetToken,
   clearResetState,
   changePassword,
+  invalidateSessions,
   createSessionToken,
   verifySessionToken
 };

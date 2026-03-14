@@ -344,7 +344,9 @@
     registerActionHandlers('shell', {
       logout: function () {
         if (hasUnsavedChangesGuard() && !confirmDiscardUnsavedChanges('目前有尚未儲存的內容，確定要登出嗎？')) return;
-        logout();
+        Promise.resolve(logout()).catch(function (error) {
+          console.error(error && error.stack ? error.stack : String(error));
+        });
       },
       'toggle-sidebar': function () { toggleSidebar(); },
       'close-sidebar': function () { closeSidebar(); }

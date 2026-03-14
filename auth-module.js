@@ -14,6 +14,7 @@
       updateUser,
       addLoginLog,
       loginWithBackend,
+      logoutWithBackend,
       resetPasswordWithBackend,
       redeemResetPasswordWithBackend,
       changePasswordWithBackend
@@ -114,7 +115,18 @@
       return writeAuthSession(user);
     }
 
-    function logout() {
+    async function logout() {
+      const auth = readAuthSession();
+      if (typeof logoutWithBackend === 'function' && auth && auth.sessionToken) {
+        try {
+          await logoutWithBackend({
+            username: auth.username,
+            sessionToken: auth.sessionToken
+          });
+        } catch (_) {
+          // Ignore remote logout failures and still clear local session.
+        }
+      }
       sessionStorage.removeItem(AUTH_KEY);
     }
 

@@ -165,7 +165,7 @@
   function addLoginLog(username, user, success) { return getDataModule().addLoginLog(username, user, success); }
   function clearLoginLogs() { return getDataModule().clearLoginLogs(); }
   function login(un, pw) { return getAuthModule().login(un, pw); }
-  function logout() { getAuthModule().logout(); renderApp(); }
+  async function logout() { await getAuthModule().logout(); renderApp(); }
   function currentUser() { return getAuthModule().currentUser(); }
   function isAdmin(user = currentUser()) { return getPolicyModule().isAdmin(user); }
   function isUnitAdmin(user = currentUser()) { return getPolicyModule().isUnitAdmin(user); }
@@ -457,6 +457,7 @@
       updateUser: function (username, updates) { return getDataModule().updateUser(username, updates); },
       addLoginLog: function (username, user, success) { return getDataModule().addLoginLog(username, user, success); },
       loginWithBackend: submitBackendLogin,
+      logoutWithBackend: submitAuthLogout,
       resetPasswordWithBackend: submitAuthResetPasswordByEmail,
       redeemResetPasswordWithBackend: submitAuthRedeemResetPassword,
       changePasswordWithBackend: submitAuthChangePassword
@@ -783,6 +784,8 @@
   const AUTH_CONTRACT_VERSION = '2026-03-13';
     const AUTH_ACTIONS = {
       LOGIN: 'auth.login',
+      VERIFY: 'auth.verify',
+      LOGOUT: 'auth.logout',
       REQUEST_RESET: 'auth.request-reset',
       REDEEM_RESET: 'auth.redeem-reset',
       CHANGE_PASSWORD: 'auth.change-password'
@@ -1010,7 +1013,9 @@
         }
       }
       if (!response.ok) {
-        throw new Error(String(parsed && (parsed.message || parsed.error || parsed.detail) || ('HTTP ' + response.status)).trim());
+        const error = new Error(String(parsed && (parsed.message || parsed.error || parsed.detail) || ('HTTP ' + response.status)).trim());
+        error.statusCode = response.status;
+        throw error;
       }
       return parsed || { ok: true };
     } catch (error) {
@@ -1556,6 +1561,34 @@
       if (message === 'Invalid username or password') return null;
       throw error;
     }
+  }
+  async function verifyCurrentSessionWithBackend() {
+    if (getAuthMode() !== 'm365-api') return currentUser();
+    const user = currentUser();
+    if (!user || !String(user.sessionToken || '').trim()) return null;
+    const body = await requestAuthJson('/verify', { method: 'GET' });
+    const item = normalizeRemoteSystemUsers(body)[0];
+    if (!item) return null;
+    return normalizeUserRecord({
+      ...item,
+      sessionToken: String(body && body.session && body.session.token || user.sessionToken || '').trim(),
+      sessionExpiresAt: String(body && body.session && body.session.expiresAt || user.sessionExpiresAt || '').trim(),
+      mustChangePassword: body && body.mustChangePassword === true
+    });
+  }
+  async function submitAuthLogout(payload) {
+    const input = payload && typeof payload === 'object' ? payload : {};
+    if (getAuthMode() !== 'm365-api') return { ok: true, source: 'local' };
+    return requestAuthJson('/logout', {
+      method: 'POST',
+      body: {
+        action: AUTH_ACTIONS.LOGOUT,
+        payload: {
+          username: String(input.username || '').trim(),
+          sessionToken: String(input.sessionToken || '').trim()
+        }
+      }
+    });
   }
   async function submitAuthResetPasswordByEmail(email) {
     const input = email && typeof email === 'object' ? email : { email: email };
@@ -2415,8 +2448,27 @@
     }
     authenticatedBootstrapKey = nextKey;
     authenticatedBootstrapPromise = (async function () {
-      if (canManageUsers(user)) await syncUsersFromM365({ silent: true });
-      if (user.role === ROLES.ADMIN || user.role === ROLES.UNIT_ADMIN) {
+      let activeUser = user;
+      try {
+        const verifiedUser = await verifyCurrentSessionWithBackend();
+        if (!verifiedUser) {
+          sessionStorage.removeItem(AUTH_KEY);
+          authenticatedBootstrapKey = '';
+          return '';
+        }
+        sessionStorage.setItem(AUTH_KEY, JSON.stringify(verifiedUser));
+        activeUser = verifiedUser;
+      } catch (error) {
+        if (Number(error && error.statusCode) === 401 || Number(error && error.statusCode) === 403) {
+          sessionStorage.removeItem(AUTH_KEY);
+          authenticatedBootstrapKey = '';
+          authenticatedBootstrapPromise = null;
+          throw new Error('登入狀態已失效，請重新登入');
+        }
+        throw error;
+      }
+      if (canManageUsers(activeUser)) await syncUsersFromM365({ silent: true });
+      if (activeUser.role === ROLES.ADMIN || activeUser.role === ROLES.UNIT_ADMIN) {
         await syncReviewScopesFromM365({ silent: true });
       }
       await syncTrainingFormsFromM365({ silent: true });

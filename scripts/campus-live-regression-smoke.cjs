@@ -107,6 +107,44 @@ async function run() {
     return { count };
   }, { critical: true });
 
+  await step('auth verify authorized', async () => {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/verify`, {
+      headers: {
+        Authorization: `Bearer ${adminSessionToken}`
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('verify response invalid');
+    return { username: json.item.username };
+  }, { critical: true });
+
+  await step('auth logout', async () => {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/logout`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminSessionToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'auth.logout',
+        payload: {}
+      })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!json || json.ok !== true || json.loggedOut !== true) throw new Error('logout response invalid');
+    return { loggedOut: true };
+  }, { critical: true });
+
+  await step('auth verify old session denied', async () => {
+    const { response } = await requestJson(`${DEFAULT_BASE}/api/auth/verify`, {
+      headers: {
+        Authorization: `Bearer ${adminSessionToken}`
+      }
+    });
+    if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
+    return { status: response.status };
+  }, { critical: true });
+
   report.finishedAt = new Date().toISOString();
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
   fs.writeFileSync(OUT_PATH, JSON.stringify(report, null, 2), 'utf8');
