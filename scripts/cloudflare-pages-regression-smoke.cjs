@@ -96,6 +96,19 @@ async function run() {
       pushStep('audit-trail:diff-modal', true, 'no rows available for modal check');
     }
 
+    await page.goto(`${BASE_URL}/#training`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('資安教育訓練統計'));
+    }, { timeout: 20000 });
+    await page.waitForFunction(() => {
+      return Array.from(document.querySelectorAll('.training-group-title')).some((element) => {
+        return /行政單位|學術單位|中心\s*\/\s*研究單位/.test(String(element.textContent || ''));
+      });
+    }, { timeout: 20000 });
+    const trainingGroupTitles = await page.locator('.training-group-title').allTextContents();
+    pushStep('training:grouped-incomplete-units', true, trainingGroupTitles.join(' / '));
+
     if (consoleErrors.length) {
       throw new Error(`console errors detected: ${consoleErrors.join(' | ')}`);
     }
