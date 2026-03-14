@@ -169,12 +169,12 @@ async function run() {
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
       return !!(app && app.innerText && app.innerText.includes('操作稽核軌跡'));
-    }, { timeout: 20000 });
+    }, { timeout: 30000 });
     await page.waitForFunction(() => {
       const emptyState = document.querySelector('.empty-state-title');
       if (emptyState && emptyState.textContent && emptyState.textContent.includes('目前查無符合條件的稽核紀錄')) return true;
       return document.querySelectorAll('button[data-action="admin.viewAuditEntry"]').length > 0;
-    }, { timeout: 20000 });
+    }, { timeout: 30000 });
     const rows = await page.locator('button[data-action="admin.viewAuditEntry"]').count();
     pushStep('audit-trail:loaded', true, `rows=${rows}`);
 
