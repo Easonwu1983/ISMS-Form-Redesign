@@ -74,7 +74,7 @@ async function run() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('login response invalid');
     if (json.item.password) throw new Error('password leaked in auth response');
-    adminSessionToken = String(json.sessionToken || '').trim();
+    adminSessionToken = String(json && json.session && json.session.token || '').trim();
     if (!adminSessionToken) throw new Error('missing session token');
     return { username: json.item.username, role: json.item.role };
   }, { critical: true });
