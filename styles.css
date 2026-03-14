@@ -6269,6 +6269,90 @@ tbody tr:hover {
   gap: 20px;
 }
 
+.training-group-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.training-group-card {
+  border: 1px solid rgba(214, 223, 233, 0.94);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 250, 255, 0.98) 100%);
+  box-shadow: 0 18px 34px -30px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.training-group-card > summary {
+  list-style: none;
+}
+
+.training-group-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.training-group-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 22px;
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.9), rgba(255, 255, 255, 0.98));
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.training-group-summary:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: -2px;
+}
+
+.training-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.training-group-subtitle {
+  margin-top: 6px;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.training-group-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.training-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.training-group-card[open] .training-group-toggle {
+  transform: rotate(180deg);
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.training-group-card .table-wrapper {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .training-signoff-files {
   margin-top: 0;
 }
@@ -6320,6 +6404,16 @@ tbody tr:hover {
 
   .training-summary-grid-wide {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .training-group-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .training-group-meta {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .training-inline-form {

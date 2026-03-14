@@ -56,6 +56,8 @@
       getTrainingStatsUnit,
       getTrainingJobUnit,
       getTrainingUnits,
+      categorizeTopLevelUnit,
+      getTrainingUnitCategories,
       sortTrainingRosterEntries,
       syncTrainingFormsFromM365,
       syncTrainingRostersFromM365,
@@ -120,6 +122,14 @@
     const badge = badgeText ? '<span class="training-inline-status">' + badgeText + '</span>' : '';
     const subtitleHtml = subtitle ? '<div class="training-table-subtitle">' + subtitle + '</div>' : '';
     return '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">' + title + '</span>' + subtitleHtml + '</div>' + badge + '</div>' + buildTrainingTableMarkup(headersHtml, rowsHtml) + '</div>';
+  }
+
+  function buildTrainingGroupedSection(title, subtitle, groups) {
+    const groupHtml = (groups || []).map((group, index) => {
+      const bodyRows = group.rows || buildTrainingEmptyTableRow(9, '此分類目前沒有單位', '', 20);
+      return '<details class="training-group-card" ' + (index === 0 ? 'open' : '') + '><summary class="training-group-summary"><div><span class="training-group-title">' + esc(group.label) + '</span><div class="training-group-subtitle">' + esc(group.subtitle || '') + '</div></div><div class="training-group-meta"><span class="training-inline-status">' + esc(String(group.count || 0)) + ' 個單位</span><span class="training-group-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary>' + buildTrainingTableMarkup('<th>一級單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th>', bodyRows) + '</details>';
+    }).join('');
+    return '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">' + esc(title) + '</span><div class="training-table-subtitle">' + esc(subtitle || '') + '</div></div></div><div class="training-group-stack">' + groupHtml + '</div></div>';
   }
 
   function buildTrainingSummarySection(summary) {
@@ -400,30 +410,45 @@
         + '<td>' + buildFormActions(item.latest) + '</td>'
         + '</tr>').join('') : '<tr><td colspan="10"><div class="empty-state" style="padding:28px"><div class="empty-state-title">目前沒有已完成填報的單位</div></div></td></tr>';
 
-      const incompleteRows = incompleteUnits.length ? incompleteUnits.map((item) => {
-        const latest = item.latest;
-        const statusText = latest ? trainingStatusBadge(latest.status) : '<span class="training-inline-status">尚未填報</span>';
-        const note = !latest
-          ? '尚未建立填報單'
-          : (latest.status === TRAINING_STATUSES.PENDING_SIGNOFF
-            ? '流程一已完成，待列印與上傳簽核表'
-            : (latest.status === TRAINING_STATUSES.RETURNED ? ('退回原因：' + (latest.returnReason || '未提供')) : '尚在填寫中'));
-        return '<tr>'
-          + '<td>' + esc(item.unit) + '</td>'
-          + '<td>' + statusText + '</td>'
-          + '<td>' + (latest ? esc(latest.fillerName || '—') : '—') + '</td>'
-          + '<td>' + (item.summary.activeCount || 0) + '</td>'
-          + '<td>' + (item.summary.completedCount || 0) + '</td>'
-          + '<td><span class="training-rate-pill">' + (item.summary.completionRate || 0) + '%</span></td>'
-          + '<td>' + esc(note) + '</td>'
-          + '<td>' + (latest ? fmtTime(latest.updatedAt) : '—') + '</td>'
-          + '<td>' + buildFormActions(latest) + '</td>'
-          + '</tr>';
-      }).join('') : '<tr><td colspan="9"><div class="empty-state" style="padding:28px"><div class="empty-state-title">所有單位都已完成填報</div></div></td></tr>';
+      const categoryOrder = getTrainingUnitCategories().slice();
+      const categoryLabels = {
+        '行政單位': '行政單位',
+        '學術單位': '學術單位',
+        '研究中心': '中心 / 研究單位'
+      };
+      const incompleteGroups = categoryOrder.map((category) => {
+        const units = incompleteUnits.filter((item) => categorizeTopLevelUnit(item.unit) === category);
+        const rows = units.length ? units.map((item) => {
+          const latest = item.latest;
+          const statusText = latest ? trainingStatusBadge(latest.status) : '<span class="training-inline-status">尚未填報</span>';
+          const note = !latest
+            ? '尚未建立填報單'
+            : (latest.status === TRAINING_STATUSES.PENDING_SIGNOFF
+              ? '流程一已完成，待列印與上傳簽核表'
+              : (latest.status === TRAINING_STATUSES.RETURNED ? ('退回原因：' + (latest.returnReason || '未提供')) : '尚在填寫中'));
+          return '<tr>'
+            + '<td>' + esc(item.unit) + '</td>'
+            + '<td>' + statusText + '</td>'
+            + '<td>' + (latest ? esc(latest.fillerName || '—') : '—') + '</td>'
+            + '<td>' + (item.summary.activeCount || 0) + '</td>'
+            + '<td>' + (item.summary.completedCount || 0) + '</td>'
+            + '<td><span class="training-rate-pill">' + (item.summary.completionRate || 0) + '%</span></td>'
+            + '<td>' + esc(note) + '</td>'
+            + '<td>' + (latest ? fmtTime(latest.updatedAt) : '—') + '</td>'
+            + '<td>' + buildFormActions(latest) + '</td>'
+            + '</tr>';
+        }).join('') : buildTrainingEmptyTableRow(9, '此分類目前沒有未完成單位', '', 20);
+        return {
+          label: categoryLabels[category] || category,
+          subtitle: units.length ? ('依一級單位彙總，共 ' + units.length + ' 個單位待補件或未送出。') : '此分類目前沒有未完成單位。',
+          count: units.length,
+          rows
+        };
+      });
 
       contentHtml = '<div class="training-dashboard-sections">'
         + buildTrainingTableCard('已完成填報', '填報清單已併入此區，方便直接查看已完成資料與下載。', completedUnits.length + ' 個單位', '<th>統計單位</th><th>填報單位</th><th>編號</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>未完成</th><th>達成比率</th><th>完成時間</th><th>操作</th>', completedRows)
-        + buildTrainingTableCard('未完成填報', '此區僅列一級單位，包含尚未填報、暫存、退回更正與待簽核中的單位。', incompleteUnits.length + ' 個單位', '<th>一級單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th>', incompleteRows)
+        + buildTrainingGroupedSection('未完成填報', '依行政單位、學術單位、中心 / 研究單位分類展開，方便內測與催辦。', incompleteGroups)
         + '</div>';
     } else {
       const rows = visibleForms.length ? visibleForms.map((form) => {

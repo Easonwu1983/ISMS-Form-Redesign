@@ -720,6 +720,8 @@
       getTrainingStatsUnit,
       getTrainingJobUnit,
       getTrainingUnits,
+      categorizeTopLevelUnit,
+      getTrainingUnitCategories,
       sortTrainingRosterEntries,
       syncTrainingFormsFromM365,
       syncTrainingRostersFromM365,

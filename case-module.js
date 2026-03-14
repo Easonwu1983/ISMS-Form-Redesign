@@ -87,7 +87,8 @@
     var opts = options || {};
     var styleAttr = opts.style ? ' style="' + opts.style + '"' : '';
     var headerClass = opts.headerClass || 'card-header';
-    return '<div class="card"' + styleAttr + '>' + (headerHtml ? '<div class="' + headerClass + '">' + headerHtml + '</div>' : '') + bodyHtml + '</div>';
+    var cardClass = opts.cardClass ? 'card ' + opts.cardClass : 'card';
+    return '<div class="' + cardClass + '"' + styleAttr + '>' + (headerHtml ? '<div class="' + headerClass + '">' + headerHtml + '</div>' : '') + bodyHtml + '</div>';
   }
 
   function buildCaseTableMarkup(headersHtml, rowsHtml) {
@@ -103,7 +104,7 @@
     var headerHtml = '<span class="card-title">' + title + '</span>' + (opts.actionHtml || '');
     var cardStyle = opts.cardStyle || '';
     var headerClass = opts.headerClass || 'card-header';
-    return buildCaseCard(headerHtml, buildCaseTableMarkup(headersHtml, rowsHtml), { style: cardStyle, headerClass: headerClass });
+    return buildCaseCard(headerHtml, buildCaseTableMarkup(headersHtml, rowsHtml), { style: cardStyle, headerClass: headerClass, cardClass: opts.cardClass || '' });
   }
 
   function buildCaseEmptyTableRow(colspan, iconName, title, padding) {
@@ -282,8 +283,8 @@
       + buildCaseStatCard('closed', 'check-circle-2', closedM, '本月結案')
       + '</div>'
       + '<div class="dashboard-grid">'
-      + buildCaseCard('<span class="card-title">狀態分布</span>', '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { headerClass: 'card-header dashboard-panel dashboard-chart-panel' })
-      + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', headerClass: 'card-header dashboard-panel dashboard-table-panel' })
+      + buildCaseCard('<span class="card-title">狀態分布</span>', '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { cardClass: 'dashboard-panel dashboard-chart-panel' })
+      + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', cardClass: 'dashboard-panel dashboard-table-panel' })
       + '</div></div>';
 
     refreshIcons();
