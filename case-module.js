@@ -107,6 +107,24 @@
     return buildCaseCard(headerHtml, buildCaseTableMarkup(headersHtml, rowsHtml), { style: cardStyle, headerClass: headerClass, cardClass: opts.cardClass || '' });
   }
 
+  function buildDashboardStatusOverview(items) {
+    var total = items.length;
+    var open = items.filter(function (item) { return item.status !== STATUSES.CLOSED; }).length;
+    var overdue = items.filter(function (item) { return isOverdue(item); }).length;
+    var closed = items.filter(function (item) { return item.status === STATUSES.CLOSED; }).length;
+    var stats = [
+      { label: '進行中', value: open },
+      { label: '已結案', value: closed },
+      { label: '逾期', value: overdue }
+    ];
+    return '<div class="dashboard-panel-summary">'
+      + stats.map(function (stat) {
+        return '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">' + stat.label + '</span><strong class="dashboard-panel-pill-value">' + stat.value + '</strong></div>';
+      }).join('')
+      + '<div class="dashboard-panel-note">狀態分布依目前可見案件計算，總數 ' + total + ' 筆。</div>'
+      + '</div>';
+  }
+
   function buildCaseEmptyTableRow(colspan, iconName, title, padding) {
     return '<tr><td colspan="' + colspan + '"><div class="empty-state" style="padding:' + (padding || 32) + 'px"><div class="empty-state-icon">' + ic(iconName || 'inbox') + '</div><div class="empty-state-title">' + esc(title) + '</div></div></td></tr>';
   }
@@ -251,7 +269,11 @@
       return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>';
     }).join('');
 
-    var recent = items.slice().sort(function (a, b) { return getCaseLastActivityTime(b) - getCaseLastActivityTime(a); }).slice(0, 5);
+    var recent = items.slice().sort(function (a, b) {
+      var closedCompare = (a.status === STATUSES.CLOSED ? 1 : 0) - (b.status === STATUSES.CLOSED ? 1 : 0);
+      if (closedCompare !== 0) return closedCompare;
+      return getCaseLastActivityTime(b) - getCaseLastActivityTime(a);
+    }).slice(0, 5);
     var recentRows = recent.length ? recent.map(function (i) {
       return renderDashboardTableRow(i);
     }).join('') : buildCaseEmptyTableRow(6, 'inbox', '沒有矯正單資料', 40);
@@ -283,7 +305,7 @@
       + buildCaseStatCard('closed', 'check-circle-2', closedM, '本月結案')
       + '</div>'
       + '<div class="dashboard-grid">'
-      + buildCaseCard('<span class="card-title">狀態分布</span>', '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { cardClass: 'dashboard-panel dashboard-chart-panel' })
+      + buildCaseCard('<span class="card-title">狀態分布</span>', buildDashboardStatusOverview(items) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { cardClass: 'dashboard-panel dashboard-chart-panel' })
       + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', cardClass: 'dashboard-panel dashboard-table-panel' })
       + '</div></div>';
 

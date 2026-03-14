@@ -127,9 +127,20 @@
   function buildTrainingGroupedSection(title, subtitle, groups) {
     const groupHtml = (groups || []).map((group, index) => {
       const bodyRows = group.rows || buildTrainingEmptyTableRow(9, '此分類目前沒有單位', '', 20);
-      return '<details class="training-group-card" ' + (index === 0 ? 'open' : '') + '><summary class="training-group-summary"><div><span class="training-group-title">' + esc(group.label) + '</span><div class="training-group-subtitle">' + esc(group.subtitle || '') + '</div></div><div class="training-group-meta"><span class="training-inline-status">' + esc(String(group.count || 0)) + ' 個單位</span><span class="training-group-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary>' + buildTrainingTableMarkup('<th>一級單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th>', bodyRows) + '</details>';
+      return '<details class="training-group-card" ' + (index === 0 ? 'open' : '') + '><summary class="training-group-summary"><div><span class="training-group-title">' + esc(group.label) + '</span><div class="training-group-subtitle">' + esc(group.subtitle || '') + '</div>' + (group.summaryHtml || '') + '</div><div class="training-group-meta"><span class="training-inline-status">' + esc(String(group.count || 0)) + ' 個單位</span><span class="training-group-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary>' + buildTrainingTableMarkup('<th>一級單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th>', bodyRows) + '</details>';
     }).join('');
     return '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">' + esc(title) + '</span><div class="training-table-subtitle">' + esc(subtitle || '') + '</div></div></div><div class="training-group-stack">' + groupHtml + '</div></div>';
+  }
+
+  function buildTrainingGroupSummary(summary) {
+    const stats = summary || {};
+    const completionRate = stats.activeCount ? Math.round((stats.completedCount / stats.activeCount) * 100) : 0;
+    const chips = [
+      ['已建立填報', stats.filledUnits || 0],
+      ['待處理單位', stats.count || 0],
+      ['平均達成率', completionRate + '%']
+    ];
+    return '<div class="training-group-summary-grid">' + chips.map(([label, value]) => '<span class="training-group-summary-chip"><strong>' + esc(String(value)) + '</strong><small>' + esc(label) + '</small></span>').join('') + '</div>';
   }
 
   function buildTrainingSummarySection(summary) {
@@ -418,6 +429,15 @@
       };
       const incompleteGroups = categoryOrder.map((category) => {
         const units = incompleteUnits.filter((item) => categorizeTopLevelUnit(item.unit) === category);
+        const groupSummary = units.reduce((acc, item) => {
+          const latest = item.latest;
+          acc.count += 1;
+          if (latest) acc.filledUnits += 1;
+          acc.activeCount += Number(item.summary.activeCount || 0);
+          acc.completedCount += Number(item.summary.completedCount || 0);
+          acc.incompleteCount += Number(item.summary.incompleteCount || 0);
+          return acc;
+        }, { count: 0, filledUnits: 0, activeCount: 0, completedCount: 0, incompleteCount: 0 });
         const rows = units.length ? units.map((item) => {
           const latest = item.latest;
           const statusText = latest ? trainingStatusBadge(latest.status) : '<span class="training-inline-status">尚未填報</span>';
@@ -442,6 +462,7 @@
           label: categoryLabels[category] || category,
           subtitle: units.length ? ('依一級單位彙總，共 ' + units.length + ' 個單位待補件或未送出。') : '此分類目前沒有未完成單位。',
           count: units.length,
+          summaryHtml: units.length ? buildTrainingGroupSummary(groupSummary) : '',
           rows
         };
       });

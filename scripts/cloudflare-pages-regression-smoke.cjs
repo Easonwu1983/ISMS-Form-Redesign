@@ -69,6 +69,10 @@ async function run() {
     if (!String(dashboardTitle || '').trim()) throw new Error('missing dashboard title');
     pushStep('dashboard:loaded', true, dashboardTitle.trim());
 
+    await page.waitForFunction(() => document.querySelectorAll('.dashboard-panel-pill').length >= 3, { timeout: 20000 });
+    const dashboardPills = await page.locator('.dashboard-panel-pill').count();
+    pushStep('dashboard:summary-pills', true, `count=${dashboardPills}`);
+
     await page.goto(`${BASE_URL}/#audit-trail`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
@@ -108,6 +112,10 @@ async function run() {
     }, { timeout: 20000 });
     const trainingGroupTitles = await page.locator('.training-group-title').allTextContents();
     pushStep('training:grouped-incomplete-units', true, trainingGroupTitles.join(' / '));
+
+    await page.waitForFunction(() => document.querySelectorAll('.training-group-summary-chip').length >= 3, { timeout: 20000 });
+    const trainingSummaryChips = await page.locator('.training-group-summary-chip').count();
+    pushStep('training:group-summary-chips', true, `count=${trainingSummaryChips}`);
 
     if (consoleErrors.length) {
       throw new Error(`console errors detected: ${consoleErrors.join(' | ')}`);

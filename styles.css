@@ -6322,6 +6322,34 @@ tbody tr:hover {
   color: var(--text-secondary);
 }
 
+.training-group-summary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.training-group-summary-chip {
+  display: inline-grid;
+  gap: 4px;
+  min-width: 110px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(214, 223, 233, 0.94);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.training-group-summary-chip strong {
+  font-size: 1rem;
+  color: var(--text-heading);
+}
+
+.training-group-summary-chip small {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .training-group-meta {
   display: inline-flex;
   align-items: center;
@@ -6663,6 +6691,43 @@ tbody tr:hover {
   color: #fff;
 }
 
+.dashboard-panel-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.dashboard-panel-pill {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(214, 223, 233, 0.92);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.dashboard-panel-pill-label {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.dashboard-panel-pill-value {
+  color: var(--text-heading);
+  font-size: 1.24rem;
+  line-height: 1.1;
+}
+
+.dashboard-panel-note {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  padding: 0 2px;
+}
+
 .stats-grid {
   grid-template-columns: repeat(4, minmax(220px, 1fr));
   gap: 18px;
@@ -6977,6 +7042,10 @@ tbody tr:hover {
   .editor-shell,
   .dashboard-hero-grid,
   .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-panel-summary {
     grid-template-columns: 1fr;
   }
 
