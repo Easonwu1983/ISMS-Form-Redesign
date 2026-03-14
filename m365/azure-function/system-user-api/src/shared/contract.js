@@ -194,10 +194,11 @@ function readStoredPasswordState(value) {
 
 function mapSystemUserForClient(entry) {
   const normalized = normalizeStoredSystemUser(entry);
+  const { password: _password, ...publicFields } = normalized;
   const passwordState = readStoredPasswordState(normalized.password);
   const displayName = cleanText(normalized.name) || DEFAULT_DISPLAY_NAME_BY_USERNAME[cleanText(normalized.username)] || cleanText(normalized.username);
   return {
-    ...normalized,
+    ...publicFields,
     name: displayName,
     hasPassword: passwordState.hasPassword,
     mustChangePassword: passwordState.mustChangePassword,
