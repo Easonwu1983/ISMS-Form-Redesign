@@ -80,16 +80,19 @@
   function renderChecklistList() {
     Promise.resolve(syncChecklistsFromM365({ silent: true })).catch(function () { });
     const checklists = getVisibleChecklists();
-    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
+    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} ?????</a>` : '';
     const rows = checklists.length ? checklists.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(c => {
       const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
       const statusCls = normalizeChecklistStatus(c.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
       const target = isChecklistDraftStatus(c.status) && canEditChecklist(c) ? `checklist-fill/${c.id}` : `checklist-detail/${c.id}`;
-      return `<tr data-route="${target}"><td class="record-id-col">${renderCopyIdCell(c.id, '檢核表編號', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} 年</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
-    }).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:60px"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有檢核表</div><div class="empty-state-desc">可以先建立新的檢核表草稿，或等待其他填報者送出後再查看。</div></div></td></tr>`;
+      return `<tr data-route="${target}"><td class="record-id-col">${renderCopyIdCell(c.id, '?????', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} ?</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
+    }).join('') : '';
+    const bodyHtml = checklists.length
+      ? `<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">??</th><th>????</th><th>????</th><th>????</th><th>??</th><th>???</th><th>????</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
+      : `<div class="card checklist-empty-card"><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">???????</div><div class="empty-state-desc">????????????????????????????</div></div></div>`;
     document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">查看各單位檢核表填報狀況，並可直接進入草稿編修或檢視明細。</p></div>${fillBtn}</div>
-      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>受稽單位</th><th>填報人員</th><th>稽核年度</th><th>狀態</th><th>完成率</th><th>填報日期</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+      <div class="page-header"><div><h1 class="page-title">?????</h1><p class="page-subtitle">?????????????????????????????</p></div>${fillBtn}</div>
+      ${bodyHtml}</div>`;
     refreshIcons();
     bindCopyButtons();
   }

@@ -6579,6 +6579,16 @@ tbody tr:hover {
   box-shadow: none;
 }
 
+.checklist-empty-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.checklist-empty-state {
+  min-height: 240px;
+  padding: 52px 28px;
+}
+
 .training-signoff-files {
   margin-top: 0;
 }
@@ -6703,6 +6713,41 @@ tbody tr:hover {
   .training-toolbar-actions .btn {
     flex: 1 1 auto;
     justify-content: center;
+  }
+
+  .training-group-card .table-wrapper th:nth-child(4),
+  .training-group-card .table-wrapper th:nth-child(5),
+  .training-group-card .table-wrapper th:nth-child(7),
+  .training-group-card .table-wrapper th:nth-child(8),
+  .training-group-card .table-wrapper td:nth-child(4),
+  .training-group-card .table-wrapper td:nth-child(5),
+  .training-group-card .table-wrapper td:nth-child(7),
+  .training-group-card .table-wrapper td:nth-child(8) {
+    display: none;
+  }
+
+  .training-group-card .table-wrapper table {
+    min-width: 560px;
+  }
+
+  .training-group-card .table-wrapper th,
+  .training-group-card .table-wrapper td {
+    padding: 10px 8px;
+    font-size: 0.78rem;
+  }
+
+  .training-group-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .training-group-header-actions .btn {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+  }
+
+  .checklist-empty-state {
+    min-height: 180px;
+    padding: 34px 20px;
   }
 }
 
