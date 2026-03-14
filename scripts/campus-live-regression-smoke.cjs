@@ -83,7 +83,7 @@ async function run() {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('login response invalid');
-    if (json.item.password) throw new Error('password leaked in auth response');
+    if (Object.prototype.hasOwnProperty.call(json.item || {}, 'password')) throw new Error('password field leaked in auth response');
     adminSessionToken = String(json && json.session && json.session.token || '').trim();
     if (!adminSessionToken) throw new Error('missing session token');
     return { username: json.item.username, role: json.item.role };
@@ -112,8 +112,12 @@ async function run() {
       }
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const count = Array.isArray(json && json.items) ? json.items.length : 0;
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const count = items.length;
     if (count < 1) throw new Error('system-users list is empty');
+    if (items.some((item) => Object.prototype.hasOwnProperty.call(item || {}, 'password'))) {
+      throw new Error('password field leaked in system-users list');
+    }
     return { count };
   }, { critical: true });
 

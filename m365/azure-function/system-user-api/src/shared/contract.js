@@ -199,7 +199,6 @@ function mapSystemUserForClient(entry) {
   return {
     ...normalized,
     name: displayName,
-    password: '',
     hasPassword: passwordState.hasPassword,
     mustChangePassword: passwordState.mustChangePassword,
     passwordChangedAt: passwordState.passwordChangedAt,
