@@ -77,7 +77,8 @@ async function run() {
     }, { timeout: 15000 });
     pushStep('dashboard:recent-last-activity-column', true, 'present');
 
-    await page.goto(`${BASE_URL}/#checklist`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
       return !!(app && app.innerText && app.innerText.includes('內稽檢核表'));
@@ -88,7 +89,8 @@ async function run() {
     }
     pushStep('checklist:list-loaded', true, checklistListText.includes('目前沒有檢核表') ? 'empty-state' : 'table');
 
-    await page.goto(`${BASE_URL}/#checklist-fill`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.goto(`${BASE_URL}/#checklist-fill`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
       return !!(app && app.innerText && (app.innerText.includes('填報檢核表') || app.innerText.includes('編修檢核表')));
@@ -100,7 +102,59 @@ async function run() {
     await page.waitForSelector('[data-testid="checklist-form"]', { timeout: 15000 });
     pushStep('checklist:fill-loaded', true, 'form ready');
 
-    await page.goto(`${BASE_URL}/#checklist-manage`, { waitUntil: 'networkidle', timeout: 45000 });
+    const checklistDetailId = 'CHK-SMOKE-DETAIL-001';
+    await page.evaluate((detailId) => {
+      const sections = window._dataModule.getChecklistSections();
+      const items = sections.flatMap((section) => Array.isArray(section.items) ? section.items : []);
+      const results = {};
+      if (items[0]) results[items[0].id] = { compliance: '\u7b26\u5408', execution: 'Smoke conform', evidence: 'Smoke evidence A' };
+      if (items[1]) results[items[1].id] = { compliance: '\u90e8\u5206\u7b26\u5408', execution: 'Smoke partial', evidence: 'Smoke evidence B' };
+      if (items[2]) results[items[2].id] = { compliance: '\u4e0d\u7b26\u5408', execution: 'Smoke nonconform', evidence: 'Smoke evidence C' };
+      if (items[3]) results[items[3].id] = { compliance: '\u4e0d\u9069\u7528', execution: 'Smoke NA', evidence: 'Smoke evidence D' };
+      const originalGetChecklist = window._dataModule.getChecklist.bind(window._dataModule);
+      const smokeChecklist = {
+        id: detailId,
+        unit: document.getElementById('cl-unit') ? document.getElementById('cl-unit').value : '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44',
+        fillerName: document.getElementById('cl-filler') ? document.getElementById('cl-filler').value : 'admin',
+        fillerUsername: 'admin',
+        auditYear: '999',
+        fillDate: '2026-03-14',
+        supervisorName: 'SYSTEM SMOKE',
+        supervisorTitle: 'SYSTEM',
+        supervisor: 'SYSTEM SMOKE',
+        signStatus: '\u5df2\u7c3d\u6838',
+        signDate: '2026-03-14',
+        supervisorNote: 'UI smoke only',
+        results,
+        summary: {
+          total: items.length,
+          conform: 1,
+          partial: 1,
+          nonConform: 1,
+          na: 1
+        },
+        status: '\u8349\u7a3f',
+        createdAt: '2026-03-14T13:20:00.000Z',
+        updatedAt: '2026-03-14T13:20:00.000Z'
+      };
+      window._dataModule.getChecklist = function(id) {
+        if (id === detailId) return smokeChecklist;
+        return originalGetChecklist(id);
+      };
+      location.hash = '#checklist-detail/' + detailId;
+    }, checklistDetailId);
+    await page.waitForTimeout(1500);
+    const checklistDetailText = await page.locator('#app').innerText();
+    if (/\?{4,}/.test(checklistDetailText)) {
+      throw new Error('checklist detail contains placeholder question marks');
+    }
+    if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001') || !checklistDetailText.includes('待改善項目')) {
+      throw new Error('checklist detail smoke record did not render as expected');
+    }
+    pushStep('checklist:detail-loaded', true, checklistDetailId);
+
+    await page.goto(`${BASE_URL}/#checklist-manage`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
       return !!(app && app.innerText && app.innerText.includes('檢核表管理'));
