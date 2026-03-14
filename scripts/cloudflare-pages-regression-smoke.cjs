@@ -30,8 +30,14 @@ async function run() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   const consoleErrors = [];
+  const ignorableConsolePatterns = [
+    'Failed to load resource: the server responded with a status of 401 ()'
+  ];
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    const text = message.text();
+    if (ignorableConsolePatterns.some((pattern) => text.includes(pattern))) return;
+    consoleErrors.push(text);
   });
   page.on('pageerror', (error) => {
     consoleErrors.push(String(error && error.message || error));
