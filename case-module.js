@@ -75,8 +75,21 @@
     return '<span class="badge badge-' + (overdue ? 'overdue' : STATUS_CLASSES[item.status]) + '"><span class="badge-dot"></span>' + label + '</span>';
   }
 
+  function renderDashboardIdCell(item) {
+    return '<div class="copy-id-cell copy-id-cell--strong dashboard-recent-id-cell"><span class="copy-id-text dashboard-recent-id-text">' + esc(item.id || '') + '</span>' + renderCopyIdButton(item.id, '矯正單號') + '</div>';
+  }
+
   function renderDashboardTableRow(item) {
-    return '<tr data-route="detail/' + item.id + '"><td class="record-id-col">' + renderCopyIdCell(item.id, '矯正單號', true) + '</td><td>' + esc(item.problemDesc || '').substring(0, 34) + '</td><td>' + renderCaseStatusCell(item, false) + '</td><td>' + formatCaseLastActivity(item) + '</td><td>' + esc(item.handlerName) + '</td><td>' + fmt(item.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(item)) + '</td></tr>';
+    var problemDesc = String(item.problemDesc || '').trim();
+    return '<tr data-route="detail/' + item.id + '">'
+      + '<td class="record-id-col">' + renderDashboardIdCell(item) + '</td>'
+      + '<td class="dashboard-recent-desc-cell" title="' + esc(problemDesc) + '"><span class="dashboard-recent-desc">' + esc(problemDesc || '—') + '</span></td>'
+      + '<td class="dashboard-recent-status-cell">' + renderCaseStatusCell(item, false) + '</td>'
+      + '<td class="dashboard-recent-date-cell">' + formatCaseLastActivity(item) + '</td>'
+      + '<td class="dashboard-recent-handler-cell">' + esc(item.handlerName || '—') + '</td>'
+      + '<td class="dashboard-recent-date-cell">' + fmt(item.correctiveDueDate) + '</td>'
+      + '<td class="dashboard-recent-date-cell">' + fmt(getCurrentNextTrackingDate(item)) + '</td>'
+      + '</tr>';
   }
 
   function renderListTableRow(item) {
@@ -91,8 +104,11 @@
     return '<div class="' + cardClass + '"' + styleAttr + '>' + (headerHtml ? '<div class="' + headerClass + '">' + headerHtml + '</div>' : '') + bodyHtml + '</div>';
   }
 
-  function buildCaseTableMarkup(headersHtml, rowsHtml) {
-    return '<div class="table-wrapper"><table><thead><tr>' + headersHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+  function buildCaseTableMarkup(headersHtml, rowsHtml, options) {
+    var opts = options || {};
+    var wrapperClass = opts.wrapperClass ? 'table-wrapper ' + opts.wrapperClass : 'table-wrapper';
+    var tableClass = opts.tableClass ? ' class="' + opts.tableClass + '"' : '';
+    return '<div class="' + wrapperClass + '"><table' + tableClass + '><thead><tr>' + headersHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
   }
 
   function buildCaseStatCard(tone, iconName, value, label) {
@@ -104,7 +120,7 @@
     var headerHtml = '<span class="card-title">' + title + '</span>' + (opts.actionHtml || '');
     var cardStyle = opts.cardStyle || '';
     var headerClass = opts.headerClass || 'card-header';
-    return buildCaseCard(headerHtml, buildCaseTableMarkup(headersHtml, rowsHtml), { style: cardStyle, headerClass: headerClass, cardClass: opts.cardClass || '' });
+    return buildCaseCard(headerHtml, buildCaseTableMarkup(headersHtml, rowsHtml, opts), { style: cardStyle, headerClass: headerClass, cardClass: opts.cardClass || '' });
   }
 
   function buildDashboardStatusOverview(items) {
@@ -311,8 +327,8 @@
       + '</div>'
       + '<div class="dashboard-grid">'
       + buildCaseCard('<span class="card-title">狀態分布</span>', buildDashboardStatusOverview(items) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { cardClass: 'dashboard-panel dashboard-chart-panel' })
-      + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>最後活動</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', cardClass: 'dashboard-panel dashboard-table-panel' })
-      + '</div></div>';
+      + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>最後活動</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', cardClass: 'dashboard-panel dashboard-table-panel', wrapperClass: 'dashboard-recent-table-wrapper', tableClass: 'dashboard-recent-table' })
+        + '</div></div>';
 
     refreshIcons();
     bindCopyButtons();
