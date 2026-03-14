@@ -32,3 +32,5 @@ tmp-*
 .codex-runtime.stderr.log
 .codex-runtime.stdout.log
 .codex-runtime-logs/
+
+dist/
