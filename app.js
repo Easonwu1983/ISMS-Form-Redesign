@@ -720,6 +720,7 @@
       getTrainingStatsUnit,
       getTrainingJobUnit,
       getTrainingUnits,
+      isOfficialUnit,
       categorizeTopLevelUnit,
       getTrainingUnitCategories,
       sortTrainingRosterEntries,

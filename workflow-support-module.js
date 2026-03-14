@@ -263,6 +263,10 @@
       return String(a || '').localeCompare(String(b || ''), 'zh-Hant', { sensitivity: 'base', numeric: true });
     }
 
+    function localeCompareZhStroke(a, b) {
+      return String(a || '').localeCompare(String(b || ''), 'zh-Hant-u-co-stroke', { sensitivity: 'base', numeric: true });
+    }
+
     function getTrainingSourceRank(row) {
       return String(row && row.source || '').trim() === 'manual' ? 1 : 0;
     }
@@ -289,22 +293,25 @@
     }
 
     function compareTrainingRosterEntries(a, b) {
-      const sourceCompare = getTrainingSourceRank(a) - getTrainingSourceRank(b);
-      if (sourceCompare !== 0) return sourceCompare;
-
-      const unitCompare = localeCompareZh(a && (a.unitName || getTrainingJobUnit(a.unit)), b && (b.unitName || getTrainingJobUnit(b.unit)));
+      const unitCompare = localeCompareZhStroke(a && (a.unitName || getTrainingJobUnit(a.unit)), b && (b.unitName || getTrainingJobUnit(b.unit)));
       if (unitCompare !== 0) return unitCompare;
 
-      const identityCompare = localeCompareZh(a && a.identity, b && b.identity);
-      if (identityCompare !== 0) return identityCompare;
+      const nameCompare = localeCompareZhStroke(a && a.name, b && b.name);
+      if (nameCompare !== 0) return nameCompare;
+
+      const sourceCompare = getTrainingSourceRank(a) - getTrainingSourceRank(b);
+      if (sourceCompare !== 0) return sourceCompare;
 
       const supervisorCompare = getTrainingSupervisorRank(a) - getTrainingSupervisorRank(b);
       if (supervisorCompare !== 0) return supervisorCompare;
 
-      const titleCompare = localeCompareZh(a && a.jobTitle, b && b.jobTitle);
+      const identityCompare = localeCompareZhStroke(a && a.identity, b && b.identity);
+      if (identityCompare !== 0) return identityCompare;
+
+      const titleCompare = localeCompareZhStroke(a && a.jobTitle, b && b.jobTitle);
       if (titleCompare !== 0) return titleCompare;
 
-      return localeCompareZh(a && a.name, b && b.name);
+      return localeCompareZh(a && a.createdAt, b && b.createdAt);
     }
 
     function sortTrainingRosterEntries(rows) {

@@ -76,7 +76,7 @@
   }
 
   function renderDashboardTableRow(item) {
-    return '<tr data-route="detail/' + item.id + '"><td class="record-id-col">' + renderCopyIdCell(item.id, '矯正單號', true) + '</td><td>' + esc(item.problemDesc || '').substring(0, 34) + '</td><td>' + renderCaseStatusCell(item, false) + '</td><td>' + esc(item.handlerName) + '</td><td>' + fmt(item.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(item)) + '</td></tr>';
+    return '<tr data-route="detail/' + item.id + '"><td class="record-id-col">' + renderCopyIdCell(item.id, '矯正單號', true) + '</td><td>' + esc(item.problemDesc || '').substring(0, 34) + '</td><td>' + renderCaseStatusCell(item, false) + '</td><td>' + formatCaseLastActivity(item) + '</td><td>' + esc(item.handlerName) + '</td><td>' + fmt(item.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(item)) + '</td></tr>';
   }
 
   function renderListTableRow(item) {
@@ -219,6 +219,11 @@
     }, 0);
   }
 
+  function formatCaseLastActivity(item) {
+    var last = getCaseLastActivityTime(item);
+    return last ? fmtTime(new Date(last).toISOString()) : '—';
+  }
+
   function getDashboardStatusBucket(item) {
     if (!item) return STATUSES.CREATED;
     return isOverdue(item) ? '已逾期' : item.status;
@@ -276,7 +281,7 @@
     }).slice(0, 5);
     var recentRows = recent.length ? recent.map(function (i) {
       return renderDashboardTableRow(i);
-    }).join('') : buildCaseEmptyTableRow(6, 'inbox', '沒有矯正單資料', 40);
+    }).join('') : buildCaseEmptyTableRow(7, 'inbox', '沒有矯正單資料', 40);
 
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     var nextDueItem = items.filter(function (i) { return i.status !== STATUSES.CLOSED && i.correctiveDueDate; }).sort(function (a, b) { return new Date(a.correctiveDueDate) - new Date(b.correctiveDueDate); })[0] || null;
@@ -306,7 +311,7 @@
       + '</div>'
       + '<div class="dashboard-grid">'
       + buildCaseCard('<span class="card-title">狀態分布</span>', buildDashboardStatusOverview(items) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { cardClass: 'dashboard-panel dashboard-chart-panel' })
-      + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', cardClass: 'dashboard-panel dashboard-table-panel' })
+      + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>最後活動</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', cardClass: 'dashboard-panel dashboard-table-panel' })
       + '</div></div>';
 
     refreshIcons();

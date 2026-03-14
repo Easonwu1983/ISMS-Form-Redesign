@@ -72,6 +72,10 @@ async function run() {
     await page.waitForFunction(() => document.querySelectorAll('.dashboard-panel-pill').length >= 3, { timeout: 20000 });
     const dashboardPills = await page.locator('.dashboard-panel-pill').count();
     pushStep('dashboard:summary-pills', true, `count=${dashboardPills}`);
+    await page.waitForFunction(() => {
+      return Array.from(document.querySelectorAll('th')).some((element) => String(element.textContent || '').includes('最後活動'));
+    }, { timeout: 15000 });
+    pushStep('dashboard:recent-last-activity-column', true, 'present');
 
     await page.goto(`${BASE_URL}/#audit-trail`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForFunction(() => {
@@ -132,6 +136,8 @@ async function run() {
     await page.waitForFunction(() => document.querySelectorAll('.training-group-summary-chip').length >= 3, { timeout: 20000 });
     const trainingSummaryChips = await page.locator('.training-group-summary-chip').count();
     pushStep('training:group-summary-chips', true, `count=${trainingSummaryChips}`);
+    await page.waitForFunction(() => document.querySelectorAll('#training-expand-groups, #training-collapse-groups').length === 2, { timeout: 15000 });
+    pushStep('training:group-toggle-actions', true, 'expand/collapse ready');
 
     if (consoleErrors.length) {
       throw new Error(`console errors detected: ${consoleErrors.join(' | ')}`);

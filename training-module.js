@@ -56,6 +56,7 @@
       getTrainingStatsUnit,
       getTrainingJobUnit,
       getTrainingUnits,
+      isOfficialUnit,
       categorizeTopLevelUnit,
       getTrainingUnitCategories,
       sortTrainingRosterEntries,
@@ -105,17 +106,26 @@
       + '<div class="stat-card overdue"><div class="stat-icon">' + ic('rotate-ccw') + '</div><div class="stat-value">' + (summary.draft + summary.returned) + '</div><div class="stat-label">待補件 / 草稿</div></div>';
   }
 
+  function compareZhStroke(a, b) {
+    return String(a || '').localeCompare(String(b || ''), 'zh-Hant-u-co-stroke', { sensitivity: 'base', numeric: true });
+  }
+
+  function isValidTrainingDashboardUnit(unitValue) {
+    const statsUnit = String(getTrainingStatsUnit(unitValue) || '').trim();
+    return !!statsUnit && isOfficialUnit(statsUnit);
+  }
+
   function getTrainingDashboardUnits() {
     const unitSet = new Set();
     getTrainingUnits().forEach((unit) => {
       const statsUnit = String(getTrainingStatsUnit(unit) || '').trim();
-      if (statsUnit) unitSet.add(statsUnit);
+      if (statsUnit && isValidTrainingDashboardUnit(statsUnit)) unitSet.add(statsUnit);
     });
     getAllTrainingForms().forEach((form) => {
       const statsUnit = String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim();
-      if (statsUnit) unitSet.add(statsUnit);
+      if (statsUnit && isValidTrainingDashboardUnit(statsUnit)) unitSet.add(statsUnit);
     });
-    return Array.from(unitSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    return Array.from(unitSet).sort(compareZhStroke);
   }
 
   function buildTrainingTableCard(title, subtitle, badgeText, headersHtml, rowsHtml) {
@@ -125,11 +135,14 @@
   }
 
   function buildTrainingGroupedSection(title, subtitle, groups) {
+    const actionsHtml = (groups || []).length
+      ? '<div class="training-group-header-actions"><button type="button" class="btn btn-secondary btn-sm" id="training-expand-groups">' + ic('list-plus', 'icon-sm') + ' 全部展開</button><button type="button" class="btn btn-secondary btn-sm" id="training-collapse-groups">' + ic('list-collapse', 'icon-sm') + ' 全部收合</button></div>'
+      : '';
     const groupHtml = (groups || []).map((group, index) => {
       const bodyRows = group.rows || buildTrainingEmptyTableRow(9, '此分類目前沒有單位', '', 20);
       return '<details class="training-group-card" ' + (index === 0 ? 'open' : '') + '><summary class="training-group-summary"><div><span class="training-group-title">' + esc(group.label) + '</span><div class="training-group-subtitle">' + esc(group.subtitle || '') + '</div>' + (group.summaryHtml || '') + '</div><div class="training-group-meta"><span class="training-inline-status">' + esc(String(group.count || 0)) + ' 個單位</span><span class="training-group-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary>' + buildTrainingTableMarkup('<th>一級單位</th><th>狀態</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>說明</th><th>最後更新</th><th>操作</th>', bodyRows) + '</details>';
     }).join('');
-    return '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">' + esc(title) + '</span><div class="training-table-subtitle">' + esc(subtitle || '') + '</div></div></div><div class="training-group-stack">' + groupHtml + '</div></div>';
+    return '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">' + esc(title) + '</span><div class="training-table-subtitle">' + esc(subtitle || '') + '</div></div>' + actionsHtml + '</div><div class="training-group-stack">' + groupHtml + '</div></div>';
   }
 
   function buildTrainingGroupSummary(summary) {
@@ -404,7 +417,7 @@
           latest,
           summary: latest ? (latest.summary || computeTrainingSummary(latest.records || [])) : computeTrainingSummary([])
         };
-      }).sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
+      }).sort((a, b) => compareZhStroke(a.unit, b.unit));
 
       const completedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED);
       const incompleteUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED);
@@ -497,6 +510,12 @@
       + '</div>';
 
     document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(visibleForms));
+    document.getElementById('training-expand-groups')?.addEventListener('click', () => {
+      document.querySelectorAll('.training-group-card').forEach((element) => { element.open = true; });
+    });
+    document.getElementById('training-collapse-groups')?.addEventListener('click', () => {
+      document.querySelectorAll('.training-group-card').forEach((element) => { element.open = false; });
+    });
     refreshIcons();
     bindCopyButtons();
   }
@@ -1177,9 +1196,9 @@
     } catch (_) { }
 
     const rosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
-      const statsCompare = String(a.statsUnit || getTrainingStatsUnit(a.unit)).localeCompare(String(b.statsUnit || getTrainingStatsUnit(b.unit)), 'zh-Hant');
+      const statsCompare = compareZhStroke(String(a.statsUnit || getTrainingStatsUnit(a.unit)), String(b.statsUnit || getTrainingStatsUnit(b.unit)));
       if (statsCompare !== 0) return statsCompare;
-      const unitCompare = String(a.unit || '').localeCompare(String(b.unit || ''), 'zh-Hant');
+      const unitCompare = compareZhStroke(String(a.unit || ''), String(b.unit || ''));
       if (unitCompare !== 0) return unitCompare;
       return 0;
     });
