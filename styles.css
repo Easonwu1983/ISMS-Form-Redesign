@@ -6820,7 +6820,7 @@ tbody tr:hover {
 .dashboard-grid {
   grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
   gap: 22px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .dashboard-panel {
@@ -6828,6 +6828,7 @@ tbody tr:hover {
   border: 1px solid rgba(214, 223, 233, 0.92);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.98) 100%);
   box-shadow: 0 20px 40px -34px rgba(15, 23, 42, 0.38);
+  min-height: 0;
 }
 
 .card-header {
@@ -6835,7 +6836,16 @@ tbody tr:hover {
 }
 
 .donut-chart-container {
-  min-height: 340px;
+  min-height: 0;
+  align-items: flex-start;
+}
+
+.dashboard-chart-panel .card-header {
+  padding-bottom: 10px;
+}
+
+.dashboard-chart-panel .donut-chart-container {
+  padding-top: 6px;
 }
 
 .editor-shell {
