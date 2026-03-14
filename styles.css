@@ -4284,7 +4284,7 @@ tbody td:first-child {
 
 .dashboard-recent-table {
   width: 100%;
-  min-width: 940px;
+  min-width: 1080px;
   table-layout: fixed;
 }
 
@@ -4297,6 +4297,24 @@ tbody td:first-child {
 
 .dashboard-recent-table .record-id-col {
   width: 250px;
+}
+
+.dashboard-recent-table thead th:nth-child(2) {
+  width: 26%;
+}
+
+.dashboard-recent-table thead th:nth-child(3) {
+  width: 110px;
+}
+
+.dashboard-recent-table thead th:nth-child(4),
+.dashboard-recent-table thead th:nth-child(6),
+.dashboard-recent-table thead th:nth-child(7) {
+  width: 120px;
+}
+
+.dashboard-recent-table thead th:nth-child(5) {
+  width: 108px;
 }
 
 .dashboard-recent-id-cell {
@@ -4331,13 +4349,28 @@ tbody td:first-child {
 }
 
 .dashboard-recent-status-cell,
-.dashboard-recent-handler-cell,
 .dashboard-recent-date-cell {
   white-space: nowrap;
 }
 
+.dashboard-recent-handler-cell {
+  white-space: normal;
+}
+
 .dashboard-recent-table tbody td {
   vertical-align: top;
+  font-size: 0.82rem;
+}
+
+.dashboard-recent-date-value,
+.dashboard-recent-handler-name {
+  display: block;
+  line-height: 1.45;
+}
+
+.dashboard-recent-handler-name {
+  word-break: break-word;
+  color: var(--text-secondary);
 }
 
 .review-page-header {

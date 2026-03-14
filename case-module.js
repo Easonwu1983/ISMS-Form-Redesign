@@ -85,10 +85,10 @@
       + '<td class="record-id-col">' + renderDashboardIdCell(item) + '</td>'
       + '<td class="dashboard-recent-desc-cell" title="' + esc(problemDesc) + '"><span class="dashboard-recent-desc">' + esc(problemDesc || '—') + '</span></td>'
       + '<td class="dashboard-recent-status-cell">' + renderCaseStatusCell(item, false) + '</td>'
-      + '<td class="dashboard-recent-date-cell">' + formatCaseLastActivity(item) + '</td>'
-      + '<td class="dashboard-recent-handler-cell">' + esc(item.handlerName || '—') + '</td>'
-      + '<td class="dashboard-recent-date-cell">' + fmt(item.correctiveDueDate) + '</td>'
-      + '<td class="dashboard-recent-date-cell">' + fmt(getCurrentNextTrackingDate(item)) + '</td>'
+      + '<td class="dashboard-recent-date-cell"><span class="dashboard-recent-date-value">' + formatCaseLastActivity(item) + '</span></td>'
+      + '<td class="dashboard-recent-handler-cell"><span class="dashboard-recent-handler-name">' + esc(item.handlerName || '—') + '</span></td>'
+      + '<td class="dashboard-recent-date-cell"><span class="dashboard-recent-date-value">' + fmt(item.correctiveDueDate) + '</span></td>'
+      + '<td class="dashboard-recent-date-cell"><span class="dashboard-recent-date-value">' + fmt(getCurrentNextTrackingDate(item)) + '</span></td>'
       + '</tr>';
   }
 
@@ -196,7 +196,7 @@
   function buildCaseTimeline(historyList) {
     return (historyList || []).map(function (h, index, all) {
       var actor = h.user || '';
-      if (!actor || actor === '蝟餌絞') {
+      if (!actor || actor === '系統' || actor === '蝟餌絞') {
         var linked = all.slice(0, index).reverse().find(function (entry) { return entry.time === h.time && entry.user && entry.user !== '蝟餌絞'; });
         if (linked) actor = linked.user;
       }
