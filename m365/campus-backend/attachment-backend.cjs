@@ -20,7 +20,8 @@ function createAttachmentRouter(deps) {
     writeJson,
     graphRequest,
     resolveSiteId,
-    getDelegatedToken
+    getDelegatedToken,
+    requestAuthz
   } = deps;
 
   const state = {
@@ -36,6 +37,10 @@ function createAttachmentRouter(deps) {
 
   function getLibraryName() {
     return getEnv('ATTACHMENTS_LIBRARY', 'ISMSAttachments');
+  }
+
+  function getAuditListName() {
+    return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
   }
 
   async function fetchListMap() {
@@ -68,6 +73,39 @@ function createAttachmentRouter(deps) {
     const list = await resolveLibraryList();
     state.drive = await graphRequest('GET', `/sites/${siteId}/lists/${list.id}/drive?$select=id,name,webUrl,driveType`);
     return state.drive;
+  }
+
+  async function resolveAuditList() {
+    const listName = getAuditListName();
+    if (!state.listMap || !state.listMap.has(listName)) {
+      state.listMap = await fetchListMap();
+    }
+    let list = state.listMap.get(listName);
+    if (!list) {
+      state.listMap = await fetchListMap();
+      list = state.listMap.get(listName);
+    }
+    if (!list) {
+      throw createError(`SharePoint list not found: ${listName}`, 500);
+    }
+    return list;
+  }
+
+  async function createAuditRow(input) {
+    const siteId = await resolveSiteId();
+    const list = await resolveAuditList();
+    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
+      fields: {
+        Title: cleanText(input.recordId || input.eventType || 'audit'),
+        EventType: cleanText(input.eventType),
+        ActorEmail: cleanText(input.actorEmail),
+        TargetEmail: cleanText(input.targetEmail),
+        UnitCode: cleanText(input.unitCode),
+        RecordId: cleanText(input.recordId),
+        OccurredAt: cleanText(input.occurredAt) || new Date().toISOString(),
+        PayloadJson: cleanText(input.payloadJson)
+      }
+    });
   }
 
   async function rawGraphRequest(method, pathOrUrl, body, headers) {
@@ -160,6 +198,7 @@ function createAttachmentRouter(deps) {
 
   async function handleUpload(req, res, origin) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ATTACHMENT_ACTIONS.UPLOAD);
       const payload = normalizeUploadPayload(envelope.payload);
@@ -194,6 +233,21 @@ function createAttachmentRouter(deps) {
           contractVersion: CONTRACT_VERSION
         }
       }, origin);
+      const actor = requestAuthz.buildActorDetails(authz);
+      await createAuditRow({
+        eventType: 'attachment.uploaded',
+        actorEmail: actor.actorEmail,
+        unitCode: cleanText(actor.actorActiveUnit || actor.actorUnit),
+        recordId: attachmentId,
+        occurredAt: new Date().toISOString(),
+        payloadJson: JSON.stringify({
+          actorUsername: actor.actorUsername,
+          ownerId: payload.ownerId,
+          recordType: payload.recordType,
+          scope: payload.scope,
+          fileName: payload.fileName
+        })
+      });
     } catch (error) {
       await writeJson(res, {
         status: Number(error && error.statusCode) || 500,
@@ -202,8 +256,9 @@ function createAttachmentRouter(deps) {
     }
   }
 
-  async function handleDetail(_req, res, origin, itemId) {
+  async function handleDetail(req, res, origin, itemId) {
     try {
+      await requestAuthz.requireAuthenticatedUser(req);
       const item = await getDriveItem(itemId);
       await writeJson(res, {
         status: 200,
@@ -225,6 +280,7 @@ function createAttachmentRouter(deps) {
 
   async function handleDelete(req, res, origin, itemId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ATTACHMENT_ACTIONS.DELETE);
       const siteId = await resolveSiteId();
@@ -238,6 +294,17 @@ function createAttachmentRouter(deps) {
           contractVersion: CONTRACT_VERSION
         }
       }, origin);
+      const actor = requestAuthz.buildActorDetails(authz);
+      await createAuditRow({
+        eventType: 'attachment.deleted',
+        actorEmail: actor.actorEmail,
+        unitCode: cleanText(actor.actorActiveUnit || actor.actorUnit),
+        recordId: cleanText(itemId),
+        occurredAt: new Date().toISOString(),
+        payloadJson: JSON.stringify({
+          actorUsername: actor.actorUsername
+        })
+      });
     } catch (error) {
       await writeJson(res, {
         status: Number(error && error.statusCode) || 500,

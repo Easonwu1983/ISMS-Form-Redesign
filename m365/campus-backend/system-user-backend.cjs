@@ -50,7 +50,8 @@ function createSystemUserRouter(deps) {
     writeJson,
     graphRequest,
     resolveSiteId,
-    getDelegatedToken
+    getDelegatedToken,
+    requestAuthz
   } = deps;
 
   const state = {
@@ -72,6 +73,12 @@ function createSystemUserRouter(deps) {
 
   function sanitizeUserForClient(entry) {
     return mapSystemUserForClient(entry);
+  }
+
+  function buildActorAudit(authz) {
+    return requestAuthz && typeof requestAuthz.buildActorDetails === 'function'
+      ? requestAuthz.buildActorDetails(authz)
+      : {};
   }
 
   function buildLoginPayload(item) {
@@ -312,8 +319,10 @@ function createSystemUserRouter(deps) {
     }
   }
 
-  async function handleList(_req, res, origin, url) {
+  async function handleList(req, res, origin, url) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only admin can list system users');
       const rows = await listAllUsers();
       const items = filterUsers(rows.map((entry) => entry.item), url);
       await writeJson(res, buildJsonResponse(200, {
@@ -326,8 +335,10 @@ function createSystemUserRouter(deps) {
     }
   }
 
-  async function handleDetail(_req, res, origin, username) {
+  async function handleDetail(req, res, origin, username) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireSelfOrAdmin(authz, username, 'Only admin or the same user can read this account');
       const existing = await getUserEntryByUsername(username);
       if (!existing) throw createError('System user not found', 404);
       await writeJson(res, buildJsonResponse(200, {
@@ -342,6 +353,8 @@ function createSystemUserRouter(deps) {
 
   async function handleUpsert(req, res, origin) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only admin can manage system users');
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, USER_ACTIONS.UPSERT);
       const incoming = normalizeSystemUserPayload(envelope.payload);
@@ -368,14 +381,22 @@ function createSystemUserRouter(deps) {
         createdAt: existing ? existing.item.createdAt : (payload.createdAt || now),
         updatedAt: now
       });
+      const actor = buildActorAudit(authz);
       await createAuditRow({
         eventType: existing ? 'system-user.updated' : 'system-user.created',
-        actorEmail: saved.item.email,
+        actorEmail: actor.actorEmail,
         targetEmail: saved.item.email,
         unitCode: '',
         recordId: saved.item.username,
         occurredAt: now,
-        payloadJson: JSON.stringify({ action: USER_ACTIONS.UPSERT, role: saved.item.role, units: saved.item.units })
+        payloadJson: JSON.stringify({
+          action: USER_ACTIONS.UPSERT,
+          actorName: actor.actorName,
+          actorUsername: actor.actorUsername,
+          previousRole: cleanText(existing && existing.item && existing.item.role),
+          nextRole: saved.item.role,
+          units: saved.item.units
+        })
       });
       await writeJson(res, buildJsonResponse(saved.created ? 201 : 200, {
         ok: true,
@@ -389,6 +410,8 @@ function createSystemUserRouter(deps) {
 
   async function handleDelete(req, res, origin, username) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only admin can delete system users');
       const existing = await getUserEntryByUsername(username);
       if (!existing) throw createError('System user not found', 404);
       const envelope = await parseJsonBody(req);
@@ -399,14 +422,20 @@ function createSystemUserRouter(deps) {
       }
       const now = new Date().toISOString();
       await deleteUserEntry(existing);
+      const actor = buildActorAudit(authz);
       await createAuditRow({
         eventType: 'system-user.deleted',
-        actorEmail: cleanText(payload.actorEmail),
+        actorEmail: actor.actorEmail,
         targetEmail: existing.item.email,
         unitCode: '',
         recordId: existing.item.username,
         occurredAt: now,
-        payloadJson: JSON.stringify({ action: USER_ACTIONS.DELETE, actorName: cleanText(payload.actorName) })
+        payloadJson: JSON.stringify({
+          action: USER_ACTIONS.DELETE,
+          actorName: actor.actorName,
+          actorUsername: actor.actorUsername,
+          deletedRole: existing.item.role
+        })
       });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
@@ -420,6 +449,8 @@ function createSystemUserRouter(deps) {
 
   async function handleResetPassword(req, res, origin, username) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only admin can reset another user password');
       const existing = await getUserEntryByUsername(username);
       if (!existing) throw createError('System user not found', 404);
       const envelope = await parseJsonBody(req);
@@ -435,14 +466,19 @@ function createSystemUserRouter(deps) {
         resetTokenExpiresAt: reset.expiresAt,
         updatedAt: now
       });
+      const actor = buildActorAudit(authz);
       await createAuditRow({
         eventType: 'system-user.reset-token-issued',
-        actorEmail: cleanText(payload.actorEmail || payload.email),
+        actorEmail: actor.actorEmail,
         targetEmail: saved.item.email,
         unitCode: '',
         recordId: saved.item.username,
         occurredAt: now,
-        payloadJson: JSON.stringify({ action: USER_ACTIONS.RESET_PASSWORD, actorName: cleanText(payload.actorName) })
+        payloadJson: JSON.stringify({
+          action: USER_ACTIONS.RESET_PASSWORD,
+          actorName: actor.actorName,
+          actorUsername: actor.actorUsername
+        })
       });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
@@ -464,6 +500,15 @@ function createSystemUserRouter(deps) {
       validateLoginPayload(payload);
       const existing = await getUserEntryByUsername(payload.username).catch(() => null);
       if (!existing) {
+        await createAuditRow({
+          eventType: 'auth.login.failed',
+          actorEmail: '',
+          targetEmail: '',
+          unitCode: '',
+          recordId: payload.username,
+          occurredAt: new Date().toISOString(),
+          payloadJson: JSON.stringify({ action: AUTH_ACTIONS.LOGIN, reason: 'user-not-found' })
+        });
         await writeJson(res, buildJsonResponse(401, {
           ok: false,
           error: 'Invalid username or password',
@@ -473,6 +518,15 @@ function createSystemUserRouter(deps) {
       }
       const verification = verifyPassword(payload.password, existing.item.password);
       if (!verification.ok) {
+        await createAuditRow({
+          eventType: 'auth.login.failed',
+          actorEmail: '',
+          targetEmail: existing.item.email,
+          unitCode: '',
+          recordId: existing.item.username,
+          occurredAt: new Date().toISOString(),
+          payloadJson: JSON.stringify({ action: AUTH_ACTIONS.LOGIN, reason: 'invalid-password' })
+        });
         await writeJson(res, buildJsonResponse(401, {
           ok: false,
           error: 'Invalid username or password',
@@ -501,7 +555,10 @@ function createSystemUserRouter(deps) {
         unitCode: '',
         recordId: resolvedEntry.item.username,
         occurredAt: new Date().toISOString(),
-        payloadJson: JSON.stringify({ action: AUTH_ACTIONS.LOGIN })
+        payloadJson: JSON.stringify({
+          action: AUTH_ACTIONS.LOGIN,
+          sessionVersion: readStoredPasswordState(resolvedEntry.item.password).sessionVersion
+        })
       });
       await writeJson(res, buildJsonResponse(200, buildLoginPayload(resolvedEntry.item)), origin);
     } catch (error) {
@@ -601,6 +658,10 @@ function createSystemUserRouter(deps) {
         const sessionPayload = verifySessionToken(payload.sessionToken, sessionSecret);
         if (!sessionPayload || cleanText(sessionPayload.sub).toLowerCase() !== cleanText(payload.username).toLowerCase()) {
           throw createError('Invalid session token', 401);
+        }
+        const existingState = readStoredPasswordState(existing.item.password);
+        if (Number(existingState.sessionVersion || 1) !== Number(sessionPayload.sessionVersion || 1)) {
+          throw createError('Session expired', 401);
         }
       }
       const verification = verifyPassword(payload.currentPassword, existing.item.password);

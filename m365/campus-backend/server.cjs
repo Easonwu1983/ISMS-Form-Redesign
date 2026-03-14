@@ -22,6 +22,7 @@ const { createReviewScopeRouter } = require('./review-scope-backend.cjs');
 const { createAttachmentRouter } = require('./attachment-backend.cjs');
 const { createSystemUserRouter } = require('./system-user-backend.cjs');
 const { createTrainingRouter } = require('./training-backend.cjs');
+const { createRequestAuthz } = require('./request-authz.cjs');
 const {
   GRAPH_ROOT,
   acquireDelegatedGraphTokenFromCli,
@@ -88,7 +89,7 @@ function buildCorsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-ISMS-Contract-Version',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-ISMS-Contract-Version, X-ISMS-Active-Unit',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin'
   };
@@ -309,12 +310,18 @@ async function getHealth() {
   };
 }
 
+const requestAuthz = createRequestAuthz({
+  graphRequest,
+  resolveSiteId
+});
+
 const checklistRouter = createChecklistRouter({
   parseJsonBody,
   writeJson,
   graphRequest,
   resolveSiteId,
-  getDelegatedToken
+  getDelegatedToken,
+  requestAuthz
 });
 
 const correctiveActionRouter = createCorrectiveActionRouter({
@@ -322,7 +329,8 @@ const correctiveActionRouter = createCorrectiveActionRouter({
   writeJson,
   graphRequest,
   resolveSiteId,
-  getDelegatedToken
+  getDelegatedToken,
+  requestAuthz
 });
 
 const trainingRouter = createTrainingRouter({
@@ -330,7 +338,8 @@ const trainingRouter = createTrainingRouter({
   writeJson,
   graphRequest,
   resolveSiteId,
-  getDelegatedToken
+  getDelegatedToken,
+  requestAuthz
 });
 
 const reviewScopeRouter = createReviewScopeRouter({
@@ -338,7 +347,8 @@ const reviewScopeRouter = createReviewScopeRouter({
   writeJson,
   graphRequest,
   resolveSiteId,
-  getDelegatedToken
+  getDelegatedToken,
+  requestAuthz
 });
 
 const attachmentRouter = createAttachmentRouter({
@@ -346,7 +356,8 @@ const attachmentRouter = createAttachmentRouter({
   writeJson,
   graphRequest,
   resolveSiteId,
-  getDelegatedToken
+  getDelegatedToken,
+  requestAuthz
 });
 
 const systemUserRouter = createSystemUserRouter({
@@ -354,7 +365,8 @@ const systemUserRouter = createSystemUserRouter({
   writeJson,
   graphRequest,
   resolveSiteId,
-  getDelegatedToken
+  getDelegatedToken,
+  requestAuthz
 });
 
 async function handleApply(req, res, origin) {

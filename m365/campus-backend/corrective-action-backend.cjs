@@ -33,7 +33,8 @@ function createCorrectiveActionRouter(deps) {
     writeJson,
     graphRequest,
     resolveSiteId,
-    getDelegatedToken
+    getDelegatedToken,
+    requestAuthz
   } = deps;
 
   const state = {
@@ -50,15 +51,27 @@ function createCorrectiveActionRouter(deps) {
   }
 
   function actorLabel(payload, fallback) {
-    return cleanText(payload && (payload.actorName || payload.actorUsername)) || fallback || '系統';
+    return cleanText(payload && (payload.actorName || payload.actorUsername)) || fallback || 'system';
   }
 
   function appendHistory(history, action, user, time) {
     return (Array.isArray(history) ? history : []).concat([{
       time: cleanText(time) || new Date().toISOString(),
       action: cleanText(action),
-      user: cleanText(user) || '系統'
+      user: cleanText(user) || 'system'
     }]);
+  }
+
+  function buildActor(authz, payload, fallback) {
+    const actorMeta = requestAuthz.buildActorDetails(authz);
+    return {
+      actorMeta,
+      actorLabel: actorLabel(payload, actorMeta.actorName || actorMeta.actorUsername || fallback || 'system')
+    };
+  }
+
+  function buildStatusHistory(status) {
+    return `\u72c0\u614b\u8b8a\u66f4\u70ba\u300c${status}\u300d`;
   }
 
   async function fetchListMap() {
@@ -118,7 +131,7 @@ function createCorrectiveActionRouter(deps) {
 
   async function getEntryByCaseId(caseId) {
     const target = cleanText(caseId);
-    if (!target) throw createError('缺少矯正單號。', 400);
+    if (!target) throw createError('Missing corrective-action id.', 400);
     const rows = await listAllEntries();
     return rows.find((entry) => entry.item.id === target) || null;
   }
@@ -207,10 +220,12 @@ function createCorrectiveActionRouter(deps) {
     }
   }
 
-  async function handleList(_req, res, origin, url) {
+  async function handleList(req, res, origin, url) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllEntries();
-      const items = filterItems(rows.map((entry) => entry.item), url);
+      const items = filterItems(rows.map((entry) => entry.item), url)
+        .filter((entry) => requestAuthz.canAccessCorrectiveAction(authz, entry));
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         items: items.map(mapCaseForClient),
@@ -221,11 +236,15 @@ function createCorrectiveActionRouter(deps) {
     }
   }
 
-  async function handleDetail(_req, res, origin, caseId) {
+  async function handleDetail(req, res, origin, caseId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
       if (!existing) {
-        throw createError('找不到矯正單。', 404);
+        throw createError('Corrective action not found.', 404);
+      }
+      if (!requestAuthz.canAccessCorrectiveAction(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have access to this corrective action.', 403);
       }
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
@@ -239,21 +258,23 @@ function createCorrectiveActionRouter(deps) {
 
   async function handleCreate(req, res, origin) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only administrators can create corrective actions.');
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.CREATE);
       const payload = normalizeCreatePayload(envelope.payload);
       validateCreatePayload(payload);
       const existing = await getEntryByCaseId(payload.id);
       if (existing) {
-        throw createError('矯正單號已存在。', 409);
+        throw createError('Corrective action already exists.', 409);
       }
       const now = new Date().toISOString();
-      const actor = actorLabel(payload, payload.proposerName);
+      const actor = buildActor(authz, payload, payload.proposerName);
       const item = createCaseRecord({
         ...payload,
         history: [
-          { time: now, action: '開立矯正單', user: actor },
-          { time: now, action: `狀態變更為「${STATUSES.PENDING}」`, user: actor }
+          { time: now, action: '\u958b\u7acb\u77ef\u6b63\u55ae', user: actor.actorLabel },
+          { time: now, action: buildStatusHistory(STATUSES.PENDING), user: actor.actorLabel }
         ]
       }, now);
       const siteId = await resolveSiteId();
@@ -263,13 +284,16 @@ function createCorrectiveActionRouter(deps) {
       });
       await createAuditRow({
         eventType: 'corrective_action.created',
-        actorEmail: '',
+        actorEmail: actor.actorMeta.actorEmail,
         targetEmail: cleanText(item.handlerEmail),
         unitCode: cleanText(item.handlerUnitCode),
         recordId: item.id,
         occurredAt: now,
         payloadJson: JSON.stringify({
-          status: item.status,
+          actorName: actor.actorMeta.actorName,
+          actorUsername: actor.actorMeta.actorUsername,
+          previousStatus: '',
+          nextStatus: item.status,
           proposerUnit: item.proposerUnit,
           handlerUnit: item.handlerUnit
         })
@@ -286,21 +310,29 @@ function createCorrectiveActionRouter(deps) {
 
   async function handleRespond(req, res, origin, caseId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
-      if (!existing) throw createError('找不到矯正單。', 404);
+      if (!existing) throw createError('Corrective action not found.', 404);
+      if (!requestAuthz.canRespondCorrectiveAction(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have permission to respond to this corrective action.', 403);
+      }
       if (existing.item.status !== STATUSES.PENDING) {
-        throw createError('目前狀態不可送出矯正措施。', 409);
+        throw createError('Corrective action is not in pending status.', 409);
       }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.RESPOND);
       const payload = normalizeRespondPayload(envelope.payload);
       validateRespondPayload(payload);
       const now = new Date().toISOString();
-      const actor = actorLabel(payload, existing.item.handlerName || '系統');
-      const history = appendHistory(existing.item.history, `${actor} 已回覆矯正措施`, actor, now);
-      const nextHistory = appendHistory(history, `狀態變更為「${STATUSES.PROPOSED}」`, actor, now);
+      const actor = buildActor(authz, payload, existing.item.handlerName || authz.username);
+      const history = appendHistory(existing.item.history, `${actor.actorLabel} \u63d0\u4ea4\u77ef\u6b63\u63aa\u65bd\u63d0\u6848`, actor.actorLabel, now);
+      let nextHistory = appendHistory(history, buildStatusHistory(STATUSES.PROPOSED), actor.actorLabel, now);
       if (payload.evidence.length) {
-        nextHistory.push({ time: now, action: `上傳 ${payload.evidence.length} 筆佐證附件`, user: actor });
+        nextHistory = nextHistory.concat([{
+          time: now,
+          action: `\u5df2\u4e0a\u50b3 ${payload.evidence.length} \u4efd\u4f50\u8b49`,
+          user: actor.actorLabel
+        }]);
       }
       const nextItem = {
         ...existing.item,
@@ -321,12 +353,16 @@ function createCorrectiveActionRouter(deps) {
       const updated = await updateCaseRecord(existing, nextItem);
       await createAuditRow({
         eventType: 'corrective_action.responded',
+        actorEmail: actor.actorMeta.actorEmail,
         targetEmail: cleanText(updated.handlerEmail),
         unitCode: cleanText(updated.handlerUnitCode),
         recordId: updated.id,
         occurredAt: now,
         payloadJson: JSON.stringify({
-          status: updated.status,
+          actorName: actor.actorMeta.actorName,
+          actorUsername: actor.actorMeta.actorUsername,
+          previousStatus: existing.item.status,
+          nextStatus: updated.status,
           evidenceCount: payload.evidence.length
         })
       });
@@ -342,40 +378,48 @@ function createCorrectiveActionRouter(deps) {
 
   async function handleReview(req, res, origin, caseId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
-      if (!existing) throw createError('找不到矯正單。', 404);
+      if (!existing) throw createError('Corrective action not found.', 404);
+      if (!requestAuthz.canReviewCorrectiveAction(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have permission to review this corrective action.', 403);
+      }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.REVIEW);
       const payload = normalizeReviewPayload(envelope.payload);
       validateReviewPayload(payload);
       const now = new Date().toISOString();
       const today = now.slice(0, 10);
-      const actor = actorLabel(payload);
+      const actor = buildActor(authz, payload, authz.username);
       let nextStatus = '';
       let reviewResult = '';
       if (payload.decision === REVIEW_DECISIONS.START_REVIEW) {
-        if (existing.item.status !== STATUSES.PROPOSED) throw createError('只有已提案案件可進入審核。', 409);
+        if (existing.item.status !== STATUSES.PROPOSED) {
+          throw createError('Corrective action must be proposed before review starts.', 409);
+        }
         nextStatus = STATUSES.REVIEWING;
-        reviewResult = '進入審核';
+        reviewResult = '\u958b\u59cb\u5be9\u6838';
       } else {
-        if (existing.item.status !== STATUSES.REVIEWING) throw createError('只有審核中案件可執行審核決定。', 409);
+        if (existing.item.status !== STATUSES.REVIEWING) {
+          throw createError('Corrective action is not in reviewing status.', 409);
+        }
         if (payload.decision === REVIEW_DECISIONS.CLOSE) {
           nextStatus = STATUSES.CLOSED;
-          reviewResult = '同意結案';
+          reviewResult = '\u540c\u610f\u7d50\u6848';
         } else if (payload.decision === REVIEW_DECISIONS.TRACKING) {
           nextStatus = STATUSES.TRACKING;
-          reviewResult = '轉為追蹤';
+          reviewResult = '\u8f49\u6301\u7e8c\u8ffd\u8e64';
         } else if (payload.decision === REVIEW_DECISIONS.RETURN) {
           nextStatus = STATUSES.PENDING;
-          reviewResult = '退回重填';
+          reviewResult = '\u9000\u56de\u66f4\u6b63';
         }
       }
-      const history = appendHistory(existing.item.history, `狀態變更為「${nextStatus}」`, actor, now);
+      const history = appendHistory(existing.item.history, buildStatusHistory(nextStatus), actor.actorLabel, now);
       const nextItem = {
         ...existing.item,
         status: nextStatus,
         reviewResult,
-        reviewer: actor,
+        reviewer: actor.actorLabel,
         reviewDate: today,
         updatedAt: now,
         closedDate: nextStatus === STATUSES.CLOSED ? now : '',
@@ -385,11 +429,16 @@ function createCorrectiveActionRouter(deps) {
       const updated = await updateCaseRecord(existing, nextItem);
       await createAuditRow({
         eventType: 'corrective_action.reviewed',
+        actorEmail: actor.actorMeta.actorEmail,
+        targetEmail: cleanText(updated.handlerEmail),
         recordId: updated.id,
         unitCode: cleanText(updated.handlerUnitCode),
         occurredAt: now,
         payloadJson: JSON.stringify({
+          actorName: actor.actorMeta.actorName,
+          actorUsername: actor.actorMeta.actorUsername,
           decision: payload.decision,
+          previousStatus: existing.item.status,
           nextStatus
         })
       });
@@ -405,16 +454,24 @@ function createCorrectiveActionRouter(deps) {
 
   async function handleTrackingSubmit(req, res, origin, caseId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
-      if (!existing) throw createError('找不到矯正單。', 404);
-      if (existing.item.status !== STATUSES.TRACKING) throw createError('只有追蹤中案件可送出追蹤提報。', 409);
-      if (existing.item.pendingTracking) throw createError('目前已有待審核的追蹤提報。', 409);
+      if (!existing) throw createError('Corrective action not found.', 404);
+      if (!requestAuthz.canRespondCorrectiveAction(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have permission to submit tracking for this corrective action.', 403);
+      }
+      if (existing.item.status !== STATUSES.TRACKING) {
+        throw createError('Corrective action is not in tracking status.', 409);
+      }
+      if (existing.item.pendingTracking) {
+        throw createError('There is already a pending tracking submission.', 409);
+      }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.TRACKING_SUBMIT);
       const payload = normalizeTrackingSubmitPayload(envelope.payload);
       validateTrackingSubmitPayload(payload);
       const now = new Date().toISOString();
-      const actor = actorLabel(payload, existing.item.handlerName || '系統');
+      const actor = buildActor(authz, payload, existing.item.handlerName || authz.username);
       const round = Array.isArray(existing.item.trackings) ? existing.item.trackings.length + 1 : 1;
       const pendingTracking = {
         round,
@@ -427,13 +484,25 @@ function createCorrectiveActionRouter(deps) {
         evidence: payload.evidence,
         submittedAt: now
       };
-      const nextHistory = appendHistory(existing.item.history, `送出第 ${round} 次追蹤提報`, actor, now);
-      nextHistory.push({ time: now, action: `追蹤建議：${payload.result}`, user: actor });
+      let nextHistory = appendHistory(existing.item.history, `\u63d0\u4ea4\u7b2c ${round} \u6b21\u8ffd\u8e64`, actor.actorLabel, now);
+      nextHistory = nextHistory.concat([{
+        time: now,
+        action: `\u8ffd\u8e64\u63d0\u5831\uff1a${payload.result}`,
+        user: actor.actorLabel
+      }]);
       if (pendingTracking.nextTrackDate) {
-        nextHistory.push({ time: now, action: `建議下次追蹤日期：${pendingTracking.nextTrackDate}`, user: actor });
+        nextHistory = nextHistory.concat([{
+          time: now,
+          action: `\u4e0b\u6b21\u8ffd\u8e64\u65e5\u671f\uff1a${pendingTracking.nextTrackDate}`,
+          user: actor.actorLabel
+        }]);
       }
       if (payload.evidence.length) {
-        nextHistory.push({ time: now, action: `上傳 ${payload.evidence.length} 筆追蹤佐證附件`, user: actor });
+        nextHistory = nextHistory.concat([{
+          time: now,
+          action: `\u5df2\u4e0a\u50b3 ${payload.evidence.length} \u4efd\u8ffd\u8e64\u4f50\u8b49`,
+          user: actor.actorLabel
+        }]);
       }
       const nextItem = {
         ...existing.item,
@@ -444,12 +513,18 @@ function createCorrectiveActionRouter(deps) {
       const updated = await updateCaseRecord(existing, nextItem);
       await createAuditRow({
         eventType: 'corrective_action.tracking_submitted',
+        actorEmail: actor.actorMeta.actorEmail,
+        targetEmail: cleanText(updated.handlerEmail),
         recordId: updated.id,
         unitCode: cleanText(updated.handlerUnitCode),
         occurredAt: now,
         payloadJson: JSON.stringify({
+          actorName: actor.actorMeta.actorName,
+          actorUsername: actor.actorMeta.actorUsername,
           round,
-          result: payload.result
+          result: payload.result,
+          previousStatus: existing.item.status,
+          nextStatus: updated.status
         })
       });
       await writeJson(res, buildJsonResponse(200, {
@@ -464,10 +539,14 @@ function createCorrectiveActionRouter(deps) {
 
   async function handleTrackingReview(req, res, origin, caseId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
-      if (!existing) throw createError('找不到矯正單。', 404);
+      if (!existing) throw createError('Corrective action not found.', 404);
+      if (!requestAuthz.canReviewCorrectiveAction(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have permission to review tracking for this corrective action.', 403);
+      }
       if (existing.item.status !== STATUSES.TRACKING || !existing.item.pendingTracking) {
-        throw createError('目前沒有可審核的追蹤提報。', 409);
+        throw createError('There is no pending tracking submission to review.', 409);
       }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.TRACKING_REVIEW);
@@ -475,23 +554,32 @@ function createCorrectiveActionRouter(deps) {
       validateTrackingReviewPayload(payload);
       const now = new Date().toISOString();
       const today = now.slice(0, 10);
-      const actor = actorLabel(payload);
+      const actor = buildActor(authz, payload, authz.username);
       const pending = existing.item.pendingTracking;
       const shouldClose = payload.decision === TRACKING_REVIEW_DECISIONS.CLOSE;
-      const finalResult = shouldClose ? '同意結案' : '同意繼續追蹤';
+      const finalResult = shouldClose ? '\u540c\u610f\u7d50\u6848' : '\u540c\u610f\u7e7c\u7e8c\u8ffd\u8e64';
       const approvedTracking = {
         ...pending,
         requestedResult: pending.result,
         result: finalResult,
         decision: finalResult,
-        reviewer: actor,
+        reviewer: actor.actorLabel,
         reviewDate: today,
         reviewedAt: now
       };
-      const nextHistory = appendHistory(existing.item.history, `審核第 ${pending.round || ((existing.item.trackings || []).length + 1)} 次追蹤提報`, actor, now);
-      nextHistory.push({ time: now, action: finalResult, user: actor });
+      const nextRound = pending.round || ((existing.item.trackings || []).length + 1);
+      let nextHistory = appendHistory(existing.item.history, `\u5be9\u6838\u7b2c ${nextRound} \u6b21\u8ffd\u8e64`, actor.actorLabel, now);
+      nextHistory = nextHistory.concat([{
+        time: now,
+        action: finalResult,
+        user: actor.actorLabel
+      }]);
       if (!shouldClose && pending.nextTrackDate) {
-        nextHistory.push({ time: now, action: `下次追蹤日期：${pending.nextTrackDate}`, user: actor });
+        nextHistory = nextHistory.concat([{
+          time: now,
+          action: `\u4e0b\u6b21\u8ffd\u8e64\u65e5\u671f\uff1a${pending.nextTrackDate}`,
+          user: actor.actorLabel
+        }]);
       }
       const nextItem = {
         ...existing.item,
@@ -500,7 +588,7 @@ function createCorrectiveActionRouter(deps) {
         status: shouldClose ? STATUSES.CLOSED : STATUSES.TRACKING,
         reviewResult: finalResult,
         reviewNextDate: shouldClose ? '' : cleanText(pending.nextTrackDate),
-        reviewer: actor,
+        reviewer: actor.actorLabel,
         reviewDate: today,
         updatedAt: now,
         closedDate: shouldClose ? now : '',
@@ -510,11 +598,17 @@ function createCorrectiveActionRouter(deps) {
       const updated = await updateCaseRecord(existing, nextItem);
       await createAuditRow({
         eventType: 'corrective_action.tracking_reviewed',
+        actorEmail: actor.actorMeta.actorEmail,
+        targetEmail: cleanText(updated.handlerEmail),
         recordId: updated.id,
         unitCode: cleanText(updated.handlerUnitCode),
         occurredAt: now,
         payloadJson: JSON.stringify({
+          actorName: actor.actorMeta.actorName,
+          actorUsername: actor.actorMeta.actorUsername,
           decision: payload.decision,
+          previousStatus: existing.item.status,
+          nextStatus: updated.status,
           finalResult
         })
       });

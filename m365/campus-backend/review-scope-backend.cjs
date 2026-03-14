@@ -19,7 +19,8 @@ function createReviewScopeRouter(deps) {
     writeJson,
     graphRequest,
     resolveSiteId,
-    getDelegatedToken
+    getDelegatedToken,
+    requestAuthz
   } = deps;
 
   const state = {
@@ -184,10 +185,15 @@ function createReviewScopeRouter(deps) {
     }
   }
 
-  async function handleList(_req, res, origin, url) {
+  async function handleList(req, res, origin, url) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllEntries();
-      const items = filterItems(rows.map((entry) => entry.item), url);
+      const scopedUrl = new URL(url.toString());
+      if (!requestAuthz.isAdmin(authz)) {
+        scopedUrl.searchParams.set('username', authz.username);
+      }
+      const items = filterItems(rows.map((entry) => entry.item), scopedUrl);
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         items,
@@ -213,6 +219,8 @@ function createReviewScopeRouter(deps) {
 
   async function handleReplace(req, res, origin) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only admin can replace review scopes');
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.REPLACE);
       const payload = validateReplacePayload(envelope.payload);
@@ -235,9 +243,10 @@ function createReviewScopeRouter(deps) {
         }
       }
 
+      const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
         eventType: ACTIONS.REPLACE,
-        actorEmail: normalized.actorEmail,
+        actorEmail: actor.actorEmail,
         targetEmail: normalized.username,
         unitCode: normalized.units.join(' | '),
         recordId: normalized.username,
@@ -245,7 +254,8 @@ function createReviewScopeRouter(deps) {
         payloadJson: JSON.stringify({
           username: normalized.username,
           units: normalized.units,
-          actorName: normalized.actorName
+          actorName: actor.actorName,
+          actorUsername: actor.actorUsername
         })
       });
 

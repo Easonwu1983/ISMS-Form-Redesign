@@ -22,7 +22,8 @@ function createChecklistRouter(deps) {
     writeJson,
     graphRequest,
     resolveSiteId,
-    getDelegatedToken
+    getDelegatedToken,
+    requestAuthz
   } = deps;
 
   const state = {
@@ -214,10 +215,12 @@ function createChecklistRouter(deps) {
     }
   }
 
-  async function handleList(_req, res, origin, url) {
+  async function handleList(req, res, origin, url) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllEntries();
-      const items = filterItems(rows.map((entry) => entry.item), url);
+      const items = filterItems(rows.map((entry) => entry.item), url)
+        .filter((entry) => requestAuthz.canAccessChecklist(authz, entry));
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         items: items.map(mapChecklistForClient),
@@ -228,11 +231,15 @@ function createChecklistRouter(deps) {
     }
   }
 
-  async function handleDetail(_req, res, origin, checklistId) {
+  async function handleDetail(req, res, origin, checklistId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByChecklistId(checklistId);
       if (!existing) {
         throw createError('\u627e\u4e0d\u5230\u6307\u5b9a\u7684\u6aa2\u6838\u8868\u3002', 404);
+      }
+      if (!requestAuthz.canAccessChecklist(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have access to this checklist', 403);
       }
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
@@ -246,6 +253,7 @@ function createChecklistRouter(deps) {
 
   async function writeChecklist(req, res, origin, checklistId, action, status) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByChecklistId(checklistId);
       assertEditable(existing);
       const envelope = await parseJsonBody(req);
@@ -253,6 +261,15 @@ function createChecklistRouter(deps) {
       const payload = normalizeChecklistPayload(envelope.payload);
       if (cleanText(checklistId) !== cleanText(payload.id)) {
         throw createError('\u8def\u7531\u7de8\u865f\u8207 payload \u7de8\u865f\u4e0d\u4e00\u81f4\u3002', 400);
+      }
+      if (existing && !requestAuthz.canEditChecklist(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have permission to edit this checklist', 403);
+      }
+      if (!existing) {
+        const intendedUnit = cleanText(payload.unit);
+        if (!(requestAuthz.isAdmin(authz) || requestAuthz.hasUnitAccess(authz, intendedUnit) || requestAuthz.matchesUsername(authz, payload.fillerUsername))) {
+          throw requestAuthz.createHttpError('You do not have permission to create a checklist for this unit', 403);
+        }
       }
       validateChecklistPayload(payload, {
         requireSubmittedState: status === STATUSES.SUBMITTED
@@ -262,23 +279,28 @@ function createChecklistRouter(deps) {
         throw createError('\u672c\u5e74\u5ea6\u8a72\u55ae\u4f4d\u5df2\u5b58\u5728\u6aa2\u6838\u8868\uff0c\u8acb\u6539\u70ba\u7e8c\u586b\u6216\u67e5\u770b\u65e2\u6709\u7d00\u9304\u3002', 409);
       }
       const now = new Date().toISOString();
-      const actor = actorLabel(payload, payload.fillerName);
+      const actorDisplay = actorLabel(payload, payload.fillerName);
       const nextItem = createChecklistRecord({
         ...payload,
         createdAt: existing ? existing.item.createdAt : payload.createdAt
       }, status, now);
       const stored = await upsertChecklist(existing, nextItem);
       const parsedId = parseChecklistId(stored.item.id);
+      const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
         eventType: status === STATUSES.SUBMITTED ? 'checklist.submitted' : 'checklist.draft_saved',
+        actorEmail: actor.actorEmail,
         unitCode: cleanText(stored.item.unitCode) || cleanText(parsedId && parsedId.unitCode),
         recordId: stored.item.id,
         occurredAt: now,
         payloadJson: JSON.stringify({
+          actorName: actor.actorName,
+          actorUsername: actor.actorUsername,
+          previousStatus: cleanText(existing && existing.item && existing.item.status),
           status: stored.item.status,
           unit: stored.item.unit,
           auditYear: stored.item.auditYear,
-          actor
+          actorLabel: actorDisplay
         })
       });
       await writeJson(res, buildJsonResponse(stored.created ? 201 : 200, {

@@ -31,6 +31,7 @@
       getAuthorizedUnits,
       getScopedUnit,
       switchCurrentUserUnit,
+      ensureAuthenticatedRemoteBootstrap,
       hasUnsavedChangesGuard,
       confirmDiscardUnsavedChanges,
       registerActionHandlers
@@ -121,7 +122,13 @@
               return;
             }
             toast('登入成功，歡迎 ' + user.name, 'success');
-            setTimeout(function () { renderApp(); }, 300);
+            setTimeout(function () {
+              Promise.resolve(ensureAuthenticatedRemoteBootstrap()).catch(function (error) {
+                console.error(error && error.stack ? error.stack : String(error));
+              }).finally(function () {
+                renderApp();
+              });
+            }, 300);
           } else {
             document.getElementById('login-error').classList.add('show');
           }
@@ -215,7 +222,13 @@
             return;
           }
           toast('密碼已重設並完成登入', 'success');
-          setTimeout(function () { renderApp(); }, 300);
+          setTimeout(function () {
+            Promise.resolve(ensureAuthenticatedRemoteBootstrap()).catch(function (error) {
+              console.error(error && error.stack ? error.stack : String(error));
+            }).finally(function () {
+              renderApp();
+            });
+          }, 300);
         } catch (error) {
           toast(String(error && error.message || error || '重設密碼失敗'), 'error');
         }
@@ -318,6 +331,11 @@
         handleRoute();
         return;
       }
+      Promise.resolve(ensureAuthenticatedRemoteBootstrap()).then(function () {
+        if (currentUser()) handleRoute();
+      }).catch(function (error) {
+        console.error(error && error.stack ? error.stack : String(error));
+      });
       document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
       handleRoute();
       refreshIcons();

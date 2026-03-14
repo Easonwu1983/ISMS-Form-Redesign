@@ -28,7 +28,8 @@ function createTrainingRouter(deps) {
     writeJson,
     graphRequest,
     resolveSiteId,
-    getDelegatedToken
+    getDelegatedToken,
+    requestAuthz
   } = deps;
 
   const state = {
@@ -352,10 +353,12 @@ function createTrainingRouter(deps) {
     }
   }
 
-  async function handleFormList(_req, res, origin, url) {
+  async function handleFormList(req, res, origin, url) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllForms();
-      const items = filterForms(rows.map((entry) => entry.item), url);
+      const items = filterForms(rows.map((entry) => entry.item), url)
+        .filter((entry) => requestAuthz.canAccessTrainingForm(authz, entry));
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         items: items.map(mapTrainingFormForClient),
@@ -366,11 +369,15 @@ function createTrainingRouter(deps) {
     }
   }
 
-  async function handleFormDetail(_req, res, origin, formId) {
+  async function handleFormDetail(req, res, origin, formId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getFormEntryById(formId);
       if (!existing) {
         throw createError('Training form not found', 404);
+      }
+      if (!requestAuthz.canAccessTrainingForm(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have access to this training form', 403);
       }
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
@@ -384,6 +391,7 @@ function createTrainingRouter(deps) {
 
   async function writeTrainingForm(req, res, origin, formId, action, options) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getFormEntryById(formId);
       if (typeof options.assertBefore === 'function') {
         options.assertBefore(existing);
@@ -396,6 +404,15 @@ function createTrainingRouter(deps) {
       if (cleanText(formId) !== cleanText(payload.id)) {
         throw createError('Route form id and payload id do not match', 400);
       }
+      if (existing && !requestAuthz.canManageTrainingForm(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have permission to edit this training form', 403);
+      }
+      if (!existing) {
+        const intendedUnit = cleanText(payload.unit);
+        if (!(requestAuthz.isAdmin(authz) || requestAuthz.hasUnitAccess(authz, intendedUnit) || requestAuthz.matchesUsername(authz, payload.fillerUsername))) {
+          throw requestAuthz.createHttpError('You do not have permission to create a training form for this unit', 403);
+        }
+      }
       validateTrainingFormPayload(payload, options.validation || {});
       const duplicate = await findDuplicateForm(payload.unit, payload.trainingYear, payload.id);
       if (duplicate) {
@@ -403,6 +420,7 @@ function createTrainingRouter(deps) {
       }
 
       const actor = actorLabel(payload, (existing && existing.item && existing.item.fillerName) || payload.fillerName);
+      const actorMeta = requestAuthz.buildActorDetails(authz);
       const now = new Date().toISOString();
       const nextStatus = typeof options.resolveStatus === 'function'
         ? options.resolveStatus(existing, payload)
@@ -426,13 +444,16 @@ function createTrainingRouter(deps) {
       const saved = await upsertForm(existing, nextItem);
       await createAuditRow({
         eventType: options.eventType,
-        actorEmail: nextItem.submitterEmail,
+        actorEmail: actorMeta.actorEmail,
         targetEmail: nextItem.submitterEmail,
         unitCode: nextItem.unitCode,
         recordId: nextItem.id,
         occurredAt: now,
         payloadJson: JSON.stringify({
           action,
+          actorName: actorMeta.actorName,
+          actorUsername: actorMeta.actorUsername,
+          previousStatus: cleanText(existingItem && existingItem.status),
           status: nextItem.status,
           backendMode: nextItem.backendMode
         })
@@ -449,25 +470,31 @@ function createTrainingRouter(deps) {
 
   async function handleFormDelete(req, res, origin, formId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getFormEntryById(formId);
       if (!existing) {
         throw createError('Training form not found', 404);
+      }
+      if (!requestAuthz.canManageTrainingForm(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have permission to delete this training form', 403);
       }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, FORM_ACTIONS.DELETE);
       const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       const now = new Date().toISOString();
       await deleteFormEntry(existing);
+      const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
         eventType: 'training.form_deleted',
-        actorEmail: cleanText(payload.actorEmail),
+        actorEmail: actor.actorEmail,
         targetEmail: cleanText(existing.item.submitterEmail),
         unitCode: cleanText(existing.item.unitCode),
         recordId: existing.item.id,
         occurredAt: now,
         payloadJson: JSON.stringify({
           action: FORM_ACTIONS.DELETE,
-          actor: actorLabel(payload, existing.item.fillerName),
+          actor: actor.actorName || actorLabel(payload, existing.item.fillerName),
+          actorUsername: actor.actorUsername,
           status: existing.item.status
         })
       });
@@ -481,10 +508,12 @@ function createTrainingRouter(deps) {
     }
   }
 
-  async function handleRosterList(_req, res, origin, url) {
+  async function handleRosterList(req, res, origin, url) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllRosters();
-      const items = filterRosters(rows.map((entry) => entry.item), url);
+      const items = filterRosters(rows.map((entry) => entry.item), url)
+        .filter((entry) => requestAuthz.canManageTrainingRoster(authz, entry));
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         items: items.map(mapTrainingRosterForClient),
@@ -497,6 +526,7 @@ function createTrainingRouter(deps) {
 
   async function handleRosterUpsert(req, res, origin) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ROSTER_ACTIONS.UPSERT);
       const payload = normalizeTrainingRosterPayload(envelope.payload);
@@ -506,7 +536,12 @@ function createTrainingRouter(deps) {
       if (!existing) {
         existing = await findDuplicateRoster(payload.unit, payload.name, payload.id);
       }
+      const targetRoster = existing ? existing.item : payload;
+      if (!requestAuthz.canManageTrainingRoster(authz, targetRoster)) {
+        throw requestAuthz.createHttpError('You do not have permission to manage this training roster', 403);
+      }
       const actor = actorLabel(payload, payload.createdBy || payload.name);
+      const actorMeta = requestAuthz.buildActorDetails(authz);
       const nextItem = createTrainingRosterRecord({
         ...(existing ? existing.item : {}),
         ...payload,
@@ -516,7 +551,7 @@ function createTrainingRouter(deps) {
       const saved = await upsertRoster(existing, nextItem);
       await createAuditRow({
         eventType: 'training.roster_upserted',
-        actorEmail: '',
+        actorEmail: actorMeta.actorEmail,
         targetEmail: '',
         unitCode: '',
         recordId: nextItem.id || nextItem.name,
@@ -524,6 +559,7 @@ function createTrainingRouter(deps) {
         payloadJson: JSON.stringify({
           action: ROSTER_ACTIONS.UPSERT,
           actor,
+          actorUsername: actorMeta.actorUsername,
           unit: nextItem.unit,
           source: nextItem.source
         })
@@ -540,25 +576,31 @@ function createTrainingRouter(deps) {
 
   async function handleRosterDelete(req, res, origin, rosterId) {
     try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getRosterEntryById(rosterId);
       if (!existing) {
         throw createError('Training roster not found', 404);
+      }
+      if (!requestAuthz.canManageTrainingRoster(authz, existing.item)) {
+        throw requestAuthz.createHttpError('You do not have permission to delete this training roster', 403);
       }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ROSTER_ACTIONS.DELETE);
       const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       const now = new Date().toISOString();
       await deleteRosterEntry(existing);
+      const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
         eventType: 'training.roster_deleted',
-        actorEmail: '',
+        actorEmail: actor.actorEmail,
         targetEmail: '',
         unitCode: '',
         recordId: existing.item.id,
         occurredAt: now,
         payloadJson: JSON.stringify({
           action: ROSTER_ACTIONS.DELETE,
-          actor: actorLabel(payload, existing.item.name),
+          actor: actor.actorName || actorLabel(payload, existing.item.name),
+          actorUsername: actor.actorUsername,
           unit: existing.item.unit,
           source: existing.item.source
         })

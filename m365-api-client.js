@@ -7,7 +7,8 @@
       getUnitContactApplication,
       getAllUnitContactApplications,
       findUnitContactApplicationsByEmail,
-      getOfficialUnitMeta
+      getOfficialUnitMeta,
+      getSessionAuthHeaders
     } = deps;
 
     const CONTRACT_VERSION = '2026-03-11';
@@ -267,10 +268,14 @@
 
     function buildHeaders(extraHeaders, options) {
       const opts = options && typeof options === 'object' ? options : {};
+      const sessionHeaders = typeof getSessionAuthHeaders === 'function'
+        ? (getSessionAuthHeaders() || {})
+        : {};
       return {
         'Content-Type': 'application/json',
         'X-ISMS-Contract-Version': cleanText(opts.contractVersion) || CONTRACT_VERSION,
         ...(opts.sharedHeaders && typeof opts.sharedHeaders === 'object' ? opts.sharedHeaders : {}),
+        ...(sessionHeaders && typeof sessionHeaders === 'object' ? sessionHeaders : {}),
         ...(extraHeaders || {})
       };
     }

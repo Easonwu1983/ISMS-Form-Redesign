@@ -22,6 +22,7 @@ async function run() {
     baseUrl: DEFAULT_BASE,
     checks: []
   };
+  let adminSessionToken = '';
 
   async function step(name, fn, options) {
     const opts = options || {};
@@ -64,14 +65,6 @@ async function run() {
     return { status: response.status, ready: json && json.ready !== false, message: json && json.message || '' };
   });
 
-  await step('system-users list', async () => {
-    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/system-users`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const count = Array.isArray(json && json.items) ? json.items.length : 0;
-    if (count < 1) throw new Error('system-users list is empty');
-    return { count };
-  }, { critical: true });
-
   await step('auth login success', async () => {
     const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/login`, {
       method: 'POST',
@@ -81,6 +74,8 @@ async function run() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('login response invalid');
     if (json.item.password) throw new Error('password leaked in auth response');
+    adminSessionToken = String(json.sessionToken || '').trim();
+    if (!adminSessionToken) throw new Error('missing session token');
     return { username: json.item.username, role: json.item.role };
   }, { critical: true });
 
@@ -92,6 +87,24 @@ async function run() {
     });
     if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
     return { status: response.status, ok: json && json.ok === false };
+  }, { critical: true });
+
+  await step('system-users list anonymous denied', async () => {
+    const { response } = await requestJson(`${DEFAULT_BASE}/api/system-users`);
+    if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
+    return { status: response.status };
+  }, { critical: true });
+
+  await step('system-users list authorized', async () => {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/system-users`, {
+      headers: {
+        Authorization: `Bearer ${adminSessionToken}`
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const count = Array.isArray(json && json.items) ? json.items.length : 0;
+    if (count < 1) throw new Error('system-users list is empty');
+    return { count };
   }, { critical: true });
 
   report.finishedAt = new Date().toISOString();

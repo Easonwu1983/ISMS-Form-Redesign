@@ -767,7 +767,8 @@
       getUnitContactApplication,
       getAllUnitContactApplications,
       findUnitContactApplicationsByEmail,
-      getOfficialUnitMeta
+      getOfficialUnitMeta,
+      getSessionAuthHeaders
     });
     window._m365ApiClient = m365ApiClientApi;
     return m365ApiClientApi;
@@ -969,6 +970,16 @@
     const single = normalizeRemoteSystemUserRecord(body && (body.item || body.data || body.result || body));
     return single ? [single] : [];
   }
+  function getSessionAuthHeaders() {
+    const user = currentUser();
+    if (!user) return {};
+    const headers = {};
+    const sessionToken = String(user.sessionToken || '').trim();
+    const activeUnit = String(user.activeUnit || '').trim();
+    if (sessionToken) headers.Authorization = 'Bearer ' + sessionToken;
+    if (activeUnit) headers['X-ISMS-Active-Unit'] = activeUnit;
+    return headers;
+  }
   async function requestSystemUserJson(url, options) {
     const requestOptions = options || {};
     const config = getRuntimeM365Config();
@@ -983,6 +994,7 @@
           'Content-Type': 'application/json',
           'X-ISMS-Contract-Version': SYSTEM_USERS_CONTRACT_VERSION,
           ...getSystemUsersSharedHeaders(),
+          ...getSessionAuthHeaders(),
           ...(requestOptions.headers || {})
         },
         body: requestOptions.body ? JSON.stringify(requestOptions.body) : undefined,
@@ -1253,11 +1265,18 @@
   }
   async function syncUsersFromM365(options) {
     const opts = options || {};
+    const user = currentUser();
     const mode = getSystemUsersMode();
     const strict = isStrictRemoteDataMode();
     setSystemUserRepositoryState({ mode: mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setSystemUserRepositoryState({ ready: false, message: '目前使用本機帳號模式', error: '' });
+    }
+    if (!user) {
+      return setSystemUserRepositoryState({ ready: false, source: 'auth-pending', message: '登入後才會同步帳號主檔', error: '' });
+    }
+    if (!canManageUsers(user)) {
+      return setSystemUserRepositoryState({ ready: false, source: 'auth-scoped', message: '目前角色不需同步帳號主檔', error: '' });
     }
     try {
       const healthEndpoint = getSystemUsersHealthEndpoint();
@@ -1302,10 +1321,17 @@
   }
   async function syncReviewScopesFromM365(options) {
     const opts = options || {};
+    const user = currentUser();
     const mode = getReviewScopesMode();
     setReviewScopeRepositoryState({ mode: mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setReviewScopeRepositoryState({ ready: false, message: '目前未啟用審核權限矩陣後端', error: '' });
+    }
+    if (!user) {
+      return setReviewScopeRepositoryState({ ready: false, source: 'auth-pending', message: '登入後才會同步審核權限矩陣', error: '' });
+    }
+    if (user.role !== ROLES.ADMIN && user.role !== ROLES.UNIT_ADMIN) {
+      return setReviewScopeRepositoryState({ ready: false, source: 'auth-scoped', message: '目前角色不需要審核權限矩陣', error: '' });
     }
     try {
       const healthEndpoint = getReviewScopesHealthEndpoint();
@@ -1681,6 +1707,7 @@
   }
   async function syncCorrectiveActionsFromM365(options) {
     const opts = options || {};
+    const user = currentUser();
     const client = getM365ApiClient();
     const mode = client.getCorrectiveActionMode();
     const strict = isStrictRemoteDataMode();
@@ -1689,6 +1716,14 @@
       return setCorrectiveActionRepositoryState({
         ready: false,
         message: '目前使用本機暫存模式',
+        error: ''
+      });
+    }
+    if (!user) {
+      return setCorrectiveActionRepositoryState({
+        ready: false,
+        source: 'auth-pending',
+        message: '登入後才會同步矯正單資料',
         error: ''
       });
     }
@@ -1898,6 +1933,7 @@
   }
   async function syncChecklistsFromM365(options) {
     const opts = options || {};
+    const user = currentUser();
     const client = getM365ApiClient();
     const mode = client.getChecklistMode();
     const strict = isStrictRemoteDataMode();
@@ -1906,6 +1942,14 @@
       return setChecklistRepositoryState({
         ready: false,
         message: '目前使用本機暫存模式',
+        error: ''
+      });
+    }
+    if (!user) {
+      return setChecklistRepositoryState({
+        ready: false,
+        source: 'auth-pending',
+        message: '登入後才會同步檢核表資料',
         error: ''
       });
     }
@@ -2091,12 +2135,16 @@
   }
   async function syncTrainingFormsFromM365(options) {
     const opts = options || {};
+    const user = currentUser();
     const client = getM365ApiClient();
     const mode = client.getTrainingMode();
     const strict = isStrictRemoteDataMode();
     setTrainingRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setTrainingRepositoryState({ ready: false, message: '目前使用本機暫存模式', error: '' });
+    }
+    if (!user) {
+      return setTrainingRepositoryState({ ready: false, source: 'auth-pending', message: '登入後才會同步教育訓練資料', error: '' });
     }
     try {
       const health = await client.getTrainingHealth();
@@ -2128,12 +2176,16 @@
   }
   async function syncTrainingRostersFromM365(options) {
     const opts = options || {};
+    const user = currentUser();
     const client = getM365ApiClient();
     const mode = client.getTrainingMode();
     const strict = isStrictRemoteDataMode();
     setTrainingRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setTrainingRepositoryState({ ready: false, message: '目前使用本機暫存模式', error: '' });
+    }
+    if (!user) {
+      return setTrainingRepositoryState({ ready: false, source: 'auth-pending', message: '登入後才會同步教育訓練名單', error: '' });
     }
     try {
       const health = await client.getTrainingHealth();
@@ -2338,6 +2390,43 @@
     window._unitContactApplicationModule = unitContactApplicationModuleApi;
     return unitContactApplicationModuleApi;
   }
+
+  let authenticatedBootstrapKey = '';
+  let authenticatedBootstrapPromise = null;
+  function buildAuthenticatedBootstrapKey(user) {
+    if (!user) return '';
+    return [
+      String(user.username || '').trim(),
+      String(user.activeUnit || '').trim(),
+      String(user.sessionToken || '').trim(),
+      String(user.sessionExpiresAt || '').trim()
+    ].join('|');
+  }
+  async function ensureAuthenticatedRemoteBootstrap() {
+    const user = currentUser();
+    if (!user) {
+      authenticatedBootstrapKey = '';
+      authenticatedBootstrapPromise = null;
+      return '';
+    }
+    const nextKey = buildAuthenticatedBootstrapKey(user);
+    if (authenticatedBootstrapPromise && authenticatedBootstrapKey === nextKey) {
+      return authenticatedBootstrapPromise;
+    }
+    authenticatedBootstrapKey = nextKey;
+    authenticatedBootstrapPromise = (async function () {
+      if (canManageUsers(user)) await syncUsersFromM365({ silent: true });
+      if (user.role === ROLES.ADMIN || user.role === ROLES.UNIT_ADMIN) {
+        await syncReviewScopesFromM365({ silent: true });
+      }
+      await syncTrainingFormsFromM365({ silent: true });
+      await syncTrainingRostersFromM365({ silent: true });
+      await syncChecklistsFromM365({ silent: true });
+      await syncCorrectiveActionsFromM365({ silent: true });
+      return nextKey;
+    })();
+    return authenticatedBootstrapPromise;
+  }
   let shellModuleApi = null;
   function getShellModule() {
     if (shellModuleApi) return shellModuleApi;
@@ -2375,6 +2464,7 @@
       getAuthorizedUnits,
       getScopedUnit,
       switchCurrentUserUnit,
+      ensureAuthenticatedRemoteBootstrap,
       hasUnsavedChangesGuard,
       confirmDiscardUnsavedChanges,
       registerActionHandlers
@@ -2987,15 +3077,10 @@
     installGlobalDelegation();
     getDataModule().migrateAllStores();
     seedData();
-      ensurePrimaryAdminProfile();
-      await syncUsersFromM365({ silent: true });
-      await syncReviewScopesFromM365({ silent: true });
-      getTrainingModule().seedTrainingData();
+    ensurePrimaryAdminProfile();
+    getTrainingModule().seedTrainingData();
     await migrateAttachmentStores();
-    await syncTrainingFormsFromM365({ silent: true });
-    await syncTrainingRostersFromM365({ silent: true });
-    await syncChecklistsFromM365({ silent: true });
-    await syncCorrectiveActionsFromM365({ silent: true });
+    await ensureAuthenticatedRemoteBootstrap();
     window.addEventListener('hashchange', handleHashChange);
     window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
     window.addEventListener('load', refreshIcons);
