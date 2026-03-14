@@ -1,0 +1,31 @@
+name: azure-webapp-backend-manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "Azure Web App name"
+        required: true
+        default: "isms-campus-backend"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Azure webapp backend package
+        run: node scripts/build-azure-webapp-package.cjs
+
+      - name: Deploy backend source to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ inputs.app_name }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: dist/azure-webapp-backend

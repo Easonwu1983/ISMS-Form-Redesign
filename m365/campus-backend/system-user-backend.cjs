@@ -428,16 +428,18 @@ function createSystemUserRouter(deps) {
 
   async function buildHealth() {
     const siteId = await resolveSiteId();
-    const { decoded } = await getDelegatedToken();
+    const { decoded, mode } = await getDelegatedToken();
     const health = {
       ok: true,
       ready: true,
       contractVersion: CONTRACT_VERSION,
-      repository: 'sharepoint-delegated-cli',
+      repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
       actor: {
-        appId: cleanText(decoded.appid),
+        tokenMode: cleanText(mode) || 'delegated-cli',
+        appId: cleanText(decoded.appid || decoded.azp),
         upn: cleanText(decoded.upn),
-        scopes: cleanText(decoded.scp)
+        scopes: cleanText(decoded.scp),
+        roles: Array.isArray(decoded.roles) ? decoded.roles.join(',') : ''
       },
       site: { id: siteId }
     };

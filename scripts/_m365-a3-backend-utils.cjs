@@ -81,6 +81,15 @@ function tryAcquireDelegatedToken(command, options = {}) {
   }
 }
 
+function resolveTokenMode(config) {
+  const mode = String(process.env.M365_A3_TOKEN_MODE || '').trim().toLowerCase();
+  if (mode === 'app-only' || mode === 'delegated-cli' || mode === 'auto') return mode;
+  if (config && config.tenantId && config.clientId && config.clientSecret && process.env.WEBSITE_SITE_NAME) {
+    return 'app-only';
+  }
+  return 'auto';
+}
+
 async function acquireGraphToken(config) {
   if (!config.tenantId || !config.clientId || !config.clientSecret) {
     throw new Error('Missing M365 A3 backend config. Set tenant/client/secret or create .local-secrets/m365-a3-backend.json');
@@ -133,6 +142,44 @@ function acquireDelegatedGraphTokenFromCli() {
   }
 
   throw new Error('Unable to acquire delegated Graph token from Azure CLI or CLI for Microsoft 365.');
+}
+
+async function acquirePreferredGraphToken(config) {
+  const effectiveConfig = config || loadBackendConfig();
+  const mode = resolveTokenMode(effectiveConfig);
+
+  if (mode === 'app-only') {
+    const token = await acquireGraphToken(effectiveConfig);
+    return {
+      ...token,
+      mode: 'app-only'
+    };
+  }
+
+  if (mode === 'delegated-cli') {
+    const token = acquireDelegatedGraphTokenFromCli();
+    return {
+      ...token,
+      mode: 'delegated-cli'
+    };
+  }
+
+  try {
+    const delegated = acquireDelegatedGraphTokenFromCli();
+    return {
+      ...delegated,
+      mode: 'delegated-cli'
+    };
+  } catch (delegatedError) {
+    if (effectiveConfig && effectiveConfig.tenantId && effectiveConfig.clientId && effectiveConfig.clientSecret) {
+      const appOnly = await acquireGraphToken(effectiveConfig);
+      return {
+        ...appOnly,
+        mode: 'app-only'
+      };
+    }
+    throw delegatedError;
+  }
 }
 
 async function graphGet(accessToken, url) {
@@ -258,6 +305,7 @@ module.exports = {
   REQUIRED_ROLES,
   adminConsentUrl,
   acquireGraphToken,
+  acquirePreferredGraphToken,
   acquireDelegatedGraphTokenFromCli,
   graphColumnFromSchema,
   graphGet,

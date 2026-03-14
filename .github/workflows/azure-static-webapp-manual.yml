@@ -1,0 +1,33 @@
+name: azure-static-webapp-manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_base:
+        description: "HTTPS backend base, e.g. https://your-backend.azurewebsites.net"
+        required: true
+        default: "https://YOUR-BACKEND.azurewebsites.net"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Azure static package
+        run: node scripts/build-azure-static-package.cjs --backend-base=${{ inputs.backend_base }}
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: dist/azure-staticwebapp
+          output_location: ""
+          skip_app_build: true

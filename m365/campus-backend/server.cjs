@@ -28,7 +28,7 @@ const {
 } = require('./audit-diff.cjs');
 const {
   GRAPH_ROOT,
-  acquireDelegatedGraphTokenFromCli,
+  acquirePreferredGraphToken,
   loadBackendConfig,
   resolveSiteIdFromUrl
 } = require('../../scripts/_m365-a3-backend-utils.cjs');
@@ -46,7 +46,8 @@ const state = {
   listColumnsMap: new Map(),
   actor: null,
   token: null,
-  tokenExp: 0
+  tokenExp: 0,
+  tokenMode: ''
 };
 
 function cleanText(value) {
@@ -111,16 +112,27 @@ async function writeJson(res, response, origin) {
   res.end(payload);
 }
 
+function summarizeTokenActor(decoded, mode) {
+  return {
+    tokenMode: cleanText(mode) || 'delegated-cli',
+    appId: cleanText(decoded && (decoded.appid || decoded.azp)),
+    upn: cleanText(decoded && decoded.upn),
+    scopes: cleanText(decoded && decoded.scp),
+    roles: Array.isArray(decoded && decoded.roles) ? decoded.roles.join(',') : ''
+  };
+}
+
 async function getDelegatedToken() {
   if (state.token && state.tokenExp > Date.now() + 60 * 1000) {
-    return { accessToken: state.token, decoded: state.actor };
+    return { accessToken: state.token, decoded: state.actor, mode: state.tokenMode || 'delegated-cli' };
   }
-  const token = acquireDelegatedGraphTokenFromCli();
+  const token = await acquirePreferredGraphToken(loadBackendConfig());
   const decoded = decodeJwt(token.accessToken);
   state.token = token.accessToken;
   state.tokenExp = Number(decoded.exp || 0) * 1000;
   state.actor = decoded;
-  return { accessToken: token.accessToken, decoded };
+  state.tokenMode = cleanText(token.mode) || 'delegated-cli';
+  return { accessToken: token.accessToken, decoded, mode: state.tokenMode };
 }
 
 async function resolveSiteId() {
@@ -356,7 +368,7 @@ async function createApplication(payload) {
   const nextSequence = await getNextSequence(new Date().getFullYear());
   const application = createApplicationRecord(payload, nextSequence);
   application.source = 'a3-campus-backend';
-  application.backendMode = 'campus-sharepoint-cli';
+  application.backendMode = state.tokenMode === 'app-only' ? 'campus-sharepoint-app-only' : 'campus-sharepoint-cli';
 
   const created = await graphRequest('POST', `/sites/${siteId}/lists/${lists.applications.id}/items`, {
     fields: filterFieldsForExistingColumns(mapApplicationToGraphFields(application), columnNames)
@@ -383,16 +395,12 @@ async function createApplication(payload) {
 async function getHealth() {
   const siteId = await resolveSiteId();
   const lists = await resolveLists();
-  const { decoded } = await getDelegatedToken();
+  const { decoded, mode } = await getDelegatedToken();
   return {
     ok: true,
     contractVersion: CONTRACT_VERSION,
-    repository: 'sharepoint-delegated-cli',
-    actor: {
-      appId: cleanText(decoded.appid),
-      upn: cleanText(decoded.upn),
-      scopes: cleanText(decoded.scp)
-    },
+    repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
+    actor: summarizeTokenActor(decoded, mode),
     site: {
       id: siteId,
       url: state.siteUrl

@@ -40,6 +40,9 @@
                     "test:training:all:local":  "test-training-all-local.cmd",
                     "test:all:local":  "test-all-local.cmd",
                     "m365:a3:system-users:provision":  "node scripts/m365-a3-system-users-provision.cjs"
+                ,
+                    "build:azure:static":  "node scripts/build-azure-static-package.cjs",
+                    "build:azure:webapp":  "node scripts/build-azure-webapp-package.cjs"
                 },
     "devDependencies":  {
                             "playwright":  "1.58.2"
