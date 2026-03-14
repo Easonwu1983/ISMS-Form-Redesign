@@ -92,7 +92,7 @@ async function run() {
 
     const diffButton = page.locator('button[data-action="admin.viewAuditEntry"]').first();
     if (await diffButton.count()) {
-      await diffButton.click();
+      await diffButton.evaluate((button) => button.click());
       await page.waitForSelector('.modal .modal-title', { timeout: 15000 });
       const modalTitle = await page.locator('.modal .modal-title').first().textContent();
       if (!String(modalTitle || '').includes('操作稽核差異檢視')) {
