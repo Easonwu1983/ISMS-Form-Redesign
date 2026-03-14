@@ -50,7 +50,7 @@ async function run() {
     return { status: response.status };
   }, { critical: true });
 
-  for (const endpoint of ['unit-contact', 'corrective-actions', 'checklists', 'training', 'system-users', 'auth']) {
+  for (const endpoint of ['unit-contact', 'corrective-actions', 'checklists', 'training', 'system-users', 'auth', 'audit-trail']) {
     await step(`health:${endpoint}`, async () => {
       const { response, json } = await requestJson(`${DEFAULT_BASE}/api/${endpoint}/health`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -105,6 +105,20 @@ async function run() {
     const count = Array.isArray(json && json.items) ? json.items.length : 0;
     if (count < 1) throw new Error('system-users list is empty');
     return { count };
+  }, { critical: true });
+
+  await step('audit-trail list authorized', async () => {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/audit-trail?limit=20`, {
+      headers: {
+        Authorization: `Bearer ${adminSessionToken}`
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!json || !Array.isArray(json.items) || !json.summary) throw new Error('audit trail response invalid');
+    return {
+      count: json.items.length,
+      latestOccurredAt: json.summary.latestOccurredAt || ''
+    };
   }, { critical: true });
 
   await step('auth verify authorized', async () => {

@@ -494,6 +494,8 @@
       mergeCustomUnit,
       loadLoginLogs,
       clearLoginLogs,
+      fetchAuditTrailEntries,
+      fetchAuditTrailHealth,
       getSchemaHealth: function () { return getDataModule().getSchemaHealth(); },
       migrateAllStores: function () { return getDataModule().migrateAllStores(); },
       exportManagedStoreSnapshot: function () { return getDataModule().exportManagedStoreSnapshot(); },
@@ -776,6 +778,7 @@
   }
   const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
   const REVIEW_SCOPE_CONTRACT_VERSION = '2026-03-13';
+  const AUDIT_TRAIL_CONTRACT_VERSION = '2026-03-14';
   const SYSTEM_USER_ACTIONS = {
     UPSERT: 'system-user.upsert',
     DELETE: 'system-user.delete',
@@ -861,6 +864,30 @@
   function getReviewScopesSharedHeaders() {
     const config = getRuntimeM365Config();
     if (config.reviewScopesSharedHeaders && typeof config.reviewScopesSharedHeaders === 'object') return config.reviewScopesSharedHeaders;
+    return getSystemUsersSharedHeaders();
+  }
+  function getAuditTrailMode() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.auditTrailMode || '').trim();
+    return explicit || (getSystemUsersMode() === 'm365-api' ? 'm365-api' : 'local-emulator');
+  }
+  function getAuditTrailEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.auditTrailEndpoint || '').trim();
+    if (explicit) return explicit.replace(/\/$/, '');
+    const usersEndpoint = getSystemUsersEndpoint();
+    return usersEndpoint ? usersEndpoint.replace(/\/system-users$/, '/audit-trail') : '';
+  }
+  function getAuditTrailHealthEndpoint() {
+    const config = getRuntimeM365Config();
+    const explicit = String(config.auditTrailHealthEndpoint || '').trim();
+    if (explicit) return explicit;
+    const endpoint = getAuditTrailEndpoint();
+    return endpoint ? endpoint + '/health' : '';
+  }
+  function getAuditTrailSharedHeaders() {
+    const config = getRuntimeM365Config();
+    if (config.auditTrailSharedHeaders && typeof config.auditTrailSharedHeaders === 'object') return config.auditTrailSharedHeaders;
     return getSystemUsersSharedHeaders();
   }
   function getAuthMode() {
@@ -1051,6 +1078,22 @@
       headers: {
         'X-ISMS-Contract-Version': REVIEW_SCOPE_CONTRACT_VERSION,
         ...getReviewScopesSharedHeaders(),
+        ...((options && options.headers) || {})
+      }
+    });
+  }
+  async function requestAuditTrailJson(path, options) {
+    const endpoint = getAuditTrailEndpoint();
+    if (!endpoint) throw new Error('未設定 auditTrailEndpoint');
+    const suffix = String(path || '').trim();
+    const url = suffix
+      ? (/^https?:\/\//i.test(suffix) ? suffix : (endpoint + suffix))
+      : endpoint;
+    return requestSystemUserJson(url, {
+      ...(options || {}),
+      headers: {
+        'X-ISMS-Contract-Version': AUDIT_TRAIL_CONTRACT_VERSION,
+        ...getAuditTrailSharedHeaders(),
         ...((options && options.headers) || {})
       }
     });
@@ -1384,6 +1427,34 @@
         error: String(error && error.message || error || '')
       });
     }
+  }
+  async function fetchAuditTrailHealth() {
+    if (getAuditTrailMode() !== 'm365-api') {
+      return { ok: false, ready: false, message: '目前未啟用操作稽核軌跡後端' };
+    }
+    const healthEndpoint = getAuditTrailHealthEndpoint();
+    if (!healthEndpoint) throw new Error('未設定 auditTrailHealthEndpoint');
+    return requestSystemUserJson(healthEndpoint, {
+      method: 'GET',
+      headers: {
+        'X-ISMS-Contract-Version': AUDIT_TRAIL_CONTRACT_VERSION,
+        ...getAuditTrailSharedHeaders()
+      }
+    });
+  }
+  async function fetchAuditTrailEntries(filters) {
+    if (getAuditTrailMode() !== 'm365-api') {
+      return { ok: false, items: [], summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] }, message: '目前未啟用操作稽核軌跡後端' };
+    }
+    const endpoint = getAuditTrailEndpoint();
+    if (!endpoint) throw new Error('未設定 auditTrailEndpoint');
+    const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+    const query = filters && typeof filters === 'object' ? filters : {};
+    Object.keys(query).forEach(function (key) {
+      const cleanValue = String(query[key] || '').trim();
+      if (cleanValue) url.searchParams.set(key, cleanValue);
+    });
+    return requestAuditTrailJson(url.toString(), { method: 'GET' });
   }
   async function submitReviewScopeReplace(payload) {
     const input = payload && typeof payload === 'object' ? payload : {};
@@ -2539,6 +2610,7 @@
     tracking: { title: '\u8ffd\u8e64\u76e3\u63a7', allow: () => !!currentUser(), render: (param) => getCaseModule().renderTracking(param) },
     users: { title: '\u5e33\u865f\u7ba1\u7406', allow: () => canManageUsers(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u5e33\u865f\u7ba1\u7406\u6b0a\u9650', render: () => getAdminModule().renderUsers() },
     'login-log': { title: '\u767b\u5165\u7d00\u9304', allow: () => canManageUsers(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u6aa2\u8996\u767b\u5165\u7d00\u9304\u6b0a\u9650', render: () => getAdminModule().renderLoginLog() },
+    'audit-trail': { title: '\u64cd\u4f5c\u7a3d\u6838\u8ecc\u8de1', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u6aa2\u8996\u64cd\u4f5c\u7a3d\u6838\u8ecc\u8de1', render: () => getAdminModule().renderAuditTrail() },
     'schema-health': { title: '\u8cc7\u6599\u5065\u5eb7\u6aa2\u67e5', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u6aa2\u8996\u8cc7\u6599\u5065\u5eb7\u8cc7\u8a0a', render: () => getAdminModule().renderSchemaHealth() },
     checklist: { title: '\u5167\u7a3d\u6aa2\u6838\u8868', allow: () => !!currentUser(), render: () => getChecklistModule().renderChecklistList() },
     'checklist-fill': { title: '\u586b\u5831\u6aa2\u6838\u8868', allow: () => canFillChecklist(), fallback: 'checklist', deniedMessage: '\u60a8\u6c92\u6709\u586b\u5831\u6aa2\u6838\u8868\u6b0a\u9650', render: (param) => getChecklistModule().renderChecklistFill(param) },

@@ -18,6 +18,7 @@ const {
 } = require('../azure-function/unit-contact-api/src/shared/contract');
 const { createChecklistRouter } = require('./checklist-backend.cjs');
 const { createCorrectiveActionRouter } = require('./corrective-action-backend.cjs');
+const { createAuditTrailRouter } = require('./audit-trail-backend.cjs');
 const { createReviewScopeRouter } = require('./review-scope-backend.cjs');
 const { createAttachmentRouter } = require('./attachment-backend.cjs');
 const { createSystemUserRouter } = require('./system-user-backend.cjs');
@@ -436,6 +437,14 @@ const correctiveActionRouter = createCorrectiveActionRouter({
   requestAuthz
 });
 
+const auditTrailRouter = createAuditTrailRouter({
+  writeJson,
+  graphRequest,
+  resolveSiteId,
+  getDelegatedToken,
+  requestAuthz
+});
+
 const trainingRouter = createTrainingRouter({
   parseJsonBody,
   writeJson,
@@ -570,6 +579,9 @@ function createServer() {
         return;
       }
       if (await correctiveActionRouter.tryHandle(req, res, origin, url)) {
+        return;
+      }
+      if (await auditTrailRouter.tryHandle(req, res, origin, url)) {
         return;
       }
       if (await checklistRouter.tryHandle(req, res, origin, url)) {

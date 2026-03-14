@@ -90,6 +90,26 @@ This will:
 2. read the current `trycloudflare.com` URL
 3. republish Pages in `full-proxy` mode against that URL
 
+## Step 5B. Health check and self-heal
+
+To verify Pages + tunnel health without opening a browser:
+
+```powershell
+node .\scripts\cloudflare-live-health-check.cjs
+```
+
+To auto-heal Pages if the quick tunnel URL changed or the proxy drifted:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\ensure-cloudflare-pages-live.ps1 -ProjectName isms-campus-portal
+```
+
+This will:
+
+1. run the Cloudflare Pages health check
+2. if unhealthy, rerun the bootstrap flow
+3. rerun the health check and stop only when green
+
 ## Step 6. Switch users to the Cloudflare Pages URL
 
 Use the Pages HTTPS URL for internal testing after verifying:
