@@ -1043,7 +1043,9 @@
     const endpoint = getReviewScopesEndpoint();
     if (!endpoint) throw new Error('未設定 reviewScopesEndpoint');
     const suffix = String(path || '').trim();
-    const url = suffix ? (endpoint + suffix) : endpoint;
+    const url = suffix
+      ? (/^https?:\/\//i.test(suffix) ? suffix : (endpoint + suffix))
+      : endpoint;
     return requestSystemUserJson(url, {
       ...(options || {}),
       headers: {

@@ -22,6 +22,7 @@ const filesToCopy = [
   'favicon.svg',
   'asset-loader.js',
   'units.js',
+  'units-data.json',
   'm365-config.js',
   'm365-api-client.js',
   'attachment-module.js',
@@ -60,12 +61,15 @@ function copyRelative(relPath) {
 function rewriteIndex() {
   const indexPath = path.join(outputDir, 'index.html');
   let html = fs.readFileSync(indexPath, 'utf8');
+  const connectTarget = mode === 'full-proxy'
+    ? "'self'"
+    : `'self' ${backendBase} https://ntums365.sharepoint.com`;
   const csp = [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https://ntums365.sharepoint.com",
-    `connect-src 'self' ${backendBase} https://ntums365.sharepoint.com`,
+    `connect-src ${connectTarget}`,
     "font-src 'self' data: https://fonts.gstatic.com",
     "object-src 'none'",
     "base-uri 'self'",
@@ -86,7 +90,7 @@ function writeRedirectIndex() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>內部稽核管考追蹤系統入口</title>
+  <title>??????????</title>
   <meta http-equiv="refresh" content="1; url=${redirectTarget}">
   <meta name="robots" content="noindex,nofollow">
   <style>
@@ -202,14 +206,14 @@ function writeRedirectIndex() {
       <span class="badge-mark">NTU</span>
       <span>CLOUDFLARE ENTRY</span>
     </div>
-    <h1>內部稽核管考追蹤系統</h1>
-    <p>此入口頁會自動導向目前的 Cloudflare HTTPS 系統入口。若 1 秒後未自動跳轉，請直接使用下方按鈕進入。</p>
+    <h1>??????????</h1>
+    <p>?????? Cloudflare HTTPS????? 1 ????????????????????????????????</p>
     <div class="actions">
-      <a class="btn btn-primary" href="${redirectTarget}">進入系統</a>
+      <a class="btn btn-primary" href="${redirectTarget}">????</a>
     </div>
     <div class="meta">
-      <div>導向目標：<code>${redirectTarget}</code></div>
-      <div>目前模式：Cloudflare Pages 入口頁，實際系統由 Cloudflare Tunnel 提供 HTTPS。</div>
+      <div>?????<code>${redirectTarget}</code></div>
+      <div>??? Cloudflare Pages ?? HTTPS ???????? Cloudflare Tunnel ????????</div>
     </div>
   </main>
   <script>
@@ -223,9 +227,39 @@ function writeRedirectIndex() {
   fs.writeFileSync(path.join(outputDir, 'index.html'), html, 'utf8');
 }
 
+function buildApiEndpoint(pathname) {
+  if (mode === 'full-proxy') {
+    return pathname;
+  }
+  return `${backendBase}${pathname}`;
+}
+
 function writeOverride() {
-  const content = `(function () {\n  window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__ = {\n    activeProfile: 'cloudflarePagesTunnel',\n    strictRemoteData: true,\n    unitContactMode: 'm365-api',\n    unitContactSubmitEndpoint: '${backendBase}/api/unit-contact/apply',\n    unitContactStatusEndpoint: '${backendBase}/api/unit-contact/status',\n    unitContactStatusLookupMethod: 'POST',\n    correctiveActionsMode: 'm365-api',\n    correctiveActionsEndpoint: '${backendBase}/api/corrective-actions',\n    correctiveActionsHealthEndpoint: '${backendBase}/api/corrective-actions/health',\n    checklistMode: 'm365-api',\n    checklistEndpoint: '${backendBase}/api/checklists',\n    checklistHealthEndpoint: '${backendBase}/api/checklists/health',\n    trainingMode: 'm365-api',\n    trainingFormsEndpoint: '${backendBase}/api/training/forms',\n    trainingRostersEndpoint: '${backendBase}/api/training/rosters',\n    trainingHealthEndpoint: '${backendBase}/api/training/health',\n    authMode: 'm365-api',\n    authEndpoint: '${backendBase}/api/auth',\n    authHealthEndpoint: '${backendBase}/api/auth/health',\n    systemUsersMode: 'm365-api',\n    systemUsersEndpoint: '${backendBase}/api/system-users',\n    systemUsersHealthEndpoint: '${backendBase}/api/system-users/health',\n    reviewScopesMode: 'm365-api',\n    reviewScopesEndpoint: '${backendBase}/api/review-scopes',\n    reviewScopesHealthEndpoint: '${backendBase}/api/review-scopes/health',\n    attachmentsMode: 'm365-api',\n    attachmentsEndpoint: '${backendBase}/api/attachments',\n    attachmentsHealthEndpoint: '${backendBase}/api/attachments/health',\n    sharePointSiteUrl: 'https://ntums365.sharepoint.com/sites/ISMSFormsWorkspace',\n    sharePointSiteName: 'ISMSFormsWorkspace',\n    sharePointProvisioningModel: 'delegated-cli-or-app-only',\n    sharePointLists: {\n      applications: 'UnitContactApplications',\n      unitAdmins: 'UnitAdmins',\n      audit: 'OpsAudit',\n      correctiveActions: 'CorrectiveActions',\n      checklists: 'Checklists',\n      trainingForms: 'TrainingForms',\n      trainingRosters: 'TrainingRosters',\n      systemUsers: 'SystemUsers',\n      reviewScopes: 'UnitReviewScopes'\n    }\n  };\n})();\n`;
+  const content = `(function () {\n  window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__ = {\n    activeProfile: 'cloudflarePagesTunnel',\n    strictRemoteData: true,\n    unitContactMode: 'm365-api',\n    unitContactSubmitEndpoint: '${buildApiEndpoint('/api/unit-contact/apply')}',\n    unitContactStatusEndpoint: '${buildApiEndpoint('/api/unit-contact/status')}',\n    unitContactStatusLookupMethod: 'POST',\n    correctiveActionsMode: 'm365-api',\n    correctiveActionsEndpoint: '${buildApiEndpoint('/api/corrective-actions')}',\n    correctiveActionsHealthEndpoint: '${buildApiEndpoint('/api/corrective-actions/health')}',\n    checklistMode: 'm365-api',\n    checklistEndpoint: '${buildApiEndpoint('/api/checklists')}',\n    checklistHealthEndpoint: '${buildApiEndpoint('/api/checklists/health')}',\n    trainingMode: 'm365-api',\n    trainingFormsEndpoint: '${buildApiEndpoint('/api/training/forms')}',\n    trainingRostersEndpoint: '${buildApiEndpoint('/api/training/rosters')}',\n    trainingHealthEndpoint: '${buildApiEndpoint('/api/training/health')}',\n    authMode: 'm365-api',\n    authEndpoint: '${buildApiEndpoint('/api/auth')}',\n    authHealthEndpoint: '${buildApiEndpoint('/api/auth/health')}',\n    systemUsersMode: 'm365-api',\n    systemUsersEndpoint: '${buildApiEndpoint('/api/system-users')}',\n    systemUsersHealthEndpoint: '${buildApiEndpoint('/api/system-users/health')}',\n    reviewScopesMode: 'm365-api',\n    reviewScopesEndpoint: '${buildApiEndpoint('/api/review-scopes')}',\n    reviewScopesHealthEndpoint: '${buildApiEndpoint('/api/review-scopes/health')}',\n    attachmentsMode: 'm365-api',\n    attachmentsEndpoint: '${buildApiEndpoint('/api/attachments')}',\n    attachmentsHealthEndpoint: '${buildApiEndpoint('/api/attachments/health')}',\n    sharePointSiteUrl: 'https://ntums365.sharepoint.com/sites/ISMSFormsWorkspace',\n    sharePointSiteName: 'ISMSFormsWorkspace',\n    sharePointProvisioningModel: 'delegated-cli-or-app-only',\n    sharePointLists: {\n      applications: 'UnitContactApplications',\n      unitAdmins: 'UnitAdmins',\n      audit: 'OpsAudit',\n      correctiveActions: 'CorrectiveActions',\n      checklists: 'Checklists',\n      trainingForms: 'TrainingForms',\n      trainingRosters: 'TrainingRosters',\n      systemUsers: 'SystemUsers',\n      reviewScopes: 'UnitReviewScopes'\n    }\n  };\n})();\n`;
   fs.writeFileSync(path.join(outputDir, 'm365-config.override.js'), content, 'utf8');
+}
+
+function writeWorkerProxy() {
+  if (mode !== 'full-proxy') return;
+  const content = `export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith('/api/')) {
+      const upstream = new URL(url.pathname + url.search, ${JSON.stringify(backendBase)});
+      const headers = new Headers(request.headers);
+      headers.delete('host');
+      return fetch(new Request(upstream.toString(), {
+        method: request.method,
+        headers,
+        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+        redirect: 'follow'
+      }));
+    }
+    return env.ASSETS.fetch(request);
+  }
+};
+`;
+  fs.writeFileSync(path.join(outputDir, '_worker.js'), content, 'utf8');
 }
 
 function writeHeaders() {
@@ -239,7 +273,7 @@ function writeHeaders() {
 }
 
 function writeReadme() {
-  const content = `ISMS Cloudflare Pages Package\n=============================\n\nPackage path:\n${outputDir}\n\nMode:\n${mode}\n\nBackend base:\n${backendBase}\n\nRedirect target:\n${redirectTarget}\n\nIntended deployment:\n- Frontend: Cloudflare Pages\n- Backend: Cloudflare Tunnel -> current backend host\n\nBefore go-live:\n1. Confirm ${backendBase}/api/auth/health responds over HTTPS\n2. Deploy this folder to Cloudflare Pages\n3. If mode=redirect, verify the page auto-redirects to ${redirectTarget}\n4. If mode=full, verify login and core business flows\n`;
+  const content = `ISMS Cloudflare Pages Package\n=============================\n\nPackage path:\n${outputDir}\n\nMode:\n${mode}\n\nBackend base:\n${backendBase}\n\nRedirect target:\n${redirectTarget}\n\nIntended deployment:\n- Frontend: Cloudflare Pages\n- Backend: Cloudflare Tunnel -> current backend host\n\nBefore go-live:\n1. Confirm ${backendBase}/api/auth/health responds over HTTPS\n2. Deploy this folder to Cloudflare Pages\n3. If mode=redirect, verify the page auto-redirects to ${redirectTarget}\n4. If mode=full or full-proxy, verify login and core business flows\n5. If mode=full-proxy, Pages will proxy /api/* to the tunnel backend via _worker.js\n`;
   fs.writeFileSync(path.join(outputDir, 'README-cloudflare-pages.txt'), content, 'utf8');
 }
 
@@ -261,6 +295,7 @@ if (mode === 'redirect') {
   filesToCopy.forEach(copyRelative);
   rewriteIndex();
   writeOverride();
+  writeWorkerProxy();
 }
 writeHeaders();
 writeReadme();

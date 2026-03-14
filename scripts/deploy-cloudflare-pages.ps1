@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectName,
     [string]$Branch = 'main',
-    [ValidateSet('full', 'redirect')]
+    [ValidateSet('full', 'redirect', 'full-proxy')]
     [string]$Mode = 'full',
     [string]$RedirectTarget = ''
 )
