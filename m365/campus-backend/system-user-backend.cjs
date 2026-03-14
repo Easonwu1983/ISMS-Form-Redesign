@@ -108,7 +108,7 @@ function createSystemUserRouter(deps) {
     return {
       key,
       failedCount: Number.isFinite(Number(entry.failedCount)) ? Number(entry.failedCount) : 0,
-      lockedUntil
+      lockedUntil: lockUntil
     };
   }
 
