@@ -123,11 +123,7 @@
             }
             toast('登入成功，歡迎 ' + user.name, 'success');
             setTimeout(function () {
-              Promise.resolve(ensureAuthenticatedRemoteBootstrap()).catch(function (error) {
-                console.error(error && error.stack ? error.stack : String(error));
-              }).finally(function () {
-                renderApp();
-              });
+              renderApp();
             }, 300);
           } else {
             document.getElementById('login-error').classList.add('show');
@@ -223,11 +219,7 @@
           }
           toast('密碼已重設並完成登入', 'success');
           setTimeout(function () {
-            Promise.resolve(ensureAuthenticatedRemoteBootstrap()).catch(function (error) {
-              console.error(error && error.stack ? error.stack : String(error));
-            }).finally(function () {
-              renderApp();
-            });
+            renderApp();
           }, 300);
         } catch (error) {
           toast(String(error && error.message || error || '重設密碼失敗'), 'error');
@@ -332,14 +324,22 @@
         handleRoute();
         return;
       }
+      document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
+      renderSidebar();
+      renderHeader();
+      document.getElementById('app').innerHTML = '<div class="animate-in"><div class="card"><div class="card-header"><span class="card-title">正在同步系統資料</span></div><p class="page-subtitle" style="margin:0">正在驗證登入狀態並同步矯正單、檢核表與教育訓練資料，完成後會自動載入頁面。</p></div></div>';
+      refreshIcons();
       Promise.resolve(ensureAuthenticatedRemoteBootstrap()).then(function () {
         if (currentUser()) handleRoute();
       }).catch(function (error) {
         console.error(error && error.stack ? error.stack : String(error));
+        if (String(error && error.message || '').indexOf('登入狀態已失效') >= 0) {
+          toast('登入狀態已失效，請重新登入', 'error');
+          handleRoute();
+          return;
+        }
+        handleRoute();
       });
-      document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
-      handleRoute();
-      refreshIcons();
     }
 
     registerActionHandlers('shell', {

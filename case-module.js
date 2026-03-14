@@ -169,6 +169,42 @@
     }).reverse().join('');
   }
 
+  function toTimestamp(value) {
+    var time = new Date(value || '').getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function getCaseLastActivityTime(item) {
+    if (!item) return 0;
+    var candidates = [
+      item.updatedAt,
+      item.createdAt,
+      item.closedDate,
+      item.reviewDate,
+      item.handlerDate,
+      item.correctiveDueDate,
+      item.pendingTracking && item.pendingTracking.submittedAt,
+      item.pendingTracking && item.pendingTracking.reviewedAt,
+      item.pendingTracking && item.pendingTracking.nextTrackDate
+    ];
+    (Array.isArray(item.trackings) ? item.trackings : []).forEach(function (tracking) {
+      candidates.push(tracking && tracking.trackDate);
+      candidates.push(tracking && tracking.reviewDate);
+      candidates.push(tracking && tracking.nextTrackDate);
+    });
+    (Array.isArray(item.history) ? item.history : []).forEach(function (history) {
+      candidates.push(history && history.time);
+    });
+    return candidates.reduce(function (max, value) {
+      return Math.max(max, toTimestamp(value));
+    }, 0);
+  }
+
+  function getDashboardStatusBucket(item) {
+    if (!item) return STATUSES.CREATED;
+    return isOverdue(item) ? '已逾期' : item.status;
+  }
+
   function renderDashboard() {
     var items = getVisibleItems();
     var total = items.length;
@@ -178,20 +214,27 @@
     var closedM = items.filter(function (i) {
       return i.status === STATUSES.CLOSED && i.closedDate && new Date(i.closedDate).getMonth() === now2.getMonth() && new Date(i.closedDate).getFullYear() === now2.getFullYear();
     }).length;
+    var totalClosed = items.filter(function (i) { return i.status === STATUSES.CLOSED; }).length;
+    var openCount = items.filter(function (i) { return i.status !== STATUSES.CLOSED; }).length;
+    var distributionOrder = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, '已逾期', STATUSES.CLOSED];
     var sc = {};
-    STATUS_FLOW.forEach(function (s) { sc[s] = 0; });
-    items.forEach(function (i) { if (sc[i.status] !== undefined) sc[i.status]++; });
+    distributionOrder.forEach(function (s) { sc[s] = 0; });
+    items.forEach(function (i) {
+      var bucket = getDashboardStatusBucket(i);
+      if (sc[bucket] !== undefined) sc[bucket]++;
+    });
     var cc = {};
     cc[STATUSES.CREATED] = '#3b82f6';
     cc[STATUSES.PENDING] = '#f59e0b';
     cc[STATUSES.PROPOSED] = '#a855f7';
     cc[STATUSES.REVIEWING] = '#06b6d4';
     cc[STATUSES.TRACKING] = '#f97316';
+    cc['已逾期'] = '#ef4444';
     cc[STATUSES.CLOSED] = '#22c55e';
 
     var R = 60, C = 2 * Math.PI * R, segs = '', off = 0;
     if (total > 0) {
-      STATUS_FLOW.forEach(function (s) {
+      distributionOrder.forEach(function (s) {
         var c2 = sc[s];
         if (!c2) return;
         var l = c2 / total * C;
@@ -203,11 +246,11 @@
     }
 
     var svg = '<svg viewBox="0 0 160 160" class="donut-chart">' + segs + '<text x="80" y="74" text-anchor="middle" fill="#0f172a" font-size="24" font-weight="700" font-family="Inter">' + total + '</text><text x="80" y="94" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500" font-family="Inter">總計</text></svg>';
-    var leg = STATUS_FLOW.map(function (s) {
+    var leg = distributionOrder.map(function (s) {
       return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>';
     }).join('');
 
-    var recent = items.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
+    var recent = items.slice().sort(function (a, b) { return getCaseLastActivityTime(b) - getCaseLastActivityTime(a); }).slice(0, 5);
     var recentRows = recent.length ? recent.map(function (i) {
       return renderDashboardTableRow(i);
     }).join('') : buildCaseEmptyTableRow(6, 'inbox', '沒有矯正單資料', 40);
@@ -226,7 +269,7 @@
     }).join('');
     var heroSide = '<div class="dashboard-hero-side"><div class="dashboard-focus-card"><div class="dashboard-focus-label">今日焦點</div><div class="dashboard-focus-text">' + focusLine + '</div><div class="dashboard-focus-list">'
       + '<div class="dashboard-focus-item"><span>下一個截止</span><strong>' + (nextDueItem ? (esc(nextDueItem.id) + ' · ' + fmt(nextDueItem.correctiveDueDate)) : '目前無') + '</strong></div>'
-      + '<div class="dashboard-focus-item"><span>進行中案件</span><strong>' + (total - closedM) + '</strong></div>'
+      + '<div class="dashboard-focus-item"><span>進行中案件</span><strong>' + openCount + '</strong></div>'
       + '<div class="dashboard-focus-item"><span>最新處理人</span><strong>' + (recent[0] ? esc(recent[0].handlerName) : '—') + '</strong></div>'
       + '</div></div>';
 

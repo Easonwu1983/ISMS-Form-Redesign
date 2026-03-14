@@ -2540,14 +2540,17 @@
         }
         throw error;
       }
-      if (canManageUsers(activeUser)) await syncUsersFromM365({ silent: true });
+      const syncTasks = [
+        syncTrainingFormsFromM365({ silent: true }),
+        syncTrainingRostersFromM365({ silent: true }),
+        syncChecklistsFromM365({ silent: true }),
+        syncCorrectiveActionsFromM365({ silent: true })
+      ];
+      if (canManageUsers(activeUser)) syncTasks.push(syncUsersFromM365({ silent: true }));
       if (activeUser.role === ROLES.ADMIN || activeUser.role === ROLES.UNIT_ADMIN) {
-        await syncReviewScopesFromM365({ silent: true });
+        syncTasks.push(syncReviewScopesFromM365({ silent: true }));
       }
-      await syncTrainingFormsFromM365({ silent: true });
-      await syncTrainingRostersFromM365({ silent: true });
-      await syncChecklistsFromM365({ silent: true });
-      await syncCorrectiveActionsFromM365({ silent: true });
+      await Promise.all(syncTasks);
       return nextKey;
     })();
     return authenticatedBootstrapPromise;
