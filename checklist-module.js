@@ -80,18 +80,18 @@
   function renderChecklistList() {
     Promise.resolve(syncChecklistsFromM365({ silent: true })).catch(function () { });
     const checklists = getVisibleChecklists();
-    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} ?????</a>` : '';
+    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} \u586b\u5831\u6aa2\u6838\u8868</a>` : '';
     const rows = checklists.length ? checklists.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(c => {
       const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
       const statusCls = normalizeChecklistStatus(c.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
       const target = isChecklistDraftStatus(c.status) && canEditChecklist(c) ? `checklist-fill/${c.id}` : `checklist-detail/${c.id}`;
-      return `<tr data-route="${target}"><td class="record-id-col">${renderCopyIdCell(c.id, '?????', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} ?</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
+      return `<tr data-route="${target}"><td class="record-id-col">${renderCopyIdCell(c.id, '\u6aa2\u6838\u8868\u7de8\u865f', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} \u5e74</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
     }).join('') : '';
     const bodyHtml = checklists.length
-      ? `<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">??</th><th>????</th><th>????</th><th>????</th><th>??</th><th>???</th><th>????</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
-      : `<div class="card checklist-empty-card"><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">???????</div><div class="empty-state-desc">????????????????????????????</div></div></div>`;
+      ? `<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">\u7de8\u865f</th><th>\u53d7\u7a3d\u55ae\u4f4d</th><th>\u586b\u5831\u4eba\u54e1</th><th>\u7a3d\u6838\u5e74\u5ea6</th><th>\u72c0\u614b</th><th>\u5b8c\u6210\u7387</th><th>\u586b\u5831\u65e5\u671f</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
+      : `<div class="card checklist-empty-card"><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">\u76ee\u524d\u6c92\u6709\u6aa2\u6838\u8868</div><div class="empty-state-desc">\u53ef\u4ee5\u5148\u5efa\u7acb\u65b0\u7684\u6aa2\u6838\u8868\u8349\u7a3f\uff0c\u6216\u7b49\u5f85\u5176\u4ed6\u586b\u5831\u8005\u9001\u51fa\u5f8c\u518d\u67e5\u770b\u3002</div></div></div>`;
     document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">?????</h1><p class="page-subtitle">?????????????????????????????</p></div>${fillBtn}</div>
+      <div class="page-header"><div><h1 class="page-title">\u5167\u7a3d\u6aa2\u6838\u8868</h1><p class="page-subtitle">\u67e5\u770b\u5404\u55ae\u4f4d\u6aa2\u6838\u8868\u586b\u5831\u72c0\u6cc1\uff0c\u4e26\u53ef\u76f4\u63a5\u9032\u5165\u8349\u7a3f\u7de8\u4fee\u6216\u6aa2\u8996\u660e\u7d30\u3002</p></div>${fillBtn}</div>
       ${bodyHtml}</div>`;
     refreshIcons();
     bindCopyButtons();
@@ -152,73 +152,77 @@
     const supervisorNote = existing?.supervisorNote || '';
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">${existing ? '編修檢核表' : '填報檢核表'}</h1><p class="page-subtitle">受稽單位預設帶入目前登入單位，但可依實際填報需求切換到其他單位。草稿可隨時暫存，正式送出後鎖定。</p></div><a href="#checklist" class="btn btn-secondary">返回列表</a></div>
+      <div class="page-header"><div><h1 class="page-title">${existing ? '\u7de8\u4fee\u6aa2\u6838\u8868' : '\u586b\u5831\u6aa2\u6838\u8868'}</h1><p class="page-subtitle">\u53d7\u7a3d\u55ae\u4f4d\u9810\u8a2d\u5e36\u5165\u76ee\u524d\u767b\u5165\u55ae\u4f4d\uff0c\u4f46\u53ef\u4f9d\u5be6\u969b\u586b\u5831\u9700\u6c42\u5207\u63db\u5230\u5176\u4ed6\u55ae\u4f4d\u3002\u8349\u7a3f\u53ef\u96a8\u6642\u66ab\u5b58\uff0c\u6b63\u5f0f\u9001\u51fa\u5f8c\u9396\u5b9a\u3002</p></div><a href="#checklist" class="btn btn-secondary">\u8fd4\u56de\u5217\u8868</a></div>
       <div class="editor-shell editor-shell--checklist">
         <section class="editor-main">
           <div class="card editor-card"><form id="checklist-form" data-testid="checklist-form">
-            <div class="section-header">${ic('info', 'icon-sm')} 基本資料</div>
+            <div class="section-header">${ic('info', 'icon-sm')} \u57fa\u672c\u8cc7\u6599</div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">受稽單位</label>${buildUnitCascadeControl('cl-unit', selectedUnit, checklistUnitLocked, true)}</div>
-              <div class="form-group"><label class="form-label form-required">填報人員</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
-              <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="cl-date" value="${existing ? esc(existing.fillDate) : today}" required></div>
+              <div class="form-group"><label class="form-label form-required">\u53d7\u7a3d\u55ae\u4f4d</label>${buildUnitCascadeControl('cl-unit', selectedUnit, checklistUnitLocked, true)}</div>
+              <div class="form-group"><label class="form-label form-required">\u586b\u5831\u4eba\u54e1</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
+              <div class="form-group"><label class="form-label form-required">\u586b\u5831\u65e5\u671f</label><input type="date" class="form-input" id="cl-date" value="${existing ? esc(existing.fillDate) : today}" required></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">稽核年度</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}" required></div>
+              <div class="form-group"><label class="form-label form-required">\u7a3d\u6838\u5e74\u5ea6</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}" required></div>
               <div class="form-group"><label class="form-label form-required">\u6b0a\u8cac\u4e3b\u7ba1\u59d3\u540d</label><input type="text" class="form-input" id="cl-supervisor-name" value="${esc(supervisorName)}" placeholder="\u4f8b\u5982 \u8cc7\u8a0a\u7db2\u8def\u7d44\u7d44\u9577" required></div>
               <div class="form-group"><label class="form-label form-required">\u4e3b\u7ba1\u8077\u7a31</label><input type="text" class="form-input" id="cl-supervisor-title" value="${esc(supervisorTitle)}" placeholder="\u4f8b\u5982 \u7d44\u9577 / \u4e3b\u4efb" required></div>
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u72c0\u614b</label><select class="form-select" id="cl-sign-status" required><option value="\u5f85\u7c3d\u6838" ${signStatus === '\u5f85\u7c3d\u6838' ? 'selected' : ''}>\u5f85\u7c3d\u6838</option><option value="\u5df2\u7c3d\u6838" ${signStatus === '\u5df2\u7c3d\u6838' ? 'selected' : ''}>\u5df2\u7c3d\u6838</option></select></div>
               <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u65e5\u671f</label><input type="date" class="form-input" id="cl-sign-date" required value="${esc(signDate)}"></div>
-              <div class="form-group"><label class="form-label">簽核備註</label><input type="text" class="form-input" id="cl-supervisor-note" value="${esc(supervisorNote)}" placeholder="可補充主管意見或追蹤說明"></div>
+              <div class="form-group"><label class="form-label">\u7c3d\u6838\u5099\u8a3b</label><input type="text" class="form-input" id="cl-supervisor-note" value="${esc(supervisorNote)}" placeholder="\u53ef\u88dc\u5145\u4e3b\u7ba1\u610f\u898b\u6216\u8ffd\u8e64\u8aaa\u660e"></div>
             </div>
-            <div class="cl-progress-bar-wrap"><div class="cl-progress-label">填報進度</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${totalItems}</span></div>
+            <div class="cl-progress-bar-wrap"><div class="cl-progress-label">\u586b\u5831\u9032\u5ea6</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${totalItems}</span></div>
             <div class="cl-draft-status" id="cl-draft-status">${existing && isChecklistDraftStatus(existing.status) ? `\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a${fmtTime(existing.updatedAt || existing.createdAt)}` : '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f'}</div>
             ${sectionsHtml}
-            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 正式送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft" data-testid="checklist-save-draft">${ic('save', 'icon-sm')} 暫存草稿</button><a href="#checklist" class="btn btn-ghost">取消返回</a></div>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} \u6b63\u5f0f\u9001\u51fa\u6aa2\u6838\u8868</button><button type="button" class="btn btn-secondary" id="cl-save-draft" data-testid="checklist-save-draft">${ic('save', 'icon-sm')} \u66ab\u5b58\u8349\u7a3f</button><a href="#checklist" class="btn btn-ghost">\u53d6\u6d88\u8fd4\u56de</a></div>
           </form></div>
         </section>
         <aside class="editor-aside">
-          <div class="editor-sticky">
-            <div class="editor-side-card editor-progress-card">
-              <div class="editor-side-kicker">Checklist Progress</div>
-              <div class="editor-side-title">即時進度</div>
-              <div class="editor-progress-meta"><div class="editor-progress-value" id="cl-side-progress-value">0%</div><div class="editor-progress-caption" id="cl-side-progress-text">已完成 0 / ${totalItems}</div></div>
-              <div class="editor-progress-track"><div class="editor-progress-fill" id="cl-side-progress-fill" style="width:0%"></div></div>
-              <div class="editor-stat-grid">
-                <div class="editor-stat-pill"><span class="editor-stat-pill-label">待完成項目</span><strong class="editor-stat-pill-value" id="cl-side-remaining">${totalItems}</strong></div>
-                <div class="editor-stat-pill"><span class="editor-stat-pill-label">稽核年度</span><strong class="editor-stat-pill-value" id="cl-side-year">${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}</strong></div>
+          <details class="editor-mobile-summary editor-mobile-summary--checklist" id="cl-mobile-summary" open>
+            <summary class="editor-mobile-summary-toggle">${ic('layout-dashboard', 'icon-sm')} \u586b\u5831\u6458\u8981</summary>
+            <div class="editor-mobile-summary-body">
+              <div class="editor-sticky">
+                <div class="editor-side-card editor-progress-card">
+                  <div class="editor-side-kicker">\u5167\u7a3d\u6aa2\u6838</div>
+                  <div class="editor-side-title">\u5373\u6642\u9032\u5ea6</div>
+                  <div class="editor-progress-meta"><div class="editor-progress-value" id="cl-side-progress-value">0%</div><div class="editor-progress-caption" id="cl-side-progress-text">\u5df2\u5b8c\u6210 0 / ${totalItems}</div></div>
+                  <div class="editor-progress-track"><div class="editor-progress-fill" id="cl-side-progress-fill" style="width:0%"></div></div>
+                  <div class="editor-stat-grid">
+                    <div class="editor-stat-pill"><span class="editor-stat-pill-label">\u5f85\u5b8c\u6210\u9805\u76ee</span><strong class="editor-stat-pill-value" id="cl-side-remaining">${totalItems}</strong></div>
+                    <div class="editor-stat-pill"><span class="editor-stat-pill-label">\u7a3d\u6838\u5e74\u5ea6</span><strong class="editor-stat-pill-value" id="cl-side-year">${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}</strong></div>
+                  </div>
+                  <div class="editor-summary-list">
+                    <div class="editor-summary-item"><span>\u53d7\u7a3d\u55ae\u4f4d</span><strong id="cl-side-unit">${esc(selectedUnit || '\u2014')}</strong></div>
+                    <div class="editor-summary-item"><span>\u586b\u5831\u65e5\u671f</span><strong id="cl-side-date">${fmt(existing ? existing.fillDate : today)}</strong></div>
+                    <div class="editor-summary-item"><span>\u7c3d\u6838\u72c0\u614b</span><strong id="cl-side-sign-status">${esc(signStatus)}</strong></div>
+                  </div>
+                  <button type="button" class="btn btn-secondary checklist-draft-inline" id="cl-save-draft-inline" data-testid="checklist-save-draft-inline">${ic('save', 'icon-sm')} \u7acb\u5373\u66ab\u5b58\u8349\u7a3f</button>
+                </div>
+                <div class="editor-side-card">
+                  <div class="editor-side-title">\u5224\u5b9a\u7d71\u8a08</div>
+                  <div class="editor-legend-list">
+                    <div class="editor-legend-item"><span class="editor-legend-key"><span class="editor-legend-dot editor-legend-dot--green"></span>\u7b26\u5408</span><strong id="cl-side-conform">0</strong></div>
+                    <div class="editor-legend-item"><span class="editor-legend-key"><span class="editor-legend-dot editor-legend-dot--amber"></span>\u90e8\u5206\u7b26\u5408</span><strong id="cl-side-partial">0</strong></div>
+                    <div class="editor-legend-item"><span class="editor-legend-key"><span class="editor-legend-dot editor-legend-dot--red"></span>\u4e0d\u7b26\u5408</span><strong id="cl-side-nonconform">0</strong></div>
+                    <div class="editor-legend-item"><span class="editor-legend-key"><span class="editor-legend-dot editor-legend-dot--slate"></span>\u4e0d\u9069\u7528</span><strong id="cl-side-na">0</strong></div>
+                  </div>
+                </div>
+                <div class="editor-side-card">
+                  <div class="editor-side-title">\u586b\u5831\u63d0\u9192</div>
+                  <div class="editor-note-list">
+                    <div class="editor-note-item"><span class="editor-note-dot"></span><span>\u6bcf\u4e00\u984c\u90fd\u8981\u5148\u9078\u64c7\u7b26\u5408\u7a0b\u5ea6\uff0c\u518d\u88dc\u5145\u57f7\u884c\u60c5\u5f62\u8207\u4f50\u8b49\u8aaa\u660e\uff0c\u624d\u80fd\u6b63\u78ba\u7d71\u8a08\u5b8c\u6210\u7387\u3002</span></div>
+                    <div class="editor-note-item"><span class="editor-note-dot"></span><span>\u82e5\u5224\u5b9a\u70ba\u90e8\u5206\u7b26\u5408\u6216\u4e0d\u7b26\u5408\uff0c\u8acb\u5728\u57f7\u884c\u60c5\u5f62\u4e2d\u8aaa\u660e\u539f\u56e0\u3001\u98a8\u96aa\u8207\u5f8c\u7e8c\u6539\u5584\u65b9\u5411\u3002</span></div>
+                    <div class="editor-note-item"><span class="editor-note-dot"></span><span>\u5b8c\u6210\u5f8c\u8acb\u78ba\u8a8d\u7c3d\u6838\u8cc7\u8a0a\u8207\u9644\u4ef6\u5df2\u9f4a\u5099\uff0c\u518d\u6b63\u5f0f\u9001\u51fa\uff1b\u9001\u51fa\u5f8c\u8349\u7a3f\u5c07\u9396\u5b9a\u3002</span></div>
+                  </div>
+                </div>
               </div>
-              <div class="editor-summary-list">
-                <div class="editor-summary-item"><span>受稽單位</span><strong id="cl-side-unit">${esc(selectedUnit || '—')}</strong></div>
-                <div class="editor-summary-item"><span>填報日期</span><strong id="cl-side-date">${fmt(existing ? existing.fillDate : today)}</strong></div>
-                <div class="editor-summary-item"><span>簽核狀態</span><strong id="cl-side-sign-status">${esc(signStatus)}</strong></div>
-              </div>
-              <button type="button" class="btn btn-secondary checklist-draft-inline" id="cl-save-draft-inline" data-testid="checklist-save-draft-inline">${ic('save', 'icon-sm')} 立即暫存草稿</button>
             </div>
-            <div class="editor-side-card">
-              <div class="editor-side-title">判定統計</div>
-              <div class="editor-legend-list">
-                <div class="editor-legend-item"><span class="editor-legend-key"><span class="editor-legend-dot editor-legend-dot--green"></span>符合</span><strong id="cl-side-conform">0</strong></div>
-                <div class="editor-legend-item"><span class="editor-legend-key"><span class="editor-legend-dot editor-legend-dot--amber"></span>部分符合</span><strong id="cl-side-partial">0</strong></div>
-                <div class="editor-legend-item"><span class="editor-legend-key"><span class="editor-legend-dot editor-legend-dot--red"></span>不符合</span><strong id="cl-side-nonconform">0</strong></div>
-                <div class="editor-legend-item"><span class="editor-legend-key"><span class="editor-legend-dot editor-legend-dot--slate"></span>不適用</span><strong id="cl-side-na">0</strong></div>
-              </div>
-            </div>
-            <div class="editor-side-card">
-              <div class="editor-side-title">填報提醒</div>
-              <div class="editor-note-list">
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>每一題都要先選擇符合程度，再補充執行情形與佐證說明，才能正確統計完成率。</span></div>
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>若判定為部分符合或不符合，請在執行情形中說明原因、風險與後續改善方向。</span></div>
-                <div class="editor-note-item"><span class="editor-note-dot"></span><span>完成後請確認簽核資訊與附件已齊備，再正式送出；送出後草稿將鎖定。</span></div>
-              </div>
-            </div>
-          </div>
+          </details>
         </aside>
       </div>
-      <button type="button" class="btn btn-secondary checklist-draft-floating" id="cl-save-draft-floating" data-testid="checklist-save-draft-floating">${ic('save', 'icon-sm')} 暫存草稿</button>
+      <button type="button" class="btn btn-secondary checklist-draft-floating" id="cl-save-draft-floating" data-testid="checklist-save-draft-floating">${ic('save', 'icon-sm')} \u66ab\u5b58\u8349\u7a3f</button>
     </div>`;
-
     refreshIcons();
     applyTestIds({
       'cl-filler': 'checklist-filler',

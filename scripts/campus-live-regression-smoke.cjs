@@ -50,6 +50,16 @@ async function run() {
     return { status: response.status };
   }, { critical: true });
 
+  await step('asset:checklist-module encoding', async () => {
+    const response = await fetch(`${DEFAULT_BASE}/checklist-module.js`);
+    const text = await response.text();
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!text.includes('function renderChecklistList()')) throw new Error('renderChecklistList missing');
+    if (!text.includes('\\u5167\\u7a3d\\u6aa2\\u6838\\u8868')) throw new Error('expected checklist title escape missing');
+    if (/\?{4,}/.test(text)) throw new Error('checklist module contains placeholder question marks');
+    return { status: response.status };
+  }, { critical: true });
+
   for (const endpoint of ['unit-contact', 'corrective-actions', 'checklists', 'training', 'system-users', 'auth', 'audit-trail']) {
     await step(`health:${endpoint}`, async () => {
       const { response, json } = await requestJson(`${DEFAULT_BASE}/api/${endpoint}/health`);

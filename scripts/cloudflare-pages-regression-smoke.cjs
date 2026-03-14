@@ -77,6 +77,40 @@ async function run() {
     }, { timeout: 15000 });
     pushStep('dashboard:recent-last-activity-column', true, 'present');
 
+    await page.goto(`${BASE_URL}/#checklist`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('內稽檢核表'));
+    }, { timeout: 20000 });
+    const checklistListText = await page.locator('#app').innerText();
+    if (/\?{4,}/.test(checklistListText)) {
+      throw new Error('checklist list contains placeholder question marks');
+    }
+    pushStep('checklist:list-loaded', true, checklistListText.includes('目前沒有檢核表') ? 'empty-state' : 'table');
+
+    await page.goto(`${BASE_URL}/#checklist-fill`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && (app.innerText.includes('填報檢核表') || app.innerText.includes('編修檢核表')));
+    }, { timeout: 20000 });
+    const checklistFillText = await page.locator('#app').innerText();
+    if (/\?{4,}/.test(checklistFillText)) {
+      throw new Error('checklist fill contains placeholder question marks');
+    }
+    await page.waitForSelector('[data-testid="checklist-form"]', { timeout: 15000 });
+    pushStep('checklist:fill-loaded', true, 'form ready');
+
+    await page.goto(`${BASE_URL}/#checklist-manage`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('檢核表管理'));
+    }, { timeout: 20000 });
+    const checklistManageText = await page.locator('#app').innerText();
+    if (/\?{4,}/.test(checklistManageText)) {
+      throw new Error('checklist manage contains placeholder question marks');
+    }
+    pushStep('checklist:manage-loaded', true, 'manage page ready');
+
     await page.goto(`${BASE_URL}/#audit-trail`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
