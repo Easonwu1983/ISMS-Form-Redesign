@@ -44,6 +44,9 @@ const {
   upgradePasswordSecret,
   verifySessionToken
 } = require('./auth-security.cjs');
+const {
+  buildFieldChanges
+} = require('./audit-diff.cjs');
 
 function createSystemUserRouter(deps) {
   const {
@@ -173,6 +176,79 @@ function createSystemUserRouter(deps) {
       mustChangePassword: authState.mustChangePassword === true,
       contractVersion: AUTH_CONTRACT_VERSION
     };
+  }
+
+  function buildSystemUserSnapshot(item) {
+    if (!item) return null;
+    const passwordState = readStoredPasswordState(item.password);
+    return {
+      username: cleanText(item.username),
+      name: cleanText(item.name),
+      email: cleanText(item.email),
+      role: cleanText(item.role),
+      unit: cleanText(item.unit),
+      units: Array.isArray(item.units) ? item.units.slice() : [],
+      activeUnit: cleanText(item.activeUnit),
+      hasPassword: passwordState.hasPassword === true,
+      mustChangePassword: passwordState.mustChangePassword === true,
+      sessionVersion: Number(passwordState.sessionVersion || 1)
+    };
+  }
+
+  function buildSystemUserChanges(beforeItem, afterItem) {
+    const beforePassword = readStoredPasswordState(beforeItem && beforeItem.password);
+    const afterPassword = readStoredPasswordState(afterItem && afterItem.password);
+    return buildFieldChanges(beforeItem, afterItem, [
+      'name',
+      'email',
+      'role',
+      'unit',
+      { key: 'units', kind: 'array' },
+      'activeUnit',
+      {
+        label: 'hasPassword',
+        kind: 'boolean',
+        get: function (_item, index) {
+          return index === 0 ? beforePassword.hasPassword : afterPassword.hasPassword;
+        }
+      },
+      {
+        label: 'mustChangePassword',
+        kind: 'boolean',
+        get: function (_item, index) {
+          return index === 0 ? beforePassword.mustChangePassword : afterPassword.mustChangePassword;
+        }
+      },
+      {
+        label: 'sessionVersion',
+        kind: 'number',
+        get: function (_item, index) {
+          return index === 0 ? beforePassword.sessionVersion : afterPassword.sessionVersion;
+        }
+      },
+      {
+        label: 'passwordChangedAt',
+        get: function (_item, index) {
+          return index === 0 ? beforePassword.passwordChangedAt : afterPassword.passwordChangedAt;
+        }
+      },
+      {
+        label: 'resetTokenExpiresAt',
+        get: function (_item, index) {
+          return index === 0 ? beforePassword.resetTokenExpiresAt : afterPassword.resetTokenExpiresAt;
+        }
+      }
+    ].map((definition) => {
+      if (typeof definition === 'string') return definition;
+      const originalGet = definition.get;
+      if (!originalGet) return definition;
+      return {
+        ...definition,
+        get: function (item) {
+          return originalGet(item, item === beforeItem ? 0 : 1);
+        }
+      };
+    }));
   }
 
   function preparePasswordForPersist(nextItem, options) {
@@ -473,9 +549,8 @@ function createSystemUserRouter(deps) {
           action: USER_ACTIONS.UPSERT,
           actorName: actor.actorName,
           actorUsername: actor.actorUsername,
-          previousRole: cleanText(existing && existing.item && existing.item.role),
-          nextRole: saved.item.role,
-          units: saved.item.units
+          snapshot: existing ? null : buildSystemUserSnapshot(saved.item),
+          changes: buildSystemUserChanges(existing && existing.item, saved.item)
         })
       });
       await writeJson(res, buildJsonResponse(saved.created ? 201 : 200, {
@@ -514,7 +589,7 @@ function createSystemUserRouter(deps) {
           action: USER_ACTIONS.DELETE,
           actorName: actor.actorName,
           actorUsername: actor.actorUsername,
-          deletedRole: existing.item.role
+          deletedState: buildSystemUserSnapshot(existing.item)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
@@ -557,7 +632,8 @@ function createSystemUserRouter(deps) {
         payloadJson: JSON.stringify({
           action: USER_ACTIONS.RESET_PASSWORD,
           actorName: actor.actorName,
-          actorUsername: actor.actorUsername
+          actorUsername: actor.actorUsername,
+          changes: buildSystemUserChanges(existing.item, saved.item)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
@@ -722,7 +798,8 @@ function createSystemUserRouter(deps) {
         payloadJson: JSON.stringify({
           action: AUTH_ACTIONS.LOGOUT,
           previousSessionVersion: Number(authz.sessionPayload && authz.sessionPayload.sessionVersion || 1),
-          nextSessionVersion: nextSecret.sessionVersion
+          nextSessionVersion: nextSecret.sessionVersion,
+          changes: buildSystemUserChanges(existing.item, saved.item)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
@@ -764,7 +841,11 @@ function createSystemUserRouter(deps) {
         unitCode: '',
         recordId: saved.item.username,
         occurredAt: now,
-        payloadJson: JSON.stringify({ action: AUTH_ACTIONS.REQUEST_RESET, actorName: cleanText(payload.actorName) })
+        payloadJson: JSON.stringify({
+          action: AUTH_ACTIONS.REQUEST_RESET,
+          actorName: cleanText(payload.actorName),
+          changes: buildSystemUserChanges(existing.item, saved.item)
+        })
       });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
@@ -808,7 +889,10 @@ function createSystemUserRouter(deps) {
         unitCode: '',
         recordId: saved.item.username,
         occurredAt: now,
-        payloadJson: JSON.stringify({ action: AUTH_ACTIONS.REDEEM_RESET })
+        payloadJson: JSON.stringify({
+          action: AUTH_ACTIONS.REDEEM_RESET,
+          changes: buildSystemUserChanges(existing.item, saved.item)
+        })
       });
       await writeJson(res, buildJsonResponse(200, buildLoginPayload(saved.item)), origin);
     } catch (error) {
@@ -855,7 +939,10 @@ function createSystemUserRouter(deps) {
         unitCode: '',
         recordId: saved.item.username,
         occurredAt: now,
-        payloadJson: JSON.stringify({ action: AUTH_ACTIONS.CHANGE_PASSWORD })
+        payloadJson: JSON.stringify({
+          action: AUTH_ACTIONS.CHANGE_PASSWORD,
+          changes: buildSystemUserChanges(existing.item, saved.item)
+        })
       });
       await writeJson(res, buildJsonResponse(200, buildLoginPayload(saved.item)), origin);
     } catch (error) {

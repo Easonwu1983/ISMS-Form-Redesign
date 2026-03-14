@@ -12,6 +12,9 @@ const {
   validateActionEnvelope,
   validateReplacePayload
 } = require('../azure-function/review-scope-api/src/shared/contract');
+const {
+  buildMembershipDiff
+} = require('./audit-diff.cjs');
 
 function createReviewScopeRouter(deps) {
   const {
@@ -254,6 +257,7 @@ function createReviewScopeRouter(deps) {
         payloadJson: JSON.stringify({
           username: normalized.username,
           units: normalized.units,
+          membership: buildMembershipDiff(Array.from(existingUnits), normalized.units),
           actorName: actor.actorName,
           actorUsername: actor.actorUsername
         })

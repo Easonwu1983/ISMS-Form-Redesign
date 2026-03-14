@@ -21,6 +21,10 @@ const {
   validateTrainingFormPayload,
   validateTrainingRosterPayload
 } = require('../azure-function/training-api/src/shared/contract');
+const {
+  buildFieldChanges,
+  summarizeAttachments
+} = require('./audit-diff.cjs');
 
 function createTrainingRouter(deps) {
   const {
@@ -55,6 +59,71 @@ function createTrainingRouter(deps) {
       action: cleanText(action),
       user: cleanText(user) || 'system'
     }]);
+  }
+
+  function buildTrainingFormSnapshot(item) {
+    if (!item) return null;
+    return {
+      id: cleanText(item.id),
+      unit: cleanText(item.unit),
+      trainingYear: cleanText(item.trainingYear),
+      fillerUsername: cleanText(item.fillerUsername),
+      status: cleanText(item.status),
+      recordsCount: Array.isArray(item.records) ? item.records.length : 0,
+      signedFiles: summarizeAttachments(item.signedFiles)
+    };
+  }
+
+  function buildTrainingFormChanges(beforeItem, afterItem) {
+    const beforeSigned = summarizeAttachments(beforeItem && beforeItem.signedFiles);
+    const afterSigned = summarizeAttachments(afterItem && afterItem.signedFiles);
+    return buildFieldChanges(beforeItem, afterItem, [
+      'unit',
+      'trainingYear',
+      'fillerName',
+      'fillerUsername',
+      'submitterPhone',
+      'submitterEmail',
+      'fillDate',
+      'status',
+      'returnReason',
+      'stepOneSubmittedAt',
+      'printedAt',
+      'signoffUploadedAt',
+      'submittedAt',
+      { label: 'recordsCount', kind: 'number', get: function (item) { return Array.isArray(item && item.records) ? item.records.length : 0; } },
+      { label: 'activeCount', kind: 'number', get: function (item) { return item && item.summary && item.summary.activeCount; } },
+      { label: 'completedCount', kind: 'number', get: function (item) { return item && item.summary && item.summary.completedCount; } },
+      { label: 'incompleteCount', kind: 'number', get: function (item) { return item && item.summary && item.summary.incompleteCount; } },
+      { label: 'signedFileCount', kind: 'number', get: function (item) { return item === beforeItem ? beforeSigned.count : afterSigned.count; } }
+    ]);
+  }
+
+  function buildTrainingRosterSnapshot(item) {
+    if (!item) return null;
+    return {
+      id: cleanText(item.id),
+      unit: cleanText(item.unit),
+      name: cleanText(item.name),
+      identity: cleanText(item.identity),
+      jobTitle: cleanText(item.jobTitle),
+      source: cleanText(item.source)
+    };
+  }
+
+  function buildTrainingRosterChanges(beforeItem, afterItem) {
+    return buildFieldChanges(beforeItem, afterItem, [
+      'unit',
+      'statsUnit',
+      'l1Unit',
+      'name',
+      'unitName',
+      'identity',
+      'jobTitle',
+      'source',
+      'createdBy',
+      'createdByUsername'
+    ]);
   }
 
   async function fetchListMap() {
@@ -453,9 +522,8 @@ function createTrainingRouter(deps) {
           action,
           actorName: actorMeta.actorName,
           actorUsername: actorMeta.actorUsername,
-          previousStatus: cleanText(existingItem && existingItem.status),
-          status: nextItem.status,
-          backendMode: nextItem.backendMode
+          snapshot: existingItem ? null : buildTrainingFormSnapshot(nextItem),
+          changes: buildTrainingFormChanges(existingItem, nextItem)
         })
       });
       await writeJson(res, buildJsonResponse(saved.created ? 201 : 200, {
@@ -495,7 +563,7 @@ function createTrainingRouter(deps) {
           action: FORM_ACTIONS.DELETE,
           actor: actor.actorName || actorLabel(payload, existing.item.fillerName),
           actorUsername: actor.actorUsername,
-          status: existing.item.status
+          deletedState: buildTrainingFormSnapshot(existing.item)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
@@ -560,8 +628,8 @@ function createTrainingRouter(deps) {
           action: ROSTER_ACTIONS.UPSERT,
           actor,
           actorUsername: actorMeta.actorUsername,
-          unit: nextItem.unit,
-          source: nextItem.source
+          snapshot: existing ? null : buildTrainingRosterSnapshot(nextItem),
+          changes: buildTrainingRosterChanges(existing && existing.item, nextItem)
         })
       });
       await writeJson(res, buildJsonResponse(saved.created ? 201 : 200, {
@@ -601,8 +669,7 @@ function createTrainingRouter(deps) {
           action: ROSTER_ACTIONS.DELETE,
           actor: actor.actorName || actorLabel(payload, existing.item.name),
           actorUsername: actor.actorUsername,
-          unit: existing.item.unit,
-          source: existing.item.source
+          deletedState: buildTrainingRosterSnapshot(existing.item)
         })
       });
       await writeJson(res, buildJsonResponse(200, {

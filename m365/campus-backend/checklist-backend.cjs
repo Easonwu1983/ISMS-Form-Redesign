@@ -15,6 +15,10 @@ const {
   validateActionEnvelope,
   validateChecklistPayload
 } = require('../azure-function/checklist-api/src/shared/contract');
+const {
+  buildFieldChanges,
+  summarizeChecklistResults
+} = require('./audit-diff.cjs');
 
 function createChecklistRouter(deps) {
   const {
@@ -41,6 +45,44 @@ function createChecklistRouter(deps) {
 
   function actorLabel(payload, fallback) {
     return cleanText(payload && (payload.actorName || payload.actorUsername || payload.fillerName || payload.fillerUsername)) || fallback || 'system';
+  }
+
+  function buildChecklistSnapshot(item) {
+    if (!item) return null;
+    const resultSummary = summarizeChecklistResults(item.results);
+    return {
+      id: cleanText(item.id),
+      unit: cleanText(item.unit),
+      auditYear: cleanText(item.auditYear),
+      fillerUsername: cleanText(item.fillerUsername),
+      status: cleanText(item.status),
+      signStatus: cleanText(item.signStatus),
+      answeredCount: Number(item.answeredCount || 0),
+      evidenceFileCount: resultSummary.evidenceFileCount
+    };
+  }
+
+  function buildChecklistChanges(beforeItem, afterItem) {
+    const beforeSummary = summarizeChecklistResults(beforeItem && beforeItem.results);
+    const afterSummary = summarizeChecklistResults(afterItem && afterItem.results);
+    return buildFieldChanges(beforeItem, afterItem, [
+      'unit',
+      'auditYear',
+      'fillerName',
+      'fillerUsername',
+      'supervisorName',
+      'supervisorTitle',
+      'signStatus',
+      'signDate',
+      'status',
+      { key: 'answeredCount', kind: 'number' },
+      { label: 'summaryTotal', kind: 'number', get: function (item) { return item && item.summary && item.summary.total; } },
+      { label: 'summaryConform', kind: 'number', get: function (item) { return item && item.summary && item.summary.conform; } },
+      { label: 'summaryPartial', kind: 'number', get: function (item) { return item && item.summary && item.summary.partial; } },
+      { label: 'summaryNonConform', kind: 'number', get: function (item) { return item && item.summary && item.summary.nonConform; } },
+      { label: 'summaryNa', kind: 'number', get: function (item) { return item && item.summary && item.summary.na; } },
+      { label: 'evidenceFileCount', kind: 'number', get: function (item) { return item === beforeItem ? beforeSummary.evidenceFileCount : afterSummary.evidenceFileCount; } }
+    ]);
   }
 
   async function fetchListMap() {
@@ -296,11 +338,9 @@ function createChecklistRouter(deps) {
         payloadJson: JSON.stringify({
           actorName: actor.actorName,
           actorUsername: actor.actorUsername,
-          previousStatus: cleanText(existing && existing.item && existing.item.status),
-          status: stored.item.status,
-          unit: stored.item.unit,
-          auditYear: stored.item.auditYear,
-          actorLabel: actorDisplay
+          actorLabel: actorDisplay,
+          snapshot: existing ? null : buildChecklistSnapshot(stored.item),
+          changes: buildChecklistChanges(existing && existing.item, stored.item)
         })
       });
       await writeJson(res, buildJsonResponse(stored.created ? 201 : 200, {

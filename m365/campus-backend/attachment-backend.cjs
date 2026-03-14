@@ -11,6 +11,9 @@ const {
   validateActionEnvelope,
   validateUploadPayload
 } = require('../azure-function/attachment-api/src/shared/contract');
+const {
+  summarizeAttachments
+} = require('./audit-diff.cjs');
 
 const GRAPH_ROOT = 'https://graph.microsoft.com/v1.0';
 
@@ -245,7 +248,15 @@ function createAttachmentRouter(deps) {
           ownerId: payload.ownerId,
           recordType: payload.recordType,
           scope: payload.scope,
-          fileName: payload.fileName
+          fileName: payload.fileName,
+          contentType: payload.contentType,
+          fileSize: Number(payload.size || contentBuffer.length || 0),
+          storedPath: drivePath,
+          attachment: summarizeAttachments([{
+            attachmentId,
+            name: payload.fileName,
+            size: Number(payload.size || contentBuffer.length || 0)
+          }])
         })
       });
     } catch (error) {
@@ -302,7 +313,8 @@ function createAttachmentRouter(deps) {
         recordId: cleanText(itemId),
         occurredAt: new Date().toISOString(),
         payloadJson: JSON.stringify({
-          actorUsername: actor.actorUsername
+          actorUsername: actor.actorUsername,
+          deletedAttachmentId: cleanText(itemId)
         })
       });
     } catch (error) {

@@ -26,6 +26,10 @@ const {
   validateTrackingReviewPayload,
   validateTrackingSubmitPayload
 } = require('../azure-function/corrective-action-api/src/shared/contract');
+const {
+  buildFieldChanges,
+  summarizeAttachments
+} = require('./audit-diff.cjs');
 
 function createCorrectiveActionRouter(deps) {
   const {
@@ -72,6 +76,58 @@ function createCorrectiveActionRouter(deps) {
 
   function buildStatusHistory(status) {
     return `\u72c0\u614b\u8b8a\u66f4\u70ba\u300c${status}\u300d`;
+  }
+
+  function buildCaseSnapshot(item) {
+    if (!item) return null;
+    return {
+      id: cleanText(item.id),
+      proposerUnit: cleanText(item.proposerUnit),
+      handlerUnit: cleanText(item.handlerUnit),
+      handlerUsername: cleanText(item.handlerUsername),
+      deficiencyType: cleanText(item.deficiencyType),
+      status: cleanText(item.status),
+      evidence: summarizeAttachments(item.evidence),
+      trackingsCount: Array.isArray(item.trackings) ? item.trackings.length : 0
+    };
+  }
+
+  function buildCaseChanges(beforeItem, afterItem) {
+    const beforeEvidence = summarizeAttachments(beforeItem && beforeItem.evidence);
+    const afterEvidence = summarizeAttachments(afterItem && afterItem.evidence);
+    return buildFieldChanges(beforeItem, afterItem, [
+      'proposerUnit',
+      'proposerName',
+      'handlerUnit',
+      'handlerName',
+      'handlerUsername',
+      'handlerEmail',
+      'deficiencyType',
+      'source',
+      { key: 'category', kind: 'array' },
+      'clause',
+      'problemDesc',
+      'occurrence',
+      'correctiveAction',
+      'correctiveDueDate',
+      'rootCause',
+      'riskDesc',
+      'riskAcceptor',
+      'riskAcceptDate',
+      'riskAssessDate',
+      'rootElimination',
+      'rootElimDueDate',
+      'reviewResult',
+      'reviewNextDate',
+      'reviewer',
+      'reviewDate',
+      'status',
+      'closedDate',
+      { label: 'evidenceCount', kind: 'number', get: function (item) { return item === beforeItem ? beforeEvidence.count : afterEvidence.count; } },
+      { label: 'trackingCount', kind: 'number', get: function (item) { return Array.isArray(item && item.trackings) ? item.trackings.length : 0; } },
+      { label: 'pendingTrackingResult', get: function (item) { return item && item.pendingTracking && item.pendingTracking.result; } },
+      { label: 'pendingTrackingNextDate', get: function (item) { return item && item.pendingTracking && item.pendingTracking.nextTrackDate; } }
+    ]);
   }
 
   async function fetchListMap() {
@@ -292,10 +348,8 @@ function createCorrectiveActionRouter(deps) {
         payloadJson: JSON.stringify({
           actorName: actor.actorMeta.actorName,
           actorUsername: actor.actorMeta.actorUsername,
-          previousStatus: '',
-          nextStatus: item.status,
-          proposerUnit: item.proposerUnit,
-          handlerUnit: item.handlerUnit
+          snapshot: buildCaseSnapshot(item),
+          changes: buildCaseChanges(null, item)
         })
       });
       await writeJson(res, buildJsonResponse(201, {
@@ -361,9 +415,7 @@ function createCorrectiveActionRouter(deps) {
         payloadJson: JSON.stringify({
           actorName: actor.actorMeta.actorName,
           actorUsername: actor.actorMeta.actorUsername,
-          previousStatus: existing.item.status,
-          nextStatus: updated.status,
-          evidenceCount: payload.evidence.length
+          changes: buildCaseChanges(existing.item, updated)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
@@ -438,8 +490,7 @@ function createCorrectiveActionRouter(deps) {
           actorName: actor.actorMeta.actorName,
           actorUsername: actor.actorMeta.actorUsername,
           decision: payload.decision,
-          previousStatus: existing.item.status,
-          nextStatus
+          changes: buildCaseChanges(existing.item, updated)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
@@ -523,8 +574,7 @@ function createCorrectiveActionRouter(deps) {
           actorUsername: actor.actorMeta.actorUsername,
           round,
           result: payload.result,
-          previousStatus: existing.item.status,
-          nextStatus: updated.status
+          changes: buildCaseChanges(existing.item, updated)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
@@ -607,9 +657,8 @@ function createCorrectiveActionRouter(deps) {
           actorName: actor.actorMeta.actorName,
           actorUsername: actor.actorMeta.actorUsername,
           decision: payload.decision,
-          previousStatus: existing.item.status,
-          nextStatus: updated.status,
-          finalResult
+          finalResult,
+          changes: buildCaseChanges(existing.item, updated)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
