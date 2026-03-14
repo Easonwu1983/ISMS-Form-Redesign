@@ -47,6 +47,16 @@ function terminate(child) {
   });
 }
 
+function startServer(outLog, errLog) {
+  const server = spawn(process.execPath, ['.codex-local-server.cjs'], {
+    cwd: root,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  server.stdout.pipe(outLog, { end: false });
+  server.stderr.pipe(errLog, { end: false });
+  return server;
+}
+
 async function main() {
   const rawCommand = process.argv.slice(2).join(' ').trim();
   if (!rawCommand) {
@@ -57,17 +67,15 @@ async function main() {
   let outLog = null;
   let errLog = null;
   let server = null;
+  let serverStartedHere = false;
+  let restarting = false;
+  let childFinished = false;
 
   if (!reuseExisting) {
     outLog = fs.createWriteStream(outLogPath, { flags: 'a' });
     errLog = fs.createWriteStream(errLogPath, { flags: 'a' });
-    server = spawn(process.execPath, ['.codex-local-server.cjs'], {
-      cwd: root,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    server.stdout.pipe(outLog);
-    server.stderr.pipe(errLog);
+    server = startServer(outLog, errLog);
+    serverStartedHere = true;
   }
 
   try {
@@ -84,10 +92,31 @@ async function main() {
       shell: true
     });
 
+    const watchdog = setInterval(async () => {
+      if (!serverStartedHere || childFinished || restarting) return;
+      const ok = await requestOk();
+      if (ok) return;
+      restarting = true;
+      try {
+        if (server) {
+          await terminate(server);
+        }
+        server = startServer(outLog, errLog);
+        const restarted = await waitForServer(10000);
+        if (!restarted) {
+          console.error(`Local server restart did not become ready at ${url}`);
+        }
+      } finally {
+        restarting = false;
+      }
+    }, 1000);
+
     const exitCode = await new Promise((resolve, reject) => {
       child.on('error', reject);
       child.on('exit', (code) => resolve(code || 0));
     });
+    childFinished = true;
+    clearInterval(watchdog);
 
     process.exitCode = exitCode;
   } finally {

@@ -4,8 +4,8 @@ const { chromium } = require('./_playwright.cjs');
 
 const BASE_URL = 'http://127.0.0.1:8080/';
 const BROWSER_CANDIDATES = [
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Google/Chrome/Application/chrome.exe'
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
 ];
 const ARTIFACT_TZ = process.env.TEST_ARTIFACT_TZ || 'Asia/Taipei';
 

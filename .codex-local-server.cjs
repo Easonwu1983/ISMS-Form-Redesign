@@ -28,9 +28,16 @@ function safePath(urlPath) {
 
 const server = http.createServer((req, res) => {
   const filePath = safePath(req.url);
+  const requestPath = decodeURIComponent((req.url || '/').split('?')[0]);
   if (!filePath) {
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Forbidden');
+    return;
+  }
+
+  if (requestPath === '/m365-config.override.js') {
+    res.writeHead(200, { 'Content-Type': mime['.js'] });
+    res.end('(function(){ window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__ = window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__ || {}; })();');
     return;
   }
 
