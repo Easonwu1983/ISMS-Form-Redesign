@@ -29,6 +29,12 @@ node scripts/build-homepage-ntu-package.cjs --mode=redirect --redirect-target=ht
 powershell -ExecutionPolicy Bypass -File .\scripts\publish-homepage-redirect.ps1 -Username easonwu -Password '你的FTP密碼'
 ```
 
+若之後 backend HTTPS 已完成，可切正式 Homepage HTTPS 版：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\cutover-homepage-to-https.ps1 -Username easonwu -Password '你的FTP密碼'
+```
+
 ## 會產出的檔案
 
 - `index.html`
