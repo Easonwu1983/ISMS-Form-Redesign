@@ -4508,6 +4508,34 @@ tbody td:first-child {
   scrollbar-width: thin;
 }
 
+.review-table-wrapper .review-data-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.review-table-wrapper .review-data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface);
+  box-shadow: inset 0 -1px 0 rgba(210, 222, 239, 0.9);
+}
+
+.review-table-wrapper .review-data-table thead th:first-child {
+  left: 0;
+  z-index: 4;
+}
+
+.review-table-wrapper .review-data-table tbody td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: inset -1px 0 0 rgba(219, 231, 244, 0.7);
+}
+
 .review-table-wrapper.is-scrollable {
   padding-bottom: 4px;
 }
