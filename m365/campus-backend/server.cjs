@@ -24,6 +24,9 @@ const { createSystemUserRouter } = require('./system-user-backend.cjs');
 const { createTrainingRouter } = require('./training-backend.cjs');
 const { createRequestAuthz } = require('./request-authz.cjs');
 const {
+  buildFieldChanges
+} = require('./audit-diff.cjs');
+const {
   GRAPH_ROOT,
   acquireDelegatedGraphTokenFromCli,
   loadBackendConfig,
@@ -40,6 +43,7 @@ const state = {
   siteId: '',
   siteUrl: '',
   lists: null,
+  listColumnsMap: new Map(),
   actor: null,
   token: null,
   tokenExp: 0
@@ -194,6 +198,31 @@ async function resolveLists() {
   return state.lists;
 }
 
+async function fetchListColumnNames(listId) {
+  const siteId = await resolveSiteId();
+  const body = await graphRequest('GET', `/sites/${siteId}/lists/${listId}/columns?$select=name`);
+  return new Set((Array.isArray(body && body.value) ? body.value : []).map((entry) => cleanText(entry && entry.name)).filter(Boolean));
+}
+
+async function resolveListColumnNames(listId) {
+  const cleanListId = cleanText(listId);
+  if (!cleanListId) return new Set();
+  if (!state.listColumnsMap.has(cleanListId)) {
+    state.listColumnsMap.set(cleanListId, await fetchListColumnNames(cleanListId));
+  }
+  return state.listColumnsMap.get(cleanListId);
+}
+
+function filterFieldsForExistingColumns(fields, existingNames) {
+  const allowed = existingNames instanceof Set ? existingNames : new Set();
+  return Object.entries(fields || {}).reduce((result, [key, value]) => {
+    if (key === 'Title' || allowed.has(key)) {
+      result[key] = value;
+    }
+    return result;
+  }, {});
+}
+
 async function listAllApplications() {
   const siteId = await resolveSiteId();
   const lists = await resolveLists();
@@ -237,14 +266,16 @@ async function ensureNoDuplicateActiveApplication(payload) {
   if (!duplicated) return;
   const error = new Error('An active application already exists for this unit and email.');
   error.statusCode = 409;
+  error.duplicatedApplication = duplicated;
   throw error;
 }
 
 async function createAuditRow(input) {
   const siteId = await resolveSiteId();
   const lists = await resolveLists();
+  const columnNames = await resolveListColumnNames(lists.audit.id);
   await graphRequest('POST', `/sites/${siteId}/lists/${lists.audit.id}/items`, {
-    fields: {
+    fields: filterFieldsForExistingColumns({
       Title: cleanText(input.recordId || input.eventType || 'audit'),
       EventType: cleanText(input.eventType),
       ActorEmail: cleanText(input.actorEmail),
@@ -253,24 +284,86 @@ async function createAuditRow(input) {
       RecordId: cleanText(input.recordId),
       OccurredAt: cleanText(input.occurredAt) || new Date().toISOString(),
       PayloadJson: cleanText(input.payloadJson)
-    }
+    }, columnNames)
   });
+}
+
+async function tryCreateAuditRow(input) {
+  try {
+    await createAuditRow(input);
+  } catch (_) { }
+}
+
+function buildApplicationSnapshot(application) {
+  if (!application) return null;
+  return {
+    id: cleanText(application.id),
+    applicantName: cleanText(application.applicantName),
+    applicantEmail: cleanText(application.applicantEmail),
+    extensionNumber: cleanText(application.extensionNumber),
+    unitCategory: cleanText(application.unitCategory),
+    primaryUnit: cleanText(application.primaryUnit),
+    secondaryUnit: cleanText(application.secondaryUnit),
+    unitValue: cleanText(application.unitValue),
+    unitCode: cleanText(application.unitCode),
+    contactType: cleanText(application.contactType),
+    status: cleanText(application.status),
+    reviewedBy: cleanText(application.reviewedBy),
+    reviewedAt: cleanText(application.reviewedAt),
+    activatedAt: cleanText(application.activatedAt)
+  };
+}
+
+function buildApplicationChanges(beforeItem, afterItem) {
+  return buildFieldChanges(beforeItem, afterItem, [
+    'applicantName',
+    'applicantEmail',
+    'extensionNumber',
+    'unitCategory',
+    'primaryUnit',
+    'secondaryUnit',
+    'unitValue',
+    'unitCode',
+    'contactType',
+    'note',
+    'status',
+    'reviewedBy',
+    'reviewedAt',
+    'reviewComment',
+    'activationSentAt',
+    'activatedAt',
+    'externalUserId'
+  ]);
+}
+
+function summarizeLookupResults(applications) {
+  const items = Array.isArray(applications) ? applications : [];
+  return {
+    total: items.length,
+    ids: items.map((entry) => cleanText(entry.id)).filter(Boolean).slice(0, 10),
+    statuses: items.reduce((result, entry) => {
+      const key = cleanText(entry && entry.status) || 'unknown';
+      result[key] = Number(result[key] || 0) + 1;
+      return result;
+    }, {})
+  };
 }
 
 async function createApplication(payload) {
   const siteId = await resolveSiteId();
   const lists = await resolveLists();
+  const columnNames = await resolveListColumnNames(lists.applications.id);
   const nextSequence = await getNextSequence(new Date().getFullYear());
   const application = createApplicationRecord(payload, nextSequence);
   application.source = 'a3-campus-backend';
   application.backendMode = 'campus-sharepoint-cli';
 
   const created = await graphRequest('POST', `/sites/${siteId}/lists/${lists.applications.id}/items`, {
-    fields: mapApplicationToGraphFields(application)
+    fields: filterFieldsForExistingColumns(mapApplicationToGraphFields(application), columnNames)
   });
   const mapped = created && created.fields ? mapGraphFieldsToApplication(created.fields) : application;
 
-  await createAuditRow({
+  await tryCreateAuditRow({
     eventType: 'unit_contact.application_submitted',
     actorEmail: mapped.applicantEmail,
     targetEmail: mapped.applicantEmail,
@@ -278,7 +371,9 @@ async function createApplication(payload) {
     recordId: mapped.id,
     payloadJson: JSON.stringify({
       source: mapped.source,
-      backendMode: mapped.backendMode
+      backendMode: mapped.backendMode,
+      snapshot: buildApplicationSnapshot(mapped),
+      changes: buildApplicationChanges(null, mapped)
     })
   });
 
@@ -370,10 +465,11 @@ const systemUserRouter = createSystemUserRouter({
 });
 
 async function handleApply(req, res, origin) {
+  let payload = null;
   try {
     const envelope = await parseJsonBody(req);
     validateActionEnvelope(envelope, ACTIONS.APPLY);
-    const payload = normalizeApplyPayload(envelope.payload);
+    payload = normalizeApplyPayload(envelope.payload);
     validateApplyPayload(payload);
     await ensureNoDuplicateActiveApplication(payload);
     const created = await createApplication(payload);
@@ -383,13 +479,27 @@ async function handleApply(req, res, origin) {
       contractVersion: CONTRACT_VERSION
     }), origin);
   } catch (error) {
+    if (payload && Number(error && error.statusCode) === 409) {
+      await tryCreateAuditRow({
+        eventType: 'unit_contact.application_duplicate_blocked',
+        actorEmail: cleanText(payload.applicantEmail),
+        targetEmail: cleanText(payload.applicantEmail),
+        unitCode: cleanText(payload.unitCode),
+        recordId: cleanText(error && error.duplicatedApplication && error.duplicatedApplication.id) || cleanText(payload.unitValue),
+        payloadJson: JSON.stringify({
+          requested: buildApplicationSnapshot(payload),
+          duplicated: buildApplicationSnapshot(error && error.duplicatedApplication),
+          duplicatedChanges: buildApplicationChanges(null, error && error.duplicatedApplication)
+        })
+      });
+    }
     return writeJson(res, buildErrorResponse(error, 'Failed to submit application.'), origin);
   }
 }
 
 async function handleLookup(req, res, origin, url) {
+  let email = '';
   try {
-    let email = '';
     if (String(req.method || 'GET').toUpperCase() === 'GET') {
       email = normalizeLookupEmail(url.searchParams.get('email'));
     } else {
@@ -398,6 +508,17 @@ async function handleLookup(req, res, origin, url) {
       email = normalizeLookupEmail(envelope && envelope.payload && envelope.payload.email);
     }
     const applications = await listApplicationsByEmail(email);
+    await tryCreateAuditRow({
+      eventType: 'unit_contact.status_looked_up',
+      actorEmail: email,
+      targetEmail: email,
+      unitCode: '',
+      recordId: email,
+      payloadJson: JSON.stringify({
+        lookupEmail: email,
+        summary: summarizeLookupResults(applications)
+      })
+    });
     return writeJson(res, buildJsonResponse(200, {
       ok: true,
       applications: applications.map(mapApplicationForClient),
