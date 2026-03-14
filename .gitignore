@@ -34,3 +34,11 @@ tmp-*
 .codex-runtime-logs/
 
 dist/
+infra/cloudflare/cloudflared-config.generated.yml
+.runtime/cloudflare-tunnel.pid
+.runtime/cloudflare-tunnel.out.log
+.runtime/cloudflare-tunnel.err.log
+.runtime/cloudflare-quick-tunnel.pid
+.runtime/cloudflare-quick-tunnel.out.log
+.runtime/cloudflare-quick-tunnel.err.log
+.runtime/cloudflare-quick-tunnel.url
