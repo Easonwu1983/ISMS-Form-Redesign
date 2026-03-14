@@ -23,6 +23,12 @@ node scripts/build-homepage-ntu-package.cjs --public-user=easonwu --public-subdi
 node scripts/build-homepage-ntu-package.cjs --mode=redirect --redirect-target=http://140.112.3.65:8088/
 ```
 
+若要直接一鍵建置並發布 redirect 版本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\publish-homepage-redirect.ps1 -Username easonwu -Password '你的FTP密碼'
+```
+
 ## 會產出的檔案
 
 - `index.html`
