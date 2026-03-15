@@ -206,6 +206,19 @@ function createTrainingRouter(deps) {
     return rows;
   }
 
+  function parseRosterSequence(rosterId) {
+    const match = cleanText(rosterId).match(/^RST-(\d+)$/i);
+    return match ? Number(match[1]) : 0;
+  }
+
+  async function generateNextRosterId() {
+    const rows = await listAllRosters();
+    const nextValue = rows.reduce((max, entry) => {
+      return Math.max(max, parseRosterSequence(entry && entry.item && entry.item.id));
+    }, 0) + 1;
+    return `RST-${String(nextValue).padStart(4, '0')}`;
+  }
+
   async function getFormEntryById(formId) {
     const target = cleanText(formId);
     if (!target) throw createError('Missing training form id', 400);
@@ -602,9 +615,11 @@ function createTrainingRouter(deps) {
       const payload = normalizeTrainingRosterPayload(envelope.payload);
       validateTrainingRosterPayload(payload);
       const now = new Date().toISOString();
-      let existing = cleanText(payload.id) ? await getRosterEntryById(payload.id) : null;
-      if (!existing) {
-        existing = await findDuplicateRoster(payload.unit, payload.name, payload.id);
+      const existingById = cleanText(payload.id) ? await getRosterEntryById(payload.id) : null;
+      const duplicateEntry = await findDuplicateRoster(payload.unit, payload.name, payload.id);
+      let existing = duplicateEntry || null;
+      if (!existing && existingById && requestAuthz.canManageTrainingRoster(authz, existingById.item)) {
+        existing = existingById;
       }
       const targetRoster = existing ? existing.item : payload;
       if (!requestAuthz.canManageTrainingRoster(authz, targetRoster)) {
@@ -612,9 +627,13 @@ function createTrainingRouter(deps) {
       }
       const actor = actorLabel(payload, payload.createdBy || payload.name);
       const actorMeta = requestAuthz.buildActorDetails(authz);
+      const nextRosterId = existing
+        ? existing.item.id
+        : ((existingById && !duplicateEntry) ? await generateNextRosterId() : (cleanText(payload.id) || await generateNextRosterId()));
       const nextItem = createTrainingRosterRecord({
         ...(existing ? existing.item : {}),
         ...payload,
+        id: nextRosterId,
         createdAt: existing ? existing.item.createdAt : (payload.createdAt || now),
         updatedAt: now
       }, now);
