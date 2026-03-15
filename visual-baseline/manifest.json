@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-15T03:10:51.166Z",
+  "generatedAt": "2026-03-15T09:45:52.947Z",
   "baseUrl": "https://isms-campus-portal.pages.dev",
   "outputDir": "C:\\Users\\User\\Playground\\ISMS-Form-Redesign\\visual-baseline",
   "files": [
@@ -9,6 +9,10 @@
     "manifest.json",
     "training-desktop.png",
     "training-mobile.png",
+    "unit-contact-apply-desktop.png",
+    "unit-contact-apply-mobile.png",
+    "unit-contact-status-desktop.png",
+    "unit-contact-status-mobile.png",
     "unit-review-desktop.png",
     "unit-review-mobile.png"
   ]

@@ -5,6 +5,8 @@ const {
   DEFAULT_BASELINE_DIR,
   DESKTOP_VISUAL_SPECS,
   MOBILE_VISUAL_SPECS,
+  PUBLIC_DESKTOP_VISUAL_SPECS,
+  PUBLIC_MOBILE_VISUAL_SPECS,
   captureVisualSpec,
   compareAgainstBaseline
 } = require('./_ui-visual-baseline.cjs');
@@ -33,6 +35,48 @@ async function login(page) {
     page.waitForFunction(() => !!document.querySelector('.btn-logout'), { timeout: 30000 }),
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
   ]);
+}
+
+async function runPublicVisualBaselineChecks(browser, pushStep) {
+  if (!fs.existsSync(DEFAULT_BASELINE_DIR)) {
+    throw new Error(`visual baseline directory not found: ${DEFAULT_BASELINE_DIR}`);
+  }
+
+  const desktopContext = await browser.newContext({ viewport: { width: 1440, height: 1200 } });
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+  const compareContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+
+  try {
+    const comparePage = await compareContext.newPage();
+
+    const desktopPage = await desktopContext.newPage();
+    await desktopPage.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    for (const spec of PUBLIC_DESKTOP_VISUAL_SPECS) {
+      const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-desktop.png`);
+      const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-desktop.png`);
+      if (!fs.existsSync(baselinePath)) throw new Error(`missing public desktop baseline: ${baselinePath}`);
+      await captureVisualSpec(desktopPage, BASE_URL, spec, actualPath, 'desktop');
+      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, { maxDiffRatio: 0.04 });
+      if (!result.ok) throw new Error(`public desktop visual drift: ${spec.slug} (${JSON.stringify(result)})`);
+      pushStep(`visual:public-desktop:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
+    }
+
+    const mobilePage = await mobileContext.newPage();
+    await mobilePage.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    for (const spec of PUBLIC_MOBILE_VISUAL_SPECS) {
+      const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-mobile.png`);
+      const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-mobile.png`);
+      if (!fs.existsSync(baselinePath)) throw new Error(`missing public mobile baseline: ${baselinePath}`);
+      await captureVisualSpec(mobilePage, BASE_URL, spec, actualPath, 'mobile');
+      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, { maxDiffRatio: 0.05 });
+      if (!result.ok) throw new Error(`public mobile visual drift: ${spec.slug} (${JSON.stringify(result)})`);
+      pushStep(`visual:public-mobile:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
+    }
+  } finally {
+    await compareContext.close();
+    await desktopContext.close();
+    await mobileContext.close();
+  }
 }
 
 async function runVisualBaselineChecks(browser, pushStep) {
@@ -537,6 +581,7 @@ async function run() {
     pushStep('unit-review:loaded', true, 'unit review page ready');
 
     await runVisualBaselineChecks(browser, pushStep);
+    await runPublicVisualBaselineChecks(browser, pushStep);
 
     if (consoleErrors.length) {
       throw new Error(`console errors detected: ${consoleErrors.join(' | ')}`);

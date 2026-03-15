@@ -5,6 +5,8 @@ const {
   DEFAULT_BASELINE_DIR,
   DESKTOP_VISUAL_SPECS,
   MOBILE_VISUAL_SPECS,
+  PUBLIC_DESKTOP_VISUAL_SPECS,
+  PUBLIC_MOBILE_VISUAL_SPECS,
   captureVisualSpec
 } = require('./_ui-visual-baseline.cjs');
 
@@ -29,6 +31,18 @@ async function login(page) {
   ]);
 }
 
+async function capturePublicSpecs(context, specs, mode) {
+  const page = await context.newPage();
+  try {
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    for (const spec of specs) {
+      await captureVisualSpec(page, BASE_URL, spec, path.join(OUT_DIR, `${spec.slug}-${mode}.png`), mode);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function run() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const executablePath = pickExecutablePath();
@@ -42,12 +56,14 @@ async function run() {
     for (const spec of DESKTOP_VISUAL_SPECS) {
       await captureVisualSpec(desktopPage, BASE_URL, spec, path.join(OUT_DIR, `${spec.slug}-desktop.png`), 'desktop');
     }
+    await capturePublicSpecs(desktop, PUBLIC_DESKTOP_VISUAL_SPECS, 'desktop');
 
     const mobilePage = await mobile.newPage();
     await login(mobilePage);
     for (const spec of MOBILE_VISUAL_SPECS) {
       await captureVisualSpec(mobilePage, BASE_URL, spec, path.join(OUT_DIR, `${spec.slug}-mobile.png`), 'mobile');
     }
+    await capturePublicSpecs(mobile, PUBLIC_MOBILE_VISUAL_SPECS, 'mobile');
     await mobilePage.goto(`${BASE_URL}/#dashboard`, { waitUntil: 'networkidle', timeout: 45000 });
     await mobilePage.waitForTimeout(900);
     await mobilePage.click('[data-action="shell.toggle-sidebar"]');

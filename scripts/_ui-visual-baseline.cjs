@@ -27,6 +27,16 @@ const MOBILE_VISUAL_SPECS = [
   { slug: 'unit-review', hash: '#unit-review' }
 ];
 
+const PUBLIC_DESKTOP_VISUAL_SPECS = [
+  { slug: 'unit-contact-apply', hash: '#apply-unit-contact' },
+  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' }
+];
+
+const PUBLIC_MOBILE_VISUAL_SPECS = [
+  { slug: 'unit-contact-apply', hash: '#apply-unit-contact' },
+  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' }
+];
+
 function getVisualSmokeStyles(slug, mode) {
   const common = `
     .visual-smoke-mask-value,
@@ -131,6 +141,21 @@ function getVisualSmokeStyles(slug, mode) {
     `;
   }
 
+  if (slug === 'unit-contact-apply' || slug === 'unit-contact-status') {
+    return common + `
+      .unit-contact-mode-title,
+      .unit-contact-mode-text,
+      .unit-contact-step-card-text,
+      .unit-contact-checklist li,
+      .public-header-actions,
+      .page-subtitle,
+      .form-hint,
+      .form-input::placeholder {
+        text-shadow: none !important;
+      }
+    `;
+  }
+
   return common;
 }
 
@@ -228,6 +253,8 @@ module.exports = {
   DEFAULT_BASELINE_DIR,
   DESKTOP_VISUAL_SPECS,
   MOBILE_VISUAL_SPECS,
+  PUBLIC_DESKTOP_VISUAL_SPECS,
+  PUBLIC_MOBILE_VISUAL_SPECS,
   captureVisualSpec,
   compareAgainstBaseline
 };
