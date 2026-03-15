@@ -616,12 +616,16 @@
     const selectedKeys = new Set();
     let bulkGeneralValue = '';
     const submitLabel = existing && existing.status === TRAINING_STATUSES.RETURNED ? '完成更正並進入簽核' : '完成流程一並進入簽核';
+    let pendingRosterMutation = null;
 
     document.getElementById('app').innerHTML = buildTrainingFillPage({ existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user });
 
     const trainingForm = document.getElementById('training-form');
     const trainingFeedback = document.getElementById('training-feedback');
     const trainingDraftStatus = document.getElementById('training-draft-status');
+    const trainingAddPersonButton = document.getElementById('training-add-person');
+    const trainingSaveDraftButton = document.getElementById('training-save-draft');
+    const trainingSubmitButton = trainingForm.querySelector('[data-testid="training-submit"]');
     clearUnsavedChangesGuard();
 
     function markTrainingDirty() {
@@ -650,6 +654,26 @@
       trainingFeedback.hidden = true;
       trainingFeedback.dataset.state = 'idle';
       trainingFeedback.innerHTML = '';
+    }
+
+    function setTrainingMutationPending(isPending) {
+      if (trainingAddPersonButton) trainingAddPersonButton.disabled = !!isPending;
+      if (trainingSaveDraftButton) trainingSaveDraftButton.disabled = !!isPending;
+      if (trainingSubmitButton) trainingSubmitButton.disabled = !!isPending;
+    }
+
+    function registerRosterMutation(task) {
+      const wrapped = Promise.resolve()
+        .then(task)
+        .finally(() => {
+          if (pendingRosterMutation === wrapped) {
+            pendingRosterMutation = null;
+            setTrainingMutationPending(false);
+          }
+        });
+      pendingRosterMutation = wrapped;
+      setTrainingMutationPending(true);
+      return wrapped;
     }
 
     function updateTrainingDraftStatus(item) {
@@ -853,6 +877,16 @@
     }
 
     async function saveTrainingForm(targetStatus) {
+      if (pendingRosterMutation) {
+        try {
+          await pendingRosterMutation;
+        } catch (error) {
+          const message = String(error && error.message || error || '新增名單失敗');
+          setTrainingFeedback('error', message, ['請先修正新增名單錯誤，再儲存教育訓練填報。']);
+          toast(message, 'error');
+          return;
+        }
+      }
       const now = new Date().toISOString();
       const currentUnit = document.getElementById('tr-unit').value;
       const trainingYearValue = document.getElementById('tr-year').value.trim() || String(new Date().getFullYear() - 1911);
@@ -972,10 +1006,7 @@
       renderRows();
     });
 
-    document.getElementById('training-add-person').addEventListener('click', async () => {
-      try {
-        await syncTrainingRostersFromM365({ silent: true });
-      } catch (_) {}
+    trainingAddPersonButton.addEventListener('click', async () => {
       const currentUnit = document.getElementById('tr-unit').value;
       const payload = {
         name: document.getElementById('tr-new-name').value.trim(),
@@ -987,44 +1018,62 @@
         toast('請輸入要新增的人員姓名', 'error');
         return;
       }
-      const fallbackResult = addTrainingRosterPerson(currentUnit, payload, 'manual', user);
-      if (!fallbackResult.added && !fallbackResult.updated) {
-        toast(fallbackResult.reason, 'error');
-        return;
-      }
-      const roster = fallbackResult.row
-        || (fallbackResult.id ? getAllTrainingRosters().find((row) => row.id === fallbackResult.id) : null)
-        || getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
-      if (!roster) {
-        toast('新增名單暫存失敗，請重新操作', 'error');
-        return;
-      }
       try {
-        const result = await submitTrainingRosterUpsert({
-          ...roster,
-          source: 'manual',
-          createdBy: roster.createdBy || user.name,
-          createdByUsername: roster.createdByUsername || user.username,
-          actorName: user.name,
-          actorUsername: user.username
+        await registerRosterMutation(async () => {
+          try {
+            await syncTrainingRostersFromM365({ silent: true });
+          } catch (_) {}
+          const fallbackResult = addTrainingRosterPerson(currentUnit, payload, 'manual', user);
+          if (!fallbackResult.added && !fallbackResult.updated) {
+            throw new Error(fallbackResult.reason || '新增名單失敗');
+          }
+          const roster = fallbackResult.row
+            || (fallbackResult.id ? getAllTrainingRosters().find((row) => row.id === fallbackResult.id) : null)
+            || getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
+          if (!roster) {
+            throw new Error('新增名單暫存失敗，請重新操作');
+          }
+          const result = await submitTrainingRosterUpsert({
+            ...roster,
+            source: 'manual',
+            createdBy: roster.createdBy || user.name,
+            createdByUsername: roster.createdByUsername || user.username,
+            actorName: user.name,
+            actorUsername: user.username
+          });
+          try {
+            await syncTrainingRostersFromM365({ silent: true });
+          } catch (_) {}
+          const syncedRoster = (result && result.item && result.item.id
+            ? getAllTrainingRosters().find((row) => row.id === result.item.id)
+            : null) || getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
+          if (!syncedRoster) {
+            throw new Error('教育訓練名單已送出，但後端同步結果未返回，請重新整理後確認。');
+          }
+          const nextManualRow = normalizeTrainingRecordRow({
+            ...syncedRoster,
+            rosterId: syncedRoster.id,
+            unit: currentUnit,
+            statsUnit: syncedRoster.statsUnit || getTrainingStatsUnit(currentUnit),
+            unitName: syncedRoster.unitName || payload.unitName,
+            identity: syncedRoster.identity || payload.identity,
+            jobTitle: syncedRoster.jobTitle || payload.jobTitle,
+            source: syncedRoster.source || 'manual',
+            status: '',
+            completedGeneral: '',
+            isInfoStaff: '',
+            completedProfessional: '',
+            note: ''
+          }, currentUnit);
+          rowsState = mergeTrainingRows(currentUnit, rowsState.concat([nextManualRow]));
+          selectedKeys.clear();
+          ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
+            document.getElementById(idName).value = '';
+          });
+          markTrainingDirty();
+          renderRows();
+          showTrainingRepositoryFallback(result, fallbackResult.updated ? fallbackResult.reason : ('已新增「' + payload.name + '」到名單'));
         });
-        try {
-          await syncTrainingRostersFromM365({ silent: true });
-        } catch (_) {}
-        const syncedRoster = (result && result.item && result.item.id
-          ? getAllTrainingRosters().find((row) => row.id === result.item.id)
-          : null) || getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
-        if (!syncedRoster) {
-          throw new Error('教育訓練名單已送出，但後端同步結果未返回，請重新整理後確認。');
-        }
-        rowsState = mergeTrainingRows(currentUnit, rowsState);
-        selectedKeys.clear();
-        ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
-          document.getElementById(idName).value = '';
-        });
-        markTrainingDirty();
-        renderRows();
-        showTrainingRepositoryFallback(result, fallbackResult.updated ? fallbackResult.reason : ('已新增「' + payload.name + '」到名單'));
       } catch (error) {
         toast(error && error.message ? error.message : '新增名單失敗', 'error');
       }
