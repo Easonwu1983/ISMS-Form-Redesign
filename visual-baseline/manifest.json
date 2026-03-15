@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-03-15T03:10:51.166Z",
+  "baseUrl": "https://isms-campus-portal.pages.dev",
+  "outputDir": "C:\\Users\\User\\Playground\\ISMS-Form-Redesign\\visual-baseline",
+  "files": [
+    "dashboard-desktop.png",
+    "dashboard-mobile.png",
+    "dashboard-sidebar-mobile.png",
+    "manifest.json",
+    "training-desktop.png",
+    "training-mobile.png",
+    "unit-review-desktop.png",
+    "unit-review-mobile.png"
+  ]
+}

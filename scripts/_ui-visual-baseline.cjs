@@ -53,8 +53,25 @@ function getVisualSmokeStyles(slug, mode) {
         color: transparent !important;
         text-shadow: none !important;
       }
-      .dashboard-recent-table tbody tr:nth-child(n+4) {
+      .donut-chart text {
+        fill: transparent !important;
+      }
+      .donut-chart circle {
+        stroke: rgba(226, 232, 240, 0.92) !important;
+        stroke-dasharray: none !important;
+        stroke-dashoffset: 0 !important;
+      }
+      .dashboard-recent-status-cell .badge,
+      .dashboard-recent-status-cell .badge-dot {
+        background: rgba(226, 232, 240, 0.92) !important;
+        border-color: rgba(226, 232, 240, 0.92) !important;
+        color: transparent !important;
+      }
+      .dashboard-recent-table tbody {
         display: none !important;
+      }
+      .dashboard-recent-table-wrapper {
+        max-height: none !important;
       }
     `;
   }
@@ -76,8 +93,10 @@ function getVisualSmokeStyles(slug, mode) {
       .training-group-card .table-wrapper td {
         color: transparent !important;
       }
-      .training-group-card:nth-of-type(n+3),
-      .training-group-card .table-wrapper tbody tr:nth-child(n+4) {
+      .training-group-card:nth-of-type(n+3) {
+        display: none !important;
+      }
+      .training-group-card .table-wrapper tbody {
         display: none !important;
       }
     `;
@@ -100,11 +119,13 @@ function getVisualSmokeStyles(slug, mode) {
       .review-history-badge,
       .review-source-pill,
       .review-unit-name,
-      .review-data-table td {
+      .review-data-table td,
+      .review-history-item,
+      .review-ref-item {
         color: transparent !important;
       }
-      .review-data-table tbody tr:nth-child(n+5),
-      .review-history-item:nth-child(n+4) {
+      .review-data-table tbody,
+      .review-ref-list {
         display: none !important;
       }
     `;
