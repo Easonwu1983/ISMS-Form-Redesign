@@ -331,6 +331,7 @@ async function loginViaPage(page, username, password) {
   await page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit());
   await page.waitForFunction(() => !!window.sessionStorage.getItem('cats_auth'), { timeout: 20000 });
   await page.waitForFunction(() => !!document.querySelector('.btn-logout'), { timeout: 20000 });
+  await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending', { timeout: 30000 });
   const auth = await page.evaluate(() => {
     try {
       return JSON.parse(window.sessionStorage.getItem('cats_auth') || 'null');

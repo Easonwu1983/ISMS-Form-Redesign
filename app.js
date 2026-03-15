@@ -2508,6 +2508,15 @@
 
   let authenticatedBootstrapKey = '';
   let authenticatedBootstrapPromise = null;
+  let authenticatedBootstrapState = 'idle';
+  function setAuthenticatedBootstrapState(nextState) {
+    authenticatedBootstrapState = String(nextState || 'idle').trim() || 'idle';
+    if (typeof window !== 'undefined') {
+      window.__REMOTE_BOOTSTRAP_STATE__ = authenticatedBootstrapState;
+      window.__REMOTE_BOOTSTRAP_KEY__ = authenticatedBootstrapKey || '';
+    }
+    return authenticatedBootstrapState;
+  }
   function buildAuthenticatedBootstrapKey(user) {
     if (!user) return '';
     return [
@@ -2522,6 +2531,7 @@
     if (!user) {
       authenticatedBootstrapKey = '';
       authenticatedBootstrapPromise = null;
+      setAuthenticatedBootstrapState('idle');
       return '';
     }
     const nextKey = buildAuthenticatedBootstrapKey(user);
@@ -2529,6 +2539,7 @@
       return authenticatedBootstrapPromise;
     }
     authenticatedBootstrapKey = nextKey;
+    setAuthenticatedBootstrapState('pending');
     authenticatedBootstrapPromise = (async function () {
       let activeUser = user;
       try {
@@ -2536,6 +2547,8 @@
         if (!verifiedUser) {
           sessionStorage.removeItem(AUTH_KEY);
           authenticatedBootstrapKey = '';
+          authenticatedBootstrapPromise = null;
+          setAuthenticatedBootstrapState('idle');
           return '';
         }
         sessionStorage.setItem(AUTH_KEY, JSON.stringify(verifiedUser));
@@ -2545,8 +2558,10 @@
           sessionStorage.removeItem(AUTH_KEY);
           authenticatedBootstrapKey = '';
           authenticatedBootstrapPromise = null;
+          setAuthenticatedBootstrapState('idle');
           throw new Error('登入狀態已失效，請重新登入');
         }
+        setAuthenticatedBootstrapState('error');
         throw error;
       }
       const syncTasks = [
@@ -2560,9 +2575,16 @@
         syncTasks.push(syncReviewScopesFromM365({ silent: true }));
       }
       await Promise.all(syncTasks);
+      setAuthenticatedBootstrapState('ready');
       return nextKey;
     })();
     return authenticatedBootstrapPromise;
+  }
+  function isAuthenticatedRemoteBootstrapPending() {
+    const user = currentUser();
+    if (!user) return false;
+    const nextKey = buildAuthenticatedBootstrapKey(user);
+    return authenticatedBootstrapState === 'pending' && authenticatedBootstrapKey === nextKey;
   }
   let shellModuleApi = null;
   function getShellModule() {
@@ -2602,6 +2624,7 @@
       getScopedUnit,
       switchCurrentUserUnit,
       ensureAuthenticatedRemoteBootstrap,
+      isAuthenticatedRemoteBootstrapPending,
       hasUnsavedChangesGuard,
       confirmDiscardUnsavedChanges,
       registerActionHandlers

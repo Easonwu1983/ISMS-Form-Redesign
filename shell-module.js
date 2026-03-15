@@ -32,6 +32,7 @@
       getScopedUnit,
       switchCurrentUserUnit,
       ensureAuthenticatedRemoteBootstrap,
+      isAuthenticatedRemoteBootstrapPending,
       hasUnsavedChangesGuard,
       confirmDiscardUnsavedChanges,
       registerActionHandlers
@@ -291,6 +292,16 @@
       }
     }
 
+    function renderBootstrapShell() {
+      renderSidebar();
+      renderHeader();
+      closeSidebar();
+      var appEl = document.getElementById('app');
+      if (!appEl) return;
+      appEl.innerHTML = '<div class="animate-in"><div class="card"><div class="card-header"><span class="card-title">正在同步系統資料</span></div><p class="page-subtitle" style="margin:0">正在驗證登入狀態並同步矯正單、檢核表與教育訓練資料，完成後會自動載入頁面。</p></div></div>';
+      refreshIcons();
+    }
+
     function handleRoute() {
       const route = getRoute();
       const page = ROUTE_WHITELIST[route.page] ? route.page : 'dashboard';
@@ -300,6 +311,10 @@
       }
       if (!currentUser()) {
         renderLogin();
+        return;
+      }
+      if (isAuthenticatedRemoteBootstrapPending()) {
+        renderBootstrapShell();
         return;
       }
       if (!canAccessRoute(page)) {
@@ -328,10 +343,7 @@
         return;
       }
       document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
-      renderSidebar();
-      renderHeader();
-      document.getElementById('app').innerHTML = '<div class="animate-in"><div class="card"><div class="card-header"><span class="card-title">正在同步系統資料</span></div><p class="page-subtitle" style="margin:0">正在驗證登入狀態並同步矯正單、檢核表與教育訓練資料，完成後會自動載入頁面。</p></div></div>';
-      refreshIcons();
+      renderBootstrapShell();
       Promise.resolve(ensureAuthenticatedRemoteBootstrap()).then(function () {
         if (currentUser()) handleRoute();
       }).catch(function (error) {
