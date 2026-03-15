@@ -438,7 +438,8 @@
       const categoryLabels = {
         '行政單位': '行政單位',
         '學術單位': '學術單位',
-        '研究中心': '中心 / 研究單位'
+        '研究中心': '中心 / 研究單位',
+        '中心 / 研究單位': '中心 / 研究單位'
       };
       const incompleteGroups = categoryOrder.map((category) => {
         const units = incompleteUnits.filter((item) => categorizeTopLevelUnit(item.unit) === category);

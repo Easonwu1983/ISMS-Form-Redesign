@@ -4,7 +4,9 @@ const { chromium } = require('./_playwright.cjs');
 
 const BASE_URL = String(process.env.ISMS_CLOUDFLARE_PAGES_BASE || 'https://isms-campus-portal.pages.dev').replace(/\/+$/, '');
 const LOG_DIR = path.join(process.cwd(), 'logs');
-const OUT_PATH = path.join(LOG_DIR, 'cloudflare-pages-regression-smoke.json');
+const OUT_PATH = process.env.ISMS_UI_SMOKE_OUT
+  ? path.resolve(process.env.ISMS_UI_SMOKE_OUT)
+  : path.join(LOG_DIR, 'cloudflare-pages-regression-smoke.json');
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const EDGE_PATH = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 
