@@ -74,7 +74,18 @@
 
     function buildChecklistEvidenceUpload(item, saved) {
       const existingCount = getChecklistEvidenceFiles(saved).length;
-      return `<div class="form-group cl-evidence-upload-group"><label class="form-label">佐證附件</label><label class="training-file-input checklist-file-input"><input type="file" id="cl-file-${item.id}" data-item-id="${item.id}" multiple accept="image/*,.pdf"><span class="training-file-input-copy"><strong>選擇佐證附件</strong><small>${existingCount ? `目前已附 ${existingCount} 份檔案` : '支援 JPG / PNG / PDF，每檔 5MB 內'}</small></span></label>${buildChecklistEvidencePreviewSlot(item.id, 'checklist-evidence-files')}</div>`;
+      return `<div class="form-group cl-evidence-upload-group"><label class="form-label">上傳佐證附件</label><label class="training-file-input checklist-file-input"><input type="file" id="cl-file-${item.id}" data-item-id="${item.id}" multiple accept="image/*,.pdf"><span class="training-file-input-copy"><strong>選擇佐證附件</strong><small>${existingCount ? `目前已附 ${existingCount} 個檔案` : '支援 JPG / PNG / PDF，單檔上限 5MB。'}</small></span></label>${buildChecklistEvidencePreviewSlot(item.id, 'checklist-evidence-files')}</div>`;
+    }
+
+    function toDateInputValue(value) {
+      if (!value) return '';
+      if (typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value.trim())) return value.trim();
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return '';
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, '0');
+      const day = String(parsed.getDate()).padStart(2, '0');
+      return year + '-' + month + '-' + day;
     }
 
   function renderChecklistList() {
@@ -121,7 +132,7 @@
 
   function renderChecklistFill(id) {
     cleanupRenderedAttachmentUrls();
-    if (!canFillChecklist()) { navigate('checklist'); toast('\u60a8\u6c92\u6709\u586b\u5831\u6aa2\u6838\u8868\u6b0a\u9650', 'error'); return; }
+    if (!canFillChecklist()) { navigate('checklist'); toast('您沒有填報檢核表權限', 'error'); return; }
 
     const u = currentUser();
     const currentAuditYear = String(new Date().getFullYear() - 1911);
@@ -129,7 +140,7 @@
     if (!id && u.role !== ROLES.ADMIN && defaultScopedUnit && getAuthorizedUnits(u).length <= 1) {
       const duplicateChecklist = findExistingChecklistForUnitYear(defaultScopedUnit, currentAuditYear);
       if (duplicateChecklist) {
-        toast('已存在相同單位與年度的檢核表草稿，系統將直接帶您前往該筆紀錄。', 'error');
+        toast('本年度已存在檢核表，請至列表繼續編輯或查看，勿重複新增。', 'error');
         clearUnsavedChangesGuard();
         navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
         return;
@@ -160,7 +171,7 @@
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">\u53d7\u7a3d\u55ae\u4f4d</label>${buildUnitCascadeControl('cl-unit', selectedUnit, checklistUnitLocked, true)}</div>
               <div class="form-group"><label class="form-label form-required">\u586b\u5831\u4eba\u54e1</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
-              <div class="form-group"><label class="form-label form-required">\u586b\u5831\u65e5\u671f</label><input type="date" class="form-input" id="cl-date" value="${existing ? esc(existing.fillDate) : today}" required></div>
+              <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="cl-date" value="${esc(toDateInputValue(existing?.fillDate) || today)}" required></div>
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">\u7a3d\u6838\u5e74\u5ea6</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}" required></div>
@@ -169,7 +180,7 @@
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u72c0\u614b</label><select class="form-select" id="cl-sign-status" required><option value="\u5f85\u7c3d\u6838" ${signStatus === '\u5f85\u7c3d\u6838' ? 'selected' : ''}>\u5f85\u7c3d\u6838</option><option value="\u5df2\u7c3d\u6838" ${signStatus === '\u5df2\u7c3d\u6838' ? 'selected' : ''}>\u5df2\u7c3d\u6838</option></select></div>
-              <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u65e5\u671f</label><input type="date" class="form-input" id="cl-sign-date" required value="${esc(signDate)}"></div>
+              <div class="form-group"><label class="form-label form-required">簽核日期</label><input type="date" class="form-input" id="cl-sign-date" required value="${esc(toDateInputValue(signDate))}"></div>
               <div class="form-group"><label class="form-label">\u7c3d\u6838\u5099\u8a3b</label><input type="text" class="form-input" id="cl-supervisor-note" value="${esc(supervisorNote)}" placeholder="\u53ef\u88dc\u5145\u4e3b\u7ba1\u610f\u898b\u6216\u8ffd\u8e64\u8aaa\u660e"></div>
             </div>
             <div class="cl-progress-bar-wrap"><div class="cl-progress-label">\u586b\u5831\u9032\u5ea6</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${totalItems}</span></div>
@@ -414,7 +425,7 @@
       const data = await collectData('\u8349\u7a3f');
       const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
       if (duplicateChecklist) {
-        toast('已存在相同單位與年度的檢核表草稿，系統將直接帶您前往該筆紀錄。', 'error');
+        toast('本年度已存在檢核表，請至列表繼續編輯或查看，勿重複新增。', 'error');
         clearUnsavedChangesGuard();
         navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
         return;
@@ -481,7 +492,7 @@
       const data = await collectData('\u5df2\u9001\u51fa');
       const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
       if (duplicateChecklist) {
-        toast('已存在相同單位與年度的檢核表草稿，系統將直接帶您前往該筆紀錄。', 'error');
+        toast('本年度已存在檢核表，請至列表繼續編輯或查看，勿重複新增。', 'error');
         navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
         return;
       }
@@ -507,10 +518,10 @@
     cleanupRenderedAttachmentUrls();
     const cl = getChecklist(id);
     if (!cl) {
-      document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到檢核表</div><a href="#checklist" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`;
+      document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到這份檢核表</div><a href="#checklist" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`;
       return;
     }
-    if (!canAccessChecklist(cl)) { navigate('checklist'); toast('您沒有權限檢視此檢核表', 'error'); return; }
+    if (!canAccessChecklist(cl)) { navigate('checklist'); toast('您沒有權限檢視這份檢核表', 'error'); return; }
 
     const s = cl.summary || { total: 0, conform: 0, partial: 0, nonConform: 0, na: 0 };
     const applicable = Math.max((s.total || 0) - (s.na || 0), 0);
@@ -518,10 +529,10 @@
     const R = 50;
     const C = 2 * Math.PI * R;
     const vals = [
-      { label: '符合', count: s.conform || 0, color: COMPLIANCE_COLORS['符合'] },
-      { label: '部分符合', count: s.partial || 0, color: COMPLIANCE_COLORS['部分符合'] },
-      { label: '不符合', count: s.nonConform || 0, color: COMPLIANCE_COLORS['不符合'] },
-      { label: '不適用', count: s.na || 0, color: COMPLIANCE_COLORS['不適用'] }
+      { label: COMPLIANCE_OPTS[0], count: s.conform || 0, color: COMPLIANCE_COLORS[COMPLIANCE_OPTS[0]] },
+      { label: COMPLIANCE_OPTS[1], count: s.partial || 0, color: COMPLIANCE_COLORS[COMPLIANCE_OPTS[1]] },
+      { label: COMPLIANCE_OPTS[2], count: s.nonConform || 0, color: COMPLIANCE_COLORS[COMPLIANCE_OPTS[2]] },
+      { label: COMPLIANCE_OPTS[3], count: s.na || 0, color: COMPLIANCE_COLORS[COMPLIANCE_OPTS[3]] }
     ];
 
     let segs = '';
@@ -559,11 +570,11 @@
     const issues = [];
     getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
       const r = cl.results?.[item.id] || {};
-      if (r.compliance === '不符合' || r.compliance === '部分符合') {
+      if (r.compliance === COMPLIANCE_OPTS[2] || r.compliance === COMPLIANCE_OPTS[1]) {
         issues.push({ id: item.id, text: item.text, compliance: r.compliance, execution: r.execution || '' });
       }
     }));
-    const issueHtml = issues.length ? `<div class="card" style="margin-top:20px;border-left:3px solid #ef4444"><div class="section-header">${ic('alert-triangle', 'icon-sm')} 待改善項目 ${issues.length} 項</div>${issues.map((iss) => `<div class="cl-issue-item"><span class="cl-compliance-badge cl-badge-${COMPLIANCE_CLASSES[iss.compliance]}">${iss.compliance}</span><span class="cl-item-id">${iss.id}</span> ${esc(iss.text)}${iss.execution ? `<div class="cl-issue-note">${esc(iss.execution)}</div>` : ''}</div>`).join('')}</div>` : '';
+    const issueHtml = issues.length ? `<div class="card" style="margin-top:20px;border-left:3px solid #ef4444"><div class="section-header">${ic('alert-triangle', 'icon-sm')} 需改善項目 ${issues.length} 項</div>${issues.map((iss) => `<div class="cl-issue-item"><span class="cl-compliance-badge cl-badge-${COMPLIANCE_CLASSES[iss.compliance]}">${iss.compliance}</span><span class="cl-item-id">${iss.id}</span> ${esc(iss.text)}${iss.execution ? `<div class="cl-issue-note">${esc(iss.execution)}</div>` : ''}</div>`).join('')}</div>` : '';
     const statusCls = normalizeChecklistStatus(cl.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
@@ -590,7 +601,7 @@
         </div>
       </div>
       ${issueHtml}
-      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 檢核題目明細</span></div>${sectDetail}</div>
+      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 檢核項目明細</span></div>${sectDetail}</div>
     </div>`;
     getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
       const result = cl.results?.[item.id] || {};
@@ -622,11 +633,11 @@
               <span class="cl-item-id" style="flex-shrink:0">${esc(item.id)}</span>
               <span class="cm-item-text">${esc(item.text)}</span>
             </div>
-            <div class="cm-item-hint">提示：${esc(item.hint || '未提供填報提示')}</div>
+            <div class="cm-item-hint">提示說明：${esc(item.hint || '未提供提示說明')}</div>
           </div>
           <div class="cm-item-actions">
-            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯題目">${ic('edit-2', 'btn-icon-svg')}</button>
-            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除題目">${ic('trash-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯項目">${ic('edit-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除項目">${ic('trash-2', 'btn-icon-svg')}</button>
           </div>
         </div>`;
   }
@@ -641,9 +652,9 @@
               <span class="cm-section-name" id="cm-sname-${si}">${esc(sec.section)}</span>
             </div>
             <div class="cm-section-actions">
-              <span class="cm-item-count">${sec.items.length} 題</span>
-              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="編輯章節名稱">${ic('edit-2', 'btn-icon-svg')}</button>
-              <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${si}" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
+              <span class="cm-item-count">${sec.items.length} 項</span>
+              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="編輯章節">${ic('edit-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${si}" title="新增項目">${ic('plus', 'btn-icon-svg')} 新增項目</button>
               <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${si}" title="刪除章節">${ic('trash-2', 'btn-icon-svg')}</button>
             </div>
           </div>
@@ -656,15 +667,15 @@
   }
 
   function renderChecklistManage() {
-    if (!isAdmin()) { navigate('dashboard'); toast('只有管理者可以管理檢核表題庫', 'error'); return; }
+    if (!isAdmin()) { navigate('dashboard'); toast('只有管理者可以維護檢核題目。', 'error'); return; }
     const totalItems = getChecklistManageTotalItems();
     const sectHtml = buildChecklistManageSectionsHtml();
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header">
         <div>
-          <h1 class="page-title">檢核表管理</h1>
-          <p class="page-subtitle">目前共有 ${getChecklistSectionsState().length} 個章節、${totalItems} 個題目，可在此維護預設檢核內容。</p>
+          <h1 class="page-title">檢核題庫管理</h1>
+          <p class="page-subtitle">目前共有 ${getChecklistSectionsState().length} 個章節、${totalItems} 個題目，可拖曳調整順序並維護題目內容。</p>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-secondary" data-action="checklist.resetDefault">${ic('refresh-cw', 'icon-sm')} 還原預設題庫</button>
@@ -674,7 +685,7 @@
 
       <div class="cm-info-banner">
         ${ic('info', 'icon-sm')}
-        <span>調整題庫內容後，新的檢核表會立即套用最新章節與題目設定，請確認名稱與提示文字都清楚可理解。</span>
+        <span>這裡調整的是後續新建檢核表會使用的題目與提示；已建立的檢核表仍保留當時版本，避免影響既有填報。</span>
       </div>
 
       <div id="cm-sections-wrap">${sectHtml}</div>
@@ -689,7 +700,7 @@
     wrap.innerHTML = buildChecklistManageSectionsHtml();
     const totalItems = getChecklistManageTotalItems();
     const subtitle = document.querySelector('.page-subtitle');
-    if (subtitle) subtitle.textContent = `目前共有 ${getChecklistSectionsState().length} 個章節、${totalItems} 個題目，可在此維護預設檢核內容。`;
+    if (subtitle) subtitle.textContent = `目前共有 ${getChecklistSectionsState().length} 個章節、${totalItems} 個題目，可拖曳調整順序並維護題目內容。`;
     refreshIcons();
   }
 
@@ -730,7 +741,7 @@
     _cmModal('新增章節', `
       <div class="form-group">
         <label class="form-label form-required">章節名稱</label>
-        <input type="text" class="form-input" id="cm-sec-name" placeholder="例如 10. 資安政策與管理" required autofocus>
+        <input type="text" class="form-input" id="cm-sec-name" placeholder="例如 10. 資訊系統存取控制" required autofocus>
       </div>`, () => {
       const name = document.getElementById('cm-sec-name').value.trim();
       if (!name) return;
@@ -744,7 +755,7 @@
   function cmEditSection(si) {
     const secs = getChecklistSections();
     const sec = secs[si];
-    _cmModal('編輯章節名稱', `
+    _cmModal('編輯章節', `
       <div class="form-group">
         <label class="form-label form-required">章節名稱</label>
         <input type="text" class="form-input" id="cm-sec-name" value="${esc(sec.section)}" required autofocus>
@@ -760,7 +771,7 @@
 
   function cmDelSection(si) {
     const secs = getChecklistSections();
-    if (!confirm(`確定要刪除章節「${secs[si].section}」嗎？這會一併刪除其中 ${secs[si].items.length} 個題目。`)) return;
+    if (!confirm(`確認要刪除章節「${secs[si].section}」？此操作會一併刪除 ${secs[si].items.length} 個檢核項目。`)) return;
     secs.splice(si, 1);
     saveChecklistSections(secs);
     toast('章節已刪除', 'info');
@@ -769,80 +780,80 @@
 
   function cmAddItem(si) {
     const nextId = _cmNextItemId(si);
-    _cmModal('新增題目', `
+    _cmModal('新增項目', `
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label form-required">題號</label>
+          <label class="form-label form-required">項目編號</label>
           <input type="text" class="form-input" id="cm-item-id" value="${esc(nextId)}" placeholder="例如 8.10" required>
-          <p class="form-hint">題號建議保持章節前綴，方便後續排序與維護。</p>
+          <p class="form-hint">項目編號建議沿用章節編碼，方便排序與後續追蹤。</p>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label form-required">題目內容</label>
-        <textarea class="form-textarea" id="cm-item-text" placeholder="請輸入檢核題目文字" required style="min-height:80px" autofocus></textarea>
+        <label class="form-label form-required">項目內容</label>
+        <textarea class="form-textarea" id="cm-item-text" placeholder="請輸入檢核項目內容" required style="min-height:80px" autofocus></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">填報提示</label>
-        <textarea class="form-textarea" id="cm-item-hint" placeholder="例如需要附上的佐證或應補充的說明" style="min-height:60px"></textarea>
+        <label class="form-label">提示說明</label>
+        <textarea class="form-textarea" id="cm-item-hint" placeholder="例如 可補充應提供的文件、畫面截圖或查核重點" style="min-height:60px"></textarea>
       </div>`, () => {
       const id = document.getElementById('cm-item-id').value.trim();
       const text = document.getElementById('cm-item-text').value.trim();
       const hint = document.getElementById('cm-item-hint').value.trim();
-      if (!id || !text) { toast('題號與題目內容都必須填寫', 'error'); return; }
+      if (!id || !text) { toast('項目編號與內容皆為必填', 'error'); return; }
       const secs = getChecklistSections();
       const allIds = secs.flatMap(s => s.items.map(it => it.id));
-      if (allIds.includes(id)) { toast(`題號 ${id} 已存在，請改用其他題號`, 'error'); return; }
+      if (allIds.includes(id)) { toast(`項目編號 ${id} 已存在，請改用其他編號。`, 'error'); return; }
       secs[si].items.push({ id, text, hint });
       saveChecklistSections(secs);
-      toast('題目已新增');
+      toast('項目已新增');
     });
   };
 
   function cmEditItem(si, ii) {
     const secs = getChecklistSections();
     const item = secs[si].items[ii];
-    _cmModal('編輯題目', `
+    _cmModal('編輯項目', `
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label form-required">題號</label>
+          <label class="form-label form-required">項目編號</label>
           <input type="text" class="form-input" id="cm-item-id" value="${esc(item.id)}" required>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label form-required">題目內容</label>
+        <label class="form-label form-required">項目內容</label>
         <textarea class="form-textarea" id="cm-item-text" required style="min-height:80px">${esc(item.text)}</textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">填報提示</label>
+        <label class="form-label">提示說明</label>
         <textarea class="form-textarea" id="cm-item-hint" style="min-height:60px">${esc(item.hint || '')}</textarea>
       </div>`, () => {
       const newId = document.getElementById('cm-item-id').value.trim();
       const text = document.getElementById('cm-item-text').value.trim();
       const hint = document.getElementById('cm-item-hint').value.trim();
-      if (!newId || !text) { toast('題號與題目內容都必須填寫', 'error'); return; }
+      if (!newId || !text) { toast('項目編號與內容皆為必填', 'error'); return; }
       const s2 = getChecklistSections();
       const allIds = s2.flatMap((sec, sIdx) => sec.items.map((it, iIdx) => ({ id: it.id, si: sIdx, ii: iIdx }))).filter(x => !(x.si === si && x.ii === ii)).map(x => x.id);
-      if (allIds.includes(newId)) { toast(`題號 ${newId} 已存在，請改用其他題號`, 'error'); return; }
+      if (allIds.includes(newId)) { toast(`項目編號 ${newId} 已存在，請改用其他編號。`, 'error'); return; }
       s2[si].items[ii] = { id: newId, text, hint };
       saveChecklistSections(s2);
-      toast('題目已更新');
+      toast('項目已更新');
     });
   };
 
   function cmDelItem(si, ii) {
     const secs = getChecklistSections();
     const item = secs[si].items[ii];
-    if (!confirm(`確定要刪除題目 ${item.id} 嗎？`)) return;
+    if (!confirm(`確認要刪除項目 ${item.id} 嗎？`)) return;
     secs[si].items.splice(ii, 1);
     saveChecklistSections(secs);
-    toast('題目已刪除', 'info');
+    toast('項目已刪除', 'info');
     _cmRefreshSections();
   };
 
   function cmResetDefault() {
-    if (!confirm('確定要還原成系統預設題庫嗎？目前自訂的章節與題目會被覆蓋。')) return;
+    if (!confirm('確認要還原成預設題庫？這會覆蓋目前自訂的章節與項目內容。')) return;
     resetChecklistSections();
-    toast('已還原為預設題庫', 'info');
+    toast('已還原成預設題庫', 'info');
     _cmRefreshSections();
   };
   registerActionHandlers('checklist', {
@@ -877,4 +888,3 @@
     };
   };
 })();
-

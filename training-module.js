@@ -110,6 +110,17 @@
     return String(a || '').localeCompare(String(b || ''), 'zh-Hant-u-co-stroke', { sensitivity: 'base', numeric: true });
   }
 
+  function toDateInputValue(value) {
+    if (!value) return '';
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+  }
+
   function hasDisplayCorruption(value) {
     const text = String(value || '').trim();
     if (!text) return false;
@@ -553,7 +564,7 @@
       + '<div class="section-header">' + ic('info', 'icon-sm') + ' 基本資訊</div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計單位（一級）</label><input type="text" class="form-input" id="tr-stats-unit" value="' + esc(existing?.statsUnit || getTrainingStatsUnit(unitValue)) + '" readonly></div><div class="form-group"><label class="form-label form-required">填報單位</label>' + buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true) + '</div></div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
-      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填表日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(existing?.fillDate || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="流程一送出後會先鎖定；若尚未列印簽核表，可於短時間內撤回。" readonly></div></div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填表日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(toDateInputValue(existing?.fillDate) || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="流程一送出後會先鎖定；若尚未列印簽核表，可於短時間內撤回。" readonly></div></div>'
       + '<div class="section-header">' + ic('users', 'icon-sm') + ' 人員清單</div>'
       + '<div class="training-editor-note">可先多選人員，再一次套用相同在職狀態與' + TRAINING_GENERAL_LABEL + '完成情形。' + TRAINING_PROFESSIONAL_LABEL + '僅在' + TRAINING_INFO_STAFF_LABEL + '為「是」時需要填寫。</div>'
       + '<div class="training-draft-status" id="training-draft-status">' + (existing ? (existing.status === TRAINING_STATUSES.DRAFT ? ('草稿上次儲存：' + fmtTime(existing.updatedAt || existing.createdAt)) : ('退回版本最後更新：' + fmtTime(existing.updatedAt || existing.createdAt))) : '尚未建立草稿') + '</div>'
