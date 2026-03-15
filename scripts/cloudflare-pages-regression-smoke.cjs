@@ -7,6 +7,7 @@ const {
   MOBILE_VISUAL_SPECS,
   PUBLIC_DESKTOP_VISUAL_SPECS,
   PUBLIC_MOBILE_VISUAL_SPECS,
+  seedSyntheticUnitContactSuccess,
   captureVisualSpec,
   compareAgainstBaseline
 } = require('./_ui-visual-baseline.cjs');
@@ -76,6 +77,39 @@ async function runPublicVisualBaselineChecks(browser, pushStep) {
     await compareContext.close();
     await desktopContext.close();
     await mobileContext.close();
+  }
+}
+
+async function runPublicRouteChecks(browser, pushStep) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+
+  try {
+    await page.goto(`${BASE_URL}/#apply-unit-contact`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const title = document.querySelector('.page-title');
+      return title && String(title.textContent || '').includes('申請單位管理人員');
+    }, { timeout: 20000 });
+    pushStep('unit-contact-public:apply-loaded', true, '申請單位管理人員');
+
+    await page.goto(`${BASE_URL}/#apply-unit-contact-status`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const title = document.querySelector('.page-title');
+      return title && String(title.textContent || '').includes('查詢申請狀態');
+    }, { timeout: 20000 });
+    await page.waitForSelector('#unit-contact-status-form', { timeout: 15000 });
+    pushStep('unit-contact-public:status-loaded', true, '查詢申請狀態');
+
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    await seedSyntheticUnitContactSuccess(page);
+    await page.goto(`${BASE_URL}/#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const title = document.querySelector('.page-title');
+      return title && String(title.textContent || '').includes('申請已送出');
+    }, { timeout: 20000 });
+    pushStep('unit-contact-public:success-loaded', true, '申請已送出');
+  } finally {
+    await context.close();
   }
 }
 
@@ -580,6 +614,7 @@ async function run() {
     }
     pushStep('unit-review:loaded', true, 'unit review page ready');
 
+    await runPublicRouteChecks(browser, pushStep);
     await runVisualBaselineChecks(browser, pushStep);
     await runPublicVisualBaselineChecks(browser, pushStep);
 

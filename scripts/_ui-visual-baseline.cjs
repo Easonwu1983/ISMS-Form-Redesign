@@ -29,13 +29,66 @@ const MOBILE_VISUAL_SPECS = [
 
 const PUBLIC_DESKTOP_VISUAL_SPECS = [
   { slug: 'unit-contact-apply', hash: '#apply-unit-contact' },
-  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' }
+  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' },
+  { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' }
 ];
 
 const PUBLIC_MOBILE_VISUAL_SPECS = [
   { slug: 'unit-contact-apply', hash: '#apply-unit-contact' },
-  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' }
+  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' },
+  { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' }
 ];
+
+async function seedSyntheticUnitContactSuccess(page) {
+  await page.waitForFunction(() => {
+    return !!(
+      window._dataModule &&
+      typeof window._dataModule.loadUnitContactApplicationStore === 'function' &&
+      typeof window._dataModule.saveUnitContactApplicationStore === 'function'
+    );
+  }, { timeout: 30000 });
+  await page.evaluate(() => {
+    const app = {
+      id: 'UCA-SMOKE-SUCCESS-001',
+      unitValue: '計算機及資訊網路中心／資訊網路組',
+      unitCode: 'A.B',
+      unitCategory: '行政單位',
+      primaryUnit: '計算機及資訊網路中心',
+      secondaryUnit: '資訊網路組',
+      applicantName: '王小明',
+      applicantEmail: 'unit-contact-smoke@example.com',
+      extensionNumber: '61234',
+      note: 'Synthetic public success page baseline',
+      status: 'pending_review',
+      statusLabel: '待審核',
+      statusTone: 'pending',
+      statusDetail: '申請已送出，等待管理者審核。',
+      submittedAt: '2026-03-15T08:00:00.000Z',
+      updatedAt: '2026-03-15T08:00:00.000Z'
+    };
+    if (!window._dataModule || typeof window._dataModule.loadUnitContactApplicationStore !== 'function' || typeof window._dataModule.saveUnitContactApplicationStore !== 'function') {
+      throw new Error('unit-contact synthetic baseline requires _dataModule');
+    }
+    const store = window._dataModule.loadUnitContactApplicationStore();
+    const applications = Array.isArray(store && store.applications) ? store.applications.slice() : [];
+    const nextId = Number.isFinite(Number(store && store.nextId)) ? Number(store.nextId) : 1;
+    const index = applications.findIndex((entry) => String(entry && entry.id || '') === app.id);
+    if (index >= 0) {
+      applications[index] = { ...applications[index], ...app };
+    } else {
+      applications.push(app);
+    }
+    window._dataModule.saveUnitContactApplicationStore({
+      applications,
+      nextId
+    });
+    try {
+      window.sessionStorage.setItem('unit-contact-last-email', app.applicantEmail);
+    } catch (_) {
+      // ignore session storage failures in smoke mode
+    }
+  });
+}
 
 function getVisualSmokeStyles(slug, mode) {
   const common = `
@@ -141,7 +194,7 @@ function getVisualSmokeStyles(slug, mode) {
     `;
   }
 
-  if (slug === 'unit-contact-apply' || slug === 'unit-contact-status') {
+  if (slug === 'unit-contact-apply' || slug === 'unit-contact-status' || slug === 'unit-contact-success') {
     return common + `
       .unit-contact-mode-title,
       .unit-contact-mode-text,
@@ -150,8 +203,16 @@ function getVisualSmokeStyles(slug, mode) {
       .public-header-actions,
       .page-subtitle,
       .form-hint,
-      .form-input::placeholder {
+      .form-input::placeholder,
+      .unit-contact-success-note,
+      .unit-contact-summary-grid strong,
+      .unit-contact-summary-grid span {
         text-shadow: none !important;
+      }
+      .unit-contact-success-note,
+      .unit-contact-summary-grid strong,
+      .unit-contact-summary-grid span {
+        color: transparent !important;
       }
     `;
   }
@@ -172,6 +233,11 @@ async function stabilizeVisualRoute(page, slug, mode) {
 }
 
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
+  if (spec && spec.slug === 'unit-contact-success') {
+  await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/`, { waitUntil: 'networkidle', timeout: 45000 });
+  await page.waitForTimeout(600);
+    await seedSyntheticUnitContactSuccess(page);
+  }
   await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil: 'networkidle', timeout: 45000 });
   await page.waitForTimeout(900);
   await stabilizeVisualRoute(page, spec.slug, mode);
@@ -255,6 +321,7 @@ module.exports = {
   MOBILE_VISUAL_SPECS,
   PUBLIC_DESKTOP_VISUAL_SPECS,
   PUBLIC_MOBILE_VISUAL_SPECS,
+  seedSyntheticUnitContactSuccess,
   captureVisualSpec,
   compareAgainstBaseline
 };
