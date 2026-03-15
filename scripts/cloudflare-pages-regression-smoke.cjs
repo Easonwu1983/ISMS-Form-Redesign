@@ -121,9 +121,9 @@ async function runPublicRouteChecks(browser, pushStep) {
     await page.goto(`${BASE_URL}/#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForFunction(() => {
       const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('申請已送出');
+      return title && String(title.textContent || '').includes('申請已成功建立');
     }, { timeout: 20000 });
-    pushStep('unit-contact-public:success-loaded', true, '申請已送出');
+    pushStep('unit-contact-public:success-loaded', true, '申請已成功建立');
 
     await page.goto(`${BASE_URL}/#activate-unit-contact/UCA-SMOKE-SUCCESS-001`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForFunction(() => {

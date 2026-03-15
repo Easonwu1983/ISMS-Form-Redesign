@@ -48,8 +48,8 @@ async function runPublicRouteChecks(browser, pushStep) {
     await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
     await seedSyntheticUnitContactSuccess(page);
 
-    await verifyPublicRoute(page, '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001', '申請已送出');
-    pushStep('unit-contact-public:success-loaded', true, '申請已送出');
+    await verifyPublicRoute(page, '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001', '申請已成功建立');
+    pushStep('unit-contact-public:success-loaded', true, '申請已成功建立');
 
     await verifyPublicRoute(page, '#activate-unit-contact/UCA-SMOKE-SUCCESS-001', '帳號啟用說明');
     pushStep('unit-contact-public:activate-loaded', true, '帳號啟用說明');
