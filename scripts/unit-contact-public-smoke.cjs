@@ -26,17 +26,17 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
     const uniqueEmail = `unit-contact-${Date.now()}@example.com`;
     let createdId = '';
 
-    await runStep(results, 'UNIT-CONTACT-PUBLIC-1', 'public', '未登入可進入申請頁', async () => {
+    await runStep(results, 'UNIT-CONTACT-PUBLIC-1', 'public', '開啟公開申請頁', async () => {
       await gotoHash(page, 'apply-unit-contact', { handleUnsaved: false });
       await page.waitForSelector('[data-testid="unit-contact-apply-form"]', { timeout: 15000 });
       const title = await page.locator('.page-title').first().textContent();
-      if (!String(title || '').includes('申請單位資安窗口')) {
+      if (!String(title || '').includes('申請單位管理人員')) {
         throw new Error('apply title mismatch: ' + title);
       }
       return 'public application form visible';
     });
 
-    await runStep(results, 'UNIT-CONTACT-PUBLIC-2', 'public', '可送出窗口申請', async () => {
+    await runStep(results, 'UNIT-CONTACT-PUBLIC-2', 'public', '送出公開申請', async () => {
       await page.selectOption('#uca-unit-category', { label: '行政單位' });
       await page.waitForTimeout(150);
       const parentOptions = await page.locator('#uca-unit-parent option').evaluateAll((options) => options.map((entry) => ({
@@ -58,7 +58,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
         if (targetChild) await page.selectOption('#uca-unit-child', targetChild.value);
       }
 
-      await page.fill('[data-testid="unit-contact-name"]', '測試窗口');
+      await page.fill('[data-testid="unit-contact-name"]', '公開申請測試');
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', uniqueEmail);
       await page.fill('[data-testid="unit-contact-note"]', 'smoke test');
@@ -71,7 +71,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
       return 'created ' + createdId;
     });
 
-    await runStep(results, 'UNIT-CONTACT-PUBLIC-3', 'public', '可依信箱查詢申請進度', async () => {
+    await runStep(results, 'UNIT-CONTACT-PUBLIC-3', 'public', '用信箱查詢申請狀態', async () => {
       await gotoHash(page, 'apply-unit-contact-status', { handleUnsaved: false });
       await page.waitForSelector('#uca-status-email', { timeout: 15000 });
       await page.fill('#uca-status-email', uniqueEmail);

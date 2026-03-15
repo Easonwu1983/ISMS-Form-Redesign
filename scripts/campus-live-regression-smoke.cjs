@@ -50,6 +50,17 @@ async function run() {
     return { status: response.status };
   }, { critical: true });
 
+  await step('asset:unit-contact-application-module copy', async () => {
+    const response = await fetch(`${DEFAULT_BASE}/unit-contact-application-module.js`);
+    const text = await response.text();
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!text.includes('申請單位管理人員')) throw new Error('unit-contact apply title missing');
+    if (!text.includes('查詢申請狀態')) throw new Error('unit-contact status title missing');
+    if (!text.includes('帳號啟用說明')) throw new Error('unit-contact activation title missing');
+    if (/\?{4,}/.test(text)) throw new Error('unit-contact module contains placeholder question marks');
+    return { status: response.status };
+  }, { critical: true });
+
   await step('asset:checklist-module encoding', async () => {
     const response = await fetch(`${DEFAULT_BASE}/checklist-module.js`);
     const text = await response.text();

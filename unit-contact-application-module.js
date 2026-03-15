@@ -34,7 +34,9 @@
     function saveLastEmail(email) {
       try {
         window.sessionStorage.setItem(LAST_EMAIL_KEY, String(email || '').trim().toLowerCase());
-      } catch (_) { }
+      } catch (_) {
+        // ignore storage failures
+      }
     }
 
     function loadLastEmail() {
@@ -58,8 +60,8 @@
     function buildModeNotice() {
       const modeKey = getM365ModeKey();
       const description = modeKey === 'local-emulator'
-        ? '目前先以校內前端驗證模式收件，後續會切換到 A3 可落地的 SharePoint / Power Automate 流程。'
-        : '目前已接上 M365 流程，送出後會進入人工審核、建帳通知與首次登入交接。';
+        ? '目前為瀏覽器模擬模式，申請資料僅寫入本機儲存。若要正式送件，請切換到校內 M365 後端模式。'
+        : '目前為校內 M365 正式模式，申請資料會送往校內後端與 SharePoint 清單，請使用真實聯絡資訊。';
       return ''
         + '<div class="unit-contact-mode-banner">'
         + '<div class="unit-contact-mode-icon">' + ic('shield-check', 'icon-lg') + '</div>'
@@ -93,17 +95,18 @@
     }
 
     function buildApplicationStatusCard(application) {
+      const detail = String(application && application.statusDetail || '').trim() || '系統尚未回寫狀態，請稍後再查詢。';
       return ''
         + '<article class="card unit-contact-status-card">'
         + '<div class="unit-contact-status-card-top">'
         + '<div><div class="unit-contact-status-id">' + esc(application.id) + '</div><div class="unit-contact-status-unit">' + esc(application.unitValue) + '</div></div>'
         + buildStatusBadge(application)
         + '</div>'
-        + '<div class="unit-contact-status-detail">' + esc(application.statusDetail || '申請已建立。') + '</div>'
+        + '<div class="unit-contact-status-detail">' + esc(detail) + '</div>'
         + '<div class="unit-contact-status-meta">'
-        + '<span>申請人 ' + esc(application.applicantName) + '</span>'
-        + '<span>分機 ' + esc(application.extensionNumber || '-') + '</span>'
-        + '<span>送出時間 ' + esc(fmtTime(application.submittedAt)) + '</span>'
+        + '<span>申請人：' + esc(application.applicantName) + '</span>'
+        + '<span>分機：' + esc(application.extensionNumber || '-') + '</span>'
+        + '<span>送件時間：' + esc(fmtTime(application.submittedAt)) + '</span>'
         + '</div>'
         + '</article>';
     }
@@ -118,7 +121,7 @@
     }
 
     function markDirty() {
-      setUnsavedChangesGuard(true, '目前有尚未送出的窗口申請資料，確定要離開嗎？');
+      setUnsavedChangesGuard(true, '目前表單尚未送出，若離開頁面會失去已填寫內容。');
     }
 
     function clearDirty() {
@@ -133,43 +136,43 @@
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
           'M365 x Campus Frontend',
-          '申請單位資安窗口',
-          '以校內前端收件、M365 後端審核與啟用的方式，讓各單位自行申請窗口帳號。',
-          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
+          '申請單位管理人員',
+          '請填寫單位、聯絡方式與申請資訊。送出後系統會交由管理者審核，核准後即可使用帳號登入系統。',
+          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請狀態</a>'
         )
         + buildModeNotice()
         + '<div class="unit-contact-layout">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-form-card">'
-        + '<div class="section-header">' + ic('plus-circle', 'icon-sm') + ' 填寫申請資料</div>'
+        + '<div class="section-header">' + ic('plus-circle', 'icon-sm') + ' 申請資料</div>'
         + '<form id="unit-contact-apply-form" data-testid="unit-contact-apply-form">'
         + '<div class="form-row"><div class="form-group"><label class="form-label form-required">申請單位</label>'
         + buildUnitCascadeControl('uca-unit', '', false, true)
-        + '<div class="form-hint">請直接選本校正式一、二級單位，後續將依此綁定窗口權限。</div></div></div>'
+        + '<div class="form-hint">請先選擇正式單位。若為二級單位，請繼續選擇下層單位。</div></div></div>'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入聯絡窗口姓名" required></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請人姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入聯絡人姓名" required></div>'
         + '<div class="form-group"><label class="form-label form-required">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" required></div>'
         + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">信箱</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="可使用校外信箱，但需能收信完成啟用" required></div>'
-        + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="例如：新任窗口、原窗口交接"></div></div>'
+        + '<div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入可收件的電子郵件" required></div>'
+        + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充需求、交接或特殊說明"></div></div>'
         + '<div class="form-actions">'
         + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
-        + '<a class="btn btn-ghost" href="#apply-unit-contact-status">已有申請編號？改查詢進度</a>'
+        + '<a class="btn btn-ghost" href="#apply-unit-contact-status">已有申請編號，改查詢狀態</a>'
         + '</div>'
         + '</form></div></div>'
         + '<aside class="unit-contact-side">'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請流程</div>'
-        + buildStepCard('1. 送出申請', '先填單位、姓名、分機與信箱，系統會產生申請編號。')
-        + buildStepCard('2. 管理端審核', '資安管理端確認單位與窗口資格，必要時會退回補件。')
-        + buildStepCard('3. 帳號開通', '核准後由管理端建立或開通帳號，再寄送首次登入或改密碼說明。')
+        + buildStepCard('1. 填寫申請資料', '選擇申請單位，填寫聯絡人姓名、分機與電子郵件後送出。')
+        + buildStepCard('2. 管理者審核', '系統管理者確認單位與聯絡資訊後，核發可登入帳號。')
+        + buildStepCard('3. 啟用後登入', '核准後可用申請時填寫的電子郵件查詢狀態，並依提示登入系統。')
         + '</div>'
-        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 這版先完成什麼</div>'
+        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 送件前確認</div>'
         + '<ul class="unit-contact-checklist">'
-        + '<li>首頁 CTA 與公共申請頁</li>'
-        + '<li>單位一、二級連動選擇</li>'
-        + '<li>申請編號與進度查詢頁</li>'
-        + '<li>後續可直接改接 SharePoint / Flow</li>'
+        + '<li>確認申請單位選擇正確</li>'
+        + '<li>聯絡信箱可正常收件</li>'
+        + '<li>送出後請保留申請編號</li>'
+        + '<li>資料將寫入 SharePoint 與校內流程</li>'
         + '</ul></div>'
         + '</aside></div></section>';
 
@@ -185,7 +188,7 @@
         const applicantEmail = String(document.getElementById('uca-email').value || '').trim().toLowerCase();
         const note = String(document.getElementById('uca-note').value || '').trim();
         if (!unitState.unitValue) {
-          toast('請先完整選擇申請單位', 'error');
+          toast('請先選擇申請單位', 'error');
           return;
         }
         try {
@@ -200,7 +203,7 @@
           if (!result || !result.application) throw new Error('申請送出失敗');
           saveLastEmail(applicantEmail);
           clearDirty();
-          toast('申請已送出，系統已產生申請編號。');
+          toast('申請已送出，請保留申請編號並追蹤審核狀態。');
           navigate('apply-unit-contact-success/' + encodeURIComponent(result.application.id), { allowDirtyNavigation: true });
         } catch (error) {
           toast(String(error && error.message || error || '申請送出失敗'), 'error');
@@ -218,8 +221,13 @@
       if (!application) {
         mount.innerHTML = ''
           + '<section class="unit-contact-shell">'
-          + buildPublicHero('Application', '找不到申請資料', '這筆申請可能尚未建立，或瀏覽器已清除暫存資料。', '<a class="btn btn-primary" href="#apply-unit-contact">返回申請頁</a>')
-          + '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">尚無可顯示的申請資料</div><div class="empty-state-desc">你可以重新填寫申請，或改用信箱查詢目前的申請進度。</div></div>'
+          + buildPublicHero(
+            'Application',
+            '找不到申請資料',
+            '目前無法取得申請內容。請確認申請編號是否正確，或回到查詢頁重新輸入電子郵件。',
+            '<a class="btn btn-primary" href="#apply-unit-contact">重新申請</a>'
+          )
+          + '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">查無對應申請</div><div class="empty-state-desc">請回到狀態查詢頁，重新輸入送件時使用的電子郵件或申請編號。</div></div>'
           + '</section>';
         refreshIcons();
         return;
@@ -229,16 +237,16 @@
         + buildPublicHero(
           'Application Created',
           '申請已送出',
-          '系統已建立申請編號。接下來會依 A3 流程進入人工審核，再由管理端寄送帳號開通資訊。',
-          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢進度</a>'
+          '系統已建立申請資料。後續會交由管理者審核，核准後可用同一個電子郵件查詢啟用狀態。',
+          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢狀態</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-success-card">'
         + '<div class="unit-contact-success-mark">' + ic('badge-check', 'icon-xl') + '</div>'
         + buildApplicationSummary(application)
-        + '<div class="unit-contact-success-note">請保留申請編號與申請信箱。A3 版會由管理端審核後寄送帳號開通或首次登入說明，不在前端直接發送明碼密碼。</div>'
-        + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">用信箱查詢進度</a><a class="btn btn-ghost" href="#apply-unit-contact">再送另一筆申請</a></div>'
+        + '<div class="unit-contact-success-note">請記下申請編號，並使用同一個電子郵件至狀態查詢頁追蹤進度。管理者核准後，系統會回寫啟用狀態與登入說明。</div>'
+        + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">前往查詢狀態</a><a class="btn btn-ghost" href="#apply-unit-contact">再送一筆申請</a></div>'
         + '</div></div></div></section>';
       refreshIcons();
     }
@@ -252,27 +260,27 @@
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
           'Application Status',
-          '查詢申請進度',
-          '輸入申請時使用的信箱，即可查看目前待審、退回補件、待建帳或已開通狀態。',
+          '查詢申請狀態',
+          '輸入送件時使用的電子郵件，系統會列出目前可查詢的申請進度與啟用狀態。',
           '<a class="btn btn-secondary" href="#apply-unit-contact">' + ic('arrow-left', 'icon-sm') + ' 返回申請頁</a>'
         )
         + '<div class="unit-contact-layout">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-form-card">'
-        + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 以信箱查詢</div>'
+        + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 依電子郵件查詢</div>'
         + '<form id="unit-contact-status-form">'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入申請時填寫的信箱" required></div>'
-        + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary" style="width:100%">' + ic('search', 'icon-sm') + ' 查詢</button></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入申請時使用的電子郵件" required></div>'
+        + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary" style="width:100%">' + ic('search', 'icon-sm') + ' 開始查詢</button></div>'
         + '</div></form>'
         + '<div id="unit-contact-status-results"></div>'
         + '</div></div>'
         + '<aside class="unit-contact-side">'
-        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('info', 'icon-sm') + ' 查詢提醒</div>'
+        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('info', 'icon-sm') + ' 查詢說明</div>'
         + '<ul class="unit-contact-checklist">'
-        + '<li>同一信箱可以查到自己送出的所有申請</li>'
-        + '<li>正式上線後會顯示審核、建帳與帳號開通進度</li>'
-        + '<li>若審核退回，會顯示待補件狀態與說明</li>'
+        + '<li>請使用送件時填寫的電子郵件</li>'
+        + '<li>若已核准，系統會顯示啟用狀態與後續提示</li>'
+        + '<li>若查不到資料，請確認是否輸入了正確信箱</li>'
         + '</ul></div></aside>'
         + '</div></section>';
 
@@ -290,7 +298,7 @@
         try {
           const applications = await lookupUnitContactApplicationsByEmail(email);
           if (!applications.length) {
-            resultsEl.innerHTML = '<div class="empty-state unit-contact-inline-empty"><div class="empty-state-icon">' + ic('inbox', 'icon-lg') + '</div><div class="empty-state-title">查無申請資料</div><div class="empty-state-desc">目前沒有找到這個信箱的申請紀錄，請確認信箱是否填寫正確。</div></div>';
+            resultsEl.innerHTML = '<div class="empty-state unit-contact-inline-empty"><div class="empty-state-icon">' + ic('inbox', 'icon-lg') + '</div><div class="empty-state-title">查無申請紀錄</div><div class="empty-state-desc">目前找不到這個電子郵件的申請資料，請確認是否使用了正確信箱，或回到申請頁重新送件。</div></div>';
             refreshIcons();
             return;
           }
@@ -319,15 +327,15 @@
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
           'Account Handoff',
-          '窗口帳號開通說明',
-          'A3 版會把這頁作為管理端寄出帳號開通通知後的交接頁，可放首次登入與改密碼指引。',
-          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢目前申請狀態</a>'
+          '帳號啟用說明',
+          '當管理者完成審核後，系統會依校內流程建立可登入帳號。若你是接手人員，請回到狀態查詢頁確認目前狀態。',
+          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢目前狀態</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-side-card">'
-        + '<div class="section-header">' + ic('key', 'icon-sm') + ' A3 交接方式</div>'
-        + '<div class="unit-contact-activation-copy">正式串接後，核准的申請會由管理端建立或確認帳號，再由 M365 信件寄送首次登入、改密碼或開通說明。未來若升級到 Azure / External ID，再把這頁改成真正的自助啟用流程即可。</div>'
+        + '<div class="section-header">' + ic('key', 'icon-sm') + ' 啟用流程</div>'
+        + '<div class="unit-contact-activation-copy">此頁主要提供校內啟用與交接說明。正式帳號建立仍由後端與校內身分流程處理，不會直接在前端頁面發放密碼。</div>'
         + (application ? buildApplicationSummary(application) : '')
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact">返回申請頁</a></div>'
         + '</div></div></div></section>';

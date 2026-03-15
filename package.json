@@ -35,6 +35,7 @@
                     "m365:a3:campus-backend:start":  "node m365/campus-backend/server.cjs",
                     "test:campus:live:smoke":  "node scripts/campus-live-regression-smoke.cjs",
                     "test:live:security":  "node scripts/live-security-smoke.cjs",
+                    "test:live:all":  "node scripts/live-regression-suite.cjs",
                     "test:unit-contact:campus-backend":  "node scripts/run-with-local-server.cjs \"node scripts/unit-contact-campus-backend-smoke.cjs\"",
                     "test:all":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs all\"",
                     "test:all:plus":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs all \u0026\u0026 node scripts/browser-zoom-regression.cjs\"",
