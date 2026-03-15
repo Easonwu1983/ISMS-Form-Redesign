@@ -995,22 +995,39 @@
       const roster = fallbackResult.row
         || (fallbackResult.id ? getAllTrainingRosters().find((row) => row.id === fallbackResult.id) : null)
         || getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
-      const result = roster ? await submitTrainingRosterUpsert({
-        ...roster,
-        source: 'manual',
-        createdBy: roster.createdBy || user.name,
-        createdByUsername: roster.createdByUsername || user.username,
-        actorName: user.name,
-        actorUsername: user.username
-      }) : { item: null };
-      rowsState = mergeTrainingRows(currentUnit, rowsState);
-      selectedKeys.clear();
-      ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
-        document.getElementById(idName).value = '';
-      });
-      markTrainingDirty();
-      renderRows();
-      showTrainingRepositoryFallback(result, fallbackResult.updated ? fallbackResult.reason : ('已新增「' + payload.name + '」到名單'));
+      if (!roster) {
+        toast('新增名單暫存失敗，請重新操作', 'error');
+        return;
+      }
+      try {
+        const result = await submitTrainingRosterUpsert({
+          ...roster,
+          source: 'manual',
+          createdBy: roster.createdBy || user.name,
+          createdByUsername: roster.createdByUsername || user.username,
+          actorName: user.name,
+          actorUsername: user.username
+        });
+        try {
+          await syncTrainingRostersFromM365({ silent: true });
+        } catch (_) {}
+        const syncedRoster = (result && result.item && result.item.id
+          ? getAllTrainingRosters().find((row) => row.id === result.item.id)
+          : null) || getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
+        if (!syncedRoster) {
+          throw new Error('教育訓練名單已送出，但後端同步結果未返回，請重新整理後確認。');
+        }
+        rowsState = mergeTrainingRows(currentUnit, rowsState);
+        selectedKeys.clear();
+        ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
+          document.getElementById(idName).value = '';
+        });
+        markTrainingDirty();
+        renderRows();
+        showTrainingRepositoryFallback(result, fallbackResult.updated ? fallbackResult.reason : ('已新增「' + payload.name + '」到名單'));
+      } catch (error) {
+        toast(error && error.message ? error.message : '新增名單失敗', 'error');
+      }
     });
 
     initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });

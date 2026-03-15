@@ -2436,7 +2436,13 @@
     }
     try {
       const response = await client.upsertTrainingRoster(payload);
-      const stored = upsertTrainingRosterInStore(response.item || payload);
+      const remoteItem = response && response.item && String(response.item.id || '').trim()
+        ? response.item
+        : null;
+      if (!remoteItem) {
+        throw new Error('教育訓練名單後端未回傳已儲存資料');
+      }
+      const stored = upsertTrainingRosterInStore(remoteItem);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單已寫入 M365', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
