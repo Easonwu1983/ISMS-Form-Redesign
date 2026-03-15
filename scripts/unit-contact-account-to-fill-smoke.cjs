@@ -30,10 +30,21 @@ const ROLE_VIEWER = '\u8de8\u55ae\u4f4d\u6aa2\u8996\u8005';
 const ROLE_REPORTER = '\u586b\u5831\u4eba';
 const ACTIVE_LABEL = '\u5df2\u555f\u7528';
 const DRAFT_STATUS = '\u66ab\u5b58';
+const UNIT_SEPARATOR = '\uFF0F';
 const DEFAULT_TARGET_UNIT = '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44';
+const SAFE_TARGET_UNITS = [
+  '\u7a3d\u6838\u5ba4',
+  '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44',
+  '\u7e3d\u52d9\u8655\uff0f\u71df\u7e55\u7d44',
+  '\u4eba\u4e8b\u5ba4\uff0f\u7d9c\u5408\u696d\u52d9\u7d44'
+];
 
 function nowStamp() {
   return Date.now();
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function cleanText(value) {
@@ -109,25 +120,23 @@ async function getTrainingRosters(token) {
   return Array.isArray(body && body.items) ? body.items : [];
 }
 
+function isSafeTargetUnit(unit) {
+  return SAFE_TARGET_UNITS.includes(cleanText(unit));
+}
+
 async function chooseTargetUnit(token) {
-  const users = await getSystemUsers(token);
   const forms = await getTrainingForms(token);
   const occupiedUnits = new Set(forms
     .filter((entry) => cleanText(entry && entry.trainingYear) === CURRENT_ROC_YEAR)
     .map((entry) => cleanText(entry && entry.unit))
     .filter(Boolean));
-  const candidates = Array.from(new Set(users
-    .filter((entry) => {
-      const role = cleanText(entry && entry.role);
-      return role && role !== ROLE_ADMIN && role !== ROLE_VIEWER;
-    })
-    .map((entry) => cleanText(entry && entry.unit))
-    .filter(isUsefulUnit)));
-  const selected = candidates.find((unit) => !occupiedUnits.has(unit)) || candidates[0] || DEFAULT_TARGET_UNIT;
+  const safeCandidates = SAFE_TARGET_UNITS.filter((unit) => !occupiedUnits.has(unit));
+  const selected = safeCandidates[0] || SAFE_TARGET_UNITS[0] || DEFAULT_TARGET_UNIT;
   return {
     unit: selected,
     occupiedUnits: Array.from(occupiedUnits),
-    candidates
+    candidates: SAFE_TARGET_UNITS.slice(),
+    safeCandidates
   };
 }
 
@@ -165,6 +174,20 @@ async function lookupApplicationsByEmail(email) {
     payload: { email }
   });
   return Array.isArray(body && body.applications) ? body.applications : [];
+}
+
+async function waitForApplicationStatus(email, applicationId, predicate, options) {
+  const timeoutMs = Number((options && options.timeoutMs) || 30000);
+  const intervalMs = Number((options && options.intervalMs) || 1500);
+  const deadline = Date.now() + timeoutMs;
+  let lastMatch = null;
+  do {
+    const applications = await lookupApplicationsByEmail(email);
+    lastMatch = applications.find((entry) => cleanText(entry && entry.id) === cleanText(applicationId)) || null;
+    if (lastMatch && predicate(lastMatch)) return lastMatch;
+    await wait(intervalMs);
+  } while (Date.now() < deadline);
+  return lastMatch;
 }
 
 async function resolveUnitContactListContext() {
@@ -400,8 +423,9 @@ async function loginViaPage(page, username, password) {
       });
       createdApplicationListItemId = await patchApplicationToActive(graphContext, createdApplicationId, testUsername);
       const login = await loginAsUser(testUsername, testPassword);
-      const lookup = await lookupApplicationsByEmail(testEmail);
-      const application = lookup.find((entry) => entry.id === createdApplicationId);
+      const application = await waitForApplicationStatus(testEmail, createdApplicationId, (entry) => {
+        return cleanText(entry && entry.status) === 'active' && cleanText(entry && entry.statusLabel) === ACTIVE_LABEL;
+      });
       if (!application) throw new Error('Updated application not found after provisioning');
       if (application.status !== 'active') throw new Error(`Application status not updated: ${application.status}`);
       if (cleanText(application.statusLabel) !== ACTIVE_LABEL) throw new Error(`Unexpected status label: ${application.statusLabel}`);
@@ -417,9 +441,14 @@ async function loginViaPage(page, username, password) {
       await gotoHash(page, 'apply-unit-contact-status', { handleUnsaved: false });
       await page.waitForSelector('#uca-status-email', { timeout: 15000 });
       await page.fill('#uca-status-email', testEmail);
-      await page.locator('#unit-contact-status-form').evaluate((form) => form.requestSubmit());
-      await page.waitForSelector('.unit-contact-status-card', { timeout: 20000 });
-      const cardText = cleanText(await page.locator('.unit-contact-status-card').first().textContent());
+      let cardText = '';
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await page.locator('#unit-contact-status-form').evaluate((form) => form.requestSubmit());
+        await page.waitForSelector('.unit-contact-status-card', { timeout: 20000 });
+        cardText = cleanText(await page.locator('.unit-contact-status-card').first().textContent());
+        if (cardText.includes(ACTIVE_LABEL)) break;
+        await page.waitForTimeout(1200);
+      }
       if (!cardText.includes(ACTIVE_LABEL)) throw new Error('Application status card did not show active label');
       return { cardText: cardText.slice(0, 280) };
     });
@@ -431,6 +460,9 @@ async function loginViaPage(page, username, password) {
       }
       if (loginState.auth.mustChangePassword === true) {
         throw new Error('Reporter session still marked as mustChangePassword');
+      }
+      if (!isSafeTargetUnit(loginState.auth.activeUnit) || cleanText(loginState.auth.activeUnit) !== targetUnit) {
+        throw new Error(`Reporter active unit mismatch: ${loginState.auth.activeUnit}`);
       }
       return {
         hash: loginState.hash,
@@ -445,7 +477,7 @@ async function loginViaPage(page, username, password) {
       await page.fill('#tr-phone', '02-3366-61234');
       await page.fill('#tr-email', testEmail);
       await page.fill('#tr-new-name', manualPersonName);
-      await page.fill('#tr-new-unit-name', cleanText(targetUnit.split('／').pop()) || targetUnit);
+      await page.fill('#tr-new-unit-name', cleanText(targetUnit.split(UNIT_SEPARATOR).pop()) || targetUnit);
       await page.fill('#tr-new-identity', identity);
       await page.fill('#tr-new-job-title', jobTitle);
       await page.click('#training-add-person');

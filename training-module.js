@@ -549,15 +549,21 @@
       + '</div>';
   }
 
-  function renderTrainingFill(id) {
+  async function renderTrainingFill(id) {
     if (!canFillTraining()) {
       navigate('training');
       return;
     }
 
+    document.getElementById('app').innerHTML = '<div class="empty-state" style="padding:48px 24px"><div class="empty-state-icon">' + ic('loader-circle', 'icon-lg') + '</div><div class="empty-state-title">正在載入教育訓練填報資料</div><div class="empty-state-subtitle">同步名單與既有填報內容後將自動開啟表單。</div></div>';
+
     const user = currentUser();
     const defaultTrainingYear = String(new Date().getFullYear() - 1911);
     const lockedUserUnit = getScopedUnit(user) || user.unit || '';
+    try {
+      await syncTrainingRostersFromM365({ silent: true });
+      await syncTrainingFormsFromM365({ silent: true });
+    } catch (_) {}
     if (!id && !isAdmin() && lockedUserUnit) {
       const duplicateDraft = findExistingTrainingFormForUnitYear(lockedUserUnit, defaultTrainingYear);
       if (duplicateDraft && isTrainingVisible(duplicateDraft)) {
@@ -947,6 +953,9 @@
     });
 
     document.getElementById('training-add-person').addEventListener('click', async () => {
+      try {
+        await syncTrainingRostersFromM365({ silent: true });
+      } catch (_) {}
       const currentUnit = document.getElementById('tr-unit').value;
       const payload = {
         name: document.getElementById('tr-new-name').value.trim(),
