@@ -104,12 +104,12 @@ function buildCorsHeaders(origin) {
 function buildSecurityHeaders(pathname) {
   const path = cleanText(pathname) || '/';
   return {
-    'X-Frame-Options': 'DENY',
-    'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'no-referrer',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()',
-    'Cache-Control': path.startsWith('/api/') ? 'no-store, no-cache, must-revalidate' : 'no-store',
-    Pragma: 'no-cache'
+    'x-frame-options': 'DENY',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()',
+    'cache-control': path.startsWith('/api/') ? 'no-store, no-cache, must-revalidate' : 'no-store',
+    'pragma': 'no-cache'
   };
 }
 

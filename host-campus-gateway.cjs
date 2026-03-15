@@ -20,17 +20,17 @@ function buildSecurityHeaders(pathname) {
   const isApi = path.startsWith('/api/');
   const isHtml = path === '/' || path.endsWith('.html') || (!path.includes('.') && !isApi);
   const headers = {
-    'X-Frame-Options': 'DENY',
-    'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'no-referrer',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()'
+    'x-frame-options': 'DENY',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()'
   };
   if (isApi || isHtml || path.endsWith('m365-config.override.js')) {
-    headers['Cache-Control'] = 'no-store, no-cache, must-revalidate';
-    headers.Pragma = 'no-cache';
+    headers['cache-control'] = 'no-store, no-cache, must-revalidate';
+    headers['pragma'] = 'no-cache';
   }
   if (isHtml) {
-    headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://ntums365.sharepoint.com; connect-src 'self' https://ntums365.sharepoint.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'; child-src 'none';";
+    headers['content-security-policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://ntums365.sharepoint.com; connect-src 'self' https://ntums365.sharepoint.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'; child-src 'none';";
   }
   return headers;
 }

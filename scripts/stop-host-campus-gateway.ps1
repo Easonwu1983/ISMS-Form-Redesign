@@ -9,11 +9,11 @@ if (-not (Test-Path $pidFile)) {
   exit 0
 }
 
-$pid = Get-Content $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($pid) {
-  $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+$gatewayPid = Get-Content $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($gatewayPid) {
+  $process = Get-Process -Id $gatewayPid -ErrorAction SilentlyContinue
   if ($process) {
-    Stop-Process -Id $pid -Force
+    Stop-Process -Id $gatewayPid -Force
   }
 }
 
