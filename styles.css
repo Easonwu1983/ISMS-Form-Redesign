@@ -1635,6 +1635,52 @@ tbody td:first-child {
   .unit-contact-compact-row {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .unit-contact-hero {
+    padding: 20px 18px;
+    border-radius: 22px;
+  }
+
+  .unit-contact-hero-actions .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .unit-contact-mode-banner {
+    flex-direction: column;
+  }
+
+  .unit-contact-status-card {
+    padding: 16px;
+  }
+
+  .unit-contact-status-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .unit-contact-status-badge {
+    align-self: flex-start;
+  }
+
+  .unit-contact-status-meta {
+    display: grid;
+    gap: 6px;
+  }
+
+  .unit-contact-success-card,
+  .unit-contact-side-card,
+  .unit-contact-form-card {
+    border-radius: 20px;
+  }
+
+  .unit-contact-success-card {
+    padding: 20px 18px;
+  }
+
+  .unit-contact-status-action {
+    align-self: stretch;
+  }
 }
 
 .form-label {

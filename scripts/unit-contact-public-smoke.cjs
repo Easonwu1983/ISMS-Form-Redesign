@@ -26,7 +26,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
     const uniqueEmail = `unit-contact-${Date.now()}@example.com`;
     let createdId = '';
 
-    await runStep(results, 'UNIT-CONTACT-PUBLIC-1', 'public', '開啟公開申請頁', async () => {
+    await runStep(results, 'UNIT-CONTACT-PUBLIC-1', 'public', '公開申請頁可正常載入', async () => {
       await gotoHash(page, 'apply-unit-contact', { handleUnsaved: false });
       await page.waitForSelector('[data-testid="unit-contact-apply-form"]', { timeout: 15000 });
       const title = await page.locator('.page-title').first().textContent();
@@ -36,14 +36,21 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
       return 'public application form visible';
     });
 
-    await runStep(results, 'UNIT-CONTACT-PUBLIC-2', 'public', '送出公開申請', async () => {
-      await page.selectOption('#uca-unit-category', { label: '行政單位' });
+    await runStep(results, 'UNIT-CONTACT-PUBLIC-2', 'public', '可送出公開申請', async () => {
+      const categoryOptions = await page.locator('#uca-unit-category option').evaluateAll((options) => options.map((entry) => ({
+        value: entry.value,
+        text: String(entry.textContent || '').trim()
+      })));
+      const targetCategory = categoryOptions.find((entry) => entry.value);
+      if (!targetCategory) throw new Error('no unit category options found');
+      await page.selectOption('#uca-unit-category', targetCategory.value);
       await page.waitForTimeout(150);
+
       const parentOptions = await page.locator('#uca-unit-parent option').evaluateAll((options) => options.map((entry) => ({
         value: entry.value,
         text: String(entry.textContent || '').trim()
       })));
-      const targetParent = parentOptions.find((entry) => entry.text.includes('計算機及資訊網路中心')) || parentOptions.find((entry) => entry.value);
+      const targetParent = parentOptions.find((entry) => entry.value);
       if (!targetParent) throw new Error('no primary unit options found');
       await page.selectOption('#uca-unit-parent', targetParent.value);
       await page.waitForTimeout(150);
@@ -54,7 +61,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
           value: entry.value,
           text: String(entry.textContent || '').trim()
         })));
-        const targetChild = childOptions.find((entry) => entry.text.includes('資訊網路組')) || childOptions.find((entry) => entry.value);
+        const targetChild = childOptions.find((entry) => entry.value);
         if (targetChild) await page.selectOption('#uca-unit-child', targetChild.value);
       }
 
