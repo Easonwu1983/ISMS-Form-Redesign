@@ -90,7 +90,7 @@ function writeRedirectIndex() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>??????????</title>
+  <title>內部稽核管考追蹤系統</title>
   <meta http-equiv="refresh" content="1; url=${redirectTarget}">
   <meta name="robots" content="noindex,nofollow">
   <style>
@@ -206,14 +206,14 @@ function writeRedirectIndex() {
       <span class="badge-mark">NTU</span>
       <span>CLOUDFLARE ENTRY</span>
     </div>
-    <h1>??????????</h1>
-    <p>?????? Cloudflare HTTPS????? 1 ????????????????????????????????</p>
+    <h1>內部稽核管考追蹤系統</h1>
+    <p>目前入口頁由 Cloudflare HTTPS 提供，系統會在 1 秒後自動導向到目前可用的正式系統網址。</p>
     <div class="actions">
-      <a class="btn btn-primary" href="${redirectTarget}">????</a>
+      <a class="btn btn-primary" href="${redirectTarget}">立即前往系統</a>
     </div>
     <div class="meta">
-      <div>?????<code>${redirectTarget}</code></div>
-      <div>??? Cloudflare Pages ?? HTTPS ???????? Cloudflare Tunnel ????????</div>
+      <div>目前目標網址：<code>${redirectTarget}</code></div>
+      <div>此入口頁使用 Cloudflare Pages 提供 HTTPS，後端服務則透過 Cloudflare Tunnel 轉送。</div>
     </div>
   </main>
   <script>
@@ -263,11 +263,37 @@ function writeWorkerProxy() {
 }
 
 function writeHeaders() {
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: blob: https://ntums365.sharepoint.com",
+    mode === 'full-proxy'
+      ? "connect-src 'self'"
+      : `connect-src 'self' ${backendBase} https://ntums365.sharepoint.com`,
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-src 'none'",
+    "child-src 'none'"
+  ].join('; ');
   const content = [
     '/*',
+    `  Content-Security-Policy: ${csp}`,
     '  X-Content-Type-Options: nosniff',
     '  X-Frame-Options: DENY',
-    '  Referrer-Policy: strict-origin-when-cross-origin'
+    '  Referrer-Policy: strict-origin-when-cross-origin',
+    '  Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()',
+    '',
+    '/',
+    '  Cache-Control: no-store, no-cache, must-revalidate',
+    '',
+    '/index.html',
+    '  Cache-Control: no-store, no-cache, must-revalidate',
+    '',
+    '/m365-config.override.js',
+    '  Cache-Control: no-store, no-cache, must-revalidate'
   ].join('\n');
   fs.writeFileSync(path.join(outputDir, '_headers'), content, 'utf8');
 }

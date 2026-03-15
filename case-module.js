@@ -826,17 +826,17 @@ async function handleStatusTransition(id, ns) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
-    if (!canAccessItem(item) || !canReviewItem(item)) { toast('???????????', 'error'); return; }
+    if (!canAccessItem(item) || !canReviewItem(item)) { toast('您沒有權限審核此案件', 'error'); return; }
     const allowedTransitions = {
       [STATUSES.PROPOSED]: [STATUSES.REVIEWING],
       [STATUSES.REVIEWING]: [STATUSES.CLOSED, STATUSES.TRACKING, STATUSES.PENDING]
     };
     const next = allowedTransitions[item.status] || [];
-    if (!next.includes(ns)) { toast(`?? ${item.status} ??????? ${ns}`, 'error'); return; }
+    if (!next.includes(ns)) { toast(`狀態 ${item.status} 無法轉換為 ${ns}`, 'error'); return; }
     const reviewDecision = getReviewDecisionByNextStatus(item, ns);
-    if (!reviewDecision) { toast('??????????', 'error'); return; }
+    if (!reviewDecision) { toast('找不到對應的審核動作', 'error'); return; }
     const now = new Date().toISOString();
-    const updates = { status: ns, updatedAt: now, pendingTracking: null, history: [...item.history, { time: now, action: `??????${ns}?`, user: u.name }] };
+    const updates = { status: ns, updatedAt: now, pendingTracking: null, history: [...item.history, { time: now, action: `審核狀態更新為${ns}`, user: u.name }] };
     updates.closedDate = ns === STATUSES.CLOSED ? now : null;
     const result = await submitReviewDecision(id, {
       decision: reviewDecision,
@@ -844,7 +844,7 @@ async function handleStatusTransition(id, ns) {
       actorUsername: u.username
     }, updates);
     if (result && result.warning) toast(result.warning, 'info');
-    toast(`???? ${ns}`);
+    toast(`已更新為 ${ns}`);
     renderDetail(id);
     renderSidebar();
     refreshIcons();
@@ -854,12 +854,12 @@ async function handleStatusTransition(id, ns) {
     const item = getItem(id);
     const u = currentUser();
     if (!item || !u) return;
-    if (!(item.status === STATUSES.TRACKING && item.pendingTracking && canReviewItem(item))) { toast('????????????', 'error'); return; }
+    if (!(item.status === STATUSES.TRACKING && item.pendingTracking && canReviewItem(item))) { toast('目前沒有可審核的追蹤提報', 'error'); return; }
     const pending = item.pendingTracking;
     const round = pending.round || ((item.trackings || []).length + 1);
     const now = new Date().toISOString();
     const shouldClose = decision === 'close';
-    const finalResult = shouldClose ? '????' : '??????';
+    const finalResult = shouldClose ? '同意結案' : '同意持續追蹤';
     const approvedTracking = {
       ...pending,
       requestedResult: pending.result,
@@ -871,14 +871,14 @@ async function handleStatusTransition(id, ns) {
     };
     const history = [
       ...(item.history || []),
-      { time: now, action: `??? ${round} ?????`, user: u.name },
+      { time: now, action: `審核第 ${round} 次追蹤`, user: u.name },
       { time: now, action: finalResult, user: u.name }
     ];
     if (!shouldClose && pending.nextTrackDate) {
-      history.push({ time: now, action: `????????${pending.nextTrackDate}`, user: u.name });
+      history.push({ time: now, action: `下一次追蹤日期：${pending.nextTrackDate}`, user: u.name });
     }
     if (pending.evidence && pending.evidence.length) {
-      history.push({ time: now, action: `???? ${pending.evidence.length} ?`, user: u.name });
+      history.push({ time: now, action: `新增 ${pending.evidence.length} 份佐證`, user: u.name });
     }
     const result = await submitTrackingReviewDecision(id, {
       decision: shouldClose ? 'close' : 'continue',
@@ -894,7 +894,7 @@ async function handleStatusTransition(id, ns) {
       history
     });
     if (result && result.warning) toast(result.warning, 'info');
-    toast(shouldClose ? '?????' : '???????');
+    toast(shouldClose ? '已核定結案' : '已核定持續追蹤');
     renderDetail(id);
     renderSidebar();
     refreshIcons();
@@ -1067,10 +1067,10 @@ function renderRespond(id) {
       const ca = document.getElementById('r-action').value.trim();
       const rc = document.getElementById('r-root').value.trim();
       const el = document.getElementById('r-elim').value.trim();
-      if (!ca || !rc || !el) { toast('?????????????????????', 'error'); return; }
+      if (!ca || !rc || !el) { toast('請完整填寫矯正措施、根因分析與根因消除措施', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
-      if (!li || !canAccessItem(li)) { toast('?????????????', 'error'); navigate('list'); return; }
-      if (!canRespondItem(li, u)) { toast('?????????????', 'error'); navigate('detail/' + id); return; }
+      if (!li || !canAccessItem(li)) { toast('找不到可操作的矯正單', 'error'); navigate('list'); return; }
+      if (!canRespondItem(li, u)) { toast('您沒有權限填寫此矯正單', 'error'); navigate('detail/' + id); return; }
       const persistedEvidence = await persistUploadedEntries(tempEv, {
         prefix: 'car',
         scope: 'case-evidence',
@@ -1087,9 +1087,9 @@ function renderRespond(id) {
         riskAssessDate: document.getElementById('r-riskassess').value || null,
         status: STATUSES.PROPOSED, updatedAt: now,
         evidence: [...(li.evidence || []), ...persistedEvidence],
-        history: [...li.history, { time: now, action: `${u.name} ???????`, user: u.name }, { time: now, action: `??????${STATUSES.PROPOSED}?`, user: u.name }]
+        history: [...li.history, { time: now, action: `${u.name} 提交改善回覆`, user: u.name }, { time: now, action: `審核狀態更新為${STATUSES.PROPOSED}`, user: u.name }]
       };
-      if (tempEv.length) upd.history.push({ time: now, action: `?? ${tempEv.length} ?????`, user: u.name });
+      if (tempEv.length) upd.history.push({ time: now, action: `新增 ${tempEv.length} 份佐證`, user: u.name });
       const result = await submitRespondCase(id, {
         correctiveAction: ca,
         correctiveDueDate: document.getElementById('r-due').value,
@@ -1105,7 +1105,7 @@ function renderRespond(id) {
         actorUsername: u.username
       }, upd);
       if (result && result.warning) toast(result.warning, 'info');
-      toast('????????');
+      toast('改善回覆已送出');
       navigate('detail/' + id);
     });
   }
@@ -1277,15 +1277,15 @@ function renderTracking(id) {
     trackForm.addEventListener('submit', async e => {
       e.preventDefault();
       const res = document.querySelector('input[name="tkResult"]:checked');
-      if (!res) { toast('??????????', 'error'); return; }
+      if (!res) { toast('請選擇本次追蹤建議', 'error'); return; }
       const now = new Date().toISOString(), li = getItem(id), u = currentUser();
-      if (!li || !canAccessItem(li)) { toast('?????????????', 'error'); navigate('list'); return; }
-      if (li.pendingTracking) { toast('???????????????', 'error'); navigate('detail/' + id); return; }
-      if (!canSubmitTracking(li, u)) { toast('????????????????', 'error'); navigate('detail/' + id); return; }
-      const isClose = res.value === '??????';
-      const isContinue = res.value === '??????';
-      if (isContinue && !document.getElementById('tk-next').value) { toast('???????????????????', 'error'); return; }
-      if (isClose && tempEv.length === 0) { toast('??????????????????', 'error'); return; }
+      if (!li || !canAccessItem(li)) { toast('找不到可操作的矯正單', 'error'); navigate('list'); return; }
+      if (li.pendingTracking) { toast('目前已有待管理者審核的追蹤提報', 'error'); navigate('detail/' + id); return; }
+      if (!canSubmitTracking(li, u)) { toast('您沒有權限送出追蹤提報', 'error'); navigate('detail/' + id); return; }
+      const isClose = res.value === '擬請同意結案';
+      const isContinue = res.value === '建議持續追蹤';
+      if (isContinue && !document.getElementById('tk-next').value) { toast('若建議持續追蹤，請填寫下一次追蹤日期', 'error'); return; }
+      if (isClose && tempEv.length === 0) { toast('若擬請同意結案，請至少上傳一份佐證', 'error'); return; }
       const persistedEvidence = await persistUploadedEntries(tempEv, {
         prefix: 'trk',
         scope: 'tracking-evidence',
@@ -1305,11 +1305,11 @@ function renderTracking(id) {
       };
       const history = [
         ...(li.history || []),
-        { time: now, action: `??? ${round} ?????`, user: u.name },
-        { time: now, action: `?????${res.value}`, user: u.name }
+        { time: now, action: `提交第 ${round} 次追蹤`, user: u.name },
+        { time: now, action: `提報建議：${res.value}`, user: u.name }
       ];
-      if (submission.nextTrackDate) history.push({ time: now, action: `????????${submission.nextTrackDate}`, user: u.name });
-      if (submission.evidence.length) history.push({ time: now, action: `?? ${submission.evidence.length} ?????`, user: u.name });
+      if (submission.nextTrackDate) history.push({ time: now, action: `下一次追蹤日期：${submission.nextTrackDate}`, user: u.name });
+      if (submission.evidence.length) history.push({ time: now, action: `新增 ${submission.evidence.length} 份佐證`, user: u.name });
       const result = await submitTrackingSubmission(id, {
         tracker: submission.tracker,
         trackDate: submission.trackDate,
@@ -1326,7 +1326,7 @@ function renderTracking(id) {
         history
       });
       if (result && result.warning) toast(result.warning, 'info');
-      toast('??????????????');
+      toast('追蹤提報已送出，等待管理者審核');
       navigate('detail/' + id);
     });
   }
