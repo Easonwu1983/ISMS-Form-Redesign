@@ -18,6 +18,9 @@
       isAdmin,
       esc
     } = deps;
+    const TRAINING_UNIT_CATEGORY_ADMIN = '行政單位';
+    const TRAINING_UNIT_CATEGORY_ACADEMIC = '學術單位';
+    const TRAINING_UNIT_CATEGORY_CENTER = '中心 / 研究單位';
 
     function getOfficialUnits() {
       try {
@@ -97,16 +100,24 @@
       return getOfficialUnitSet().has(value);
     }
 
+    function isCorruptedUnitValue(unit) {
+      const value = String(unit || '').trim();
+      if (!value) return false;
+      if (/[�]/.test(value)) return true;
+      if (/[?？]{4,}/.test(value)) return true;
+      return !value.replace(/[?？]/g, '').trim();
+    }
+
     function formatUnitScopeSummary(scopes) {
       const defs = [
         ['users', '帳號'],
         ['items', '矯正單'],
         ['checklists', '檢核表'],
-        ['trainingForms', '訓練填報'],
-        ['trainingRosters', '名單']
+        ['trainingForms', '教育訓練'],
+        ['trainingRosters', '教育訓練名單']
       ];
       const parts = defs.filter(([key]) => scopes[key] > 0).map(([key, label]) => `${label} ${scopes[key]}`);
-      return parts.join('、') || '尚未使用';
+      return parts.join(' · ') || '尚無引用';
     }
 
     function approveCustomUnit(unit, actor) {
@@ -139,7 +150,7 @@
 
     function pushUnitReference(map, unit, scope, label) {
       const value = String(unit || '').trim();
-      if (!value) return;
+      if (!value || isCorruptedUnitValue(value)) return;
 
       let entry = map.get(value);
       if (!entry) {
@@ -165,20 +176,20 @@
       });
 
       (data.items || []).forEach((item) => {
-        pushUnitReference(map, item.proposerUnit, 'items', `矯正單 ${item.id}（提出單位）`);
-        pushUnitReference(map, item.handlerUnit, 'items', `矯正單 ${item.id}（處理單位）`);
+        pushUnitReference(map, item.proposerUnit, 'items', `矯正單 ${item.id} · 提案單位`);
+        pushUnitReference(map, item.handlerUnit, 'items', `矯正單 ${item.id} · 責任單位`);
       });
 
       (checklistStore.items || []).forEach((item) => {
-        pushUnitReference(map, item.unit, 'checklists', `檢核表 ${item.id} · ${item.fillerName || '未填報'}`);
+        pushUnitReference(map, item.unit, 'checklists', `檢核表 ${item.id} · ${item.fillerName || '未填寫'}`);
       });
 
       (trainingStore.forms || []).forEach((form) => {
-        pushUnitReference(map, form.unit, 'trainingForms', `教育訓練 ${form.id} · ${form.fillerName || '未填報'}`);
+        pushUnitReference(map, form.unit, 'trainingForms', `教育訓練 ${form.id} · ${form.fillerName || '未填寫'}`);
       });
 
       (trainingStore.rosters || []).forEach((row) => {
-        pushUnitReference(map, row.unit, 'trainingRosters', `教育訓練名單 · ${row.name}`);
+        pushUnitReference(map, row.unit, 'trainingRosters', `教育訓練名單 · ${row.name || '未命名'}`);
       });
 
       return Array.from(map.values());
@@ -188,6 +199,7 @@
       const store = loadUnitReviewStore();
       const approvedMap = new Map(store.approvedUnits.map((entry) => [entry.unit, entry]));
       return collectUnitReferences()
+        .filter((entry) => !isCorruptedUnitValue(entry.unit))
         .filter((entry) => !isOfficialUnit(entry.unit))
         .map((entry) => ({
           ...entry,
@@ -361,31 +373,32 @@
 
     function categorizeTopLevelUnit(unitValue) {
       const unit = String(splitUnitValue(unitValue).parent || unitValue || '').trim();
-      if (!unit) return '行政單位';
-      if (UNIT_ADMIN_PRIMARY_WHITELIST.has(unit)) return '行政單位';
-      if (UNIT_ACADEMIC_PRIMARY_WHITELIST.has(unit)) return '學術單位';
+      if (!unit || isCorruptedUnitValue(unit)) return TRAINING_UNIT_CATEGORY_ADMIN;
+      if (UNIT_ADMIN_PRIMARY_WHITELIST.has(unit)) return TRAINING_UNIT_CATEGORY_ADMIN;
+      if (UNIT_ACADEMIC_PRIMARY_WHITELIST.has(unit)) return TRAINING_UNIT_CATEGORY_ACADEMIC;
       const meta = getTopLevelUnitOfficialMeta(unit) || {};
       const code = String(meta.topCode || meta.code || '').trim().toUpperCase();
       const academicKeywords = ['學院', '共同教育中心', '國際學院', '研究學院', '創新設計學院', '進修推廣學院', '附設醫院'];
-      if (academicKeywords.some((keyword) => unit.includes(keyword))) return '學術單位';
-      if (unit.includes('研究中心') || unit.includes('研究院')) return '研究中心';
+      const centerKeywords = ['中心', '研究中心', '研究院', '實驗室', '委員會', '館'];
+      if (academicKeywords.some((keyword) => unit.includes(keyword))) return TRAINING_UNIT_CATEGORY_ACADEMIC;
+      if (centerKeywords.some((keyword) => unit.includes(keyword))) return TRAINING_UNIT_CATEGORY_CENTER;
       if (/^0\.\d{2}$/.test(code)) {
         const numeric = Number(code.slice(2));
-        if (numeric >= 51) return '學術單位';
-        if (unit.includes('中心') || unit.includes('委員會') || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
-          return '研究中心';
+        if (numeric >= 51) return TRAINING_UNIT_CATEGORY_ACADEMIC;
+        if (centerKeywords.some((keyword) => unit.includes(keyword)) || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
+          return TRAINING_UNIT_CATEGORY_CENTER;
         }
-        return '行政單位';
+        return TRAINING_UNIT_CATEGORY_ADMIN;
       }
-      if (/^0\.[A-Z0-9]{2}$/.test(code)) return '研究中心';
-      if (unit.includes('中心') || unit.includes('委員會') || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
-        return '研究中心';
+      if (/^0\.[A-Z0-9]{2}$/.test(code)) return TRAINING_UNIT_CATEGORY_CENTER;
+      if (centerKeywords.some((keyword) => unit.includes(keyword)) || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
+        return TRAINING_UNIT_CATEGORY_CENTER;
       }
-      return '行政單位';
+      return TRAINING_UNIT_CATEGORY_ADMIN;
     }
 
     function getTrainingUnitCategories() {
-      return ['行政單位', '學術單位', '研究中心'];
+      return [TRAINING_UNIT_CATEGORY_ADMIN, TRAINING_UNIT_CATEGORY_ACADEMIC, TRAINING_UNIT_CATEGORY_CENTER];
     }
 
     function getParentsByUnitCategory(parents, category) {
@@ -405,11 +418,12 @@
 
     function buildUnitSearchEntry(unitValue) {
       const value = String(unitValue || '').trim();
-      if (!value) return null;
+      if (!value || isCorruptedUnitValue(value)) return null;
       const meta = getOfficialUnitMeta(value) || {};
       const parsed = splitUnitValue(value);
       const parent = parsed.parent || value;
       const child = parsed.child || '';
+      if (isCorruptedUnitValue(parent) || isCorruptedUnitValue(child)) return null;
       const label = child || String(meta.name || parent).trim() || value;
       const fullLabel = child ? `${parent}／${child}` : parent;
       const category = categorizeTopLevelUnit(parent);

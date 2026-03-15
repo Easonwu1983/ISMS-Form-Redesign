@@ -433,6 +433,18 @@ async function run() {
     }
     pushStep('training:detail-loaded', true, trainingDetailId);
 
+    await page.goto(`${BASE_URL}/#training-roster`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('教育訓練名單管理') && app.innerText.includes('名單管理'));
+    }, { timeout: 20000 });
+    const trainingRosterText = await page.locator('#app').innerText();
+    if (/\?{4,}/.test(trainingRosterText)) {
+      throw new Error('training roster contains placeholder question marks');
+    }
+    pushStep('training:roster-loaded', true, 'training roster page ready');
+
     await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
@@ -444,6 +456,18 @@ async function run() {
       throw new Error('users page contains placeholder question marks');
     }
     pushStep('users:loaded', true, 'account table ready');
+
+    await page.goto(`${BASE_URL}/#unit-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('自訂單位審核與合併') && app.innerText.includes('自訂單位清單'));
+    }, { timeout: 20000 });
+    const unitReviewText = await page.locator('#app').innerText();
+    if (/\?{4,}/.test(unitReviewText)) {
+      throw new Error('unit review contains placeholder question marks');
+    }
+    pushStep('unit-review:loaded', true, 'unit review page ready');
 
     if (consoleErrors.length) {
       throw new Error(`console errors detected: ${consoleErrors.join(' | ')}`);
