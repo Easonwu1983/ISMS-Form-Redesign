@@ -39,6 +39,16 @@ function readHeader(req, name) {
   return Array.isArray(value) ? cleanText(value[0]) : cleanText(value);
 }
 
+function decodeHeaderUnit(value) {
+  const raw = cleanText(value);
+  if (!raw) return '';
+  try {
+    return cleanText(decodeURIComponent(raw));
+  } catch (_) {
+    return raw;
+  }
+}
+
 function createRequestAuthz(deps) {
   const {
     graphRequest,
@@ -119,7 +129,7 @@ function createRequestAuthz(deps) {
   }
 
   function resolveActiveUnit(req, user) {
-    const requested = readHeader(req, 'x-isms-active-unit');
+    const requested = decodeHeaderUnit(readHeader(req, 'x-isms-active-unit'));
     const authorizedUnits = parseUnits(user && user.units);
     if (user && user.role === USER_ROLES.ADMIN) return requested || '';
     if (requested && authorizedUnits.includes(requested)) return requested;

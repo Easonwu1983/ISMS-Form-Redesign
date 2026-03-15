@@ -1010,7 +1010,7 @@
     const sessionToken = String(user.sessionToken || '').trim();
     const activeUnit = String(user.activeUnit || '').trim();
     if (sessionToken) headers.Authorization = 'Bearer ' + sessionToken;
-    if (activeUnit) headers['X-ISMS-Active-Unit'] = activeUnit;
+    if (activeUnit) headers['X-ISMS-Active-Unit'] = encodeURIComponent(activeUnit);
     return headers;
   }
   async function requestSystemUserJson(url, options) {
