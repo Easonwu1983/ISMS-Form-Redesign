@@ -213,7 +213,7 @@ function mapSystemUserToGraphFields(entry) {
   const passwordValue = cleanText(item.password);
   const isStructuredPassword = passwordValue.startsWith('{') || passwordValue.startsWith(PASSWORD_SECRET_PREFIX + '|');
   return {
-    Title: item.username,
+    Title: item.name || item.username,
     UserName: item.username,
     Password: passwordValue || '[no-password]',
     PasswordSecret: isStructuredPassword ? passwordValue : '',
@@ -237,10 +237,13 @@ function mapSystemUserToGraphFields(entry) {
 
 function mapGraphFieldsToSystemUser(fields) {
   const units = parseJsonField(fields.AuthorizedUnitsJson, function () { return []; });
+  const username = cleanText(fields.UserName || fields.Title);
+  const rawTitle = cleanText(fields.Title);
+  const displayName = cleanText(fields.DisplayName) || (rawTitle && rawTitle !== username ? rawTitle : '');
   return normalizeStoredSystemUser({
-    username: fields.UserName || fields.Title,
+    username: username,
     password: fields.PasswordSecret || fields.Password,
-    name: fields.DisplayName,
+    name: displayName,
     email: fields.Email,
     role: fields.Role,
     unit: fields.PrimaryUnit,

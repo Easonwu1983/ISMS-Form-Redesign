@@ -148,16 +148,16 @@
       if (mode === 'm365-api') {
         const config = getConfig();
         if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
-          return 'A3 / Campus backend / SharePoint';
+          return '校內正式後端';
         }
-        return 'M365 API 模式';
+        return '正式後端模式';
       }
       if (mode === 'sharepoint-flow') {
         const config = getConfig();
         if (String(config.sharePointProvisioningModel || '').trim() === 'delegated-site-owner') {
-          return 'A3 / SharePoint / Power Automate / Site Owner 模式';
+          return '正式流程整合模式';
         }
-        return 'A3 / SharePoint / Power Automate 模式';
+        return '正式流程模式';
       }
       return '本機瀏覽器模式';
     }
@@ -167,9 +167,9 @@
       if (mode === 'm365-api') {
         const config = getConfig();
         if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
-          return 'A3 / Campus backend / SharePoint';
+          return '校內正式後端';
         }
-        return 'M365 corrective-actions API';
+        return '正式矯正單後端';
       }
       return '瀏覽器本地暫存';
     }
@@ -179,9 +179,9 @@
       if (mode === 'm365-api') {
         const config = getConfig();
         if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
-          return 'A3 / Campus backend / SharePoint';
+          return '校內正式後端';
         }
-        return 'M365 checklist API';
+        return '正式檢核表後端';
       }
       return '瀏覽器本地暫存';
     }
@@ -191,9 +191,9 @@
       if (mode === 'm365-api') {
         const config = getConfig();
         if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
-          return 'A3 / Campus backend / SharePoint';
+          return '校內正式後端';
         }
-        return 'M365 training API';
+        return '正式教育訓練後端';
       }
       return '瀏覽器本地暫存';
     }

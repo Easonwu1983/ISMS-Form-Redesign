@@ -60,8 +60,8 @@
     function buildModeNotice() {
       const modeKey = getM365ModeKey();
       const description = modeKey === 'local-emulator'
-        ? '目前為瀏覽器模擬模式，申請資料僅保存在本機。若要正式送件，請切換到校內 M365 後端模式。'
-        : '目前為 M365 後端模式，申請資料會同步寫入 SharePoint，並開啟正式的校內審核與查詢流程。';
+        ? '目前為瀏覽器模擬模式，申請資料僅保存在本機。若要正式送件，請切換到校內正式後端模式。'
+        : '目前為正式後端模式，申請資料會同步寫入系統資料庫，並開啟正式的校內審核與查詢流程。';
       return ''
         + '<div class="unit-contact-mode-banner">'
         + '<div class="unit-contact-mode-icon">' + ic('shield-check', 'icon-lg') + '</div>'
@@ -173,7 +173,7 @@
         + '<li>申請單位是否選擇正確。</li>'
         + '<li>電子郵件是否為可正常收信的校內信箱。</li>'
         + '<li>送出後請保留申請編號，方便後續查詢。</li>'
-        + '<li>正式模式下，資料會寫入 SharePoint 供後續流程使用。</li>'
+        + '<li>正式模式下，資料會寫入系統資料庫供後續流程使用。</li>'
         + '</ul></div>'
         + '</aside></div></section>';
 

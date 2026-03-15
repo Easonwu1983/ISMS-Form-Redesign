@@ -1179,7 +1179,7 @@
   }
   async function submitAttachmentUpload(entry, options) {
     const blob = await resolveAttachmentBlob(entry);
-    if (!blob) throw new Error('找不到附件內容，無法上傳到 M365');
+    if (!blob) throw new Error('找不到附件內容，無法上傳到正式後端');
     const dataUrl = await readBlobAsDataUrl(blob);
     const contentBase64 = String(dataUrl.split(',')[1] || '').trim();
     if (!contentBase64) throw new Error('附件內容轉換失敗');
@@ -1299,7 +1299,7 @@
   }
   function buildSystemUserFallbackWarning(error) {
     const detail = String(error && error.message || error || '').trim();
-    return detail ? ('M365 帳號後端未就緒，已改用本機暫存：' + detail) : 'M365 帳號後端未就緒，已改用本機暫存。';
+    return detail ? ('正式帳號後端未就緒，已改用本機暫存：' + detail) : '正式帳號後端未就緒，已改用本機暫存。';
   }
   const reviewScopeRepositoryState = {
     mode: 'local-emulator',
@@ -1340,8 +1340,8 @@
             ready: false,
             source: strict ? 'remote-error' : 'local-fallback',
             message: strict
-              ? String(health.message || 'M365 帳號後端尚未就緒，正式模式已停用本機暫存')
-              : String(health.message || 'M365 帳號後端尚未就緒，系統維持本機資料模式'),
+              ? String(health.message || '正式帳號後端尚未就緒，正式模式已停用本機暫存')
+              : String(health.message || '正式帳號後端尚未就緒，系統維持本機資料模式'),
             error: String(health.message || '')
           });
         }
@@ -1360,14 +1360,14 @@
         ready: true,
         source: 'remote',
         lastSyncAt: new Date().toISOString(),
-        message: '已同步 M365 帳號資料',
+        message: '已同步正式帳號資料',
         error: ''
       });
     } catch (error) {
       return setSystemUserRepositoryState({
         ready: false,
         source: strict ? 'remote-error' : 'local-fallback',
-        message: strict ? 'M365 帳號後端連線失敗，正式模式已停用本機暫存' : 'M365 帳號後端尚未就緒，系統維持本機資料模式',
+        message: strict ? '正式帳號後端連線失敗，正式模式已停用本機暫存' : '正式帳號後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -1488,7 +1488,7 @@
       source: 'remote',
       ready: true,
       lastSyncAt: new Date().toISOString(),
-      message: '審核權限矩陣已寫入 M365',
+      message: '審核權限矩陣已寫入正式後端',
       error: ''
     });
     return { ok: true, item: findUser(username), source: 'remote' };
@@ -1521,16 +1521,16 @@
         body: buildSystemUserEnvelope(SYSTEM_USER_ACTIONS.UPSERT, requestPayload)
       });
       const stored = upsertSystemUserInStore(normalizeRemoteSystemUsers(body)[0] || requestPayload);
-      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '帳號資料已寫入 M365', error: '' });
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '帳號資料已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 帳號寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式帳號寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('帳號資料寫入', error));
       }
       if (existing) updateUser(requestPayload.username, requestPayload);
       else addUser(requestPayload);
-      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: findUser(requestPayload.username) || requestPayload, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
     }
   }
@@ -1547,15 +1547,15 @@
         body: buildSystemUserEnvelope(SYSTEM_USER_ACTIONS.DELETE, payload && typeof payload === 'object' ? payload : {})
       });
       deleteSystemUserFromStore(cleanUsername);
-      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '帳號刪除已寫入 M365', error: '' });
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '帳號刪除已寫入正式後端', error: '' });
       return { ok: true, deletedId: cleanUsername, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 帳號刪除失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式帳號刪除失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('帳號刪除', error));
       }
       deleteSystemUserFromStore(cleanUsername);
-      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, deletedId: cleanUsername, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
     }
   }
@@ -1576,7 +1576,7 @@
       });
       const item = normalizeRemoteSystemUsers(body)[0] || { ...(matchedUser || {}), username: username };
       const stored = upsertSystemUserInStore(item);
-      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '密碼重設代碼已寫入 M365', error: '' });
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '密碼重設代碼已寫入正式後端', error: '' });
       return {
         user: stored,
         resetToken: String(body && body.resetToken || '').trim(),
@@ -1590,7 +1590,7 @@
       }
       const fallbackPassword = String(input.password || '').trim() || generatePassword();
       updateUser(username, { password: fallbackPassword });
-      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
     }
   }
@@ -1609,7 +1609,7 @@
     if (healthEndpoint) {
       const health = await requestAuthJson('/health', { method: 'GET' });
       if (health && health.ready === false) {
-        throw new Error(String(health.message || 'M365 登入後端尚未就緒').trim());
+        throw new Error(String(health.message || '正式登入後端尚未就緒').trim());
       }
     }
 
@@ -1680,7 +1680,7 @@
     if (healthEndpoint) {
       const health = await requestAuthJson('/health', { method: 'GET' });
       if (health && health.ready === false) {
-        throw new Error(String(health.message || 'M365 登入後端尚未就緒').trim());
+        throw new Error(String(health.message || '正式登入後端尚未就緒').trim());
       }
     }
 
@@ -1812,7 +1812,7 @@
   }
   function buildCorrectiveActionFallbackWarning(error) {
     const detail = String(error && error.message || error || '').trim();
-    return detail ? ('M365 矯正單後端未就緒，已改用本機暫存：' + detail) : 'M365 矯正單後端未就緒，已改用本機暫存。';
+    return detail ? ('正式矯正單後端未就緒，已改用本機暫存：' + detail) : '正式矯正單後端未就緒，已改用本機暫存。';
   }
   async function syncCorrectiveActionsFromM365(options) {
     const opts = options || {};
@@ -1842,7 +1842,7 @@
         return setCorrectiveActionRepositoryState({
           ready: false,
           source: strict ? 'remote-error' : 'local-fallback',
-          message: strict ? String(health.message || 'M365 矯正單後端尚未就緒，正式模式已停用本機暫存') : String(health.message || 'M365 矯正單後端尚未就緒，系統維持本機資料模式'),
+          message: strict ? String(health.message || '正式矯正單後端尚未就緒，正式模式已停用本機暫存') : String(health.message || '正式矯正單後端尚未就緒，系統維持本機資料模式'),
           error: String(health.message || '')
         });
       }
@@ -1852,14 +1852,14 @@
         ready: true,
         source: 'remote',
         lastSyncAt: new Date().toISOString(),
-        message: '已同步 M365 矯正單資料',
+        message: '已同步正式矯正單資料',
         error: ''
       });
     } catch (error) {
       return setCorrectiveActionRepositoryState({
         ready: false,
         source: strict ? 'remote-error' : 'local-fallback',
-        message: strict ? 'M365 矯正單後端連線失敗，正式模式已停用本機暫存' : 'M365 矯正單後端尚未就緒，系統維持本機資料模式',
+        message: strict ? '正式矯正單後端連線失敗，正式模式已停用本機暫存' : '正式矯正單後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -1879,13 +1879,13 @@
         source: 'remote',
         ready: true,
         lastSyncAt: new Date().toISOString(),
-        message: '矯正單已寫入 M365',
+        message: '矯正單已寫入正式後端',
         error: ''
       });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 矯正單寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式矯正單寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('矯正單建立', error));
       }
       addItem(item);
@@ -1893,7 +1893,7 @@
         mode: 'm365-api',
         source: 'local-fallback',
         ready: false,
-        message: 'M365 矯正單後端尚未就緒，已改用本機暫存',
+        message: '正式矯正單後端尚未就緒，已改用本機暫存',
         error: String(error && error.message || error || '')
       });
       return { ok: true, item: getItem(item.id) || item, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
@@ -1907,15 +1907,15 @@
     try {
       const response = await client.respondCorrectiveAction(id, payload);
       const stored = upsertCorrectiveActionInStore(response.item || persistLocalCorrectiveActionUpdate(id, fallbackUpdates));
-      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '矯正單回覆已寫入 M365', error: '' });
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '矯正單回覆已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 矯正單回覆失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式矯正單回覆失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('矯正單回覆', error));
       }
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
-      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
     }
   }
@@ -1927,15 +1927,15 @@
     try {
       const response = await client.reviewCorrectiveAction(id, payload);
       const stored = upsertCorrectiveActionInStore(response.item || persistLocalCorrectiveActionUpdate(id, fallbackUpdates));
-      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '矯正單審核狀態已寫入 M365', error: '' });
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '矯正單審核狀態已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 矯正單審核失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式矯正單審核失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('矯正單審核', error));
       }
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
-      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
     }
   }
@@ -1947,15 +1947,15 @@
     try {
       const response = await client.submitCorrectiveActionTracking(id, payload);
       const stored = upsertCorrectiveActionInStore(response.item || persistLocalCorrectiveActionUpdate(id, fallbackUpdates));
-      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '追蹤提報已寫入 M365', error: '' });
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '追蹤提報已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 追蹤提報失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式追蹤提報失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('追蹤提報', error));
       }
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
-      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
     }
   }
@@ -1967,15 +1967,15 @@
     try {
       const response = await client.reviewCorrectiveActionTracking(id, payload);
       const stored = upsertCorrectiveActionInStore(response.item || persistLocalCorrectiveActionUpdate(id, fallbackUpdates));
-      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '追蹤審核已寫入 M365', error: '' });
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '追蹤審核已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 追蹤審核失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式追蹤審核失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('追蹤審核', error));
       }
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
-      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
     }
   }
@@ -2038,7 +2038,7 @@
   }
   function buildChecklistFallbackWarning(error) {
     const detail = String(error && error.message || error || '').trim();
-    return detail ? ('M365 檢核表後端未就緒，已改用本機暫存：' + detail) : 'M365 檢核表後端未就緒，已改用本機暫存。';
+    return detail ? ('正式檢核表後端未就緒，已改用本機暫存：' + detail) : '正式檢核表後端未就緒，已改用本機暫存。';
   }
   async function syncChecklistsFromM365(options) {
     const opts = options || {};
@@ -2068,7 +2068,7 @@
         return setChecklistRepositoryState({
           ready: false,
           source: strict ? 'remote-error' : 'local-fallback',
-          message: strict ? String(health.message || 'M365 檢核表後端尚未就緒，正式模式已停用本機暫存') : String(health.message || 'M365 檢核表後端尚未就緒，系統維持本機資料模式'),
+          message: strict ? String(health.message || '正式檢核表後端尚未就緒，正式模式已停用本機暫存') : String(health.message || '正式檢核表後端尚未就緒，系統維持本機資料模式'),
           error: String(health.message || '')
         });
       }
@@ -2078,14 +2078,14 @@
         ready: true,
         source: 'remote',
         lastSyncAt: new Date().toISOString(),
-        message: '已同步 M365 檢核表資料',
+        message: '已同步正式檢核表資料',
         error: ''
       });
     } catch (error) {
       return setChecklistRepositoryState({
         ready: false,
         source: strict ? 'remote-error' : 'local-fallback',
-        message: strict ? 'M365 檢核表後端連線失敗，正式模式已停用本機暫存' : 'M365 檢核表後端尚未就緒，系統維持本機資料模式',
+        message: strict ? '正式檢核表後端連線失敗，正式模式已停用本機暫存' : '正式檢核表後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -2104,13 +2104,13 @@
         source: 'remote',
         ready: true,
         lastSyncAt: new Date().toISOString(),
-        message: '檢核表草稿已寫入 M365',
+        message: '檢核表草稿已寫入正式後端',
         error: ''
       });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setChecklistRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 檢核表草稿儲存失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setChecklistRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式檢核表草稿儲存失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('檢核表草稿儲存', error));
       }
       const stored = persistLocalChecklist(payload);
@@ -2118,7 +2118,7 @@
         mode: 'm365-api',
         source: 'local-fallback',
         ready: false,
-        message: 'M365 檢核表後端尚未就緒，已改用本機暫存',
+        message: '正式檢核表後端尚未就緒，已改用本機暫存',
         error: String(error && error.message || error || '')
       });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildChecklistFallbackWarning(error) };
@@ -2138,13 +2138,13 @@
         source: 'remote',
         ready: true,
         lastSyncAt: new Date().toISOString(),
-        message: '檢核表已寫入 M365',
+        message: '檢核表已寫入正式後端',
         error: ''
       });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
-        setChecklistRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: 'M365 檢核表送出失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        setChecklistRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式檢核表送出失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('檢核表送出', error));
       }
       const stored = persistLocalChecklist(payload);
@@ -2152,7 +2152,7 @@
         mode: 'm365-api',
         source: 'local-fallback',
         ready: false,
-        message: 'M365 檢核表後端尚未就緒，已改用本機暫存',
+        message: '正式檢核表後端尚未就緒，已改用本機暫存',
         error: String(error && error.message || error || '')
       });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildChecklistFallbackWarning(error) };
@@ -2240,7 +2240,7 @@
   }
   function buildTrainingFallbackWarning(error) {
     const detail = String(error && error.message || error || '').trim();
-    return detail ? ('M365 教育訓練後端未就緒，已改用本機暫存：' + detail) : 'M365 教育訓練後端未就緒，已改用本機暫存。';
+    return detail ? ('正式教育訓練後端未就緒，已改用本機暫存：' + detail) : '正式教育訓練後端未就緒，已改用本機暫存。';
   }
   async function syncTrainingFormsFromM365(options) {
     const opts = options || {};
@@ -2261,7 +2261,7 @@
         return setTrainingRepositoryState({
           ready: false,
           source: strict ? 'remote-error' : 'local-fallback',
-          message: strict ? String(health.message || 'M365 教育訓練後端尚未就緒，正式模式已停用本機暫存') : String(health.message || 'M365 教育訓練後端尚未就緒，系統維持本機資料模式'),
+          message: strict ? String(health.message || '正式教育訓練後端尚未就緒，正式模式已停用本機暫存') : String(health.message || '正式教育訓練後端尚未就緒，系統維持本機資料模式'),
           error: String(health.message || '')
         });
       }
@@ -2271,14 +2271,14 @@
         ready: true,
         source: 'remote',
         lastFormsSyncAt: new Date().toISOString(),
-        message: '已同步 M365 教育訓練資料',
+        message: '已同步正式教育訓練資料',
         error: ''
       });
     } catch (error) {
       return setTrainingRepositoryState({
         ready: false,
         source: strict ? 'remote-error' : 'local-fallback',
-        message: strict ? 'M365 教育訓練後端連線失敗，正式模式已停用本機暫存' : 'M365 教育訓練後端尚未就緒，系統維持本機資料模式',
+        message: strict ? '正式教育訓練後端連線失敗，正式模式已停用本機暫存' : '正式教育訓練後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -2302,7 +2302,7 @@
         return setTrainingRepositoryState({
           ready: false,
           source: strict ? 'remote-error' : 'local-fallback',
-          message: strict ? String(health.message || 'M365 教育訓練後端尚未就緒，正式模式已停用本機暫存') : String(health.message || 'M365 教育訓練後端尚未就緒，系統維持本機資料模式'),
+          message: strict ? String(health.message || '正式教育訓練後端尚未就緒，正式模式已停用本機暫存') : String(health.message || '正式教育訓練後端尚未就緒，系統維持本機資料模式'),
           error: String(health.message || '')
         });
       }
@@ -2312,14 +2312,14 @@
         ready: true,
         source: 'remote',
         lastRostersSyncAt: new Date().toISOString(),
-        message: '已同步 M365 教育訓練名單',
+        message: '已同步正式教育訓練名單',
         error: ''
       });
     } catch (error) {
       return setTrainingRepositoryState({
         ready: false,
         source: strict ? 'remote-error' : 'local-fallback',
-        message: strict ? 'M365 教育訓練名單後端連線失敗，正式模式已停用本機暫存' : 'M365 教育訓練名單後端尚未就緒，系統維持本機資料模式',
+        message: strict ? '正式教育訓練名單後端連線失敗，正式模式已停用本機暫存' : '正式教育訓練名單後端尚未就緒，系統維持本機資料模式',
         error: String(error && error.message || error || '')
       });
     }
@@ -2333,7 +2333,7 @@
     try {
       const response = await client.saveTrainingDraft(id, payload);
       const stored = upsertTrainingFormInStore(response.item || payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練草稿已寫入 M365', error: '' });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練草稿已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
@@ -2341,7 +2341,7 @@
         throw new Error(buildStrictRemoteError('教育訓練草稿儲存', error));
       }
       const stored = persistLocalTrainingForm(payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
     }
   }
@@ -2354,7 +2354,7 @@
     try {
       const response = await client.submitTrainingStepOne(id, payload);
       const stored = upsertTrainingFormInStore(response.item || payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練流程一已寫入 M365', error: '' });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練流程一已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
@@ -2362,7 +2362,7 @@
         throw new Error(buildStrictRemoteError('教育訓練流程一送出', error));
       }
       const stored = persistLocalTrainingForm(payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
     }
   }
@@ -2375,7 +2375,7 @@
     try {
       const response = await client.finalizeTrainingForm(id, payload);
       const stored = upsertTrainingFormInStore(response.item || payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練結案已寫入 M365', error: '' });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練結案已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
@@ -2383,7 +2383,7 @@
         throw new Error(buildStrictRemoteError('教育訓練結案', error));
       }
       const stored = persistLocalTrainingForm(payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
     }
   }
@@ -2396,7 +2396,7 @@
     try {
       const response = await client.returnTrainingForm(id, payload);
       const stored = upsertTrainingFormInStore(response.item || payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練退回已寫入 M365', error: '' });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練退回已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
@@ -2404,7 +2404,7 @@
         throw new Error(buildStrictRemoteError('教育訓練退回', error));
       }
       const stored = persistLocalTrainingForm(payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
     }
   }
@@ -2417,7 +2417,7 @@
     try {
       const response = await client.undoTrainingForm(id, payload);
       const stored = upsertTrainingFormInStore(response.item || payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練撤回已寫入 M365', error: '' });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練撤回已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
@@ -2425,7 +2425,7 @@
         throw new Error(buildStrictRemoteError('教育訓練撤回', error));
       }
       const stored = persistLocalTrainingForm(payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
     }
   }
@@ -2443,7 +2443,7 @@
         throw new Error('教育訓練名單後端未回傳已儲存資料');
       }
       const stored = upsertTrainingRosterInStore(remoteItem);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單已寫入 M365', error: '' });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單已寫入正式後端', error: '' });
       return { ok: true, item: stored, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
@@ -2451,7 +2451,7 @@
         throw new Error(buildStrictRemoteError('教育訓練名單寫入', error));
       }
       const stored = upsertTrainingRosterInStore(payload);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
     }
   }
@@ -2465,7 +2465,7 @@
     try {
       await client.deleteTrainingRoster(cleanId, payload);
       deleteTrainingRosterFromStore(cleanId);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單刪除已寫入 M365', error: '' });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單刪除已寫入正式後端', error: '' });
       return { ok: true, deletedId: cleanId, source: 'remote' };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
@@ -2473,7 +2473,7 @@
         throw new Error(buildStrictRemoteError('教育訓練名單刪除', error));
       }
       deleteTrainingRosterFromStore(cleanId);
-      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: 'M365 教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, deletedId: cleanId, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
     }
   }
