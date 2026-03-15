@@ -108,6 +108,13 @@ async function runPublicRouteChecks(browser, pushStep) {
       return title && String(title.textContent || '').includes('申請已送出');
     }, { timeout: 20000 });
     pushStep('unit-contact-public:success-loaded', true, '申請已送出');
+
+    await page.goto(`${BASE_URL}/#activate-unit-contact/UCA-SMOKE-SUCCESS-001`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForFunction(() => {
+      const title = document.querySelector('.page-title');
+      return title && String(title.textContent || '').includes('帳號啟用說明');
+    }, { timeout: 20000 });
+    pushStep('unit-contact-public:activate-loaded', true, '帳號啟用說明');
   } finally {
     await context.close();
   }

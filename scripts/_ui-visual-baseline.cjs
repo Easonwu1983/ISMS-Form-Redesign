@@ -30,13 +30,15 @@ const MOBILE_VISUAL_SPECS = [
 const PUBLIC_DESKTOP_VISUAL_SPECS = [
   { slug: 'unit-contact-apply', hash: '#apply-unit-contact' },
   { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' },
-  { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' }
+  { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' },
+  { slug: 'unit-contact-activate', hash: '#activate-unit-contact/UCA-SMOKE-SUCCESS-001' }
 ];
 
 const PUBLIC_MOBILE_VISUAL_SPECS = [
   { slug: 'unit-contact-apply', hash: '#apply-unit-contact' },
   { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' },
-  { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' }
+  { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' },
+  { slug: 'unit-contact-activate', hash: '#activate-unit-contact/UCA-SMOKE-SUCCESS-001' }
 ];
 
 async function seedSyntheticUnitContactSuccess(page) {
@@ -194,7 +196,7 @@ function getVisualSmokeStyles(slug, mode) {
     `;
   }
 
-  if (slug === 'unit-contact-apply' || slug === 'unit-contact-status' || slug === 'unit-contact-success') {
+  if (slug === 'unit-contact-apply' || slug === 'unit-contact-status' || slug === 'unit-contact-success' || slug === 'unit-contact-activate') {
     return common + `
       .unit-contact-mode-title,
       .unit-contact-mode-text,
@@ -233,7 +235,7 @@ async function stabilizeVisualRoute(page, slug, mode) {
 }
 
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
-  if (spec && spec.slug === 'unit-contact-success') {
+  if (spec && (spec.slug === 'unit-contact-success' || spec.slug === 'unit-contact-activate')) {
   await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/`, { waitUntil: 'networkidle', timeout: 45000 });
   await page.waitForTimeout(600);
     await seedSyntheticUnitContactSuccess(page);
