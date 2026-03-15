@@ -18,16 +18,31 @@ const {
   writeJson
 } = require('./_role-test-utils.cjs');
 
-const FRONT_BASE = String(process.env.ACCOUNT_FLOW_FRONT_BASE || 'https://isms-campus-portal.pages.dev/').trim();
+const FRONT_BASE = String(process.env.ACCOUNT_FLOW_FRONT_BASE || 'https://isms-campus-portal.pages.dev/').trim().replace(/\/$/, '');
 const API_BASE = String(process.env.ACCOUNT_FLOW_API_BASE || 'http://127.0.0.1:8088').trim().replace(/\/$/, '');
 const ADMIN_USERNAME = String(process.env.ACCOUNT_FLOW_ADMIN_USERNAME || 'admin').trim();
 const ADMIN_PASSWORD = String(process.env.ACCOUNT_FLOW_ADMIN_PASSWORD || 'admin123').trim();
 const OUT_DIR = createArtifactRun('unit-contact-account-to-fill-smoke').outDir;
 const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-account-to-fill-smoke.json');
 const CURRENT_ROC_YEAR = String(new Date().getFullYear() - 1911);
+const ROLE_ADMIN = '\u6700\u9ad8\u7ba1\u7406\u54e1';
+const ROLE_VIEWER = '\u8de8\u55ae\u4f4d\u6aa2\u8996\u8005';
+const ROLE_REPORTER = '\u586b\u5831\u4eba';
+const ACTIVE_LABEL = '\u5df2\u555f\u7528';
+const DRAFT_STATUS = '\u66ab\u5b58';
+const DEFAULT_TARGET_UNIT = '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44';
 
 function nowStamp() {
   return Date.now();
+}
+
+function cleanText(value) {
+  return String(value || '').trim();
+}
+
+function isUsefulUnit(unit) {
+  const text = cleanText(unit);
+  return !!text && !/[?\uFFFD]/.test(text);
 }
 
 async function apiJson(method, pathName, body, headers) {
@@ -58,24 +73,25 @@ async function apiJson(method, pathName, body, headers) {
   return json;
 }
 
-async function loginAsAdmin() {
+async function loginAsUser(username, password) {
   const body = await apiJson('POST', '/api/auth/login', {
     action: 'auth.login',
-    payload: {
-      username: ADMIN_USERNAME,
-      password: ADMIN_PASSWORD
-    }
+    payload: { username, password }
   });
-  const token = String(body && body.session && body.session.token || '').trim();
-  if (!token) throw new Error('Admin login did not return a session token');
-  return {
-    token,
-    body
-  };
+  const token = cleanText(body && body.session && body.session.token);
+  if (!token) throw new Error(`Login did not return a session token for ${username}`);
+  return { token, body };
 }
 
-function authHeaders(token) {
-  return { Authorization: `Bearer ${token}` };
+async function loginAsAdmin() {
+  return loginAsUser(ADMIN_USERNAME, ADMIN_PASSWORD);
+}
+
+function authHeaders(token, extraHeaders) {
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(extraHeaders || {})
+  };
 }
 
 async function getSystemUsers(token) {
@@ -97,14 +113,17 @@ async function chooseTargetUnit(token) {
   const users = await getSystemUsers(token);
   const forms = await getTrainingForms(token);
   const occupiedUnits = new Set(forms
-    .filter((entry) => String(entry && entry.trainingYear || '').trim() === CURRENT_ROC_YEAR)
-    .map((entry) => String(entry && entry.unit || '').trim())
+    .filter((entry) => cleanText(entry && entry.trainingYear) === CURRENT_ROC_YEAR)
+    .map((entry) => cleanText(entry && entry.unit))
     .filter(Boolean));
   const candidates = Array.from(new Set(users
-    .filter((entry) => entry && entry.role !== '最高管理員' && entry.role !== '跨單位檢視者')
-    .map((entry) => String(entry.unit || '').trim())
-    .filter(Boolean)));
-  const selected = candidates.find((unit) => !occupiedUnits.has(unit)) || candidates[0] || '總務處／營繕組';
+    .filter((entry) => {
+      const role = cleanText(entry && entry.role);
+      return role && role !== ROLE_ADMIN && role !== ROLE_VIEWER;
+    })
+    .map((entry) => cleanText(entry && entry.unit))
+    .filter(isUsefulUnit)));
+  const selected = candidates.find((unit) => !occupiedUnits.has(unit)) || candidates[0] || DEFAULT_TARGET_UNIT;
   return {
     unit: selected,
     occupiedUnits: Array.from(occupiedUnits),
@@ -122,36 +141,28 @@ async function upsertSystemUser(token, payload) {
 async function deleteSystemUser(token, username) {
   return apiJson('POST', `/api/system-users/${encodeURIComponent(username)}/delete`, {
     action: 'system-user.delete',
-    payload: {
-      username
-    }
+    payload: { username }
   }, authHeaders(token));
 }
 
 async function deleteTrainingForm(token, formId) {
   return apiJson('POST', `/api/training/forms/${encodeURIComponent(formId)}/delete`, {
     action: 'training.form.delete',
-    payload: {
-      id: formId
-    }
+    payload: { id: formId }
   }, authHeaders(token));
 }
 
 async function deleteTrainingRoster(token, rosterId) {
   return apiJson('POST', `/api/training/rosters/${encodeURIComponent(rosterId)}/delete`, {
     action: 'training.roster.delete',
-    payload: {
-      id: rosterId
-    }
+    payload: { id: rosterId }
   }, authHeaders(token));
 }
 
 async function lookupApplicationsByEmail(email) {
   const body = await apiJson('POST', '/api/unit-contact/status', {
     action: 'unit-contact.lookup',
-    payload: {
-      email
-    }
+    payload: { email }
   });
   return Array.isArray(body && body.applications) ? body.applications : [];
 }
@@ -162,12 +173,14 @@ async function resolveUnitContactListContext() {
   let siteId = '';
   try {
     const health = await apiJson('GET', '/api/unit-contact/health');
-    siteId = String(health && health.site && health.site.id || '').trim();
-  } catch (_) { }
+    siteId = cleanText(health && health.site && health.site.id);
+  } catch (_) {
+    siteId = '';
+  }
   if (!siteId) {
     siteId = config.siteId || await resolveSiteIdFromUrl(token, config.sharePointSiteUrl);
   }
-  if (!siteId) throw new Error('Missing siteId in .local-secrets/m365-a3-backend.json');
+  if (!siteId) throw new Error('Missing siteId in backend configuration');
   const lists = await graphGet(token, `${GRAPH_ROOT}/sites/${siteId}/lists?$select=id,displayName`);
   const unitContactList = (lists.value || []).find((entry) => entry.displayName === 'UnitContactApplications');
   if (!unitContactList) throw new Error('UnitContactApplications list not found');
@@ -176,7 +189,7 @@ async function resolveUnitContactListContext() {
     accessToken: token,
     siteId,
     listId: unitContactList.id,
-    columnNames: new Set((columns.value || []).map((entry) => String(entry && entry.name || '').trim()).filter(Boolean))
+    columnNames: new Set((columns.value || []).map((entry) => cleanText(entry && entry.name)).filter(Boolean))
   };
 }
 
@@ -189,7 +202,7 @@ function filterFields(fields, columnNames) {
 
 async function findApplicationListItem(context, applicationId) {
   const body = await graphGet(context.accessToken, `${GRAPH_ROOT}/sites/${context.siteId}/lists/${context.listId}/items?$expand=fields&$top=200`);
-  return (body.value || []).find((entry) => String(entry && entry.fields && entry.fields.ApplicationId || '').trim() === applicationId) || null;
+  return (body.value || []).find((entry) => cleanText(entry && entry.fields && entry.fields.ApplicationId) === applicationId) || null;
 }
 
 async function patchApplicationToActive(context, applicationId, username) {
@@ -198,8 +211,8 @@ async function patchApplicationToActive(context, applicationId, username) {
   const nowIso = new Date().toISOString();
   const fields = filterFields({
     Status: 'active',
-    StatusLabel: '已啟用',
-    StatusDetail: `管理端已建立帳號 ${username}，可直接登入開始填報。`,
+    StatusLabel: '\u5df2\u555f\u7528',
+    StatusDetail: `\u5e33\u865f\u5df2\u555f\u7528\uff0c\u8acb\u4f7f\u7528 ${username} \u767b\u5165\u7cfb\u7d71\u3002`,
     ReviewedAt: nowIso,
     ReviewedBy: 'smoke-script',
     ReviewComment: 'smoke auto approved',
@@ -208,7 +221,8 @@ async function patchApplicationToActive(context, applicationId, username) {
     ProvisionedAt: nowIso,
     ProvisionedBy: 'smoke-script',
     ProvisioningNote: `Account ready: ${username}`,
-    AppUsername: username
+    AppUsername: username,
+    ExternalUserId: username
   }, context.columnNames);
   await graphPatch(context.accessToken, `${GRAPH_ROOT}/sites/${context.siteId}/lists/${context.listId}/items/${item.id}/fields`, fields);
   return item.id;
@@ -216,12 +230,15 @@ async function patchApplicationToActive(context, applicationId, username) {
 
 async function deleteApplicationListItem(context, itemId) {
   if (!itemId) return;
-  await fetch(`${GRAPH_ROOT}/sites/${context.siteId}/lists/${context.listId}/items/${itemId}`, {
+  const response = await fetch(`${GRAPH_ROOT}/sites/${context.siteId}/lists/${context.listId}/items/${itemId}`, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${context.accessToken}`
     }
   });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Failed to delete application list item ${itemId}: HTTP ${response.status}`);
+  }
 }
 
 async function chooseUnitByLabel(page, baseId, unitLabel) {
@@ -243,8 +260,8 @@ async function chooseUnitByLabel(page, baseId, unitLabel) {
     };
 
     const tryCurrent = () => currentValue() === unitLabel;
-
     const categoryOptions = categorySelect ? optionsOf(categorySelect) : [{ value: '' }];
+
     for (const categoryOption of categoryOptions) {
       if (categorySelect) {
         categorySelect.value = categoryOption.value;
@@ -277,9 +294,18 @@ async function loginViaPage(page, username, password) {
   await page.fill('[data-testid="login-pass"]', password);
   await page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit());
   await page.waitForFunction(() => !!window.sessionStorage.getItem('cats_auth'), { timeout: 20000 });
-  await page.goto(FRONT_BASE, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 45000 });
-  await page.waitForSelector('.btn-logout', { timeout: 20000 });
+  await page.waitForFunction(() => !!document.querySelector('.btn-logout'), { timeout: 20000 });
+  const auth = await page.evaluate(() => {
+    try {
+      return JSON.parse(window.sessionStorage.getItem('cats_auth') || 'null');
+    } catch (_) {
+      return null;
+    }
+  });
+  return {
+    hash: await page.evaluate(() => window.location.hash || ''),
+    auth
+  };
 }
 
 (async () => {
@@ -292,7 +318,10 @@ async function loginViaPage(page, username, password) {
   const testUsername = `ucae2e${stamp}`;
   const testPassword = `T${stamp}#Aa1`;
   const testEmail = `ucae2e-${stamp}@example.com`;
-  const manualPersonName = `測試人員${stamp}`;
+  const applicantName = `\u6e2c\u8a66\u7533\u8acb\u4eba${stamp}`;
+  const manualPersonName = `\u6e2c\u8a66\u53d7\u8a13\u4eba\u54e1${stamp}`;
+  const jobTitle = '\u5de5\u7a0b\u5e2b';
+  const identity = '\u8077\u54e1';
   let adminToken = '';
   let browser = null;
   let page = null;
@@ -325,17 +354,17 @@ async function loginViaPage(page, username, password) {
       await gotoHash(page, 'apply-unit-contact', { handleUnsaved: false });
       await page.waitForSelector('[data-testid="unit-contact-apply-form"]', { timeout: 20000 });
       await chooseUnitByLabel(page, 'uca-unit', targetUnit);
-      await page.fill('[data-testid="unit-contact-name"]', '測試申請人');
+      await page.fill('[data-testid="unit-contact-name"]', applicantName);
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', testEmail);
       await page.fill('[data-testid="unit-contact-note"]', 'account-to-fill smoke');
       await page.click('[data-testid="unit-contact-submit"]');
       await page.waitForURL(/#apply-unit-contact-success\//, { timeout: 20000 });
       if (await page.locator('.unit-contact-summary-grid strong').count()) {
-        createdApplicationId = String(await page.locator('.unit-contact-summary-grid strong').first().textContent() || '').trim();
+        createdApplicationId = cleanText(await page.locator('.unit-contact-summary-grid strong').first().textContent());
       } else {
         const lookup = await lookupApplicationsByEmail(testEmail);
-        createdApplicationId = String((lookup[0] && lookup[0].id) || '').trim();
+        createdApplicationId = cleanText(lookup[0] && lookup[0].id);
       }
       if (!createdApplicationId.startsWith('UCA-')) throw new Error(`Unexpected application id: ${createdApplicationId}`);
       return {
@@ -350,31 +379,33 @@ async function loginViaPage(page, username, password) {
       await page.fill('#uca-status-email', testEmail);
       await page.locator('#unit-contact-status-form').evaluate((form) => form.requestSubmit());
       await page.waitForSelector('.unit-contact-status-card', { timeout: 20000 });
-      const cardText = String(await page.locator('.unit-contact-status-card').first().textContent() || '').trim();
+      const cardText = cleanText(await page.locator('.unit-contact-status-card').first().textContent());
       if (!cardText.includes(createdApplicationId)) throw new Error('Pending application lookup did not include application id');
-      return {
-        cardText: cardText.slice(0, 240)
-      };
+      return { cardText: cardText.slice(0, 240) };
     });
 
     await runStep(results, 'ACCOUNT-FLOW-4', 'admin', 'provision reporter account for the approved application', async () => {
       await upsertSystemUser(adminToken, {
         username: testUsername,
         password: testPassword,
-        name: '測試申請人',
+        forcePasswordChange: false,
+        name: applicantName,
         email: testEmail,
-        role: '填報人',
+        role: ROLE_REPORTER,
         unit: targetUnit,
         units: [targetUnit],
         activeUnit: targetUnit,
-        actorName: '系統測試',
+        actorName: '\u7cfb\u7d71\u7ba1\u7406\u54e1',
         actorEmail: 'admin@company.com'
       });
       createdApplicationListItemId = await patchApplicationToActive(graphContext, createdApplicationId, testUsername);
+      const login = await loginAsUser(testUsername, testPassword);
       const lookup = await lookupApplicationsByEmail(testEmail);
       const application = lookup.find((entry) => entry.id === createdApplicationId);
       if (!application) throw new Error('Updated application not found after provisioning');
       if (application.status !== 'active') throw new Error(`Application status not updated: ${application.status}`);
+      if (cleanText(application.statusLabel) !== ACTIVE_LABEL) throw new Error(`Unexpected status label: ${application.statusLabel}`);
+      if (login.body && login.body.mustChangePassword === true) throw new Error('Provisioned reporter still requires password change');
       return {
         username: testUsername,
         status: application.status,
@@ -382,25 +413,29 @@ async function loginViaPage(page, username, password) {
       };
     });
 
-    await runStep(results, 'ACCOUNT-FLOW-5', 'public', 'lookup approved application and confirm handoff detail is visible', async () => {
+    await runStep(results, 'ACCOUNT-FLOW-5', 'public', 'lookup approved application and confirm active label is visible', async () => {
       await gotoHash(page, 'apply-unit-contact-status', { handleUnsaved: false });
       await page.waitForSelector('#uca-status-email', { timeout: 15000 });
       await page.fill('#uca-status-email', testEmail);
       await page.locator('#unit-contact-status-form').evaluate((form) => form.requestSubmit());
       await page.waitForSelector('.unit-contact-status-card', { timeout: 20000 });
-      const cardText = String(await page.locator('.unit-contact-status-card').first().textContent() || '').trim();
-      if (!cardText.includes('已啟用')) throw new Error('Application status card did not show 已啟用');
-      return {
-        cardText: cardText.slice(0, 280)
-      };
+      const cardText = cleanText(await page.locator('.unit-contact-status-card').first().textContent());
+      if (!cardText.includes(ACTIVE_LABEL)) throw new Error('Application status card did not show active label');
+      return { cardText: cardText.slice(0, 280) };
     });
 
     await runStep(results, 'ACCOUNT-FLOW-6', 'reporter', 'login with the provisioned account through Pages', async () => {
-      await loginViaPage(page, testUsername, testPassword);
-      const shellText = String(await page.textContent('.shell') || '').trim();
-      if (!shellText) throw new Error('Shell did not render after login');
+      const loginState = await loginViaPage(page, testUsername, testPassword);
+      if (!loginState.auth || cleanText(loginState.auth.username) !== testUsername) {
+        throw new Error('Session auth did not switch to the provisioned reporter');
+      }
+      if (loginState.auth.mustChangePassword === true) {
+        throw new Error('Reporter session still marked as mustChangePassword');
+      }
       return {
-        hash: await page.evaluate(() => window.location.hash || '')
+        hash: loginState.hash,
+        activeUnit: cleanText(loginState.auth.activeUnit),
+        username: cleanText(loginState.auth.username)
       };
     });
 
@@ -410,18 +445,21 @@ async function loginViaPage(page, username, password) {
       await page.fill('#tr-phone', '02-3366-61234');
       await page.fill('#tr-email', testEmail);
       await page.fill('#tr-new-name', manualPersonName);
-      await page.fill('#tr-new-unit-name', targetUnit.split('／').pop() || targetUnit);
-      await page.fill('#tr-new-identity', '測試人員');
-      await page.fill('#tr-new-job-title', '工程師');
+      await page.fill('#tr-new-unit-name', cleanText(targetUnit.split('／').pop()) || targetUnit);
+      await page.fill('#tr-new-identity', identity);
+      await page.fill('#tr-new-job-title', jobTitle);
       await page.click('#training-add-person');
       await page.waitForFunction((name) => {
         return Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes(name));
-      }, manualPersonName, { timeout: 15000 });
+      }, manualPersonName, { timeout: 20000 });
       await page.click('[data-testid="training-save-draft"]');
       await page.waitForFunction(() => /#training-fill\//.test(window.location.hash), { timeout: 20000 });
       createdTrainingFormId = await page.evaluate(() => decodeURIComponent((window.location.hash || '').split('/')[1] || ''));
       if (!createdTrainingFormId.startsWith('TRN-')) throw new Error(`Unexpected training form id: ${createdTrainingFormId}`);
-      const statusText = String(await page.textContent('#training-draft-status') || '').trim();
+      const statusText = cleanText(await page.textContent('#training-draft-status'));
+      if (!statusText || statusText.includes('\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f')) {
+        throw new Error('Draft status was not updated after save');
+      }
       return {
         formId: createdTrainingFormId,
         draftStatus: statusText
@@ -430,14 +468,15 @@ async function loginViaPage(page, username, password) {
 
     await runStep(results, 'ACCOUNT-FLOW-8', 'admin', 'verify saved training draft through backend API', async () => {
       const forms = await getTrainingForms(adminToken);
-      const form = forms.find((entry) => entry.id === createdTrainingFormId);
+      const form = forms.find((entry) => cleanText(entry.id) === createdTrainingFormId);
       if (!form) throw new Error('Created training draft not found in backend');
-      if (String(form.status || '').trim() !== '暫存') throw new Error(`Unexpected training form status: ${form.status}`);
+      if (cleanText(form.status) !== DRAFT_STATUS) throw new Error(`Unexpected training form status: ${form.status}`);
       const rosters = await getTrainingRosters(adminToken);
       createdRosterIds = rosters
-        .filter((entry) => String(entry.name || '').trim() === manualPersonName && String(entry.unit || '').trim() === targetUnit)
-        .map((entry) => entry.id)
+        .filter((entry) => cleanText(entry.name) === manualPersonName && cleanText(entry.unit) === targetUnit)
+        .map((entry) => cleanText(entry.id))
         .filter(Boolean);
+      if (!createdRosterIds.length) throw new Error('Created manual roster row was not found in backend');
       return {
         formId: form.id,
         rosterCount: createdRosterIds.length
@@ -448,21 +487,21 @@ async function loginViaPage(page, username, password) {
       if (createdTrainingFormId) {
         try {
           await deleteTrainingForm(adminToken, createdTrainingFormId);
-        } catch (_) { }
+        } catch (_) {}
       }
       for (const rosterId of createdRosterIds) {
         try {
           await deleteTrainingRoster(adminToken, rosterId);
-        } catch (_) { }
+        } catch (_) {}
       }
       try {
         await deleteSystemUser(adminToken, testUsername);
-      } catch (_) { }
+      } catch (_) {}
     }
     if (graphContext && createdApplicationListItemId) {
       try {
         await deleteApplicationListItem(graphContext, createdApplicationListItemId);
-      } catch (_) { }
+      } catch (_) {}
     }
     if (page) await page.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});

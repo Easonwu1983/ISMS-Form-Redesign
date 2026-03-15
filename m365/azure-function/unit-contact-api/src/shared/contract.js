@@ -16,33 +16,33 @@ const STATUSES = {
 
 const STATUS_META = {
   [STATUSES.PENDING_REVIEW]: {
-    label: '???',
-    detail: '????????????????',
+    label: '\u5f85\u5be9\u6838',
+    detail: '\u7533\u8acb\u5df2\u9001\u51fa\uff0c\u8acb\u7b49\u5f85\u7ba1\u7406\u8005\u5be9\u6838\u3002',
     tone: 'pending'
   },
   [STATUSES.RETURNED]: {
-    label: '????',
-    detail: '????????????????????',
+    label: '\u9000\u56de\u88dc\u4ef6',
+    detail: '\u7533\u8acb\u8cc7\u6599\u9700\u8981\u88dc\u5145\uff0c\u8acb\u4f9d\u9000\u56de\u610f\u898b\u4fee\u6b63\u5f8c\u91cd\u65b0\u9001\u51fa\u3002',
     tone: 'attention'
   },
   [STATUSES.APPROVED]: {
-    label: '????',
-    detail: '???????????????????',
+    label: '\u5be9\u6838\u901a\u904e',
+    detail: '\u7533\u8acb\u5df2\u901a\u904e\u5be9\u6838\uff0c\u7cfb\u7d71\u5c07\u9032\u5165\u5efa\u5e33\u8207\u555f\u7528\u6d41\u7a0b\u3002',
     tone: 'approved'
   },
   [STATUSES.REJECTED]: {
-    label: '?????',
-    detail: '?????????????????',
+    label: '\u672a\u6838\u51c6',
+    detail: '\u7533\u8acb\u672a\u901a\u904e\u5be9\u6838\uff0c\u8acb\u806f\u7e6b\u7cfb\u7d71\u7ba1\u7406\u8005\u78ba\u8a8d\u539f\u56e0\u3002',
     tone: 'danger'
   },
   [STATUSES.ACTIVATION_PENDING]: {
-    label: '???',
-    detail: '????????????????????',
+    label: '\u5f85\u5efa\u5e33',
+    detail: '\u7cfb\u7d71\u5df2\u958b\u59cb\u5efa\u7acb\u5e33\u865f\uff0c\u5b8c\u6210\u5f8c\u6703\u901a\u77e5\u767b\u5165\u65b9\u5f0f\u3002',
     tone: 'approved'
   },
   [STATUSES.ACTIVE]: {
-    label: '???',
-    detail: '???????????',
+    label: '\u5df2\u555f\u7528',
+    detail: '\u5e33\u865f\u5df2\u555f\u7528\uff0c\u8acb\u4f7f\u7528\u901a\u77e5\u7684\u5e33\u865f\u5bc6\u78bc\u767b\u5165\u7cfb\u7d71\u3002',
     tone: 'live'
   }
 };
@@ -62,6 +62,11 @@ function cleanEmail(value) {
   return cleanText(value).toLowerCase();
 }
 
+function isPlaceholderText(value) {
+  const text = cleanText(value);
+  return !!text && /^[?\uFFFD\s]+$/.test(text);
+}
+
 function createError(message, statusCode) {
   const error = new Error(message);
   error.statusCode = statusCode || 400;
@@ -72,18 +77,18 @@ async function parseJsonBody(request) {
   try {
     return await request.json();
   } catch (_) {
-    throw createError('請求內容不是合法的 JSON。', 400);
+    throw createError('\u8acb\u6c42\u5167\u5bb9\u4e0d\u662f\u6709\u6548\u7684 JSON\u3002', 400);
   }
 }
 
 function validateActionEnvelope(envelope, expectedAction) {
   if (!envelope || typeof envelope !== 'object') {
-    throw createError('缺少 request envelope。', 400);
+    throw createError('\u7f3a\u5c11 request envelope\u3002', 400);
   }
   const action = cleanText(envelope.action);
-  if (!action) throw createError('缺少 action。', 400);
+  if (!action) throw createError('\u7f3a\u5c11 action\u3002', 400);
   if (expectedAction && action !== expectedAction) {
-    throw createError('action 不符合目前端點需求。', 400);
+    throw createError('action \u8207\u9810\u671f\u4e0d\u4e00\u81f4\u3002', 400);
   }
 }
 
@@ -103,16 +108,16 @@ function normalizeApplyPayload(payload) {
 }
 
 function validateApplyPayload(payload) {
-  if (!payload.unitValue) throw createError('請選擇單位。', 400);
-  if (!payload.applicantName) throw createError('請輸入姓名。', 400);
-  if (!payload.extensionNumber) throw createError('請輸入分機。', 400);
-  if (!payload.applicantEmail) throw createError('請輸入信箱。', 400);
-  if (!payload.unitCode) throw createError('系統無法辨識單位代碼，請重新選擇單位。', 400);
+  if (!payload.unitValue) throw createError('\u8acb\u9078\u64c7\u7533\u8acb\u55ae\u4f4d\u3002', 400);
+  if (!payload.applicantName) throw createError('\u8acb\u586b\u5beb\u7533\u8acb\u4eba\u59d3\u540d\u3002', 400);
+  if (!payload.extensionNumber) throw createError('\u8acb\u586b\u5beb\u5206\u6a5f\u3002', 400);
+  if (!payload.applicantEmail) throw createError('\u8acb\u586b\u5beb\u96fb\u5b50\u90f5\u4ef6\u3002', 400);
+  if (!payload.unitCode) throw createError('\u627e\u4e0d\u5230\u5c0d\u61c9\u7684\u6b63\u5f0f\u55ae\u4f4d\u4ee3\u78bc\uff0c\u8acb\u5148\u78ba\u8a8d\u55ae\u4f4d\u8cc7\u6599\u3002', 400);
 }
 
 function normalizeLookupEmail(email) {
   const value = cleanEmail(email);
-  if (!value) throw createError('請輸入申請信箱。', 400);
+  if (!value) throw createError('\u8acb\u8f38\u5165\u7533\u8acb\u4fe1\u7bb1\u3002', 400);
   return value;
 }
 
@@ -122,13 +127,18 @@ function buildApplicationId(sequence, date) {
   return 'UCA-' + year + '-' + String(sequence).padStart(4, '0');
 }
 
+function resolveStatusCopy(value, fallback) {
+  const text = cleanText(value);
+  return text && !isPlaceholderText(text) ? text : fallback;
+}
+
 function decorateStatus(application) {
   const meta = STATUS_META[application.status] || STATUS_META[STATUSES.PENDING_REVIEW];
   return {
     ...application,
-    statusLabel: application.statusLabel || meta.label,
-    statusDetail: application.statusDetail || meta.detail,
-    statusTone: application.statusTone || meta.tone
+    statusLabel: resolveStatusCopy(application.statusLabel, meta.label),
+    statusDetail: resolveStatusCopy(application.statusDetail, meta.detail),
+    statusTone: cleanText(application.statusTone) || meta.tone
   };
 }
 
@@ -293,7 +303,7 @@ function buildJsonResponse(status, jsonBody) {
 }
 
 function buildErrorResponse(error, fallbackMessage, fallbackStatus) {
-  const message = cleanText(error && error.message) || fallbackMessage || '系統發生錯誤。';
+  const message = cleanText(error && error.message) || fallbackMessage || '\u8655\u7406\u55ae\u4f4d\u806f\u7d61\u4eba\u7533\u8acb\u6642\u767c\u751f\u932f\u8aa4\u3002';
   const status = Number((error && error.statusCode) || fallbackStatus || 400);
   return buildJsonResponse(status, {
     ok: false,
