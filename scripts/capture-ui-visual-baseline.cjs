@@ -1,9 +1,15 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('./_playwright.cjs');
+const {
+  DEFAULT_BASELINE_DIR,
+  DESKTOP_VISUAL_SPECS,
+  MOBILE_VISUAL_SPECS,
+  captureVisualSpec
+} = require('./_ui-visual-baseline.cjs');
 
 const BASE_URL = String(process.env.ISMS_UI_BASE || 'https://isms-campus-portal.pages.dev').replace(/\/+$/, '');
-const OUT_DIR = path.resolve(process.env.ISMS_UI_BASELINE_OUT || path.join(process.cwd(), 'test-artifacts', 'ui-visual-baseline'));
+const OUT_DIR = path.resolve(process.env.ISMS_UI_BASELINE_OUT || DEFAULT_BASELINE_DIR);
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const EDGE_PATH = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 
@@ -23,30 +29,6 @@ async function login(page) {
   ]);
 }
 
-async function captureDesktop(page, slug, hash, options) {
-  await page.goto(`${BASE_URL}/${hash}`, { waitUntil: 'networkidle', timeout: 45000 });
-  await page.waitForTimeout(1200);
-  const clip = options && options.clip;
-  await page.screenshot({
-    path: path.join(OUT_DIR, `${slug}-desktop.png`),
-    fullPage: !clip,
-    clip: clip || undefined
-  });
-}
-
-async function captureMobile(page, slug, hash, options) {
-  await page.goto(`${BASE_URL}/${hash}`, { waitUntil: 'networkidle', timeout: 45000 });
-  await page.waitForTimeout(1200);
-  if (options && typeof options.before === 'function') {
-    await options.before(page);
-    await page.waitForTimeout(600);
-  }
-  await page.screenshot({
-    path: path.join(OUT_DIR, `${slug}-mobile.png`),
-    fullPage: true
-  });
-}
-
 async function run() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const executablePath = pickExecutablePath();
@@ -57,20 +39,22 @@ async function run() {
   try {
     const desktopPage = await desktop.newPage();
     await login(desktopPage);
-    await captureDesktop(desktopPage, 'dashboard', '#dashboard');
-    await captureDesktop(desktopPage, 'training', '#training', { clip: { x: 260, y: 64, width: 1180, height: 1600 } });
-    await captureDesktop(desktopPage, 'audit-trail', '#audit-trail', { clip: { x: 260, y: 64, width: 1180, height: 1400 } });
-    await captureDesktop(desktopPage, 'unit-review', '#unit-review', { clip: { x: 260, y: 64, width: 1180, height: 1500 } });
+    for (const spec of DESKTOP_VISUAL_SPECS) {
+      await captureVisualSpec(desktopPage, BASE_URL, spec, path.join(OUT_DIR, `${spec.slug}-desktop.png`), 'desktop');
+    }
 
     const mobilePage = await mobile.newPage();
     await login(mobilePage);
-    await captureMobile(mobilePage, 'dashboard', '#dashboard');
-    await captureMobile(mobilePage, 'dashboard-sidebar', '#dashboard', {
-      before: async (page) => {
-        await page.click('[data-action="shell.toggle-sidebar"]');
-      }
+    for (const spec of MOBILE_VISUAL_SPECS) {
+      await captureVisualSpec(mobilePage, BASE_URL, spec, path.join(OUT_DIR, `${spec.slug}-mobile.png`), 'mobile');
+    }
+    await mobilePage.goto(`${BASE_URL}/#dashboard`, { waitUntil: 'networkidle', timeout: 45000 });
+    await mobilePage.waitForTimeout(900);
+    await mobilePage.click('[data-action="shell.toggle-sidebar"]');
+    await mobilePage.waitForTimeout(500);
+    await mobilePage.screenshot({
+      path: path.join(OUT_DIR, 'dashboard-sidebar-mobile.png')
     });
-    await captureMobile(mobilePage, 'training', '#training');
   } finally {
     await browser.close();
   }

@@ -7582,3 +7582,92 @@ tbody tr:hover {
   }
 }
 
+@media (max-width: 768px) {
+  .dashboard-panel-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-chart-panel .donut-chart-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .dashboard-chart-panel .donut-chart {
+    width: 128px;
+    height: 128px;
+  }
+
+  .dashboard-recent-table {
+    min-width: 0;
+  }
+
+  .dashboard-recent-table thead th:nth-child(5),
+  .dashboard-recent-table tbody td:nth-child(5),
+  .dashboard-recent-table thead th:nth-child(7),
+  .dashboard-recent-table tbody td:nth-child(7) {
+    display: none;
+  }
+
+  .dashboard-recent-table .record-id-col {
+    width: 182px;
+  }
+
+  .dashboard-recent-table thead th:nth-child(2) {
+    width: auto;
+  }
+
+  .dashboard-recent-table thead th:nth-child(3),
+  .dashboard-recent-table thead th:nth-child(4),
+  .dashboard-recent-table thead th:nth-child(6) {
+    width: 94px;
+  }
+
+  .dashboard-recent-id-text {
+    font-size: 0.78rem;
+    -webkit-line-clamp: 3;
+  }
+
+  .dashboard-recent-desc {
+    font-size: 0.78rem;
+    -webkit-line-clamp: 2;
+  }
+
+  .training-group-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .training-group-summary-chip {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .training-group-summary-chip small {
+    font-size: 0.74rem;
+  }
+
+  .training-group-card .table-wrapper table {
+    min-width: 480px;
+  }
+
+  .review-table-wrapper {
+    margin: 0 -4px;
+    padding: 0 4px 8px;
+  }
+
+  .review-table-wrapper .review-data-table {
+    min-width: 720px;
+  }
+
+  .review-table-wrapper .review-data-table thead th:first-child,
+  .review-table-wrapper .review-data-table tbody td:first-child {
+    position: static;
+    box-shadow: none;
+  }
+
+  .unit-review-modal {
+    max-width: calc(100vw - 24px);
+  }
+}
+

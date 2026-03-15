@@ -1,12 +1,20 @@
 ﻿const fs = require('fs');
 const path = require('path');
 const { chromium } = require('./_playwright.cjs');
+const {
+  DEFAULT_BASELINE_DIR,
+  DESKTOP_VISUAL_SPECS,
+  MOBILE_VISUAL_SPECS,
+  captureVisualSpec,
+  compareAgainstBaseline
+} = require('./_ui-visual-baseline.cjs');
 
 const BASE_URL = String(process.env.ISMS_CLOUDFLARE_PAGES_BASE || 'https://isms-campus-portal.pages.dev').replace(/\/+$/, '');
 const LOG_DIR = path.join(process.cwd(), 'logs');
 const OUT_PATH = process.env.ISMS_UI_SMOKE_OUT
   ? path.resolve(process.env.ISMS_UI_SMOKE_OUT)
   : path.join(LOG_DIR, 'cloudflare-pages-regression-smoke.json');
+const VISUAL_OUT_DIR = path.join(process.cwd(), 'test-artifacts', 'ui-visual-smoke');
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const EDGE_PATH = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 
@@ -14,6 +22,60 @@ function pickExecutablePath() {
   if (fs.existsSync(CHROME_PATH)) return CHROME_PATH;
   if (fs.existsSync(EDGE_PATH)) return EDGE_PATH;
   return undefined;
+}
+
+async function login(page) {
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+  await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
+  await page.fill('[data-testid="login-user"]', 'admin');
+  await page.fill('[data-testid="login-pass"]', 'admin123');
+  await Promise.all([
+    page.waitForFunction(() => !!document.querySelector('.btn-logout'), { timeout: 30000 }),
+    page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
+  ]);
+}
+
+async function runVisualBaselineChecks(browser, pushStep) {
+  fs.mkdirSync(VISUAL_OUT_DIR, { recursive: true });
+  if (!fs.existsSync(DEFAULT_BASELINE_DIR)) {
+    throw new Error(`visual baseline directory not found: ${DEFAULT_BASELINE_DIR}`);
+  }
+
+  const desktopContext = await browser.newContext({ viewport: { width: 1440, height: 1200 } });
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+  const compareContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+
+  try {
+    const comparePage = await compareContext.newPage();
+
+    const desktopPage = await desktopContext.newPage();
+    await login(desktopPage);
+    for (const spec of DESKTOP_VISUAL_SPECS) {
+      const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-desktop.png`);
+      const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-desktop.png`);
+      if (!fs.existsSync(baselinePath)) throw new Error(`missing desktop baseline: ${baselinePath}`);
+      await captureVisualSpec(desktopPage, BASE_URL, spec, actualPath, 'desktop');
+      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, { maxDiffRatio: 0.025 });
+      if (!result.ok) throw new Error(`desktop visual drift: ${spec.slug} (${JSON.stringify(result)})`);
+      pushStep(`visual:desktop:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
+    }
+
+    const mobilePage = await mobileContext.newPage();
+    await login(mobilePage);
+    for (const spec of MOBILE_VISUAL_SPECS) {
+      const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-mobile.png`);
+      const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-mobile.png`);
+      if (!fs.existsSync(baselinePath)) throw new Error(`missing mobile baseline: ${baselinePath}`);
+      await captureVisualSpec(mobilePage, BASE_URL, spec, actualPath, 'mobile');
+      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, { maxDiffRatio: 0.03 });
+      if (!result.ok) throw new Error(`mobile visual drift: ${spec.slug} (${JSON.stringify(result)})`);
+      pushStep(`visual:mobile:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
+    }
+  } finally {
+    await compareContext.close();
+    await desktopContext.close();
+    await mobileContext.close();
+  }
 }
 
 async function run() {
@@ -470,6 +532,8 @@ async function run() {
       throw new Error('unit review contains placeholder question marks');
     }
     pushStep('unit-review:loaded', true, 'unit review page ready');
+
+    await runVisualBaselineChecks(browser, pushStep);
 
     if (consoleErrors.length) {
       throw new Error(`console errors detected: ${consoleErrors.join(' | ')}`);

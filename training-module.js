@@ -110,6 +110,26 @@
     return String(a || '').localeCompare(String(b || ''), 'zh-Hant-u-co-stroke', { sensitivity: 'base', numeric: true });
   }
 
+  function hasDisplayCorruption(value) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (/\?{3,}/.test(text)) return true;
+    return /(\uFFFD|銵|摮貉|銝剖|蝟餌絞|撣唾|瑼Ｘ)/.test(text);
+  }
+
+  function isRenderableTrainingRoster(row) {
+    const fields = [
+      row && row.statsUnit,
+      row && row.unit,
+      row && row.name,
+      row && row.unitName,
+      row && row.identity,
+      row && row.jobTitle,
+      row && row.createdBy
+    ];
+    return fields.every((field) => !hasDisplayCorruption(field));
+  }
+
   function isValidTrainingDashboardUnit(unitValue) {
     const statsUnit = String(getTrainingStatsUnit(unitValue) || '').trim();
     return !!statsUnit && isOfficialUnit(statsUnit);
@@ -1182,12 +1202,16 @@
     return rosters.map((row) => buildTrainingRosterRow(row)).join('');
   }
 
-  function buildTrainingRosterPage(summary, rowsHtml) {
+  function buildTrainingRosterPage(summary, rowsHtml, hiddenCount) {
+    const hiddenNote = hiddenCount
+      ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
+      : '';
     return '<div class="animate-in">'
       + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div>'
       + '<div class="stats-grid">'
       + buildTrainingRosterStats(summary)
       + '</div>'
+      + hiddenNote
       + buildTrainingRosterImportCard()
       + '<div class="card" style="padding:0;overflow:hidden">' + buildTrainingTableMarkup('<th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th>', rowsHtml) + '</div>'
       + '</div>';
@@ -1207,20 +1231,22 @@
       await syncTrainingRostersFromM365({ silent: true });
     } catch (_) { }
 
-    const rosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
+    const rawRosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
       const statsCompare = compareZhStroke(String(a.statsUnit || getTrainingStatsUnit(a.unit)), String(b.statsUnit || getTrainingStatsUnit(b.unit)));
       if (statsCompare !== 0) return statsCompare;
       const unitCompare = compareZhStroke(String(a.unit || ''), String(b.unit || ''));
       if (unitCompare !== 0) return unitCompare;
       return 0;
     });
+    const rosters = rawRosters.filter((row) => isRenderableTrainingRoster(row));
+    const hiddenCount = rawRosters.length - rosters.length;
     const summary = {
       total: rosters.length,
       imported: rosters.filter((row) => row.source === 'import').length,
       manual: rosters.filter((row) => row.source === 'manual').length
     };
     const rows = buildTrainingRosterRows(rosters);
-    document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, rows);
+    document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, rows, hiddenCount);
 
     initUnitCascade('training-import-unit', '', { disabled: false });
     const fileInput = document.getElementById('training-import-file');
