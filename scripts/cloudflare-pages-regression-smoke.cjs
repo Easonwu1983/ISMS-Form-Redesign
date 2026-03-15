@@ -36,6 +36,22 @@ async function login(page) {
     page.waitForFunction(() => !!document.querySelector('.btn-logout'), { timeout: 30000 }),
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
   ]);
+  await waitForRemoteBootstrap(page);
+}
+
+async function waitForRemoteBootstrap(page) {
+  await page.waitForFunction(() => {
+    return typeof window.__REMOTE_BOOTSTRAP_STATE__ === 'string' && window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending';
+  }, { timeout: 45000 });
+}
+
+async function waitForDashboardReady(page) {
+  await waitForRemoteBootstrap(page);
+  await page.waitForFunction(() => {
+    if (window.__REMOTE_BOOTSTRAP_STATE__ === 'pending') return false;
+    const app = document.getElementById('app');
+    return !!(app && app.innerText && app.innerText.includes('儀表板'));
+  }, { timeout: 45000 });
 }
 
 async function runPublicVisualBaselineChecks(browser, pushStep) {
@@ -209,10 +225,7 @@ async function run() {
     pushStep('auth:login', true, 'admin login succeeded');
 
     await page.waitForTimeout(1200);
-    await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('儀表板'));
-    }, { timeout: 20000 });
+    await waitForDashboardReady(page);
     const dashboardTitle = await page.evaluate(() => {
       const app = document.getElementById('app');
       if (!app || !app.innerText) return '';

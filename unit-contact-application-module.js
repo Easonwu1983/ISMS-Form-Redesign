@@ -135,7 +135,7 @@
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          'M365 x Campus Frontend',
+          '校內帳號申請流程',
           '申請單位管理人員',
           '請填寫單位、聯絡方式與申請資訊。送出後系統會交由管理者審核，核准後即可使用帳號登入系統。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請狀態</a>'
@@ -222,7 +222,7 @@
         mount.innerHTML = ''
           + '<section class="unit-contact-shell">'
           + buildPublicHero(
-            'Application',
+            '申請資料',
             '找不到申請資料',
             '目前無法取得申請內容。請確認申請編號是否正確，或回到查詢頁重新輸入電子郵件。',
             '<a class="btn btn-primary" href="#apply-unit-contact">重新申請</a>'
@@ -235,7 +235,7 @@
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          'Application Created',
+          '申請完成',
           '申請已送出',
           '系統已建立申請資料。後續會交由管理者審核，核准後可用同一個電子郵件查詢啟用狀態。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢狀態</a>'
@@ -259,7 +259,7 @@
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          'Application Status',
+          '申請進度查詢',
           '查詢申請狀態',
           '輸入送件時使用的電子郵件，系統會列出目前可查詢的申請進度與啟用狀態。',
           '<a class="btn btn-secondary" href="#apply-unit-contact">' + ic('arrow-left', 'icon-sm') + ' 返回申請頁</a>'
@@ -326,7 +326,7 @@
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          'Account Handoff',
+          '帳號啟用流程',
           '帳號啟用說明',
           '當管理者完成審核後，系統會依校內流程建立可登入帳號。若你是接手人員，請回到狀態查詢頁確認目前狀態。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢目前狀態</a>'
