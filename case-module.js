@@ -906,7 +906,7 @@ async function handleStatusTransition(id, ns) {
     var respondAside = '<div class="editor-sticky">'
       + buildEditorSideCard({
         accent: true,
-        kicker: 'Response Summary',
+        kicker: '回覆摘要',
         title: '送審摘要',
         text: '送出前先檢查期限、根因與附件是否完整，避免被退回補件。',
         bodyHtml: buildEditorSummaryItems([
@@ -1114,7 +1114,7 @@ function renderRespond(id) {
     var trackingAside = '<div class="editor-sticky">'
       + buildEditorSideCard({
         accent: true,
-        kicker: 'Tracking Summary',
+        kicker: '追蹤摘要',
         title: '追蹤提報摘要',
         text: '這一輪先由處理人員提出追蹤建議，再由管理者決定是否結案或繼續追蹤。',
         bodyHtml: buildEditorSummaryItems([
