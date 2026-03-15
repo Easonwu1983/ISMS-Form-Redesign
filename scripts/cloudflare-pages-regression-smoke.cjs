@@ -97,7 +97,8 @@ async function run() {
   const page = await context.newPage();
   const consoleErrors = [];
   const ignorableConsolePatterns = [
-    'Failed to load resource: the server responded with a status of 401 ()'
+    'Failed to load resource: the server responded with a status of 401 ()',
+    'Failed to load resource: the server responded with a status of 401 (Unauthorized)'
   ];
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
