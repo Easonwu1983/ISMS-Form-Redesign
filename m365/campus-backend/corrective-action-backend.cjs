@@ -30,6 +30,9 @@ const {
   buildFieldChanges,
   summarizeAttachments
 } = require('./audit-diff.cjs');
+const {
+  buildHtmlDocument
+} = require('./graph-mailer.cjs');
 
 function createCorrectiveActionRouter(deps) {
   const {
@@ -38,6 +41,7 @@ function createCorrectiveActionRouter(deps) {
     graphRequest,
     resolveSiteId,
     getDelegatedToken,
+    sendGraphMail,
     requestAuthz
   } = deps;
 
@@ -128,6 +132,24 @@ function createCorrectiveActionRouter(deps) {
       { label: 'pendingTrackingResult', get: function (item) { return item && item.pendingTracking && item.pendingTracking.result; } },
       { label: 'pendingTrackingNextDate', get: function (item) { return item && item.pendingTracking && item.pendingTracking.nextTrackDate; } }
     ]);
+  }
+
+  function buildAssignmentMail(item) {
+    const portalUrl = cleanText(process.env.ISMS_PORTAL_URL) || 'https://isms-campus-portal.pages.dev/';
+    return {
+      subject: `ISMS 矯正單指派通知：${cleanText(item && item.id)}`,
+      html: buildHtmlDocument([
+        `您好，${cleanText(item && item.handlerName) || cleanText(item && item.handlerUsername)}：`,
+        '您有一筆新的矯正單指派待處理。',
+        `單號：${cleanText(item && item.id)}`,
+        `所屬單位：${cleanText(item && item.handlerUnit)}`,
+        `缺失類型：${cleanText(item && item.deficiencyType)}`,
+        `問題說明：${cleanText(item && item.problemDesc)}`,
+        `預定完成日：${cleanText(item && item.correctiveDueDate)}`,
+        `系統入口：${portalUrl}`,
+        '請登入系統查看並填寫矯正措施。'
+      ])
+    };
   }
 
   async function fetchListMap() {
@@ -354,9 +376,38 @@ function createCorrectiveActionRouter(deps) {
           changes: buildCaseChanges(null, item)
         })
       });
+      const shouldNotify = envelope && envelope.payload && envelope.payload.notifyHandler !== false;
+      const notification = shouldNotify && item.handlerEmail
+        ? await sendGraphMail({
+            graphRequest,
+            getDelegatedToken,
+            to: item.handlerEmail,
+            ...buildAssignmentMail(item)
+          })
+        : {
+            sent: false,
+            channel: 'graph-mail',
+            reason: shouldNotify ? 'missing-recipient' : 'disabled'
+          };
+      if (shouldNotify) {
+        await createAuditRow({
+          eventType: notification.sent ? 'corrective_action.notification_sent' : 'corrective_action.notification_failed',
+          actorEmail: actor.actorMeta.actorEmail,
+          targetEmail: cleanText(item.handlerEmail),
+          unitCode: cleanText(item.handlerUnitCode),
+          recordId: item.id,
+          occurredAt: now,
+          payloadJson: JSON.stringify({
+            actorName: actor.actorMeta.actorName,
+            actorUsername: actor.actorMeta.actorUsername,
+            notification
+          })
+        });
+      }
       await writeJson(res, buildJsonResponse(201, {
         ok: true,
         item: mapCaseForClient(item),
+        notification,
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {

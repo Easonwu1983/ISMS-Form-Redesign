@@ -28,6 +28,9 @@ const {
   buildFieldChanges
 } = require('./audit-diff.cjs');
 const {
+  sendGraphMail
+} = require('./graph-mailer.cjs');
+const {
   GRAPH_ROOT,
   acquirePreferredGraphToken,
   loadBackendConfig,
@@ -447,6 +450,7 @@ const correctiveActionRouter = createCorrectiveActionRouter({
   graphRequest,
   resolveSiteId,
   getDelegatedToken,
+  sendGraphMail,
   requestAuthz
 });
 
@@ -491,6 +495,7 @@ const systemUserRouter = createSystemUserRouter({
   graphRequest,
   resolveSiteId,
   getDelegatedToken,
+  sendGraphMail,
   requestAuthz
 });
 

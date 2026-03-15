@@ -1701,6 +1701,7 @@
         user: stored,
         resetToken: String(body && body.resetToken || '').trim(),
         resetTokenExpiresAt: String(body && body.resetTokenExpiresAt || '').trim(),
+        delivery: body && body.delivery ? body.delivery : null,
         source: 'remote'
       };
     } catch (error) {
@@ -1882,7 +1883,7 @@
         message: '矯正單已寫入正式後端',
         error: ''
       });
-      return { ok: true, item: stored, source: 'remote' };
+      return { ok: true, item: stored, source: 'remote', notification: response && response.notification ? response.notification : null };
     } catch (error) {
       if (isStrictRemoteDataMode()) {
         setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式矯正單寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });

@@ -83,11 +83,12 @@
         '<div class="login-error" id="forgot-error">找不到符合帳號與信箱的使用者</div>' +
         '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="forgot-username" placeholder="請輸入帳號" required></div><div class="form-group"><label class="form-label">註冊電子信箱</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入帳號綁定的電子信箱" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 取得重設代碼</button></form>' +
         '<div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px">' +
-        '<p style="font-size:.88rem;color:#0f172a;font-weight:600">已產生一次性重設代碼</p>' +
+        '<p style="font-size:.88rem;color:#0f172a;font-weight:600" id="reset-result-title">已產生一次性重設代碼</p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary)">帳號：<strong id="reset-username"></strong></p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary)">有效期限：<strong id="reset-expire"></strong></p>' +
+        '<p style="font-size:.82rem;color:var(--text-secondary);margin-top:6px" id="reset-result-message"></p>' +
         '<p style="font-size:1.1rem;font-weight:700;color:var(--text-heading);margin-top:6px;font-family:monospace;background:#f0f2f7;padding:8px;border-radius:8px" id="reset-token"></p>' +
-        '<form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><input type="hidden" id="redeem-token"><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="redeem-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="redeem-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' 完成重設</button></form></div>' +
+        '<form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><div class="form-group"><label class="form-label">重設代碼</label><input type="text" class="form-input" id="redeem-token" placeholder="請輸入信件中的重設代碼" required></div><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="redeem-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="redeem-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' 完成重設</button></form></div>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
         '<div class="login-hint"><p>測試帳號</p><table>' +
         '<tr><th>角色</th><th>帳號</th><th>密碼</th></tr>' +
@@ -191,11 +192,17 @@
           document.getElementById('forgot-error').classList.remove('show');
           document.getElementById('reset-username').textContent = resetResult.user.username;
           document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || '依系統設定';
+          var deliveredByMail = !!(resetResult.delivery && resetResult.delivery.sent);
+          document.getElementById('reset-result-title').textContent = deliveredByMail ? '重設信已寄出' : '已產生一次性重設代碼';
+          document.getElementById('reset-result-message').textContent = deliveredByMail
+            ? ('系統已將重設代碼寄送到 ' + (resetResult.user.email || email) + '，請查看信件後貼到下方欄位。')
+            : '目前無法直接寄信，系統已提供一次性重設代碼供手動完成重設。';
           document.getElementById('reset-token').textContent = resetResult.resetToken || resetResult.password || '';
+          document.getElementById('reset-token').style.display = (resetResult.resetToken || resetResult.password) ? 'block' : 'none';
           document.getElementById('redeem-username').value = resetResult.user.username;
-          document.getElementById('redeem-token').value = resetResult.resetToken || 'LOCAL-RESET';
+          document.getElementById('redeem-token').value = resetResult.resetToken || '';
           document.getElementById('forgot-result').style.display = 'block';
-          toast('已產生一次性重設代碼', 'info');
+          toast(deliveredByMail ? '重設信已寄出' : '已產生一次性重設代碼', deliveredByMail ? 'success' : 'info');
         } catch (error) {
           document.getElementById('forgot-error').textContent = String(error && error.message || error || '密碼重設失敗');
           document.getElementById('forgot-error').classList.add('show');

@@ -47,6 +47,9 @@ const {
 const {
   buildFieldChanges
 } = require('./audit-diff.cjs');
+const {
+  buildHtmlDocument
+} = require('./graph-mailer.cjs');
 
 function createSystemUserRouter(deps) {
   const {
@@ -55,6 +58,7 @@ function createSystemUserRouter(deps) {
     graphRequest,
     resolveSiteId,
     getDelegatedToken,
+    sendGraphMail,
     requestAuthz
   } = deps;
 
@@ -249,6 +253,21 @@ function createSystemUserRouter(deps) {
         }
       };
     }));
+  }
+
+  function buildResetMail(savedItem, reset) {
+    return {
+      subject: 'ISMS 系統密碼重設通知',
+      html: buildHtmlDocument([
+        `您好，${cleanText(savedItem && savedItem.name) || cleanText(savedItem && savedItem.username)}：`,
+        '系統已為您建立一次性密碼重設代碼。',
+        `帳號：${cleanText(savedItem && savedItem.username)}`,
+        `重設代碼：${cleanText(reset && reset.token)}`,
+        `有效期限：${cleanText(reset && reset.expiresAt)}`,
+        '請回到登入頁的「忘記密碼」流程，輸入重設代碼與新密碼完成重設。',
+        '若這不是您本人操作，請立即聯絡系統管理者。'
+      ])
+    };
   }
 
   function preparePasswordForPersist(nextItem, options) {
@@ -836,6 +855,12 @@ function createSystemUserRouter(deps) {
         resetTokenExpiresAt: reset.expiresAt,
         updatedAt: now
       });
+      const delivery = await sendGraphMail({
+        graphRequest,
+        getDelegatedToken,
+        to: saved.item.email,
+        ...buildResetMail(saved.item, reset)
+      });
       await createAuditRow({
         eventType: 'auth.reset-token-issued',
         actorEmail: cleanText(payload.actorEmail || payload.email),
@@ -849,11 +874,25 @@ function createSystemUserRouter(deps) {
           changes: buildSystemUserChanges(existing.item, saved.item)
         })
       });
+      await createAuditRow({
+        eventType: delivery.sent ? 'auth.reset-email-sent' : 'auth.reset-email-failed',
+        actorEmail: cleanText(payload.actorEmail || payload.email),
+        targetEmail: saved.item.email,
+        unitCode: '',
+        recordId: saved.item.username,
+        occurredAt: now,
+        payloadJson: JSON.stringify({
+          action: AUTH_ACTIONS.REQUEST_RESET,
+          actorName: cleanText(payload.actorName),
+          delivery
+        })
+      });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         item: sanitizeUserForClient(saved.item),
-        resetToken: reset.token,
+        resetToken: delivery.sent ? '' : reset.token,
         resetTokenExpiresAt: reset.expiresAt,
+        delivery,
         contractVersion: AUTH_CONTRACT_VERSION
       }), origin);
     } catch (error) {

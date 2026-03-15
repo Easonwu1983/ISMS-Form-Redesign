@@ -666,6 +666,7 @@ function renderCreate() {
         reviewResult: '', reviewNextDate: null, reviewer: '', reviewDate: null,
         trackings: [],
         status: STATUSES.PENDING, createdAt: now, updatedAt: now, closedDate: null, evidence: [],
+        notifyHandler: document.getElementById('f-notify').checked,
         history: [{ time: now, action: '開立矯正單', user: u.name }, { time: now, action: `狀態變更為「${STATUSES.PENDING}」`, user: u.name }]
       };
       const shouldNotify = document.getElementById('f-notify').checked;
@@ -673,10 +674,15 @@ function renderCreate() {
       const createResult = await submitCreateCase(item);
       const storedItem = createResult && createResult.item ? createResult.item : item;
       debugFlow('create', 'submit success', { id: item.id, notify: shouldNotify, handlerEmail: hEmail || '' });
-      if (shouldNotify && hEmail) {
+      if (createResult && createResult.notification && createResult.notification.sent) {
         item.history.push({ time: now, action: `系統寄送指派通知至 ${hEmail}`, user: '系統' });
         updateItem(item.id, { history: item.history });
         toast(`矯正單 ${item.id} 已建立，並已寄送通知至 ${hEmail}`);
+      } else if (shouldNotify && hEmail) {
+        const notifyError = createResult && createResult.notification && createResult.notification.error
+          ? `，但通知寄送失敗：${createResult.notification.error}`
+          : '，但通知尚未成功寄出';
+        toast(`矯正單 ${item.id} 已建立${notifyError}`, 'warning');
       } else {
         toast(`矯正單 ${item.id} 已建立完成`);
       }

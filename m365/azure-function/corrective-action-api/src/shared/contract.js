@@ -362,6 +362,7 @@ function normalizeCreatePayload(payload) {
     problemDesc: cleanText(base.problemDesc),
     occurrence: cleanText(base.occurrence),
     correctiveDueDate: cleanText(base.correctiveDueDate),
+    notifyHandler: base.notifyHandler !== false,
     actorName: cleanText(base.actorName),
     actorUsername: cleanText(base.actorUsername)
   };
