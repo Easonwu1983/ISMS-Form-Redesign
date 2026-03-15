@@ -15,6 +15,26 @@ const ALLOWED_IPV6_PREFIXES = [
   '2001:288:'
 ];
 
+function buildSecurityHeaders(pathname) {
+  const path = String(pathname || '');
+  const isApi = path.startsWith('/api/');
+  const isHtml = path === '/' || path.endsWith('.html') || (!path.includes('.') && !isApi);
+  const headers = {
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()'
+  };
+  if (isApi || isHtml || path.endsWith('m365-config.override.js')) {
+    headers['Cache-Control'] = 'no-store, no-cache, must-revalidate';
+    headers.Pragma = 'no-cache';
+  }
+  if (isHtml) {
+    headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://ntums365.sharepoint.com; connect-src 'self' https://ntums365.sharepoint.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'; child-src 'none';";
+  }
+  return headers;
+}
+
 function normalizeRemoteAddress(remoteAddress) {
   const value = String(remoteAddress || '').trim().toLowerCase();
   if (!value) return '';
@@ -130,6 +150,7 @@ function writeForbiddenHtml(res, ip) {
 </body>
 </html>`;
   res.writeHead(403, {
+    ...buildSecurityHeaders('/'),
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': Buffer.byteLength(payload)
   });
@@ -144,6 +165,7 @@ function writeForbiddenJson(res, ip) {
     remoteAddress: ip
   });
   res.writeHead(403, {
+    ...buildSecurityHeaders('/api/forbidden'),
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(payload)
   });
@@ -173,7 +195,10 @@ function proxyRequest(req, res, remoteAddress) {
       'x-forwarded-proto': 'http'
     }
   }, (upstreamRes) => {
-    res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
+    res.writeHead(upstreamRes.statusCode || 502, {
+      ...upstreamRes.headers,
+      ...buildSecurityHeaders(targetUrl.pathname)
+    });
     upstreamRes.pipe(res);
   });
 
@@ -185,6 +210,7 @@ function proxyRequest(req, res, remoteAddress) {
     });
     if (!res.headersSent) {
       res.writeHead(502, {
+        ...buildSecurityHeaders('/api/bad-gateway'),
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Length': Buffer.byteLength(payload)
       });

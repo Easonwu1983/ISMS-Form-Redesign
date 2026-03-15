@@ -85,12 +85,48 @@ async function run() {
       return { status: response.status };
     }, true);
 
-    for (const endpoint of ['auth', 'system-users', 'audit-trail']) {
+    await step(target, 'homepage.security-headers', async () => {
+      const { response, text } = await requestText(`${target.base}/`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const cspHeader = response.headers.get('content-security-policy') || '';
+      const xFrame = response.headers.get('x-frame-options') || '';
+      const nosniff = response.headers.get('x-content-type-options') || '';
+      const referrer = response.headers.get('referrer-policy') || '';
+      const permissions = response.headers.get('permissions-policy') || '';
+      const cacheControl = response.headers.get('cache-control') || '';
+      if (!cspHeader && !/http-equiv=["']Content-Security-Policy["']/i.test(text)) {
+        throw new Error('missing CSP header or meta policy');
+      }
+      if (!xFrame) throw new Error('missing X-Frame-Options');
+      if (!nosniff) throw new Error('missing X-Content-Type-Options');
+      if (!referrer && !/meta name=["']referrer["']/i.test(text)) {
+        throw new Error('missing Referrer-Policy');
+      }
+      if (!permissions && !/http-equiv=["']Permissions-Policy["']/i.test(text)) {
+        throw new Error('missing Permissions-Policy');
+      }
+      return {
+        csp: cspHeader ? 'header' : 'meta',
+        xFrame,
+        nosniff,
+        referrer: referrer || 'meta',
+        permissions: permissions || 'meta',
+        cacheControl
+      };
+    }, true);
+
+    for (const endpoint of ['auth', 'system-users', 'audit-trail', 'review-scopes', 'attachments']) {
       await step(target, `health:${endpoint}`, async () => {
         const { response, json } = await requestJson(`${target.base}/api/${endpoint}/health`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         if (!json || json.ok === false || json.ready === false) {
           throw new Error(json && (json.message || json.error) || `${endpoint} health not ready`);
+        }
+        if (!String(response.headers.get('cache-control') || '').toLowerCase().includes('no-store')) {
+          throw new Error(`${endpoint} health missing no-store cache-control`);
+        }
+        if (!response.headers.get('x-content-type-options')) {
+          throw new Error(`${endpoint} health missing X-Content-Type-Options`);
         }
         return { status: response.status, ready: json.ready !== false };
       }, true);
@@ -140,6 +176,22 @@ async function run() {
       return { status: response.status };
     }, true);
 
+    await step(target, 'review-scopes.anonymous.denied', async () => {
+      const { response } = await requestJson(`${target.base}/api/review-scopes`);
+      if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
+      return { status: response.status };
+    }, true);
+
+    await step(target, 'attachments.upload.anonymous.denied', async () => {
+      const { response } = await requestJson(`${target.base}/api/attachments/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
+      return { status: response.status };
+    }, true);
+
     await step(target, 'system-users.authorized', async () => {
       const { response, json } = await requestJson(`${target.base}/api/system-users`, {
         headers: {
@@ -152,6 +204,17 @@ async function run() {
       if (items.some((item) => Object.prototype.hasOwnProperty.call(item || {}, 'password'))) {
         throw new Error('password leaked in system-users list');
       }
+      return { count: items.length };
+    }, true);
+
+    await step(target, 'review-scopes.authorized', async () => {
+      const { response, json } = await requestJson(`${target.base}/api/review-scopes`, {
+        headers: {
+          Authorization: `Bearer ${sessionToken}`
+        }
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const items = Array.isArray(json && json.items) ? json.items : [];
       return { count: items.length };
     }, true);
 

@@ -101,11 +101,24 @@ function buildCorsHeaders(origin) {
   };
 }
 
+function buildSecurityHeaders(pathname) {
+  const path = cleanText(pathname) || '/';
+  return {
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()',
+    'Cache-Control': path.startsWith('/api/') ? 'no-store, no-cache, must-revalidate' : 'no-store',
+    Pragma: 'no-cache'
+  };
+}
+
 async function writeJson(res, response, origin) {
   const payload = JSON.stringify(response.jsonBody || {});
   const headers = {
     ...(response.headers || {}),
     ...buildCorsHeaders(origin),
+    ...buildSecurityHeaders(response.path || '/api'),
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(payload)
   };
@@ -560,7 +573,10 @@ function createServer() {
     const url = new URL(req.url, `http://${req.headers.host}`);
 
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, buildCorsHeaders(origin));
+      res.writeHead(204, {
+        ...buildCorsHeaders(origin),
+        ...buildSecurityHeaders(url.pathname)
+      });
       res.end();
       return;
     }
