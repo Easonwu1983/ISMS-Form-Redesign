@@ -972,7 +972,9 @@
         toast(fallbackResult.reason, 'error');
         return;
       }
-      const roster = getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
+      const roster = fallbackResult.row
+        || (fallbackResult.id ? getAllTrainingRosters().find((row) => row.id === fallbackResult.id) : null)
+        || getAllTrainingRosters().find((row) => row.unit === currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
       const result = roster ? await submitTrainingRosterUpsert({
         ...roster,
         source: 'manual',

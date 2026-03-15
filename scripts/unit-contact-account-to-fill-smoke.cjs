@@ -120,6 +120,19 @@ async function getTrainingRosters(token) {
   return Array.isArray(body && body.items) ? body.items : [];
 }
 
+async function waitForTrainingRosters(token, predicate, options) {
+  const timeoutMs = Number((options && options.timeoutMs) || 30000);
+  const intervalMs = Number((options && options.intervalMs) || 1500);
+  const deadline = Date.now() + timeoutMs;
+  let lastItems = [];
+  do {
+    lastItems = await getTrainingRosters(token);
+    if (predicate(lastItems)) return lastItems;
+    await wait(intervalMs);
+  } while (Date.now() < deadline);
+  return lastItems;
+}
+
 function isSafeTargetUnit(unit) {
   return SAFE_TARGET_UNITS.includes(cleanText(unit));
 }
@@ -480,10 +493,14 @@ async function loginViaPage(page, username, password) {
       await page.fill('#tr-new-unit-name', cleanText(targetUnit.split(UNIT_SEPARATOR).pop()) || targetUnit);
       await page.fill('#tr-new-identity', identity);
       await page.fill('#tr-new-job-title', jobTitle);
+      const previousRowCount = await page.locator('#training-rows-body tr').count();
       await page.click('#training-add-person');
-      await page.waitForFunction((name) => {
-        return Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes(name));
-      }, manualPersonName, { timeout: 20000 });
+      await page.waitForFunction(({ name, previousRowCount }) => {
+        const rows = Array.from(document.querySelectorAll('#training-rows-body tr'));
+        const nameFound = rows.some((row) => String(row.textContent || '').includes(name));
+        const inputCleared = !String(document.querySelector('#tr-new-name')?.value || '').trim();
+        return nameFound || rows.length > previousRowCount || inputCleared;
+      }, { name: manualPersonName, previousRowCount }, { timeout: 20000 });
       await page.click('[data-testid="training-save-draft"]');
       await page.waitForFunction(() => /#training-fill\//.test(window.location.hash), { timeout: 20000 });
       createdTrainingFormId = await page.evaluate(() => decodeURIComponent((window.location.hash || '').split('/')[1] || ''));
@@ -503,7 +520,9 @@ async function loginViaPage(page, username, password) {
       const form = forms.find((entry) => cleanText(entry.id) === createdTrainingFormId);
       if (!form) throw new Error('Created training draft not found in backend');
       if (cleanText(form.status) !== DRAFT_STATUS) throw new Error(`Unexpected training form status: ${form.status}`);
-      const rosters = await getTrainingRosters(adminToken);
+      const rosters = await waitForTrainingRosters(adminToken, (items) => {
+        return items.some((entry) => cleanText(entry.name) === manualPersonName && cleanText(entry.unit) === targetUnit);
+      });
       createdRosterIds = rosters
         .filter((entry) => cleanText(entry.name) === manualPersonName && cleanText(entry.unit) === targetUnit)
         .map((entry) => cleanText(entry.id))

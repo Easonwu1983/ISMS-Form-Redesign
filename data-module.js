@@ -1021,14 +1021,14 @@
         if (changed) {
           store.rosters[index] = merged;
           saveTrainingStore(store);
-          return { added: false, updated: true, reason: `已更新 ${cleanName} 的名單資訊` };
+          return { added: false, updated: true, id: merged.id, row: merged, reason: `已更新 ${cleanName} 的名單資訊` };
         }
         return { added: false, updated: false, reason: `${cleanName} 已存在於該單位名單` };
       }
 
       store.rosters.push(nextRow);
       saveTrainingStore(store);
-      return { added: true, updated: false, id: nextRow.id };
+      return { added: true, updated: false, id: nextRow.id, row: nextRow };
     }
 
     function deleteTrainingRosterPerson(id) {
