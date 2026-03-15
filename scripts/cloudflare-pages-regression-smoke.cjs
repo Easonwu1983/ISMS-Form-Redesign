@@ -360,7 +360,7 @@ async function run() {
     if (/\?{4,}/.test(checklistDetailText)) {
       throw new Error('checklist detail contains placeholder question marks');
     }
-    if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001') || !checklistDetailText.includes('待改善項目')) {
+    if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001') || !checklistDetailText.includes('需改善項目')) {
       throw new Error('checklist detail smoke record did not render as expected');
     }
     pushStep('checklist:detail-loaded', true, checklistDetailId);
@@ -369,7 +369,7 @@ async function run() {
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('檢核表管理'));
+      return !!(app && app.innerText && app.innerText.includes('檢核題庫管理'));
     }, { timeout: 20000 });
     const checklistManageText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(checklistManageText)) {
