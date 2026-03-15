@@ -751,6 +751,41 @@
       return { forms: [], rosters: [], nextFormId: 1, nextRosterId: 1 };
     }
 
+    function parseTrainingRosterSequence(id) {
+      const match = String(id || '').trim().match(/^RST-(\d+)$/i);
+      return match ? Number(match[1]) : 0;
+    }
+
+    function ensureTrainingRosterSequence(store) {
+      const base = store && typeof store === 'object' ? store : emptyTrainingStore();
+      const maxExisting = Array.isArray(base.rosters)
+        ? base.rosters.reduce((max, row) => Math.max(max, parseTrainingRosterSequence(row && row.id)), 0)
+        : 0;
+      const currentNext = Number.isFinite(Number(base.nextRosterId)) ? Number(base.nextRosterId) : 1;
+      return {
+        ...base,
+        nextRosterId: Math.max(currentNext, maxExisting + 1, 1)
+      };
+    }
+
+    function createNextTrainingRosterId(store) {
+      const base = ensureTrainingRosterSequence(store);
+      let nextValue = base.nextRosterId;
+      const existingIds = new Set((Array.isArray(base.rosters) ? base.rosters : [])
+        .map((row) => String(row && row.id || '').trim())
+        .filter(Boolean));
+      let candidate = 'RST-' + String(nextValue).padStart(4, '0');
+      while (existingIds.has(candidate)) {
+        nextValue += 1;
+        candidate = 'RST-' + String(nextValue).padStart(4, '0');
+      }
+      base.nextRosterId = nextValue + 1;
+      return {
+        id: candidate,
+        store: base
+      };
+    }
+
     function normalizeTrainingRosterRow(row, fallbackUnit) {
       const unit = String((row && row.unit) || fallbackUnit || '').trim();
       const statsUnit = String((row && (row.statsUnit || row.l1Unit)) || getTrainingStatsUnit(unit)).trim();
@@ -880,13 +915,13 @@
     function loadTrainingStore() {
       const raw = readVersionedStore(TRAINING_KEY, emptyTrainingStore);
       if (!raw || typeof raw !== 'object') return emptyTrainingStore();
-      const store = {
+      const store = ensureTrainingRosterSequence({
         forms: Array.isArray(raw.forms) ? raw.forms.map((form) => normalizeTrainingForm(form)) : [],
         rosters: Array.isArray(raw.rosters) ? raw.rosters.map((row) => normalizeTrainingRosterRow(row, row.unit)) : [],
         nextFormId: Number.isFinite(raw.nextFormId) ? raw.nextFormId : 1,
         nextRosterId: Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : 1
-      };
-      let changed = false;
+      });
+      let changed = store.nextRosterId !== (Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : 1);
       const normalizedForms = [];
       store.forms.forEach((form) => {
         const documentNo = buildTrainingFormDocumentNo(form.unit, form.trainingYear, form.fillDate || form.updatedAt || form.createdAt);
@@ -959,11 +994,17 @@
         return { added: false, updated: false, reason: '請先選擇單位並輸入姓名' };
       }
 
-      const store = loadTrainingStore();
+      let store = loadTrainingStore();
       const index = store.rosters.findIndex((row) => row.unit === cleanUnit && row.name.toLowerCase() === cleanName.toLowerCase());
+      let nextRosterId = index >= 0 ? store.rosters[index].id : '';
+      if (!nextRosterId) {
+        const sequence = createNextTrainingRosterId(store);
+        store = sequence.store;
+        nextRosterId = sequence.id;
+      }
       const nextRow = normalizeTrainingRosterRow({
         ...base,
-        id: index >= 0 ? store.rosters[index].id : 'RST-' + String(store.nextRosterId).padStart(4, '0'),
+        id: nextRosterId,
         unit: cleanUnit,
         source: source || base.source || 'manual',
         createdBy: index >= 0 ? store.rosters[index].createdBy : (actorName || '系統'),
@@ -985,7 +1026,6 @@
         return { added: false, updated: false, reason: `${cleanName} 已存在於該單位名單` };
       }
 
-      store.nextRosterId += 1;
       store.rosters.push(nextRow);
       saveTrainingStore(store);
       return { added: true, updated: false, id: nextRow.id };
