@@ -150,6 +150,7 @@ function normalizeActivationPayload(payload) {
   return {
     id: cleanText(payload && payload.id),
     externalUserId: cleanText(payload && payload.externalUserId),
+    initialPassword: cleanText(payload && payload.initialPassword),
     reviewComment: cleanText(payload && payload.reviewComment),
     reviewedBy: cleanText(payload && payload.reviewedBy)
   };

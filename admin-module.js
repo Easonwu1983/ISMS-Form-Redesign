@@ -340,17 +340,19 @@
 
   function promptActivationInfo(applicationId) {
     const mr = document.getElementById('modal-root');
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">標記帳號已啟用</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="form-group"><label class="form-label">系統帳號</label><input type="text" class="form-input" id="unit-contact-external-user-id" placeholder="例如 sheila.tsai 或單一帳號"></div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="例如：帳號已建立，請使用初始密碼登入後立即修改。"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('key-round', 'icon-sm')} 標記已啟用</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">標記帳號已啟用</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="form-group"><label class="form-label">登入帳號</label><input type="text" class="form-input" id="unit-contact-external-user-id" placeholder="例如 sheila.tsai 或單一帳號"></div><div class="form-group"><label class="form-label">初始密碼</label><input type="text" class="form-input" id="unit-contact-initial-password" placeholder="若已另行交付可留空"></div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="例如：帳號已建立，請使用初始密碼登入後立即修改。"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('key-round', 'icon-sm')} 標記已啟用</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
     document.getElementById('modal-bg').addEventListener('click', function (event) { if (event.target === event.currentTarget) closeModalRoot(); });
     document.getElementById('unit-contact-activate-form').addEventListener('submit', async function (event) {
       event.preventDefault();
       const externalUserId = String(document.getElementById('unit-contact-external-user-id').value || '').trim();
+      const initialPassword = String(document.getElementById('unit-contact-initial-password').value || '').trim();
       const reviewComment = String(document.getElementById('unit-contact-activate-comment').value || '').trim();
       closeModalRoot();
       try {
         const result = await activateUnitContactApplication({
           id: applicationId,
           externalUserId,
+          initialPassword,
           reviewComment
         });
         toast(result && result.delivery && result.delivery.sent ? '已標記啟用並寄送通知' : '已標記啟用');

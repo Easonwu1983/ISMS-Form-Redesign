@@ -432,7 +432,10 @@ function buildUnitContactAdminMail(application) {
   };
 }
 
-function buildUnitContactStatusMail(application) {
+function buildUnitContactStatusMail(application, options) {
+  const opts = options || {};
+  const loginUsername = cleanText(opts.loginUsername) || cleanText(application && application.externalUserId);
+  const initialPassword = cleanText(opts.initialPassword);
   return {
     subject: `[ISMS] 單位管理人申請進度更新：${cleanText(application && application.id)}`,
     html: buildHtmlDocument([
@@ -442,7 +445,15 @@ function buildUnitContactStatusMail(application) {
       `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`,
       cleanText(application && application.reviewComment) ? `處理說明：${cleanText(application && application.reviewComment)}` : '',
       cleanText(application && application.status) === STATUSES.ACTIVE
-        ? '帳號已可啟用或已完成啟用，請依管理端通知的帳號資訊登入系統。'
+        ? [
+            loginUsername ? `登入帳號：${loginUsername}` : '',
+            initialPassword ? `初始密碼：${initialPassword}` : '',
+            initialPassword
+              ? '請使用上列帳號與初始密碼登入系統，並於首次登入後立即修改密碼。'
+              : (loginUsername
+                  ? '帳號已可啟用或已完成啟用。若尚未收到初始密碼，請先使用忘記密碼流程重設，或聯絡管理端確認。'
+                  : '帳號已可啟用或已完成啟用，請依管理端通知的帳號資訊登入系統。')
+          ].filter(Boolean).join('\n')
         : '請使用原送件信箱回到系統查詢最新處理進度。'
     ].filter(Boolean))
   };
@@ -501,9 +512,9 @@ async function notifyUnitContactApplicationSubmitted(application) {
   };
 }
 
-async function notifyUnitContactStatusUpdated(application) {
+async function notifyUnitContactStatusUpdated(application, options) {
   const applicantEmail = cleanText(application && application.applicantEmail);
-  const mail = buildUnitContactStatusMail(application);
+  const mail = buildUnitContactStatusMail(application, options);
   const delivery = applicantEmail
     ? await sendGraphMail({
         graphRequest,
@@ -516,15 +527,17 @@ async function notifyUnitContactStatusUpdated(application) {
 
   await tryCreateAuditRow({
     eventType: delivery.sent ? 'unit_contact.status_mail_sent' : 'unit_contact.status_mail_failed',
-    actorEmail: cleanText(application && application.reviewedBy) || cleanText(application && application.applicantEmail),
-    targetEmail: applicantEmail,
-    unitCode: cleanText(application && application.unitCode),
-    recordId: cleanText(application && application.id),
-    payloadJson: JSON.stringify({
-      delivery,
-      subject: mail.subject,
-      status: cleanText(application && application.status)
-    })
+      actorEmail: cleanText(application && application.reviewedBy) || cleanText(application && application.applicantEmail),
+      targetEmail: applicantEmail,
+      unitCode: cleanText(application && application.unitCode),
+      recordId: cleanText(application && application.id),
+      payloadJson: JSON.stringify({
+        delivery,
+        subject: mail.subject,
+        status: cleanText(application && application.status),
+        loginUsername: cleanText(options && options.loginUsername) || cleanText(application && application.externalUserId),
+        hasInitialPassword: !!cleanText(options && options.initialPassword)
+      })
   });
 
   return delivery;
@@ -815,7 +828,10 @@ async function handleActivate(req, res, origin) {
       activatedAt: new Date().toISOString(),
       externalUserId: payload.externalUserId
     });
-    const delivery = await notifyUnitContactStatusUpdated(result.after);
+    const delivery = await notifyUnitContactStatusUpdated(result.after, {
+      loginUsername: payload.externalUserId,
+      initialPassword: payload.initialPassword
+    });
     await tryCreateAuditRow({
       eventType: 'unit_contact.application_activated',
       actorEmail: cleanText(authz && authz.user && authz.user.email),
