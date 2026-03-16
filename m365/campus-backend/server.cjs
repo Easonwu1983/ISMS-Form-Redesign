@@ -28,7 +28,8 @@ const {
   buildFieldChanges
 } = require('./audit-diff.cjs');
 const {
-  sendGraphMail
+  sendGraphMail,
+  buildHtmlDocument
 } = require('./graph-mailer.cjs');
 const {
   GRAPH_ROOT,
@@ -378,6 +379,96 @@ function summarizeLookupResults(applications) {
   };
 }
 
+function getUnitContactNotifyTo() {
+  return cleanText(
+    process.env.UNIT_CONTACT_NOTIFY_TO
+    || process.env.GRAPH_MAIL_SENDER_UPN
+    || process.env.AUTH_MAIL_SENDER_UPN
+  );
+}
+
+function buildUnitContactApplicantMail(application) {
+  return {
+    subject: `[ISMS] 已收到單位管理人申請：${cleanText(application && application.id)}`,
+    html: buildHtmlDocument([
+      `您好，系統已收到您的單位管理人申請。`,
+      `申請編號：${cleanText(application && application.id)}`,
+      `申請單位：${cleanText(application && application.unitValue)}`,
+      `申請人：${cleanText(application && application.applicantName)}`,
+      `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`,
+      `後續請使用送件信箱回到系統查詢申請進度。`
+    ])
+  };
+}
+
+function buildUnitContactAdminMail(application) {
+  return {
+    subject: `[ISMS] 新的單位管理人申請：${cleanText(application && application.id)}`,
+    html: buildHtmlDocument([
+      `系統收到新的單位管理人申請，請管理端留意。`,
+      `申請編號：${cleanText(application && application.id)}`,
+      `申請單位：${cleanText(application && application.unitValue)}`,
+      `申請人：${cleanText(application && application.applicantName)}`,
+      `申請信箱：${cleanText(application && application.applicantEmail)}`,
+      `分機：${cleanText(application && application.extensionNumber)}`,
+      `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`
+    ])
+  };
+}
+
+async function notifyUnitContactApplicationSubmitted(application) {
+  const applicantMail = buildUnitContactApplicantMail(application);
+  const adminMail = buildUnitContactAdminMail(application);
+  const applicantEmail = cleanText(application && application.applicantEmail);
+  const adminEmail = getUnitContactNotifyTo();
+  const applicantDelivery = applicantEmail
+    ? await sendGraphMail({
+        graphRequest,
+        getDelegatedToken,
+        to: applicantEmail,
+        subject: applicantMail.subject,
+        html: applicantMail.html
+      })
+    : { sent: false, channel: 'graph-mail', reason: 'missing-applicant-email' };
+  const adminDelivery = adminEmail
+    ? await sendGraphMail({
+        graphRequest,
+        getDelegatedToken,
+        to: adminEmail,
+        subject: adminMail.subject,
+        html: adminMail.html
+      })
+    : { sent: false, channel: 'graph-mail', reason: 'missing-admin-recipient' };
+
+  await tryCreateAuditRow({
+    eventType: applicantDelivery.sent ? 'unit_contact.applicant_mail_sent' : 'unit_contact.applicant_mail_failed',
+    actorEmail: cleanText(application && application.applicantEmail),
+    targetEmail: cleanText(application && application.applicantEmail),
+    unitCode: cleanText(application && application.unitCode),
+    recordId: cleanText(application && application.id),
+    payloadJson: JSON.stringify({
+      delivery: applicantDelivery,
+      subject: applicantMail.subject
+    })
+  });
+  await tryCreateAuditRow({
+    eventType: adminDelivery.sent ? 'unit_contact.admin_mail_sent' : 'unit_contact.admin_mail_failed',
+    actorEmail: cleanText(application && application.applicantEmail),
+    targetEmail: adminEmail,
+    unitCode: cleanText(application && application.unitCode),
+    recordId: cleanText(application && application.id),
+    payloadJson: JSON.stringify({
+      delivery: adminDelivery,
+      subject: adminMail.subject
+    })
+  });
+
+  return {
+    applicant: applicantDelivery,
+    admin: adminDelivery
+  };
+}
+
 async function createApplication(payload) {
   const siteId = await resolveSiteId();
   const lists = await resolveLists();
@@ -508,9 +599,11 @@ async function handleApply(req, res, origin) {
     validateApplyPayload(payload);
     await ensureNoDuplicateActiveApplication(payload);
     const created = await createApplication(payload);
+    const notifications = await notifyUnitContactApplicationSubmitted(created);
     return writeJson(res, buildJsonResponse(201, {
       ok: true,
       application: mapApplicationForClient(created),
+      notifications,
       contractVersion: CONTRACT_VERSION
     }), origin);
   } catch (error) {
