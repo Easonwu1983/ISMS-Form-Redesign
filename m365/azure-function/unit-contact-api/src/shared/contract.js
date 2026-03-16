@@ -2,7 +2,10 @@ const CONTRACT_VERSION = '2026-03-11';
 
 const ACTIONS = {
   APPLY: 'unit-contact.apply',
-  LOOKUP: 'unit-contact.lookup'
+  LOOKUP: 'unit-contact.lookup',
+  LIST: 'unit-contact.list',
+  REVIEW: 'unit-contact.review',
+  ACTIVATE: 'unit-contact.activate'
 };
 
 const STATUSES = {
@@ -119,6 +122,41 @@ function normalizeLookupEmail(email) {
   const value = cleanEmail(email);
   if (!value) throw createError('\u8acb\u8f38\u5165\u7533\u8acb\u4fe1\u7bb1\u3002', 400);
   return value;
+}
+
+function normalizeReviewPayload(payload) {
+  return {
+    id: cleanText(payload && payload.id),
+    status: cleanText(payload && payload.status),
+    reviewComment: cleanText(payload && payload.reviewComment),
+    reviewedBy: cleanText(payload && payload.reviewedBy),
+    externalUserId: cleanText(payload && payload.externalUserId)
+  };
+}
+
+function validateReviewPayload(payload) {
+  if (!cleanText(payload && payload.id)) throw createError('\u7f3a\u5c11\u7533\u8acb\u7de8\u865f\u3002', 400);
+  const status = cleanText(payload && payload.status);
+  if (![
+    STATUSES.APPROVED,
+    STATUSES.RETURNED,
+    STATUSES.REJECTED
+  ].includes(status)) {
+    throw createError('\u4e0d\u652f\u63f4\u7684\u5be9\u6838\u72c0\u614b\u3002', 400);
+  }
+}
+
+function normalizeActivationPayload(payload) {
+  return {
+    id: cleanText(payload && payload.id),
+    externalUserId: cleanText(payload && payload.externalUserId),
+    reviewComment: cleanText(payload && payload.reviewComment),
+    reviewedBy: cleanText(payload && payload.reviewedBy)
+  };
+}
+
+function validateActivationPayload(payload) {
+  if (!cleanText(payload && payload.id)) throw createError('\u7f3a\u5c11\u7533\u8acb\u7de8\u865f\u3002', 400);
 }
 
 function buildApplicationId(sequence, date) {
@@ -327,6 +365,10 @@ module.exports = {
   mapGraphFieldsToApplication,
   normalizeApplyPayload,
   normalizeLookupEmail,
+  normalizeReviewPayload,
+  validateReviewPayload,
+  normalizeActivationPayload,
+  validateActivationPayload,
   normalizeStoredApplication,
   parseJsonBody,
   validateActionEnvelope,

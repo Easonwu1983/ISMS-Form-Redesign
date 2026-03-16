@@ -342,6 +342,15 @@
       };
     }
 
+    function buildUnitContactAdminEnvelope(action, payload) {
+      return {
+        action: cleanText(action),
+        requestId: makeRequestId('uca'),
+        context: buildClientContext(CONTRACT_VERSION),
+        payload: payload && typeof payload === 'object' ? payload : {}
+      };
+    }
+
     function buildCorrectiveActionEnvelope(action, payload) {
       return {
         action: cleanText(action),
@@ -857,6 +866,77 @@
         });
       }
       return normalizeRemoteApplications(body);
+    }
+
+    function getUnitContactApplicationsEndpoint() {
+      const submitEndpoint = cleanText(getConfig().unitContactSubmitEndpoint);
+      if (!submitEndpoint) return '';
+      return submitEndpoint.replace(/\/apply$/, '/applications');
+    }
+
+    function getUnitContactReviewEndpoint() {
+      const submitEndpoint = cleanText(getConfig().unitContactSubmitEndpoint);
+      if (!submitEndpoint) return '';
+      return submitEndpoint.replace(/\/apply$/, '/review');
+    }
+
+    function getUnitContactActivateEndpoint() {
+      const submitEndpoint = cleanText(getConfig().unitContactSubmitEndpoint);
+      if (!submitEndpoint) return '';
+      return submitEndpoint.replace(/\/apply$/, '/activate');
+    }
+
+    async function listUnitContactApplications(filters) {
+      const endpoint = getUnitContactApplicationsEndpoint();
+      if (!endpoint) throw new Error('未設定 unit-contact applications endpoint');
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const query = filters && typeof filters === 'object' ? filters : {};
+      Object.keys(query).forEach(function (key) {
+        const value = cleanText(query[key]);
+        if (value) url.searchParams.set(key, value);
+      });
+      const body = await requestJson(url.toString(), {
+        method: 'GET',
+        contractVersion: CONTRACT_VERSION,
+        sharedHeaders: getConfig().unitContactSharedHeaders || {}
+      });
+      return normalizeRemoteApplications({ applications: body && body.items ? body.items : [] });
+    }
+
+    async function reviewUnitContactApplication(payload) {
+      const endpoint = getUnitContactReviewEndpoint();
+      if (!endpoint) throw new Error('未設定 unit-contact review endpoint');
+      const body = await requestJson(endpoint, {
+        method: 'POST',
+        body: buildUnitContactAdminEnvelope('unit-contact.review', payload),
+        contractVersion: CONTRACT_VERSION,
+        sharedHeaders: getConfig().unitContactSharedHeaders || {}
+      });
+      const items = normalizeRemoteApplications({ applications: body && body.item ? [body.item] : [] });
+      return {
+        ok: !!(body && body.ok !== false),
+        item: items[0] || null,
+        delivery: body && body.delivery ? body.delivery : null,
+        raw: body
+      };
+    }
+
+    async function activateUnitContactApplication(payload) {
+      const endpoint = getUnitContactActivateEndpoint();
+      if (!endpoint) throw new Error('未設定 unit-contact activate endpoint');
+      const body = await requestJson(endpoint, {
+        method: 'POST',
+        body: buildUnitContactAdminEnvelope('unit-contact.activate', payload),
+        contractVersion: CONTRACT_VERSION,
+        sharedHeaders: getConfig().unitContactSharedHeaders || {}
+      });
+      const items = normalizeRemoteApplications({ applications: body && body.item ? [body.item] : [] });
+      return {
+        ok: !!(body && body.ok !== false),
+        item: items[0] || null,
+        delivery: body && body.delivery ? body.delivery : null,
+        raw: body
+      };
     }
 
     function getCorrectiveActionsEndpoint() {
@@ -1412,6 +1492,7 @@
       buildActivationUrl,
       buildSubmitEnvelope,
       buildLookupEnvelope,
+      buildUnitContactAdminEnvelope,
       buildCorrectiveActionEnvelope,
       buildChecklistEnvelope,
       buildTrainingEnvelope,
@@ -1423,6 +1504,9 @@
       },
       submitUnitContactApplication,
       lookupUnitContactApplicationsByEmail,
+      listUnitContactApplications,
+      reviewUnitContactApplication,
+      activateUnitContactApplication,
       markActivationPending,
       getCorrectiveActionHealth,
       listCorrectiveActions,

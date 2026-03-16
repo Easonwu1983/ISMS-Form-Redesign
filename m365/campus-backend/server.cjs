@@ -12,9 +12,14 @@ const {
   mapApplicationToGraphFields,
   mapGraphFieldsToApplication,
   normalizeApplyPayload,
+  normalizeActivationPayload,
   normalizeLookupEmail,
+  normalizeReviewPayload,
+  STATUSES,
   validateActionEnvelope,
-  validateApplyPayload
+  validateActivationPayload,
+  validateApplyPayload,
+  validateReviewPayload
 } = require('../azure-function/unit-contact-api/src/shared/contract');
 const { createChecklistRouter } = require('./checklist-backend.cjs');
 const { createCorrectiveActionRouter } = require('./corrective-action-backend.cjs');
@@ -266,7 +271,10 @@ async function listAllApplications() {
   }
 
   return items
-    .map((entry) => entry && entry.fields ? mapGraphFieldsToApplication(entry.fields) : null)
+    .map((entry) => entry && entry.fields ? {
+      listItemId: cleanText(entry.id),
+      application: mapGraphFieldsToApplication(entry.fields)
+    } : null)
     .filter(Boolean);
 }
 
@@ -280,14 +288,22 @@ function parseSequenceFromId(id, year) {
 
 async function getNextSequence(year) {
   const applications = await listAllApplications();
-  return applications.reduce((maxValue, entry) => Math.max(maxValue, parseSequenceFromId(entry.id, year)), 0) + 1;
+  return applications.reduce((maxValue, entry) => Math.max(maxValue, parseSequenceFromId(entry.application && entry.application.id, year)), 0) + 1;
 }
 
 async function listApplicationsByEmail(email) {
   const applications = await listAllApplications();
   return applications
+    .map((entry) => entry.application)
     .filter((entry) => entry.applicantEmail === email)
     .sort((left, right) => String(right.submittedAt).localeCompare(String(left.submittedAt)));
+}
+
+async function findApplicationEntryById(id) {
+  const cleanId = cleanText(id);
+  if (!cleanId) return null;
+  const applications = await listAllApplications();
+  return applications.find((entry) => cleanText(entry.application && entry.application.id) === cleanId) || null;
 }
 
 async function ensureNoDuplicateActiveApplication(payload) {
@@ -416,6 +432,22 @@ function buildUnitContactAdminMail(application) {
   };
 }
 
+function buildUnitContactStatusMail(application) {
+  return {
+    subject: `[ISMS] 單位管理人申請進度更新：${cleanText(application && application.id)}`,
+    html: buildHtmlDocument([
+      `您好，您的單位管理人申請狀態已更新。`,
+      `申請編號：${cleanText(application && application.id)}`,
+      `申請單位：${cleanText(application && application.unitValue)}`,
+      `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`,
+      cleanText(application && application.reviewComment) ? `處理說明：${cleanText(application && application.reviewComment)}` : '',
+      cleanText(application && application.status) === STATUSES.ACTIVE
+        ? '帳號已可啟用或已完成啟用，請依管理端通知的帳號資訊登入系統。'
+        : '請使用原送件信箱回到系統查詢最新處理進度。'
+    ].filter(Boolean))
+  };
+}
+
 async function notifyUnitContactApplicationSubmitted(application) {
   const applicantMail = buildUnitContactApplicantMail(application);
   const adminMail = buildUnitContactAdminMail(application);
@@ -469,6 +501,35 @@ async function notifyUnitContactApplicationSubmitted(application) {
   };
 }
 
+async function notifyUnitContactStatusUpdated(application) {
+  const applicantEmail = cleanText(application && application.applicantEmail);
+  const mail = buildUnitContactStatusMail(application);
+  const delivery = applicantEmail
+    ? await sendGraphMail({
+        graphRequest,
+        getDelegatedToken,
+        to: applicantEmail,
+        subject: mail.subject,
+        html: mail.html
+      })
+    : { sent: false, channel: 'graph-mail', reason: 'missing-applicant-email' };
+
+  await tryCreateAuditRow({
+    eventType: delivery.sent ? 'unit_contact.status_mail_sent' : 'unit_contact.status_mail_failed',
+    actorEmail: cleanText(application && application.reviewedBy) || cleanText(application && application.applicantEmail),
+    targetEmail: applicantEmail,
+    unitCode: cleanText(application && application.unitCode),
+    recordId: cleanText(application && application.id),
+    payloadJson: JSON.stringify({
+      delivery,
+      subject: mail.subject,
+      status: cleanText(application && application.status)
+    })
+  });
+
+  return delivery;
+}
+
 async function createApplication(payload) {
   const siteId = await resolveSiteId();
   const lists = await resolveLists();
@@ -498,6 +559,59 @@ async function createApplication(payload) {
   });
 
   return mapped;
+}
+
+function matchesListFilter(application, filters) {
+  const input = filters && typeof filters === 'object' ? filters : {};
+  const status = cleanText(input.status);
+  const email = cleanText(input.email).toLowerCase();
+  const keyword = cleanText(input.keyword).toLowerCase();
+  if (status && cleanText(application && application.status) !== status) return false;
+  if (email && cleanText(application && application.applicantEmail).toLowerCase() !== email) return false;
+  if (keyword) {
+    const haystack = [
+      cleanText(application && application.id),
+      cleanText(application && application.applicantName),
+      cleanText(application && application.applicantEmail),
+      cleanText(application && application.unitValue),
+      cleanText(application && application.reviewComment)
+    ].join(' ').toLowerCase();
+    if (!haystack.includes(keyword)) return false;
+  }
+  return true;
+}
+
+async function listApplicationsForAdmin(filters) {
+  const applications = await listAllApplications();
+  const limit = Math.max(1, Math.min(200, Number(filters && filters.limit) || 50));
+  return applications
+    .map((entry) => entry.application)
+    .filter((application) => matchesListFilter(application, filters))
+    .sort((left, right) => String(right.updatedAt || right.submittedAt).localeCompare(String(left.updatedAt || left.submittedAt)))
+    .slice(0, limit);
+}
+
+async function updateApplicationRecord(applicationId, updates) {
+  const entry = await findApplicationEntryById(applicationId);
+  if (!entry) {
+    const error = new Error('Application not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const siteId = await resolveSiteId();
+  const lists = await resolveLists();
+  const columnNames = await resolveListColumnNames(lists.applications.id);
+  const nextRecord = {
+    ...entry.application,
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+  const fields = filterFieldsForExistingColumns(mapApplicationToGraphFields(nextRecord), columnNames);
+  await graphRequest('PATCH', `/sites/${siteId}/lists/${lists.applications.id}/items/${entry.listItemId}/fields`, fields);
+  return {
+    before: entry.application,
+    after: mapGraphFieldsToApplication(fields)
+  };
 }
 
 async function getHealth() {
@@ -625,6 +739,106 @@ async function handleApply(req, res, origin) {
   }
 }
 
+async function handleAdminList(req, res, origin, url) {
+  try {
+    const authz = await requestAuthz.requireAuthenticatedUser(req);
+    requestAuthz.requireAdmin(authz, '僅最高管理員可檢視申請清單');
+    const items = await listApplicationsForAdmin({
+      status: url.searchParams.get('status'),
+      email: url.searchParams.get('email'),
+      keyword: url.searchParams.get('keyword'),
+      limit: url.searchParams.get('limit')
+    });
+    return writeJson(res, buildJsonResponse(200, {
+      ok: true,
+      items: items.map(mapApplicationForClient),
+      contractVersion: CONTRACT_VERSION
+    }), origin);
+  } catch (error) {
+    return writeJson(res, buildErrorResponse(error, 'Failed to list applications.'), origin);
+  }
+}
+
+async function handleReview(req, res, origin) {
+  try {
+    const authz = await requestAuthz.requireAuthenticatedUser(req);
+    requestAuthz.requireAdmin(authz, '僅最高管理員可審核申請');
+    const envelope = await parseJsonBody(req);
+    validateActionEnvelope(envelope, ACTIONS.REVIEW);
+    const payload = normalizeReviewPayload(envelope.payload);
+    validateReviewPayload(payload);
+    const reviewActor = cleanText(payload.reviewedBy) || cleanText(authz && authz.user && authz.user.name) || cleanText(authz && authz.username);
+    const result = await updateApplicationRecord(payload.id, {
+      status: payload.status,
+      reviewComment: payload.reviewComment,
+      reviewedBy: reviewActor,
+      reviewedAt: new Date().toISOString()
+    });
+    const delivery = await notifyUnitContactStatusUpdated(result.after);
+    await tryCreateAuditRow({
+      eventType: 'unit_contact.application_reviewed',
+      actorEmail: cleanText(authz && authz.user && authz.user.email),
+      targetEmail: cleanText(result.after && result.after.applicantEmail),
+      unitCode: cleanText(result.after && result.after.unitCode),
+      recordId: cleanText(result.after && result.after.id),
+      payloadJson: JSON.stringify({
+        snapshot: buildApplicationSnapshot(result.after),
+        changes: buildApplicationChanges(result.before, result.after),
+        delivery
+      })
+    });
+    return writeJson(res, buildJsonResponse(200, {
+      ok: true,
+      item: mapApplicationForClient(result.after),
+      delivery,
+      contractVersion: CONTRACT_VERSION
+    }), origin);
+  } catch (error) {
+    return writeJson(res, buildErrorResponse(error, 'Failed to review application.'), origin);
+  }
+}
+
+async function handleActivate(req, res, origin) {
+  try {
+    const authz = await requestAuthz.requireAuthenticatedUser(req);
+    requestAuthz.requireAdmin(authz, '僅最高管理員可標記啟用');
+    const envelope = await parseJsonBody(req);
+    validateActionEnvelope(envelope, ACTIONS.ACTIVATE);
+    const payload = normalizeActivationPayload(envelope.payload);
+    validateActivationPayload(payload);
+    const reviewActor = cleanText(payload.reviewedBy) || cleanText(authz && authz.user && authz.user.name) || cleanText(authz && authz.username);
+    const result = await updateApplicationRecord(payload.id, {
+      status: STATUSES.ACTIVE,
+      reviewComment: payload.reviewComment,
+      reviewedBy: reviewActor,
+      reviewedAt: new Date().toISOString(),
+      activatedAt: new Date().toISOString(),
+      externalUserId: payload.externalUserId
+    });
+    const delivery = await notifyUnitContactStatusUpdated(result.after);
+    await tryCreateAuditRow({
+      eventType: 'unit_contact.application_activated',
+      actorEmail: cleanText(authz && authz.user && authz.user.email),
+      targetEmail: cleanText(result.after && result.after.applicantEmail),
+      unitCode: cleanText(result.after && result.after.unitCode),
+      recordId: cleanText(result.after && result.after.id),
+      payloadJson: JSON.stringify({
+        snapshot: buildApplicationSnapshot(result.after),
+        changes: buildApplicationChanges(result.before, result.after),
+        delivery
+      })
+    });
+    return writeJson(res, buildJsonResponse(200, {
+      ok: true,
+      item: mapApplicationForClient(result.after),
+      delivery,
+      contractVersion: CONTRACT_VERSION
+    }), origin);
+  } catch (error) {
+    return writeJson(res, buildErrorResponse(error, 'Failed to activate application.'), origin);
+  }
+}
+
 async function handleLookup(req, res, origin, url) {
   let email = '';
   try {
@@ -688,8 +902,20 @@ function createServer() {
         await handleApply(req, res, origin);
         return;
       }
+      if (url.pathname === '/api/unit-contact/applications' && req.method === 'GET') {
+        await handleAdminList(req, res, origin, url);
+        return;
+      }
       if (url.pathname === '/api/unit-contact/status' && (req.method === 'POST' || req.method === 'GET')) {
         await handleLookup(req, res, origin, url);
+        return;
+      }
+      if (url.pathname === '/api/unit-contact/review' && req.method === 'POST') {
+        await handleReview(req, res, origin);
+        return;
+      }
+      if (url.pathname === '/api/unit-contact/activate' && req.method === 'POST') {
+        await handleActivate(req, res, origin);
         return;
       }
       if (await correctiveActionRouter.tryHandle(req, res, origin, url)) {

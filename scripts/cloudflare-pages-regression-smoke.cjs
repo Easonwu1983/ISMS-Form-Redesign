@@ -622,6 +622,18 @@ async function run() {
     }
     pushStep('users:loaded', true, 'account table ready');
 
+    await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return app && /申請審核與啟用追蹤/.test(app.textContent || '');
+    }, { timeout: 45000 });
+    const unitContactReviewText = await page.locator('#app').innerText();
+    if (/\?{4,}/.test(unitContactReviewText)) {
+      throw new Error('unit contact review contains placeholder question marks');
+    }
+    pushStep('unit-contact-review:loaded', true, 'unit contact review page ready');
+
     await page.goto(`${BASE_URL}/#unit-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {

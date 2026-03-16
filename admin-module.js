@@ -25,6 +25,9 @@
       clearLoginLogs,
       fetchAuditTrailEntries,
       fetchAuditTrailHealth,
+      listUnitContactApplications,
+      reviewUnitContactApplication,
+      activateUnitContactApplication,
       getSchemaHealth,
       migrateAllStores,
       exportManagedStoreSnapshot,
@@ -59,6 +62,17 @@
       health: null,
       lastLoadedAt: '',
       loading: false
+    };
+    const unitContactReviewState = {
+      filters: {
+        status: 'pending_review',
+        keyword: '',
+        email: '',
+        limit: '50'
+      },
+      items: [],
+      loading: false,
+      lastLoadedAt: ''
     };
 
     function formatUserUnitSummary(user) {
@@ -258,6 +272,93 @@
     }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:36px"><div class="empty-state-title">尚無登入紀錄</div></div></td></tr>';
     document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">系統保存最近 500 筆登入成功與失敗事件</p></div><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>角色</th><th>結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
+  }
+
+  function getUnitContactReviewFiltersFromDom() {
+    return {
+      status: document.getElementById('unit-contact-review-status') ? document.getElementById('unit-contact-review-status').value.trim() : '',
+      keyword: document.getElementById('unit-contact-review-keyword') ? document.getElementById('unit-contact-review-keyword').value.trim() : '',
+      email: document.getElementById('unit-contact-review-email') ? document.getElementById('unit-contact-review-email').value.trim() : '',
+      limit: document.getElementById('unit-contact-review-limit') ? document.getElementById('unit-contact-review-limit').value.trim() : '50'
+    };
+  }
+
+  function unitContactStatusBadge(item) {
+    const tone = String(item && item.statusTone || 'pending').trim() || 'pending';
+    return `<span class="unit-contact-status-badge unit-contact-status-badge--${esc(tone)}">${esc(item && item.statusLabel || item && item.status || '—')}</span>`;
+  }
+
+  function renderUnitContactReviewRows(items) {
+    const rows = Array.isArray(items) ? items : [];
+    if (!rows.length) {
+      return `<tr><td colspan="7"><div class="empty-state" style="padding:36px 20px"><div class="empty-state-title">目前沒有符合條件的申請</div><div class="empty-state-desc">可調整篩選條件或稍後重新整理。</div></div></td></tr>`;
+    }
+    return rows.map((item) => {
+      const id = String(item && item.id || '').trim();
+      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.applicantEmail || '—')}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions"><button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactApprove" data-id="${esc(id)}">${ic('badge-check', 'icon-sm')} 通過</button><button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button><button type="button" class="btn btn-sm btn-danger" data-action="admin.unitContactReject" data-id="${esc(id)}">${ic('x-circle', 'icon-sm')} 拒絕</button><button type="button" class="btn btn-sm btn-primary" data-action="admin.unitContactActivate" data-id="${esc(id)}">${ic('key-round', 'icon-sm')} 已啟用</button></div></td></tr>`;
+    }).join('');
+  }
+
+  async function renderUnitContactReview(nextFilters) {
+    if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可審核單位管理人申請', 'error'); return; }
+    unitContactReviewState.filters = { ...unitContactReviewState.filters, ...(nextFilters || {}) };
+    unitContactReviewState.loading = true;
+    const app = document.getElementById('app');
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與啟用追蹤</h1><p class="page-subtitle">集中處理單位管理人申請，支援通過、退回、拒絕與啟用完成通知。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取申請資料...</div></div>`;
+    refreshIcons();
+    try {
+      const items = await listUnitContactApplications(unitContactReviewState.filters);
+      unitContactReviewState.items = Array.isArray(items) ? items : [];
+      unitContactReviewState.lastLoadedAt = new Date().toISOString();
+    } catch (error) {
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與啟用追蹤</h1><p class="page-subtitle">無法讀取申請清單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">申請後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
+      refreshIcons();
+      return;
+    }
+
+    const counts = unitContactReviewState.items.reduce((result, item) => {
+      const key = String(item && item.status || 'unknown').trim() || 'unknown';
+      result[key] = Number(result[key] || 0) + 1;
+      return result;
+    }, {});
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與啟用追蹤</h1><p class="page-subtitle">最後更新：${esc(fmtTime(unitContactReviewState.lastLoadedAt))}</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('mail-plus')}</div><div class="stat-value">${unitContactReviewState.items.length}</div><div class="stat-label">目前清單筆數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${counts.pending_review || 0}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${counts.approved || 0}</div><div class="stat-label">已通過</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('key-round')}</div><div class="stat-value">${counts.active || 0}</div><div class="stat-label">已啟用</div></div></div><div class="card review-table-card"><div class="card-header"><span class="card-title">申請清單</span><span class="review-card-subtitle">可依狀態、信箱與關鍵字過濾</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">狀態</label><select class="form-select" id="unit-contact-review-status"><option value="" ${!unitContactReviewState.filters.status ? 'selected' : ''}>全部</option><option value="pending_review" ${unitContactReviewState.filters.status === 'pending_review' ? 'selected' : ''}>待審核</option><option value="approved" ${unitContactReviewState.filters.status === 'approved' ? 'selected' : ''}>已通過</option><option value="returned" ${unitContactReviewState.filters.status === 'returned' ? 'selected' : ''}>退回補件</option><option value="rejected" ${unitContactReviewState.filters.status === 'rejected' ? 'selected' : ''}>未核准</option><option value="active" ${unitContactReviewState.filters.status === 'active' ? 'selected' : ''}>已啟用</option></select></div><div class="form-group"><label class="form-label">申請信箱</label><input class="form-input" id="unit-contact-review-email" value="${esc(unitContactReviewState.filters.email)}" placeholder="例如 user@ntu.edu.tw"></div><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="unit-contact-review-keyword" value="${esc(unitContactReviewState.filters.keyword)}" placeholder="單位、申請人、編號"></div><div class="form-group"><label class="form-label">筆數</label><select class="form-select" id="unit-contact-review-limit"><option value="20" ${unitContactReviewState.filters.limit === '20' ? 'selected' : ''}>20</option><option value="50" ${unitContactReviewState.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${unitContactReviewState.filters.limit === '100' ? 'selected' : ''}>100</option></select></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUnitContactFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUnitContactFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${buildReviewTableShell('unit-contact-review-table', '<th>申請編號 / 單位</th><th>申請人</th><th>分機</th><th>狀態</th><th>處理說明</th><th>最後更新</th><th>操作</th>', renderUnitContactReviewRows(unitContactReviewState.items), { toolbarSubtitle: '通過、退回、拒絕與已啟用都會同步更新狀態並寄送通知信。' })}</div></div>`;
+    wireReviewTableScrollers(app);
+    refreshIcons();
+  }
+
+  function promptReviewComment(title, placeholder, submitLabel, onSubmit) {
+    const mr = document.getElementById('modal-root');
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${esc(title)}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-review-form"><div class="form-group"><label class="form-label">處理說明</label><textarea class="form-textarea" id="unit-contact-review-comment" rows="5" placeholder="${esc(placeholder || '')}"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${esc(submitLabel)}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
+    document.getElementById('modal-bg').addEventListener('click', function (event) { if (event.target === event.currentTarget) closeModalRoot(); });
+    document.getElementById('unit-contact-review-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      const comment = String(document.getElementById('unit-contact-review-comment').value || '').trim();
+      closeModalRoot();
+      onSubmit(comment);
+    });
+  }
+
+  function promptActivationInfo(applicationId) {
+    const mr = document.getElementById('modal-root');
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">標記帳號已啟用</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="form-group"><label class="form-label">系統帳號</label><input type="text" class="form-input" id="unit-contact-external-user-id" placeholder="例如 sheila.tsai 或單一帳號"></div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="例如：帳號已建立，請使用初始密碼登入後立即修改。"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('key-round', 'icon-sm')} 標記已啟用</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
+    document.getElementById('modal-bg').addEventListener('click', function (event) { if (event.target === event.currentTarget) closeModalRoot(); });
+    document.getElementById('unit-contact-activate-form').addEventListener('submit', async function (event) {
+      event.preventDefault();
+      const externalUserId = String(document.getElementById('unit-contact-external-user-id').value || '').trim();
+      const reviewComment = String(document.getElementById('unit-contact-activate-comment').value || '').trim();
+      closeModalRoot();
+      try {
+        const result = await activateUnitContactApplication({
+          id: applicationId,
+          externalUserId,
+          reviewComment
+        });
+        toast(result && result.delivery && result.delivery.sent ? '已標記啟用並寄送通知' : '已標記啟用');
+        renderUnitContactReview(unitContactReviewState.filters);
+      } catch (error) {
+        toast(String(error && error.message || error || '啟用標記失敗'), 'error');
+      }
+    });
   }
 
   function getAuditTrailFiltersFromDom() {
@@ -585,6 +686,68 @@
     refreshAuditTrail: function () {
       renderAuditTrail(auditTrailState.filters);
     },
+    refreshUnitContactReview: function () {
+      renderUnitContactReview(unitContactReviewState.filters);
+    },
+    applyUnitContactFilters: function () {
+      renderUnitContactReview(getUnitContactReviewFiltersFromDom());
+    },
+    resetUnitContactFilters: function () {
+      renderUnitContactReview({
+        status: 'pending_review',
+        keyword: '',
+        email: '',
+        limit: '50'
+      });
+    },
+    unitContactApprove: function ({ dataset }) {
+      promptReviewComment('審核通過', '可填寫後續建帳或啟用說明。', '確認通過', async function (reviewComment) {
+        try {
+          const result = await reviewUnitContactApplication({
+            id: dataset.id,
+            status: 'approved',
+            reviewComment
+          });
+          toast(result && result.delivery && result.delivery.sent ? '已通過並寄送通知' : '已通過');
+          renderUnitContactReview(unitContactReviewState.filters);
+        } catch (error) {
+          toast(String(error && error.message || error || '審核失敗'), 'error');
+        }
+      });
+    },
+    unitContactReturn: function ({ dataset }) {
+      promptReviewComment('退回補件', '請填寫需要補充或修正的內容。', '確認退回', async function (reviewComment) {
+        try {
+          const result = await reviewUnitContactApplication({
+            id: dataset.id,
+            status: 'returned',
+            reviewComment
+          });
+          toast(result && result.delivery && result.delivery.sent ? '已退回並寄送通知' : '已退回補件');
+          renderUnitContactReview(unitContactReviewState.filters);
+        } catch (error) {
+          toast(String(error && error.message || error || '退回失敗'), 'error');
+        }
+      });
+    },
+    unitContactReject: function ({ dataset }) {
+      promptReviewComment('未核准', '請填寫未核准原因。', '確認未核准', async function (reviewComment) {
+        try {
+          const result = await reviewUnitContactApplication({
+            id: dataset.id,
+            status: 'rejected',
+            reviewComment
+          });
+          toast(result && result.delivery && result.delivery.sent ? '已拒絕並寄送通知' : '已標記未核准');
+          renderUnitContactReview(unitContactReviewState.filters);
+        } catch (error) {
+          toast(String(error && error.message || error || '未核准操作失敗'), 'error');
+        }
+      });
+    },
+    unitContactActivate: function ({ dataset }) {
+      promptActivationInfo(dataset.id);
+    },
     viewAuditEntry: function ({ dataset }) {
       showAuditEntryModal(dataset.index);
     },
@@ -620,6 +783,7 @@
 
     return {
       renderUsers,
+      renderUnitContactReview,
       renderUnitReview,
       renderLoginLog,
       renderAuditTrail,
