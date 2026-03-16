@@ -427,8 +427,14 @@
       + (isAdmin() ? '<a href="#training-roster" class="btn btn-secondary">' + ic('users', 'icon-sm') + ' 名單管理</a>' : '')
       + '</div>';
 
-    const buildFormActions = (form) => {
-      if (!form) return canFillTraining() ? '<a href="#training-fill" class="btn btn-sm btn-primary">開始填報</a>' : '—';
+    const buildFormActions = (form, options) => {
+      const opts = options || {};
+      if (!form) {
+        if (isAdmin() && opts.unit) {
+          return '<a href="#training-fill/' + encodeURIComponent('unit:' + opts.unit) + '" class="btn btn-sm btn-primary">編修</a>';
+        }
+        return canFillTraining() ? '<a href="#training-fill" class="btn btn-sm btn-primary">開始填報</a>' : '—';
+      }
       const actions = ['<a href="#training-detail/' + form.id + '" class="btn btn-sm btn-secondary">檢視</a>'];
       if (canEditTrainingForm(form)) actions.push('<a href="#training-fill/' + form.id + '" class="btn btn-sm btn-primary">編修</a>');
       if (canUndoTrainingForm(form)) actions.push('<button type="button" class="btn btn-sm btn-warning" data-action="training.undo" data-id="' + esc(form.id) + '">撤回流程一</button>');
@@ -500,7 +506,7 @@
             + '<td><span class="training-rate-pill">' + (item.summary.completionRate || 0) + '%</span></td>'
             + '<td>' + esc(note) + '</td>'
             + '<td>' + (latest ? fmtTime(latest.updatedAt) : '—') + '</td>'
-            + '<td>' + buildFormActions(latest) + '</td>'
+            + '<td>' + buildFormActions(latest, { unit: item.unit }) + '</td>'
             + '</tr>';
         }).join('') : buildTrainingEmptyTableRow(9, '此分類目前沒有未完成單位', '', 20);
         return {
@@ -603,8 +609,9 @@
         return;
       }
     }
-    let existing = id ? getTrainingForm(id) : null;
-    if (id && !existing) {
+    const unitPrefill = id && String(id).startsWith('unit:') ? String(id).slice(5).trim() : '';
+    let existing = unitPrefill ? null : (id ? getTrainingForm(id) : null);
+    if (id && !unitPrefill && !existing) {
       toast('找不到填報單', 'error');
       navigate('training');
       return;
@@ -620,7 +627,12 @@
       return;
     }
 
-    const unitValue = existing ? existing.unit : (isAdmin() ? (user.unit || getTrainingUnits()[0] || '') : (getScopedUnit(user) || user.unit));
+    const unitValue = existing ? existing.unit : (unitPrefill || (isAdmin() ? (user.unit || getTrainingUnits()[0] || '') : (getScopedUnit(user) || user.unit)));
+    if (unitPrefill && isAdmin() && !isOfficialUnit(getTrainingStatsUnit(unitPrefill))) {
+      toast('找不到指定的填報單位', 'error');
+      navigate('training');
+      return;
+    }
     const isUnitLocked = !!existing || !isAdmin();
     const takeoverDraft = !!(existing && existing.fillerUsername && existing.fillerUsername !== user.username && isUnitAdmin());
     let rowsState = mergeTrainingRows(unitValue, existing ? (existing.records || []) : []);
