@@ -295,7 +295,11 @@
     }
     return rows.map((item) => {
       const id = String(item && item.id || '').trim();
-      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.applicantEmail || '—')}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions"><button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactApprove" data-id="${esc(id)}">${ic('badge-check', 'icon-sm')} 通過</button><button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button><button type="button" class="btn btn-sm btn-danger" data-action="admin.unitContactReject" data-id="${esc(id)}">${ic('x-circle', 'icon-sm')} 拒絕</button><button type="button" class="btn btn-sm btn-primary" data-action="admin.unitContactActivate" data-id="${esc(id)}">${ic('key-round', 'icon-sm')} 已啟用</button></div></td></tr>`;
+      const status = String(item && item.status || '').trim();
+      const activateAction = status === 'active'
+        ? `<button type="button" class="btn btn-sm btn-primary" data-action="admin.unitContactResendActivation" data-id="${esc(id)}">${ic('mail', 'icon-sm')} 重新寄送啟用通知</button>`
+        : `<button type="button" class="btn btn-sm btn-primary" data-action="admin.unitContactActivate" data-id="${esc(id)}">${ic('key-round', 'icon-sm')} 已啟用</button>`;
+      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.applicantEmail || '—')}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions"><button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactApprove" data-id="${esc(id)}">${ic('badge-check', 'icon-sm')} 通過</button><button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button><button type="button" class="btn btn-sm btn-danger" data-action="admin.unitContactReject" data-id="${esc(id)}">${ic('x-circle', 'icon-sm')} 拒絕</button>${activateAction}</div></td></tr>`;
     }).join('');
   }
 
@@ -338,9 +342,11 @@
     });
   }
 
-  function promptActivationInfo(applicationId) {
+  function promptActivationInfo(applicationId, options) {
+    const opts = options || {};
+    const isResend = opts.mode === 'resend';
     const mr = document.getElementById('modal-root');
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">標記帳號已啟用</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="form-group"><label class="form-label">登入帳號</label><input type="text" class="form-input" id="unit-contact-external-user-id" placeholder="例如 sheila.tsai 或單一帳號"></div><div class="form-group"><label class="form-label">初始密碼</label><input type="text" class="form-input" id="unit-contact-initial-password" placeholder="若已另行交付可留空"></div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="例如：帳號已建立，請使用初始密碼登入後立即修改。"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('key-round', 'icon-sm')} 標記已啟用</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${isResend ? '重新寄送啟用通知' : '標記帳號已啟用'}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="form-group"><label class="form-label">登入帳號</label><input type="text" class="form-input" id="unit-contact-external-user-id" placeholder="例如 sheila.tsai 或單一帳號"></div><div class="form-group"><label class="form-label">初始密碼</label><input type="text" class="form-input" id="unit-contact-initial-password" placeholder="若已另行交付可留空"></div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="例如：帳號已建立，請使用初始密碼登入後立即修改。"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic(isResend ? 'mail' : 'key-round', 'icon-sm')} ${isResend ? '重新寄送啟用通知' : '標記已啟用'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
     document.getElementById('modal-bg').addEventListener('click', function (event) { if (event.target === event.currentTarget) closeModalRoot(); });
     document.getElementById('unit-contact-activate-form').addEventListener('submit', async function (event) {
       event.preventDefault();
@@ -749,6 +755,9 @@
     },
     unitContactActivate: function ({ dataset }) {
       promptActivationInfo(dataset.id);
+    },
+    unitContactResendActivation: function ({ dataset }) {
+      promptActivationInfo(dataset.id, { mode: 'resend' });
     },
     viewAuditEntry: function ({ dataset }) {
       showAuditEntryModal(dataset.index);
