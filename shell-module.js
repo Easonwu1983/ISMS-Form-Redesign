@@ -45,8 +45,8 @@
     }
 
     function isMobileViewport() {
-      if (window.matchMedia) return window.matchMedia('(max-width: 768px)').matches;
-      return window.innerWidth <= 768;
+      if (window.matchMedia) return window.matchMedia('(max-width: 1280px)').matches;
+      return window.innerWidth <= 1280;
     }
 
     function setSidebarOpen(nextOpen) {

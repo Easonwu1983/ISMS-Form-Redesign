@@ -271,42 +271,31 @@
       return String(row && row.source || '').trim() === 'manual' ? 1 : 0;
     }
 
-    function getTrainingSupervisorRank(row) {
-      const text = [row && row.identity, row && row.jobTitle]
-        .map((value) => String(value || '').trim())
-        .filter(Boolean)
-        .join(' ');
-      if (!text) return 999;
-      const rules = [
-        [/校長/, 0],
-        [/副校長/, 1],
-        [/院長/, 2],
-        [/副院長/, 3],
-        [/處長|館長|所長|主任|執行長/, 4],
-        [/副主任|副執行長|副處長|副所長/, 5],
-        [/組長|隊長|中心主管|主管/, 6],
-        [/副組長|副隊長|副主管/, 7],
-        [/經理|副理|秘書長|秘書/, 8]
-      ];
-      const matched = rules.find(([pattern]) => pattern.test(text));
-      return matched ? matched[1] : 999;
+    function getTrainingIdentityRank(row) {
+      const identity = String(row && row.identity || '').trim();
+      const rankMap = new Map([
+        ['一級主管', 0],
+        ['一級副主管', 1],
+        ['二級主管', 2],
+        ['二級副主管', 3],
+        ['技工工友', 20]
+      ]);
+      if (rankMap.has(identity)) return rankMap.get(identity);
+      return 10;
     }
 
     function compareTrainingRosterEntries(a, b) {
-      const unitCompare = localeCompareZhStroke(a && (a.unitName || getTrainingJobUnit(a.unit)), b && (b.unitName || getTrainingJobUnit(b.unit)));
-      if (unitCompare !== 0) return unitCompare;
+      const sourceCompare = getTrainingSourceRank(a) - getTrainingSourceRank(b);
+      if (sourceCompare !== 0) return sourceCompare;
+
+      const identityCompare = getTrainingIdentityRank(a) - getTrainingIdentityRank(b);
+      if (identityCompare !== 0) return identityCompare;
 
       const nameCompare = localeCompareZhStroke(a && a.name, b && b.name);
       if (nameCompare !== 0) return nameCompare;
 
-      const sourceCompare = getTrainingSourceRank(a) - getTrainingSourceRank(b);
-      if (sourceCompare !== 0) return sourceCompare;
-
-      const supervisorCompare = getTrainingSupervisorRank(a) - getTrainingSupervisorRank(b);
-      if (supervisorCompare !== 0) return supervisorCompare;
-
-      const identityCompare = localeCompareZhStroke(a && a.identity, b && b.identity);
-      if (identityCompare !== 0) return identityCompare;
+      const unitCompare = localeCompareZhStroke(a && (a.unitName || getTrainingJobUnit(a.unit)), b && (b.unitName || getTrainingJobUnit(b.unit)));
+      if (unitCompare !== 0) return unitCompare;
 
       const titleCompare = localeCompareZhStroke(a && a.jobTitle, b && b.jobTitle);
       if (titleCompare !== 0) return titleCompare;
@@ -558,16 +547,25 @@
     }
 
     function mergeTrainingRows(targetUnit, carryRows) {
-      const carry = Array.isArray(carryRows) ? carryRows.map((row) => normalizeTrainingRecordRow(row, targetUnit)) : [];
-      const rosterRows = targetUnit ? getTrainingRosterByUnit(targetUnit).map((row) => {
+      const normalizedTargetUnit = String(targetUnit || '').trim();
+      const carry = (Array.isArray(carryRows) ? carryRows : [])
+        .map((row) => {
+          const rowUnit = String(row && row.unit || normalizedTargetUnit).trim();
+          return normalizeTrainingRecordRow({ ...row, unit: rowUnit || normalizedTargetUnit }, rowUnit || normalizedTargetUnit);
+        })
+        .filter((row) => {
+          if (!normalizedTargetUnit) return true;
+          return String(row && row.unit || '').trim() === normalizedTargetUnit;
+        });
+      const rosterRows = normalizedTargetUnit ? getTrainingRosterByUnit(normalizedTargetUnit).map((row) => {
         const existing = carry.find((item) => (item.rosterId && item.rosterId === row.id) || item.name === row.name);
         return normalizeTrainingRecordRow({
           ...row,
           ...existing,
           rosterId: row.id,
-          unit: targetUnit,
-          statsUnit: row.statsUnit || getTrainingStatsUnit(targetUnit),
-          unitName: existing?.unitName || row.unitName || getTrainingJobUnit(targetUnit),
+          unit: normalizedTargetUnit,
+          statsUnit: row.statsUnit || getTrainingStatsUnit(normalizedTargetUnit),
+          unitName: existing?.unitName || row.unitName || getTrainingJobUnit(normalizedTargetUnit),
           identity: existing?.identity || row.identity || '',
           jobTitle: existing?.jobTitle || row.jobTitle || '',
           source: existing?.source || row.source || 'import',
@@ -576,11 +574,13 @@
           isInfoStaff: existing?.isInfoStaff || '',
           completedProfessional: existing?.completedProfessional || '',
           note: existing?.note || ''
-        }, targetUnit);
+        }, normalizedTargetUnit);
       }) : [];
       carry.forEach((row) => {
+        const rowUnit = String(row && row.unit || '').trim();
+        if (normalizedTargetUnit && rowUnit !== normalizedTargetUnit) return;
         const exists = rosterRows.some((item) => (row.rosterId && item.rosterId === row.rosterId) || item.name === row.name);
-        if (!exists) rosterRows.push(normalizeTrainingRecordRow(row, targetUnit || row.unit));
+        if (!exists) rosterRows.push(normalizeTrainingRecordRow({ ...row, unit: normalizedTargetUnit || rowUnit }, normalizedTargetUnit || rowUnit));
       });
       return sortTrainingRosterEntries(rosterRows);
     }

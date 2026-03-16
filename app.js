@@ -60,7 +60,6 @@
     '計算機及資訊網路中心',
     '出版中心',
     '環境保護暨職業安全衛生中心',
-    '研究誠信辦公室',
     '法務處'
   ]);
   const UNIT_ACADEMIC_PRIMARY_WHITELIST = new Set([

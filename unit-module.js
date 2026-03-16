@@ -18,9 +18,14 @@
       isAdmin,
       esc
     } = deps;
-    const TRAINING_UNIT_CATEGORY_ADMIN = '行政單位';
-    const TRAINING_UNIT_CATEGORY_ACADEMIC = '學術單位';
-    const TRAINING_UNIT_CATEGORY_CENTER = '中心 / 研究單位';
+    const TRAINING_UNIT_CATEGORY_ADMIN = '\u884c\u653f\u55ae\u4f4d';
+    const TRAINING_UNIT_CATEGORY_ACADEMIC = '\u5b78\u8853\u55ae\u4f4d';
+    const TRAINING_UNIT_CATEGORY_CENTER = '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d';
+    const TRAINING_CENTER_OVERRIDE_UNITS = new Set([
+      '校長室',
+      '副校長室',
+      '研究誠信辦公室'
+    ]);
 
     function getOfficialUnits() {
       try {
@@ -103,9 +108,9 @@
     function isCorruptedUnitValue(unit) {
       const value = String(unit || '').trim();
       if (!value) return false;
-      if (/[�]/.test(value)) return true;
-      if (/[?？]{4,}/.test(value)) return true;
-      return !value.replace(/[?？]/g, '').trim();
+      if (/\uFFFD/.test(value)) return true;
+      if (/\?{3,}/.test(value)) return true;
+      return /(\u92b5\uf5fb\ue71c|\u646e\u8cb9|\u929d\u5256|\u875f\u990c\u7d5e|\u64a3\u553e|\u747c\uff38\ufeb1)/.test(value);
     }
 
     function formatUnitScopeSummary(scopes) {
@@ -349,7 +354,7 @@
     function splitUnitValue(unitValue) {
       const raw = String(unitValue || '').trim();
       if (!raw) return { parent: '', child: '' };
-      const sep = raw.includes('／') ? '／' : (raw.includes('/') ? '/' : '');
+      const sep = raw.includes('\uFF0F') ? '\uFF0F' : (raw.includes('/') ? '/' : '');
       if (!sep) return { parent: raw, child: '' };
       const parts = raw.split(sep);
       const parent = String(parts.shift() || '').trim();
@@ -361,7 +366,7 @@
       const p = String(parent || '').trim();
       const c = String(child || '').trim();
       if (!p) return '';
-      return c ? `${p}／${c}` : p;
+      return c ? `${p}\uFF0F${c}` : p;
     }
 
     function getTopLevelUnitOfficialMeta(unitValue) {
@@ -373,27 +378,22 @@
 
     function categorizeTopLevelUnit(unitValue) {
       const unit = String(splitUnitValue(unitValue).parent || unitValue || '').trim();
+      if (TRAINING_CENTER_OVERRIDE_UNITS.has(unit)) return TRAINING_UNIT_CATEGORY_CENTER;
       if (!unit || isCorruptedUnitValue(unit)) return TRAINING_UNIT_CATEGORY_ADMIN;
       if (UNIT_ADMIN_PRIMARY_WHITELIST.has(unit)) return TRAINING_UNIT_CATEGORY_ADMIN;
       if (UNIT_ACADEMIC_PRIMARY_WHITELIST.has(unit)) return TRAINING_UNIT_CATEGORY_ACADEMIC;
       const meta = getTopLevelUnitOfficialMeta(unit) || {};
       const code = String(meta.topCode || meta.code || '').trim().toUpperCase();
-      const academicKeywords = ['學院', '共同教育中心', '國際學院', '研究學院', '創新設計學院', '進修推廣學院', '附設醫院'];
-      const centerKeywords = ['中心', '研究中心', '研究院', '實驗室', '委員會', '館'];
+      const academicKeywords = ['學院', '學系', '研究所', '學位學程', '共同教育中心', '進修推廣學院', '國際學院'];
+      const centerKeywords = ['中心', '研究中心', '辦公室', '委員會', '聯盟', '聯合辦公室', '館'];
       if (academicKeywords.some((keyword) => unit.includes(keyword))) return TRAINING_UNIT_CATEGORY_ACADEMIC;
       if (centerKeywords.some((keyword) => unit.includes(keyword))) return TRAINING_UNIT_CATEGORY_CENTER;
       if (/^0\.\d{2}$/.test(code)) {
         const numeric = Number(code.slice(2));
         if (numeric >= 51) return TRAINING_UNIT_CATEGORY_ACADEMIC;
-        if (centerKeywords.some((keyword) => unit.includes(keyword)) || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
-          return TRAINING_UNIT_CATEGORY_CENTER;
-        }
         return TRAINING_UNIT_CATEGORY_ADMIN;
       }
       if (/^0\.[A-Z0-9]{2}$/.test(code)) return TRAINING_UNIT_CATEGORY_CENTER;
-      if (centerKeywords.some((keyword) => unit.includes(keyword)) || unit.includes('辦公室') || unit.includes('研究室') || unit.includes('籌備處') || unit.includes('博物館群')) {
-        return TRAINING_UNIT_CATEGORY_CENTER;
-      }
       return TRAINING_UNIT_CATEGORY_ADMIN;
     }
 
