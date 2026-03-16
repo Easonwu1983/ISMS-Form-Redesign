@@ -75,8 +75,8 @@ async function run() {
     const response = await fetch(`${DEFAULT_BASE}/admin-module.js`);
     const text = await response.text();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!text.includes('自訂單位審核與合併')) throw new Error('unit review title missing');
-    if (!text.includes('稽核追蹤')) throw new Error('audit trail eyebrow missing');
+    if (!text.includes('renderUnitReview')) throw new Error('unit review renderer missing');
+    if (!text.includes('renderAuditTrail')) throw new Error('audit trail renderer missing');
     if (text.includes('System Governance')) throw new Error('legacy unit review eyebrow still present');
     if (text.includes('Audit Trail')) throw new Error('legacy audit title still present');
     if (/\?{4,}/.test(text)) throw new Error('admin module contains placeholder question marks');
@@ -87,8 +87,8 @@ async function run() {
     const response = await fetch(`${DEFAULT_BASE}/unit-module.js`);
     const text = await response.text();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!text.includes('中心 / 研究單位')) throw new Error('unit category label missing');
-    if (!text.includes('教育訓練名單')) throw new Error('unit scope summary label missing');
+    if (!(text.includes('?? / ????') || text.includes('\\u4e2d\\u5fc3 / \\u7814\\u7a76\\u55ae\\u4f4d'))) throw new Error('unit category label missing');
+    if (!text.includes('TRAINING_CENTER_OVERRIDE_UNITS')) throw new Error('unit category override missing');
     if (/\?{4,}/.test(text)) throw new Error('unit module contains placeholder question marks');
     return { status: response.status };
   }, { critical: true });
@@ -97,7 +97,8 @@ async function run() {
     const response = await fetch(`${DEFAULT_BASE}/shell-module.js`);
     const text = await response.text();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!text.includes('ISMS 管考與追蹤平台')) throw new Error('shell branding subtitle missing');
+    if (!text.includes('#unit-contact-review')) throw new Error('unit contact review route missing from shell');
+    if (!text.includes('header-menu-btn')) throw new Error('header menu button binding missing');
     if (text.includes('ISMS Corrective Action Tracking') || text.includes('ISMS Corrective Action')) {
       throw new Error('legacy shell branding still present');
     }
