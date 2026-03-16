@@ -170,6 +170,19 @@ function resolveStatusCopy(value, fallback) {
   return text && !isPlaceholderText(text) ? text : fallback;
 }
 
+function resolveMeaningfulText(value, fallback) {
+  const text = cleanText(value);
+  if (text && !isPlaceholderText(text)) return text;
+  return cleanText(fallback);
+}
+
+function deriveApplicantNameFallback(email) {
+  const normalizedEmail = cleanEmail(email);
+  if (!normalizedEmail) return '未提供姓名';
+  const localPart = normalizedEmail.split('@')[0] || '';
+  return cleanText(localPart) || '未提供姓名';
+}
+
 function decorateStatus(application) {
   const meta = STATUS_META[application.status] || STATUS_META[STATUSES.PENDING_REVIEW];
   return {
@@ -209,15 +222,21 @@ function createApplicationRecord(payload, sequence, now) {
 }
 
 function normalizeStoredApplication(application) {
+  const applicantEmail = cleanEmail(application.applicantEmail);
+  const primaryUnit = resolveMeaningfulText(application.primaryUnit);
+  const secondaryUnit = resolveMeaningfulText(application.secondaryUnit);
+  const composedUnitValue = primaryUnit && secondaryUnit
+    ? `${primaryUnit}／${secondaryUnit}`
+    : (primaryUnit || secondaryUnit || '');
   return decorateStatus({
     id: cleanText(application.id),
-    applicantName: cleanText(application.applicantName),
-    applicantEmail: cleanEmail(application.applicantEmail),
+    applicantName: resolveMeaningfulText(application.applicantName, deriveApplicantNameFallback(applicantEmail)),
+    applicantEmail,
     extensionNumber: cleanText(application.extensionNumber),
-    unitCategory: cleanText(application.unitCategory),
-    primaryUnit: cleanText(application.primaryUnit),
-    secondaryUnit: cleanText(application.secondaryUnit),
-    unitValue: cleanText(application.unitValue),
+    unitCategory: resolveMeaningfulText(application.unitCategory),
+    primaryUnit,
+    secondaryUnit,
+    unitValue: resolveMeaningfulText(application.unitValue, composedUnitValue),
     unitCode: cleanText(application.unitCode),
     contactType: cleanText(application.contactType) || 'primary',
     note: cleanText(application.note),
