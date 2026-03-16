@@ -90,13 +90,7 @@
         '<p style="font-size:1.1rem;font-weight:700;color:var(--text-heading);margin-top:6px;font-family:monospace;background:#f0f2f7;padding:8px;border-radius:8px" id="reset-token"></p>' +
         '<form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><div class="form-group"><label class="form-label">重設代碼</label><input type="text" class="form-input" id="redeem-token" placeholder="請輸入信件中的重設代碼" required></div><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="redeem-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="redeem-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' 完成重設</button></form></div>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
-        '<div class="login-hint"><p>測試帳號</p><table>' +
-        '<tr><th>角色</th><th>帳號</th><th>密碼</th></tr>' +
-        '<tr><td>最高管理員</td><td>admin</td><td>admin123</td></tr>' +
-        '<tr><td>單位管理員</td><td>unit1</td><td>unit123</td></tr>' +
-        '<tr><td>填報人</td><td>user1</td><td>user123</td></tr>' +
-        '<tr><td>跨單位檢視者</td><td>viewer1</td><td>viewer123</td></tr>' +
-        '</table></div></div></div><div class="toast-container" id="toast-container"></div>';
+        '</div></div><div class="toast-container" id="toast-container"></div>';
 
       function switchPanel(target) {
         ['login-panel', 'forgot-panel', 'change-panel'].forEach(function (id) {

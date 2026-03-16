@@ -192,6 +192,7 @@ body {
   background: var(--bg-login);
   position: relative;
   overflow: hidden;
+  padding: 28px 18px;
 }
 
 .login-page::before {
@@ -223,13 +224,15 @@ body {
 .login-card {
   background: #ffffff;
   border-radius: var(--radius-xl);
-  padding: 48px 44px;
-  width: 420px;
-  max-width: 90vw;
+  padding: 40px 36px;
+  width: min(100%, 500px);
+  max-width: min(92vw, 500px);
   box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
   z-index: 1;
   position: relative;
   animation: fadeSlideUp 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
 }
 
 .login-logo {
@@ -320,37 +323,6 @@ body {
 
 .login-error.show {
   display: block;
-}
-
-.login-hint {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-color);
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.login-hint table {
-  width: 100%;
-  margin-top: 8px;
-  font-size: 0.75rem;
-  border-collapse: collapse;
-}
-
-.login-hint th,
-.login-hint td {
-  padding: 4px 8px;
-  text-align: left;
-}
-
-.login-hint th {
-  color: var(--text-secondary);
-}
-
-.login-hint td {
-  color: var(--text-primary);
-  font-family: 'Courier New', monospace;
 }
 
 /* ========================================
@@ -1568,7 +1540,7 @@ tbody td:first-child {
 
 .login-entry-card {
   margin-top: 18px;
-  padding: 18px;
+  padding: 20px 20px 18px;
   border-radius: 20px;
   background: linear-gradient(135deg, rgba(30, 64, 175, 0.08), rgba(14, 165, 233, 0.08));
   border: 1px solid rgba(30, 64, 175, 0.12);
@@ -1608,6 +1580,12 @@ tbody td:first-child {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
+}
+
+.login-entry-actions .btn {
+  flex: 1 1 170px;
+  justify-content: center;
+  min-height: 46px;
 }
 
 @media (max-width: 960px) {
@@ -4252,7 +4230,7 @@ tbody td:first-child {
 }
 
 .login-card {
-  width: 448px;
+  width: min(100%, 500px);
   border: 1px solid rgba(219, 231, 244, 0.96);
   box-shadow: 0 30px 60px -34px rgba(15, 23, 42, 0.4);
   overflow: hidden;
@@ -4274,23 +4252,6 @@ tbody td:first-child {
 
 .login-logo h1 {
   letter-spacing: -0.03em;
-}
-
-.login-hint {
-  margin-top: 26px;
-  padding: 18px 18px 0;
-  margin-left: -18px;
-  margin-right: -18px;
-  background: linear-gradient(180deg, rgba(245, 249, 255, 0.92), rgba(239, 246, 255, 0.88));
-}
-
-.login-hint p {
-  font-weight: 700;
-  color: #587293;
-}
-
-.login-hint table {
-  margin-top: 12px;
 }
 
 .dashboard-grid {
@@ -4798,17 +4759,39 @@ tbody td:first-child {
 
   .login-card {
     width: 100%;
-    padding: 34px 26px;
-  }
-
-  .login-hint {
-    margin-left: -12px;
-    margin-right: -12px;
+    max-width: 100%;
+    max-height: calc(100vh - 32px);
+    padding: 30px 22px 24px;
   }
 
   .ntu-logo-lg {
     width: 64px;
     height: 64px;
+  }
+
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-logo {
+    margin-bottom: 24px;
+  }
+
+  .login-logo h1 {
+    font-size: 1.34rem;
+  }
+
+  .login-entry-card {
+    padding: 18px 16px;
+  }
+
+  .login-entry-actions {
+    flex-direction: column;
+  }
+
+  .login-entry-actions .btn {
+    width: 100%;
+    flex-basis: auto;
   }
 }
 
