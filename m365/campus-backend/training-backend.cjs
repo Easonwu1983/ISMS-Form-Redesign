@@ -239,15 +239,24 @@ function createTrainingRouter(deps) {
 
   async function generateNextRosterId() {
     return withRosterSequenceLock(async function reserveNextRosterId() {
-      if (!Number.isFinite(state.nextRosterSequence) || state.nextRosterSequence < 1) {
-        const rows = await listAllRosters();
-        state.nextRosterSequence = rows.reduce((max, entry) => {
-          return Math.max(max, parseRosterSequence(entry && entry.item && entry.item.id));
-        }, 0) + 1;
+      const rows = await listAllRosters();
+      const existingIds = new Set(rows
+        .map((entry) => cleanText(entry && entry.item && entry.item.id))
+        .filter(Boolean));
+      const maxExisting = rows.reduce((max, entry) => {
+        return Math.max(max, parseRosterSequence(entry && entry.item && entry.item.id));
+      }, 0);
+      let nextValue = Number.isFinite(state.nextRosterSequence) && state.nextRosterSequence > 0
+        ? state.nextRosterSequence
+        : (maxExisting + 1);
+      if (nextValue <= maxExisting) nextValue = maxExisting + 1;
+      let candidate = `RST-${String(nextValue).padStart(4, '0')}`;
+      while (existingIds.has(candidate)) {
+        nextValue += 1;
+        candidate = `RST-${String(nextValue).padStart(4, '0')}`;
       }
-      const nextValue = state.nextRosterSequence;
-      state.nextRosterSequence += 1;
-      return `RST-${String(nextValue).padStart(4, '0')}`;
+      state.nextRosterSequence = nextValue + 1;
+      return candidate;
     });
   }
 
@@ -656,10 +665,10 @@ function createTrainingRouter(deps) {
       const now = new Date().toISOString();
       const existingById = cleanText(payload.id) ? await getRosterEntryById(payload.id) : null;
       const duplicateEntry = await findDuplicateRoster(payload.unit, payload.name, payload.id);
-      let existing = duplicateEntry || null;
-      if (!existing && existingById && requestAuthz.canManageTrainingRoster(authz, existingById.item)) {
-        existing = existingById;
-      }
+      const authorizedExistingById = existingById && requestAuthz.canManageTrainingRoster(authz, existingById.item)
+        ? existingById
+        : null;
+      const existing = duplicateEntry || authorizedExistingById || null;
       const targetRoster = existing ? existing.item : payload;
       if (!requestAuthz.canManageTrainingRoster(authz, targetRoster)) {
         throw requestAuthz.createHttpError('You do not have permission to manage this training roster', 403);
@@ -668,7 +677,7 @@ function createTrainingRouter(deps) {
       const actorMeta = requestAuthz.buildActorDetails(authz);
       const nextRosterId = existing
         ? existing.item.id
-        : ((existingById && !duplicateEntry) ? await generateNextRosterId() : (cleanText(payload.id) || await generateNextRosterId()));
+        : await generateNextRosterId();
       reserveKnownRosterSequence(nextRosterId);
       const nextItem = createTrainingRosterRecord({
         ...(existing ? existing.item : {}),
