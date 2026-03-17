@@ -111,6 +111,43 @@
     return String(a || '').localeCompare(String(b || ''), 'zh-Hant-u-co-stroke', { sensitivity: 'base', numeric: true });
   }
 
+  function getFileExtension(name) {
+    const clean = String(name || '').trim();
+    const match = clean.match(/\.([^.]+)$/);
+    return match ? String(match[1] || '').toLowerCase() : '';
+  }
+
+  function normalizeTrainingYearLabel(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return String(new Date().getFullYear() - 1911);
+    const digits = raw.replace(/[^\d]/g, '');
+    if (!digits) return raw;
+    if (digits.length >= 4) {
+      const adYear = Number(digits.slice(0, 4));
+      if (Number.isFinite(adYear) && adYear >= 1911) return String(adYear - 1911);
+    }
+    const parsed = Number(digits);
+    return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : raw;
+  }
+
+  function buildTrainingSignoffFileName(form, entry) {
+    const fillUnit = String(form?.unit || '').trim();
+    const fallbackUnit = String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim();
+    const unitLabel = fillUnit || fallbackUnit || '未指定單位';
+    const yearLabel = normalizeTrainingYearLabel(form?.trainingYear);
+    const extension = String(entry?.extension || getFileExtension(entry?.name || entry?.file?.name || '')).trim().toLowerCase();
+    const suffix = extension ? ('.' + extension) : '';
+    return unitLabel + '-' + yearLabel + '年國立臺灣大學資通安全教育訓練執行情形簽核表-掃描檔' + suffix;
+  }
+
+  function applyTrainingSignoffFileName(entry, form) {
+    const source = entry && typeof entry === 'object' ? entry : {};
+    return {
+      ...source,
+      name: buildTrainingSignoffFileName(form, source)
+    };
+  }
+
   async function runAsyncPool(items, worker, concurrency) {
     const list = Array.isArray(items) ? items : [];
     const runner = typeof worker === 'function' ? worker : async function noop() {};
@@ -1197,7 +1234,7 @@
     const canManage = !!user && !isViewer(user) && (user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
     const canUndo = canUndoTrainingForm(form, user);
     const undoRemainingMinutes = canUndo ? getTrainingUndoRemainingMinutes(form) : 0;
-    let filesState = [...(form.signedFiles || [])];
+    let filesState = (form.signedFiles || []).map((entry) => applyTrainingSignoffFileName(entry, form));
     clearUnsavedChangesGuard();
 
     function markTrainingDetailDirty() {
@@ -1276,11 +1313,11 @@
       });
       batch.errors.forEach((message) => toast(message, 'error'));
       batch.accepted.forEach(({ file, meta }) => {
-        filesState.push(createTransientUploadEntry(file, meta, {
+        filesState.push(applyTrainingSignoffFileName(createTransientUploadEntry(file, meta, {
           prefix: 'trn',
           scope: 'training-signoff',
           ownerId: form.id
-        }));
+        }), form));
       });
       if (batch.accepted.length) markTrainingDetailDirty();
       renderSignedFiles('training-file-previews', true);
@@ -1320,11 +1357,14 @@
         }
         const now = new Date().toISOString();
         const latestForm = getTrainingForm(form.id) || form;
-        const persistedFiles = await persistUploadedEntries(filesState, {
+        const persistedFiles = (await persistUploadedEntries(filesState, {
           prefix: 'trn',
           scope: 'training-signoff',
-          ownerId: form.id
-        });
+          ownerId: form.id,
+          buildFileName: function (_descriptor, uploadEntry) {
+            return buildTrainingSignoffFileName(form, uploadEntry);
+          }
+        })).map((entry) => applyTrainingSignoffFileName(entry, form));
         clearUnsavedChangesGuard();
         const result = await submitTrainingFinalize({
           ...latestForm,

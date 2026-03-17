@@ -1153,7 +1153,10 @@
   function normalizeRemoteAttachmentDescriptor(item, fallback) {
     const source = item && typeof item === 'object' ? item : {};
     const base = fallback && typeof fallback === 'object' ? fallback : {};
-    const name = String(source.name || base.name || '').trim();
+    const scope = String(source.scope || base.scope || '').trim();
+    const name = scope === 'training-signoff' && String(base.name || '').trim()
+      ? String(base.name || '').trim()
+      : String(source.name || base.name || '').trim();
     const contentType = String(source.contentType || source.type || base.contentType || base.type || '').trim();
     const size = Number(source.size || base.size || 0);
     return {
@@ -1167,7 +1170,7 @@
       signature: String(base.signature || buildUploadSignature({ name: name, type: contentType, size: size })).trim(),
       storedAt: String(source.uploadedAt || source.storedAt || base.storedAt || new Date().toISOString()).trim(),
       uploadedAt: String(source.uploadedAt || source.storedAt || base.storedAt || new Date().toISOString()).trim(),
-      scope: String(source.scope || base.scope || '').trim(),
+      scope: scope,
       ownerId: String(source.ownerId || base.ownerId || '').trim(),
       recordType: String(source.recordType || base.recordType || base.scope || '').trim(),
       webUrl: String(source.webUrl || base.webUrl || '').trim(),
@@ -1191,13 +1194,24 @@
     if (!contentBase64) throw new Error('附件內容轉換失敗');
     const descriptor = entry && typeof entry === 'object' ? entry : {};
     const opts = options && typeof options === 'object' ? options : {};
+    const resolvedFileName = (() => {
+      if (typeof opts.buildFileName === 'function') {
+        const built = String(opts.buildFileName(descriptor, entry, blob) || '').trim();
+        if (built) return built;
+      }
+      if (opts.fileName) {
+        const explicit = String(opts.fileName || '').trim();
+        if (explicit) return explicit;
+      }
+      return String(descriptor.name || (entry && entry.file && entry.file.name) || 'attachment.bin').trim();
+    })();
     const body = await requestAttachmentJson('/upload', {
       method: 'POST',
       body: {
         action: ATTACHMENT_ACTIONS.UPLOAD,
         payload: {
           attachmentId: String(descriptor.attachmentId || '').trim(),
-          fileName: String(descriptor.name || (entry && entry.file && entry.file.name) || 'attachment.bin').trim(),
+          fileName: resolvedFileName,
           contentType: String(descriptor.type || descriptor.contentType || blob.type || 'application/octet-stream').trim(),
           contentBase64: contentBase64,
           scope: String(opts.scope || descriptor.scope || '').trim(),

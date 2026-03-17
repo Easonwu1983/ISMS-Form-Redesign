@@ -145,11 +145,11 @@ function createAttachmentRouter(deps) {
 
   function buildDrivePath(payload, attachmentId) {
     const safeFileName = sanitizeFileName(payload.fileName);
-    const encodedName = `${attachmentId}-${safeFileName}`;
     return [
       sanitizePathSegment(payload.scope, 'misc'),
       sanitizePathSegment(payload.ownerId, 'unscoped'),
-      encodedName
+      sanitizePathSegment(attachmentId, 'att'),
+      safeFileName
     ].join('/');
   }
 
