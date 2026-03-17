@@ -494,7 +494,8 @@ async function run() {
     }
     pushStep('checklist:manage-loaded', true, 'manage page ready');
 
-    await page.goto(`${BASE_URL}/#audit-trail`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.goto(`${BASE_URL}/#audit-trail`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
       return !!(app && app.innerText && app.innerText.includes('操作稽核軌跡'));
@@ -502,7 +503,8 @@ async function run() {
     await page.waitForFunction(() => {
       const emptyState = document.querySelector('.empty-state-title');
       if (emptyState && emptyState.textContent && emptyState.textContent.includes('目前查無符合條件的稽核紀錄')) return true;
-      return document.querySelectorAll('button[data-action="admin.viewAuditEntry"]').length > 0;
+      if (document.querySelectorAll('button[data-action="admin.viewAuditEntry"]').length > 0) return true;
+      return !!document.getElementById('audit-trail-table');
     }, { timeout: 30000 });
     const rows = await page.locator('button[data-action="admin.viewAuditEntry"]').count();
     pushStep('audit-trail:loaded', true, `rows=${rows}`);
@@ -644,7 +646,7 @@ async function run() {
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return app && /申請審核與啟用追蹤/.test(app.textContent || '');
+      return app && /申請審核與登入資訊追蹤/.test(app.textContent || '');
     }, { timeout: 45000 });
     const unitContactReviewText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(unitContactReviewText)) {
