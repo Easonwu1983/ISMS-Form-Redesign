@@ -360,7 +360,8 @@
   }
 
   function buildTrainingRosterRow(row) {
-    return '<tr><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>';
+    const rowAttrs = ' data-roster-id="' + esc(row.id) + '" data-roster-name="' + esc(row.name || '') + '" data-roster-unit="' + esc(row.unit || '') + '"';
+    return '<tr' + rowAttrs + '><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>';
   }
 
   function buildTrainingRosterFileCopy(fileName) {
@@ -460,8 +461,12 @@
       actorName: currentUser()?.name || '',
       actorUsername: currentUser()?.username || ''
     });
-    showTrainingRepositoryFallback(result, '名單已刪除');
-    renderTrainingRoster({ skipSync: true });
+    await renderTrainingRoster({ skipSync: true });
+    const deletedCount = Number(result && result.raw && result.raw.deletedCount || 0);
+    toast(deletedCount > 1 ? ('名單已刪除，並同步清理重複資料 ' + deletedCount + ' 筆') : '名單已刪除', 'success');
+    if (result && result.warning) {
+      toast(result.warning, 'info');
+    }
   }
 
   function handleTrainingPrintDetail(id) {
@@ -1391,6 +1396,28 @@
     return rosters.map((row) => buildTrainingRosterRow(row)).join('');
   }
 
+  function focusTrainingRosterRows(options) {
+    const opts = options || {};
+    const ids = new Set((Array.isArray(opts.rosterIds) ? opts.rosterIds : []).map((value) => String(value || '').trim()).filter(Boolean));
+    const names = new Set((Array.isArray(opts.rosterNames) ? opts.rosterNames : []).map((value) => String(value || '').trim()).filter(Boolean));
+    const units = new Set((Array.isArray(opts.rosterUnits) ? opts.rosterUnits : []).map((value) => String(value || '').trim()).filter(Boolean));
+    if (!ids.size && !names.size) return;
+    const matchedRows = Array.from(document.querySelectorAll('tr[data-roster-id]')).filter((row) => {
+      const rosterId = String(row.dataset.rosterId || '').trim();
+      const rosterName = String(row.dataset.rosterName || '').trim();
+      const rosterUnit = String(row.dataset.rosterUnit || '').trim();
+      if (ids.size && ids.has(rosterId)) return true;
+      if (names.size && names.has(rosterName)) {
+        if (!units.size) return true;
+        return units.has(rosterUnit);
+      }
+      return false;
+    });
+    if (!matchedRows.length) return;
+    matchedRows.forEach((row) => row.classList.add('training-roster-row-focused'));
+    matchedRows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   function buildTrainingRosterPage(summary, rowsHtml, hiddenCount) {
     const hiddenNote = hiddenCount
       ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
@@ -1510,6 +1537,9 @@
       let skipped = 0;
       let fallbackWarning = '';
       const importErrors = [];
+      const importedRosterIds = [];
+      const importedRosterNames = [];
+      const importedRosterUnits = [];
       try {
         await syncTrainingRostersFromM365({ silent: true });
       } catch (_) {}
@@ -1549,6 +1579,9 @@
           const result = await submitTrainingRosterUpsert(nextPayload);
           if (result && result.item) {
             rosterIndex.set(rosterKey, result.item);
+            importedRosterIds.push(String(result.item.id || '').trim());
+            importedRosterNames.push(String(result.item.name || '').trim());
+            importedRosterUnits.push(String(result.item.unit || targetUnit).trim());
           }
           if (existingRoster) updated += 1;
           else added += 1;
@@ -1561,12 +1594,21 @@
       try {
         await syncTrainingRostersFromM365({ silent: true });
       } catch (_) {}
-      toast('匯入完成：新增 ' + added + ' 筆、更新 ' + updated + ' 筆、略過 ' + skipped + ' 筆');
+      await renderTrainingRoster({
+        skipSync: true,
+        rosterIds: importedRosterIds,
+        rosterNames: importedRosterNames,
+        rosterUnits: importedRosterUnits
+      });
+      toast('匯入完成：新增 ' + added + ' 筆、更新 ' + updated + ' 筆、略過 ' + skipped + ' 筆', 'success');
+      if ((added + updated) > 0) {
+        toast('已自動定位到本次匯入的名單列', 'info');
+      }
       if (fallbackWarning) toast(fallbackWarning, 'info');
       if (importErrors.length) toast(importErrors[0], 'error');
-      renderTrainingRoster({ skipSync: true });
     });
 
+    focusTrainingRosterRows(opts);
     refreshIcons();
   }
 

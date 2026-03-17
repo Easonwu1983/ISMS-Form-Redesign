@@ -181,6 +181,27 @@ async function run() {
     };
   }, { critical: true });
 
+  await step('training-rosters ids unique', async () => {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/training/rosters`, {
+      headers: {
+        Authorization: `Bearer ${adminSessionToken}`
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const idCounts = new Map();
+    items.forEach((item) => {
+      const id = String(item && item.id || '').trim();
+      if (!id) return;
+      idCounts.set(id, (idCounts.get(id) || 0) + 1);
+    });
+    const duplicates = Array.from(idCounts.entries()).filter(([, count]) => count > 1);
+    if (duplicates.length) {
+      throw new Error(`duplicate roster ids detected: ${duplicates.map(([id, count]) => `${id}x${count}`).join(', ')}`);
+    }
+    return { count: items.length };
+  }, { critical: true });
+
   await step('auth verify authorized', async () => {
     const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/verify`, {
       headers: {

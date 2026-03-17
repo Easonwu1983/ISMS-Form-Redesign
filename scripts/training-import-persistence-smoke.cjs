@@ -179,6 +179,14 @@ async function deleteTrainingRostersByNames(page, names) {
       );
       await page.click('[data-testid="training-import-submit"]');
       await waitForTrainingRostersByNames(page, names, 30000);
+      const importedRows = await listTrainingRostersByNames(page, names);
+      const importedIds = importedRows.map((item) => String(item && item.id || '').trim()).filter(Boolean);
+      if (importedRows.length !== names.length) {
+        throw new Error(`expected ${names.length} imported rows but found ${importedRows.length}`);
+      }
+      if (new Set(importedIds).size !== names.length) {
+        throw new Error(`duplicate roster ids detected: ${importedIds.join(', ')}`);
+      }
       return `imported ${names.join(', ')} into ${target.fullUnit}`;
     });
 

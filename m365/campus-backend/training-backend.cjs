@@ -37,7 +37,9 @@ function createTrainingRouter(deps) {
   } = deps;
 
   const state = {
-    listMap: null
+    listMap: null,
+    nextRosterSequence: null,
+    rosterSequenceLock: Promise.resolve()
   };
 
   function getEnv(name, fallback) {
@@ -211,12 +213,42 @@ function createTrainingRouter(deps) {
     return match ? Number(match[1]) : 0;
   }
 
+  async function withRosterSequenceLock(work) {
+    const task = typeof work === 'function' ? work : async function noop() {};
+    const previous = state.rosterSequenceLock;
+    let release;
+    state.rosterSequenceLock = new Promise((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await task();
+    } finally {
+      release();
+    }
+  }
+
+  function reserveKnownRosterSequence(rosterId) {
+    const sequence = parseRosterSequence(rosterId);
+    if (!sequence) return;
+    const nextCandidate = sequence + 1;
+    if (!Number.isFinite(state.nextRosterSequence) || state.nextRosterSequence < nextCandidate) {
+      state.nextRosterSequence = nextCandidate;
+    }
+  }
+
   async function generateNextRosterId() {
-    const rows = await listAllRosters();
-    const nextValue = rows.reduce((max, entry) => {
-      return Math.max(max, parseRosterSequence(entry && entry.item && entry.item.id));
-    }, 0) + 1;
-    return `RST-${String(nextValue).padStart(4, '0')}`;
+    return withRosterSequenceLock(async function reserveNextRosterId() {
+      if (!Number.isFinite(state.nextRosterSequence) || state.nextRosterSequence < 1) {
+        const rows = await listAllRosters();
+        state.nextRosterSequence = rows.reduce((max, entry) => {
+          return Math.max(max, parseRosterSequence(entry && entry.item && entry.item.id));
+        }, 0) + 1;
+      }
+      const nextValue = state.nextRosterSequence;
+      state.nextRosterSequence += 1;
+      return `RST-${String(nextValue).padStart(4, '0')}`;
+    });
   }
 
   async function getFormEntryById(formId) {
@@ -231,6 +263,13 @@ function createTrainingRouter(deps) {
     if (!target) throw createError('Missing training roster id', 400);
     const rows = await listAllRosters();
     return rows.find((entry) => entry.item.id === target) || null;
+  }
+
+  async function getRosterEntriesById(rosterId) {
+    const target = cleanText(rosterId);
+    if (!target) throw createError('Missing training roster id', 400);
+    const rows = await listAllRosters();
+    return rows.filter((entry) => entry.item.id === target);
   }
 
   async function findDuplicateForm(unit, trainingYear, excludeId) {
@@ -630,6 +669,7 @@ function createTrainingRouter(deps) {
       const nextRosterId = existing
         ? existing.item.id
         : ((existingById && !duplicateEntry) ? await generateNextRosterId() : (cleanText(payload.id) || await generateNextRosterId()));
+      reserveKnownRosterSequence(nextRosterId);
       const nextItem = createTrainingRosterRecord({
         ...(existing ? existing.item : {}),
         ...payload,
@@ -666,18 +706,21 @@ function createTrainingRouter(deps) {
   async function handleRosterDelete(req, res, origin, rosterId) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const existing = await getRosterEntryById(rosterId);
+      const existingEntries = await getRosterEntriesById(rosterId);
+      const existing = existingEntries[0] || null;
       if (!existing) {
         throw createError('Training roster not found', 404);
       }
-      if (!requestAuthz.canManageTrainingRoster(authz, existing.item)) {
+      if (existingEntries.some((entry) => !requestAuthz.canManageTrainingRoster(authz, entry.item))) {
         throw requestAuthz.createHttpError('You do not have permission to delete this training roster', 403);
       }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ROSTER_ACTIONS.DELETE);
       const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       const now = new Date().toISOString();
-      await deleteRosterEntry(existing);
+      for (const entry of existingEntries) {
+        await deleteRosterEntry(entry);
+      }
       const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
         eventType: 'training.roster_deleted',
@@ -690,12 +733,14 @@ function createTrainingRouter(deps) {
           action: ROSTER_ACTIONS.DELETE,
           actor: actor.actorName || actorLabel(payload, existing.item.name),
           actorUsername: actor.actorUsername,
-          deletedState: buildTrainingRosterSnapshot(existing.item)
+          deletedState: existingEntries.map((entry) => buildTrainingRosterSnapshot(entry.item)),
+          deletedCount: existingEntries.length
         })
       });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         deletedId: existing.item.id,
+        deletedCount: existingEntries.length,
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {

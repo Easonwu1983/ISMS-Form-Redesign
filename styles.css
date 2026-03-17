@@ -6080,6 +6080,11 @@ tbody tr:hover {
   flex-wrap: wrap;
 }
 
+.training-roster-row-focused {
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+
 .training-editor-layout {
   display: block;
 }
