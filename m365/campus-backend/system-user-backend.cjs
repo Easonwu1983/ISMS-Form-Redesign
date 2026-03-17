@@ -14,6 +14,7 @@ const {
   normalizeSystemUserPayload,
   readStoredPasswordState,
   validateActionEnvelope,
+  validatePasswordComplexity,
   validateSystemUserPayload
 } = require('../azure-function/system-user-api/src/shared/contract');
 const {
@@ -535,6 +536,9 @@ function createSystemUserRouter(deps) {
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, USER_ACTIONS.UPSERT);
       const incoming = normalizeSystemUserPayload(envelope.payload);
+      if (cleanText(incoming.password)) {
+        validatePasswordComplexity(incoming.password, 'password');
+      }
       const existing = await getUserEntryByUsername(incoming.username).catch(() => null);
       const existingAuthState = readStoredPasswordState(existing && existing.item && existing.item.password);
       const payload = {
