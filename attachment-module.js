@@ -4,7 +4,8 @@
       esc,
       toast,
       getBackendMode,
-      fetchRemoteAttachmentDetail
+      fetchRemoteAttachmentDetail,
+      fetchRemoteAttachmentBlob
     } = deps;
 
     const DB_NAME = 'cats_attachments_v1';
@@ -12,6 +13,7 @@
     const DB_VERSION = 1;
     const CONTAINER_URLS = new WeakMap();
     const ACTIVE_URLS = new Set();
+    const REMOTE_BLOB_CACHE = new Map();
     let dbPromise = null;
 
     function openDb() {
@@ -354,6 +356,25 @@
       }
     }
 
+    function getRemoteBlobCacheKey(descriptor) {
+      return String(descriptor && descriptor.driveItemId || '').trim();
+    }
+
+    async function fetchProtectedRemoteBlob(descriptor) {
+      const blobFetcher = typeof fetchRemoteAttachmentBlob === 'function' ? fetchRemoteAttachmentBlob : null;
+      const cacheKey = getRemoteBlobCacheKey(descriptor);
+      if (!descriptor || !cacheKey || !blobFetcher) return null;
+      if (!REMOTE_BLOB_CACHE.has(cacheKey)) {
+        REMOTE_BLOB_CACHE.set(cacheKey, Promise.resolve().then(() => blobFetcher(descriptor)));
+      }
+      try {
+        return await REMOTE_BLOB_CACHE.get(cacheKey);
+      } catch (error) {
+        REMOTE_BLOB_CACHE.delete(cacheKey);
+        throw error;
+      }
+    }
+
     async function buildRenderModel(entry) {
       const descriptor = await resolveRemoteAttachmentDescriptor(normalizeAttachmentDescriptor(entry));
       if (entry && entry.previewUrl) {
@@ -382,6 +403,7 @@
           url: remoteUrl,
           previewUrl: remoteWebUrl || remoteDownloadUrl,
           downloadUrl: remoteDownloadUrl || remoteWebUrl,
+          requiresProtectedFetch: !!(descriptor.driveItemId && typeof fetchRemoteAttachmentBlob === 'function'),
           isImage: String(descriptor.contentType || descriptor.type || '').startsWith('image/')
         };
       }
@@ -451,8 +473,12 @@
           : fileIconHtml;
         const previewUrl = model.previewUrl || model.url;
         const downloadUrl = model.downloadUrl || model.url;
-        const previewAction = previewUrl ? '<a class="btn btn-sm btn-secondary" href="' + previewUrl + '" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">' + previewLabel + '</a>' : '';
-        const downloadAction = downloadUrl ? '<a class="btn btn-sm btn-secondary" href="' + downloadUrl + '" download="' + esc(model.descriptor.name) + '">' + downloadLabel + '</a>' : '';
+        const previewAction = model.requiresProtectedFetch
+          ? '<button type="button" class="btn btn-sm btn-secondary attachment-preview-remote" data-idx="' + index + '">' + previewLabel + '</button>'
+          : (previewUrl ? '<a class="btn btn-sm btn-secondary" href="' + previewUrl + '" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">' + previewLabel + '</a>' : '');
+        const downloadAction = model.requiresProtectedFetch
+          ? '<button type="button" class="btn btn-sm btn-secondary attachment-download-remote" data-idx="' + index + '">' + downloadLabel + '</button>'
+          : (downloadUrl ? '<a class="btn btn-sm btn-secondary" href="' + downloadUrl + '" download="' + esc(model.descriptor.name) + '">' + downloadLabel + '</a>' : '');
         const removeAction = opts.editable ? '<button type="button" class="btn btn-sm btn-danger attachment-remove" data-idx="' + index + '">' + removeLabel + '</button>' : '';
         return '<div class="' + itemClass + '">' + previewHtml + '<div class="file-name">' + esc(model.descriptor.name || '未命名檔案') + '</div><div class="' + actionsClass + '">' + previewAction + downloadAction + removeAction + '</div></div>';
       }).join('') : emptyHtml;
@@ -466,6 +492,44 @@
           });
         });
       }
+      async function openProtectedAttachment(index, download) {
+        const buttonSelector = download ? '.attachment-download-remote' : '.attachment-preview-remote';
+        const button = container.querySelector(buttonSelector + '[data-idx="' + index + '"]');
+        const model = models[index];
+        if (!model) return;
+        if (button) button.disabled = true;
+        try {
+          const remote = await fetchProtectedRemoteBlob(model.descriptor);
+          if (!remote || !(remote.blob instanceof Blob)) throw new Error('附件內容不存在');
+          const objectUrl = URL.createObjectURL(remote.blob);
+          urls.push(objectUrl);
+          ACTIVE_URLS.add(objectUrl);
+          if (download) {
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = model.descriptor.name || 'attachment';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          } else {
+            window.open(objectUrl, '_blank', 'noopener,noreferrer');
+          }
+        } catch (error) {
+          toast(String(error && error.message || error || '附件讀取失敗'), 'error');
+        } finally {
+          if (button) button.disabled = false;
+        }
+      }
+      container.querySelectorAll('.attachment-preview-remote').forEach((button) => {
+        button.addEventListener('click', () => {
+          openProtectedAttachment(Number(button.dataset.idx), false);
+        });
+      });
+      container.querySelectorAll('.attachment-download-remote').forEach((button) => {
+        button.addEventListener('click', () => {
+          openProtectedAttachment(Number(button.dataset.idx), true);
+        });
+      });
     }
 
     function readAttachmentPreviewData(entry) {

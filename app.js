@@ -328,7 +328,8 @@
       esc: function (value) { return getUiModule().esc(value); },
       toast: function (message, type) { return getUiModule().toast(message, type); },
       getBackendMode: function () { return getAttachmentsMode(); },
-      fetchRemoteAttachmentDetail: function (entry) { return fetchRemoteAttachmentDetail(entry); }
+      fetchRemoteAttachmentDetail: function (entry) { return fetchRemoteAttachmentDetail(entry); },
+      fetchRemoteAttachmentBlob: function (entry) { return fetchRemoteAttachmentBlob(entry); }
     });
     window._attachmentModule = attachmentModuleApi;
     return attachmentModuleApi;
@@ -1121,6 +1122,51 @@
       }
     });
   }
+  async function requestAttachmentBlob(path, options) {
+    const endpoint = getAttachmentsEndpoint();
+    if (!endpoint) throw new Error('未設定 attachmentsEndpoint');
+    const suffix = String(path || '').trim();
+    const url = suffix ? (endpoint + suffix) : endpoint;
+    const requestOptions = options || {};
+    const config = getRuntimeM365Config();
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutMs = Number(config.unitContactRequestTimeoutMs || 15000);
+    let timeoutId = null;
+    if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
+    try {
+      const response = await fetch(url, {
+        method: requestOptions.method || 'GET',
+        headers: {
+          'X-ISMS-Contract-Version': ATTACHMENT_CONTRACT_VERSION,
+          ...getAttachmentsSharedHeaders(),
+          ...getSessionAuthHeaders(),
+          ...(requestOptions.headers || {})
+        },
+        signal: controller ? controller.signal : undefined
+      });
+      if (!response.ok) {
+        const rawText = await response.text();
+        let parsed = null;
+        try {
+          parsed = rawText ? JSON.parse(rawText) : null;
+        } catch (_) {
+          parsed = { ok: false, message: rawText };
+        }
+        const error = new Error(String(parsed && (parsed.message || parsed.error || parsed.detail) || ('HTTP ' + response.status)).trim());
+        error.statusCode = response.status;
+        throw error;
+      }
+      return {
+        response,
+        blob: await response.blob()
+      };
+    } catch (error) {
+      if (error && error.name === 'AbortError') throw new Error('連線逾時，請稍後再試');
+      throw error;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
   function readBlobAsDataUrl(blob) {
     return new Promise(function (resolve, reject) {
       if (!(blob instanceof Blob)) {
@@ -1185,6 +1231,16 @@
     if (!driveItemId) return descriptor;
     const body = await requestAttachmentJson('/' + encodeURIComponent(driveItemId), { method: 'GET' });
     return normalizeRemoteAttachmentDescriptor(body && body.item || {}, descriptor);
+  }
+  async function fetchRemoteAttachmentBlob(entry) {
+    const descriptor = entry && typeof entry === 'object' ? entry : {};
+    const driveItemId = String(descriptor.driveItemId || '').trim();
+    if (!driveItemId) return null;
+    const result = await requestAttachmentBlob('/' + encodeURIComponent(driveItemId) + '/content', { method: 'GET' });
+    return {
+      blob: result.blob,
+      contentType: String(result.response.headers.get('content-type') || descriptor.contentType || descriptor.type || '').trim()
+    };
   }
   async function submitAttachmentUpload(entry, options) {
     const blob = await resolveAttachmentBlob(entry);

@@ -151,6 +151,20 @@ async function writeJson(res, response, origin) {
   res.end(payload);
 }
 
+async function writeBinary(res, response, origin) {
+  const body = Buffer.isBuffer(response.body)
+    ? response.body
+    : Buffer.from(response.body || '');
+  const headers = {
+    ...(response.headers || {}),
+    ...buildCorsHeaders(origin),
+    ...buildSecurityHeaders(response.path || '/api'),
+    'Content-Length': Buffer.byteLength(body)
+  };
+  res.writeHead(response.status || 200, headers);
+  res.end(body);
+}
+
 function summarizeTokenActor(decoded, mode) {
   return {
     tokenMode: cleanText(mode) || 'delegated-cli',
@@ -821,6 +835,7 @@ const reviewScopeRouter = createReviewScopeRouter({
 const attachmentRouter = createAttachmentRouter({
   parseJsonBody,
   writeJson,
+  writeBinary,
   graphRequest,
   resolveSiteId,
   getDelegatedToken,

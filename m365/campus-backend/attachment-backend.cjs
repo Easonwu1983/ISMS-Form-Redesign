@@ -21,6 +21,7 @@ function createAttachmentRouter(deps) {
   const {
     parseJsonBody,
     writeJson,
+    writeBinary,
     graphRequest,
     resolveSiteId,
     getDelegatedToken,
@@ -111,7 +112,7 @@ function createAttachmentRouter(deps) {
     });
   }
 
-  async function rawGraphRequest(method, pathOrUrl, body, headers) {
+  async function rawGraphResponse(method, pathOrUrl, body, headers) {
     const { accessToken } = await getDelegatedToken();
     const targetUrl = /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : GRAPH_ROOT + pathOrUrl;
     const response = await fetch(targetUrl, {
@@ -123,24 +124,39 @@ function createAttachmentRouter(deps) {
       },
       body
     });
-    const contentType = cleanText(response.headers.get('content-type'));
-    if (response.status === 204) return null;
-    if (contentType.includes('application/json')) {
-      const json = await response.json();
-      if (!response.ok) {
+    if (!response.ok) {
+      const contentType = cleanText(response.headers.get('content-type'));
+      if (contentType.includes('application/json')) {
+        const json = await response.json();
         const error = new Error(cleanText(json && json.error && json.error.message) || `Graph request failed with HTTP ${response.status}`);
         error.statusCode = response.status >= 500 ? 502 : 500;
         throw error;
       }
-      return json;
-    }
-    const text = await response.text();
-    if (!response.ok) {
+      const text = await response.text();
       const error = new Error(cleanText(text) || `Graph request failed with HTTP ${response.status}`);
       error.statusCode = response.status >= 500 ? 502 : 500;
       throw error;
     }
+    return response;
+  }
+
+  async function rawGraphRequest(method, pathOrUrl, body, headers) {
+    const response = await rawGraphResponse(method, pathOrUrl, body, headers);
+    const contentType = cleanText(response.headers.get('content-type'));
+    if (response.status === 204) return null;
+    if (contentType.includes('application/json')) {
+      const json = await response.json();
+      return json;
+    }
+    const text = await response.text();
     return text;
+  }
+
+  function buildContentDisposition(filename, download) {
+    const cleanName = cleanText(filename) || 'attachment.bin';
+    const asciiFallback = cleanName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+    const encoded = encodeURIComponent(cleanName);
+    return `${download ? 'attachment' : 'inline'}; filename="${asciiFallback || 'attachment.bin'}"; filename*=UTF-8''${encoded}`;
   }
 
   function buildDrivePath(payload, attachmentId) {
@@ -291,6 +307,38 @@ function createAttachmentRouter(deps) {
     }
   }
 
+  async function handleContent(req, res, origin, itemId, url) {
+    try {
+      await requestAuthz.requireAuthenticatedUser(req);
+      const siteId = await resolveSiteId();
+      const drive = await resolveDrive();
+      const item = await getDriveItem(itemId);
+      const response = await rawGraphResponse(
+        'GET',
+        `/sites/${siteId}/drives/${drive.id}/items/${encodeURIComponent(cleanText(itemId))}/content`,
+        undefined,
+        { Accept: '*/*' }
+      );
+      const contentType = cleanText(response.headers.get('content-type')) || cleanText(item && item.file && item.file.mimeType) || 'application/octet-stream';
+      const download = cleanText(url && url.searchParams && url.searchParams.get('download')) === '1';
+      const payload = Buffer.from(await response.arrayBuffer());
+      await writeBinary(res, {
+        status: 200,
+        path: '/api/attachments/content',
+        body: payload,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Disposition': buildContentDisposition(cleanText(item && item.name), download)
+        }
+      }, origin);
+    } catch (error) {
+      await writeJson(res, {
+        status: Number(error && error.statusCode) || 500,
+        jsonBody: { ok: false, error: cleanText(error && error.message) || 'Failed to read attachment content.' }
+      }, origin);
+    }
+  }
+
   async function handleDelete(req, res, origin, itemId) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
@@ -329,6 +377,7 @@ function createAttachmentRouter(deps) {
 
   function tryHandle(req, res, origin, url) {
     const detailMatch = url.pathname.match(/^\/api\/attachments\/([^/]+)\/?$/);
+    const contentMatch = url.pathname.match(/^\/api\/attachments\/([^/]+)\/content\/?$/);
     const deleteMatch = url.pathname.match(/^\/api\/attachments\/([^/]+)\/delete\/?$/);
 
     if (url.pathname === '/api/attachments/health' && req.method === 'GET') {
@@ -339,6 +388,9 @@ function createAttachmentRouter(deps) {
     }
     if (detailMatch && req.method === 'GET') {
       return handleDetail(req, res, origin, decodeURIComponent(detailMatch[1])).then(() => true);
+    }
+    if (contentMatch && req.method === 'GET') {
+      return handleContent(req, res, origin, decodeURIComponent(contentMatch[1]), url).then(() => true);
     }
     if (deleteMatch && req.method === 'POST') {
       return handleDelete(req, res, origin, decodeURIComponent(deleteMatch[1])).then(() => true);
