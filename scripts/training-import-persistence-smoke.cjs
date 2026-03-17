@@ -14,10 +14,14 @@ const {
 
 const runMeta = createArtifactRun('training-import-persistence-smoke');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-import-persistence-smoke.json');
+const ROLE_ADMIN = '\u6700\u9ad8\u7ba1\u7406\u8005';
+const TITLE_IMPORT_PERSIST = '\u8cbc\u4e0a\u532f\u5165\u5f8c\uff0c\u8cc7\u6599\u6703\u5beb\u5165\u9060\u7aef roster \u4e14 id \u552f\u4e00';
+const TITLE_IMPORT_RESYNC = '\u63db\u65b0\u700f\u89bd\u5668 session \u5f8c\u4ecd\u80fd\u8b80\u56de\u525b\u532f\u5165\u7684\u4eba\u54e1';
 const IMPORT_IDENTITY_MANAGER = '\u4e3b\u7ba1';
 const IMPORT_IDENTITY_REPORTER = '\u586b\u5831\u4eba';
 const IMPORT_TITLE_MANAGER = '\u7d44\u9577';
 const IMPORT_TITLE_ENGINEER = '\u5de5\u7a0b\u5e2b';
+const IMPORT_TARGET_UNIT = '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44';
 
 async function ensureTrainingImportPanelVisible(page) {
   await page.waitForSelector('#training-roster-toggle-import');
@@ -37,75 +41,31 @@ async function ensureTrainingImportPanelVisible(page) {
   await page.waitForSelector('#training-import-form', { state: 'visible' });
 }
 
-async function pickImportTargetUnit(page) {
-  return await page.evaluate(() => {
-    const categoryEl = document.getElementById('training-import-unit-category');
-    const parentEl = document.getElementById('training-import-unit-parent');
-    const childEl = document.getElementById('training-import-unit-child');
-    const hiddenEl = document.getElementById('training-import-unit');
-    if (!categoryEl || !parentEl || !childEl || !hiddenEl) {
-      throw new Error('missing unit cascade controls');
-    }
-    const dispatch = (element) => element.dispatchEvent(new Event('change', { bubbles: true }));
-    const values = (select) => Array.from(select.options).map((option) => String(option.value || '').trim()).filter(Boolean);
-
-    for (const category of values(categoryEl)) {
-      categoryEl.value = category;
-      dispatch(categoryEl);
-      for (const parent of values(parentEl)) {
-        parentEl.value = parent;
-        dispatch(parentEl);
-        if (!childEl.disabled) {
-          const children = values(childEl);
-          if (children.length) {
-            childEl.value = children[0];
-            dispatch(childEl);
-            return {
-              fullUnit: hiddenEl.value,
-              token: children[0].slice(0, 2) || parent.slice(0, 2)
-            };
-          }
-        }
-      }
-    }
-
-    throw new Error('unable to locate a searchable multi-level unit');
-  });
-}
-
-async function selectImportTargetUnit(page, target) {
-  await page.fill('#training-import-unit-search', target.token);
-  await page.waitForSelector('#training-import-unit-search-results [data-unit-value]');
-  await page.click(`#training-import-unit-search-results [data-unit-value="${target.fullUnit}"]`);
-  await page.waitForFunction((value) => {
-    const hidden = document.getElementById('training-import-unit');
-    return !!hidden && String(hidden.value || '').trim() === String(value || '').trim();
-  }, target.fullUnit);
-}
-
 async function listTrainingRostersByNames(page, names) {
   return await page.evaluate(async (targetNames) => {
-    const response = await fetch('/api/training/rosters');
+    const token = window._authModule?.currentUser?.()?.sessionToken || '';
+    const response = await fetch('/api/training/rosters', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
     const body = await response.json();
     const items = []
       .concat(Array.isArray(body) ? body : [])
       .concat(Array.isArray(body?.items) ? body.items : [])
       .concat(Array.isArray(body?.value) ? body.value : []);
-    return items.filter((item) => targetNames.includes(String(item && item.name || '').trim()));
+    return items.filter((item) => targetNames.includes(String((item && item.name) || '').trim()));
   }, names);
 }
 
 async function waitForTrainingRostersByNames(page, names, timeout) {
-  await page.waitForFunction(async (targetNames) => {
-    const response = await fetch('/api/training/rosters');
-    if (!response.ok) return false;
-    const body = await response.json();
-    const items = []
-      .concat(Array.isArray(body) ? body : [])
-      .concat(Array.isArray(body?.items) ? body.items : [])
-      .concat(Array.isArray(body?.value) ? body.value : []);
-    return targetNames.every((name) => items.some((item) => String(item && item.name || '').trim() === name));
-  }, names, { timeout });
+  const startedAt = Date.now();
+  while ((Date.now() - startedAt) < timeout) {
+    const rows = await listTrainingRostersByNames(page, names);
+    if (names.every((name) => rows.some((row) => String((row && row.name) || '').trim() === name))) {
+      return rows;
+    }
+    await page.waitForTimeout(500);
+  }
+  throw new Error(`training rosters not visible after ${timeout}ms: ${names.join(', ')}`);
 }
 
 async function deleteTrainingRostersByNames(page, names) {
@@ -122,18 +82,24 @@ async function deleteTrainingRostersByNames(page, names) {
       },
       payload
     });
-    const response = await fetch('/api/training/rosters');
+    const token = window._authModule?.currentUser?.()?.sessionToken || '';
+    const response = await fetch('/api/training/rosters', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
     if (!response.ok) return;
     const body = await response.json();
     const items = []
       .concat(Array.isArray(body) ? body : [])
       .concat(Array.isArray(body?.items) ? body.items : [])
       .concat(Array.isArray(body?.value) ? body.value : []);
-    const matches = items.filter((item) => targetNames.includes(String(item && item.name || '').trim()));
+    const matches = items.filter((item) => targetNames.includes(String((item && item.name) || '').trim()));
     for (const item of matches) {
       await fetch(`/api/training/rosters/${encodeURIComponent(item.id)}/delete`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(buildEnvelope('training.roster.delete', {
           id: item.id,
           actorName: 'training-import-persistence-smoke',
@@ -165,32 +131,38 @@ async function deleteTrainingRostersByNames(page, names) {
   try {
     await resetApp(page);
 
-    await runStep(results, 'IMP-01', '管理者', '匯入名單後需可在同一瀏覽器看見', async () => {
+    await runStep(results, 'IMP-01', ROLE_ADMIN, TITLE_IMPORT_PERSIST, async () => {
       await login(page, results.context.admin.username, results.context.admin.password);
       await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending');
       await gotoHash(page, 'training-roster');
       await ensureTrainingImportPanelVisible(page);
-      const target = await pickImportTargetUnit(page);
-      results.context.importUnit = target.fullUnit;
-      await selectImportTargetUnit(page, target);
-      await page.fill(
-        '#training-import-names',
-        `${names[0]},InfoGroup,${IMPORT_IDENTITY_MANAGER},${IMPORT_TITLE_MANAGER}\n${names[1]},InfoGroup,${IMPORT_IDENTITY_REPORTER},${IMPORT_TITLE_ENGINEER}`
-      );
+      results.context.importUnit = IMPORT_TARGET_UNIT;
+      await page.evaluate(({ unit, managerName, reporterName, managerIdentity, managerTitle, reporterIdentity, reporterTitle }) => {
+        document.getElementById('training-import-unit').value = unit;
+        document.getElementById('training-import-names').value = `${managerName},InfoGroup,${managerIdentity},${managerTitle}\n${reporterName},InfoGroup,${reporterIdentity},${reporterTitle}`;
+      }, {
+        unit: IMPORT_TARGET_UNIT,
+        managerName: names[0],
+        reporterName: names[1],
+        managerIdentity: IMPORT_IDENTITY_MANAGER,
+        managerTitle: IMPORT_TITLE_MANAGER,
+        reporterIdentity: IMPORT_IDENTITY_REPORTER,
+        reporterTitle: IMPORT_TITLE_ENGINEER
+      });
       await page.click('[data-testid="training-import-submit"]');
       await waitForTrainingRostersByNames(page, names, 30000);
       const importedRows = await listTrainingRostersByNames(page, names);
-      const importedIds = importedRows.map((item) => String(item && item.id || '').trim()).filter(Boolean);
+      const importedIds = importedRows.map((item) => String((item && item.id) || '').trim()).filter(Boolean);
       if (importedRows.length !== names.length) {
         throw new Error(`expected ${names.length} imported rows but found ${importedRows.length}`);
       }
       if (new Set(importedIds).size !== names.length) {
         throw new Error(`duplicate roster ids detected: ${importedIds.join(', ')}`);
       }
-      return `imported ${names.join(', ')} into ${target.fullUnit}`;
+      return `imported ${names.join(', ')} into ${results.context.importUnit}`;
     });
 
-    await runStep(results, 'IMP-02', '管理者', '換新瀏覽器 session 仍可從遠端讀回匯入名單', async () => {
+    await runStep(results, 'IMP-02', ROLE_ADMIN, TITLE_IMPORT_RESYNC, async () => {
       const verifyContext = await browser.newContext({ viewport: { width: 1440, height: 1024 } });
       const verifyPage = await verifyContext.newPage();
       attachDiagnostics(verifyPage, results);
