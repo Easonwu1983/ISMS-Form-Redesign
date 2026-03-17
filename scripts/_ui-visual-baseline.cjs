@@ -158,6 +158,9 @@ function getVisualSmokeStyles(slug, mode) {
       .training-group-card .table-wrapper td {
         color: transparent !important;
       }
+      .training-table-card:first-of-type .table-wrapper tbody {
+        display: none !important;
+      }
       .training-group-card:nth-of-type(n+3) {
         display: none !important;
       }
