@@ -72,6 +72,17 @@ async function getTrainingStore(page) {
   return await readJsonFromStorage(page, 'cats_training_hours') || { forms: [], rosters: [] };
 }
 
+async function ensureTrainingImportPanelVisible(page) {
+  const toggle = page.locator('#training-roster-toggle-import');
+  if (await toggle.count()) {
+    const formVisible = await page.locator('#training-import-form').isVisible().catch(() => false);
+    if (!formVisible) {
+      await toggle.click();
+    }
+  }
+  await page.waitForSelector('#training-import-form', { state: 'visible' });
+}
+
 async function chooseUnit(page, baseId, fullUnit) {
   await page.evaluate(({ baseId, fullUnit }) => {
     const categoryEl = document.getElementById(`${baseId}-category`);
@@ -206,7 +217,7 @@ async function populateTrainingFlowOne(page) {
     await runStep(results, 'TRN-01', '最高管理者', '名單管理可驗證單位三級選擇與單層單位隱藏', async () => {
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'training-roster');
-      await page.waitForSelector('#training-import-form');
+      await ensureTrainingImportPanelVisible(page);
       if (!(await page.locator('#training-import-unit-parent').isDisabled())) {
         throw new Error('parent select should be disabled before category selection');
       }
@@ -227,6 +238,7 @@ async function populateTrainingFlowOne(page) {
         [IMPORT_NAMES[0], '資訊網路組', '職員', '工程師'],
         [IMPORT_NAMES[1], '資訊網路組', '委外', '駐點工程師']
       ]);
+      await ensureTrainingImportPanelVisible(page);
       await chooseUnit(page, 'training-import-unit', TARGET_UNIT);
       await page.setInputFiles('#training-import-file', ROSTER_FILE_PATH);
       await page.waitForFunction(() => {

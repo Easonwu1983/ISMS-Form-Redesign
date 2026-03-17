@@ -58,6 +58,7 @@
       getTrainingUnits,
       isOfficialUnit,
       categorizeTopLevelUnit,
+      isTrainingDashboardExcludedUnit,
       getTrainingUnitCategories,
       sortTrainingRosterEntries,
       syncTrainingFormsFromM365,
@@ -143,7 +144,7 @@
 
   function isValidTrainingDashboardUnit(unitValue) {
     const statsUnit = String(getTrainingStatsUnit(unitValue) || '').trim();
-    return !!statsUnit && isOfficialUnit(statsUnit);
+    return !!statsUnit && isOfficialUnit(statsUnit) && !isTrainingDashboardExcludedUnit(statsUnit);
   }
 
   function getTrainingDashboardUnits() {
@@ -157,6 +158,18 @@
       if (statsUnit && isValidTrainingDashboardUnit(statsUnit)) unitSet.add(statsUnit);
     });
     return Array.from(unitSet).sort(compareZhStroke);
+  }
+
+  function getTrainingDashboardDisplayUnit(form, statsUnit) {
+    const displayUnit = String(form?.unit || '').trim();
+    return displayUnit || String(statsUnit || '').trim();
+  }
+
+  function renderTrainingDashboardUnitCell(statsUnit, displayUnit) {
+    const topLevel = String(statsUnit || '').trim();
+    const display = String(displayUnit || '').trim();
+    if (!display || display === topLevel) return esc(topLevel || '—');
+    return '<div class="training-dashboard-unit-cell"><strong>' + esc(topLevel || '—') + '</strong><small>' + esc(display) + '</small></div>';
   }
 
   function buildTrainingTableCard(title, subtitle, badgeText, headersHtml, rowsHtml) {
@@ -445,26 +458,27 @@
     let contentHtml = '';
     if (isAdmin()) {
       const allForms = getAllTrainingForms();
-      const latestByUnit = getTrainingDashboardUnits().map((unit) => {
+      const latestByUnit = getTrainingDashboardUnits().map((statsUnit) => {
         const unitForms = allForms
-          .filter((form) => String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim() === unit)
+          .filter((form) => String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim() === statsUnit)
           .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
         const latestSubmitted = unitForms.find((form) => form.status === TRAINING_STATUSES.SUBMITTED) || null;
         const latest = unitForms[0] || null;
         const effectiveLatest = latestSubmitted || latest;
         return {
-          unit,
+          statsUnit,
+          displayUnit: getTrainingDashboardDisplayUnit(effectiveLatest, statsUnit),
           latest: effectiveLatest,
           summary: effectiveLatest ? (effectiveLatest.summary || computeTrainingSummary(effectiveLatest.records || [])) : computeTrainingSummary([])
         };
-      }).sort((a, b) => compareZhStroke(a.unit, b.unit));
+      }).sort((a, b) => compareZhStroke(a.statsUnit, b.statsUnit));
 
       const completedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED);
       const incompleteUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED);
       summary.submitted = completedUnits.length;
       const completedRows = completedUnits.length ? completedUnits.map((item) => '<tr>'
-        + '<td>' + esc(item.latest.statsUnit || getTrainingStatsUnit(item.unit)) + '</td>'
-        + '<td>' + esc(item.unit) + '</td>'
+        + '<td>' + esc(item.statsUnit) + '</td>'
+        + '<td>' + esc(item.displayUnit || item.statsUnit) + '</td>'
         + '<td>' + renderCopyIdCell(item.latest.id, '教育訓練編號', true) + '</td>'
         + '<td>' + esc(item.latest.fillerName || '—') + '</td>'
         + '<td>' + (item.summary.activeCount || 0) + '</td>'
@@ -483,7 +497,7 @@
         '中心 / 研究單位': '中心 / 研究單位'
       };
       const incompleteGroups = categoryOrder.map((category) => {
-        const units = incompleteUnits.filter((item) => categorizeTopLevelUnit(item.unit) === category);
+        const units = incompleteUnits.filter((item) => categorizeTopLevelUnit(item.statsUnit) === category);
         const groupSummary = units.reduce((acc, item) => {
           const latest = item.latest;
           acc.count += 1;
@@ -502,7 +516,7 @@
               ? '流程一已完成，待列印與上傳簽核表'
               : (latest.status === TRAINING_STATUSES.RETURNED ? ('退回原因：' + (latest.returnReason || '未提供')) : '尚在填寫中'));
           return '<tr>'
-            + '<td>' + esc(item.unit) + '</td>'
+            + '<td>' + renderTrainingDashboardUnitCell(item.statsUnit, item.displayUnit) + '</td>'
             + '<td>' + statusText + '</td>'
             + '<td>' + (latest ? esc(latest.fillerName || '—') : '—') + '</td>'
             + '<td>' + (item.summary.activeCount || 0) + '</td>'
@@ -510,7 +524,7 @@
             + '<td><span class="training-rate-pill">' + (item.summary.completionRate || 0) + '%</span></td>'
             + '<td>' + esc(note) + '</td>'
             + '<td>' + (latest ? fmtTime(latest.updatedAt) : '—') + '</td>'
-            + '<td>' + buildFormActions(latest, { unit: item.unit }) + '</td>'
+            + '<td>' + buildFormActions(latest, { unit: item.statsUnit }) + '</td>'
             + '</tr>';
         }).join('') : buildTrainingEmptyTableRow(9, '此分類目前沒有未完成單位', '', 20);
         return {
@@ -1324,14 +1338,14 @@
     const hiddenNote = hiddenCount
       ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
       : '';
+    const rosterActions = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">名單管理</span><div class="training-table-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</div></div><div class="training-group-header-actions"><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></div><div id="training-roster-import-wrap" style="display:none">' + buildTrainingRosterImportCard() + '</div>' + buildTrainingTableMarkup('<th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th>', rowsHtml) + '</div>';
     return '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><div><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button> <a href="#training" class="btn btn-secondary">← 返回統計</a></div></div>'
+      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><div><a href="#training" class="btn btn-secondary">← 返回統計</a></div></div>'
       + '<div class="stats-grid">'
       + buildTrainingRosterStats(summary)
       + '</div>'
       + hiddenNote
-      + '<div id="training-roster-import-wrap" style="display:none">' + buildTrainingRosterImportCard() + '</div>'
-      + '<div class="card" style="padding:0;overflow:hidden">' + buildTrainingTableMarkup('<th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th>', rowsHtml) + '</div>'
+      + rosterActions
       + '</div>';
   }
 
@@ -1438,29 +1452,42 @@
       let updated = 0;
       let skipped = 0;
       let fallbackWarning = '';
+      const importErrors = [];
       for (const entry of entries) {
         const targetUnit = String(entry.unit || unit || '').trim();
+        const normalizedName = String(entry.name || '').trim().toLowerCase();
+        const existingRoster = getAllTrainingRosters().find((row) => String(row.unit || '').trim() === targetUnit && String(row.name || '').trim().toLowerCase() === normalizedName);
         const fallbackResult = addTrainingRosterPerson(targetUnit, { ...entry, unit: targetUnit }, 'import', currentUser());
-        if (fallbackResult.added) added += 1;
-        else if (fallbackResult.updated) updated += 1;
-        else {
+        if (!fallbackResult.added && !fallbackResult.updated) {
           skipped += 1;
           continue;
         }
         const roster = fallbackResult.row || getAllTrainingRosters().find((row) => row.unit === targetUnit && row.name.toLowerCase() === String(entry.name || '').trim().toLowerCase());
-        if (!roster) continue;
-        const result = await submitTrainingRosterUpsert({
-          ...roster,
-          source: 'import',
-          createdBy: roster.createdBy || currentUser()?.name || '',
-          createdByUsername: roster.createdByUsername || currentUser()?.username || '',
-          actorName: currentUser()?.name || '',
-          actorUsername: currentUser()?.username || ''
-        });
-        if (!fallbackWarning && result && result.warning) fallbackWarning = result.warning;
+        if (!roster) {
+          skipped += 1;
+          importErrors.push('找不到匯入後的人員資料：' + String(entry.name || '未命名'));
+          continue;
+        }
+        try {
+          const result = await submitTrainingRosterUpsert({
+            ...roster,
+            source: 'import',
+            createdBy: roster.createdBy || currentUser()?.name || '',
+            createdByUsername: roster.createdByUsername || currentUser()?.username || '',
+            actorName: currentUser()?.name || '',
+            actorUsername: currentUser()?.username || ''
+          });
+          if (existingRoster || fallbackResult.updated) updated += 1;
+          else added += 1;
+          if (!fallbackWarning && result && result.warning) fallbackWarning = result.warning;
+        } catch (error) {
+          skipped += 1;
+          importErrors.push((entry.name || '未命名人員') + '：' + (error?.message || '匯入失敗'));
+        }
       }
       toast('匯入完成：新增 ' + added + ' 筆、更新 ' + updated + ' 筆、略過 ' + skipped + ' 筆');
       if (fallbackWarning) toast(fallbackWarning, 'info');
+      if (importErrors.length) toast(importErrors[0], 'error');
       renderTrainingRoster();
     });
 

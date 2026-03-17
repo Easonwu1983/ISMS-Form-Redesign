@@ -26,6 +26,9 @@
       '副校長室',
       '研究誠信辦公室'
     ]);
+    const TRAINING_DASHBOARD_EXCLUDED_UNITS = new Set([
+      '學校分部總辦事處'
+    ]);
 
     function getOfficialUnits() {
       try {
@@ -398,6 +401,11 @@
       return TRAINING_UNIT_CATEGORY_ADMIN;
     }
 
+    function isTrainingDashboardExcludedUnit(unitValue) {
+      const unit = String(splitUnitValue(unitValue).parent || unitValue || '').trim();
+      return !!unit && TRAINING_DASHBOARD_EXCLUDED_UNITS.has(unit);
+    }
+
     function getTrainingUnitCategories() {
       return [TRAINING_UNIT_CATEGORY_ADMIN, TRAINING_UNIT_CATEGORY_ACADEMIC, TRAINING_UNIT_CATEGORY_CENTER];
     }
@@ -760,6 +768,7 @@
       splitUnitValue,
       composeUnitValue,
       categorizeTopLevelUnit,
+      isTrainingDashboardExcludedUnit,
       getTrainingUnitCategories,
       getParentsByUnitCategory,
       buildUnitSearchEntry,

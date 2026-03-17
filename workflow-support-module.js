@@ -478,6 +478,48 @@
       return map.name >= 0 ? map : null;
     }
 
+    function isTrainingRosterHeaderLikeRow(cells) {
+      const normalizedCells = (Array.isArray(cells) ? cells : [])
+        .map((cell) => normalizeTrainingImportHeader(cell))
+        .filter(Boolean);
+      if (!normalizedCells.length) return false;
+      if (buildTrainingRosterHeaderMap(cells)) return true;
+      const headerTokens = new Set([
+        normalizeTrainingImportHeader('姓名'),
+        normalizeTrainingImportHeader('人員姓名'),
+        normalizeTrainingImportHeader('本職單位'),
+        normalizeTrainingImportHeader('服務單位'),
+        normalizeTrainingImportHeader('單位'),
+        normalizeTrainingImportHeader('身分別'),
+        normalizeTrainingImportHeader('身份別'),
+        normalizeTrainingImportHeader('職稱'),
+        normalizeTrainingImportHeader('職務'),
+        normalizeTrainingImportHeader('填報單位'),
+        normalizeTrainingImportHeader('統計單位'),
+        normalizeTrainingImportHeader('一級單位')
+      ]);
+      const matched = normalizedCells.filter((cell) => headerTokens.has(cell)).length;
+      return matched >= 2 || (matched >= 1 && normalizedCells.length <= 4 && normalizedCells[0] === normalizeTrainingImportHeader('姓名'));
+    }
+
+    function resolveTrainingRosterDataRows(rows) {
+      const list = Array.isArray(rows) ? rows : [];
+      if (!list.length) return { headerMap: null, dataRows: [] };
+      for (let index = 0; index < Math.min(list.length, 5); index += 1) {
+        const headerMap = buildTrainingRosterHeaderMap(list[index]);
+        if (headerMap) {
+          return {
+            headerMap,
+            dataRows: list.slice(index + 1)
+          };
+        }
+      }
+      return {
+        headerMap: null,
+        dataRows: list.filter((cells) => !isTrainingRosterHeaderLikeRow(cells))
+      };
+    }
+
     function resolveTrainingImportTargetUnit(defaultUnit, rawUnit, rawStatsUnit) {
       const selectedUnit = String(defaultUnit || '').trim();
       const unitText = String(rawUnit || '').trim().replace(/\//g, '／');
@@ -495,6 +537,7 @@
 
     function parseTrainingRosterCells(cells, unit, headerMap) {
       const clean = (Array.isArray(cells) ? cells : []).map((part) => String(part || '').replace(/^\uFEFF/, '').trim());
+      if (isTrainingRosterHeaderLikeRow(clean)) return null;
       const getCell = (key, fallbackIndex) => {
         if (headerMap && Number.isInteger(headerMap[key])) return clean[headerMap[key]] || '';
         return clean[fallbackIndex] || '';
@@ -517,8 +560,7 @@
         .map((line) => line.trim())
         .filter(Boolean)
         .map((line) => (line.includes('\t') ? line.split('\t') : line.split(',')));
-      const headerMap = rows.length ? buildTrainingRosterHeaderMap(rows[0]) : null;
-      const dataRows = headerMap ? rows.slice(1) : rows;
+      const { headerMap, dataRows } = resolveTrainingRosterDataRows(rows);
       return dataRows.map((parts) => parseTrainingRosterCells(parts, unit, headerMap)).filter((row) => row && row.name);
     }
 
@@ -539,8 +581,7 @@
               return;
             }
             const rows = window.XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1, raw: false, defval: '' });
-            const headerMap = rows.length ? buildTrainingRosterHeaderMap(rows[0]) : null;
-            const dataRows = headerMap ? rows.slice(1) : rows;
+            const { headerMap, dataRows } = resolveTrainingRosterDataRows(rows);
             resolve(dataRows.map((cells) => parseTrainingRosterCells(cells, unit, headerMap)).filter((row) => row && row.name));
           } catch (error) {
             reject(error);

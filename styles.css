@@ -5914,6 +5914,23 @@ tbody tr:hover {
   overflow: hidden;
 }
 
+.training-dashboard-unit-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.training-dashboard-unit-cell strong {
+  font-size: 0.92rem;
+  color: var(--text-heading);
+}
+
+.training-dashboard-unit-cell small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.77rem;
+  line-height: 1.45;
+}
+
 .training-group-header-actions {
   display: inline-flex;
   align-items: center;

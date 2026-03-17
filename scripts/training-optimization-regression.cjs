@@ -22,6 +22,17 @@ function getTrainingStore(page) {
   return readJsonFromStorage(page, 'cats_training_hours');
 }
 
+async function ensureTrainingImportPanelVisible(page) {
+  const toggle = page.locator('#training-roster-toggle-import');
+  if (await toggle.count()) {
+    const searchVisible = await page.locator('#training-import-unit-search').isVisible().catch(() => false);
+    if (!searchVisible) {
+      await toggle.click();
+    }
+  }
+  await page.waitForSelector('#training-import-unit-search', { state: 'visible' });
+}
+
 (async () => {
   const results = createResultEnvelope({
     steps: [],
@@ -41,7 +52,7 @@ function getTrainingStore(page) {
     await runStep(results, 'OPT-01', '最高管理者', '單位選擇器支援 autocomplete 搜尋並自動帶入層級', async () => {
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'training-roster');
-      await page.waitForSelector('#training-import-unit-search');
+      await ensureTrainingImportPanelVisible(page);
 
       const target = await page.evaluate(() => {
         const categoryEl = document.getElementById('training-import-unit-category');

@@ -109,6 +109,7 @@
   function splitUnitValue(unitValue) { return getUnitModule().splitUnitValue(unitValue); }
   function composeUnitValue(parent, child) { return getUnitModule().composeUnitValue(parent, child); }
   function categorizeTopLevelUnit(unitValue) { return getUnitModule().categorizeTopLevelUnit(unitValue); }
+  function isTrainingDashboardExcludedUnit(unitValue) { return getUnitModule().isTrainingDashboardExcludedUnit(unitValue); }
   function getTrainingUnitCategories() { return getUnitModule().getTrainingUnitCategories(); }
   function getParentsByUnitCategory(parents, category) { return getUnitModule().getParentsByUnitCategory(parents, category); }
   function buildUnitSearchEntry(unitValue) { return getUnitModule().buildUnitSearchEntry(unitValue); }
@@ -726,6 +727,7 @@
       getTrainingUnits,
       isOfficialUnit,
       categorizeTopLevelUnit,
+      isTrainingDashboardExcludedUnit,
       getTrainingUnitCategories,
       sortTrainingRosterEntries,
       syncTrainingFormsFromM365,
