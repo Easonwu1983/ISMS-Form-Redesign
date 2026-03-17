@@ -187,12 +187,13 @@ body {
 .login-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: var(--bg-login);
   position: relative;
-  overflow: hidden;
-  padding: 28px 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(18px, 5vh, 36px) 18px;
 }
 
 .login-page::before {
@@ -225,14 +226,13 @@ body {
   background: #ffffff;
   border-radius: var(--radius-xl);
   padding: 40px 36px;
-  width: min(100%, 500px);
-  max-width: min(92vw, 500px);
+  width: min(100%, 520px);
+  max-width: min(94vw, 520px);
   box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
   z-index: 1;
   position: relative;
   animation: fadeSlideUp 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  max-height: calc(100vh - 56px);
-  overflow-y: auto;
+  margin: auto 0;
 }
 
 .login-logo {
@@ -1586,6 +1586,35 @@ tbody td:first-child {
   flex: 1 1 170px;
   justify-content: center;
   min-height: 46px;
+}
+
+@media (max-width: 760px), (max-height: 760px) {
+  .login-page {
+    padding: 14px 12px 20px;
+  }
+
+  .login-card {
+    padding: 28px 22px;
+    border-radius: 24px;
+    max-width: 100%;
+  }
+
+  .login-logo {
+    margin-bottom: 22px;
+  }
+
+  .login-logo h1 {
+    font-size: 1.34rem;
+  }
+
+  .login-entry-card {
+    margin-top: 16px;
+    padding: 16px;
+  }
+
+  .login-entry-actions .btn {
+    flex: 1 1 100%;
+  }
 }
 
 @media (max-width: 960px) {

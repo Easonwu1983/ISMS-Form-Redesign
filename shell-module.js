@@ -62,6 +62,15 @@
     function closeSidebar() { setSidebarOpen(false); }
     function toggleSidebar() { setSidebarOpen(!isSidebarOpen); }
 
+    function validatePasswordComplexity(password) {
+      var value = String(password || '');
+      if (value.length < 8) return '密碼長度至少需 8 碼';
+      if (!/[a-z]/.test(value)) return '密碼至少需包含一個英文小寫字母';
+      if (!/[A-Z]/.test(value)) return '密碼至少需包含一個英文大寫字母';
+      if (!/[0-9]/.test(value)) return '密碼至少需包含一個數字';
+      return '';
+    }
+
     function renderLogin() {
       document.body.innerHTML = '<div class="login-page"><div class="login-card">' +
         '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div>' +
@@ -74,12 +83,12 @@
         '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h3 class="login-entry-title">申請單位管理人員</h3><p class="login-entry-text">如需新增或異動各單位管理窗口，請先送出單位管理人申請，再由系統管理者建立登入帳號。</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">前往申請</a><a class="btn btn-secondary" href="#apply-unit-contact-status">查詢進度</a></div></div>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">忘記密碼？</a></p></div>' +
         '<div id="change-panel" style="display:none">' +
-        '<div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">首次登入需變更密碼</h3></div>' +
+        '<div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">首次登入需變更密碼</h3><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
         '<div class="login-error" id="change-error">密碼變更失敗</div>' +
         '<form class="login-form" id="change-form"><input type="hidden" id="change-username"><input type="hidden" id="change-current-password"><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="change-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="change-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' 立即更新密碼</button></form>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
         '<div id="forgot-panel" style="display:none">' +
-        '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h3></div>' +
+        '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h3><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">新密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
         '<div class="login-error" id="forgot-error">找不到符合帳號與信箱的使用者</div>' +
         '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="forgot-username" placeholder="請輸入帳號" required></div><div class="form-group"><label class="form-label">註冊電子信箱</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入帳號綁定的電子信箱" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 取得重設代碼</button></form>' +
         '<div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px">' +
@@ -138,6 +147,12 @@
         var confirmPassword = document.getElementById('change-pass-confirm').value;
         if (nextPassword !== confirmPassword) {
           document.getElementById('change-error').textContent = '兩次輸入的新密碼不一致';
+          document.getElementById('change-error').classList.add('show');
+          return;
+        }
+        var changePasswordError = validatePasswordComplexity(nextPassword);
+        if (changePasswordError) {
+          document.getElementById('change-error').textContent = changePasswordError;
           document.getElementById('change-error').classList.add('show');
           return;
         }
@@ -211,6 +226,11 @@
         var confirmPassword = document.getElementById('redeem-pass-confirm').value;
         if (nextPassword !== confirmPassword) {
           toast('兩次輸入的新密碼不一致', 'error');
+          return;
+        }
+        var redeemPasswordError = validatePasswordComplexity(nextPassword);
+        if (redeemPasswordError) {
+          toast(redeemPasswordError, 'error');
           return;
         }
         try {

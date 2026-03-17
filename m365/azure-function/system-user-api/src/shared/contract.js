@@ -42,6 +42,16 @@ function createError(message, statusCode) {
   return error;
 }
 
+function validatePasswordComplexity(password, fieldName) {
+  const label = cleanText(fieldName) || 'password';
+  const value = cleanText(password);
+  if (!value) throw createError('Missing ' + label, 400);
+  if (value.length < 8) throw createError('Password must be at least 8 characters', 400);
+  if (!/[a-z]/.test(value)) throw createError('Password must include at least one lowercase letter', 400);
+  if (!/[A-Z]/.test(value)) throw createError('Password must include at least one uppercase letter', 400);
+  if (!/[0-9]/.test(value)) throw createError('Password must include at least one number', 400);
+}
+
 function parseJsonField(value, fallback) {
   if (value === null || value === undefined || value === '') {
     return typeof fallback === 'function' ? fallback() : fallback;
@@ -288,6 +298,7 @@ function validateSystemUserPayload(payload, options) {
   if (!cleanText(payload.name)) throw createError('Missing display name', 400);
   if (!cleanEmail(payload.email)) throw createError('Missing email', 400);
   if (opts.requirePassword && !cleanText(payload.password)) throw createError('Missing password', 400);
+  if (cleanText(payload.password)) validatePasswordComplexity(payload.password, 'password');
   if (payload.role !== USER_ROLES.ADMIN && payload.role !== USER_ROLES.VIEWER && !payload.units.length) {
     throw createError('At least one authorized unit is required', 400);
   }
@@ -340,6 +351,7 @@ module.exports = {
   normalizeSystemUserPayload,
   parseUserUnits,
   readStoredPasswordState,
+  validatePasswordComplexity,
   validateActionEnvelope,
   validateSystemUserPayload
 };

@@ -39,6 +39,9 @@ function validateNextPassword(password, fieldName) {
   const value = cleanText(password);
   if (!value) throw createError('Missing ' + label, 400);
   if (value.length < 8) throw createError('Password must be at least 8 characters', 400);
+  if (!/[a-z]/.test(value)) throw createError('Password must include at least one lowercase letter', 400);
+  if (!/[A-Z]/.test(value)) throw createError('Password must include at least one uppercase letter', 400);
+  if (!/[0-9]/.test(value)) throw createError('Password must include at least one number', 400);
 }
 
 function normalizeLoginPayload(payload) {
