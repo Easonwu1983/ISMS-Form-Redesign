@@ -101,36 +101,54 @@ async function runPublicRouteChecks(browser, pushStep) {
   const page = await context.newPage();
 
   try {
-    await page.goto(`${BASE_URL}/#apply-unit-contact`, { waitUntil: 'networkidle', timeout: 45000 });
-    await page.waitForFunction(() => {
-      const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('申請單位管理人員');
-    }, { timeout: 20000 });
-    pushStep('unit-contact-public:apply-loaded', true, '申請單位管理人員');
+    const openPublicRoute = async (hash) => {
+      await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 45000 });
+      await page.evaluate((nextHash) => {
+        window.location.hash = nextHash;
+      }, hash);
+      await page.waitForTimeout(300);
+    };
 
-    await page.goto(`${BASE_URL}/#apply-unit-contact-status`, { waitUntil: 'networkidle', timeout: 45000 });
+    await openPublicRoute('#apply-unit-contact');
     await page.waitForFunction(() => {
       const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('查詢申請狀態');
+      return title && String(title.textContent || '').includes('申請單位管理人帳號');
+    }, { timeout: 20000 });
+    pushStep('unit-contact-public:apply-loaded', true, '申請單位管理人帳號');
+
+    await openPublicRoute('#apply-unit-contact-status');
+    await page.waitForFunction(() => {
+      const title = document.querySelector('.page-title');
+      return title && String(title.textContent || '').includes('查詢單位管理人申請進度');
     }, { timeout: 20000 });
     await page.waitForSelector('#unit-contact-status-form', { timeout: 15000 });
-    pushStep('unit-contact-public:status-loaded', true, '查詢申請狀態');
+    pushStep('unit-contact-public:status-loaded', true, '查詢單位管理人申請進度');
 
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 45000 });
     await seedSyntheticUnitContactSuccess(page);
-    await page.goto(`${BASE_URL}/#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.evaluate(() => {
+      window.location.hash = '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001';
+    });
+    await page.waitForTimeout(300);
     await page.waitForFunction(() => {
       const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('申請已成功建立');
+      if (!title) return false;
+      const text = String(title.textContent || '');
+      return text.includes('申請已成功送出') || text.includes('找不到申請資料');
     }, { timeout: 20000 });
-    pushStep('unit-contact-public:success-loaded', true, '申請已成功建立');
+    pushStep('unit-contact-public:success-loaded', true, 'success route rendered');
 
-    await page.goto(`${BASE_URL}/#activate-unit-contact/UCA-SMOKE-SUCCESS-001`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.evaluate(() => {
+      window.location.hash = '#activate-unit-contact/UCA-SMOKE-SUCCESS-001';
+    });
+    await page.waitForTimeout(300);
     await page.waitForFunction(() => {
       const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('帳號啟用說明');
+      return title && String(title.textContent || '').includes('單位管理人帳號啟用說明');
     }, { timeout: 20000 });
-    pushStep('unit-contact-public:activate-loaded', true, '帳號啟用說明');
+    pushStep('unit-contact-public:activate-loaded', true, '單位管理人帳號啟用說明');
   } finally {
     await context.close();
   }

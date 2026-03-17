@@ -10,6 +10,7 @@ const SUITE = [
   { label: 'campus-browser-regression-smoke', script: 'scripts/campus-browser-regression-smoke.cjs' },
   { label: 'unit-contact-public-visual-smoke', script: 'scripts/unit-contact-public-visual-smoke.cjs' },
   { label: 'campus-unit-contact-public-visual-smoke', script: 'scripts/campus-unit-contact-public-visual-smoke.cjs' },
+  { label: 'unit-contact-admin-review-smoke', script: 'scripts/unit-contact-admin-review-smoke.cjs' },
   { label: 'unit-contact-account-to-fill-smoke', script: 'scripts/unit-contact-account-to-fill-smoke.cjs' }
 ];
 

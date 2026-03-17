@@ -18,6 +18,7 @@
                     "test:training:all":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs training\"",
                     "test:bonus:all":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs bonus\"",
                     "test:unit-contact:smoke":  "node scripts/run-with-local-server.cjs \"node scripts/unit-contact-public-smoke.cjs\"",
+                    "test:unit-contact:admin-review":  "node scripts/unit-contact-admin-review-smoke.cjs",
                     "test:unit-contact:public:visual":  "node scripts/unit-contact-public-visual-smoke.cjs",
                     "test:unit-contact:public:visual:campus":  "node scripts/campus-unit-contact-public-visual-smoke.cjs",
                     "test:unit-contact:account-flow":  "node scripts/unit-contact-account-to-fill-smoke.cjs",

@@ -1,72 +1,79 @@
 # Project Execution Flow
 
-This document records the actual runtime flow of the ISMS project as it is implemented today, including browser modules, M365 backend routes, guest deployment, and live campus entry.
+This document records the current production runtime flow for the ISMS project as it exists today.
 
 ## 1. Runtime Topology
 
 ```mermaid
 flowchart LR
-  A["User Browser"] --> B["Windows Host :8088"]
-  B --> C["VirtualBox Ubuntu VM"]
-  C --> D["Caddy :80"]
-  D --> E["Node campus backend :8787"]
-  E --> F["SharePoint Lists / Library"]
+  A["User Browser"] --> B["Cloudflare Pages (fixed HTTPS entry)"]
+  A --> C["Campus entry http://140.112.3.65:8088"]
+  B --> D["Cloudflare Quick Tunnel (temporary backend HTTPS)"]
+  C --> E["Windows host campus gateway :8088"]
+  D --> F["Windows host local backend port :18080"]
+  E --> G["Ubuntu guest backend :8787"]
+  F --> G
+  G --> H["Microsoft Graph / SharePoint Lists + Library"]
 ```
 
-## 2. Frontend Flow
+Notes:
+- The public HTTPS frontend is `https://isms-campus-portal.pages.dev/`.
+- The current public backend exposure still depends on a Quick Tunnel. This is serviceable for UAT, but not the final infrastructure state.
+- The campus entry remains `http://140.112.3.65:8088/` and is restricted by the Windows host gateway.
 
-### Boot sequence
+## 2. Frontend Boot Flow
 
 1. `index.html` loads the SPA bundles.
 2. `m365-config.js` loads base profile settings.
-3. `m365-config.override.js` overrides live endpoints and mode flags.
-4. `app.js` initializes modules and performs startup sync:
-   - users
-   - training forms
-   - training rosters
-   - checklists
-   - corrective actions
+3. `m365-config.override.js` selects the live profile and endpoints.
+4. `app.js` initializes modules, waits for auth/session state, and performs remote bootstrap.
+5. `shell-module.js` gates route rendering until authenticated remote bootstrap is complete.
 
-### Main frontend modules
+### Key frontend modules
 
 - `app.js`
   - orchestration
   - repository switching
-  - startup sync
+  - remote bootstrap
+  - route wiring
+- `shell-module.js`
+  - login shell
+  - responsive navigation
+  - bootstrap gating
 - `auth-module.js`
   - login
-  - reset password
-  - session handling
+  - logout
+  - request reset / redeem reset / change password
 - `case-module.js`
   - corrective action workflow
 - `checklist-module.js`
   - internal audit checklist workflow
 - `training-module.js`
   - training statistics workflow
+- `unit-contact-application-module.js`
+  - public account application / status / success / activation instructions
 - `admin-module.js`
   - account management
+  - unit-contact admin review
+  - audit trail
+  - schema health
 - `attachment-module.js`
-  - local attachment storage
-  - remote-attachment rendering support
+  - remote attachment rendering and upload support
 
 ## 3. Data Source Strategy
 
-The project currently uses a mixed strategy with M365 as the target system of record.
+The production system of record is M365 / SharePoint. The frontend talks to backend APIs; it does not write directly to SharePoint.
 
-### Already backendized
+### Production mode
 
-- unit contact
-- corrective actions
-- checklists
-- training
-- system users
-- auth
+- live frontend uses `strictRemoteData: true`
+- core modules run in backend mode (`m365-api`)
+- `app-only` token mode is now active for live backend auth and Graph mail
 
-### Attachment status
+### Technical debt still present
 
-- attachment backend router exists
-- frontend backend-mode support exists
-- live is still kept in local attachment mode until `ISMSAttachments` is provisioned
+- local emulator and local fallback code paths still exist in `app.js`
+- these paths are dormant in live, but remain maintenance risk if an override is missing or stale
 
 ## 4. Backend Routes
 
@@ -76,12 +83,19 @@ The project currently uses a mixed strategy with M365 as the target system of re
 
 ### Current route groups
 
-- `/api/unit-contact/*`
+- `/api/unit-contact/health`
+- `/api/unit-contact/apply`
+- `/api/unit-contact/status`
+- `/api/unit-contact/applications`
+- `/api/unit-contact/review`
+- `/api/unit-contact/activate`
 - `/api/corrective-actions/*`
 - `/api/checklists/*`
 - `/api/training/*`
 - `/api/system-users/*`
 - `/api/auth/*`
+- `/api/audit-trail/*`
+- `/api/review-scopes/*`
 - `/api/attachments/*`
 
 ## 5. SharePoint Data Layout
@@ -96,6 +110,7 @@ The project currently uses a mixed strategy with M365 as the target system of re
 - `TrainingForms`
 - `TrainingRosters`
 - `SystemUsers`
+- `UnitReviewScopes`
 
 ### Library
 
@@ -107,7 +122,7 @@ The project currently uses a mixed strategy with M365 as the target system of re
 
 ## 6. Guest Deployment Flow
 
-### Repo and service paths
+### Repo and runtime paths
 
 - repo: `/srv/isms-form-redesign`
 - runtime: `/srv/isms-form-redesign/m365/campus-backend/runtime.local.json`
@@ -121,8 +136,8 @@ The project currently uses a mixed strategy with M365 as the target system of re
 3. SSH to guest.
 4. Pull repo under `ismsbackend`.
 5. Update runtime/override if needed.
-6. Restart `isms-unit-contact-backend.service`.
-7. Run live smoke.
+6. Restart `isms-unit-contact-backend.service` if backend/runtime changed.
+7. Re-run campus live smoke.
 
 ### Known guest issue
 
@@ -136,72 +151,93 @@ and retry the pull.
 
 ## 7. Campus Entry Flow
 
-### Host gateway
+### Windows host gateway
 
 - Windows host exposes `8088`
-- campus IP restriction is enforced on the host gateway
-- current campus test entry:
+- campus IP restriction is enforced in `host-campus-gateway.cjs`
+- current campus entry:
   - `http://140.112.3.65:8088/`
 
-### Live smoke script
+### Cloudflare entry
 
-- `scripts/campus-live-regression-smoke.cjs`
-
-It verifies:
-
-- homepage
-- runtime override
-- health of core modules
-- system-users count
-- auth success / failure behavior
+- Cloudflare Pages provides the fixed public frontend URL
+- Quick Tunnel currently proxies backend API traffic for Pages `full-proxy` mode
+- recovery depends on:
+  - `scripts/bootstrap-cloudflare-pages-live.ps1`
+  - `scripts/refresh-cloudflare-quick-pages-entry.ps1`
+  - `scripts/ensure-cloudflare-pages-live.ps1`
 
 ## 8. Provisioning Flow
 
 ### Preferred
 
-Run backend provision scripts first:
+Run backend provision scripts first for SharePoint lists/libraries.
 
-- corrective actions
-- checklists
-- training
-- attachments
-
-### Fallback
+### Browser-session fallback
 
 If Graph create operations return `403 accessDenied`, use browser-session provisioning:
 
-- lists:
-  - `scripts/sharepoint-browser-provision.js`
-- attachment library:
-  - `scripts/sharepoint-browser-attachment-provision.js`
+- `scripts/sharepoint-browser-provision.js`
+- `scripts/sharepoint-browser-attachment-provision.js`
 
-## 9. Migration Flow
+This tenant has repeatedly required that fallback for certain create operations.
 
-### Browser-local to M365
+## 9. Mail Flow
 
-- script:
-  - `scripts/browser-m365-live-migration.js`
+### Current mail sender
 
-### Important rule
+- live backend now uses `app-only` Graph mail
+- sender is configured through backend runtime environment
+- flows currently wired to mail:
+  - auth password reset
+  - corrective action notifications
+  - unit-contact application submitted
+  - unit-contact status updated / activation
 
-Migration only works when run in the browser profile that actually contains the old local data. If all totals are `0`, that browser profile is not the real source.
+### Fallback still present
 
-## 10. Current Operational State
+- password reset still has a manual token-display fallback if mail delivery fails
+
+## 10. Regression Coverage
+
+### Main live suite
+
+- `scripts/live-regression-suite.cjs`
+
+It currently runs:
+
+- `campus-live-regression-smoke`
+- `live-security-smoke`
+- `cloudflare-pages-regression-smoke`
+- `campus-browser-regression-smoke`
+- `unit-contact-public-visual-smoke`
+- `campus-unit-contact-public-visual-smoke`
+- `unit-contact-admin-review-smoke`
+- `unit-contact-account-to-fill-smoke`
+
+### Additional route-level / visual coverage
+
+- public `unit-contact` pages have dedicated desktop/mobile visual baseline checks
+- main authenticated routes have route-level browser smoke for both Pages and campus entry
+
+## 11. Current Operational State
 
 ### Ready
 
-- unit contact
+- unit contact public flow
+- unit contact admin review / activation flow
 - corrective actions
 - checklists
 - training
 - system users
 - auth
-- live deployment and smoke verification
+- audit trail
+- review scopes
+- attachments
+- Graph mail delivery in app-only mode
 
-### Not yet fully ready
+### Still not final-form
 
-- attachments live mode
-
-Reason:
-
-- `ISMSAttachments` still requires successful SharePoint provisioning before live can switch to backend attachment mode.
+- backend public HTTPS relies on Cloudflare Quick Tunnel, not Named Tunnel or fixed backend hostname
+- local fallback code still exists in the SPA codebase
+- production correctness still depends on deployment override selecting the live profile
