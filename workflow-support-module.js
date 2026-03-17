@@ -268,20 +268,25 @@
     }
 
     function getTrainingSourceRank(row) {
-      return String(row && row.source || '').trim() === 'manual' ? 1 : 0;
+      const source = String(row && row.source || '').trim();
+      if (source === 'import') return 0;
+      if (source === 'manual') return 1;
+      return 0;
     }
 
     function getTrainingIdentityRank(row) {
       const identity = String(row && row.identity || '').trim();
       const rankMap = new Map([
-        ['一級主管', 0],
-        ['一級副主管', 1],
-        ['二級主管', 2],
-        ['二級副主管', 3],
-        ['技工工友', 20]
+        ['一級主管', 1],
+        ['一級副主管', 2],
+        ['二級主管', 3],
+        ['二級副主管', 4],
+        ['銓敘新制職員', 5],
+        ['校聘人員', 6],
+        ['技工工友', 99]
       ]);
       if (rankMap.has(identity)) return rankMap.get(identity);
-      return 10;
+      return 98;
     }
 
     function compareTrainingRosterEntries(a, b) {

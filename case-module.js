@@ -465,6 +465,7 @@ function renderCreate() {
     const handlerName = document.getElementById('f-hname');
     const handlerEmailInput = document.getElementById('f-hemail');
     const dueInput = document.getElementById('f-due');
+    dueInput.min = new Date().toISOString().slice(0, 10);
     const notifyInput = document.getElementById('f-notify');
     const summaryDocNo = document.getElementById('create-summary-docno');
     const summaryId = document.getElementById('create-summary-id');

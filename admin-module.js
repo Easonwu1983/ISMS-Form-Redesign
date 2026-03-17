@@ -44,7 +44,8 @@
       buildUnitCascadeControl,
       initUnitCascade,
       registerActionHandlers,
-      closeModalRoot
+      closeModalRoot,
+      getUnitContactApplication
     } = deps;
 
     const DEFAULT_AUDIT_FILTERS = Object.freeze({
@@ -361,6 +362,23 @@
           initialPassword,
           reviewComment
         });
+        if (externalUserId) {
+          try {
+            const application = getUnitContactApplication(applicationId);
+            await submitUserUpsert({
+              username: externalUserId,
+              password: initialPassword || undefined,
+              name: application && application.applicantName || '',
+              email: application && application.applicantEmail || '',
+              role: 'REPORTER',
+              unit: application && application.unitValue || '',
+              units: application && application.unitValue ? [application.unitValue] : [],
+              activeUnit: application && application.unitValue || ''
+            });
+          } catch (userError) {
+            console.warn('建立本機帳號失敗:', userError);
+          }
+        }
         toast(result && result.delivery && result.delivery.sent ? '已標記啟用並寄送通知' : '已標記啟用');
         renderUnitContactReview(unitContactReviewState.filters);
       } catch (error) {

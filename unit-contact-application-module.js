@@ -157,6 +157,10 @@
         + '<div class="form-row unit-contact-compact-row">'
         + '<div class="form-group"><label class="form-label form-required">電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入校內聯絡電子郵件" required></div>'
         + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="例如代理人資訊或特殊說明"></div></div>'
+        + '<div class="form-row unit-contact-compact-row">'
+        + '<div class="form-group"><label class="form-label form-required">登入帳號</label><input type="text" class="form-input" id="uca-username" data-testid="unit-contact-username" placeholder="請輸入登入帳號" required autocomplete="off"></div>'
+        + '<div class="form-group"><label class="form-label form-required">初始密碼</label><input type="password" class="form-input" id="uca-password" data-testid="unit-contact-password" placeholder="至少 8 碼" minlength="8" required autocomplete="new-password"></div>'
+        + '</div>'
         + '<div class="form-actions">'
         + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
         + '<a class="btn btn-ghost" href="#apply-unit-contact-status">已有申請編號？前往查詢</a>'
@@ -188,6 +192,16 @@
         const extensionNumber = String(document.getElementById('uca-extension').value || '').trim();
         const applicantEmail = String(document.getElementById('uca-email').value || '').trim().toLowerCase();
         const note = String(document.getElementById('uca-note').value || '').trim();
+        const requestedUsername = String(document.getElementById('uca-username').value || '').trim();
+        const requestedPassword = String(document.getElementById('uca-password').value || '');
+        if (!requestedUsername) {
+          toast('請填寫登入帳號。', 'error');
+          return;
+        }
+        if (requestedPassword.length < 8) {
+          toast('初始密碼至少需 8 碼。', 'error');
+          return;
+        }
         if (!unitState.unitValue) {
           toast('請先選擇申請單位。', 'error');
           return;
@@ -199,7 +213,9 @@
             applicantName,
             extensionNumber,
             applicantEmail,
-            note
+            note,
+            requestedUsername,
+            requestedPassword
           });
           if (!result || !result.application) throw new Error('系統未回傳申請結果。');
           saveLastEmail(applicantEmail);

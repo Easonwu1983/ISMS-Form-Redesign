@@ -394,7 +394,7 @@
       actorUsername: currentUser()?.username || ''
     });
     showTrainingRepositoryFallback(result, '名單已刪除');
-    renderTrainingRoster();
+    renderTrainingRoster({ skipSync: true });
   }
 
   function handleTrainingPrintDetail(id) {
@@ -446,18 +446,22 @@
     if (isAdmin()) {
       const allForms = getAllTrainingForms();
       const latestByUnit = getTrainingDashboardUnits().map((unit) => {
-        const latest = allForms
+        const unitForms = allForms
           .filter((form) => String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim() === unit)
-          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0] || null;
+          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        const latestSubmitted = unitForms.find((form) => form.status === TRAINING_STATUSES.SUBMITTED) || null;
+        const latest = unitForms[0] || null;
+        const effectiveLatest = latestSubmitted || latest;
         return {
           unit,
-          latest,
-          summary: latest ? (latest.summary || computeTrainingSummary(latest.records || [])) : computeTrainingSummary([])
+          latest: effectiveLatest,
+          summary: effectiveLatest ? (effectiveLatest.summary || computeTrainingSummary(effectiveLatest.records || [])) : computeTrainingSummary([])
         };
       }).sort((a, b) => compareZhStroke(a.unit, b.unit));
 
       const completedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED);
       const incompleteUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED);
+      summary.submitted = completedUnits.length;
       const completedRows = completedUnits.length ? completedUnits.map((item) => '<tr>'
         + '<td>' + esc(item.latest.statsUnit || getTrainingStatsUnit(item.unit)) + '</td>'
         + '<td>' + esc(item.unit) + '</td>'
@@ -873,7 +877,7 @@
           if (field === 'isInfoStaff') row.completedProfessional = row.isInfoStaff === '否' ? '不適用' : '';
           rowsState[Number(event.target.dataset.idx)] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
           markTrainingDirty();
-          renderRows();
+          setTimeout(renderRows, 0);
         });
       });
 
@@ -893,7 +897,7 @@
           persistEditableRosterRow(rowsState[idx]);
           rowsState = sortTrainingRosterEntries(rowsState);
           markTrainingDirty();
-          renderRows();
+          setTimeout(renderRows, 0);
         });
       });
 
@@ -1321,12 +1325,12 @@
       ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
       : '';
     return '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><a href="#training" class="btn btn-secondary">← 返回統計</a></div>'
+      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><div><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button> <a href="#training" class="btn btn-secondary">← 返回統計</a></div></div>'
       + '<div class="stats-grid">'
       + buildTrainingRosterStats(summary)
       + '</div>'
       + hiddenNote
-      + buildTrainingRosterImportCard()
+      + '<div id="training-roster-import-wrap" style="display:none">' + buildTrainingRosterImportCard() + '</div>'
       + '<div class="card" style="padding:0;overflow:hidden">' + buildTrainingTableMarkup('<th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th>', rowsHtml) + '</div>'
       + '</div>';
   }
@@ -1335,15 +1339,18 @@
     return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">' + buildTrainingRosterImportNote() + '</div><div class="form-row"><div class="form-group"><label class="form-label">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, false) + '<div class="form-hint">可先指定單位當作預設值；若 Excel 內已有「填報單位」欄位，系統會優先使用檔案中的單位。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy">' + buildTrainingRosterFileCopy('') + '</span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>' + buildTrainingRosterSampleCsv() + '</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
   }
 
-  async function renderTrainingRoster() {
+  async function renderTrainingRoster(options) {
+    const opts = options || {};
     if (!isAdmin()) {
       navigate('training');
       toast('僅管理者可管理名單', 'error');
       return;
     }
-    try {
-      await syncTrainingRostersFromM365({ silent: true });
-    } catch (_) { }
+    if (!opts.skipSync) {
+      try {
+        await syncTrainingRostersFromM365({ silent: true });
+      } catch (_) { }
+    }
 
     const rawRosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
       const statsCompare = compareZhStroke(String(a.statsUnit || getTrainingStatsUnit(a.unit)), String(b.statsUnit || getTrainingStatsUnit(b.unit)));
@@ -1362,6 +1369,14 @@
     const rows = buildTrainingRosterRows(rosters);
     document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, rows, hiddenCount);
 
+    const toggleBtn = document.getElementById('training-roster-toggle-import');
+    const importWrap = document.getElementById('training-roster-import-wrap');
+    if (toggleBtn && importWrap) {
+      toggleBtn.addEventListener('click', () => {
+        const visible = importWrap.style.display !== 'none';
+        importWrap.style.display = visible ? 'none' : '';
+      });
+    }
     initUnitCascade('training-import-unit', '', { disabled: false });
     const fileInput = document.getElementById('training-import-file');
     const fileCopy = document.getElementById('training-import-file-copy');
@@ -1389,7 +1404,7 @@
       event.preventDefault();
       const unit = document.getElementById('training-import-unit').value;
       const raw = document.getElementById('training-import-names').value;
-      const file = fileInput.files[0];
+      const file = document.getElementById('training-import-file')?.files[0];
       let entries = [];
       if (file) {
         const batch = prepareUploadBatch([], [file], {
@@ -1432,7 +1447,7 @@
           skipped += 1;
           continue;
         }
-        const roster = getAllTrainingRosters().find((row) => row.unit === targetUnit && row.name.toLowerCase() === String(entry.name || '').trim().toLowerCase());
+        const roster = fallbackResult.row || getAllTrainingRosters().find((row) => row.unit === targetUnit && row.name.toLowerCase() === String(entry.name || '').trim().toLowerCase());
         if (!roster) continue;
         const result = await submitTrainingRosterUpsert({
           ...roster,

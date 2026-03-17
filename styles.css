@@ -6317,7 +6317,7 @@ tbody tr:hover {
 
 .training-row-select,
 .training-row-note {
-  min-width: 0;
+  min-width: 80px;
 }
 
 .training-row-meta {

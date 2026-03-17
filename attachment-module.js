@@ -92,7 +92,7 @@
       const next = {
         attachmentId: String(entry && entry.attachmentId || overrides && overrides.attachmentId || '').trim(),
         driveItemId: String(entry && entry.driveItemId || overrides && overrides.driveItemId || '').trim(),
-        name: String(entry && entry.name || overrides && overrides.name || '').trim(),
+        name: String(entry && entry.name || overrides && overrides.name || '').replace(/^\uFEFF/, '').trim(),
         type: String(entry && (entry.type || entry.contentType) || overrides && (overrides.type || overrides.contentType) || '').trim(),
         contentType: String(entry && (entry.contentType || entry.type) || overrides && (overrides.contentType || overrides.type) || '').trim(),
         size: Number(entry && entry.size || overrides && overrides.size || 0),
@@ -372,12 +372,16 @@
           isImage: descriptor.type.startsWith('image/')
         };
       }
-      const remoteUrl = String(descriptor.downloadUrl || descriptor.webUrl || '').trim();
+      const remoteDownloadUrl = String(descriptor.downloadUrl || '').trim();
+      const remoteWebUrl = String(descriptor.webUrl || '').trim();
+      const remoteUrl = remoteDownloadUrl || remoteWebUrl;
       if (remoteUrl) {
         return {
           entry,
           descriptor,
           url: remoteUrl,
+          previewUrl: remoteWebUrl || remoteDownloadUrl,
+          downloadUrl: remoteDownloadUrl || remoteWebUrl,
           isImage: String(descriptor.contentType || descriptor.type || '').startsWith('image/')
         };
       }
@@ -445,8 +449,10 @@
         const previewHtml = model.isImage && model.url
           ? '<img src="' + model.url + '" alt="' + esc(model.descriptor.name) + '">'
           : fileIconHtml;
-        const previewAction = model.url ? '<a class="btn btn-sm btn-secondary" href="' + model.url + '" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">' + previewLabel + '</a>' : '';
-        const downloadAction = model.url ? '<a class="btn btn-sm btn-secondary" href="' + model.url + '" download="' + esc(model.descriptor.name) + '">' + downloadLabel + '</a>' : '';
+        const previewUrl = model.previewUrl || model.url;
+        const downloadUrl = model.downloadUrl || model.url;
+        const previewAction = previewUrl ? '<a class="btn btn-sm btn-secondary" href="' + previewUrl + '" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">' + previewLabel + '</a>' : '';
+        const downloadAction = downloadUrl ? '<a class="btn btn-sm btn-secondary" href="' + downloadUrl + '" download="' + esc(model.descriptor.name) + '">' + downloadLabel + '</a>' : '';
         const removeAction = opts.editable ? '<button type="button" class="btn btn-sm btn-danger attachment-remove" data-idx="' + index + '">' + removeLabel + '</button>' : '';
         return '<div class="' + itemClass + '">' + previewHtml + '<div class="file-name">' + esc(model.descriptor.name || '未命名檔案') + '</div><div class="' + actionsClass + '">' + previewAction + downloadAction + removeAction + '</div></div>';
       }).join('') : emptyHtml;

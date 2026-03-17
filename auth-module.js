@@ -212,6 +212,10 @@
 
     async function changePassword(payload) {
       const input = payload && typeof payload === 'object' ? payload : {};
+      const newPw = String(input.newPassword || '').trim();
+      if (newPw.length < 8) {
+        throw new Error('密碼至少需 8 碼');
+      }
       if (typeof changePasswordWithBackend === 'function') {
         const user = await changePasswordWithBackend({
           ...input,
@@ -221,7 +225,7 @@
       }
       const matched = findUser(input.username);
       if (!matched || String(matched.password || '') !== String(input.currentPassword || '')) return null;
-      updateUser(matched.username, { password: String(input.newPassword || '').trim(), mustChangePassword: false });
+      updateUser(matched.username, { password: newPw, mustChangePassword: false });
       return writeAuthSession({ ...matched, password: '', mustChangePassword: false });
     }
 

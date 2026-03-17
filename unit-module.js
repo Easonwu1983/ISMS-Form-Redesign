@@ -281,6 +281,7 @@
       (trainingStore.rosters || []).forEach((row) => {
         if (row.unit === source) {
           row.unit = target;
+          row.updatedAt = now;
           summary.trainingRosters += 1;
           trainingChanged = true;
         }
