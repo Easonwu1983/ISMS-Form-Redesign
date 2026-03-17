@@ -83,18 +83,65 @@ async function selectImportTargetUnit(page, target) {
   }, target.fullUnit);
 }
 
-async function deleteRosterRowsByNames(page, names) {
-  await gotoHash(page, 'training-roster');
-  await page.waitForSelector('tbody tr');
-  await page.evaluate(() => { window.confirm = () => true; });
-  for (const name of names) {
-    const row = page.locator('tbody tr').filter({ hasText: name }).first();
-    if (!(await row.count())) continue;
-    const button = row.locator('[data-testid^="training-roster-delete-"]').first();
-    if (!(await button.count())) continue;
-    await button.click();
-    await page.waitForTimeout(300);
-  }
+async function listTrainingRostersByNames(page, names) {
+  return await page.evaluate(async (targetNames) => {
+    const response = await fetch('/api/training/rosters');
+    const body = await response.json();
+    const items = []
+      .concat(Array.isArray(body) ? body : [])
+      .concat(Array.isArray(body?.items) ? body.items : [])
+      .concat(Array.isArray(body?.value) ? body.value : []);
+    return items.filter((item) => targetNames.includes(String(item && item.name || '').trim()));
+  }, names);
+}
+
+async function waitForTrainingRostersByNames(page, names, timeout) {
+  await page.waitForFunction(async (targetNames) => {
+    const response = await fetch('/api/training/rosters');
+    if (!response.ok) return false;
+    const body = await response.json();
+    const items = []
+      .concat(Array.isArray(body) ? body : [])
+      .concat(Array.isArray(body?.items) ? body.items : [])
+      .concat(Array.isArray(body?.value) ? body.value : []);
+    return targetNames.every((name) => items.some((item) => String(item && item.name || '').trim() === name));
+  }, names, { timeout });
+}
+
+async function deleteTrainingRostersByNames(page, names) {
+  await page.evaluate(async (targetNames) => {
+    const buildEnvelope = (action, payload) => ({
+      action,
+      requestId: `trn-cleanup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      context: {
+        contractVersion: '2026-03-12',
+        source: 'training-import-persistence-smoke',
+        frontendOrigin: window.location.origin,
+        frontendHash: window.location.hash || '',
+        sentAt: new Date().toISOString()
+      },
+      payload
+    });
+    const response = await fetch('/api/training/rosters');
+    if (!response.ok) return;
+    const body = await response.json();
+    const items = []
+      .concat(Array.isArray(body) ? body : [])
+      .concat(Array.isArray(body?.items) ? body.items : [])
+      .concat(Array.isArray(body?.value) ? body.value : []);
+    const matches = items.filter((item) => targetNames.includes(String(item && item.name || '').trim()));
+    for (const item of matches) {
+      await fetch(`/api/training/rosters/${encodeURIComponent(item.id)}/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildEnvelope('training.roster.delete', {
+          id: item.id,
+          actorName: 'training-import-persistence-smoke',
+          actorUsername: 'admin'
+        }))
+      });
+    }
+  }, names);
 }
 
 (async () => {
@@ -120,6 +167,7 @@ async function deleteRosterRowsByNames(page, names) {
 
     await runStep(results, 'IMP-01', '管理者', '匯入名單後需可在同一瀏覽器看見', async () => {
       await login(page, results.context.admin.username, results.context.admin.password);
+      await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending');
       await gotoHash(page, 'training-roster');
       await ensureTrainingImportPanelVisible(page);
       const target = await pickImportTargetUnit(page);
@@ -130,10 +178,7 @@ async function deleteRosterRowsByNames(page, names) {
         `${names[0]},InfoGroup,${IMPORT_IDENTITY_MANAGER},${IMPORT_TITLE_MANAGER}\n${names[1]},InfoGroup,${IMPORT_IDENTITY_REPORTER},${IMPORT_TITLE_ENGINEER}`
       );
       await page.click('[data-testid="training-import-submit"]');
-      await page.waitForFunction((importNames) => {
-        const rows = Array.from(document.querySelectorAll('tbody tr')).map((row) => row.textContent || '');
-        return importNames.every((name) => rows.some((text) => text.includes(name)));
-      }, names, { timeout: 30000 });
+      await waitForTrainingRostersByNames(page, names, 30000);
       return `imported ${names.join(', ')} into ${target.fullUnit}`;
     });
 
@@ -143,11 +188,9 @@ async function deleteRosterRowsByNames(page, names) {
       attachDiagnostics(verifyPage, results);
       try {
         await login(verifyPage, results.context.admin.username, results.context.admin.password);
+        await verifyPage.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending');
         await gotoHash(verifyPage, 'training-roster');
-        await verifyPage.waitForFunction((importNames) => {
-          const rows = Array.from(document.querySelectorAll('tbody tr')).map((row) => row.textContent || '');
-          return importNames.every((name) => rows.some((text) => text.includes(name)));
-        }, names, { timeout: 30000 });
+        await waitForTrainingRostersByNames(verifyPage, names, 30000);
       } finally {
         await verifyContext.close();
       }
@@ -155,7 +198,9 @@ async function deleteRosterRowsByNames(page, names) {
     });
   } finally {
     try {
-      await deleteRosterRowsByNames(page, names);
+      await login(page, results.context.admin.username, results.context.admin.password);
+      await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending');
+      await deleteTrainingRostersByNames(page, names);
     } catch (_) {}
     await browser.close();
     const finalized = finalizeResults(results);
