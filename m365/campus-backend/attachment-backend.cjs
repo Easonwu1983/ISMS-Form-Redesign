@@ -159,6 +159,15 @@ function createAttachmentRouter(deps) {
     return `${download ? 'attachment' : 'inline'}; filename="${asciiFallback || 'attachment.bin'}"; filename*=UTF-8''${encoded}`;
   }
 
+  function normalizeAttachmentDisplayName(filename) {
+    const cleanName = cleanText(filename);
+    if (!cleanName) return 'attachment.bin';
+    return cleanName
+      .replace(/^(?:att|trn|chk|car|uca)_[a-z0-9]+_[a-z0-9]+[-_]+/i, '')
+      .replace(/^[a-z]{3,4}_[a-z0-9]+_[a-z0-9]+[-_]+/i, '')
+      .trim() || cleanName;
+  }
+
   function buildDrivePath(payload, attachmentId) {
     const safeFileName = sanitizeFileName(payload.fileName);
     return [
@@ -289,11 +298,15 @@ function createAttachmentRouter(deps) {
     try {
       await requestAuthz.requireAuthenticatedUser(req);
       const item = await getDriveItem(itemId);
+      const clientItem = {
+        ...(item || {}),
+        name: normalizeAttachmentDisplayName(cleanText(item && item.name))
+      };
       await writeJson(res, {
         status: 200,
         jsonBody: {
           ok: true,
-          item: mapDriveItemForClient(item, {
+          item: mapDriveItemForClient(clientItem, {
             path: cleanText(item && item.parentReference && item.parentReference.path)
           }),
           contractVersion: CONTRACT_VERSION
@@ -328,7 +341,7 @@ function createAttachmentRouter(deps) {
         body: payload,
         headers: {
           'Content-Type': contentType,
-          'Content-Disposition': buildContentDisposition(cleanText(item && item.name), download)
+          'Content-Disposition': buildContentDisposition(normalizeAttachmentDisplayName(cleanText(item && item.name)), download)
         }
       }, origin);
     } catch (error) {

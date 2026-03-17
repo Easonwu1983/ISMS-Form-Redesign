@@ -504,7 +504,9 @@ async function run() {
       const emptyState = document.querySelector('.empty-state-title');
       if (emptyState && emptyState.textContent && emptyState.textContent.includes('目前查無符合條件的稽核紀錄')) return true;
       if (document.querySelectorAll('button[data-action="admin.viewAuditEntry"]').length > 0) return true;
-      return !!document.getElementById('audit-trail-table');
+      if (document.querySelector('[data-review-scroll-root="audit-trail-table"]')) return true;
+      if (document.querySelector('.review-table-wrapper')) return true;
+      return !!document.querySelector('.review-history-card');
     }, { timeout: 30000 });
     const rows = await page.locator('button[data-action="admin.viewAuditEntry"]').count();
     pushStep('audit-trail:loaded', true, `rows=${rows}`);
