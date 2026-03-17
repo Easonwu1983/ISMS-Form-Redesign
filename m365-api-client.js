@@ -65,7 +65,7 @@
       [UNIT_CONTACT_APPLICATION_STATUSES.PENDING_REVIEW]: {
         label: '待審核',
         tone: 'pending',
-        detail: '申請已送出，等待管理者審核與啟用流程。'
+        detail: '申請已送出，等待管理者審核。審核通過後會直接啟用帳號並寄送登入資訊。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.RETURNED]: {
         label: '退回補件',
@@ -75,7 +75,7 @@
       [UNIT_CONTACT_APPLICATION_STATUSES.APPROVED]: {
         label: '已核准',
         tone: 'approved',
-        detail: '申請已核准，系統將進入帳號啟用程序。'
+        detail: '申請已核准，系統正在完成帳號啟用與寄信。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.REJECTED]: {
         label: '未核准',
@@ -85,12 +85,12 @@
       [UNIT_CONTACT_APPLICATION_STATUSES.ACTIVATION_PENDING]: {
         label: '待啟用',
         tone: 'approved',
-        detail: '啟用通知已送出，等待申請人完成帳號啟用。'
+        detail: '系統正在寄送登入資訊，登入帳號會使用申請時填寫的電子郵件。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.ACTIVE]: {
         label: '已啟用',
         tone: 'live',
-        detail: '申請已完成啟用，可直接使用系統。'
+        detail: '申請已完成啟用，可直接使用申請時填寫的電子郵件登入系統。'
       }
     };
 

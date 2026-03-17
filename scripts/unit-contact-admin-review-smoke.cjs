@@ -242,24 +242,10 @@ async function run() {
         }
       }, authHeaders(sessionToken));
       const item = body && body.item;
-      if (cleanText(item && item.status) !== 'approved') throw new Error('application did not become approved');
-      if (!(body && body.delivery && body.delivery.sent)) throw new Error('approval mail delivery did not succeed');
-      return cleanText(item && item.status);
-    });
-
-    await step('review:activate', async () => {
-      const body = await apiJson('POST', '/api/unit-contact/activate', {
-        action: 'unit-contact.activate',
-        payload: {
-          id: applicationId,
-          reviewComment: 'admin review smoke activated'
-        }
-      }, authHeaders(sessionToken));
-      const item = body && body.item;
       generatedUsername = cleanText(item && item.externalUserId);
-      if (cleanText(item && item.status) !== 'active') throw new Error('application did not become active');
-      if (!generatedUsername) throw new Error('activation did not return generated username');
-      if (!(body && body.delivery && body.delivery.sent)) throw new Error('activation mail delivery did not succeed');
+      if (cleanText(item && item.status) !== 'active') throw new Error('application did not become active after approval');
+      if (generatedUsername !== cleanText(payload.applicantEmail)) throw new Error(`unexpected login username ${generatedUsername}`);
+      if (!(body && body.delivery && body.delivery.sent)) throw new Error('approval mail delivery did not succeed');
       return { status: cleanText(item && item.status), generatedUsername };
     });
 

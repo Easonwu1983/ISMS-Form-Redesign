@@ -66,7 +66,7 @@
       const modeKey = getM365ModeKey();
       const description = modeKey === 'local-emulator'
         ? '目前為本機模擬模式，申請資料只會保留在目前瀏覽器。若要讓最高管理員實際審核，請切換到正式後端。'
-        : '目前為正式後端模式，送出的申請會同步到系統後端，供最高管理員審核與啟用。';
+        : '目前為正式後端模式，送出的申請會同步到系統後端，供最高管理員審核並直接啟用。';
       return ''
         + '<div class="unit-contact-mode-banner">'
         + '<div class="unit-contact-mode-icon">' + ic('shield-check', 'icon-lg') + '</div>'
@@ -166,7 +166,7 @@
         + buildPublicHero(
           '公開申請單位管理人',
           '申請單位管理人帳號',
-          '若需新增或異動各單位管理窗口，請先送出申請。最高管理員完成審核與啟用後，系統會自動寄送亂數產生的登入資訊。',
+          '若需新增或異動各單位管理窗口，請先送出申請。最高管理員審核通過後，系統會直接啟用帳號並寄送登入資訊。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
         )
         + buildModeNotice()
@@ -194,13 +194,13 @@
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請流程</div>'
         + buildStepCard('1. 填寫並送出申請', '填妥申請單位、申請人與聯絡資訊後送出。')
         + buildStepCard('2. 等待最高管理員審核', '最高管理員會依申請內容進行通過、退回補件或拒絕。')
-        + buildStepCard('3. 啟用後登入系統', '審核完成並啟用後，系統會自動寄送亂數帳號與初始密碼。')
+        + buildStepCard('3. 直接使用申請信箱登入', '審核通過後，系統會直接啟用帳號，並寄送初始密碼。登入帳號固定為申請時填寫的電子郵件。')
         + '</div>'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 送出前請確認</div>'
         + '<ul class="unit-contact-checklist">'
         + '<li>申請單位已填寫正式名稱或完整自訂名稱。</li>'
         + '<li>申請信箱必須為 @ntu.edu.tw。</li>'
-        + '<li>帳號與初始密碼會在啟用後由系統自動產生並寄送。</li>'
+        + '<li>審核通過後會直接啟用帳號，登入帳號固定為申請時填寫的電子郵件。</li>'
         + '<li>送出後請記下申請信箱，後續可用來查詢申請進度。</li>'
         + '</ul></div>'
         + '</aside></div></section>';
@@ -272,7 +272,7 @@
         + buildPublicHero(
           '申請已送出',
           '申請已成功送出',
-          '請記下申請編號與申請信箱，後續可回到查詢頁查看審核進度與啟用結果。',
+          '請記下申請編號與申請信箱，後續可回到查詢頁查看審核進度與登入資訊寄送結果。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
@@ -280,7 +280,7 @@
         + '<div class="card unit-contact-success-card">'
         + '<div class="unit-contact-success-mark">' + ic('badge-check', 'icon-xl') + '</div>'
         + buildApplicationSummary(application)
-        + '<div class="unit-contact-success-note">若管理端需要補件或已完成啟用，系統會更新申請狀態。請保留申請信箱並定期查詢。</div>'
+        + '<div class="unit-contact-success-note">若管理端需要補件或已完成審核，系統會更新申請狀態。登入帳號會固定使用申請信箱。</div>'
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">立即查詢進度</a><a class="btn btn-ghost" href="#apply-unit-contact">送出另一筆申請</a></div>'
         + '</div></div></div></section>';
       refreshIcons();
@@ -315,7 +315,7 @@
         + '<ul class="unit-contact-checklist">'
         + '<li>請輸入申請時使用的 @ntu.edu.tw 信箱。</li>'
         + '<li>若看到退回補件，可直接回到申請頁補正後重新送出。</li>'
-        + '<li>若看到已核准或待啟用，可查看啟用說明與後續通知。</li>'
+        + '<li>若看到已核准、待啟用或已啟用，可查看登入說明與後續通知。</li>'
         + '</ul></div></aside>'
         + '</div></section>';
 
@@ -367,14 +367,14 @@
         + buildPublicHero(
           '帳號啟用說明',
           '單位管理人帳號啟用說明',
-          '當申請已核准或已啟用時，可依此頁說明確認登入方式。若尚未收到啟用通知，請先回查詢頁確認狀態。',
+          '當申請已核准或已啟用時，可依此頁說明確認登入方式。登入帳號固定為申請時填寫的電子郵件。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-side-card">'
-        + '<div class="section-header">' + ic('key', 'icon-sm') + ' 啟用說明</div>'
-        + '<div class="unit-contact-activation-copy">若您已收到啟用通知，請使用通知中的亂數帳號與初始密碼登入系統，並在首次登入後立即修改密碼。若狀態仍為待審核或退回補件，請先回到查詢頁確認最新進度。</div>'
+        + '<div class="section-header">' + ic('key', 'icon-sm') + ' 登入說明</div>'
+        + '<div class="unit-contact-activation-copy">若您已收到通知，請使用申請時填寫的電子郵件作為登入帳號，並搭配通知中的初始密碼登入系統，首次登入後請立即修改密碼。若狀態仍為待審核或退回補件，請先回到查詢頁確認最新進度。</div>'
         + (application ? buildApplicationSummary(application) : '')
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">返回查詢頁</a></div>'
         + '</div></div></div></section>';

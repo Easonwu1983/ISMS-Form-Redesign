@@ -514,6 +514,10 @@ async function getSystemUserEntryByUsername(username) {
   return rows.find((entry) => cleanText(entry.item && entry.item.username).toLowerCase() === target) || null;
 }
 
+function resolveUnitContactLoginUsername(application) {
+  return cleanEmail(application && application.applicantEmail);
+}
+
 async function upsertSystemUser(existingEntry, nextItem) {
   const siteId = await resolveSiteId();
   const list = await resolveSystemUsersList();
@@ -545,7 +549,8 @@ function buildUnitContactApplicantMail(application) {
       `申請單位：${cleanText(application && application.unitValue)}`,
       `申請人：${cleanText(application && application.applicantName)}`,
       `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`,
-      `系統會在審核通過並完成啟用後，自動寄送亂數產生的登入帳號與初始密碼。`,
+      `管理者審核通過後，系統會直接啟用帳號，並寄送登入資訊。`,
+      `登入帳號會直接使用您申請時填寫的電子郵件。`,
       `後續請使用送件信箱回到系統查詢申請進度。`
     ])
   };
@@ -568,7 +573,7 @@ function buildUnitContactAdminMail(application) {
 
 function buildUnitContactStatusMail(application, options) {
   const opts = options || {};
-  const loginUsername = cleanText(opts.loginUsername) || cleanText(application && application.externalUserId);
+  const loginUsername = cleanText(opts.loginUsername) || cleanText(application && application.externalUserId) || resolveUnitContactLoginUsername(application);
   const initialPassword = cleanText(opts.initialPassword);
   return {
     subject: `[ISMS] 單位管理人申請進度更新：${cleanText(application && application.id)}`,
@@ -583,13 +588,46 @@ function buildUnitContactStatusMail(application, options) {
             loginUsername ? `登入帳號：${loginUsername}` : '',
             initialPassword ? `初始密碼：${initialPassword}` : '',
             initialPassword
-              ? '請使用上列亂數帳號與初始密碼登入系統，並於首次登入後立即修改密碼。若需調整帳號名稱，請登入後由管理端協助處理。'
+              ? '登入帳號固定為申請時使用的電子郵件。請使用上列初始密碼登入系統，並於首次登入後立即修改密碼。'
               : (loginUsername
-                  ? '帳號已可啟用或已完成啟用。若尚未收到新的初始密碼，請先使用忘記密碼流程重設，或聯絡管理端重新寄送啟用通知。'
+                  ? '帳號已啟用，登入帳號固定為申請時使用的電子郵件。若尚未收到新的初始密碼，請先使用忘記密碼流程重設，或聯絡管理端重新寄送登入資訊。'
                   : '帳號已可啟用或已完成啟用，請依管理端通知的帳號資訊登入系統。')
           ].filter(Boolean).join('\n')
         : '請使用原送件信箱回到系統查詢最新處理進度。'
     ].filter(Boolean))
+  };
+}
+
+async function provisionUnitContactSystemUser(application) {
+  const loginUsername = resolveUnitContactLoginUsername(application);
+  if (!loginUsername) {
+    const error = new Error('Application email is required to provision the system user.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const existingUserEntry = await getSystemUserEntryByUsername(loginUsername);
+  const initialPassword = generateRandomInitialPassword();
+  const nextPasswordSecret = createGeneratedPasswordSecret(initialPassword, cleanText(existingUserEntry && existingUserEntry.item && existingUserEntry.item.password));
+  const systemUserPayload = {
+    username: loginUsername,
+    password: nextPasswordSecret,
+    name: cleanText(application && application.applicantName),
+    email: cleanText(application && application.applicantEmail),
+    role: USER_ROLES.UNIT_ADMIN,
+    unit: cleanText(application && application.unitValue),
+    units: cleanText(application && application.unitValue) ? [cleanText(application.unitValue)] : [],
+    activeUnit: cleanText(application && application.unitValue),
+    mustChangePassword: true,
+    backendMode: state.tokenMode === 'app-only' ? 'campus-sharepoint-app-only' : 'campus-sharepoint-cli',
+    recordSource: 'unit-contact-activation'
+  };
+  validateSystemUserPayload(systemUserPayload, { requirePassword: !existingUserEntry });
+  const userWrite = await upsertSystemUser(existingUserEntry, systemUserPayload);
+  return {
+    loginUsername,
+    initialPassword,
+    userWrite
   };
 }
 
@@ -916,15 +954,47 @@ async function handleReview(req, res, origin) {
     const payload = normalizeReviewPayload(envelope.payload);
     validateReviewPayload(payload);
     const reviewActor = cleanText(payload.reviewedBy) || cleanText(authz && authz.user && authz.user.name) || cleanText(authz && authz.username);
-    const result = await updateApplicationRecord(payload.id, {
-      status: payload.status,
-      reviewComment: payload.reviewComment,
-      reviewedBy: reviewActor,
-      reviewedAt: new Date().toISOString()
-    });
-    const delivery = await notifyUnitContactStatusUpdated(result.after);
+    const existingApplicationEntry = await findApplicationEntryById(payload.id);
+    if (!existingApplicationEntry) {
+      const missingError = new Error('Application not found');
+      missingError.statusCode = 404;
+      throw missingError;
+    }
+    const currentApplication = existingApplicationEntry.application;
+    const currentStatus = cleanText(currentApplication && currentApplication.status);
+    if (payload.status === STATUSES.APPROVED && currentStatus === STATUSES.ACTIVE) {
+      const alreadyActiveError = new Error('申請已啟用，如需補寄登入資訊請使用重新寄送功能。');
+      alreadyActiveError.statusCode = 409;
+      throw alreadyActiveError;
+    }
+
+    let provisioning = null;
+    let result = null;
+    if (payload.status === STATUSES.APPROVED) {
+      provisioning = await provisionUnitContactSystemUser(currentApplication);
+      result = await updateApplicationRecord(payload.id, {
+        status: STATUSES.ACTIVE,
+        reviewComment: payload.reviewComment,
+        reviewedBy: reviewActor,
+        reviewedAt: new Date().toISOString(),
+        activatedAt: new Date().toISOString(),
+        activationSentAt: new Date().toISOString(),
+        externalUserId: provisioning.loginUsername
+      });
+    } else {
+      result = await updateApplicationRecord(payload.id, {
+        status: payload.status,
+        reviewComment: payload.reviewComment,
+        reviewedBy: reviewActor,
+        reviewedAt: new Date().toISOString()
+      });
+    }
+    const delivery = await notifyUnitContactStatusUpdated(result.after, provisioning ? {
+      loginUsername: provisioning.loginUsername,
+      initialPassword: provisioning.initialPassword
+    } : null);
     await tryCreateAuditRow({
-      eventType: 'unit_contact.application_reviewed',
+      eventType: provisioning ? 'unit_contact.application_reviewed_and_activated' : 'unit_contact.application_reviewed',
       actorEmail: cleanText(authz && authz.user && authz.user.email),
       targetEmail: cleanText(result.after && result.after.applicantEmail),
       unitCode: cleanText(result.after && result.after.unitCode),
@@ -932,7 +1002,10 @@ async function handleReview(req, res, origin) {
       payloadJson: JSON.stringify({
         snapshot: buildApplicationSnapshot(result.after),
         changes: buildApplicationChanges(result.before, result.after),
-        delivery
+        delivery,
+        loginUsername: cleanText(provisioning && provisioning.loginUsername),
+        createdSystemUser: !!(provisioning && provisioning.userWrite && provisioning.userWrite.created),
+        updatedSystemUser: !!(provisioning && provisioning.userWrite)
       })
     });
     return writeJson(res, buildJsonResponse(200, {
@@ -970,26 +1043,7 @@ async function handleActivate(req, res, origin) {
     }
 
     const reviewActor = cleanText(payload.reviewedBy) || cleanText(authz && authz.user && authz.user.name) || cleanText(authz && authz.username);
-    const loginUsername = cleanText(currentApplication && currentApplication.externalUserId) || await generateUniqueUnitContactUsername();
-    const existingUserEntry = await getSystemUserEntryByUsername(loginUsername);
-    const initialPassword = generateRandomInitialPassword();
-    const nextPasswordSecret = createGeneratedPasswordSecret(initialPassword, cleanText(existingUserEntry && existingUserEntry.item && existingUserEntry.item.password));
-
-    const systemUserPayload = {
-      username: loginUsername,
-      password: nextPasswordSecret,
-      name: cleanText(currentApplication && currentApplication.applicantName),
-      email: cleanText(currentApplication && currentApplication.applicantEmail),
-      role: USER_ROLES.UNIT_ADMIN,
-      unit: cleanText(currentApplication && currentApplication.unitValue),
-      units: cleanText(currentApplication && currentApplication.unitValue) ? [cleanText(currentApplication.unitValue)] : [],
-      activeUnit: cleanText(currentApplication && currentApplication.unitValue),
-      mustChangePassword: true,
-      backendMode: state.tokenMode === 'app-only' ? 'campus-sharepoint-app-only' : 'campus-sharepoint-cli',
-      recordSource: 'unit-contact-activation'
-    };
-    validateSystemUserPayload(systemUserPayload, { requirePassword: !existingUserEntry });
-    const userWrite = await upsertSystemUser(existingUserEntry, systemUserPayload);
+    const provisioning = await provisionUnitContactSystemUser(currentApplication);
 
     const result = await updateApplicationRecord(payload.id, {
       status: STATUSES.ACTIVE,
@@ -998,12 +1052,12 @@ async function handleActivate(req, res, origin) {
       reviewedAt: new Date().toISOString(),
       activatedAt: new Date().toISOString(),
       activationSentAt: new Date().toISOString(),
-      externalUserId: loginUsername
+      externalUserId: provisioning.loginUsername
     });
 
     const delivery = await notifyUnitContactStatusUpdated(result.after, {
-      loginUsername,
-      initialPassword
+      loginUsername: provisioning.loginUsername,
+      initialPassword: provisioning.initialPassword
     });
     await tryCreateAuditRow({
       eventType: 'unit_contact.application_activated',
@@ -1015,9 +1069,9 @@ async function handleActivate(req, res, origin) {
         snapshot: buildApplicationSnapshot(result.after),
         changes: buildApplicationChanges(result.before, result.after),
         delivery,
-        loginUsername,
-        createdSystemUser: !!(userWrite && userWrite.created),
-        updatedSystemUser: !!userWrite
+        loginUsername: provisioning.loginUsername,
+        createdSystemUser: !!(provisioning.userWrite && provisioning.userWrite.created),
+        updatedSystemUser: !!provisioning.userWrite
       })
     });
     return writeJson(res, buildJsonResponse(200, {
