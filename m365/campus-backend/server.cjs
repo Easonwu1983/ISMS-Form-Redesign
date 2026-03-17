@@ -515,7 +515,7 @@ async function getSystemUserEntryByUsername(username) {
 }
 
 function resolveUnitContactLoginUsername(application) {
-  return cleanEmail(application && application.applicantEmail);
+  return normalizeLookupEmail(application && application.applicantEmail);
 }
 
 async function upsertSystemUser(existingEntry, nextItem) {
@@ -1208,5 +1208,6 @@ module.exports = {
   createServer,
   startServer
 };
+
 
 
