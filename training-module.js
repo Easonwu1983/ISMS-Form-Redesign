@@ -111,6 +111,23 @@
     return String(a || '').localeCompare(String(b || ''), 'zh-Hant-u-co-stroke', { sensitivity: 'base', numeric: true });
   }
 
+  async function runAsyncPool(items, worker, concurrency) {
+    const list = Array.isArray(items) ? items : [];
+    const runner = typeof worker === 'function' ? worker : async function noop() {};
+    const limit = Math.max(1, Number(concurrency) || 1);
+    const results = new Array(list.length);
+    let index = 0;
+    async function next() {
+      while (index < list.length) {
+        const currentIndex = index;
+        index += 1;
+        results[currentIndex] = await runner(list[currentIndex], currentIndex);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, list.length) }, next));
+    return results;
+  }
+
   function toDateInputValue(value) {
     if (!value) return '';
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
@@ -1453,42 +1470,61 @@
       let skipped = 0;
       let fallbackWarning = '';
       const importErrors = [];
-      for (const entry of entries) {
+      try {
+        await syncTrainingRostersFromM365({ silent: true });
+      } catch (_) {}
+      const actor = currentUser() || {};
+      const rosterIndex = new Map(
+        getAllTrainingRosters().map((row) => [
+          (String(row.unit || '').trim() + '::' + String(row.name || '').trim().toLowerCase()),
+          row
+        ])
+      );
+      await runAsyncPool(entries, async (entry) => {
         const targetUnit = String(entry.unit || unit || '').trim();
         const normalizedName = String(entry.name || '').trim().toLowerCase();
-        const existingRoster = getAllTrainingRosters().find((row) => String(row.unit || '').trim() === targetUnit && String(row.name || '').trim().toLowerCase() === normalizedName);
-        const fallbackResult = addTrainingRosterPerson(targetUnit, { ...entry, unit: targetUnit }, 'import', currentUser());
-        if (!fallbackResult.added && !fallbackResult.updated) {
+        const rosterKey = targetUnit + '::' + normalizedName;
+        const existingRoster = rosterIndex.get(rosterKey) || null;
+        const nextPayload = {
+          ...(existingRoster || {}),
+          ...entry,
+          id: existingRoster && existingRoster.id ? existingRoster.id : '',
+          unit: targetUnit,
+          source: 'import',
+          createdBy: existingRoster?.createdBy || actor.name || '',
+          createdByUsername: existingRoster?.createdByUsername || actor.username || '',
+          actorName: actor.name || '',
+          actorUsername: actor.username || ''
+        };
+        const unchanged = !!existingRoster
+          && String(existingRoster.unitName || '') === String(nextPayload.unitName || '')
+          && String(existingRoster.identity || '') === String(nextPayload.identity || '')
+          && String(existingRoster.jobTitle || '') === String(nextPayload.jobTitle || '')
+          && String(existingRoster.source || 'import') === 'import';
+        if (unchanged) {
           skipped += 1;
-          continue;
-        }
-        const roster = fallbackResult.row || getAllTrainingRosters().find((row) => row.unit === targetUnit && row.name.toLowerCase() === String(entry.name || '').trim().toLowerCase());
-        if (!roster) {
-          skipped += 1;
-          importErrors.push('找不到匯入後的人員資料：' + String(entry.name || '未命名'));
-          continue;
+          return;
         }
         try {
-          const result = await submitTrainingRosterUpsert({
-            ...roster,
-            source: 'import',
-            createdBy: roster.createdBy || currentUser()?.name || '',
-            createdByUsername: roster.createdByUsername || currentUser()?.username || '',
-            actorName: currentUser()?.name || '',
-            actorUsername: currentUser()?.username || ''
-          });
-          if (existingRoster || fallbackResult.updated) updated += 1;
+          const result = await submitTrainingRosterUpsert(nextPayload);
+          if (result && result.item) {
+            rosterIndex.set(rosterKey, result.item);
+          }
+          if (existingRoster) updated += 1;
           else added += 1;
           if (!fallbackWarning && result && result.warning) fallbackWarning = result.warning;
         } catch (error) {
           skipped += 1;
           importErrors.push((entry.name || '未命名人員') + '：' + (error?.message || '匯入失敗'));
         }
-      }
+      }, 6);
+      try {
+        await syncTrainingRostersFromM365({ silent: true });
+      } catch (_) {}
       toast('匯入完成：新增 ' + added + ' 筆、更新 ' + updated + ' 筆、略過 ' + skipped + ' 筆');
       if (fallbackWarning) toast(fallbackWarning, 'info');
       if (importErrors.length) toast(importErrors[0], 'error');
-      renderTrainingRoster();
+      renderTrainingRoster({ skipSync: true });
     });
 
     refreshIcons();

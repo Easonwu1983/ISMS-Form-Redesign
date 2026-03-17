@@ -14,6 +14,7 @@
                     "test:role:smoke":  "node scripts/role-flow-smoke.cjs",
                     "test:role:all":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs role\"",
                     "test:training:optimization":  "node scripts/training-optimization-regression.cjs",
+                    "test:training:import:persistence":  "node scripts/training-import-persistence-smoke.cjs",
                     "test:training:acceptance":  "node scripts/training-flow-acceptance.cjs",
                     "test:training:all":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs training\"",
                     "test:bonus:all":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs bonus\"",

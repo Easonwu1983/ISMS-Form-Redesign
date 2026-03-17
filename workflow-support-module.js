@@ -277,33 +277,63 @@
     function getTrainingIdentityRank(row) {
       const identity = String(row && row.identity || '').trim();
       const rankMap = new Map([
-        ['一級主管', 1],
-        ['一級副主管', 2],
-        ['二級主管', 3],
-        ['二級副主管', 4],
-        ['銓敘新制職員', 5],
-        ['校聘人員', 6],
-        ['技工工友', 99]
+        ['\u4e00\u7d1a\u4e3b\u7ba1', 1],
+        ['\u4e00\u7d1a\u526f\u4e3b\u7ba1', 2],
+        ['\u4e8c\u7d1a\u4e3b\u7ba1', 3],
+        ['\u4e8c\u7d1a\u526f\u4e3b\u7ba1', 4],
+        ['\u9293\u6558\u65b0\u5236\u8077\u54e1', 6],
+        ['\u6821\u8058\u4eba\u54e1', 6],
+        ['\u6280\u5de5\u5de5\u53cb', 99]
       ]);
       if (rankMap.has(identity)) return rankMap.get(identity);
-      return 98;
+      return 6;
+    }
+
+    function getTrainingJobTitleRank(row) {
+      const title = String(row && row.jobTitle || '').trim();
+      const rankMap = new Map([
+        ['\u7d93\u7406', 1],
+        ['\u4e3b\u4efb', 1],
+        ['\u7d44\u9577', 1],
+        ['\u884c\u653f\u5c08\u54e1', 2],
+        ['\u5c08\u54e1', 2],
+        ['\u884c\u653f\u7d44\u54e1', 3],
+        ['\u7d44\u54e1', 3],
+        ['\u8cc7\u6df1\u5c08\u54e1', 4]
+      ]);
+      if (rankMap.has(title)) return rankMap.get(title);
+      return 99;
+    }
+
+    function getTrainingRosterJobUnit(row) {
+      return String(row && (row.unitName || getTrainingJobUnit(row.unit) || row.unit) || '').trim();
     }
 
     function compareTrainingRosterEntries(a, b) {
       const sourceCompare = getTrainingSourceRank(a) - getTrainingSourceRank(b);
-      if (sourceCompare !== 0) return sourceCompare;
+      if (sourceCompare !== 0) {
+        return sourceCompare;
+      }
 
       const identityCompare = getTrainingIdentityRank(a) - getTrainingIdentityRank(b);
-      if (identityCompare !== 0) return identityCompare;
+      if (identityCompare !== 0) {
+        return identityCompare;
+      }
+
+      const unitCompare = localeCompareZhStroke(getTrainingRosterJobUnit(a), getTrainingRosterJobUnit(b));
+      if (unitCompare !== 0) {
+        return unitCompare;
+      }
+
+      const titleCompare = getTrainingJobTitleRank(a) - getTrainingJobTitleRank(b);
+      if (titleCompare !== 0) {
+        return titleCompare;
+      }
 
       const nameCompare = localeCompareZhStroke(a && a.name, b && b.name);
-      if (nameCompare !== 0) return nameCompare;
-
-      const unitCompare = localeCompareZhStroke(a && (a.unitName || getTrainingJobUnit(a.unit)), b && (b.unitName || getTrainingJobUnit(b.unit)));
-      if (unitCompare !== 0) return unitCompare;
-
-      const titleCompare = localeCompareZhStroke(a && a.jobTitle, b && b.jobTitle);
-      if (titleCompare !== 0) return titleCompare;
+      if (nameCompare !== 0) {
+        return nameCompare;
+      }
 
       return localeCompareZh(a && a.createdAt, b && b.createdAt);
     }
