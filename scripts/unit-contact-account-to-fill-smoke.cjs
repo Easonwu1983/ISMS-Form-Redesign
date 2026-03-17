@@ -395,8 +395,6 @@ async function loginViaPage(page, username, password) {
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', testEmail);
       await page.fill('[data-testid="unit-contact-note"]', 'account-to-fill smoke');
-      await page.fill('[data-testid="unit-contact-username"]', testUsername);
-      await page.fill('[data-testid="unit-contact-password"]', testPassword);
       await page.click('[data-testid="unit-contact-submit"]');
       await page.waitForURL(/#apply-unit-contact-success\//, { timeout: 20000 });
       if (await page.locator('.unit-contact-summary-grid strong').count()) {

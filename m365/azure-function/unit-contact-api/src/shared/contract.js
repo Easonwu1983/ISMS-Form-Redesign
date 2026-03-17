@@ -119,10 +119,7 @@ function normalizeApplyPayload(payload) {
     unitValue: cleanText(payload && payload.unitValue),
     unitCode: cleanText(payload && payload.unitCode),
     contactType: cleanText(payload && payload.contactType) || 'primary',
-    note: cleanText(payload && payload.note),
-    requestedUsername: cleanText(payload && payload.requestedUsername),
-    requestedPassword: cleanText(payload && payload.requestedPassword),
-    requestedPasswordSecret: cleanText(payload && payload.requestedPasswordSecret)
+    note: cleanText(payload && payload.note)
   };
 }
 
@@ -133,9 +130,6 @@ function validateApplyPayload(payload) {
   if (!payload.applicantEmail) throw createError('\u7f3a\u5c11\u7533\u8acb\u4fe1\u7bb1\u3002', 400);
   if (!isValidNtuEmail(payload.applicantEmail)) throw createError('\u7533\u8acb\u4fe1\u7bb1\u5fc5\u9808\u70ba @ntu.edu.tw\u3002', 400);
   if (!payload.unitCode) throw createError('\u7f3a\u5c11\u55ae\u4f4d\u4ee3\u78bc\uff0c\u8acb\u91cd\u65b0\u9078\u64c7\u7533\u8acb\u55ae\u4f4d\u3002', 400);
-  if (!payload.requestedUsername) throw createError('\u7f3a\u5c11\u767b\u5165\u5e33\u865f\u3002', 400);
-  if (!payload.requestedPassword) throw createError('\u7f3a\u5c11\u521d\u59cb\u5bc6\u78bc\u3002', 400);
-  if (!isStrongPassword(payload.requestedPassword)) throw createError('\u521d\u59cb\u5bc6\u78bc\u81f3\u5c11 8 \u78bc\uff0c\u4e14\u9700\u5305\u542b\u5927\u5c0f\u5beb\u82f1\u6587\u8207\u6578\u5b57\u3002', 400);
 }
 
 function normalizeLookupEmail(email) {
@@ -178,12 +172,6 @@ function normalizeActivationPayload(payload) {
 
 function validateActivationPayload(payload) {
   if (!cleanText(payload && payload.id)) throw createError('\u7f3a\u5c11\u7533\u8acb\u7de8\u865f\u3002', 400);
-  if (cleanText(payload && payload.externalUserId) && cleanText(payload.externalUserId).length < 3) {
-    throw createError('\u767b\u5165\u5e33\u865f\u81f3\u5c11\u9700 3 \u500b\u5b57\u5143\u3002', 400);
-  }
-  if (cleanText(payload && payload.initialPassword) && !isStrongPassword(payload.initialPassword)) {
-    throw createError('\u521d\u59cb\u5bc6\u78bc\u81f3\u5c11 8 \u78bc\uff0c\u4e14\u9700\u5305\u542b\u5927\u5c0f\u5beb\u82f1\u6587\u8207\u6578\u5b57\u3002', 400);
-  }
 }
 
 function buildApplicationId(sequence, date) {
@@ -261,7 +249,6 @@ function createApplicationRecord(payload, sequence, now) {
     unitCode: payload.unitCode,
     contactType: payload.contactType || 'primary',
     note: payload.note || '',
-    requestedPasswordSecret: payload.requestedPasswordSecret || '',
     status: STATUSES.PENDING_REVIEW,
     source: 'm365-api',
     backendMode: 'm365-api',
@@ -272,7 +259,7 @@ function createApplicationRecord(payload, sequence, now) {
     reviewComment: '',
     activationSentAt: null,
     activatedAt: null,
-    externalUserId: payload.requestedUsername || ''
+    externalUserId: ''
   });
 }
 
@@ -296,7 +283,6 @@ function normalizeStoredApplication(application) {
     unitCode: cleanText(application.unitCode),
     contactType: cleanText(application.contactType) || 'primary',
     note: noteMeta.note,
-    requestedPasswordSecret: cleanText(application.requestedPasswordSecret || noteMeta.meta.requestedPasswordSecret),
     status: cleanText(application.status) || STATUSES.PENDING_REVIEW,
     statusLabel: cleanText(application.statusLabel),
     statusDetail: cleanText(application.statusDetail),
@@ -310,7 +296,7 @@ function normalizeStoredApplication(application) {
     reviewComment: cleanText(application.reviewComment),
     activationSentAt: cleanText(application.activationSentAt),
     activatedAt: cleanText(application.activatedAt),
-    externalUserId: cleanText(application.externalUserId || noteMeta.meta.requestedUsername)
+    externalUserId: cleanText(application.externalUserId || noteMeta.meta.externalUserId || noteMeta.meta.requestedUsername)
   });
 }
 
@@ -341,8 +327,7 @@ function mapApplicationForClient(application) {
     reviewComment: normalized.reviewComment || '',
     activationSentAt: normalized.activationSentAt || null,
     activatedAt: normalized.activatedAt || null,
-    externalUserId: normalized.externalUserId || '',
-    hasRequestedPassword: !!cleanText(normalized.requestedPasswordSecret)
+    externalUserId: normalized.externalUserId || ''
   };
 }
 
@@ -361,8 +346,7 @@ function mapApplicationToGraphFields(application) {
     UnitCode: normalized.unitCode,
     ContactType: normalized.contactType,
     Note: composeNoteWithMeta(normalized.note, {
-      requestedUsername: normalized.externalUserId,
-      requestedPasswordSecret: normalized.requestedPasswordSecret
+      externalUserId: normalized.externalUserId
     }),
     Status: normalized.status,
     StatusLabel: normalized.statusLabel,

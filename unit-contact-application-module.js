@@ -52,11 +52,6 @@
       return /@ntu\.edu\.tw$/i.test(String(email || '').trim());
     }
 
-    function isStrongPassword(password) {
-      const value = String(password || '');
-      return value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /\d/.test(value);
-    }
-
     function buildPublicHero(eyebrow, title, subtitle, actions) {
       return ''
         + '<div class="page-header unit-contact-hero">'
@@ -171,7 +166,7 @@
         + buildPublicHero(
           '公開申請單位管理人',
           '申請單位管理人帳號',
-          '若需新增或異動各單位管理窗口，請先送出申請。最高管理員完成審核與啟用後，會再通知登入資訊。',
+          '若需新增或異動各單位管理窗口，請先送出申請。最高管理員完成審核與啟用後，系統會自動寄送亂數產生的登入資訊。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
         )
         + buildModeNotice()
@@ -190,10 +185,6 @@
         + '<div class="form-row unit-contact-compact-row">'
         + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入 @ntu.edu.tw 信箱" required></div>'
         + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充職稱、代理原因或其他說明"></div></div>'
-        + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">登入帳號</label><input type="text" class="form-input" id="uca-username" data-testid="unit-contact-username" placeholder="請輸入預計使用的登入帳號" required autocomplete="off"></div>'
-        + '<div class="form-group"><label class="form-label form-required">初始密碼</label><input type="password" class="form-input" id="uca-password" data-testid="unit-contact-password" placeholder="至少 8 碼，需含大小寫英文與數字" minlength="8" required autocomplete="new-password"></div>'
-        + '</div>'
         + '<div class="form-actions">'
         + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
         + '<a class="btn btn-ghost" href="#apply-unit-contact-status">改為查詢進度</a>'
@@ -201,15 +192,15 @@
         + '</form></div></div>'
         + '<aside class="unit-contact-side">'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請流程</div>'
-        + buildStepCard('1. 填寫並送出申請', '填妥申請單位、申請人、信箱、登入帳號與初始密碼後送出。')
+        + buildStepCard('1. 填寫並送出申請', '填妥申請單位、申請人與聯絡資訊後送出。')
         + buildStepCard('2. 等待最高管理員審核', '最高管理員會依申請內容進行通過、退回補件或拒絕。')
-        + buildStepCard('3. 啟用後登入系統', '審核完成並啟用後，系統會通知帳號狀態，申請人即可登入。')
+        + buildStepCard('3. 啟用後登入系統', '審核完成並啟用後，系統會自動寄送亂數帳號與初始密碼。')
         + '</div>'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 送出前請確認</div>'
         + '<ul class="unit-contact-checklist">'
         + '<li>申請單位已填寫正式名稱或完整自訂名稱。</li>'
         + '<li>申請信箱必須為 @ntu.edu.tw。</li>'
-        + '<li>初始密碼至少 8 碼，且需包含大寫英文、小寫英文與數字。</li>'
+        + '<li>帳號與初始密碼會在啟用後由系統自動產生並寄送。</li>'
         + '<li>送出後請記下申請信箱，後續可用來查詢申請進度。</li>'
         + '</ul></div>'
         + '</aside></div></section>';
@@ -225,23 +216,13 @@
         const extensionNumber = String(document.getElementById('uca-extension').value || '').trim();
         const applicantEmail = String(document.getElementById('uca-email').value || '').trim().toLowerCase();
         const note = String(document.getElementById('uca-note').value || '').trim();
-        const requestedUsername = String(document.getElementById('uca-username').value || '').trim();
-        const requestedPassword = String(document.getElementById('uca-password').value || '');
 
         if (!unitState.unitValue) {
           toast('請先選擇申請單位。', 'error');
           return;
         }
-        if (!requestedUsername) {
-          toast('請輸入登入帳號。', 'error');
-          return;
-        }
         if (!isNtuEmail(applicantEmail)) {
           toast('申請信箱必須為 @ntu.edu.tw。', 'error');
-          return;
-        }
-        if (!isStrongPassword(requestedPassword)) {
-          toast('初始密碼至少 8 碼，且需包含大小寫英文與數字。', 'error');
           return;
         }
 
@@ -252,9 +233,7 @@
             applicantName,
             extensionNumber,
             applicantEmail,
-            note,
-            requestedUsername,
-            requestedPassword
+            note
           });
           if (!result || !result.application) throw new Error('申請送出後未收到有效回應。');
           saveLastEmail(applicantEmail);
@@ -388,14 +367,14 @@
         + buildPublicHero(
           '帳號啟用說明',
           '單位管理人帳號啟用說明',
-          '當申請已核准或已啟用時，可依此頁說明確認登入帳號與後續使用方式。若尚未收到啟用通知，請先回查詢頁確認狀態。',
+          '當申請已核准或已啟用時，可依此頁說明確認登入方式。若尚未收到啟用通知，請先回查詢頁確認狀態。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-side-card">'
         + '<div class="section-header">' + ic('key', 'icon-sm') + ' 啟用說明</div>'
-        + '<div class="unit-contact-activation-copy">若您已收到啟用通知，請使用通知中的登入帳號與初始密碼登入系統，並在首次登入後立即修改密碼。若狀態仍為待審核或退回補件，請先回到查詢頁確認最新進度。</div>'
+        + '<div class="unit-contact-activation-copy">若您已收到啟用通知，請使用通知中的亂數帳號與初始密碼登入系統，並在首次登入後立即修改密碼。若狀態仍為待審核或退回補件，請先回到查詢頁確認最新進度。</div>'
         + (application ? buildApplicationSummary(application) : '')
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">返回查詢頁</a></div>'
         + '</div></div></div></section>';

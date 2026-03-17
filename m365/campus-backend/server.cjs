@@ -1,4 +1,5 @@
 ﻿const http = require('http');
+const crypto = require('crypto');
 const { URL } = require('url');
 
 const {
@@ -40,6 +41,15 @@ const {
   createPasswordSecret,
   serializePasswordSecret
 } = require('./auth-security.cjs');
+const {
+  createSystemUserRecord,
+  generatePassword,
+  mapGraphFieldsToSystemUser,
+  mapSystemUserToGraphFields,
+  readStoredPasswordState,
+  USER_ROLES,
+  validateSystemUserPayload
+} = require('../azure-function/system-user-api/src/shared/contract');
 const {
   GRAPH_ROOT,
   acquirePreferredGraphToken,
@@ -427,13 +437,39 @@ function summarizeLookupResults(applications) {
   };
 }
 
-function createRequestedPasswordSecret(password) {
+function createGeneratedPasswordSecret(password, existingPasswordSecret) {
   const plain = cleanText(password);
   if (!plain) return '';
+  const existingState = readStoredPasswordState(existingPasswordSecret);
+  const existingVersion = Number(existingState && existingState.sessionVersion) || 1;
+  const nextVersion = cleanText(existingPasswordSecret) ? existingVersion + 1 : existingVersion;
   return serializePasswordSecret(createPasswordSecret(plain, {
     mustChangePassword: true,
-    sessionVersion: 1
+    sessionVersion: nextVersion
   }));
+}
+
+function generateRandomInitialPassword() {
+  for (let index = 0; index < 12; index += 1) {
+    const candidate = generatePassword(14);
+    if (/[A-Z]/.test(candidate) && /[a-z]/.test(candidate) && /\d/.test(candidate)) {
+      return candidate;
+    }
+  }
+  return 'Temp' + crypto.randomBytes(4).toString('hex').slice(0, 8) + '9';
+}
+
+function generateUsernameCandidate() {
+  return `uca${crypto.randomBytes(4).toString('hex')}`;
+}
+
+async function generateUniqueUnitContactUsername() {
+  for (let index = 0; index < 20; index += 1) {
+    const candidate = generateUsernameCandidate();
+    const existing = await getSystemUserEntryByUsername(candidate);
+    if (!existing) return candidate;
+  }
+  throw new Error('????????????????????');
 }
 
 async function listAllSystemUsers() {
@@ -491,6 +527,7 @@ function buildUnitContactApplicantMail(application) {
       `申請單位：${cleanText(application && application.unitValue)}`,
       `申請人：${cleanText(application && application.applicantName)}`,
       `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`,
+      `系統會在審核通過並完成啟用後，自動寄送亂數產生的登入帳號與初始密碼。`,
       `後續請使用送件信箱回到系統查詢申請進度。`
     ])
   };
@@ -528,9 +565,9 @@ function buildUnitContactStatusMail(application, options) {
             loginUsername ? `登入帳號：${loginUsername}` : '',
             initialPassword ? `初始密碼：${initialPassword}` : '',
             initialPassword
-              ? '請使用上列帳號與初始密碼登入系統，並於首次登入後立即修改密碼。'
+              ? '請使用上列亂數帳號與初始密碼登入系統，並於首次登入後立即修改密碼。若需調整帳號名稱，請登入後由管理端協助處理。'
               : (loginUsername
-                  ? '帳號已可啟用或已完成啟用。若尚未收到初始密碼，請先使用忘記密碼流程重設，或聯絡管理端確認。'
+                  ? '帳號已可啟用或已完成啟用。若尚未收到新的初始密碼，請先使用忘記密碼流程重設，或聯絡管理端重新寄送啟用通知。'
                   : '帳號已可啟用或已完成啟用，請依管理端通知的帳號資訊登入系統。')
           ].filter(Boolean).join('\n')
         : '請使用原送件信箱回到系統查詢最新處理進度。'
@@ -803,7 +840,6 @@ async function handleApply(req, res, origin) {
     validateActionEnvelope(envelope, ACTIONS.APPLY);
     payload = normalizeApplyPayload(envelope.payload);
     validateApplyPayload(payload);
-    payload.requestedPasswordSecret = createRequestedPasswordSecret(payload.requestedPassword);
     await ensureNoDuplicateActiveApplication(payload);
     const created = await createApplication(payload);
     const notifications = await notifyUnitContactApplicationSubmitted(created);
@@ -915,23 +951,10 @@ async function handleActivate(req, res, origin) {
     }
 
     const reviewActor = cleanText(payload.reviewedBy) || cleanText(authz && authz.user && authz.user.name) || cleanText(authz && authz.username);
-    const loginUsername = cleanText(payload.externalUserId) || cleanText(currentApplication && currentApplication.externalUserId);
-    if (!loginUsername) {
-      throw new Error('\u7f3a\u5c11\u767b\u5165\u5e33\u865f\uff0c\u7121\u6cd5\u5b8c\u6210\u555f\u7528\u3002');
-    }
-
+    const loginUsername = cleanText(currentApplication && currentApplication.externalUserId) || await generateUniqueUnitContactUsername();
     const existingUserEntry = await getSystemUserEntryByUsername(loginUsername);
-    const requestedPasswordSecret = cleanText(currentApplication && currentApplication.requestedPasswordSecret);
-    const initialPassword = cleanText(payload.initialPassword);
-    const nextPasswordSecret = initialPassword
-      ? createRequestedPasswordSecret(initialPassword)
-      : (requestedPasswordSecret || cleanText(existingUserEntry && existingUserEntry.item && existingUserEntry.item.password));
-
-    if (!nextPasswordSecret) {
-      const passwordError = new Error('\u627e\u4e0d\u5230\u53ef\u7528\u7684\u521d\u59cb\u5bc6\u78bc\uff0c\u8acb\u7531\u6700\u9ad8\u7ba1\u7406\u54e1\u91cd\u65b0\u8a2d\u5b9a\u3002');
-      passwordError.statusCode = 400;
-      throw passwordError;
-    }
+    const initialPassword = generateRandomInitialPassword();
+    const nextPasswordSecret = createGeneratedPasswordSecret(initialPassword, cleanText(existingUserEntry && existingUserEntry.item && existingUserEntry.item.password));
 
     const systemUserPayload = {
       username: loginUsername,
@@ -956,15 +979,12 @@ async function handleActivate(req, res, origin) {
       reviewedAt: new Date().toISOString(),
       activatedAt: new Date().toISOString(),
       activationSentAt: new Date().toISOString(),
-      externalUserId: loginUsername,
-      requestedPasswordSecret: nextPasswordSecret
+      externalUserId: loginUsername
     });
 
-    const usedRequestedPassword = !initialPassword && !!requestedPasswordSecret && !cleanText(existingUserEntry && existingUserEntry.item && existingUserEntry.item.password);
     const delivery = await notifyUnitContactStatusUpdated(result.after, {
       loginUsername,
-      initialPassword,
-      usedRequestedPassword
+      initialPassword
     });
     await tryCreateAuditRow({
       eventType: 'unit_contact.application_activated',
@@ -978,8 +998,7 @@ async function handleActivate(req, res, origin) {
         delivery,
         loginUsername,
         createdSystemUser: !!(userWrite && userWrite.created),
-        updatedSystemUser: !!userWrite,
-        usedRequestedPassword
+        updatedSystemUser: !!userWrite
       })
     });
     return writeJson(res, buildJsonResponse(200, {

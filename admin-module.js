@@ -355,40 +355,19 @@
     const opts = options || {};
     const isResend = opts.mode === 'resend';
     const application = unitContactReviewState.items.find((item) => String(item && item.id || '').trim() === String(applicationId || '').trim()) || getUnitContactApplication(applicationId);
-    const defaultUsername = String(application && application.externalUserId || '').trim();
-    const hasRequestedPassword = !!(application && application.hasRequestedPassword);
     const mr = document.getElementById('modal-root');
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${isResend ? '重新寄送啟用通知' : '完成帳號啟用'}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="form-group"><label class="form-label form-required">登入帳號</label><input type="text" class="form-input" id="unit-contact-external-user-id" value="${esc(defaultUsername)}" placeholder="例如 sheila.tsai 或 sheila" required></div><div class="form-group"><label class="form-label${hasRequestedPassword ? '' : ' form-required'}">初始密碼</label><input type="text" class="form-input" id="unit-contact-initial-password" placeholder="${hasRequestedPassword ? '留空代表沿用申請時填寫的密碼' : '至少 8 碼，需含大小寫英文與數字'}"></div><div class="form-hint">${hasRequestedPassword ? '若申請人已在申請頁填入初始密碼，可留空並直接沿用。若要改發新密碼，也可在此重新輸入。' : '申請頁未保留可用密碼時，這裡必須由最高管理員提供新的初始密碼。'}</div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="可補充啟用說明、聯絡方式或首次登入提醒"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic(isResend ? 'mail' : 'key-round', 'icon-sm')} ${isResend ? '重新寄送通知' : '完成啟用'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${isResend ? '重新寄送啟用通知' : '完成帳號啟用'}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="review-callout compact"><span class="review-callout-icon">${ic(isResend ? 'mail' : 'key-round', 'icon-sm')}</span><div>${isResend ? '系統會沿用既有登入帳號，並重新產生一組新的亂數初始密碼寄給申請人。' : '系統會自動產生亂數登入帳號與初始密碼，並在啟用完成後寄送給申請人。'}</div></div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="可補充啟用說明、聯絡方式或首次登入提醒"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic(isResend ? 'mail' : 'key-round', 'icon-sm')} ${isResend ? '重新寄送通知' : '完成啟用'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
     document.getElementById('modal-bg').addEventListener('click', function (event) { if (event.target === event.currentTarget) closeModalRoot(); });
     document.getElementById('unit-contact-activate-form').addEventListener('submit', async function (event) {
       event.preventDefault();
-      const externalUserId = String(document.getElementById('unit-contact-external-user-id').value || '').trim();
-      const initialPassword = String(document.getElementById('unit-contact-initial-password').value || '').trim();
       const reviewComment = String(document.getElementById('unit-contact-activate-comment').value || '').trim();
-      if (!externalUserId) {
-        toast('請輸入登入帳號。', 'error');
-        return;
-      }
-      if (!initialPassword && !hasRequestedPassword && !isResend) {
-        toast('這筆申請沒有可沿用的初始密碼，請由最高管理員設定新的初始密碼。', 'error');
-        return;
-      }
-      if (initialPassword) {
-        const strongEnough = initialPassword.length >= 8 && /[A-Z]/.test(initialPassword) && /[a-z]/.test(initialPassword) && /\d/.test(initialPassword);
-        if (!strongEnough) {
-          toast('初始密碼至少 8 碼，且需包含大小寫英文與數字。', 'error');
-          return;
-        }
-      }
       closeModalRoot();
       try {
         const result = await activateUnitContactApplication({
           id: applicationId,
-          externalUserId,
-          initialPassword,
           reviewComment
         });
-        toast(result && result.delivery && result.delivery.sent ? '啟用通知已寄出。' : '狀態已更新，但未寄出通知。');
+        toast(result && result.delivery && result.delivery.sent ? '亂數登入資訊已寄出。' : '狀態已更新，但未寄出通知。');
         renderUnitContactReview(unitContactReviewState.filters);
       } catch (error) {
         toast(String(error && error.message || error || '啟用處理失敗。'), 'error');
@@ -829,4 +808,3 @@
     };
   };
 })();
-

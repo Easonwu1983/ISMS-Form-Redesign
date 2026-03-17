@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const {
@@ -35,7 +35,7 @@ async function waitForHealth(url, timeoutMs = 45000) {
     try {
       const response = await fetch(url);
       if (response.ok) return;
-    } catch (_) { }
+    } catch (_) {}
     await wait(500);
   }
   throw new Error('Timed out waiting for backend health.');
@@ -116,13 +116,20 @@ async function cleanupApplicationById(applicationId) {
     await runStep(results, 'UNIT-CONTACT-CAMPUS-2', 'public', 'submit application through frontend to campus backend', async () => {
       await gotoHash(page, 'apply-unit-contact', { handleUnsaved: false });
       await page.waitForSelector('[data-testid="unit-contact-apply-form"]', { timeout: 15000 });
-      await page.selectOption('#uca-unit-category', { label: '行政單位' });
+      const categoryOptions = await page.locator('#uca-unit-category option').evaluateAll((options) => options.map((entry) => ({
+        value: entry.value,
+        text: String(entry.textContent || '').trim()
+      })));
+      const targetCategory = categoryOptions.find((entry) => entry.value);
+      if (!targetCategory) throw new Error('no unit category options found');
+      await page.selectOption('#uca-unit-category', targetCategory.value);
       await page.waitForTimeout(150);
+
       const parentOptions = await page.locator('#uca-unit-parent option').evaluateAll((options) => options.map((entry) => ({
         value: entry.value,
         text: String(entry.textContent || '').trim()
       })));
-      const targetParent = parentOptions.find((entry) => entry.text.includes('計算機及資訊網路中心')) || parentOptions.find((entry) => entry.value);
+      const targetParent = parentOptions.find((entry) => entry.value);
       if (!targetParent) throw new Error('no primary unit options found');
       await page.selectOption('#uca-unit-parent', targetParent.value);
       await page.waitForTimeout(150);
@@ -136,12 +143,10 @@ async function cleanupApplicationById(applicationId) {
         if (targetChild) await page.selectOption('#uca-unit-child', targetChild.value);
       }
 
-      await page.fill('[data-testid="unit-contact-name"]', '校內 backend 測試');
+      await page.fill('[data-testid="unit-contact-name"]', 'Campus Backend 測試');
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', uniqueEmail);
       await page.fill('[data-testid="unit-contact-note"]', 'campus backend smoke');
-      await page.fill('[data-testid="unit-contact-username"]', 'campus.smoke');
-      await page.fill('[data-testid="unit-contact-password"]', 'CampusPass123');
       await page.click('[data-testid="unit-contact-submit"]');
       await page.waitForURL(/#apply-unit-contact-success\//, { timeout: 20000 });
       applicationId = await page.locator('.unit-contact-summary-grid strong').first().textContent();
@@ -166,7 +171,7 @@ async function cleanupApplicationById(applicationId) {
   } finally {
     try {
       if (applicationId) await cleanupApplicationById(applicationId);
-    } catch (_) { }
+    } catch (_) {}
     if (page) await page.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});
     if (fs.existsSync(OVERRIDE_PATH)) fs.unlinkSync(OVERRIDE_PATH);
