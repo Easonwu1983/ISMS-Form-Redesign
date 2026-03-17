@@ -1418,6 +1418,31 @@
     matchedRows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
+  function mergeTrainingRosterItemsIntoLocalStore(items) {
+    const incoming = (Array.isArray(items) ? items : [])
+      .map((item) => normalizeTrainingRosterRow(item, item && item.unit))
+      .filter((item) => item && String(item.id || '').trim());
+    if (!incoming.length) return;
+    const store = loadTrainingStore();
+    let changed = false;
+    incoming.forEach((item) => {
+      const index = (store.rosters || []).findIndex((entry) => String(entry && entry.id || '').trim() === String(item.id || '').trim());
+      if (index >= 0) {
+        const merged = normalizeTrainingRosterRow({ ...store.rosters[index], ...item }, item.unit);
+        const before = JSON.stringify(store.rosters[index]);
+        const after = JSON.stringify(merged);
+        if (before !== after) {
+          store.rosters[index] = merged;
+          changed = true;
+        }
+        return;
+      }
+      store.rosters.push(item);
+      changed = true;
+    });
+    if (changed) saveTrainingStore(store);
+  }
+
   function buildTrainingRosterPage(summary, rowsHtml, hiddenCount) {
     const hiddenNote = hiddenCount
       ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
@@ -1540,6 +1565,7 @@
       const importedRosterIds = [];
       const importedRosterNames = [];
       const importedRosterUnits = [];
+      const importedRosterItems = [];
       try {
         await syncTrainingRostersFromM365({ silent: true });
       } catch (_) {}
@@ -1582,6 +1608,7 @@
             importedRosterIds.push(String(result.item.id || '').trim());
             importedRosterNames.push(String(result.item.name || '').trim());
             importedRosterUnits.push(String(result.item.unit || targetUnit).trim());
+            importedRosterItems.push(result.item);
           }
           if (existingRoster) updated += 1;
           else added += 1;
@@ -1594,6 +1621,7 @@
       try {
         await syncTrainingRostersFromM365({ silent: true });
       } catch (_) {}
+      mergeTrainingRosterItemsIntoLocalStore(importedRosterItems);
       await renderTrainingRoster({
         skipSync: true,
         rosterIds: importedRosterIds,

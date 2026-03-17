@@ -68,6 +68,13 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
   throw new Error(`training rosters not visible after ${timeout}ms: ${names.join(', ')}`);
 }
 
+async function waitForTrainingRosterRowsByNames(page, names, timeout) {
+  await page.waitForFunction((targetNames) => {
+    const rows = Array.from(document.querySelectorAll('tr[data-roster-name]')).map((row) => String(row.dataset.rosterName || '').trim());
+    return targetNames.every((name) => rows.includes(name));
+  }, names, { timeout });
+}
+
 async function deleteTrainingRostersByNames(page, names) {
   await page.evaluate(async (targetNames) => {
     const buildEnvelope = (action, payload) => ({
@@ -151,6 +158,7 @@ async function deleteTrainingRostersByNames(page, names) {
       });
       await page.click('[data-testid="training-import-submit"]');
       await waitForTrainingRostersByNames(page, names, 30000);
+      await waitForTrainingRosterRowsByNames(page, names, 30000);
       const importedRows = await listTrainingRostersByNames(page, names);
       const importedIds = importedRows.map((item) => String((item && item.id) || '').trim()).filter(Boolean);
       if (importedRows.length !== names.length) {

@@ -94,12 +94,19 @@ async function selectImportTargetUnit(page, target) {
   }, target.fullUnit);
 }
 
+async function waitForTrainingRosterRowsByNames(page, names) {
+  await page.waitForFunction((targetNames) => {
+    const rows = Array.from(document.querySelectorAll('tr[data-roster-name]')).map((row) => String(row.dataset.rosterName || '').trim());
+    return targetNames.every((name) => rows.includes(name));
+  }, names);
+}
+
 async function deleteRosterRowsByNames(page, names) {
   await gotoHash(page, 'training-roster');
   await page.waitForSelector('[data-testid^="training-roster-delete-"]');
   await page.evaluate(() => { window.confirm = () => true; });
   for (const name of names) {
-    const row = page.locator('tbody tr').filter({ hasText: name }).first();
+    const row = page.locator(`tr[data-roster-name="${name}"]`).first();
     if (!(await row.count())) continue;
     const button = row.locator('[data-testid^="training-roster-delete-"]').first();
     if (!(await button.count())) continue;
@@ -248,14 +255,11 @@ async function deleteRosterRowsByNames(page, names) {
         `${results.context.importNames[0]},InfoGroup,${IMPORT_IDENTITY_MANAGER},${IMPORT_TITLE_MANAGER}\n${results.context.importNames[1]},InfoGroup,${IMPORT_IDENTITY_REPORTER},${IMPORT_TITLE_ENGINEER}`
       );
       await page.click('[data-testid="training-import-submit"]');
-      await page.waitForFunction((names) => {
-        const rows = Array.from(document.querySelectorAll('tbody tr')).map((row) => row.textContent || '');
-        return names.every((name) => rows.some((text) => text.includes(name)));
-      }, results.context.importNames);
+      await waitForTrainingRosterRowsByNames(page, results.context.importNames);
 
-      const currentRows = await page.$$eval('tbody tr', (rows, names) => rows
-        .map((row) => row.textContent || '')
-        .filter((text) => names.some((name) => text.includes(name))), results.context.importNames);
+      const currentRows = await page.$$eval('tr[data-roster-name]', (rows, names) => rows
+        .map((row) => String(row.dataset.rosterName || '').trim())
+        .filter((text) => names.includes(text)), results.context.importNames);
       if (currentRows.length !== results.context.importNames.length) {
         throw new Error(`expected ${results.context.importNames.length} visible imported rows, got ${currentRows.length}`);
       }
@@ -265,18 +269,15 @@ async function deleteRosterRowsByNames(page, names) {
       try {
         await login(verifyPage, results.context.admin.username, results.context.admin.password);
         await gotoHash(verifyPage, 'training-roster');
-        await verifyPage.waitForFunction((names) => {
-          const rows = Array.from(document.querySelectorAll('tbody tr')).map((row) => row.textContent || '');
-          return names.every((name) => rows.some((text) => text.includes(name)));
-        }, results.context.importNames);
+        await waitForTrainingRosterRowsByNames(verifyPage, results.context.importNames);
       } finally {
         await verifyContext.close();
       }
 
       await deleteRosterRowsByNames(page, results.context.importNames);
       await page.waitForFunction((names) => {
-        const rows = Array.from(document.querySelectorAll('tbody tr')).map((row) => row.textContent || '');
-        return names.every((name) => !rows.some((text) => text.includes(name)));
+        const rows = Array.from(document.querySelectorAll('tr[data-roster-name]')).map((row) => String(row.dataset.rosterName || '').trim());
+        return names.every((name) => !rows.includes(name));
       }, results.context.importNames);
 
       return `import persisted across sessions for ${target.fullUnit}`;

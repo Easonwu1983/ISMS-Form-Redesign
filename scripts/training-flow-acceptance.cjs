@@ -83,6 +83,13 @@ async function ensureTrainingImportPanelVisible(page) {
   await page.waitForSelector('#training-import-form', { state: 'visible' });
 }
 
+async function waitForTrainingRosterRowsByNames(page, names) {
+  await page.waitForFunction((targetNames) => {
+    const rows = Array.from(document.querySelectorAll('tr[data-roster-name]')).map((row) => String(row.dataset.rosterName || '').trim());
+    return targetNames.every((name) => rows.includes(name));
+  }, names);
+}
+
 async function chooseUnit(page, baseId, fullUnit) {
   await page.evaluate(({ baseId, fullUnit }) => {
     const categoryEl = document.getElementById(`${baseId}-category`);
@@ -246,10 +253,7 @@ async function populateTrainingFlowOne(page) {
         return !!copy && String(copy.textContent || '').includes('training-roster-import.xlsx');
       });
       await page.click('[data-testid="training-import-submit"]');
-      await page.waitForFunction((names) => {
-        const rows = Array.from(document.querySelectorAll('tbody tr')).map((row) => row.textContent || '');
-        return names.every((name) => rows.some((text) => text.includes(name)));
-      }, IMPORT_NAMES);
+      await waitForTrainingRosterRowsByNames(page, IMPORT_NAMES);
       const store = await getTrainingStore(page);
       const targetRows = (store.rosters || []).filter((row) => row.unit === TARGET_UNIT && IMPORT_NAMES.includes(row.name));
       if (targetRows.length !== IMPORT_NAMES.length) {
