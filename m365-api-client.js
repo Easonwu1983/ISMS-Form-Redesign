@@ -35,6 +35,7 @@
     };
     const TRAINING_ROSTER_ACTIONS = {
       UPSERT: 'training.roster.upsert',
+      UPSERT_BATCH: 'training.roster.upsert-batch',
       DELETE: 'training.roster.delete'
     };
     const DEFAULT_CONFIG = {
@@ -73,9 +74,9 @@
         detail: '申請資料需要補充，請依退回意見修正後重新送出。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.APPROVED]: {
-        label: '已核准',
+        label: '已通過',
         tone: 'approved',
-        detail: '申請已核准，系統正在完成帳號啟用與寄信。'
+        detail: '申請已通過，系統會直接啟用帳號並寄送登入資訊。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.REJECTED]: {
         label: '未核准',
@@ -83,7 +84,7 @@
         detail: '申請未通過，若需再申請請先與系統管理者確認。'
       },
       [UNIT_CONTACT_APPLICATION_STATUSES.ACTIVATION_PENDING]: {
-        label: '待啟用',
+        label: '寄信處理中',
         tone: 'approved',
         detail: '系統正在寄送登入資訊，登入帳號會使用申請時填寫的電子郵件。'
       },
@@ -1402,6 +1403,22 @@
       };
     }
 
+    async function upsertTrainingRosterBatch(payload) {
+      const body = await requestTrainingRosters('/upsert-batch', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_ROSTER_ACTIONS.UPSERT_BATCH, payload)
+      });
+      const items = normalizeRemoteTrainingRosters(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        items,
+        summary: body && body.summary && typeof body.summary === 'object' ? body.summary : {},
+        errors: Array.isArray(body && body.errors) ? body.errors : [],
+        raw: body
+      };
+    }
+
     async function deleteTrainingRoster(id, payload) {
       const cleanId = cleanText(id || (payload && payload.id));
       const body = await requestTrainingRosters('/' + encodeURIComponent(cleanId) + '/delete', {
@@ -1532,6 +1549,7 @@
       undoTrainingForm,
       listTrainingRosters,
       upsertTrainingRoster,
+      upsertTrainingRosterBatch,
       deleteTrainingRoster
     };
   };

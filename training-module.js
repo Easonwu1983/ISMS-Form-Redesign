@@ -69,6 +69,7 @@
       submitTrainingReturn,
       submitTrainingUndo,
       submitTrainingRosterUpsert,
+      submitTrainingRosterBatchUpsert,
       submitTrainingRosterDelete,
       getVisibleTrainingForms,
       isTrainingVisible,
@@ -1576,9 +1577,14 @@
           row
         ])
       );
-      await runAsyncPool(entries, async (entry) => {
+      const pendingUpserts = new Map();
+      entries.forEach((entry) => {
         const targetUnit = String(entry.unit || unit || '').trim();
         const normalizedName = String(entry.name || '').trim().toLowerCase();
+        if (!targetUnit || !normalizedName) {
+          skipped += 1;
+          return;
+        }
         const rosterKey = targetUnit + '::' + normalizedName;
         const existingRoster = rosterIndex.get(rosterKey) || null;
         const nextPayload = {
@@ -1601,23 +1607,42 @@
           skipped += 1;
           return;
         }
-        try {
-          const result = await submitTrainingRosterUpsert(nextPayload);
-          if (result && result.item) {
-            rosterIndex.set(rosterKey, result.item);
-            importedRosterIds.push(String(result.item.id || '').trim());
-            importedRosterNames.push(String(result.item.name || '').trim());
-            importedRosterUnits.push(String(result.item.unit || targetUnit).trim());
-            importedRosterItems.push(result.item);
-          }
-          if (existingRoster) updated += 1;
-          else added += 1;
-          if (!fallbackWarning && result && result.warning) fallbackWarning = result.warning;
-        } catch (error) {
+        if (pendingUpserts.has(rosterKey)) {
           skipped += 1;
-          importErrors.push((entry.name || '未命名人員') + '：' + (error?.message || '匯入失敗'));
         }
-      }, 6);
+        pendingUpserts.set(rosterKey, nextPayload);
+      });
+      const batchPayload = Array.from(pendingUpserts.values());
+      if (batchPayload.length) {
+        try {
+          const result = await submitTrainingRosterBatchUpsert({
+            items: batchPayload,
+            actorName: actor.name || '',
+            actorUsername: actor.username || ''
+          });
+          const summary = result && result.summary && typeof result.summary === 'object' ? result.summary : {};
+          added += Number(summary.added || 0);
+          updated += Number(summary.updated || 0);
+          skipped += Number(summary.skipped || 0);
+          if (!fallbackWarning && result && result.warning) fallbackWarning = result.warning;
+          if (Array.isArray(result && result.items)) {
+            result.items.forEach((item) => {
+              const targetUnit = String(item.unit || '').trim();
+              const rosterKey = targetUnit + '::' + String(item.name || '').trim().toLowerCase();
+              rosterIndex.set(rosterKey, item);
+              importedRosterIds.push(String(item.id || '').trim());
+              importedRosterNames.push(String(item.name || '').trim());
+              importedRosterUnits.push(String(item.unit || targetUnit).trim());
+              importedRosterItems.push(item);
+            });
+          }
+          if (Array.isArray(result && result.errors) && result.errors.length) {
+            importErrors.push(...result.errors);
+          }
+        } catch (error) {
+          importErrors.push(String(error && error.message || error || '匯入失敗'));
+        }
+      }
       try {
         await syncTrainingRostersFromM365({ silent: true });
       } catch (_) {}
@@ -1628,7 +1653,7 @@
         rosterNames: importedRosterNames,
         rosterUnits: importedRosterUnits
       });
-      toast('匯入完成：新增 ' + added + ' 筆、更新 ' + updated + ' 筆、略過 ' + skipped + ' 筆', 'success');
+      toast('匯入完成：新增 ' + added + ' 筆、更新 ' + updated + ' 筆、略過 ' + skipped + ' 筆', importErrors.length ? 'info' : 'success');
       if ((added + updated) > 0) {
         toast('已自動定位到本次匯入的名單列', 'info');
       }

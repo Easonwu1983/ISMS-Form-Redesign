@@ -894,7 +894,7 @@ function createSystemUserRouter(deps) {
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         item: sanitizeUserForClient(saved.item),
-        resetToken: delivery.sent ? '' : reset.token,
+        resetToken: '',
         resetTokenExpiresAt: reset.expiresAt,
         delivery,
         contractVersion: AUTH_CONTRACT_VERSION

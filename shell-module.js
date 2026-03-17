@@ -80,7 +80,7 @@
         '<div class="form-group"><label class="form-label">密碼</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" placeholder="請輸入密碼" required></div>' +
         '<button type="submit" class="login-btn" data-testid="login-submit">登入系統 ' + ic('arrow-right', 'icon-sm') + '</button>' +
         '</form>' +
-        '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h3 class="login-entry-title">申請單位管理人員</h3><p class="login-entry-text">如需新增或異動各單位管理窗口，請先送出單位管理人申請，再由系統管理者建立登入帳號。</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">前往申請</a><a class="btn btn-secondary" href="#apply-unit-contact-status">查詢進度</a></div></div>' +
+        '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h3 class="login-entry-title">申請單位管理人員</h3><p class="login-entry-text">如需新增或異動各單位管理窗口，請先送出單位管理人申請。審核通過後，系統會直接啟用帳號並寄送登入資訊。</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">前往申請</a><a class="btn btn-secondary" href="#apply-unit-contact-status">查詢進度</a></div></div>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">忘記密碼？</a></p></div>' +
         '<div id="change-panel" style="display:none">' +
         '<div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">首次登入需變更密碼</h3><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
@@ -90,9 +90,9 @@
         '<div id="forgot-panel" style="display:none">' +
         '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h3><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">新密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
         '<div class="login-error" id="forgot-error">找不到符合帳號與信箱的使用者</div>' +
-        '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="forgot-username" placeholder="請輸入帳號" required></div><div class="form-group"><label class="form-label">註冊電子信箱</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入帳號綁定的電子信箱" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 取得重設代碼</button></form>' +
+        '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="forgot-username" placeholder="請輸入帳號" required></div><div class="form-group"><label class="form-label">註冊電子信箱</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入帳號綁定的電子信箱" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 寄送重設信</button></form>' +
         '<div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px">' +
-        '<p style="font-size:.88rem;color:#0f172a;font-weight:600" id="reset-result-title">已產生一次性重設代碼</p>' +
+        '<p style="font-size:.88rem;color:#0f172a;font-weight:600" id="reset-result-title">重設信已寄出</p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary)">帳號：<strong id="reset-username"></strong></p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary)">有效期限：<strong id="reset-expire"></strong></p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary);margin-top:6px" id="reset-result-message"></p>' +
@@ -202,16 +202,17 @@
           document.getElementById('reset-username').textContent = resetResult.user.username;
           document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || '依系統設定';
           var deliveredByMail = !!(resetResult.delivery && resetResult.delivery.sent);
-          document.getElementById('reset-result-title').textContent = deliveredByMail ? '重設信已寄出' : '已產生一次性重設代碼';
+          document.getElementById('reset-result-title').textContent = deliveredByMail ? '重設信已寄出' : '目前無法寄送重設信';
           document.getElementById('reset-result-message').textContent = deliveredByMail
             ? ('系統已將重設代碼寄送到 ' + (resetResult.user.email || email) + '，請查看信件後貼到下方欄位。')
-            : '目前無法直接寄信，系統已提供一次性重設代碼供手動完成重設。';
-          document.getElementById('reset-token').textContent = resetResult.resetToken || resetResult.password || '';
-          document.getElementById('reset-token').style.display = (resetResult.resetToken || resetResult.password) ? 'block' : 'none';
+            : '系統暫時無法寄送重設信，請稍後再試，或聯絡最高管理員協助重設。';
+          document.getElementById('reset-token').textContent = '';
+          document.getElementById('reset-token').style.display = 'none';
           document.getElementById('redeem-username').value = resetResult.user.username;
-          document.getElementById('redeem-token').value = resetResult.resetToken || '';
+          document.getElementById('redeem-token').value = '';
+          document.getElementById('redeem-form').style.display = deliveredByMail ? '' : 'none';
           document.getElementById('forgot-result').style.display = 'block';
-          toast(deliveredByMail ? '重設信已寄出' : '已產生一次性重設代碼', deliveredByMail ? 'success' : 'info');
+          toast(deliveredByMail ? '重設信已寄出' : '目前無法寄送重設信', deliveredByMail ? 'success' : 'error');
         } catch (error) {
           document.getElementById('forgot-error').textContent = String(error && error.message || error || '密碼重設失敗');
           document.getElementById('forgot-error').classList.add('show');

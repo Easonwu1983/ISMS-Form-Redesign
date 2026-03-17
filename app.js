@@ -739,6 +739,7 @@
       submitTrainingReturn,
       submitTrainingUndo,
       submitTrainingRosterUpsert,
+      submitTrainingRosterBatchUpsert,
       submitTrainingRosterDelete,
       getVisibleTrainingForms,
       isTrainingVisible,
@@ -2530,6 +2531,62 @@
       const stored = upsertTrainingRosterInStore(payload);
         setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingRosterBatchUpsert(payload) {
+    const client = getM365ApiClient();
+    const inputItems = Array.isArray(payload && payload.items) ? payload.items : [];
+    if (!inputItems.length) {
+      return {
+        ok: true,
+        items: [],
+        summary: { added: 0, updated: 0, skipped: 0, failed: 0 },
+        errors: [],
+        source: 'noop'
+      };
+    }
+    if (client.getTrainingMode() !== 'm365-api') {
+      const storedItems = inputItems.map((item) => upsertTrainingRosterInStore(item));
+      return {
+        ok: true,
+        items: storedItems,
+        summary: { added: storedItems.length, updated: 0, skipped: 0, failed: 0 },
+        errors: [],
+        source: 'local'
+      };
+    }
+    try {
+      const response = await client.upsertTrainingRosterBatch(payload);
+      const remoteItems = Array.isArray(response && response.items)
+        ? response.items.filter((item) => String(item && item.id || '').trim())
+        : [];
+      if (!remoteItems.length && Number(response && response.summary && response.summary.failed || 0) > 0) {
+        throw new Error('教育訓練名單批次匯入失敗');
+      }
+      const storedItems = remoteItems.map((item) => upsertTrainingRosterInStore(item));
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '教育訓練名單批次匯入已寫入正式後端', error: '' });
+      return {
+        ok: true,
+        items: storedItems,
+        summary: response && response.summary ? response.summary : { added: storedItems.length, updated: 0, skipped: 0, failed: 0 },
+        errors: Array.isArray(response && response.errors) ? response.errors : [],
+        source: 'remote'
+      };
+    } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練名單批次匯入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練名單批次匯入', error));
+      }
+      const storedItems = inputItems.map((item) => upsertTrainingRosterInStore(item));
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return {
+        ok: true,
+        items: storedItems,
+        summary: { added: storedItems.length, updated: 0, skipped: 0, failed: 0 },
+        errors: [],
+        source: 'local-fallback',
+        warning: buildTrainingFallbackWarning(error)
+      };
     }
   }
   async function submitTrainingRosterDelete(id, payload) {

@@ -315,7 +315,7 @@
         + '<ul class="unit-contact-checklist">'
         + '<li>請輸入申請時使用的 @ntu.edu.tw 信箱。</li>'
         + '<li>若看到退回補件，可直接回到申請頁補正後重新送出。</li>'
-        + '<li>若看到已核准、待啟用或已啟用，可查看登入說明與後續通知。</li>'
+        + '<li>若看到已通過或已啟用，代表系統會直接寄送登入資訊，可查看登入說明與後續通知。</li>'
         + '</ul></div></aside>'
         + '</div></section>';
 
@@ -367,7 +367,7 @@
         + buildPublicHero(
           '帳號啟用說明',
           '單位管理人帳號啟用說明',
-          '當申請已核准或已啟用時，可依此頁說明確認登入方式。登入帳號固定為申請時填寫的電子郵件。',
+          '當申請已通過或已啟用時，可依此頁說明確認登入方式。登入帳號固定為申請時填寫的電子郵件。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'

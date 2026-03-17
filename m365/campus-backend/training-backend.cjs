@@ -307,6 +307,39 @@ function createTrainingRouter(deps) {
     )) || null;
   }
 
+  function buildRosterLookupKey(unit, name) {
+    return `${cleanText(unit)}::${cleanText(name).toLowerCase()}`;
+  }
+
+  async function allocateNextRosterIds(count) {
+    const total = Number(count || 0);
+    if (total <= 0) return [];
+    return withRosterSequenceLock(async function reserveNextRosterIds() {
+      const rows = await listAllRosters();
+      const existingIds = new Set(rows
+        .map((entry) => cleanText(entry && entry.item && entry.item.id))
+        .filter(Boolean));
+      const maxExisting = rows.reduce((max, entry) => {
+        return Math.max(max, parseRosterSequence(entry && entry.item && entry.item.id));
+      }, 0);
+      let nextValue = Number.isFinite(state.nextRosterSequence) && state.nextRosterSequence > 0
+        ? state.nextRosterSequence
+        : (maxExisting + 1);
+      if (nextValue <= maxExisting) nextValue = maxExisting + 1;
+      const reserved = [];
+      while (reserved.length < total) {
+        const candidate = `RST-${String(nextValue).padStart(4, '0')}`;
+        if (!existingIds.has(candidate)) {
+          existingIds.add(candidate);
+          reserved.push(candidate);
+        }
+        nextValue += 1;
+      }
+      state.nextRosterSequence = nextValue;
+      return reserved;
+    });
+  }
+
   async function upsertForm(existingEntry, nextItem) {
     const siteId = await resolveSiteId();
     const list = await resolveTrainingFormsList();
@@ -712,6 +745,126 @@ function createTrainingRouter(deps) {
     }
   }
 
+  async function handleRosterUpsertBatch(req, res, origin) {
+    try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      const envelope = await parseJsonBody(req);
+      validateActionEnvelope(envelope, ROSTER_ACTIONS.UPSERT_BATCH);
+      const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
+      const rawItems = Array.isArray(payload.items) ? payload.items : [];
+      if (!rawItems.length) {
+        throw createError('Training roster batch is empty', 400);
+      }
+      if (rawItems.length > 200) {
+        throw createError('Training roster batch exceeds the 200 item limit', 400);
+      }
+
+      const actorMeta = requestAuthz.buildActorDetails(authz);
+      const actorName = cleanText(payload.actorName) || actorMeta.actorName;
+      const actorUsername = cleanText(payload.actorUsername) || actorMeta.actorUsername;
+      const now = new Date().toISOString();
+      const rosterRows = await listAllRosters();
+      const rosterById = new Map();
+      const rosterByKey = new Map();
+      rosterRows.forEach((entry) => {
+        const rosterId = cleanText(entry && entry.item && entry.item.id);
+        const key = buildRosterLookupKey(entry && entry.item && entry.item.unit, entry && entry.item && entry.item.name);
+        if (rosterId && !rosterById.has(rosterId)) rosterById.set(rosterId, entry);
+        if (key && !rosterByKey.has(key)) rosterByKey.set(key, entry);
+      });
+
+      const plans = [];
+      const summary = { added: 0, updated: 0, skipped: 0, failed: 0 };
+      const errors = [];
+      const requestKeys = new Set();
+
+      rawItems.forEach((rawItem, index) => {
+        try {
+          const normalized = normalizeTrainingRosterPayload({
+            ...(rawItem && typeof rawItem === 'object' ? rawItem : {}),
+            actorName,
+            actorUsername
+          });
+          validateTrainingRosterPayload(normalized);
+          const key = buildRosterLookupKey(normalized.unit, normalized.name);
+          if (requestKeys.has(key)) {
+            summary.skipped += 1;
+            return;
+          }
+          requestKeys.add(key);
+          const explicitId = cleanText(normalized.id);
+          const existing = (explicitId && rosterById.get(explicitId)) || rosterByKey.get(key) || null;
+          const target = existing ? existing.item : normalized;
+          if (!requestAuthz.canManageTrainingRoster(authz, target)) {
+            summary.failed += 1;
+            errors.push(`第 ${index + 1} 筆人員不在可管理範圍內`);
+            return;
+          }
+          plans.push({ existing, item: normalized, key });
+        } catch (error) {
+          summary.failed += 1;
+          errors.push(cleanText(error && error.message) || `第 ${index + 1} 筆匯入失敗`);
+        }
+      });
+
+      const newIds = await allocateNextRosterIds(plans.filter((plan) => !plan.existing).length);
+      let newIndex = 0;
+      const items = [];
+
+      for (const plan of plans) {
+        try {
+          const existing = plan.existing;
+          const nextRosterId = existing ? existing.item.id : newIds[newIndex++];
+          reserveKnownRosterSequence(nextRosterId);
+          const nextItem = createTrainingRosterRecord({
+            ...(existing ? existing.item : {}),
+            ...plan.item,
+            id: nextRosterId,
+            createdBy: cleanText(plan.item.createdBy) || (existing && existing.item && existing.item.createdBy) || actorName,
+            createdByUsername: cleanText(plan.item.createdByUsername) || (existing && existing.item && existing.item.createdByUsername) || actorUsername,
+            createdAt: existing ? existing.item.createdAt : (plan.item.createdAt || now),
+            updatedAt: now
+          }, now);
+          const saved = await upsertRoster(existing, nextItem);
+          items.push(mapTrainingRosterForClient(saved.item));
+          if (saved.created) {
+            summary.added += 1;
+          } else {
+            summary.updated += 1;
+          }
+          await createAuditRow({
+            eventType: 'training.roster_upserted',
+            actorEmail: actorMeta.actorEmail,
+            targetEmail: '',
+            unitCode: '',
+            recordId: nextItem.id || nextItem.name,
+            occurredAt: now,
+            payloadJson: JSON.stringify({
+              action: ROSTER_ACTIONS.UPSERT_BATCH,
+              actor: actorName || actorLabel(plan.item, plan.item.createdBy || plan.item.name),
+              actorUsername,
+              snapshot: existing ? null : buildTrainingRosterSnapshot(nextItem),
+              changes: buildTrainingRosterChanges(existing && existing.item, nextItem)
+            })
+          });
+        } catch (error) {
+          summary.failed += 1;
+          errors.push(cleanText(error && error.message) || `匯入 ${cleanText(plan && plan.item && plan.item.name) || '人員'} 失敗`);
+        }
+      }
+
+      await writeJson(res, buildJsonResponse(200, {
+        ok: true,
+        items,
+        summary,
+        errors,
+        contractVersion: CONTRACT_VERSION
+      }), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to batch upsert training rosters.', 500), origin);
+    }
+  }
+
   async function handleRosterDelete(req, res, origin, rosterId) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
@@ -769,6 +922,7 @@ function createTrainingRouter(deps) {
     const formDetailMatch = url.pathname.match(/^\/api\/training\/forms\/([^/]+)\/?$/);
     const formActionMatch = url.pathname.match(/^\/api\/training\/forms\/([^/]+)\/(save-draft|submit-step-one|finalize|return|undo|delete)\/?$/);
     const rosterCollectionMatch = url.pathname.match(/^\/api\/training\/rosters\/?$/);
+    const rosterBatchUpsertMatch = url.pathname.match(/^\/api\/training\/rosters\/upsert-batch\/?$/);
     const rosterUpsertMatch = url.pathname.match(/^\/api\/training\/rosters\/upsert\/?$/);
     const rosterDeleteMatch = url.pathname.match(/^\/api\/training\/rosters\/([^/]+)\/delete\/?$/);
 
@@ -887,6 +1041,9 @@ function createTrainingRouter(deps) {
       }    }
     if (rosterCollectionMatch && req.method === 'GET') {
       return handleRosterList(req, res, origin, url).then(() => true);
+    }
+    if (rosterBatchUpsertMatch && req.method === 'POST') {
+      return handleRosterUpsertBatch(req, res, origin).then(() => true);
     }
     if (rosterUpsertMatch && req.method === 'POST') {
       return handleRosterUpsert(req, res, origin).then(() => true);
