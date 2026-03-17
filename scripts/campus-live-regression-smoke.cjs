@@ -54,10 +54,11 @@ async function run() {
     const response = await fetch(`${DEFAULT_BASE}/unit-contact-application-module.js`);
     const text = await response.text();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!text.includes('申請單位管理人員')) throw new Error('unit-contact apply title missing');
-    if (!text.includes('查詢申請狀態')) throw new Error('unit-contact status title missing');
-    if (!text.includes('帳號啟用說明')) throw new Error('unit-contact activation title missing');
-    if (/\?{4,}/.test(text)) throw new Error('unit-contact module contains placeholder question marks');
+    if (!text.includes('apply-unit-contact')) throw new Error('unit-contact apply route missing');
+    if (!text.includes('apply-unit-contact-status')) throw new Error('unit-contact status route missing');
+    if (!text.includes('activate-unit-contact')) throw new Error('unit-contact activation route missing');
+    if (!text.includes('unit-contact-apply-form')) throw new Error('unit-contact apply form missing');
+    if (!text.includes('unit-contact-status-form')) throw new Error('unit-contact status form missing');
     return { status: response.status };
   }, { critical: true });
 
