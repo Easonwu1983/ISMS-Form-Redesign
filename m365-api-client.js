@@ -413,7 +413,8 @@
         reviewComment: cleanText(source.ReviewComment || source.reviewComment),
         activationSentAt: source.ActivationSentAt || source.activationSentAt || null,
         activatedAt: source.ActivatedAt || source.activatedAt || null,
-        externalUserId: cleanText(source.ExternalUserId || source.externalUserId)
+        externalUserId: cleanText(source.ExternalUserId || source.externalUserId),
+        hasRequestedPassword: source.hasRequestedPassword === true || cleanText(source.HasRequestedPassword).toLowerCase() === 'true'
       };
       return decorateApplication(normalized);
     }

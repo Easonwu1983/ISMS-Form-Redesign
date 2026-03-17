@@ -23,7 +23,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
   try {
     await resetApp(page);
 
-    const uniqueEmail = `unit-contact-${Date.now()}@example.com`;
+    const uniqueEmail = `unit-contact-${Date.now()}@ntu.edu.tw`;
     let createdId = '';
 
     await runStep(results, 'UNIT-CONTACT-PUBLIC-1', 'public', '公開申請頁可正常載入', async () => {
@@ -69,6 +69,8 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', uniqueEmail);
       await page.fill('[data-testid="unit-contact-note"]', 'smoke test');
+      await page.fill('[data-testid="unit-contact-username"]', 'public.smoke');
+      await page.fill('[data-testid="unit-contact-password"]', 'SmokePass123');
       await page.click('[data-testid="unit-contact-submit"]');
       await page.waitForURL(/#apply-unit-contact-success\//, { timeout: 15000 });
       createdId = await page.locator('.unit-contact-summary-grid strong').first().textContent();

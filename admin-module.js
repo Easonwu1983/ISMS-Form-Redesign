@@ -292,15 +292,23 @@
   function renderUnitContactReviewRows(items) {
     const rows = Array.isArray(items) ? items : [];
     if (!rows.length) {
-      return `<tr><td colspan="7"><div class="empty-state" style="padding:36px 20px"><div class="empty-state-title">目前沒有符合條件的申請</div><div class="empty-state-desc">可調整篩選條件或稍後重新整理。</div></div></td></tr>`;
+      return `<tr><td colspan="7"><div class="empty-state" style="padding:36px 20px"><div class="empty-state-title">目前沒有符合條件的申請</div><div class="empty-state-desc">請調整篩選條件，或等待新的申請送出。</div></div></td></tr>`;
     }
     return rows.map((item) => {
       const id = String(item && item.id || '').trim();
       const status = String(item && item.status || '').trim();
-      const activateAction = status === 'active'
-        ? `<button type="button" class="btn btn-sm btn-primary" data-action="admin.unitContactResendActivation" data-id="${esc(id)}">${ic('mail', 'icon-sm')} 重新寄送啟用通知</button>`
-        : `<button type="button" class="btn btn-sm btn-primary" data-action="admin.unitContactActivate" data-id="${esc(id)}">${ic('key-round', 'icon-sm')} 已啟用</button>`;
-      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.applicantEmail || '—')}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions"><button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactApprove" data-id="${esc(id)}">${ic('badge-check', 'icon-sm')} 通過</button><button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button><button type="button" class="btn btn-sm btn-danger" data-action="admin.unitContactReject" data-id="${esc(id)}">${ic('x-circle', 'icon-sm')} 拒絕</button>${activateAction}</div></td></tr>`;
+      const actionButtons = [];
+      if (status === 'pending_review' || status === 'returned') {
+        actionButtons.push(`<button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactApprove" data-id="${esc(id)}">${ic('badge-check', 'icon-sm')} 通過</button>`);
+        actionButtons.push(`<button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
+        actionButtons.push(`<button type="button" class="btn btn-sm btn-danger" data-action="admin.unitContactReject" data-id="${esc(id)}">${ic('x-circle', 'icon-sm')} 拒絕</button>`);
+      } else if (status === 'approved' || status === 'activation_pending') {
+        actionButtons.push(`<button type="button" class="btn btn-sm btn-primary" data-action="admin.unitContactActivate" data-id="${esc(id)}">${ic('key-round', 'icon-sm')} 已啟用</button>`);
+        actionButtons.push(`<button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
+      } else if (status === 'active') {
+        actionButtons.push(`<button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactResendActivation" data-id="${esc(id)}">${ic('mail', 'icon-sm')} 重新寄送啟用通知</button>`);
+      }
+      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.applicantEmail || '—')}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions review-actions--unit-contact">${actionButtons.join('')}</div></td></tr>`;
     }).join('');
   }
 
@@ -346,14 +354,32 @@
   function promptActivationInfo(applicationId, options) {
     const opts = options || {};
     const isResend = opts.mode === 'resend';
+    const application = unitContactReviewState.items.find((item) => String(item && item.id || '').trim() === String(applicationId || '').trim()) || getUnitContactApplication(applicationId);
+    const defaultUsername = String(application && application.externalUserId || '').trim();
+    const hasRequestedPassword = !!(application && application.hasRequestedPassword);
     const mr = document.getElementById('modal-root');
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${isResend ? '重新寄送啟用通知' : '標記帳號已啟用'}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="form-group"><label class="form-label">登入帳號</label><input type="text" class="form-input" id="unit-contact-external-user-id" placeholder="例如 sheila.tsai 或單一帳號"></div><div class="form-group"><label class="form-label">初始密碼</label><input type="text" class="form-input" id="unit-contact-initial-password" placeholder="若已另行交付可留空"></div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="例如：帳號已建立，請使用初始密碼登入後立即修改。"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic(isResend ? 'mail' : 'key-round', 'icon-sm')} ${isResend ? '重新寄送啟用通知' : '標記已啟用'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${isResend ? '重新寄送啟用通知' : '完成帳號啟用'}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-activate-form"><div class="form-group"><label class="form-label form-required">登入帳號</label><input type="text" class="form-input" id="unit-contact-external-user-id" value="${esc(defaultUsername)}" placeholder="例如 sheila.tsai 或 sheila" required></div><div class="form-group"><label class="form-label${hasRequestedPassword ? '' : ' form-required'}">初始密碼</label><input type="text" class="form-input" id="unit-contact-initial-password" placeholder="${hasRequestedPassword ? '留空代表沿用申請時填寫的密碼' : '至少 8 碼，需含大小寫英文與數字'}"></div><div class="form-hint">${hasRequestedPassword ? '若申請人已在申請頁填入初始密碼，可留空並直接沿用。若要改發新密碼，也可在此重新輸入。' : '申請頁未保留可用密碼時，這裡必須由最高管理員提供新的初始密碼。'}</div><div class="form-group"><label class="form-label">通知說明</label><textarea class="form-textarea" id="unit-contact-activate-comment" rows="4" placeholder="可補充啟用說明、聯絡方式或首次登入提醒"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic(isResend ? 'mail' : 'key-round', 'icon-sm')} ${isResend ? '重新寄送通知' : '完成啟用'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
     document.getElementById('modal-bg').addEventListener('click', function (event) { if (event.target === event.currentTarget) closeModalRoot(); });
     document.getElementById('unit-contact-activate-form').addEventListener('submit', async function (event) {
       event.preventDefault();
       const externalUserId = String(document.getElementById('unit-contact-external-user-id').value || '').trim();
       const initialPassword = String(document.getElementById('unit-contact-initial-password').value || '').trim();
       const reviewComment = String(document.getElementById('unit-contact-activate-comment').value || '').trim();
+      if (!externalUserId) {
+        toast('請輸入登入帳號。', 'error');
+        return;
+      }
+      if (!initialPassword && !hasRequestedPassword && !isResend) {
+        toast('這筆申請沒有可沿用的初始密碼，請由最高管理員設定新的初始密碼。', 'error');
+        return;
+      }
+      if (initialPassword) {
+        const strongEnough = initialPassword.length >= 8 && /[A-Z]/.test(initialPassword) && /[a-z]/.test(initialPassword) && /\d/.test(initialPassword);
+        if (!strongEnough) {
+          toast('初始密碼至少 8 碼，且需包含大小寫英文與數字。', 'error');
+          return;
+        }
+      }
       closeModalRoot();
       try {
         const result = await activateUnitContactApplication({
@@ -362,27 +388,10 @@
           initialPassword,
           reviewComment
         });
-        if (externalUserId) {
-          try {
-            const application = getUnitContactApplication(applicationId);
-            await submitUserUpsert({
-              username: externalUserId,
-              password: initialPassword || undefined,
-              name: application && application.applicantName || '',
-              email: application && application.applicantEmail || '',
-              role: 'REPORTER',
-              unit: application && application.unitValue || '',
-              units: application && application.unitValue ? [application.unitValue] : [],
-              activeUnit: application && application.unitValue || ''
-            });
-          } catch (userError) {
-            console.warn('建立本機帳號失敗:', userError);
-          }
-        }
-        toast(result && result.delivery && result.delivery.sent ? '已標記啟用並寄送通知' : '已標記啟用');
+        toast(result && result.delivery && result.delivery.sent ? '啟用通知已寄出。' : '狀態已更新，但未寄出通知。');
         renderUnitContactReview(unitContactReviewState.filters);
       } catch (error) {
-        toast(String(error && error.message || error || '啟用標記失敗'), 'error');
+        toast(String(error && error.message || error || '啟用處理失敗。'), 'error');
       }
     });
   }

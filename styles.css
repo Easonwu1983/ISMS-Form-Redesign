@@ -7700,3 +7700,9 @@ tbody tr:hover {
   }
 }
 
+
+@media (max-width: 1520px) {
+  .review-actions--unit-contact {
+    grid-template-columns: 1fr;
+  }
+}

@@ -104,7 +104,7 @@ async function cleanupApplicationById(applicationId) {
     attachDiagnostics(page, results);
     await resetApp(page);
 
-    const uniqueEmail = `unit-contact-campus-${Date.now()}@example.com`;
+    const uniqueEmail = `unit-contact-campus-${Date.now()}@ntu.edu.tw`;
 
     await runStep(results, 'UNIT-CONTACT-CAMPUS-1', 'public', 'backend health endpoint reachable', async () => {
       const response = await fetch(`${BASE_BACKEND}/api/unit-contact/health`);
@@ -140,6 +140,8 @@ async function cleanupApplicationById(applicationId) {
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', uniqueEmail);
       await page.fill('[data-testid="unit-contact-note"]', 'campus backend smoke');
+      await page.fill('[data-testid="unit-contact-username"]', 'campus.smoke');
+      await page.fill('[data-testid="unit-contact-password"]', 'CampusPass123');
       await page.click('[data-testid="unit-contact-submit"]');
       await page.waitForURL(/#apply-unit-contact-success\//, { timeout: 20000 });
       applicationId = await page.locator('.unit-contact-summary-grid strong').first().textContent();

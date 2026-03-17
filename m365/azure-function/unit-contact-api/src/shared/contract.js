@@ -56,6 +56,7 @@ const ACTIVE_DUPLICATE_STATUSES = new Set([
   STATUSES.ACTIVATION_PENDING,
   STATUSES.ACTIVE
 ]);
+const NOTE_META_MARKER = '\n[ISMS_META]';
 
 function cleanText(value) {
   return String(value || '').trim();
@@ -63,6 +64,18 @@ function cleanText(value) {
 
 function cleanEmail(value) {
   return cleanText(value).toLowerCase();
+}
+
+function isValidNtuEmail(value) {
+  return /^[^@\s]+@ntu\.edu\.tw$/i.test(cleanEmail(value));
+}
+
+function isStrongPassword(value) {
+  const text = cleanText(value);
+  return text.length >= 8
+    && /[A-Z]/.test(text)
+    && /[a-z]/.test(text)
+    && /\d/.test(text);
 }
 
 function isPlaceholderText(value) {
@@ -106,16 +119,23 @@ function normalizeApplyPayload(payload) {
     unitValue: cleanText(payload && payload.unitValue),
     unitCode: cleanText(payload && payload.unitCode),
     contactType: cleanText(payload && payload.contactType) || 'primary',
-    note: cleanText(payload && payload.note)
+    note: cleanText(payload && payload.note),
+    requestedUsername: cleanText(payload && payload.requestedUsername),
+    requestedPassword: cleanText(payload && payload.requestedPassword),
+    requestedPasswordSecret: cleanText(payload && payload.requestedPasswordSecret)
   };
 }
 
 function validateApplyPayload(payload) {
-  if (!payload.unitValue) throw createError('\u8acb\u9078\u64c7\u7533\u8acb\u55ae\u4f4d\u3002', 400);
-  if (!payload.applicantName) throw createError('\u8acb\u586b\u5beb\u7533\u8acb\u4eba\u59d3\u540d\u3002', 400);
-  if (!payload.extensionNumber) throw createError('\u8acb\u586b\u5beb\u5206\u6a5f\u3002', 400);
-  if (!payload.applicantEmail) throw createError('\u8acb\u586b\u5beb\u96fb\u5b50\u90f5\u4ef6\u3002', 400);
-  if (!payload.unitCode) throw createError('\u627e\u4e0d\u5230\u5c0d\u61c9\u7684\u6b63\u5f0f\u55ae\u4f4d\u4ee3\u78bc\uff0c\u8acb\u5148\u78ba\u8a8d\u55ae\u4f4d\u8cc7\u6599\u3002', 400);
+  if (!payload.unitValue) throw createError('\u7f3a\u5c11\u7533\u8acb\u55ae\u4f4d\u3002', 400);
+  if (!payload.applicantName) throw createError('\u7f3a\u5c11\u7533\u8acb\u4eba\u59d3\u540d\u3002', 400);
+  if (!payload.extensionNumber) throw createError('\u7f3a\u5c11\u5206\u6a5f\u3002', 400);
+  if (!payload.applicantEmail) throw createError('\u7f3a\u5c11\u7533\u8acb\u4fe1\u7bb1\u3002', 400);
+  if (!isValidNtuEmail(payload.applicantEmail)) throw createError('\u7533\u8acb\u4fe1\u7bb1\u5fc5\u9808\u70ba @ntu.edu.tw\u3002', 400);
+  if (!payload.unitCode) throw createError('\u7f3a\u5c11\u55ae\u4f4d\u4ee3\u78bc\uff0c\u8acb\u91cd\u65b0\u9078\u64c7\u7533\u8acb\u55ae\u4f4d\u3002', 400);
+  if (!payload.requestedUsername) throw createError('\u7f3a\u5c11\u767b\u5165\u5e33\u865f\u3002', 400);
+  if (!payload.requestedPassword) throw createError('\u7f3a\u5c11\u521d\u59cb\u5bc6\u78bc\u3002', 400);
+  if (!isStrongPassword(payload.requestedPassword)) throw createError('\u521d\u59cb\u5bc6\u78bc\u81f3\u5c11 8 \u78bc\uff0c\u4e14\u9700\u5305\u542b\u5927\u5c0f\u5beb\u82f1\u6587\u8207\u6578\u5b57\u3002', 400);
 }
 
 function normalizeLookupEmail(email) {
@@ -158,12 +178,45 @@ function normalizeActivationPayload(payload) {
 
 function validateActivationPayload(payload) {
   if (!cleanText(payload && payload.id)) throw createError('\u7f3a\u5c11\u7533\u8acb\u7de8\u865f\u3002', 400);
+  if (cleanText(payload && payload.externalUserId) && cleanText(payload.externalUserId).length < 3) {
+    throw createError('\u767b\u5165\u5e33\u865f\u81f3\u5c11\u9700 3 \u500b\u5b57\u5143\u3002', 400);
+  }
+  if (cleanText(payload && payload.initialPassword) && !isStrongPassword(payload.initialPassword)) {
+    throw createError('\u521d\u59cb\u5bc6\u78bc\u81f3\u5c11 8 \u78bc\uff0c\u4e14\u9700\u5305\u542b\u5927\u5c0f\u5beb\u82f1\u6587\u8207\u6578\u5b57\u3002', 400);
+  }
 }
 
 function buildApplicationId(sequence, date) {
   const sourceDate = date instanceof Date ? date : new Date();
   const year = sourceDate.getFullYear();
   return 'UCA-' + year + '-' + String(sequence).padStart(4, '0');
+}
+
+function splitNoteMeta(note) {
+  const raw = String(note || '');
+  const markerIndex = raw.lastIndexOf(NOTE_META_MARKER);
+  if (markerIndex < 0) return { note: cleanText(raw), meta: {} };
+  const visible = cleanText(raw.slice(0, markerIndex));
+  const metaRaw = cleanText(raw.slice(markerIndex + NOTE_META_MARKER.length));
+  if (!metaRaw) return { note: visible, meta: {} };
+  try {
+    const parsed = JSON.parse(metaRaw);
+    return { note: visible, meta: parsed && typeof parsed === 'object' ? parsed : {} };
+  } catch (_) {
+    return { note: cleanText(raw), meta: {} };
+  }
+}
+
+function composeNoteWithMeta(note, meta) {
+  const visible = cleanText(note);
+  const input = meta && typeof meta === 'object' ? meta : {};
+  const filtered = Object.entries(input).reduce((result, [key, value]) => {
+    const text = cleanText(value);
+    if (text) result[key] = text;
+    return result;
+  }, {});
+  if (!Object.keys(filtered).length) return visible;
+  return [visible, NOTE_META_MARKER + JSON.stringify(filtered)].filter(Boolean).join('\n');
 }
 
 function resolveStatusCopy(value, fallback) {
@@ -208,6 +261,7 @@ function createApplicationRecord(payload, sequence, now) {
     unitCode: payload.unitCode,
     contactType: payload.contactType || 'primary',
     note: payload.note || '',
+    requestedPasswordSecret: payload.requestedPasswordSecret || '',
     status: STATUSES.PENDING_REVIEW,
     source: 'm365-api',
     backendMode: 'm365-api',
@@ -218,12 +272,13 @@ function createApplicationRecord(payload, sequence, now) {
     reviewComment: '',
     activationSentAt: null,
     activatedAt: null,
-    externalUserId: ''
+    externalUserId: payload.requestedUsername || ''
   });
 }
 
 function normalizeStoredApplication(application) {
   const applicantEmail = cleanEmail(application.applicantEmail);
+  const noteMeta = splitNoteMeta(application.note);
   const primaryUnit = resolveMeaningfulText(application.primaryUnit);
   const secondaryUnit = resolveMeaningfulText(application.secondaryUnit);
   const composedUnitValue = primaryUnit && secondaryUnit
@@ -240,7 +295,8 @@ function normalizeStoredApplication(application) {
     unitValue: resolveMeaningfulText(application.unitValue, composedUnitValue),
     unitCode: cleanText(application.unitCode),
     contactType: cleanText(application.contactType) || 'primary',
-    note: cleanText(application.note),
+    note: noteMeta.note,
+    requestedPasswordSecret: cleanText(application.requestedPasswordSecret || noteMeta.meta.requestedPasswordSecret),
     status: cleanText(application.status) || STATUSES.PENDING_REVIEW,
     statusLabel: cleanText(application.statusLabel),
     statusDetail: cleanText(application.statusDetail),
@@ -254,7 +310,7 @@ function normalizeStoredApplication(application) {
     reviewComment: cleanText(application.reviewComment),
     activationSentAt: cleanText(application.activationSentAt),
     activatedAt: cleanText(application.activatedAt),
-    externalUserId: cleanText(application.externalUserId)
+    externalUserId: cleanText(application.externalUserId || noteMeta.meta.requestedUsername)
   });
 }
 
@@ -285,7 +341,8 @@ function mapApplicationForClient(application) {
     reviewComment: normalized.reviewComment || '',
     activationSentAt: normalized.activationSentAt || null,
     activatedAt: normalized.activatedAt || null,
-    externalUserId: normalized.externalUserId || ''
+    externalUserId: normalized.externalUserId || '',
+    hasRequestedPassword: !!cleanText(normalized.requestedPasswordSecret)
   };
 }
 
@@ -303,7 +360,10 @@ function mapApplicationToGraphFields(application) {
     UnitValue: normalized.unitValue,
     UnitCode: normalized.unitCode,
     ContactType: normalized.contactType,
-    Note: normalized.note,
+    Note: composeNoteWithMeta(normalized.note, {
+      requestedUsername: normalized.externalUserId,
+      requestedPasswordSecret: normalized.requestedPasswordSecret
+    }),
     Status: normalized.status,
     StatusLabel: normalized.statusLabel,
     StatusDetail: normalized.statusDetail,
@@ -338,8 +398,8 @@ function mapGraphFieldsToApplication(fields) {
     statusDetail: fields.StatusDetail || fields.ReviewComment,
     source: fields.Source,
     backendMode: fields.BackendMode,
-    submittedAt: fields.SubmittedAt,
-    updatedAt: fields.UpdatedAt,
+    submittedAt: fields.SubmittedAt || fields.Created || fields.createdDateTime,
+    updatedAt: fields.UpdatedAt || fields.Modified || fields.lastModifiedDateTime,
     reviewedAt: fields.ReviewedAt,
     reviewedBy: fields.ReviewedBy,
     reviewComment: fields.ReviewComment,
@@ -383,6 +443,8 @@ module.exports = {
   mapApplicationForClient,
   mapApplicationToGraphFields,
   mapGraphFieldsToApplication,
+  isStrongPassword,
+  isValidNtuEmail,
   normalizeApplyPayload,
   normalizeLookupEmail,
   normalizeReviewPayload,

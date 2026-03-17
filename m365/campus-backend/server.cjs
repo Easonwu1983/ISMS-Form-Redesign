@@ -37,6 +37,10 @@ const {
   buildHtmlDocument
 } = require('./graph-mailer.cjs');
 const {
+  createPasswordSecret,
+  serializePasswordSecret
+} = require('./auth-security.cjs');
+const {
   GRAPH_ROOT,
   acquirePreferredGraphToken,
   loadBackendConfig,
@@ -53,6 +57,8 @@ const state = {
   siteId: '',
   siteUrl: '',
   lists: null,
+  listMap: null,
+  systemUsersList: null,
   listColumnsMap: new Map(),
   actor: null,
   token: null,
@@ -175,6 +181,34 @@ async function resolveSiteId() {
   return siteId;
 }
 
+async function fetchListMap() {
+  const siteId = await resolveSiteId();
+  const body = await graphRequest('GET', '/sites/' + siteId + '/lists?$select=id,displayName,webUrl');
+  return new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
+}
+
+async function resolveNamedList(name) {
+  const listName = cleanText(name);
+  if (!state.listMap || !state.listMap.has(listName)) {
+    state.listMap = await fetchListMap();
+  }
+  let list = state.listMap.get(listName);
+  if (!list) {
+    state.listMap = await fetchListMap();
+    list = state.listMap.get(listName);
+  }
+  if (!list) {
+    throw new Error('SharePoint list not found: ' + listName);
+  }
+  return list;
+}
+
+async function resolveSystemUsersList() {
+  if (state.systemUsersList) return state.systemUsersList;
+  state.systemUsersList = await resolveNamedList(getSystemUsersListName());
+  return state.systemUsersList;
+}
+
 async function graphRequest(method, pathOrUrl, body) {
   const { accessToken } = await getDelegatedToken();
   const targetUrl = /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : GRAPH_ROOT + pathOrUrl;
@@ -211,19 +245,13 @@ async function graphRequest(method, pathOrUrl, body) {
 
 async function resolveLists() {
   if (state.lists) return state.lists;
-  const siteId = await resolveSiteId();
   const applicationsName = getEnv('UNIT_CONTACT_APPLICATIONS_LIST', 'UnitContactApplications');
   const unitAdminsName = getEnv('UNIT_CONTACT_UNITADMINS_LIST', 'UnitAdmins');
   const auditName = getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
-  const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
-  const listMap = new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
 
-  const applications = listMap.get(applicationsName);
-  const unitAdmins = listMap.get(unitAdminsName);
-  const audit = listMap.get(auditName);
-  if (!applications || !unitAdmins || !audit) {
-    throw new Error('Required SharePoint lists are missing. Run provisioning first.');
-  }
+  const applications = await resolveNamedList(applicationsName);
+  const unitAdmins = await resolveNamedList(unitAdminsName);
+  const audit = await resolveNamedList(auditName);
 
   state.lists = {
     applications,
@@ -273,7 +301,11 @@ async function listAllApplications() {
   return items
     .map((entry) => entry && entry.fields ? {
       listItemId: cleanText(entry.id),
-      application: mapGraphFieldsToApplication(entry.fields)
+      application: mapGraphFieldsToApplication({
+        ...entry.fields,
+        Created: entry.createdDateTime,
+        Modified: entry.lastModifiedDateTime
+      })
     } : null)
     .filter(Boolean);
 }
@@ -393,6 +425,53 @@ function summarizeLookupResults(applications) {
       return result;
     }, {})
   };
+}
+
+function createRequestedPasswordSecret(password) {
+  const plain = cleanText(password);
+  if (!plain) return '';
+  return serializePasswordSecret(createPasswordSecret(plain, {
+    mustChangePassword: true,
+    sessionVersion: 1
+  }));
+}
+
+async function listAllSystemUsers() {
+  const siteId = await resolveSiteId();
+  const list = await resolveSystemUsersList();
+  const rows = [];
+  let nextUrl = '/sites/' + siteId + '/lists/' + list.id + '/items?$expand=fields&$top=200';
+  while (nextUrl) {
+    const body = await graphRequest('GET', nextUrl);
+    const batch = Array.isArray(body && body.value) ? body.value : [];
+    rows.push(...batch.map((entry) => ({
+      listItemId: cleanText(entry && entry.id),
+      item: mapGraphFieldsToSystemUser(entry && entry.fields ? entry.fields : {})
+    })));
+    nextUrl = cleanText(body && body['@odata.nextLink']);
+  }
+  return rows;
+}
+
+async function getSystemUserEntryByUsername(username) {
+  const target = cleanText(username).toLowerCase();
+  if (!target) return null;
+  const rows = await listAllSystemUsers();
+  return rows.find((entry) => cleanText(entry.item && entry.item.username).toLowerCase() === target) || null;
+}
+
+async function upsertSystemUser(existingEntry, nextItem) {
+  const siteId = await resolveSiteId();
+  const list = await resolveSystemUsersList();
+  const normalized = createSystemUserRecord(nextItem, nextItem.updatedAt || new Date().toISOString());
+  const columnNames = await resolveListColumnNames(list.id);
+  const fields = filterFieldsForExistingColumns(mapSystemUserToGraphFields(normalized), columnNames);
+  if (existingEntry) {
+    await graphRequest('PATCH', '/sites/' + siteId + '/lists/' + list.id + '/items/' + existingEntry.listItemId + '/fields', fields);
+    return { created: false, item: normalized };
+  }
+  await graphRequest('POST', '/sites/' + siteId + '/lists/' + list.id + '/items', { fields });
+  return { created: true, item: normalized };
 }
 
 function getUnitContactNotifyTo() {
@@ -724,6 +803,7 @@ async function handleApply(req, res, origin) {
     validateActionEnvelope(envelope, ACTIONS.APPLY);
     payload = normalizeApplyPayload(envelope.payload);
     validateApplyPayload(payload);
+    payload.requestedPasswordSecret = createRequestedPasswordSecret(payload.requestedPassword);
     await ensureNoDuplicateActiveApplication(payload);
     const created = await createApplication(payload);
     const notifications = await notifyUnitContactApplicationSubmitted(created);
@@ -814,23 +894,77 @@ async function handleReview(req, res, origin) {
 async function handleActivate(req, res, origin) {
   try {
     const authz = await requestAuthz.requireAuthenticatedUser(req);
-    requestAuthz.requireAdmin(authz, '僅最高管理員可標記啟用');
+    requestAuthz.requireAdmin(authz, '\u50c5\u6700\u9ad8\u7ba1\u7406\u54e1\u53ef\u5b8c\u6210\u5e33\u865f\u555f\u7528');
     const envelope = await parseJsonBody(req);
     validateActionEnvelope(envelope, ACTIONS.ACTIVATE);
     const payload = normalizeActivationPayload(envelope.payload);
     validateActivationPayload(payload);
+
+    const existingApplicationEntry = await findApplicationEntryById(payload.id);
+    if (!existingApplicationEntry) {
+      const missingError = new Error('Application not found');
+      missingError.statusCode = 404;
+      throw missingError;
+    }
+    const currentApplication = existingApplicationEntry.application;
+    const currentStatus = cleanText(currentApplication && currentApplication.status);
+    if (![STATUSES.APPROVED, STATUSES.ACTIVATION_PENDING, STATUSES.ACTIVE].includes(currentStatus)) {
+      const statusError = new Error('\u7533\u8acb\u5c1a\u672a\u901a\u904e\u5be9\u6838\uff0c\u4e0d\u80fd\u76f4\u63a5\u6a19\u8a18\u70ba\u5df2\u555f\u7528\u3002');
+      statusError.statusCode = 409;
+      throw statusError;
+    }
+
     const reviewActor = cleanText(payload.reviewedBy) || cleanText(authz && authz.user && authz.user.name) || cleanText(authz && authz.username);
+    const loginUsername = cleanText(payload.externalUserId) || cleanText(currentApplication && currentApplication.externalUserId);
+    if (!loginUsername) {
+      throw new Error('\u7f3a\u5c11\u767b\u5165\u5e33\u865f\uff0c\u7121\u6cd5\u5b8c\u6210\u555f\u7528\u3002');
+    }
+
+    const existingUserEntry = await getSystemUserEntryByUsername(loginUsername);
+    const requestedPasswordSecret = cleanText(currentApplication && currentApplication.requestedPasswordSecret);
+    const initialPassword = cleanText(payload.initialPassword);
+    const nextPasswordSecret = initialPassword
+      ? createRequestedPasswordSecret(initialPassword)
+      : (requestedPasswordSecret || cleanText(existingUserEntry && existingUserEntry.item && existingUserEntry.item.password));
+
+    if (!nextPasswordSecret) {
+      const passwordError = new Error('\u627e\u4e0d\u5230\u53ef\u7528\u7684\u521d\u59cb\u5bc6\u78bc\uff0c\u8acb\u7531\u6700\u9ad8\u7ba1\u7406\u54e1\u91cd\u65b0\u8a2d\u5b9a\u3002');
+      passwordError.statusCode = 400;
+      throw passwordError;
+    }
+
+    const systemUserPayload = {
+      username: loginUsername,
+      password: nextPasswordSecret,
+      name: cleanText(currentApplication && currentApplication.applicantName),
+      email: cleanText(currentApplication && currentApplication.applicantEmail),
+      role: USER_ROLES.UNIT_ADMIN,
+      unit: cleanText(currentApplication && currentApplication.unitValue),
+      units: cleanText(currentApplication && currentApplication.unitValue) ? [cleanText(currentApplication.unitValue)] : [],
+      activeUnit: cleanText(currentApplication && currentApplication.unitValue),
+      mustChangePassword: true,
+      backendMode: state.tokenMode === 'app-only' ? 'campus-sharepoint-app-only' : 'campus-sharepoint-cli',
+      recordSource: 'unit-contact-activation'
+    };
+    validateSystemUserPayload(systemUserPayload, { requirePassword: !existingUserEntry });
+    const userWrite = await upsertSystemUser(existingUserEntry, systemUserPayload);
+
     const result = await updateApplicationRecord(payload.id, {
       status: STATUSES.ACTIVE,
       reviewComment: payload.reviewComment,
       reviewedBy: reviewActor,
       reviewedAt: new Date().toISOString(),
       activatedAt: new Date().toISOString(),
-      externalUserId: payload.externalUserId
+      activationSentAt: new Date().toISOString(),
+      externalUserId: loginUsername,
+      requestedPasswordSecret: nextPasswordSecret
     });
+
+    const usedRequestedPassword = !initialPassword && !!requestedPasswordSecret && !cleanText(existingUserEntry && existingUserEntry.item && existingUserEntry.item.password);
     const delivery = await notifyUnitContactStatusUpdated(result.after, {
-      loginUsername: payload.externalUserId,
-      initialPassword: payload.initialPassword
+      loginUsername,
+      initialPassword,
+      usedRequestedPassword
     });
     await tryCreateAuditRow({
       eventType: 'unit_contact.application_activated',
@@ -841,7 +975,11 @@ async function handleActivate(req, res, origin) {
       payloadJson: JSON.stringify({
         snapshot: buildApplicationSnapshot(result.after),
         changes: buildApplicationChanges(result.before, result.after),
-        delivery
+        delivery,
+        loginUsername,
+        createdSystemUser: !!(userWrite && userWrite.created),
+        updatedSystemUser: !!userWrite,
+        usedRequestedPassword
       })
     });
     return writeJson(res, buildJsonResponse(200, {

@@ -354,7 +354,7 @@ async function loginViaPage(page, username, password) {
   const stamp = nowStamp();
   const testUsername = `ucae2e${stamp}`;
   const testPassword = `T${stamp}#Aa1`;
-  const testEmail = `ucae2e-${stamp}@example.com`;
+  const testEmail = `ucae2e-${stamp}@ntu.edu.tw`;
   const applicantName = `\u6e2c\u8a66\u7533\u8acb\u4eba${stamp}`;
   const manualPersonName = `\u6e2c\u8a66\u53d7\u8a13\u4eba\u54e1${stamp}`;
   const jobTitle = '\u5de5\u7a0b\u5e2b';
@@ -395,6 +395,8 @@ async function loginViaPage(page, username, password) {
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', testEmail);
       await page.fill('[data-testid="unit-contact-note"]', 'account-to-fill smoke');
+      await page.fill('[data-testid="unit-contact-username"]', testUsername);
+      await page.fill('[data-testid="unit-contact-password"]', testPassword);
       await page.click('[data-testid="unit-contact-submit"]');
       await page.waitForURL(/#apply-unit-contact-success\//, { timeout: 20000 });
       if (await page.locator('.unit-contact-summary-grid strong').count()) {
