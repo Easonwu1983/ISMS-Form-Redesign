@@ -213,6 +213,10 @@ async function resolveNamedList(name) {
   return list;
 }
 
+function getSystemUsersListName() {
+  return getEnv('SYSTEM_USERS_LIST', 'SystemUsers');
+}
+
 async function resolveSystemUsersList() {
   if (state.systemUsersList) return state.systemUsersList;
   state.systemUsersList = await resolveNamedList(getSystemUsersListName());
