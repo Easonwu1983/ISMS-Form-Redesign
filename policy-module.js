@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createPolicyModule = function createPolicyModule(deps) {
     const {
       ROLES,
@@ -35,11 +35,11 @@
     function hasUnitAccess(unit, user = currentUser()) {
       if (!user) return false;
       const target = String(unit || '').trim();
-      if (!target) return true;
+      if (!target) return isAdmin(user);
       if (user.role === ROLES.ADMIN) return true;
       if (user.role === ROLES.VIEWER) {
         const scoped = getActiveUnit(user);
-        return !scoped || scoped === target;
+        return !!scoped && scoped === target;
       }
       return getAuthorizedUnits(user).includes(target);
     }
@@ -88,8 +88,7 @@
 
     function isItemHandler(item, user = currentUser()) {
       if (!item || !user) return false;
-      if (hasUnitAccess(item.handlerUnit, user)) return true;
-      return item.handlerUsername ? item.handlerUsername === user.username : item.handlerName === user.name;
+      return !!item.handlerUsername && item.handlerUsername === user.username;
     }
 
     function getVisibleItems(user = currentUser()) {
@@ -117,8 +116,7 @@
 
     function isChecklistOwner(item, user = currentUser()) {
       if (!user || !item) return false;
-      if (item.fillerUsername) return item.fillerUsername === user.username;
-      return item.fillerName === user.name;
+      return !!item.fillerUsername && item.fillerUsername === user.username;
     }
 
     function canAccessChecklist(item, user = currentUser()) {
@@ -156,7 +154,7 @@
 
     function canManageTrainingForm(form, user = currentUser()) {
       if (!user || !form || isViewer(user)) return false;
-      return user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
+      return user.role === ROLES.ADMIN || form.fillerUsername === user.username;
     }
 
     function isTrainingManualRowOwner(row, user = currentUser()) {
@@ -233,3 +231,4 @@
     };
   };
 })();
+

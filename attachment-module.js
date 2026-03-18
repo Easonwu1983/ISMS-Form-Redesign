@@ -41,39 +41,52 @@
     }
 
     function runStoreRequest(mode, callback) {
-      return openDb().then((db) => new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, mode);
-        const store = tx.objectStore(STORE_NAME);
-        let settled = false;
-
-        function finish(fn, value) {
-          if (settled) return;
-          settled = true;
-          fn(value);
+      return openDb().then((db) => {
+        if (!db) {
+          const unsupported = new Error('\u700f\u89bd\u5668\u4e0d\u652f\u63f4\u672c\u6a5f\u9644\u4ef6\u5feb\u53d6\uff0c\u7cfb\u7d71\u5c07\u6539\u7528\u5373\u6642\u4e32\u6d41\u3002');
+          unsupported.code = 'ATTACHMENT_CACHE_UNAVAILABLE';
+          throw unsupported;
         }
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, mode);
+          const store = tx.objectStore(STORE_NAME);
+          let settled = false;
 
-        tx.oncomplete = function () {
-          if (!settled) finish(resolve);
-        };
-        tx.onerror = function () {
-          finish(reject, tx.error || new Error('Attachment database transaction failed'));
-        };
-        tx.onabort = function () {
-          finish(reject, tx.error || new Error('Attachment database transaction aborted'));
-        };
+          function finish(fn, value) {
+            if (settled) return;
+            settled = true;
+            fn(value);
+          }
 
-        try {
-          callback(store, resolve, reject, finish);
-        } catch (error) {
-          finish(reject, error);
-        }
-      }));
+          tx.oncomplete = function () {
+            if (!settled) finish(resolve);
+          };
+          tx.onerror = function () {
+            finish(reject, tx.error || new Error('Attachment database transaction failed'));
+          };
+          tx.onabort = function () {
+            finish(reject, tx.error || new Error('Attachment database transaction aborted'));
+          };
+
+          try {
+            callback(store, resolve, reject, finish);
+          } catch (error) {
+            finish(reject, error);
+          }
+        });
+      });
     }
 
     function buildAttachmentId(prefix) {
       const head = String(prefix || 'att').trim().toLowerCase() || 'att';
       const stamp = Date.now().toString(36);
-      const salt = Math.random().toString(36).slice(2, 10);
+      const bytes = new Uint8Array(6);
+      if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        window.crypto.getRandomValues(bytes);
+      } else {
+        for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+      }
+      const salt = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
       return head + '_' + stamp + '_' + salt;
     }
 

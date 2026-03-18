@@ -94,7 +94,9 @@
       parseTrainingRosterImport,
       loadTrainingStore,
       saveTrainingStore,
-      registerActionHandlers
+      registerActionHandlers,
+      openConfirmDialog,
+      openPromptDialog
     } = deps;
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
@@ -398,7 +400,8 @@
       return;
     }
     const remainingMinutes = getTrainingUndoRemainingMinutes(form);
-    if (!confirm('撤回後會回到可編修的草稿狀態，並中止後續簽核流程，確定要撤回嗎？')) return;
+    const confirmed = await openConfirmDialog('\u64a4\u56de\u5f8c\u6703\u56de\u5230\u53ef\u7de8\u4fee\u7684\u8349\u7a3f\u72c0\u614b\uff0c\u4e26\u4e2d\u6b62\u5f8c\u7e8c\u7c3d\u6838\u6d41\u7a0b\uff0c\u78ba\u5b9a\u8981\u64a4\u56de\u55ce\uff1f', { title: '\u78ba\u8a8d\u64a4\u56de\u6d41\u7a0b\u4e00', confirmText: '\u78ba\u8a8d\u64a4\u56de', cancelText: '\u53d6\u6d88' });
+    if (!confirmed) return;
     const now = new Date().toISOString();
     const payload = {
       ...form,
@@ -427,10 +430,10 @@
     const form = getTrainingForm(id);
     if (!form) return;
     if (form.status !== TRAINING_STATUSES.SUBMITTED) {
-      toast('只有正式送出的填報單可以退回', 'error');
+      toast('\u53ea\u6709\u6b63\u5f0f\u9001\u51fa\u7684\u586b\u5831\u55ae\u53ef\u4ee5\u9000\u56de', 'error');
       return;
     }
-    const reason = prompt('請輸入退回原因');
+    const reason = await openPromptDialog('\u8acb\u8f38\u5165\u9000\u56de\u539f\u56e0', { title: '\u9000\u56de\u586b\u5831\u55ae', confirmText: '\u78ba\u8a8d\u9000\u56de', cancelText: '\u53d6\u6d88', placeholder: '\u8acb\u8f38\u5165\u9000\u56de\u539f\u56e0' });
     if (reason === null) return;
     const trimmed = reason.trim();
     if (!trimmed) {
@@ -457,7 +460,8 @@
     }
     const roster = getAllTrainingRosters().find((row) => row.id === id);
     if (!roster) return;
-    if (!confirm('確定刪除 ' + roster.unit + ' 的 ' + roster.name + ' 嗎？已填報的歷史資料不會被刪除。')) return;
+    const confirmed = await openConfirmDialog('\u78ba\u5b9a\u522a\u9664 ' + roster.unit + ' \u7684 ' + roster.name + ' \u55ce\uff1f\u5df2\u586b\u5831\u7684\u6b77\u53f2\u8cc7\u6599\u4e0d\u6703\u88ab\u522a\u9664\u3002', { title: '\u78ba\u8a8d\u522a\u9664\u540d\u55ae', confirmText: '\u78ba\u8a8d\u522a\u9664', cancelText: '\u53d6\u6d88' });
+    if (!confirmed) return;
     const result = await submitTrainingRosterDelete(id, {
       id,
       actorName: currentUser()?.name || '',
@@ -984,7 +988,7 @@
       });
 
       body.querySelectorAll('.training-binary-btn[data-field]').forEach((button) => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
           const idx = Number(button.dataset.idx);
           const row = rowsState[idx];
           if (!row) return;
@@ -999,15 +1003,16 @@
       });
 
       body.querySelectorAll('.training-row-delete').forEach((button) => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
           const idx = Number(button.dataset.idx);
           const row = rowsState[idx];
           if (!row) return;
           if (!canDeleteTrainingEditableRow(row, existing, user)) {
-            toast('目前只能刪除自己手動新增的人員', 'error');
+            toast('\u76ee\u524d\u53ea\u80fd\u522a\u9664\u81ea\u5df1\u624b\u52d5\u65b0\u589e\u7684\u4eba\u54e1', 'error');
             return;
           }
-          if (!confirm('確定刪除「' + row.name + '」嗎？這會一併從此單位名單移除。')) return;
+          const confirmed = await openConfirmDialog('確定刪除「' + row.name + '」嗎？這會一併從此單位名單移除。', { title: '確認刪除列', confirmText: '確認刪除', cancelText: '取消' });
+          if (!confirmed) return;
           if (row.rosterId) deleteTrainingRosterPerson(row.rosterId);
           rowsState = rowsState.filter((_, rowIndex) => rowIndex !== idx);
           selectedKeys.clear();

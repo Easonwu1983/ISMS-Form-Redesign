@@ -66,7 +66,8 @@ function createSystemUserRouter(deps) {
   const state = {
     listMap: null,
     listColumnsMap: new Map(),
-    loginFailures: new Map()
+    loginFailures: new Map(),
+    resetRequests: new Map()
   };
 
   function getEnv(name, fallback) {
@@ -74,7 +75,10 @@ function createSystemUserRouter(deps) {
     return value || fallback || '';
   }
 
-  const sessionSecret = getEnv('AUTH_SESSION_SECRET', 'isms-campus-auth-dev-secret');
+  const sessionSecret = getEnv('AUTH_SESSION_SECRET', '');
+  if (!sessionSecret) {
+    throw new Error('AUTH_SESSION_SECRET is required for system user router.');
+  }
 
   function getSessionTtlMs() {
     const raw = Number(process.env.AUTH_SESSION_TTL_MS || '');
@@ -89,6 +93,16 @@ function createSystemUserRouter(deps) {
   function getLoginLockoutMs() {
     const raw = Number(process.env.AUTH_LOCKOUT_MS || '');
     return Number.isFinite(raw) && raw > 0 ? raw : (15 * 60 * 1000);
+  }
+
+  function getResetRequestWindowMs() {
+    const raw = Number(process.env.AUTH_RESET_REQUEST_WINDOW_MS || '');
+    return Number.isFinite(raw) && raw > 0 ? raw : (15 * 60 * 1000);
+  }
+
+  function getResetRequestMaxAttempts() {
+    const raw = Number(process.env.AUTH_RESET_REQUEST_MAX_ATTEMPTS || '');
+    return Number.isFinite(raw) && raw > 0 ? raw : 3;
   }
 
   function readClientAddress(req) {
@@ -142,6 +156,38 @@ function createSystemUserRouter(deps) {
 
   function clearFailedLogin(username) {
     state.loginFailures.delete(buildLoginFailureKey(username));
+  }
+
+  function buildResetRequestKey(username, email, clientAddress) {
+    return [cleanText(username).toLowerCase(), cleanText(email).toLowerCase(), cleanText(clientAddress).toLowerCase()].join('::');
+  }
+
+  function getResetRequestState(username, email, clientAddress) {
+    const key = buildResetRequestKey(username, email, clientAddress);
+    const entry = state.resetRequests.get(key);
+    if (!entry) return { key, count: 0, resetAt: 0 };
+    const windowMs = getResetRequestWindowMs();
+    if (!Number.isFinite(Number(entry.resetAt)) || Number(entry.resetAt) <= Date.now()) {
+      state.resetRequests.delete(key);
+      return { key, count: 0, resetAt: 0 };
+    }
+    return { key, count: Number(entry.count || 0), resetAt: Number(entry.resetAt || 0) };
+  }
+
+  function registerResetRequest(username, email, clientAddress) {
+    const snapshot = getResetRequestState(username, email, clientAddress);
+    const count = snapshot.count + 1;
+    const next = {
+      count,
+      resetAt: Date.now() + getResetRequestWindowMs()
+    };
+    state.resetRequests.set(snapshot.key, next);
+    return {
+      count,
+      remaining: Math.max(0, getResetRequestMaxAttempts() - count),
+      limited: count > getResetRequestMaxAttempts(),
+      retryAt: new Date(next.resetAt).toISOString()
+    };
   }
 
   function sanitizeUserForClient(entry) {
@@ -664,7 +710,7 @@ function createSystemUserRouter(deps) {
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         item: sanitizeUserForClient(saved.item),
-        resetToken: reset.token,
+        resetToken: '',
         resetTokenExpiresAt: reset.expiresAt,
         contractVersion: CONTRACT_VERSION
       }), origin);
@@ -844,6 +890,11 @@ function createSystemUserRouter(deps) {
       validateAuthActionEnvelope(envelope, AUTH_ACTIONS.REQUEST_RESET);
       const payload = normalizeRequestResetPayload(envelope.payload);
       validateRequestResetPayload(payload);
+      const clientAddress = readClientAddress(req);
+      const throttle = registerResetRequest(payload.username, payload.email, clientAddress);
+      if (throttle.limited) {
+        throw createError('Too many reset requests. Please try again later.', 429);
+      }
       const existing = await getUserEntryByEmail(payload.email);
       if (!existing) throw createError('System user not found', 404);
       if (cleanText(existing.item.username).toLowerCase() !== cleanText(payload.username).toLowerCase()) {

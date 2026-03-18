@@ -1,4 +1,4 @@
-const {
+﻿const {
   CONTRACT_VERSION,
   FORM_ACTIONS,
   ROSTER_ACTIONS,
@@ -804,13 +804,13 @@ function createTrainingRouter(deps) {
           const target = existing ? existing.item : normalized;
           if (!requestAuthz.canManageTrainingRoster(authz, target)) {
             summary.failed += 1;
-            errors.push(`第 ${index + 1} 筆人員不在可管理範圍內`);
+            errors.push(`\u7b2c ${index + 1} \u7b46\u8cc7\u6599\u6c92\u6709\u6b0a\u9650\u7ba1\u7406\u5c0d\u61c9\u540d\u55ae`);
             return;
           }
           plans.push({ existing, item: normalized, key });
         } catch (error) {
           summary.failed += 1;
-          errors.push(cleanText(error && error.message) || `第 ${index + 1} 筆匯入失敗`);
+          errors.push(cleanText(error && error.message) || `\u7b2c ${index + 1} \u7b46\u8cc7\u6599\u8655\u7406\u5931\u6557`);
         }
       });
 
@@ -856,7 +856,7 @@ function createTrainingRouter(deps) {
           });
         } catch (error) {
           summary.failed += 1;
-          errors.push(cleanText(error && error.message) || `匯入 ${cleanText(plan && plan.item && plan.item.name) || '人員'} 失敗`);
+          errors.push(cleanText(error && error.message) || `?臬 ${cleanText(plan && plan.item && plan.item.name) || '鈭箏'} 憭望?`);
         }
       }
 
@@ -1090,4 +1090,5 @@ function createTrainingRouter(deps) {
 module.exports = {
   createTrainingRouter
 };
+
 

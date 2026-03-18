@@ -22,6 +22,51 @@
 
     const PRIMARY_ADMIN_NAME = '計算機及資訊網路中心';
 
+    function validateLocalPasswordComplexity(password) {
+      const value = String(password || '');
+      if (value.length < 8) throw new Error('密碼至少需 8 碼');
+      if (!/[a-z]/.test(value)) throw new Error('密碼至少需包含一個英文小寫字母');
+      if (!/[A-Z]/.test(value)) throw new Error('密碼至少需包含一個英文大寫字母');
+      if (!/[0-9]/.test(value)) throw new Error('密碼至少需包含一個數字');
+    }
+
+    async function hashLocalPassword(password) {
+      const value = String(password || '');
+      if (window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function') {
+        const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+        return Array.from(new Uint8Array(digest)).map(function (byte) {
+          return byte.toString(16).padStart(2, '0');
+        }).join('');
+      }
+      throw new Error('瀏覽器不支援本機密碼雜湊');
+    }
+
+    function createSecurePassword() {
+      if (!window.crypto || typeof window.crypto.getRandomValues !== 'function') {
+        throw new Error('瀏覽器不支援安全密碼產生');
+      }
+      const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+      const lower = 'abcdefghjkmnpqrstuvwxyz';
+      const digits = '23456789';
+      const all = upper + lower + digits;
+      const randomChar = function (charset) {
+        const bytes = new Uint32Array(1);
+        window.crypto.getRandomValues(bytes);
+        return charset[bytes[0] % charset.length];
+      };
+      const chars = [randomChar(upper), randomChar(lower), randomChar(digits)];
+      while (chars.length < 10) chars.push(randomChar(all));
+      for (let index = chars.length - 1; index > 0; index -= 1) {
+        const bytes = new Uint32Array(1);
+        window.crypto.getRandomValues(bytes);
+        const swapIndex = bytes[0] % (index + 1);
+        const temp = chars[index];
+        chars[index] = chars[swapIndex];
+        chars[swapIndex] = temp;
+      }
+      return chars.join('');
+    }
+
     function readAuthSession() {
       try {
         const raw = sessionStorage.getItem(AUTH_KEY);
@@ -39,6 +84,23 @@
       }
       sessionStorage.setItem(AUTH_KEY, JSON.stringify(normalized));
       return normalized;
+    }
+
+    async function verifyLocalPassword(user, password) {
+      const passwordHash = String(user && user.passwordHash || '').trim();
+      if (passwordHash) {
+        return passwordHash === await hashLocalPassword(password);
+      }
+      const legacyPassword = String(user && user.password || '');
+      if (!legacyPassword) return false;
+      const ok = legacyPassword === String(password || '');
+      if (ok && user && user.username) {
+        updateUser(user.username, {
+          password: '',
+          passwordHash: await hashLocalPassword(password)
+        });
+      }
+      return ok;
     }
 
     function syncSessionUnit(sourceUnit, targetUnit) {
@@ -84,12 +146,7 @@
     }
 
     function generatePassword() {
-      const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-      let password = '';
-      for (let index = 0; index < 8; index += 1) {
-        password += chars[Math.floor(Math.random() * chars.length)];
-      }
-      return password;
+      return createSecurePassword();
     }
 
     async function login(username, password) {
@@ -109,7 +166,7 @@
       }
 
       const user = findUser(cleanUsername);
-      const success = !!(user && user.password === cleanPassword);
+      const success = !!(user && await verifyLocalPassword(user, cleanPassword));
       addLoginLog(cleanUsername, user, success);
       if (!success) return null;
       return writeAuthSession(user);
@@ -154,9 +211,9 @@
       if (!data || !Array.isArray(data.users)) return;
 
       let changed = false;
-      let admin = data.users.find((user) => user.username === 'admin');
+      let admin = data.users.find(function (user) { return user.username === 'admin'; });
       if (!admin) {
-        const defaultAdmin = DEFAULT_USERS.find((user) => user.username === 'admin');
+        const defaultAdmin = DEFAULT_USERS.find(function (user) { return user.username === 'admin'; });
         if (defaultAdmin) {
           admin = { ...defaultAdmin };
           data.users.unshift(admin);
@@ -190,7 +247,11 @@
       const user = findUserByEmail(payload.email);
       if (!user) return null;
       const nextPassword = generatePassword();
-      updateUser(user.username, { password: nextPassword, mustChangePassword: true });
+      updateUser(user.username, {
+        password: '',
+        passwordHash: await hashLocalPassword(nextPassword),
+        mustChangePassword: true
+      });
       return {
         user: normalizeUserRecord(user),
         password: nextPassword,
@@ -206,27 +267,35 @@
       }
       const matched = findUser(input.username);
       if (!matched || String(input.token || '').trim() !== 'LOCAL-RESET') return null;
-      updateUser(matched.username, { password: String(input.newPassword || '').trim(), mustChangePassword: false });
-      return writeAuthSession({ ...matched, password: '', mustChangePassword: false });
+      validateLocalPasswordComplexity(input.newPassword);
+      updateUser(matched.username, {
+        password: '',
+        passwordHash: await hashLocalPassword(String(input.newPassword || '').trim()),
+        mustChangePassword: false
+      });
+      return writeAuthSession({ ...matched, password: '', passwordHash: '', mustChangePassword: false });
     }
 
     async function changePassword(payload) {
       const input = payload && typeof payload === 'object' ? payload : {};
       const newPw = String(input.newPassword || '').trim();
-      if (newPw.length < 8) {
-        throw new Error('密碼至少需 8 碼');
-      }
+      validateLocalPasswordComplexity(newPw);
       if (typeof changePasswordWithBackend === 'function') {
+        const auth = currentUser();
         const user = await changePasswordWithBackend({
           ...input,
-          sessionToken: currentUser() && currentUser().sessionToken
+          sessionToken: auth && auth.sessionToken
         });
         return user ? writeAuthSession(user) : null;
       }
       const matched = findUser(input.username);
-      if (!matched || String(matched.password || '') !== String(input.currentPassword || '')) return null;
-      updateUser(matched.username, { password: newPw, mustChangePassword: false });
-      return writeAuthSession({ ...matched, password: '', mustChangePassword: false });
+      if (!matched || !(await verifyLocalPassword(matched, String(input.currentPassword || '')))) return null;
+      updateUser(matched.username, {
+        password: '',
+        passwordHash: await hashLocalPassword(newPw),
+        mustChangePassword: false
+      });
+      return writeAuthSession({ ...matched, password: '', passwordHash: '', mustChangePassword: false });
     }
 
     return {

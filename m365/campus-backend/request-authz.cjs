@@ -64,7 +64,10 @@ function createRequestAuthz(deps) {
     return value || fallback || '';
   }
 
-  const sessionSecret = getEnv('AUTH_SESSION_SECRET', 'isms-campus-auth-dev-secret');
+  const sessionSecret = getEnv('AUTH_SESSION_SECRET', '');
+  if (!sessionSecret) {
+    throw new Error('AUTH_SESSION_SECRET is required for request authorization.');
+  }
 
   async function fetchListMap() {
     const siteId = await resolveSiteId();
@@ -194,11 +197,11 @@ function createRequestAuthz(deps) {
   function hasUnitAccess(authz, unit) {
     if (!authz) return false;
     const target = cleanText(unit);
-    if (!target) return true;
+    if (!target) return isAdmin(authz);
     if (isAdmin(authz)) return true;
     if (isViewer(authz)) {
       const scoped = cleanText(authz.activeUnit);
-      return !scoped || scoped === target;
+      return !!scoped && scoped === target;
     }
     return parseUnits(authz.authorizedUnits).includes(target);
   }
@@ -252,13 +255,13 @@ function createRequestAuthz(deps) {
   function canManageTrainingForm(authz, form) {
     if (!authz || !form || isViewer(authz)) return false;
     if (isAdmin(authz)) return true;
-    return hasUnitAccess(authz, form.unit) || matchesUsername(authz, form.fillerUsername);
+    return matchesUsername(authz, form.fillerUsername);
   }
 
   function canManageTrainingRoster(authz, roster) {
     if (!authz || !roster || isViewer(authz)) return false;
     if (isAdmin(authz)) return true;
-    return hasUnitAccess(authz, roster.unit);
+    return isUnitAdmin(authz) ? hasUnitAccess(authz, roster.unit) : matchesUsername(authz, roster.createdByUsername);
   }
 
   function requireAdmin(authz, message) {
@@ -310,3 +313,4 @@ function createRequestAuthz(deps) {
 module.exports = {
   createRequestAuthz
 };
+

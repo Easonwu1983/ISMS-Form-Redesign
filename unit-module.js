@@ -104,7 +104,7 @@
 
     function isOfficialUnit(unit) {
       const value = String(unit || '').trim();
-      if (!value) return true;
+      if (!value) return false;
       return getOfficialUnitSet().has(value);
     }
 

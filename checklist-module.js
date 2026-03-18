@@ -53,7 +53,8 @@
       refreshIcons,
       bindCopyButtons,
       renderCopyIdCell,
-      renderCopyIdButton
+      renderCopyIdButton,
+      openConfirmDialog
     } = deps;
 
     function getChecklistSectionsState() {
@@ -79,7 +80,7 @@
 
     function toDateInputValue(value) {
       if (!value) return '';
-      if (typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value.trim())) return value.trim();
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
       const parsed = new Date(value);
       if (Number.isNaN(parsed.getTime())) return '';
       const year = parsed.getFullYear();
@@ -769,9 +770,10 @@
     });
   };
 
-  function cmDelSection(si) {
+  async function cmDelSection(si) {
     const secs = getChecklistSections();
-    if (!confirm(`確認要刪除章節「${secs[si].section}」？此操作會一併刪除 ${secs[si].items.length} 個檢核項目。`)) return;
+    const confirmed = await openConfirmDialog('確認要刪除章節嗎？此操作會一併刪除相關檢核項目。', { title: '確認刪除章節', confirmText: '確認刪除', cancelText: '取消' });
+    if (!confirmed) return;
     secs.splice(si, 1);
     saveChecklistSections(secs);
     toast('章節已刪除', 'info');
@@ -840,18 +842,20 @@
     });
   };
 
-  function cmDelItem(si, ii) {
+  async function cmDelItem(si, ii) {
     const secs = getChecklistSections();
     const item = secs[si].items[ii];
-    if (!confirm(`確認要刪除項目 ${item.id} 嗎？`)) return;
+    const confirmed = await openConfirmDialog('確認要刪除項目 ' + esc(item.id) + ' 嗎？', { title: '確認刪除項目', confirmText: '確認刪除', cancelText: '取消' });
+    if (!confirmed) return;
     secs[si].items.splice(ii, 1);
     saveChecklistSections(secs);
     toast('項目已刪除', 'info');
     _cmRefreshSections();
   };
 
-  function cmResetDefault() {
-    if (!confirm('確認要還原成預設題庫？這會覆蓋目前自訂的章節與項目內容。')) return;
+  async function cmResetDefault() {
+    const confirmed = await openConfirmDialog('確認要還原成預設題庫？這會覆蓋目前自訂的章節與項目內容。', { title: '確認還原題庫', confirmText: '確認還原', cancelText: '取消' });
+    if (!confirmed) return;
     resetChecklistSections();
     toast('已還原成預設題庫', 'info');
     _cmRefreshSections();

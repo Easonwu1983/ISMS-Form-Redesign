@@ -127,9 +127,7 @@
               return;
             }
             toast('登入成功，歡迎 ' + user.name, 'success');
-            setTimeout(function () {
-              renderApp();
-            }, 300);
+            renderApp();
           } else {
             document.getElementById('login-error').classList.add('show');
           }
@@ -241,9 +239,7 @@
             return;
           }
           toast('密碼已重設並完成登入', 'success');
-          setTimeout(function () {
             renderApp();
-          }, 300);
         } catch (error) {
           toast(String(error && error.message || error || '重設密碼失敗'), 'error');
         }

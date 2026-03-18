@@ -66,7 +66,8 @@
       applyTestIds,
       applySelectorTestIds,
       debugFlow,
-      registerActionHandlers
+      registerActionHandlers,
+      openConfirmDialog
     } = deps;
 
   function renderCaseStatusCell(item, useClosedGuard) {
@@ -539,7 +540,7 @@ function renderCreate() {
         return `<option value="${esc(username)}" data-display-name="${esc(displayName)}" data-username="${esc(username)}" data-email="${esc(entry.email || '')}">${esc(displayName)}\uFF08${esc(unitLabel)}\uFF09</option>`;
       }).join('');
       if (prevSelected && filtered.some((entry) => String(entry.username || '').trim() === prevSelected)) handlerName.value = prevSelected;
-      else if (filtered.length > 0) handlerName.value = String(filtered[0].username || '').trim();
+      else handlerName.value = '';
       updateHandlerEmail();
     }
 
@@ -842,6 +843,12 @@ async function handleStatusTransition(id, ns) {
     if (!next.includes(ns)) { toast(`狀態 ${item.status} 無法轉換為 ${ns}`, 'error'); return; }
     const reviewDecision = getReviewDecisionByNextStatus(item, ns);
     if (!reviewDecision) { toast('找不到對應的審核動作', 'error'); return; }
+    const confirmed = await openConfirmDialog(`確定要將案件 ${item.id} 更新為「${ns}」嗎？`, {
+      title: '確認審核動作',
+      confirmText: '確認送出',
+      cancelText: '取消'
+    });
+    if (!confirmed) return;
     const now = new Date().toISOString();
     const updates = { status: ns, updatedAt: now, pendingTracking: null, history: [...item.history, { time: now, action: `審核狀態更新為${ns}`, user: u.name }] };
     updates.closedDate = ns === STATUSES.CLOSED ? now : null;

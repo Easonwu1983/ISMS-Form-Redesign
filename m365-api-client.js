@@ -285,45 +285,55 @@
     async function requestJson(url, options) {
       const requestOptions = options || {};
       const config = getConfig();
-      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutMs = Number(config.unitContactRequestTimeoutMs || 15000);
-      let timeoutId = null;
-      if (controller && timeoutMs > 0) {
-        timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-      }
-      try {
-        const response = await fetch(url, {
-          method: requestOptions.method || 'POST',
-          headers: buildHeaders(requestOptions.headers, {
-            contractVersion: requestOptions.contractVersion,
-            sharedHeaders: requestOptions.sharedHeaders
-          }),
-          body: requestOptions.body ? JSON.stringify(requestOptions.body) : undefined,
-          signal: controller ? controller.signal : undefined
-        });
+      const method = String(requestOptions.method || 'POST').toUpperCase();
+      const maxAttempts = method === 'GET' ? 2 : 1;
+      let lastError = null;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutMs = Number(config.unitContactRequestTimeoutMs || 15000);
+        let timeoutId = null;
+        if (controller && timeoutMs > 0) {
+          timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        }
+        try {
+          const response = await fetch(url, {
+            method,
+            headers: buildHeaders(requestOptions.headers, {
+              contractVersion: requestOptions.contractVersion,
+              sharedHeaders: requestOptions.sharedHeaders
+            }),
+            body: requestOptions.body ? JSON.stringify(requestOptions.body) : undefined,
+            signal: controller ? controller.signal : undefined
+          });
 
-        const rawText = await response.text();
-        let parsed = null;
-        if (rawText) {
-          try {
-            parsed = JSON.parse(rawText);
-          } catch (_) {
-            parsed = { ok: false, message: rawText };
+          const rawText = await response.text();
+          let parsed = null;
+          if (rawText) {
+            try {
+              parsed = JSON.parse(rawText);
+            } catch (_) {
+              parsed = { ok: false, message: rawText };
+            }
           }
+          if (!response.ok) {
+            const serverMessage = cleanText(parsed && (parsed.message || parsed.error || parsed.detail));
+            if (response.status === 401) {
+              throw new Error('\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548\uff0c\u8acb\u91cd\u65b0\u767b\u5165');
+            }
+            throw new Error(serverMessage || ('HTTP ' + response.status));
+          }
+          return parsed || { ok: true };
+        } catch (error) {
+          lastError = error && error.name === 'AbortError'
+            ? new Error('\u9023\u7dda\u903e\u6642\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66')
+            : error;
+          if (attempt >= maxAttempts || method !== 'GET') break;
+          await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId);
         }
-        if (!response.ok) {
-          const serverMessage = cleanText(parsed && (parsed.message || parsed.error || parsed.detail));
-          throw new Error(serverMessage || ('HTTP ' + response.status));
-        }
-        return parsed || { ok: true };
-      } catch (error) {
-        if (error && error.name === 'AbortError') {
-          throw new Error('連線逾時，請稍後再試');
-        }
-        throw error;
-      } finally {
-        if (timeoutId) clearTimeout(timeoutId);
       }
+      throw lastError;
     }
 
     function buildSubmitEnvelope(payload) {

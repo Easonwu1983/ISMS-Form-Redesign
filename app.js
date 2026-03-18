@@ -204,10 +204,9 @@
       GLOBAL_ACTION_HANDLERS[prefix ? (prefix + '.' + name) : name] = handler;
     });
   }
-  function closeModalRoot() {
-    const modalRoot = document.getElementById('modal-root');
-    if (modalRoot) modalRoot.innerHTML = '';
-  }
+  function closeModalRoot() { return getUiModule().closeModal(); }
+  function openConfirmDialog(message, options) { return getUiModule().openConfirmDialog(message, options); }
+  function openPromptDialog(message, options) { return getUiModule().openPromptDialog(message, options); }
   let globalDelegationInstalled = false;
   function installGlobalDelegation() {
     if (globalDelegationInstalled || typeof document === 'undefined') return;
@@ -595,7 +594,8 @@
       applyTestIds,
       applySelectorTestIds,
       debugFlow,
-      registerActionHandlers
+      registerActionHandlers,
+      openConfirmDialog
     });
     window._caseModule = caseModuleApi;
     return caseModuleApi;
@@ -659,7 +659,8 @@
       renderCopyIdCell,
       renderCopyIdButton,
       registerActionHandlers,
-      closeModalRoot
+      closeModalRoot,
+      openConfirmDialog
     });
     window._checklistModule = checklistModuleApi;
     return checklistModuleApi;
@@ -764,7 +765,9 @@
       parseTrainingRosterImport,
       loadTrainingStore,
       saveTrainingStore,
-      registerActionHandlers
+      registerActionHandlers,
+      openConfirmDialog,
+      openPromptDialog
     });
     window._trainingModule = trainingModuleApi;
     return trainingModuleApi;
@@ -3430,4 +3433,6 @@
   });
 
 })();
+
+
 
