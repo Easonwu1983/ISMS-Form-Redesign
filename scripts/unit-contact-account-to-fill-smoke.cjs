@@ -25,18 +25,18 @@ const ADMIN_PASSWORD = String(process.env.ACCOUNT_FLOW_ADMIN_PASSWORD || 'admin1
 const OUT_DIR = createArtifactRun('unit-contact-account-to-fill-smoke').outDir;
 const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-account-to-fill-smoke.json');
 const CURRENT_ROC_YEAR = String(new Date().getFullYear() - 1911);
-const ROLE_ADMIN = '\u6700\u9ad8\u7ba1\u7406\u54e1';
-const ROLE_VIEWER = '\u8de8\u55ae\u4f4d\u6aa2\u8996\u8005';
-const ROLE_REPORTER = '\u586b\u5831\u4eba';
-const ACTIVE_LABEL = '\u5df2\u555f\u7528';
-const DRAFT_STATUS = '\u66ab\u5b58';
-const UNIT_SEPARATOR = '\uFF0F';
-const DEFAULT_TARGET_UNIT = '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44';
+const ROLE_ADMIN = '最高管理員';
+const ROLE_VIEWER = '跨單位檢視者';
+const ROLE_REPORTER = '填報人';
+const ACTIVE_LABEL = '已啟用';
+const DRAFT_STATUS = '暫存';
+const UNIT_SEPARATOR = '／';
+const DEFAULT_TARGET_UNIT = '計算機及資訊網路中心／資訊網路組';
 const SAFE_TARGET_UNITS = [
-  '\u7a3d\u6838\u5ba4',
-  '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44',
-  '\u7e3d\u52d9\u8655\uff0f\u71df\u7e55\u7d44',
-  '\u4eba\u4e8b\u5ba4\uff0f\u7d9c\u5408\u696d\u52d9\u7d44'
+  '稽核室',
+  '計算機及資訊網路中心／資訊網路組',
+  '總務處／營繕組',
+  '人事室／綜合業務組'
 ];
 
 function nowStamp() {
@@ -142,7 +142,7 @@ async function chooseTargetUnit(token) {
   const occupiedUnits = new Set(forms
     .filter((entry) => cleanText(entry && entry.trainingYear) === CURRENT_ROC_YEAR)
     .map((entry) => cleanText(entry && entry.unit))
-    .filter(Boolean));
+    .filter(isUsefulUnit));
   const safeCandidates = SAFE_TARGET_UNITS.filter((unit) => !occupiedUnits.has(unit));
   const selected = safeCandidates[0] || SAFE_TARGET_UNITS[0] || DEFAULT_TARGET_UNIT;
   return {
@@ -247,8 +247,8 @@ async function patchApplicationToActive(context, applicationId, username) {
   const nowIso = new Date().toISOString();
   const fields = filterFields({
     Status: 'active',
-    StatusLabel: '\u5df2\u555f\u7528',
-    StatusDetail: `\u5e33\u865f\u5df2\u555f\u7528\uff0c\u8acb\u4f7f\u7528 ${username} \u767b\u5165\u7cfb\u7d71\u3002`,
+    StatusLabel: '已啟用',
+    StatusDetail: `帳號已啟用，請使用 ${username} 登入系統。`,
     ReviewedAt: nowIso,
     ReviewedBy: 'smoke-script',
     ReviewComment: 'smoke auto approved',
@@ -352,13 +352,13 @@ async function loginViaPage(page, username, password) {
     apiBase: API_BASE
   });
   const stamp = nowStamp();
-  const testUsername = `ucae2e${stamp}`;
-  const testPassword = `T${stamp}#Aa1`;
   const testEmail = `ucae2e-${stamp}@ntu.edu.tw`;
-  const applicantName = `\u6e2c\u8a66\u7533\u8acb\u4eba${stamp}`;
-  const manualPersonName = `\u6e2c\u8a66\u53d7\u8a13\u4eba\u54e1${stamp}`;
-  const jobTitle = '\u5de5\u7a0b\u5e2b';
-  const identity = '\u8077\u54e1';
+  const testUsername = testEmail;
+  const testPassword = `T${stamp}#Aa1`;
+  const applicantName = `測試申請人${stamp}`;
+  const manualPersonName = `測試受訓人員${stamp}`;
+  const jobTitle = '工程師';
+  const identity = '職員';
   let adminToken = '';
   let browser = null;
   let page = null;
@@ -432,7 +432,7 @@ async function loginViaPage(page, username, password) {
         unit: targetUnit,
         units: [targetUnit],
         activeUnit: targetUnit,
-        actorName: '\u7cfb\u7d71\u7ba1\u7406\u54e1',
+          actorName: '系統管理員',
         actorEmail: 'admin@company.com'
       });
       createdApplicationListItemId = await patchApplicationToActive(graphContext, createdApplicationId, testUsername);
@@ -507,7 +507,7 @@ async function loginViaPage(page, username, password) {
       createdTrainingFormId = await page.evaluate(() => decodeURIComponent((window.location.hash || '').split('/')[1] || ''));
       if (!createdTrainingFormId.startsWith('TRN-')) throw new Error(`Unexpected training form id: ${createdTrainingFormId}`);
       const statusText = cleanText(await page.textContent('#training-draft-status'));
-      if (!statusText || statusText.includes('\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f')) {
+      if (!statusText || statusText.includes('尚未建立草稿')) {
         throw new Error('Draft status was not updated after save');
       }
       return {
@@ -517,6 +517,8 @@ async function loginViaPage(page, username, password) {
     });
 
     await runStep(results, 'ACCOUNT-FLOW-8', 'admin', 'verify saved training draft through backend API', async () => {
+      const login = await loginAsAdmin();
+      adminToken = login.token;
       const forms = await getTrainingForms(adminToken);
       const form = forms.find((entry) => cleanText(entry.id) === createdTrainingFormId);
       if (!form) throw new Error('Created training draft not found in backend');

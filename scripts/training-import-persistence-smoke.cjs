@@ -14,14 +14,14 @@ const {
 
 const runMeta = createArtifactRun('training-import-persistence-smoke');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-import-persistence-smoke.json');
-const ROLE_ADMIN = '\u6700\u9ad8\u7ba1\u7406\u8005';
-const TITLE_IMPORT_PERSIST = '\u8cbc\u4e0a\u532f\u5165\u5f8c\uff0c\u8cc7\u6599\u6703\u5beb\u5165\u9060\u7aef roster \u4e14 id \u552f\u4e00';
-const TITLE_IMPORT_RESYNC = '\u63db\u65b0\u700f\u89bd\u5668 session \u5f8c\u4ecd\u80fd\u8b80\u56de\u525b\u532f\u5165\u7684\u4eba\u54e1';
-const IMPORT_IDENTITY_MANAGER = '\u4e3b\u7ba1';
-const IMPORT_IDENTITY_REPORTER = '\u586b\u5831\u4eba';
-const IMPORT_TITLE_MANAGER = '\u7d44\u9577';
-const IMPORT_TITLE_ENGINEER = '\u5de5\u7a0b\u5e2b';
-const IMPORT_TARGET_UNIT = '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44';
+const ROLE_ADMIN = '最高管理者';
+const TITLE_IMPORT_PERSIST = '貼上匯入後，資料會寫入遠端 roster 且 id 唯一';
+const TITLE_IMPORT_RESYNC = '換新瀏覽器 session 後仍能讀回剛匯入的人員';
+const IMPORT_IDENTITY_MANAGER = '主管';
+const IMPORT_IDENTITY_REPORTER = '填報人';
+const IMPORT_TITLE_MANAGER = '組長';
+const IMPORT_TITLE_ENGINEER = '工程師';
+const IMPORT_TARGET_UNIT = '計算機及資訊網路中心／資訊網路組';
 
 async function ensureTrainingImportPanelVisible(page) {
   await page.waitForSelector('#training-roster-toggle-import');

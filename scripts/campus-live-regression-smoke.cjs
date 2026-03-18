@@ -67,7 +67,7 @@ async function run() {
     const text = await response.text();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (!text.includes('function renderChecklistList()')) throw new Error('renderChecklistList missing');
-    if (!text.includes('\\u5167\\u7a3d\\u6aa2\\u6838\\u8868')) throw new Error('expected checklist title escape missing');
+    if (!text.includes('內稽檢核表')) throw new Error('expected checklist title missing');
     if (/\?{4,}/.test(text)) throw new Error('checklist module contains placeholder question marks');
     return { status: response.status };
   }, { critical: true });
@@ -88,7 +88,9 @@ async function run() {
     const response = await fetch(`${DEFAULT_BASE}/unit-module.js`);
     const text = await response.text();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!(text.includes('?? / ????') || text.includes('\\u4e2d\\u5fc3 / \\u7814\\u7a76\\u55ae\\u4f4d'))) throw new Error('unit category label missing');
+    if (!(text.includes('中心 / 研究單位') || text.includes('\\u4e2d\\u5fc3 / \\u7814\\u7a76\\u55ae\\u4f4d'))) {
+      throw new Error('unit category label missing');
+    }
     if (!text.includes('TRAINING_CENTER_OVERRIDE_UNITS')) throw new Error('unit category override missing');
     if (/\?{4,}/.test(text)) throw new Error('unit module contains placeholder question marks');
     return { status: response.status };
