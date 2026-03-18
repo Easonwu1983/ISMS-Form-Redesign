@@ -46,6 +46,11 @@
     }
   }
 
+  function shouldLoadManifest() {
+    var hostname = String((window.location && window.location.hostname) || '').toLowerCase();
+    return /(^|\.)pages\.dev$/.test(hostname);
+  }
+
   function appendLink(rel, href, type) {
     var link = document.createElement('link');
     link.rel = rel;
@@ -57,6 +62,20 @@
 
   function loadManifest() {
     if (manifestPromise) return manifestPromise;
+    if (window.__APP_ASSET_MANIFEST__ && typeof window.__APP_ASSET_MANIFEST__ === 'object') {
+      integrityMap = (window.__APP_ASSET_MANIFEST__.assetIntegrity && typeof window.__APP_ASSET_MANIFEST__.assetIntegrity === 'object')
+        ? window.__APP_ASSET_MANIFEST__.assetIntegrity
+        : {};
+      window.__APP_ASSET_INTEGRITY__ = integrityMap;
+      manifestPromise = Promise.resolve(window.__APP_ASSET_MANIFEST__);
+      return manifestPromise;
+    }
+    if (!shouldLoadManifest()) {
+      window.__APP_ASSET_MANIFEST__ = window.__APP_ASSET_MANIFEST__ || {};
+      window.__APP_ASSET_INTEGRITY__ = integrityMap;
+      manifestPromise = Promise.resolve(null);
+      return manifestPromise;
+    }
     manifestPromise = fetch('deploy-manifest.json?v=' + cacheKey, { cache: 'no-store', credentials: 'same-origin' })
       .then(function (response) {
         if (!response.ok) throw new Error('manifest load failed: ' + response.status);
