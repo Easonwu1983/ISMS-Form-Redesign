@@ -920,17 +920,21 @@
     function getAllChecklists() { return loadChecklists().items.slice(); }
     function getChecklist(id) { return loadChecklists().items.find((item) => item.id === id); }
     function addChecklist(item) {
-      const store = loadChecklists();
-      store.items.push(normalizeChecklistItem(item));
-      saveChecklists(store);
+      mutateVersionedStore(CHECKLIST_KEY, emptyChecklistStore, function (store) {
+        if (!Array.isArray(store.items)) store.items = [];
+        store.items.push(normalizeChecklistItem(item));
+      });
     }
     function updateChecklist(id, updates) {
-      const store = loadChecklists();
-      const index = store.items.findIndex((item) => item.id === id);
-      if (index < 0) return false;
-      store.items[index] = normalizeChecklistItem({ ...store.items[index], ...updates });
-      saveChecklists(store);
-      return true;
+      let updated = false;
+      mutateVersionedStore(CHECKLIST_KEY, emptyChecklistStore, function (store) {
+        if (!Array.isArray(store.items)) store.items = [];
+        const index = store.items.findIndex((item) => item.id === id);
+        if (index < 0) return;
+        store.items[index] = normalizeChecklistItem({ ...store.items[index], ...updates });
+        updated = true;
+      });
+      return updated;
     }
 
     function emptyTrainingStore() {
@@ -1179,50 +1183,56 @@
         ? String((actor && actor.username) || '').trim()
         : String(actorUsername || '').trim();
       if (!cleanUnit || !cleanName) {
-        return { added: false, updated: false, reason: '請先選擇單位並輸入姓名' };
+        return { added: false, updated: false, reason: '???????' };
       }
 
-      let store = loadTrainingStore();
-      const index = store.rosters.findIndex((row) => row.unit === cleanUnit && row.name.toLowerCase() === cleanName.toLowerCase());
-      let nextRosterId = index >= 0 ? store.rosters[index].id : '';
-      if (!nextRosterId) {
-        const sequence = createNextTrainingRosterId(store);
-        store = sequence.store;
-        nextRosterId = sequence.id;
-      }
-      const nextRow = normalizeTrainingRosterRow({
-        ...base,
-        id: nextRosterId,
-        unit: cleanUnit,
-        source: source || base.source || 'manual',
-        createdBy: index >= 0 ? store.rosters[index].createdBy : (actorName || '系統'),
-        createdByUsername: index >= 0 ? store.rosters[index].createdByUsername : actorUser,
-        createdAt: index >= 0 ? store.rosters[index].createdAt : new Date().toISOString()
-      }, cleanUnit);
-
-      if (index >= 0) {
-        const current = store.rosters[index];
-        const merged = { ...current, ...nextRow };
-        const changed = ['unitName', 'identity', 'jobTitle', 'statsUnit', 'l1Unit'].some(
-          (key) => String(current[key] || '') !== String(merged[key] || '')
-        );
-        if (changed) {
-          store.rosters[index] = merged;
-          saveTrainingStore(store);
-          return { added: false, updated: true, id: merged.id, row: merged, reason: `已更新 ${cleanName} 的名單資訊` };
+      let outcome = { added: false, updated: false, reason: '' };
+      mutateVersionedStore(TRAINING_KEY, emptyTrainingStore, function (store) {
+        if (!Array.isArray(store.rosters)) store.rosters = [];
+        const index = store.rosters.findIndex((row) => row.unit === cleanUnit && row.name.toLowerCase() === cleanName.toLowerCase());
+        let nextRosterId = index >= 0 ? store.rosters[index].id : '';
+        if (!nextRosterId) {
+          const sequence = createNextTrainingRosterId(store);
+          store.nextRosterId = sequence.store.nextRosterId;
+          nextRosterId = sequence.id;
         }
-        return { added: false, updated: false, reason: `${cleanName} 已存在於該單位名單` };
-      }
+        const nextRow = normalizeTrainingRosterRow({
+          ...base,
+          id: nextRosterId,
+          unit: cleanUnit,
+          source: source || base.source || 'manual',
+          createdBy: index >= 0 ? store.rosters[index].createdBy : (actorName || '???'),
+          createdByUsername: index >= 0 ? store.rosters[index].createdByUsername : actorUser,
+          createdAt: index >= 0 ? store.rosters[index].createdAt : new Date().toISOString()
+        }, cleanUnit);
 
-      store.rosters.push(nextRow);
-      saveTrainingStore(store);
-      return { added: true, updated: false, id: nextRow.id, row: nextRow };
+        if (index >= 0) {
+          const current = store.rosters[index];
+          const merged = { ...current, ...nextRow };
+          const changed = ['unitName', 'identity', 'jobTitle', 'statsUnit', 'l1Unit'].some(
+            (key) => String(current[key] || '') !== String(merged[key] || '')
+          );
+          if (changed) {
+            store.rosters[index] = merged;
+            outcome = { added: false, updated: true, id: merged.id, row: merged, reason: `??? ${cleanName} ?????` };
+            return;
+          }
+          outcome = { added: false, updated: false, reason: `${cleanName} ?????????` };
+          return;
+        }
+
+        store.rosters.push(nextRow);
+        outcome = { added: true, updated: false, id: nextRow.id, row: nextRow };
+      });
+      return outcome;
     }
 
     function deleteTrainingRosterPerson(id) {
+      const cleanId = String(id || '').trim();
+      if (!cleanId) return;
       mutateVersionedStore(TRAINING_KEY, emptyTrainingStore, function (store) {
         if (!Array.isArray(store.rosters)) store.rosters = [];
-        store.rosters = store.rosters.filter((row) => row.id !== id);
+        store.rosters = store.rosters.filter((row) => row.id !== cleanId);
       });
     }
 
@@ -1268,33 +1278,39 @@
     }
 
     function createUnitContactApplication(application) {
-      const store = loadUnitContactApplicationStore();
-      const sequence = Number.isFinite(Number(store.nextId)) ? Number(store.nextId) : 1;
-      const normalized = normalizeUnitContactApplication({
-        ...application,
-        sequence,
-        submittedAt: (application && application.submittedAt) || new Date().toISOString(),
-        updatedAt: (application && application.updatedAt) || new Date().toISOString()
+      let created = null;
+      mutateVersionedStore(UNIT_CONTACT_APP_KEY, emptyUnitContactApplicationStore, function (store) {
+        if (!Array.isArray(store.applications)) store.applications = [];
+        const sequence = Number.isFinite(Number(store.nextId)) ? Number(store.nextId) : 1;
+        const normalized = normalizeUnitContactApplication({
+          ...application,
+          sequence,
+          submittedAt: (application && application.submittedAt) || new Date().toISOString(),
+          updatedAt: (application && application.updatedAt) || new Date().toISOString()
+        });
+        store.applications.push(normalized);
+        store.nextId = sequence + 1;
+        created = normalized;
       });
-      store.applications.push(normalized);
-      store.nextId = sequence + 1;
-      saveUnitContactApplicationStore(store);
-      return normalized;
+      return created;
     }
 
     function updateUnitContactApplication(id, updates) {
       const cleanId = String(id || '').trim();
       if (!cleanId) return null;
-      const store = loadUnitContactApplicationStore();
-      const index = store.applications.findIndex((entry) => entry.id === cleanId);
-      if (index < 0) return null;
-      store.applications[index] = normalizeUnitContactApplication({
-        ...store.applications[index],
-        ...(updates || {}),
-        updatedAt: new Date().toISOString()
+      let updated = null;
+      mutateVersionedStore(UNIT_CONTACT_APP_KEY, emptyUnitContactApplicationStore, function (store) {
+        if (!Array.isArray(store.applications)) store.applications = [];
+        const index = store.applications.findIndex((entry) => entry.id === cleanId);
+        if (index < 0) return;
+        store.applications[index] = normalizeUnitContactApplication({
+          ...store.applications[index],
+          ...(updates || {}),
+          updatedAt: new Date().toISOString()
+        });
+        updated = store.applications[index];
       });
-      saveUnitContactApplicationStore(store);
-      return store.applications[index];
+      return updated;
     }
 
     function findUnitContactApplicationsByEmail(email) {
