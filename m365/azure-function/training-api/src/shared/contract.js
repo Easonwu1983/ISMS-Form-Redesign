@@ -5,6 +5,7 @@ const FORM_ACTIONS = {
   DETAIL: 'training.form.detail',
   SAVE_DRAFT: 'training.form.save-draft',
   SUBMIT_STEP_ONE: 'training.form.submit-step-one',
+  MARK_PRINTED: 'training.form.mark-printed',
   FINALIZE: 'training.form.finalize',
   RETURN: 'training.form.return',
   UNDO: 'training.form.undo',

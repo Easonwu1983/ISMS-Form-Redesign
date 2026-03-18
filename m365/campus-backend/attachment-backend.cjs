@@ -163,8 +163,8 @@ function createAttachmentRouter(deps) {
     const cleanName = cleanText(filename);
     if (!cleanName) return 'attachment.bin';
     return cleanName
-      .replace(/^(?:att|trn|chk|car|uca)_[a-z0-9]+_[a-z0-9]+[-_]+/i, '')
-      .replace(/^[a-z]{3,4}_[a-z0-9]+_[a-z0-9]+[-_]+/i, '')
+      .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
+      .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
       .trim() || cleanName;
   }
 

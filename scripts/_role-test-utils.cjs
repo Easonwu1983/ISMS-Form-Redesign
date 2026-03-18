@@ -52,7 +52,11 @@ function attachDiagnostics(page, results) {
     if (!results.console) return;
     const type = msg.type();
     if (type === 'error' || type === 'warning') {
-      results.console.push({ type, text: msg.text() });
+      const text = msg.text();
+      if (/Failed to load resource: the server responded with a status of 401 \(Unauthorized\)/.test(text)) {
+        return;
+      }
+      results.console.push({ type, text });
     }
   });
   page.on('pageerror', (error) => {

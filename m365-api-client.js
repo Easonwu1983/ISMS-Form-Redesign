@@ -29,6 +29,7 @@
     const TRAINING_FORM_ACTIONS = {
       SAVE_DRAFT: 'training.form.save-draft',
       SUBMIT_STEP_ONE: 'training.form.submit-step-one',
+      MARK_PRINTED: 'training.form.mark-printed',
       FINALIZE: 'training.form.finalize',
       RETURN: 'training.form.return',
       UNDO: 'training.form.undo'
@@ -1323,6 +1324,21 @@
       };
     }
 
+    async function markTrainingPrinted(id, payload) {
+      const cleanId = cleanText(id || (payload && payload.id));
+      const body = await requestTrainingForms('/' + encodeURIComponent(cleanId) + '/mark-printed', {
+        method: 'POST',
+        body: buildTrainingEnvelope(TRAINING_FORM_ACTIONS.MARK_PRINTED, payload)
+      });
+      const items = normalizeRemoteTrainingForms(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        item: items[0] || null,
+        raw: body
+      };
+    }
+
     async function finalizeTrainingForm(id, payload) {
       const cleanId = cleanText(id || (payload && payload.id));
       const body = await requestTrainingForms('/' + encodeURIComponent(cleanId) + '/finalize', {
@@ -1544,6 +1560,7 @@
       getTrainingFormRecord,
       saveTrainingDraft,
       submitTrainingStepOne,
+      markTrainingPrinted,
       finalizeTrainingForm,
       returnTrainingForm,
       undoTrainingForm,

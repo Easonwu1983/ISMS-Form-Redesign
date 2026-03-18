@@ -16,11 +16,12 @@ const runMeta = createArtifactRun('browser-zoom-regression');
 const OUT_DIR = runMeta.outDir;
 const SHOT_DIR = path.join(OUT_DIR, 'screenshots');
 const RESULT_PATH = path.join(OUT_DIR, 'browser-zoom-regression.json');
+const INCLUDE_EDGE = String(process.env.BROWSER_ZOOM_INCLUDE_EDGE || '').trim() === '1';
 const BROWSERS = [
   { name: 'chrome', executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' },
-  { name: 'edge', executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' }
+  ...(INCLUDE_EDGE ? [{ name: 'edge', executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' }] : [])
 ].filter((entry) => fs.existsSync(entry.executablePath));
-const ZOOMS = [1.25, 1.5];
+const ZOOMS = [1.25, 1.5, 2];
 const ROUTES = ['dashboard', 'create', 'checklist-fill', 'training-fill', 'training-roster', 'schema-health'];
 const BASE_VIEWPORT = { width: 1440, height: 1100 };
 

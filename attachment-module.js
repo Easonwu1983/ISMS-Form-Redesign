@@ -90,11 +90,20 @@
       return [name, size, type].join('::');
     }
 
+    function normalizeLegacyAttachmentName(name) {
+      const clean = String(name || '').replace(/^\uFEFF/, '').trim();
+      if (!clean) return '';
+      return clean
+        .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
+        .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
+        .trim() || clean;
+    }
+
     function normalizeAttachmentDescriptor(entry, overrides) {
       const next = {
         attachmentId: String(entry && entry.attachmentId || overrides && overrides.attachmentId || '').trim(),
         driveItemId: String(entry && entry.driveItemId || overrides && overrides.driveItemId || '').trim(),
-        name: String(entry && entry.name || overrides && overrides.name || '').replace(/^\uFEFF/, '').trim(),
+        name: normalizeLegacyAttachmentName(String(entry && entry.name || overrides && overrides.name || '')),
         type: String(entry && (entry.type || entry.contentType) || overrides && (overrides.type || overrides.contentType) || '').trim(),
         contentType: String(entry && (entry.contentType || entry.type) || overrides && (overrides.contentType || overrides.type) || '').trim(),
         size: Number(entry && entry.size || overrides && overrides.size || 0),

@@ -735,6 +735,7 @@
       syncTrainingRostersFromM365,
       submitTrainingDraft,
       submitTrainingStepOne,
+      submitTrainingMarkPrinted,
       submitTrainingFinalize,
       submitTrainingReturn,
       submitTrainingUndo,
@@ -1197,13 +1198,23 @@
     }
     return null;
   }
+  function normalizeLegacyAttachmentName(name) {
+    const clean = String(name || '').replace(/^\uFEFF/, '').trim();
+    if (!clean) return '';
+    return clean
+      .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
+      .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
+      .trim() || clean;
+  }
   function normalizeRemoteAttachmentDescriptor(item, fallback) {
     const source = item && typeof item === 'object' ? item : {};
     const base = fallback && typeof fallback === 'object' ? fallback : {};
     const scope = String(source.scope || base.scope || '').trim();
-    const name = scope === 'training-signoff' && String(base.name || '').trim()
-      ? String(base.name || '').trim()
-      : String(source.name || base.name || '').trim();
+    const name = normalizeLegacyAttachmentName(
+      scope === 'training-signoff' && String(base.name || '').trim()
+        ? String(base.name || '').trim()
+        : String(source.name || base.name || '').trim()
+    );
     const contentType = String(source.contentType || source.type || base.contentType || base.type || '').trim();
     const size = Number(source.size || base.size || 0);
     return {
@@ -2438,6 +2449,27 @@
       if (isStrictRemoteDataMode()) {
         setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練流程一送出失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('教育訓練流程一送出', error));
+      }
+      const stored = persistLocalTrainingForm(payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, item: stored, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingMarkPrinted(payload) {
+    const client = getM365ApiClient();
+    const id = String(payload && payload.id || '').trim();
+    if (client.getTrainingMode() !== 'm365-api') {
+      return { ok: true, item: persistLocalTrainingForm(payload), source: 'local' };
+    }
+    try {
+      const response = await client.markTrainingPrinted(id, payload);
+      const stored = upsertTrainingFormInStore(response.item || payload);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastFormsSyncAt: new Date().toISOString(), message: '教育訓練列印紀錄已寫入正式後端', error: '' });
+      return { ok: true, item: stored, source: 'remote' };
+    } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '教育訓練列印紀錄寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('教育訓練列印紀錄寫入', error));
       }
       const stored = persistLocalTrainingForm(payload);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });

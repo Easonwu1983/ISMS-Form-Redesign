@@ -510,6 +510,13 @@ function createTrainingRouter(deps) {
     }
   }
 
+  function assertCanMarkPrinted(existing) {
+    if (!existing) throw createError('Training form not found', 404);
+    if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) {
+      throw createError('Only pending-signoff forms can be marked as printed.', 409);
+    }
+  }
+
   async function handleHealth(_req, res, origin) {
     try {
       await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
@@ -920,7 +927,7 @@ function createTrainingRouter(deps) {
   function tryHandle(req, res, origin, url) {
     const formCollectionMatch = url.pathname.match(/^\/api\/training\/forms\/?$/);
     const formDetailMatch = url.pathname.match(/^\/api\/training\/forms\/([^/]+)\/?$/);
-    const formActionMatch = url.pathname.match(/^\/api\/training\/forms\/([^/]+)\/(save-draft|submit-step-one|finalize|return|undo|delete)\/?$/);
+    const formActionMatch = url.pathname.match(/^\/api\/training\/forms\/([^/]+)\/(save-draft|submit-step-one|mark-printed|finalize|return|undo|delete)\/?$/);
     const rosterCollectionMatch = url.pathname.match(/^\/api\/training\/rosters\/?$/);
     const rosterBatchUpsertMatch = url.pathname.match(/^\/api\/training\/rosters\/upsert-batch\/?$/);
     const rosterUpsertMatch = url.pathname.match(/^\/api\/training\/rosters\/upsert\/?$/);
@@ -978,6 +985,27 @@ function createTrainingRouter(deps) {
             return appendHistory(existingItem && existingItem.history, 'Training step one submitted', actor, now);
           },
           eventType: 'training.form_step_one_submitted'
+        }).then(() => true);
+      }
+      if (actionName === 'mark-printed') {
+        return writeTrainingForm(req, res, origin, formId, FORM_ACTIONS.MARK_PRINTED, {
+          assertBefore: assertCanMarkPrinted,
+          validation: { requireRecords: true },
+          resolveStatus: function (existing) {
+            return existing && existing.item && existing.item.status
+              ? existing.item.status
+              : FORM_STATUSES.PENDING_SIGNOFF;
+          },
+          transformItem: function (item, existingItem, _payload, now) {
+            return {
+              ...item,
+              printedAt: cleanText(item.printedAt) || (existingItem && existingItem.printedAt) || now
+            };
+          },
+          buildHistory: function (existingItem, _payload, actor, now) {
+            return appendHistory(existingItem && existingItem.history, 'Training print sheet generated', actor, now);
+          },
+          eventType: 'training.form_printed'
         }).then(() => true);
       }
       if (actionName === 'finalize') {
