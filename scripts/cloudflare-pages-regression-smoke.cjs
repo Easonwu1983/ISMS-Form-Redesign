@@ -674,7 +674,8 @@ async function run() {
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('自訂單位審核與合併') && app.innerText.includes('自訂單位清單'));
+      const text = String(app && app.innerText || '');
+      return !!(text && (text.includes('自訂單位審核與合併') || text.includes('單位治理')) && text.includes('自訂單位清單'));
     }, undefined, { timeout: 45000 });
     const unitReviewText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(unitReviewText)) {
