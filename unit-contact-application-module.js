@@ -56,7 +56,7 @@
       return ''
         + '<div class="page-header unit-contact-hero">'
         + '<div class="page-eyebrow">' + esc(eyebrow) + '</div>'
-        + '<h1 class="page-title">' + esc(title) + '</h1>'
+        + '<h1 class="page-title" data-route-heading="true">' + esc(title) + '</h1>'
         + '<p class="page-subtitle">' + esc(subtitle) + '</p>'
         + '<div class="unit-contact-hero-actions">' + actions + '</div>'
         + '</div>';
