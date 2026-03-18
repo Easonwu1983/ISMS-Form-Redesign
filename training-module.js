@@ -65,6 +65,7 @@
       syncTrainingRostersFromM365,
       submitTrainingDraft,
       submitTrainingStepOne,
+      submitTrainingMarkPrinted,
       submitTrainingFinalize,
       submitTrainingReturn,
       submitTrainingUndo,
@@ -1335,12 +1336,34 @@
     document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
     document.getElementById('training-undo-step-one')?.addEventListener('click', () => handleTrainingUndo(form.id));
     document.getElementById('training-print-detail')?.addEventListener('click', () => {
-      if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && !form.printedAt) {
-        const now = new Date().toISOString();
-        updateTrainingForm(form.id, { printedAt: now, updatedAt: now, history: [...(form.history || []), { time: now, action: '列印簽核表', user: currentUser().name }] });
-        form.printedAt = now;
-      }
-      printTrainingSheet(form);
+      (async () => {
+        let printPayload = form;
+        if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && !form.printedAt) {
+          const now = new Date().toISOString();
+          const payload = {
+            ...form,
+            printedAt: now,
+            updatedAt: now,
+            history: [...(form.history || []), { time: now, action: '列印簽核表', user: currentUser().name }],
+            actorName: currentUser().name,
+            actorUsername: currentUser().username
+          };
+          try {
+            const result = await submitTrainingMarkPrinted(payload);
+            const nextForm = (result && result.item) || getTrainingForm(form.id) || payload;
+            showTrainingRepositoryFallback(result, '已記錄簽核表列印時間');
+            form.printedAt = nextForm.printedAt || now;
+            form.updatedAt = nextForm.updatedAt || now;
+            form.history = nextForm.history || payload.history;
+            printPayload = nextForm;
+            renderTrainingDetail(form.id);
+          } catch (error) {
+            toast(error && error.message ? error.message : '列印紀錄寫入失敗', 'error');
+            return;
+          }
+        }
+        printTrainingSheet(printPayload);
+      })();
     });
     if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && canManage) {
       const fileInput = document.getElementById('training-file-input');
