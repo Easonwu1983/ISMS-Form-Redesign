@@ -95,7 +95,9 @@ async function waitForTrainingRosterRowsByNames(page, names, timeout = 45000) {
 async function confirmTrainingModal(page) {
   const confirm = page.locator('[data-modal-confirm]').first();
   await confirm.waitFor({ state: 'visible', timeout: 10000 });
-  await confirm.click();
+  await confirm.evaluate((element) => {
+    if (element && typeof element.click === 'function') element.click();
+  });
   await page.waitForTimeout(120);
 }
 

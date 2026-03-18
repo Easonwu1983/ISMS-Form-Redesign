@@ -1845,11 +1845,20 @@
         focusTrainingRosterRows(opts);
       }
     };
-    if (typeof window.setTimeout === 'function') {
-      window.setTimeout(restoreFocus, 0);
-    } else {
+    const scheduleRestoreFocus = function () {
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(function () {
+          window.requestAnimationFrame(restoreFocus);
+        });
+        return;
+      }
+      if (typeof window.setTimeout === 'function') {
+        window.setTimeout(restoreFocus, 50);
+        return;
+      }
       restoreFocus();
-    }
+    };
+    scheduleRestoreFocus();
     refreshIcons();
   }
 
