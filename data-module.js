@@ -69,11 +69,16 @@
       return Object.keys(STORE_VERSIONS);
     }
 
-    function createStoreEnvelope(key, payload) {
-      return {
+    function createStoreEnvelope(key, payload, revision) {
+      const envelope = {
         version: getStoreVersion(key),
         payload
       };
+      const numericRevision = Number(revision);
+      if (Number.isFinite(numericRevision) && numericRevision >= 0) {
+        envelope.revision = Math.floor(numericRevision);
+      }
+      return envelope;
     }
 
     function isStoreEnvelope(value) {
@@ -81,6 +86,12 @@
         && typeof value === 'object'
         && Number.isFinite(Number(value.version))
         && Object.prototype.hasOwnProperty.call(value, 'payload');
+    }
+
+    function getStoreRevision(envelope) {
+      if (!envelope || typeof envelope !== 'object') return 0;
+      const revision = Number(envelope.revision);
+      return Number.isFinite(revision) && revision >= 0 ? Math.floor(revision) : 0;
     }
 
     function installStorageCacheInvalidation() {
@@ -155,6 +166,17 @@
       const fallback = fallbackFactory();
       STORAGE_CACHE[key] = { raw: JSON.stringify(fallback), parsed: fallback };
       return fallback;
+    }
+
+    function readStoreEnvelopeSnapshot(key) {
+      const raw = localStorage.getItem(key);
+      if (raw === null || raw === undefined) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        return isStoreEnvelope(parsed) ? parsed : { version: 0, payload: parsed };
+      } catch (_) {
+        return null;
+      }
     }
 
     function writeCachedJson(key, value) {
@@ -358,18 +380,24 @@
 
     function writeVersionedStore(key, payload) {
       withStoreLock(key, function () {
-        writeCachedJson(key, createStoreEnvelope(key, payload));
+        const currentEnvelope = readStoreEnvelopeSnapshot(key);
+        const nextRevision = getStoreRevision(currentEnvelope) + 1;
+        const nextEnvelope = createStoreEnvelope(key, payload, nextRevision);
+        writeCachedJson(key, nextEnvelope);
       });
     }
 
     function mutateVersionedStore(key, fallbackFactory, mutator) {
       return withStoreLock(key, function () {
+        const currentEnvelope = readStoreEnvelopeSnapshot(key);
         const current = readVersionedStore(key, fallbackFactory);
         const draft = cloneStoreValue(current);
         const result = typeof mutator === 'function' ? mutator(draft) : undefined;
         const nextValue = result === undefined ? draft : result;
-        writeCachedJson(key, createStoreEnvelope(key, nextValue));
-        STORAGE_CACHE[key] = { raw: JSON.stringify(createStoreEnvelope(key, nextValue)), parsed: createStoreEnvelope(key, nextValue) };
+        const nextRevision = getStoreRevision(currentEnvelope) + 1;
+        const nextEnvelope = createStoreEnvelope(key, nextValue, nextRevision);
+        writeCachedJson(key, nextEnvelope);
+        STORAGE_CACHE[key] = { raw: JSON.stringify(nextEnvelope), parsed: nextEnvelope };
         return nextValue;
       });
     }

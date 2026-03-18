@@ -99,6 +99,9 @@
       openPromptDialog,
       runWithBusyState
     } = deps;
+
+    let lastTrainingRosterFocusState = null;
+    let trainingRosterFocusTrackerInstalled = false;
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
     return cards.map(([label, value, tone]) => '<div class="training-mini-card training-mini-card--' + tone + '"><div class="training-mini-label">' + label + '</div><div class="training-mini-value">' + value + '</div></div>').join('');
@@ -461,6 +464,7 @@
     }
     const roster = getAllTrainingRosters().find((row) => row.id === id);
     if (!roster) return;
+    const focusState = captureTrainingRosterFocusState() || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null);
     const confirmed = await openConfirmDialog('\u78ba\u5b9a\u522a\u9664 ' + roster.unit + ' \u7684 ' + roster.name + ' \u55ce\uff1f\u5df2\u586b\u5831\u7684\u6b77\u53f2\u8cc7\u6599\u4e0d\u6703\u88ab\u522a\u9664\u3002', { title: '\u78ba\u8a8d\u522a\u9664\u540d\u55ae', confirmText: '\u78ba\u8a8d\u522a\u9664', cancelText: '\u53d6\u6d88' });
     if (!confirmed) return;
     const result = await submitTrainingRosterDelete(id, {
@@ -468,7 +472,10 @@
       actorName: currentUser()?.name || '',
       actorUsername: currentUser()?.username || ''
     });
-    await renderTrainingRoster({ skipSync: true });
+    await renderTrainingRoster({
+      skipSync: true,
+      restoreFocusState: focusState || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null)
+    });
     const deletedCount = Number(result && result.raw && result.raw.deletedCount || 0);
     toast(deletedCount > 1 ? ('名單已刪除，並同步清理重複資料 ' + deletedCount + ' 筆') : '名單已刪除', 'success');
     if (result && result.warning) {
@@ -1483,11 +1490,24 @@
       state.value = String(active.dataset.value || '').trim();
       return state;
     }
-    if (active.matches('.training-row-delete')) {
+    if (active.matches('button[data-testid^="training-roster-delete-"]')) {
       state.kind = 'delete';
+      lastTrainingRosterFocusState = { ...state };
       return state;
     }
-    return null;
+    lastTrainingRosterFocusState = { ...state };
+    return state;
+  }
+
+  function installTrainingRosterFocusTracker() {
+    if (trainingRosterFocusTrackerInstalled || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+    document.addEventListener('focusin', function () {
+      const state = captureTrainingRosterFocusState();
+      if (state) {
+        lastTrainingRosterFocusState = { ...state };
+      }
+    }, true);
+    trainingRosterFocusTrackerInstalled = true;
   }
 
   function focusTrainingRosterElement(element, state) {
@@ -1549,7 +1569,7 @@
         target = Array.from(row.querySelectorAll('.training-binary-btn[data-field]')).find((element) => String(element.dataset.field || '').trim() === field && String(element.dataset.value || '').trim() === String(state.value || '').trim()) || null;
         break;
       case 'delete':
-        target = row.querySelector('.training-row-delete');
+        target = row.querySelector('button[data-testid^="training-roster-delete-"]');
         break;
       default:
         target = row.querySelector('.training-row-delete')
@@ -1559,7 +1579,11 @@
         break;
     }
     if (!target) return false;
-    return focusTrainingRosterElement(target, state);
+    const focused = focusTrainingRosterElement(target, state);
+    if (focused) {
+      lastTrainingRosterFocusState = { ...state };
+    }
+    return focused;
   }
 
   function focusTrainingRosterRows(options) {
@@ -1582,11 +1606,18 @@
     if (!matchedRows.length) return;
     matchedRows.forEach((row) => row.classList.add('training-roster-row-focused'));
     matchedRows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const preferredFocus = matchedRows[0].querySelector('.training-row-delete')
+    const preferredFocus = matchedRows[0].querySelector('button[data-testid^="training-roster-delete-"]')
       || matchedRows[0].querySelector('.training-row-check')
       || matchedRows[0].querySelector('.training-row-select')
       || matchedRows[0].querySelector('.training-row-note');
-    focusTrainingRosterElement(preferredFocus, { kind: 'delete' });
+    const state = {
+      kind: 'delete',
+      rowId: String(matchedRows[0].dataset.rosterId || '').trim(),
+      rowIndex: Array.from(document.querySelectorAll('tr[data-roster-id]')).indexOf(matchedRows[0])
+    };
+    if (focusTrainingRosterElement(preferredFocus, state)) {
+      lastTrainingRosterFocusState = { ...state };
+    }
   }
 
   function mergeTrainingRosterItemsIntoLocalStore(items) {
@@ -1647,7 +1678,10 @@
         console.warn('training roster page sync failed', error);
       }
     }
-    const focusState = captureTrainingRosterFocusState();
+    installTrainingRosterFocusTracker();
+    const focusState = opts.restoreFocusState
+      ? { ...opts.restoreFocusState }
+      : (captureTrainingRosterFocusState() || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null));
 
     const rawRosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
       const statsCompare = compareZhStroke(String(a.statsUnit || getTrainingStatsUnit(a.unit)), String(b.statsUnit || getTrainingStatsUnit(b.unit)));
