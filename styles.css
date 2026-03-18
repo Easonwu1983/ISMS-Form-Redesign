@@ -6230,6 +6230,10 @@ tbody tr:hover {
   outline: none;
 }
 
+.unit-cascade-search-option.is-active {
+  background: #dbeafe;
+}
+
 .unit-cascade-search-option-title {
   font-size: 0.92rem;
   font-weight: 700;

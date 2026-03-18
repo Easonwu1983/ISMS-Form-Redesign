@@ -39,6 +39,7 @@
 
     const STORAGE_CACHE = Object.create(null);
     let storageListenerInstalled = false;
+    const STORAGE_WARNING_KEYS = Object.create(null);
     const STORE_VERSIONS = {
       [DATA_KEY]: 1,
       [CHECKLIST_KEY]: 1,
@@ -104,12 +105,29 @@
     function createStorageWriteError(error) {
       const wrapped = new Error(
         hasQuotaExceededError(error)
-          ? '瀏覽器本機儲存空間不足，請清理瀏覽資料後再試。'
-          : '無法寫入本機資料，請稍後再試。'
+          ? '\u700f\u89bd\u5668\u66ab\u5b58\u7a7a\u9593\u4e0d\u8db3\uff0c\u7cfb\u7d71\u7121\u6cd5\u5beb\u5165\u6700\u65b0\u8cc7\u6599\u3002\u8acb\u6e05\u7406\u700f\u89bd\u5668\u5132\u5b58\u7a7a\u9593\u5f8c\u518d\u8a66\u3002'
+          : '\u700f\u89bd\u5668\u66ab\u5b58\u5beb\u5165\u5931\u6557\uff0c\u7cfb\u7d71\u7121\u6cd5\u4fdd\u5b58\u6700\u65b0\u8cc7\u6599\u3002'
       );
       wrapped.code = hasQuotaExceededError(error) ? 'LOCAL_STORAGE_QUOTA' : 'LOCAL_STORAGE_WRITE_FAILED';
       wrapped.cause = error;
       return wrapped;
+    }
+
+    function emitStorageWarning(key, message) {
+      if (typeof window === 'undefined' || !window.dispatchEvent) return;
+      const warningKey = String(key || '').trim() + '::' + String(message || '').trim();
+      if (!warningKey || STORAGE_WARNING_KEYS[warningKey]) return;
+      STORAGE_WARNING_KEYS[warningKey] = true;
+      try {
+        window.dispatchEvent(new CustomEvent('isms:storage-warning', {
+          detail: {
+            key: String(key || '').trim(),
+            message: String(message || '').trim()
+          }
+        }));
+      } catch (_) {
+        console.warn('[data-module] storage warning:', String(message || '').trim());
+      }
     }
 
     function cloneStoreValue(value) {
@@ -130,6 +148,7 @@
         } catch (_) {
           delete STORAGE_CACHE[key];
           localStorage.removeItem(key);
+          emitStorageWarning(key, '\u5075\u6e2c\u5230\u700f\u89bd\u5668\u66ab\u5b58\u8cc7\u6599\u640d\u6bc0\uff0c\u7cfb\u7d71\u5df2\u81ea\u52d5\u6e05\u9664\u4e26\u91cd\u65b0\u8f09\u5165\u3002');
         }
       }
       const fallback = fallbackFactory();

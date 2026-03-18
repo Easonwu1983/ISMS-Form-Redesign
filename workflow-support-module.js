@@ -367,19 +367,19 @@
     }
 
     function sanitizeTrainingFileNamePart(value, fallbackText) {
-      const cleaned = String(value || '').trim().replace(/[\\/:*?"<>|／]/g, '_');
-      return cleaned || String(fallbackText || '').trim() || '未指定';
+      const cleaned = String(value || '').trim().replace(/[\\/:*?\"<>|]+/g, '_');
+      return cleaned || String(fallbackText || '').trim() || '\u672a\u547d\u540d';
     }
 
     function getTrainingDetailExportFilename(form) {
-      const unitName = sanitizeTrainingFileNamePart(form && form.unit, '未指定單位');
-      const fillerName = sanitizeTrainingFileNamePart(form && form.fillerName, '未知經辦人');
-      return '資安教育訓練統計表_' + unitName + '_' + fillerName + '_' + formatTrainingExportDate(new Date()) + '.csv';
+      const unitName = sanitizeTrainingFileNamePart(form && form.unit, '\u672a\u547d\u540d\u55ae\u4f4d');
+      const fillerName = sanitizeTrainingFileNamePart(form && form.fillerName, '\u672a\u547d\u540d\u586b\u5831\u4eba');
+      return '\u6559\u80b2\u8a13\u7df4\u7d71\u8a08_' + unitName + '_' + fillerName + '_' + formatTrainingExportDate(new Date()) + '.csv';
     }
 
     function getTrainingProfessionalExportValue(record) {
-      if (!record || record.status !== '在職') return '';
-      if (record.isInfoStaff === '否') return '無須';
+      if (!record || record.status !== '\u5728\u8077') return '';
+      if (record.isInfoStaff === '\u5426') return '\u4e0d\u9069\u7528';
       return String(getTrainingProfessionalDisplay(record) || '').trim();
     }
 
@@ -405,9 +405,26 @@
           fmtTime(form.updatedAt)
         ];
       });
-      downloadWorkbook(filename || ('資安教育訓練統計總表_' + new Date().toISOString().slice(0, 10) + '.xlsx'), [{
-        name: '統計總表',
-        rows: [['編號', '統計單位', '填報單位', '年度', '狀態', '經辦人', '聯絡電話', '聯絡信箱', '單位總人數(人)', '已完成人數(人)', '未完成人數(人)', '單位達成比率', '填表日期', '流程一完成時間', '整體完成時間', '最後更新']].concat(rows)
+      downloadWorkbook(filename || ('\u6559\u80b2\u8a13\u7df4\u7d71\u8a08\u7e3d\u8868_' + new Date().toISOString().slice(0, 10) + '.xlsx'), [{
+        name: '\u6559\u80b2\u8a13\u7df4\u7d71\u8a08',
+        rows: [[
+          '\u8868\u55ae\u7de8\u865f',
+          '\u7d71\u8a08\u55ae\u4f4d',
+          '\u586b\u5831\u55ae\u4f4d',
+          '\u5e74\u5ea6',
+          '\u72c0\u614b',
+          '\u586b\u5831\u4eba',
+          '\u806f\u7d61\u96fb\u8a71',
+          '\u806f\u7d61\u4fe1\u7bb1',
+          '\u5728\u8077\u4eba\u6578',
+          '\u5df2\u5b8c\u6210',
+          '\u672a\u5b8c\u6210',
+          '\u5b8c\u6210\u7387',
+          '\u586b\u5831\u65e5\u671f',
+          '\u6d41\u7a0b\u4e00\u9001\u51fa\u6642\u9593',
+          '\u7c3d\u6838\u5b8c\u6210\u6642\u9593',
+          '\u6700\u5f8c\u66f4\u65b0'
+        ]].concat(rows)
       }]);
     }
 
@@ -416,13 +433,13 @@
       const records = sortTrainingRosterEntries(form.records || []);
       const trainingYear = String(form.trainingYear || new Date().getFullYear() - 1911).trim();
       const rows = [
-        ['【' + trainingYear + '年國立臺灣大學資通安全教育訓練統計】'],
+        ['\u570b\u7acb\u81fa\u7063\u5927\u5b78 ' + trainingYear + ' \u5e74\u8cc7\u901a\u5b89\u5168\u6559\u80b2\u8a13\u7df4\u57f7\u884c\u60c5\u5f62\u7d71\u8a08\u8868'],
         [],
-        ['【統計與經辦人資訊】'],
-        ['統計單位', '經辦人姓名', '經辦人電話', '經辦人信箱', '單位總人數(在職)', '未完成人數(在職)', '已完成人數(在職)', '達成率', '提交時間'],
+        ['\u8868\u55ae\u6458\u8981'],
+        ['\u7d71\u8a08\u55ae\u4f4d', '\u586b\u5831\u4eba', '\u806f\u7d61\u96fb\u8a71', '\u806f\u7d61\u4fe1\u7bb1', '\u5728\u8077\u4eba\u6578', '\u672a\u5b8c\u6210', '\u5df2\u5b8c\u6210', '\u5b8c\u6210\u7387', '\u6700\u5f8c\u66f4\u65b0'],
         [
-          form.statsUnit || getTrainingStatsUnit(form.unit) || '未指定單位',
-          form.fillerName || '未知經辦人',
+          form.statsUnit || getTrainingStatsUnit(form.unit) || '\u672a\u6307\u5b9a\u55ae\u4f4d',
+          form.fillerName || '\u672a\u6307\u5b9a\u586b\u5831\u4eba',
           form.submitterPhone || '',
           form.submitterEmail || '',
           summary.activeCount || 0,
@@ -432,8 +449,8 @@
           formatTrainingExportTimestamp(form.submittedAt || form.updatedAt || form.createdAt)
         ],
         [],
-        ['【人員申報明細】'],
-        ['項次', '員工姓名', '一級單位', '本職單位', '身分別', '職稱', '在職狀態', '是否完成資安通識(1年3hr)', '是否為資訊人員(含委外)', '是否完成資安專業課程(2年3hr)']
+        ['\u4eba\u54e1\u660e\u7d30'],
+        ['\u5e8f\u865f', '\u59d3\u540d', '\u7d71\u8a08\u55ae\u4f4d', '\u672c\u8077\u55ae\u4f4d', '\u8eab\u5206\u5225', '\u8077\u7a31', '\u5728\u8077\u72c0\u614b', '\u8cc7\u5b89\u901a\u8b58\uff081 \u5e74 3 \u5c0f\u6642\uff09', '\u8cc7\u8a0a\u4eba\u54e1\u8a13\u7df4', '\u8cc7\u5b89\u5c08\u696d\u8a13\u7df4\uff082 \u5e74 3 \u5c0f\u6642\uff09']
       ].concat(records.map((row, index) => [
         index + 1,
         row.name || '',
@@ -461,22 +478,97 @@
 
     function buildTrainingPrintHtml(payload) {
       const summary = payload.summary || computeTrainingSummary(payload.records || []);
-      const unitName = payload.statsUnit || getTrainingStatsUnit(payload.unit);
+      const unitName = payload.statsUnit || getTrainingStatsUnit(payload.unit) || '\u672a\u6307\u5b9a\u55ae\u4f4d';
       const rocDate = getRocDateParts(payload.fillDate);
-      return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>資安教育訓練簽核表</title><style>body{font-family:"Noto Sans TC",sans-serif;color:#111827;margin:0;padding:24px}.sheet{max-width:960px;margin:0 auto}h1{font-size:24px;text-align:center;margin:0 0 18px}.meta,.summary,.confirm-table{width:100%;border-collapse:collapse;margin-bottom:18px}.meta th,.meta td,.summary th,.summary td,.confirm-table th,.confirm-table td{border:1px solid #111827;padding:10px 12px;font-size:14px;vertical-align:top}.meta th,.summary th,.confirm-table th{background:#f8fafc;text-align:left;width:18%}.summary-note{display:block;margin-top:4px;font-size:12px;color:#475569;font-weight:400}.confirm-check{display:inline-flex;align-items:center;gap:10px;font-weight:600}.checkbox-box{display:inline-block;width:18px;height:18px;border:1.5px solid #111827;box-sizing:border-box}.notes{font-size:13px;line-height:1.8;color:#111827}.notes-title{font-weight:700;margin:14px 0 6px}.notes ol{padding-left:20px;margin:6px 0 0}.sign-row{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:end;margin-top:22px}.sign-box{border:2px solid #111827;height:120px;padding:12px;font-size:16px;display:flex;align-items:flex-start;justify-content:flex-start}</style></head><body><div class="sheet"><h1>' + esc(payload.trainingYear || '') + '年國立臺灣大學資通安全教育訓練執行情形</h1><table class="meta"><tr><th>一級單位</th><td>' + esc(unitName || '未指定') + '</td><th>填表日期</th><td>' + esc(rocDate.year) + '年' + esc(rocDate.month) + '月' + esc(rocDate.day) + '日</td></tr><tr><th>經辦人</th><td>' + esc(payload.fillerName || payload.submitterName || '') + '</td><th>聯絡電話</th><td>' + esc(payload.submitterPhone || '') + '</td></tr><tr><th>聯絡信箱</th><td colspan="3">' + esc(payload.submitterEmail || '') + '</td></tr></table><table class="summary"><tr><th>單位總人數(人)<span class="summary-note">（勿自行填寫）</span></th><th>單位達成比率<span class="summary-note">（勿自行填寫）</span></th><th>未完成人數(人)<span class="summary-note">（勿自行填寫）</span></th><th>已完成人數(人)<span class="summary-note">（勿自行填寫）</span></th></tr><tr><td>' + (summary.activeCount || 0) + '</td><td>' + (summary.completionRate || 0) + '%</td><td>' + (summary.incompleteCount || 0) + '</td><td>' + (summary.completedCount || 0) + '</td></tr></table><table class="confirm-table"><tr><th>單位是否已留存單位人員教育訓練佐證</th><td><span class="confirm-check"><span class="checkbox-box"></span><span>是，本單位已留存單位人員教育訓練佐證。</span></span></td></tr></table><div class="notes"><div class="notes-title">資通安全教育訓練統計注意事項:</div><ol><li>此表單將會作為校內資通安全二方稽核依據，請單位確實辦理。</li><li>請單位自行留存單位人員教育訓練佐證，佐證將於資通安全二方稽核時抽查審閱。</li><li>教育訓練佐證應包含：人員姓名、人員職稱、已完成之課程名稱、認證時數之單位、認證時數、完成課程之日期。</li><li>教育訓練佐證範例（皆須含上述內容）：課程證書、認證時數之單位往來信件截圖、相關教育訓練系統截圖（如：公務人員終身學習網站、e 等公務員學習平台、臺灣大學資通盤點系統等）。</li><li>線上資安教育訓練資源可參考本校網站：https://isms.ntu.edu.tw/e-learning.html</li></ol></div><div class="sign-row"><div></div><div class="sign-box">一級主管</div></div></div></body></html>';
+      const title = String(payload.trainingYear || '') + '\u5e74\u570b\u7acb\u81fa\u7063\u5927\u5b78\u8cc7\u901a\u5b89\u5168\u6559\u80b2\u8a13\u7df4\u57f7\u884c\u60c5\u5f62\u7c3d\u6838\u8868';
+      return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>' + esc(title) + '</title><style>'
+        + 'body{font-family:"Noto Sans TC",sans-serif;color:#111827;margin:0;padding:24px;background:#fff}'
+        + '.sheet{max-width:960px;margin:0 auto}'
+        + 'h1{font-size:24px;text-align:center;margin:0 0 18px}'
+        + '.meta,.summary,.confirm-table{width:100%;border-collapse:collapse;margin-bottom:18px}'
+        + '.meta th,.meta td,.summary th,.summary td,.confirm-table th,.confirm-table td{border:1px solid #111827;padding:10px 12px;font-size:14px;vertical-align:top}'
+        + '.meta th,.summary th,.confirm-table th{background:#f8fafc;text-align:left;width:18%}'
+        + '.summary-note{display:block;margin-top:4px;font-size:12px;color:#475569;font-weight:400}'
+        + '.confirm-check{display:inline-flex;align-items:center;gap:10px;font-weight:600}'
+        + '.checkbox-box{display:inline-block;width:18px;height:18px;border:1.5px solid #111827;box-sizing:border-box}'
+        + '.notes{font-size:13px;line-height:1.8;color:#111827}'
+        + '.notes-title{font-weight:700;margin:14px 0 6px}'
+        + '.notes ol{padding-left:20px;margin:6px 0 0}'
+        + '.sign-row{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:end;margin-top:22px}'
+        + '.sign-box{border:2px solid #111827;height:120px;padding:12px;font-size:16px;display:flex;align-items:flex-start;justify-content:flex-start}'
+        + '</style></head><body><div class="sheet">'
+        + '<h1>' + esc(title) + '</h1>'
+        + '<table class="meta">'
+        + '<tr><th>\u7d71\u8a08\u55ae\u4f4d</th><td>' + esc(unitName) + '</td><th>\u586b\u5831\u65e5\u671f</th><td>' + esc(rocDate.year) + '\u5e74' + esc(rocDate.month) + '\u6708' + esc(rocDate.day) + '\u65e5</td></tr>'
+        + '<tr><th>\u586b\u5831\u4eba</th><td>' + esc(payload.fillerName || payload.submitterName || '') + '</td><th>\u806f\u7d61\u96fb\u8a71</th><td>' + esc(payload.submitterPhone || '') + '</td></tr>'
+        + '<tr><th>\u806f\u7d61\u4fe1\u7bb1</th><td colspan="3">' + esc(payload.submitterEmail || '') + '</td></tr>'
+        + '</table>'
+        + '<table class="summary">'
+        + '<tr>'
+        + '<th>\u5728\u8077\u4eba\u6578<span class="summary-note">\u4ee5\u540d\u55ae\u4e2d\u7684\u5728\u8077\u4eba\u54e1\u70ba\u6e96</span></th>'
+        + '<th>\u5b8c\u6210\u7387<span class="summary-note">\u5df2\u5b8c\u6210\u4eba\u6578 / \u5728\u8077\u4eba\u6578</span></th>'
+        + '<th>\u672a\u5b8c\u6210<span class="summary-note">\u5c1a\u672a\u5b8c\u6210\u61c9\u53d7\u8a13\u7df4\u4eba\u6578</span></th>'
+        + '<th>\u5df2\u5b8c\u6210<span class="summary-note">\u7b26\u5408\u61c9\u5b8c\u6210\u689d\u4ef6\u4eba\u6578</span></th>'
+        + '</tr>'
+        + '<tr><td>' + (summary.activeCount || 0) + '</td><td>' + (summary.completionRate || 0) + '%</td><td>' + (summary.incompleteCount || 0) + '</td><td>' + (summary.completedCount || 0) + '</td></tr>'
+        + '</table>'
+        + '<table class="confirm-table">'
+        + '<tr><th>\u672c\u55ae\u4f4d\u8cc7\u901a\u5b89\u5168\u6559\u80b2\u8a13\u7df4\u57f7\u884c\u60c5\u5f62\u78ba\u8a8d</th><td><span class="confirm-check"><span class="checkbox-box"></span><span>\u4ee5\u4e0a\u5167\u5bb9\u7d93\u78ba\u8a8d\u7121\u8aa4\uff0c\u4e26\u5df2\u5b8c\u6210\u55ae\u4f4d\u5167\u90e8\u6aa2\u6838\u3002</span></span></td></tr>'
+        + '</table>'
+        + '<div class="notes">'
+        + '<div class="notes-title">\u7c3d\u6838\u524d\u8acb\u78ba\u8a8d\u4ee5\u4e0b\u4e8b\u9805</div>'
+        + '<ol>'
+        + '<li>\u8acb\u78ba\u8a8d\u586b\u5831\u540d\u55ae\u3001\u5728\u8077\u72c0\u614b\u8207\u6559\u80b2\u8a13\u7df4\u5b8c\u6210\u60c5\u5f62\u5747\u70ba\u6700\u65b0\u8cc7\u6599\u3002</li>'
+        + '<li>\u7c3d\u6838\u524d\u8acb\u5148\u5b8c\u6210\u6d41\u7a0b\u4e00\u9001\u51fa\uff0c\u518d\u5217\u5370\u672c\u8868\u4e26\u7531\u55ae\u4f4d\u4e3b\u7ba1\u7c3d\u7ae0\u3002</li>'
+        + '<li>\u7c3d\u6838\u6383\u63cf\u6a94\u4e0a\u50b3\u5f8c\uff0c\u8acb\u78ba\u8a8d\u7cfb\u7d71\u4e2d\u7684\u6a94\u6848\u53ef\u4ee5\u6b63\u5e38\u9810\u89bd\u8207\u4e0b\u8f09\u3002</li>'
+        + '<li>\u82e5\u6709\u9000\u56de\u66f4\u6b63\uff0c\u8acb\u4f9d\u9000\u56de\u610f\u898b\u66f4\u65b0\u8cc7\u6599\u5f8c\u91cd\u65b0\u5217\u5370\u4e26\u88dc\u4e0a\u6700\u65b0\u7c3d\u6838\u6383\u63cf\u6a94\u3002</li>'
+        + '<li>\u76f8\u95dc\u8cc7\u5b89\u8a13\u7df4\u8ab2\u7a0b\u8cc7\u8a0a\u53ef\u53c3\u8003\u672c\u6821\u8cc7\u5b89\u5c08\u5340\u8207 e-learning \u5e73\u53f0\u3002</li>'
+        + '</ol></div>'
+        + '<div class="sign-row"><div></div><div class="sign-box">\u55ae\u4f4d\u4e3b\u7ba1\u7c3d\u7ae0</div></div>'
+        + '</div></body></html>';
     }
 
     function printTrainingSheet(payload) {
+      const html = buildTrainingPrintHtml(payload);
       const win = window.open('', '_blank', 'width=980,height=800');
-      if (!win) {
-        toast('無法開啟列印視窗，請確認瀏覽器未封鎖彈出視窗', 'error');
+      if (win) {
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        setTimeout(() => {
+          win.focus();
+          win.print();
+        }, 250);
         return;
       }
-      win.document.open();
-      win.document.write(buildTrainingPrintHtml(payload));
-      win.document.close();
-      win.focus();
-      setTimeout(() => win.print(), 250);
+      toast('\u700f\u89bd\u5668\u5df2\u5c01\u9396\u5f48\u51fa\u8996\u7a97\uff0c\u7cfb\u7d71\u6539\u4ee5\u9801\u5167\u5217\u5370\u6a21\u5f0f\u958b\u555f\u3002', 'info');
+      const iframe = document.createElement('iframe');
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+      const frameWindow = iframe.contentWindow;
+      if (!frameWindow) {
+        iframe.remove();
+        toast('\u7121\u6cd5\u5efa\u7acb\u5217\u5370\u8996\u7a97\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66\u3002', 'error');
+        return;
+      }
+      frameWindow.document.open();
+      frameWindow.document.write(html);
+      frameWindow.document.close();
+      const cleanup = () => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      };
+      frameWindow.addEventListener('afterprint', cleanup, { once: true });
+      setTimeout(() => {
+        frameWindow.focus();
+        frameWindow.print();
+        setTimeout(cleanup, 1500);
+      }, 250);
     }
 
     function normalizeTrainingImportHeader(value) {
@@ -485,19 +577,18 @@
         .trim()
         .toLowerCase()
         .replace(/[\s\u3000]+/g, '')
-        .replace(/[()（）]/g, '')
-        .replace(/[／/]/g, '')
+        .replace(/[()\uFF08\uFF09]/g, '')
         .replace(/[._\-]/g, '');
     }
 
     function buildTrainingRosterHeaderMap(cells) {
       const headerAliases = {
-        name: ['姓名', '人員姓名', 'name'],
-        unitName: ['本職單位', '服務單位', '單位', '本單位', '任職單位'],
-        identity: ['身分別', '身份別', '身分類別', '人員身分', '身份類別'],
-        jobTitle: ['職稱', '職務', 'title'],
-        unit: ['填報單位', '受填報單位', '單位代填', '歸屬單位'],
-        statsUnit: ['統計單位', '一級單位']
+        name: ['\u59d3\u540d', '\u53d7\u8a13\u4eba\u59d3\u540d', 'name'],
+        unitName: ['\u672c\u8077\u55ae\u4f4d', '\u55ae\u4f4d\u540d\u7a31', '\u670d\u52d9\u55ae\u4f4d', '\u8077\u52d9\u55ae\u4f4d'],
+        identity: ['\u8eab\u5206\u5225', '\u8eab\u4efd\u5225', '\u4eba\u54e1\u8eab\u5206', '\u8077\u54e1\u8eab\u5206'],
+        jobTitle: ['\u8077\u7a31', '\u8077\u52d9', 'title'],
+        unit: ['\u586b\u5831\u55ae\u4f4d', '\u6240\u5c6c\u55ae\u4f4d', '\u4e3b\u586b\u5831\u55ae\u4f4d', '\u55ae\u4f4d'],
+        statsUnit: ['\u7d71\u8a08\u55ae\u4f4d', '\u4e00\u7d1a\u55ae\u4f4d', '\u6240\u5c6c\u4e00\u7d1a\u55ae\u4f4d']
       };
       const normalizedCells = (Array.isArray(cells) ? cells : []).map((cell) => normalizeTrainingImportHeader(cell));
       const map = {};
@@ -505,7 +596,7 @@
         const idx = normalizedCells.findIndex((cell) => headerAliases[key].some((alias) => cell === normalizeTrainingImportHeader(alias)));
         if (idx >= 0) map[key] = idx;
       });
-      return map.name >= 0 ? map : null;
+      return Number.isInteger(map.name) ? map : null;
     }
 
     function isTrainingRosterHeaderLikeRow(cells) {
@@ -515,21 +606,19 @@
       if (!normalizedCells.length) return false;
       if (buildTrainingRosterHeaderMap(cells)) return true;
       const headerTokens = new Set([
-        normalizeTrainingImportHeader('姓名'),
-        normalizeTrainingImportHeader('人員姓名'),
-        normalizeTrainingImportHeader('本職單位'),
-        normalizeTrainingImportHeader('服務單位'),
-        normalizeTrainingImportHeader('單位'),
-        normalizeTrainingImportHeader('身分別'),
-        normalizeTrainingImportHeader('身份別'),
-        normalizeTrainingImportHeader('職稱'),
-        normalizeTrainingImportHeader('職務'),
-        normalizeTrainingImportHeader('填報單位'),
-        normalizeTrainingImportHeader('統計單位'),
-        normalizeTrainingImportHeader('一級單位')
+        normalizeTrainingImportHeader('\u59d3\u540d'),
+        normalizeTrainingImportHeader('\u53d7\u8a13\u4eba\u59d3\u540d'),
+        normalizeTrainingImportHeader('\u672c\u8077\u55ae\u4f4d'),
+        normalizeTrainingImportHeader('\u55ae\u4f4d\u540d\u7a31'),
+        normalizeTrainingImportHeader('\u8eab\u5206\u5225'),
+        normalizeTrainingImportHeader('\u8eab\u4efd\u5225'),
+        normalizeTrainingImportHeader('\u8077\u7a31'),
+        normalizeTrainingImportHeader('\u8077\u52d9'),
+        normalizeTrainingImportHeader('\u586b\u5831\u55ae\u4f4d'),
+        normalizeTrainingImportHeader('\u7d71\u8a08\u55ae\u4f4d')
       ]);
       const matched = normalizedCells.filter((cell) => headerTokens.has(cell)).length;
-      return matched >= 2 || (matched >= 1 && normalizedCells.length <= 4 && normalizedCells[0] === normalizeTrainingImportHeader('姓名'));
+      return matched >= 2 || (matched >= 1 && normalizedCells.length <= 4 && normalizedCells[0] === normalizeTrainingImportHeader('\u59d3\u540d'));
     }
 
     function resolveTrainingRosterDataRows(rows) {
@@ -552,8 +641,8 @@
 
     function resolveTrainingImportTargetUnit(defaultUnit, rawUnit, rawStatsUnit) {
       const selectedUnit = String(defaultUnit || '').trim();
-      const unitText = String(rawUnit || '').trim().replace(/\//g, '／');
-      const statsText = String(rawStatsUnit || '').trim().replace(/\//g, '／');
+      const unitText = String(rawUnit || '').trim().replace(/\//g, '\uFF0F');
+      const statsText = String(rawStatsUnit || '').trim().replace(/\//g, '\uFF0F');
       if (unitText) {
         if (getOfficialUnitMeta(unitText) || getApprovedCustomUnits().includes(unitText)) return unitText;
         if (statsText && getOfficialUnitMeta(composeUnitValue(statsText, unitText))) return composeUnitValue(statsText, unitText);
@@ -573,7 +662,7 @@
         return clean[fallbackIndex] || '';
       };
       const firstCell = getCell('name', 0);
-      if (!firstCell || firstCell === '姓名') return null;
+      if (!firstCell || firstCell === '\u59d3\u540d' || firstCell === '\u53d7\u8a13\u4eba\u59d3\u540d') return null;
       const importedUnit = resolveTrainingImportTargetUnit(unit, getCell('unit', -1), getCell('statsUnit', -1));
       return {
         unit: importedUnit,
@@ -603,7 +692,7 @@
         const reader = new FileReader();
         reader.onload = (event) => {
           try {
-            if (typeof window === 'undefined' || !window.XLSX) throw new Error('Excel 模組尚未載入');
+            if (typeof window === 'undefined' || !window.XLSX) throw new Error('\u0045\u0078\u0063\u0065\u006c\u0020\u6a21\u7d44\u5c1a\u672a\u8f09\u5165');
             const workbook = window.XLSX.read(event.target.result, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             if (!firstSheetName) {
@@ -617,7 +706,7 @@
             reject(error);
           }
         };
-        reader.onerror = () => reject(new Error('無法讀取匯入檔案'));
+        reader.onerror = () => reject(new Error('\u7121\u6cd5\u8b80\u53d6\u6a94\u6848\u5167\u5bb9'));
         reader.readAsArrayBuffer(file);
       });
     }

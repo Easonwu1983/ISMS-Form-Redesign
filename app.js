@@ -2723,6 +2723,10 @@
   let authenticatedBootstrapKey = '';
   let authenticatedBootstrapPromise = null;
   let authenticatedBootstrapState = 'idle';
+  let sessionHeartbeatTimer = null;
+  let sessionExpiryReminderKey = '';
+  const SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+  const SESSION_EXPIRY_WARNING_MS = 10 * 60 * 1000;
   function setAuthenticatedBootstrapState(nextState) {
     authenticatedBootstrapState = String(nextState || 'idle').trim() || 'idle';
     if (typeof window !== 'undefined') {
@@ -2799,6 +2803,76 @@
     if (!user) return false;
     const nextKey = buildAuthenticatedBootstrapKey(user);
     return authenticatedBootstrapState === 'pending' && authenticatedBootstrapKey === nextKey;
+  }
+  function clearSessionHeartbeat() {
+    if (sessionHeartbeatTimer && typeof window !== 'undefined' && typeof window.clearInterval === 'function') {
+      window.clearInterval(sessionHeartbeatTimer);
+    }
+    sessionHeartbeatTimer = null;
+  }
+  function getSessionExpiresAtMs(user) {
+    const value = Date.parse(String(user && user.sessionExpiresAt || '').trim());
+    return Number.isFinite(value) ? value : 0;
+  }
+  function maybeWarnSessionExpiry(user) {
+    const expiresAt = getSessionExpiresAtMs(user);
+    if (!expiresAt) return;
+    const remainingMs = expiresAt - Date.now();
+    if (remainingMs > SESSION_EXPIRY_WARNING_MS) return;
+    const reminderKey = [
+      String(user && user.username || '').trim(),
+      String(user && user.sessionToken || '').trim(),
+      String(expiresAt)
+    ].join('|');
+    if (!reminderKey || sessionExpiryReminderKey === reminderKey) return;
+    sessionExpiryReminderKey = reminderKey;
+    toast('登入狀態將於 10 分鐘內到期，請先完成手上的操作。', 'info');
+  }
+  async function runSessionHeartbeat() {
+    if (getAuthMode() !== 'm365-api') return;
+    const user = currentUser();
+    if (!user || !String(user.sessionToken || '').trim()) {
+      clearSessionHeartbeat();
+      sessionExpiryReminderKey = '';
+      return;
+    }
+    try {
+      const verifiedUser = await verifyCurrentSessionWithBackend();
+      if (!verifiedUser) {
+        sessionStorage.removeItem(AUTH_KEY);
+        sessionExpiryReminderKey = '';
+        toast('登入狀態已失效，請重新登入', 'error');
+        await logout();
+        return;
+      }
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify(verifiedUser));
+      maybeWarnSessionExpiry(verifiedUser);
+    } catch (error) {
+      const statusCode = Number(error && error.statusCode || 0);
+      const message = String(error && error.message || error || '').trim();
+      if (statusCode === 401 || statusCode === 403 || message === '登入狀態已失效，請重新登入') {
+        sessionStorage.removeItem(AUTH_KEY);
+        sessionExpiryReminderKey = '';
+        toast('登入狀態已失效，請重新登入', 'error');
+        await logout();
+        return;
+      }
+      console.warn('session heartbeat failed', error);
+    }
+  }
+  function ensureSessionHeartbeat() {
+    clearSessionHeartbeat();
+    sessionExpiryReminderKey = '';
+    if (typeof window === 'undefined') return;
+    if (getAuthMode() !== 'm365-api') return;
+    const user = currentUser();
+    if (!user || !String(user.sessionToken || '').trim()) return;
+    maybeWarnSessionExpiry(user);
+    sessionHeartbeatTimer = window.setInterval(function () {
+      runSessionHeartbeat().catch(function (error) {
+        console.warn('session heartbeat failed', error);
+      });
+    }, SESSION_HEARTBEAT_INTERVAL_MS);
   }
   let shellModuleApi = null;
   function getShellModule() {
@@ -2930,7 +3004,10 @@
   function closeSidebar() { return getShellModule().closeSidebar(); }
   function toggleSidebar() { return getShellModule().toggleSidebar(); }
   function renderLogin() { return getShellModule().renderLogin(); }
-  function renderApp() { return getShellModule().renderApp(); }
+  function renderApp() {
+    ensureSessionHeartbeat();
+    return getShellModule().renderApp();
+  }
   function renderSidebar() { return getShellModule().renderSidebar(); }
   function renderHeader() { return getShellModule().renderHeader(); }
 
@@ -3463,6 +3540,22 @@
     window.addEventListener('hashchange', handleHashChange);
     window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
     window.addEventListener('load', refreshIcons);
+    window.addEventListener('focus', function () {
+      runSessionHeartbeat().catch(function (error) {
+        console.warn('session heartbeat failed', error);
+      });
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        runSessionHeartbeat().catch(function (error) {
+          console.warn('session heartbeat failed', error);
+        });
+      }
+    });
+    window.addEventListener('isms:storage-warning', function (event) {
+      const message = String(event && event.detail && event.detail.message || '').trim();
+      if (message) toast(message, 'error');
+    });
     renderApp();
     lastStableHash = window.location.hash || '#dashboard';
     refreshIcons();

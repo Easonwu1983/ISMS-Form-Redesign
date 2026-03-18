@@ -496,9 +496,9 @@
       const req = required ? 'required' : '';
       return `<div class="unit-cascade">
       <div class="unit-cascade-search">
-        <input type="search" class="form-input unit-cascade-search-input" id="${baseId}-search" data-testid="${baseId}-search" placeholder="可搜尋單位名稱或代碼" autocomplete="off" ${dis}>
-        <div class="unit-cascade-search-results" id="${baseId}-search-results" hidden></div>
-        <div class="form-hint unit-cascade-search-hint">可直接輸入單位名稱或代碼，系統會自動帶入類別與層級。</div>
+        <input type="search" class="form-input unit-cascade-search-input" id="${baseId}-search" data-testid="${baseId}-search" placeholder="\u53ef\u641c\u5c0b\u55ae\u4f4d\u540d\u7a31\u6216\u4ee3\u78bc" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${baseId}-search-results" ${dis}>
+        <div class="unit-cascade-search-results" id="${baseId}-search-results" role="listbox" aria-label="\u641c\u5c0b\u5efa\u8b70" hidden></div>
+        <div class="form-hint unit-cascade-search-hint">\u53ef\u76f4\u63a5\u8f38\u5165\u55ae\u4f4d\u540d\u7a31\u6216\u4ee3\u78bc\uff0c\u7cfb\u7d71\u6703\u81ea\u52d5\u5e36\u5165\u985e\u5225\u8207\u5c64\u7d1a\u3002</div>
       </div>
       <div class="unit-cascade-grid unit-cascade-grid--training" id="${baseId}-grid">
         <div class="unit-cascade-segment">
@@ -512,7 +512,7 @@
         </div>
       </div>
       <div class="unit-cascade-custom" id="${baseId}-custom-wrap" style="display:none;margin-top:8px">
-        <input type="text" class="form-input" id="${baseId}-custom" data-testid="${baseId}-custom" placeholder="請輸入自訂單位名稱" ${dis}>
+        <input type="text" class="form-input" id="${baseId}-custom" data-testid="${baseId}-custom" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
       </div>
       <input type="hidden" id="${baseId}" data-testid="${baseId}" value="${esc(selectedUnit || '')}" />
     </div>`;
@@ -538,15 +538,24 @@
       const parsed = splitUnitValue(rawInitial);
       const knownParents = new Set(Object.keys(structure || {}));
       const isInitialCustom = allowCustom && !!rawInitial && !!parsed.parent && !knownParents.has(parsed.parent);
+      const listboxId = `${baseId}-search-results`;
 
       const parentSet = new Set(knownParents);
       if (parsed.parent && !isInitialCustom) parentSet.add(parsed.parent);
       const parents = Array.from(parentSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
       const initialCategory = parsed.parent ? categorizeTopLevelUnit(parsed.parent) : '';
+      let activeSearchIndex = -1;
+      let searchBlurTimer = null;
 
       categoryEl.innerHTML =
-        '<option value="">選單位類別</option>' +
+        '<option value="">\u9078\u55ae\u4f4d\u985e\u5225</option>' +
         getTrainingUnitCategories().map((category) => `<option value="${esc(category)}">${esc(category)}</option>`).join('');
+
+      const setSearchExpanded = (expanded) => {
+        if (!searchEl) return;
+        searchEl.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        if (!expanded) searchEl.removeAttribute('aria-activedescendant');
+      };
 
       const setCustomMode = (enabled) => {
         if (!customWrap || !customEl) return;
@@ -558,6 +567,29 @@
         if (!searchResultsEl) return;
         searchResultsEl.hidden = true;
         searchResultsEl.innerHTML = '';
+        activeSearchIndex = -1;
+        setSearchExpanded(false);
+      };
+
+      const setActiveSearchOption = (index) => {
+        if (!searchEl || !searchResultsEl) return;
+        const options = Array.from(searchResultsEl.querySelectorAll('[data-unit-value]'));
+        if (!options.length) {
+          activeSearchIndex = -1;
+          searchEl.removeAttribute('aria-activedescendant');
+          return;
+        }
+        const boundedIndex = Math.max(0, Math.min(index, options.length - 1));
+        activeSearchIndex = boundedIndex;
+        options.forEach((button, buttonIndex) => {
+          const isActive = buttonIndex === boundedIndex;
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          if (isActive) {
+            searchEl.setAttribute('aria-activedescendant', button.id);
+            button.scrollIntoView({ block: 'nearest' });
+          }
+        });
       };
 
       const syncSearchInput = () => {
@@ -573,6 +605,85 @@
         }
         const entry = searchEntries.find((item) => item.value === currentValue) || buildUnitSearchEntry(currentValue);
         searchEl.value = entry ? entry.fullLabel : currentValue;
+      };
+
+      const renderParents = (category, selectedParent) => {
+        const targetCategory = String(category || '').trim();
+        const parent = String(selectedParent || '').trim();
+        if (!targetCategory) {
+          parentEl.innerHTML = '<option value="">\u8acb\u5148\u9078\u55ae\u4f4d\u985e\u5225</option>';
+          parentEl.disabled = true;
+          if (childWrap) childWrap.style.display = 'none';
+          childEl.innerHTML = '<option value="">\u8acb\u5148\u9078\u4e00\u7d1a\u55ae\u4f4d</option>';
+          childEl.disabled = true;
+          return;
+        }
+        const categoryParents = getParentsByUnitCategory(parents, targetCategory);
+        const parentOptions = parent && !categoryParents.includes(parent) ? [parent].concat(categoryParents) : categoryParents;
+        parentEl.disabled = false;
+        parentEl.innerHTML =
+          '<option value="">\u9078\u64c7\u4e00\u7d1a\u55ae\u4f4d</option>' +
+          parentOptions.map((item) => `<option value="${esc(item)}">${esc(getUnitOptionLabel(item, item))}</option>`).join('') +
+          (allowCustom ? `<option value="${UNIT_CUSTOM_VALUE}">${UNIT_CUSTOM_LABEL}</option>` : '');
+        if (parent) parentEl.value = parent;
+      };
+
+      const renderChildren = (parent, selectedChild) => {
+        const child = String(selectedChild || '').trim();
+
+        if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
+          childEl.innerHTML = '<option value="">\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d</option>';
+          childEl.disabled = true;
+          if (childWrap) childWrap.style.display = 'none';
+          return;
+        }
+
+        const children = Array.isArray(structure[parent]) ? [...structure[parent]] : [];
+        if (child && !children.includes(child)) children.unshift(child);
+
+        if (!parent) {
+          childEl.innerHTML = '<option value="">\u8acb\u5148\u9078\u4e00\u7d1a\u55ae\u4f4d</option>';
+          childEl.disabled = true;
+          if (childWrap) childWrap.style.display = 'none';
+          return;
+        }
+
+        if (children.length === 0) {
+          childEl.innerHTML = '<option value="">\u6b64\u55ae\u4f4d\u7121\u4e8c\u7d1a\u55ae\u4f4d</option>';
+          childEl.disabled = true;
+          if (childWrap) childWrap.style.display = 'none';
+          return;
+        }
+
+        childEl.disabled = false;
+        if (childWrap) childWrap.style.display = '';
+        childEl.innerHTML = '<option value="">\u9078\u64c7\u4e8c\u7d1a\u55ae\u4f4d</option>' + children.map((c) => {
+          const unitValue = composeUnitValue(parent, c);
+          return `<option value="${esc(c)}">${esc(getUnitOptionLabel(unitValue, c))}</option>`;
+        }).join('');
+        if (child) childEl.value = child;
+      };
+
+      const syncHidden = (dispatchChange) => {
+        const parent = String(parentEl.value || '').trim();
+
+        if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
+          setCustomMode(true);
+          customEl.placeholder = '\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d';
+          childEl.innerHTML = '<option value="">\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d</option>';
+          childEl.disabled = true;
+          hiddenEl.value = String(customEl.value || '').trim();
+          syncSearchInput();
+          if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
+          return;
+        }
+
+        setCustomMode(false);
+        const hasChildren = Array.isArray(structure[parent]) && structure[parent].length > 0;
+        const child = (!childEl.disabled && hasChildren) ? String(childEl.value || '').trim() : '';
+        hiddenEl.value = composeUnitValue(parent, child);
+        syncSearchInput();
+        if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
       };
 
       const applySelectedUnit = (unitValue) => {
@@ -602,96 +713,28 @@
           .slice(0, 8);
         if (!matches.length) {
           searchResultsEl.hidden = false;
-          searchResultsEl.innerHTML = '<div class="unit-cascade-search-empty">找不到符合的單位，仍可改用下方層級選擇。</div>';
+          setSearchExpanded(true);
+          searchResultsEl.innerHTML = '<div class="unit-cascade-search-empty">\u627e\u4e0d\u5230\u7b26\u5408\u7684\u55ae\u4f4d\uff0c\u53ef\u6539\u7528\u4e0b\u65b9\u5c64\u7d1a\u9078\u64c7\u3002</div>';
           return;
         }
         searchResultsEl.hidden = false;
+        setSearchExpanded(true);
         searchResultsEl.innerHTML = matches.map((entry) => {
-          const meta = [entry.category, entry.code ? ('代碼 ' + entry.code) : '', entry.child ? entry.parent : ''].filter(Boolean).join(' · ');
-          return '<button type="button" class="unit-cascade-search-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(meta) + '</span></button>';
+          const meta = [entry.category, entry.code ? ('\u4ee3\u78bc ' + entry.code) : '', entry.child ? entry.parent : ''].filter(Boolean).join(' \u00b7 ');
+          const optionId = `${listboxId}-option-${entry.value.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
+          return '<button type="button" class="unit-cascade-search-option" id="' + esc(optionId) + '" role="option" aria-selected="false" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(meta) + '</span></button>';
         }).join('');
         searchResultsEl.querySelectorAll('[data-unit-value]').forEach((button) => {
-          button.addEventListener('click', () => applySelectedUnit(button.dataset.unitValue));
+          button.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            applySelectedUnit(button.dataset.unitValue);
+          });
+          button.addEventListener('mouseenter', () => {
+            const options = Array.from(searchResultsEl.querySelectorAll('[data-unit-value]'));
+            setActiveSearchOption(options.indexOf(button));
+          });
         });
-      };
-
-      const syncHidden = (dispatchChange) => {
-        const parent = String(parentEl.value || '').trim();
-
-        if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
-          setCustomMode(true);
-          customEl.placeholder = '請輸入自訂單位名稱';
-          childEl.innerHTML = '<option value="">自訂單位模式</option>';
-          childEl.disabled = true;
-          hiddenEl.value = String(customEl.value || '').trim();
-          syncSearchInput();
-          if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
-          return;
-        }
-
-        setCustomMode(false);
-        const hasChildren = Array.isArray(structure[parent]) && structure[parent].length > 0;
-        const child = (!childEl.disabled && hasChildren) ? String(childEl.value || '').trim() : '';
-        hiddenEl.value = composeUnitValue(parent, child);
-        syncSearchInput();
-        if (dispatchChange) hiddenEl.dispatchEvent(new Event('change'));
-      };
-
-      const renderParents = (category, selectedParent) => {
-        const targetCategory = String(category || '').trim();
-        const parent = String(selectedParent || '').trim();
-        if (!targetCategory) {
-          parentEl.innerHTML = '<option value="">再選單位</option>';
-          parentEl.disabled = true;
-          if (childWrap) childWrap.style.display = 'none';
-          childEl.innerHTML = '<option value="">有二級單位再選</option>';
-          childEl.disabled = true;
-          return;
-        }
-        const categoryParents = getParentsByUnitCategory(parents, targetCategory);
-        const parentOptions = parent && !categoryParents.includes(parent) ? [parent].concat(categoryParents) : categoryParents;
-        parentEl.disabled = false;
-        parentEl.innerHTML =
-          '<option value="">請選擇單位</option>' +
-          parentOptions.map((item) => `<option value="${esc(item)}">${esc(getUnitOptionLabel(item, item))}</option>`).join('') +
-          (allowCustom ? `<option value="${UNIT_CUSTOM_VALUE}">${UNIT_CUSTOM_LABEL}</option>` : '');
-        if (parent) parentEl.value = parent;
-      };
-
-      const renderChildren = (parent, selectedChild) => {
-        const child = String(selectedChild || '').trim();
-
-        if (allowCustom && parent === UNIT_CUSTOM_VALUE) {
-          childEl.innerHTML = '<option value="">自訂單位模式</option>';
-          childEl.disabled = true;
-          if (childWrap) childWrap.style.display = 'none';
-          return;
-        }
-
-        const children = Array.isArray(structure[parent]) ? [...structure[parent]] : [];
-        if (child && !children.includes(child)) children.unshift(child);
-
-        if (!parent) {
-          childEl.innerHTML = '<option value="">請先選擇一級單位</option>';
-          childEl.disabled = true;
-          if (childWrap) childWrap.style.display = 'none';
-          return;
-        }
-
-        if (children.length === 0) {
-          childEl.innerHTML = '<option value="">無二級單位</option>';
-          childEl.disabled = true;
-          if (childWrap) childWrap.style.display = 'none';
-          return;
-        }
-
-        childEl.disabled = false;
-        if (childWrap) childWrap.style.display = '';
-        childEl.innerHTML = '<option value="">選二級單位（選填）</option>' + children.map((c) => {
-          const unitValue = composeUnitValue(parent, c);
-          return `<option value="${esc(c)}">${esc(getUnitOptionLabel(unitValue, c))}</option>`;
-        }).join('');
-        if (child) childEl.value = child;
+        setActiveSearchOption(0);
       };
 
       categoryEl.addEventListener('change', () => {
@@ -707,7 +750,7 @@
       if (allowCustom) customEl.addEventListener('input', () => syncHidden(true));
 
       if (isInitialCustom) {
-        categoryEl.value = initialCategory || '行政單位';
+        categoryEl.value = initialCategory || '\u4e2d\u5fc3\uff0f\u7814\u7a76\u55ae\u4f4d';
         renderParents(categoryEl.value, UNIT_CUSTOM_VALUE);
         parentEl.value = UNIT_CUSTOM_VALUE;
         customEl.value = rawInitial;
@@ -721,23 +764,42 @@
       if (searchEl) {
         searchEl.addEventListener('input', (event) => renderSearchResults(event.target.value));
         searchEl.addEventListener('focus', () => {
+          if (searchBlurTimer) {
+            window.clearTimeout(searchBlurTimer);
+            searchBlurTimer = null;
+          }
           if (String(searchEl.value || '').trim()) renderSearchResults(searchEl.value);
         });
         searchEl.addEventListener('keydown', (event) => {
+          const options = Array.from(searchResultsEl?.querySelectorAll('[data-unit-value]') || []);
           if (event.key === 'Escape') {
             hideSearchResults();
             return;
           }
-          if (event.key === 'Enter') {
-            const firstMatch = searchResultsEl?.querySelector('[data-unit-value]');
-            if (firstMatch) {
+          if (event.key === 'ArrowDown') {
+            if (options.length) {
               event.preventDefault();
-              firstMatch.click();
+              setActiveSearchOption(activeSearchIndex < 0 ? 0 : Math.min(activeSearchIndex + 1, options.length - 1));
+            }
+            return;
+          }
+          if (event.key === 'ArrowUp') {
+            if (options.length) {
+              event.preventDefault();
+              setActiveSearchOption(activeSearchIndex <= 0 ? 0 : activeSearchIndex - 1);
+            }
+            return;
+          }
+          if (event.key === 'Enter') {
+            const activeMatch = activeSearchIndex >= 0 ? options[activeSearchIndex] : options[0];
+            if (activeMatch) {
+              event.preventDefault();
+              applySelectedUnit(activeMatch.dataset.unitValue);
             }
           }
         });
         searchEl.addEventListener('blur', () => {
-          window.setTimeout(hideSearchResults, 120);
+          searchBlurTimer = window.setTimeout(hideSearchResults, 180);
         });
         syncSearchInput();
       }

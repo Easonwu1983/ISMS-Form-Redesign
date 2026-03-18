@@ -490,7 +490,9 @@
   async function renderTraining() {
     try {
       await syncTrainingFormsFromM365({ silent: true });
-    } catch (_) { }
+    } catch (error) {
+      console.warn('training list sync failed', error);
+    }
     const visibleForms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const summary = {
       total: visibleForms.length,
@@ -683,7 +685,9 @@
     try {
       await syncTrainingRostersFromM365({ silent: true });
       await syncTrainingFormsFromM365({ silent: true });
-    } catch (_) {}
+    } catch (error) {
+      console.warn('training fill bootstrap sync failed', error);
+    }
     if (!id && !isAdmin() && lockedUserUnit) {
       const duplicateDraft = findExistingTrainingFormForUnitYear(lockedUserUnit, defaultTrainingYear);
       if (duplicateDraft && isTrainingVisible(duplicateDraft)) {
@@ -799,7 +803,9 @@
       return registerRosterMutation(async () => {
         try {
           await syncTrainingRostersFromM365({ silent: true });
-        } catch (_) {}
+        } catch (error) {
+          console.warn('training roster pre-sync failed', error);
+        }
         const fallbackResult = addTrainingRosterPerson(payload.currentUnit, payload, 'manual', user);
         if (!fallbackResult.added && !fallbackResult.updated) {
           throw new Error(fallbackResult.reason || '新增名單失敗');
@@ -820,7 +826,9 @@
         });
         try {
           await syncTrainingRostersFromM365({ silent: true });
-        } catch (_) {}
+        } catch (error) {
+          console.warn('training roster post-sync failed', error);
+        }
         const syncedRoster = (result && result.item && result.item.id
           ? getAllTrainingRosters().find((row) => row.id === result.item.id)
           : null) || getAllTrainingRosters().find((row) => row.unit === payload.currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
@@ -1501,7 +1509,9 @@
     if (!opts.skipSync) {
       try {
         await syncTrainingRostersFromM365({ silent: true });
-      } catch (_) { }
+      } catch (error) {
+        console.warn('training roster page sync failed', error);
+      }
     }
 
     const rawRosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
@@ -1597,7 +1607,9 @@
       const importedRosterItems = [];
       try {
         await syncTrainingRostersFromM365({ silent: true });
-      } catch (_) {}
+      } catch (error) {
+        console.warn('training roster import pre-sync failed', error);
+      }
       const actor = currentUser() || {};
       const rosterIndex = new Map(
         getAllTrainingRosters().map((row) => [
@@ -1673,7 +1685,9 @@
       }
       try {
         await syncTrainingRostersFromM365({ silent: true });
-      } catch (_) {}
+      } catch (error) {
+        console.warn('training roster import post-sync failed', error);
+      }
       mergeTrainingRosterItemsIntoLocalStore(importedRosterItems);
       await renderTrainingRoster({
         skipSync: true,

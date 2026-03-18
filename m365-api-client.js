@@ -46,6 +46,9 @@
       unitContactStatusEndpoint: '',
       unitContactActivationEndpoint: '',
       unitContactRequestTimeoutMs: 15000,
+      apiReadTimeoutMs: 15000,
+      apiWriteTimeoutMs: 20000,
+      trainingBatchTimeoutMs: 45000,
       unitContactStatusLookupMethod: 'POST',
       unitContactStatusQueryParam: 'email',
       unitContactSharedHeaders: {},
@@ -295,7 +298,10 @@
       let lastError = null;
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        const timeoutMs = Number(config.unitContactRequestTimeoutMs || 15000);
+        const defaultTimeoutMs = method === 'GET'
+          ? Number(config.apiReadTimeoutMs || config.unitContactRequestTimeoutMs || 15000)
+          : Number(config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 15000);
+        const timeoutMs = Number(requestOptions.timeoutMs || defaultTimeoutMs || 15000);
         let timeoutId = null;
         if (controller && timeoutMs > 0) {
           timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -1290,6 +1296,7 @@
       return requestJson(endpoint + path, {
         method: options && options.method || 'GET',
         body: options && options.body,
+        timeoutMs: options && options.timeoutMs,
         contractVersion: TRAINING_CONTRACT_VERSION,
         sharedHeaders: getTrainingSharedHeaders()
       });
@@ -1300,6 +1307,7 @@
       return requestJson(endpoint + path, {
         method: options && options.method || 'GET',
         body: options && options.body,
+        timeoutMs: options && options.timeoutMs,
         contractVersion: TRAINING_CONTRACT_VERSION,
         sharedHeaders: getTrainingSharedHeaders()
       });
@@ -1475,8 +1483,10 @@
     }
 
     async function upsertTrainingRosterBatch(payload) {
+      const config = getConfig();
       const body = await requestTrainingRosters('/upsert-batch', {
         method: 'POST',
+        timeoutMs: Number(config.trainingBatchTimeoutMs || config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 45000),
         body: buildTrainingEnvelope(TRAINING_ROSTER_ACTIONS.UPSERT_BATCH, payload)
       });
       const items = normalizeRemoteTrainingRosters(body);
