@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createChecklistModule = function createChecklistModule(deps) {
     const {
       TEMPLATE_KEY,
@@ -53,8 +53,9 @@
       refreshIcons,
       bindCopyButtons,
       renderCopyIdCell,
-      renderCopyIdButton,
-      openConfirmDialog
+      renderCopyIdButton,
+      openConfirmDialog,
+      runWithBusyState
     } = deps;
 
     function getChecklistSectionsState() {
@@ -422,23 +423,52 @@
       };
     }
 
-    async function saveChecklistDraft() {
-      const data = await collectData('\u8349\u7a3f');
-      const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
-      if (duplicateChecklist) {
-        toast('本年度已存在檢核表，請至列表繼續編輯或查看，勿重複新增。', 'error');
-        clearUnsavedChangesGuard();
-        navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
-        return;
+    function validateChecklistMeta() {
+      const requiredMeta = [
+        { el: document.getElementById('cl-unit'), label: '\u53d7\u7a3d\u55ae\u4f4d' },
+        { el: document.getElementById('cl-date'), label: '\u586b\u5831\u65e5\u671f' },
+        { el: document.getElementById('cl-year'), label: '\u7a3d\u6838\u5e74\u5ea6' },
+        { el: document.getElementById('cl-supervisor-name'), label: '\u6b0a\u8cac\u4e3b\u7ba1\u59d3\u540d' },
+        { el: document.getElementById('cl-supervisor-title'), label: '\u4e3b\u7ba1\u8077\u7a31' },
+        { el: document.getElementById('cl-sign-status'), label: '\u7c3d\u6838\u72c0\u614b' },
+        { el: document.getElementById('cl-sign-date'), label: '\u7c3d\u6838\u65e5\u671f' }
+      ];
+      return requiredMeta.find(({ el }) => !String(el && el.value || '').trim()) || null;
+    }
+
+    function replaceChecklistDraftRoute(id) {
+      if (typeof window === 'undefined' || !window.history || !id) return;
+      const nextHash = '#checklist-fill/' + encodeURIComponent(id);
+      if (window.location.hash !== nextHash) {
+        window.history.replaceState(null, '', nextHash);
       }
-      const result = await submitChecklistDraft(data);
-      existing = result && result.item ? result.item : (getChecklist(data.id) || data);
-      debugFlow('checklist', 'draft saved', { id: data.id, unit: data.unit, status: data.status });
-      updateChecklistDraftStatus(existing);
-      clearUnsavedChangesGuard();
-      if (result && result.warning) toast(result.warning, 'info');
-      toast(`\u8349\u7a3f ${data.id} \u5df2\u66ab\u5b58`);
-      navigate('checklist-fill/' + data.id, { replace: true });
+    }
+
+    async function saveChecklistDraft() {
+      await runWithBusyState('\u6b63\u5728\u5132\u5b58\u6aa2\u6838\u8868\u8349\u7a3f\u2026', async function () {
+        const metaError = validateChecklistMeta();
+        if (metaError) {
+          toast(`\u8acb\u5b8c\u6574\u586b\u5beb${metaError.label}`, 'error');
+          metaError.el.focus();
+          return;
+        }
+        const data = await collectData('\u8349\u7a3f');
+        const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
+        if (duplicateChecklist) {
+          toast('\u672c\u5e74\u5ea6\u5df2\u5b58\u5728\u6aa2\u6838\u8868\uff0c\u8acb\u81f3\u5217\u8868\u7e7c\u7e8c\u7de8\u8f2f\u6216\u67e5\u770b\uff0c\u52ff\u91cd\u8907\u65b0\u589e\u3002', 'error');
+          clearUnsavedChangesGuard();
+          navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
+          return;
+        }
+        const result = await submitChecklistDraft(data);
+        existing = result && result.item ? result.item : (getChecklist(data.id) || data);
+        debugFlow('checklist', 'draft saved', { id: data.id, unit: data.unit, status: data.status });
+        updateChecklistDraftStatus(existing);
+        clearUnsavedChangesGuard();
+        if (result && result.warning) toast(result.warning, 'info');
+        toast(`\u8349\u7a3f ${data.id} \u5df2\u66ab\u5b58`);
+        replaceChecklistDraftRoute(data.id);
+      });
     }
 
     document.querySelectorAll('.cl-radio-group input').forEach((radio) => radio.addEventListener('change', updateProgress));
@@ -465,46 +495,41 @@
 
     checklistForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      debugFlow('checklist', 'submit start', { id: existing?.id || null, unit: document.getElementById('cl-unit').value });
-      const missing = [];
-      getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
-        if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id);
-      }));
-      if (missing.length > 0) {
-        debugFlow('checklist', 'submit blocked by unanswered items', { count: missing.length, first: missing[0] });
-        toast(`\u4ecd\u6709 ${missing.length} \u500b\u67e5\u6aa2\u9805\u76ee\u5c1a\u672a\u586b\u7b54`, 'error');
-        const el = document.getElementById(`cl-item-${missing[0]}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-      const requiredMeta = [
-        { el: document.getElementById('cl-supervisor-name'), label: '\u6b0a\u8cac\u4e3b\u7ba1\u59d3\u540d' },
-        { el: document.getElementById('cl-supervisor-title'), label: '\u4e3b\u7ba1\u8077\u7a31' },
-        { el: document.getElementById('cl-sign-status'), label: '\u7c3d\u6838\u72c0\u614b' },
-        { el: document.getElementById('cl-sign-date'), label: '\u7c3d\u6838\u65e5\u671f' }
-      ];
-      const missingMeta = requiredMeta.find(({ el }) => !String(el.value || '').trim());
-      if (missingMeta) {
-        debugFlow('checklist', 'submit blocked by metadata', { field: missingMeta.label });
-        toast(`\u8acb\u5b8c\u6574\u586b\u5beb${missingMeta.label}`, 'error');
-        missingMeta.el.focus();
-        return;
-      }
-      const data = await collectData('\u5df2\u9001\u51fa');
-      const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
-      if (duplicateChecklist) {
-        toast('本年度已存在檢核表，請至列表繼續編輯或查看，勿重複新增。', 'error');
-        navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
-        return;
-      }
-      const result = await submitChecklistForm(data);
-      existing = result && result.item ? result.item : (getChecklist(data.id) || data);
-      debugFlow('checklist', 'submit success', { id: data.id, unit: data.unit, status: data.status });
-      updateChecklistDraftStatus(existing);
-      clearUnsavedChangesGuard();
-      if (result && result.warning) toast(result.warning, 'info');
-      toast(`\u6aa2\u6838\u8868 ${data.id} \u5df2\u6b63\u5f0f\u9001\u51fa`);
-      navigate('checklist-detail/' + data.id);
+      await runWithBusyState('\u6b63\u5728\u9001\u51fa\u6aa2\u6838\u8868\u2026', async function () {
+        debugFlow('checklist', 'submit start', { id: existing?.id || null, unit: document.getElementById('cl-unit').value });
+        const missing = [];
+        getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
+          if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id);
+        }));
+        if (missing.length > 0) {
+          debugFlow('checklist', 'submit blocked by unanswered items', { count: missing.length, first: missing[0] });
+          toast(`\u4ecd\u6709 ${missing.length} \u500b\u67e5\u6aa2\u9805\u76ee\u5c1a\u672a\u586b\u7b54`, 'error');
+          const el = document.getElementById(`cl-item-${missing[0]}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        const missingMeta = validateChecklistMeta();
+        if (missingMeta) {
+          debugFlow('checklist', 'submit blocked by metadata', { field: missingMeta.label });
+          toast(`\u8acb\u5b8c\u6574\u586b\u5beb${missingMeta.label}`, 'error');
+          missingMeta.el.focus();
+          return;
+        }
+        const data = await collectData('\u5df2\u9001\u51fa');
+        const duplicateChecklist = findExistingChecklistForUnitYear(data.unit, data.auditYear, existing?.id);
+        if (duplicateChecklist) {
+          toast('\u672c\u5e74\u5ea6\u5df2\u5b58\u5728\u6aa2\u6838\u8868\uff0c\u8acb\u81f3\u5217\u8868\u7e7c\u7e8c\u7de8\u8f2f\u6216\u67e5\u770b\uff0c\u52ff\u91cd\u8907\u65b0\u589e\u3002', 'error');
+          navigate(canEditChecklist(duplicateChecklist) ? ('checklist-fill/' + duplicateChecklist.id) : ('checklist-detail/' + duplicateChecklist.id));
+          return;
+        }
+        const result = await submitChecklistForm(data);
+        existing = result && result.item ? result.item : (getChecklist(data.id) || data);
+        debugFlow('checklist', 'submit success', { id: data.id, unit: data.unit, status: data.status });
+        updateChecklistDraftStatus(existing);
+        clearUnsavedChangesGuard();
+        toast(`\u6aa2\u6838\u8868 ${data.id} \u5df2\u6b63\u5f0f\u9001\u51fa`);
+        navigate('checklist-detail/' + data.id);
+      });
     });
 
     checklistForm.addEventListener('input', markChecklistDirty);
@@ -892,3 +917,4 @@
     };
   };
 })();
+

@@ -1,4 +1,4 @@
-﻿// =============================================
+// =============================================
 // ISMS Internal Audit Tracking System - v4
 // =============================================
 (function () {
@@ -198,6 +198,9 @@
   function closeModalRoot() { return getUiModule().closeModal(); }
   function openConfirmDialog(message, options) { return getUiModule().openConfirmDialog(message, options); }
   function openPromptDialog(message, options) { return getUiModule().openPromptDialog(message, options); }
+  function showBusyState(message) { return getUiModule().showBusyState(message); }
+  function hideBusyState() { return getUiModule().hideBusyState(); }
+  function runWithBusyState(message, task) { return getUiModule().runWithBusyState(message, task); }
   let globalDelegationInstalled = false;
   function installGlobalDelegation() {
     if (globalDelegationInstalled || typeof document === 'undefined') return;
@@ -651,7 +654,8 @@
       renderCopyIdButton,
       registerActionHandlers,
       closeModalRoot,
-      openConfirmDialog
+      openConfirmDialog,
+      runWithBusyState
     });
     window._checklistModule = checklistModuleApi;
     return checklistModuleApi;
@@ -758,7 +762,8 @@
       saveTrainingStore,
       registerActionHandlers,
       openConfirmDialog,
-      openPromptDialog
+      openPromptDialog,
+      runWithBusyState
     });
     window._trainingModule = trainingModuleApi;
     return trainingModuleApi;

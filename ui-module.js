@@ -1,11 +1,13 @@
-﻿(function () {
+(function () {
   window.createUiModule = function createUiModule() {
     const DEFAULT_UNSAVED_MESSAGE = '目前有未儲存的變更，確定要離開此頁嗎？';
     const MODAL_ROOT_ID = 'modal-root';
+    const BUSY_ROOT_ID = 'busy-root';
     let iconRetryTimer = null;
     let iconRetryCount = 0;
     let unsavedChangesActive = false;
     let unsavedChangesMessage = DEFAULT_UNSAVED_MESSAGE;
+    let busyOverlayDepth = 0;
 
     if (typeof window !== 'undefined' && !window.__UNSAVED_CHANGES_GUARD__) {
       window.addEventListener('beforeunload', function (event) {
@@ -241,10 +243,42 @@
       return modalRoot;
     }
 
+    function ensureBusyRoot() {
+      let busyRoot = document.getElementById(BUSY_ROOT_ID);
+      if (!busyRoot) {
+        busyRoot = document.createElement('div');
+        busyRoot.id = BUSY_ROOT_ID;
+        document.body.appendChild(busyRoot);
+      }
+      return busyRoot;
+    }
+
     function closeModal() {
       const modalRoot = document.getElementById(MODAL_ROOT_ID);
       if (modalRoot) modalRoot.innerHTML = '';
       document.body.classList.remove('modal-open');
+    }
+
+    function showBusyState(message) {
+      busyOverlayDepth += 1;
+      const busyRoot = ensureBusyRoot();
+      busyRoot.innerHTML = '<div class="busy-overlay" aria-live="polite" aria-busy="true"><div class="busy-card"><span class="busy-spinner" aria-hidden="true"></span><div class="busy-title">' + esc(message || '\u7cfb\u7d71\u8655\u7406\u4e2d\u2026') + '</div></div></div>';
+    }
+
+    function hideBusyState() {
+      busyOverlayDepth = Math.max(0, busyOverlayDepth - 1);
+      if (busyOverlayDepth > 0) return;
+      const busyRoot = document.getElementById(BUSY_ROOT_ID);
+      if (busyRoot) busyRoot.innerHTML = '';
+    }
+
+    async function runWithBusyState(message, task) {
+      showBusyState(message);
+      try {
+        return await task();
+      } finally {
+        hideBusyState();
+      }
     }
 
     function renderDialog(contentHtml, options) {
@@ -391,6 +425,9 @@
       openConfirmDialog,
       openPromptDialog,
       closeModal,
+      showBusyState,
+      hideBusyState,
+      runWithBusyState,
       setUnsavedChangesGuard,
       clearUnsavedChangesGuard,
       hasUnsavedChangesGuard,

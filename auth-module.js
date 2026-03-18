@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createAuthModule = function createAuthModule(deps) {
     const {
       AUTH_KEY,

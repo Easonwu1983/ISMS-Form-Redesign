@@ -96,7 +96,8 @@
       saveTrainingStore,
       registerActionHandlers,
       openConfirmDialog,
-      openPromptDialog
+      openPromptDialog,
+      runWithBusyState
     } = deps;
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
@@ -1144,15 +1145,22 @@
         return;
       }
       showTrainingRepositoryFallback(result, '填報單 ' + formId + ' 已儲存暫存');
-      navigate('training-fill/' + formId, { replace: true });
+      if (typeof window !== 'undefined' && window.history) {
+        const nextHash = '#training-fill/' + encodeURIComponent(formId);
+        if (window.location.hash !== nextHash) window.history.replaceState(null, '', nextHash);
+      }
     }
 
     document.getElementById('training-save-draft').addEventListener('click', async () => {
-      await saveTrainingForm(TRAINING_STATUSES.DRAFT);
+      await runWithBusyState('\u6b63\u5728\u5132\u5b58\u6559\u80b2\u8a13\u7df4\u8349\u7a3f\u2026', async () => {
+        await saveTrainingForm(TRAINING_STATUSES.DRAFT);
+      });
     });
     trainingForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      await saveTrainingForm(TRAINING_STATUSES.PENDING_SIGNOFF);
+      await runWithBusyState('\u6b63\u5728\u9001\u51fa\u6559\u80b2\u8a13\u7df4\u6d41\u7a0b\u4e00\u2026', async () => {
+        await saveTrainingForm(TRAINING_STATUSES.PENDING_SIGNOFF);
+      });
     });
     document.getElementById('training-search').addEventListener('input', renderRows);
     document.getElementById('training-only-focus').addEventListener('change', renderRows);
@@ -1394,32 +1402,34 @@
       });
       document.getElementById('training-finalize-submit').addEventListener('click', async () => {
         if (!filesState.length) {
-          toast('請先上傳簽核掃描檔', 'error');
+          toast('\u8acb\u5148\u4e0a\u50b3\u7c3d\u6838\u6383\u63cf\u6a94', 'error');
           return;
         }
-        const now = new Date().toISOString();
-        const latestForm = getTrainingForm(form.id) || form;
-        const persistedFiles = (await persistUploadedEntries(filesState, {
-          prefix: 'trn',
-          scope: 'training-signoff',
-          ownerId: form.id,
-          buildFileName: function (_descriptor, uploadEntry) {
-            return buildTrainingSignoffFileName(form, uploadEntry);
-          }
-        })).map((entry) => applyTrainingSignoffFileName(entry, form));
-        clearUnsavedChangesGuard();
-        const result = await submitTrainingFinalize({
-          ...latestForm,
-          id: form.id,
-          status: TRAINING_STATUSES.SUBMITTED,
-          signedFiles: persistedFiles,
-          signoffUploadedAt: now,
-          submittedAt: now,
-          updatedAt: now,
-          history: [...(latestForm.history || []), { time: now, action: '上傳簽核掃描檔並完成整體填報', user: currentUser().name }]
+        await runWithBusyState('\u6b63\u5728\u4e0a\u50b3\u7c3d\u6838\u6383\u63cf\u6a94\u4e26\u5b8c\u6210\u6d41\u7a0b\u4e09\u2026', async () => {
+          const now = new Date().toISOString();
+          const latestForm = getTrainingForm(form.id) || form;
+          const persistedFiles = (await persistUploadedEntries(filesState, {
+            prefix: 'trn',
+            scope: 'training-signoff',
+            ownerId: form.id,
+            buildFileName: function (_descriptor, uploadEntry) {
+              return buildTrainingSignoffFileName(form, uploadEntry);
+            }
+          })).map((entry) => applyTrainingSignoffFileName(entry, form));
+          clearUnsavedChangesGuard();
+          const result = await submitTrainingFinalize({
+            ...latestForm,
+            id: form.id,
+            status: TRAINING_STATUSES.SUBMITTED,
+            signedFiles: persistedFiles,
+            signoffUploadedAt: now,
+            submittedAt: now,
+            updatedAt: now,
+            history: [...(latestForm.history || []), { time: now, action: '\u4e0a\u50b3\u7c3d\u6838\u6383\u63cf\u6a94\u4e26\u5b8c\u6210\u6574\u9ad4\u586b\u5831', user: currentUser().name }]
+          });
+          showTrainingRepositoryFallback(result, '\u5df2\u5b8c\u6210\u6d41\u7a0b\u4e09\uff0c\u6574\u9ad4\u586b\u5831\u7d50\u675f');
+          renderTrainingDetail(form.id);
         });
-        showTrainingRepositoryFallback(result, '已完成流程三，整體填報結束');
-        renderTrainingDetail(form.id);
       });
       renderSignedFiles('training-file-previews', true);
     }
@@ -1564,6 +1574,7 @@
     });
     document.getElementById('training-import-form').addEventListener('submit', async (event) => {
       event.preventDefault();
+      await runWithBusyState('\u6b63\u5728\u532f\u5165\u6559\u80b2\u8a13\u7df4\u540d\u55ae\u2026', async () => {
       const unit = document.getElementById('training-import-unit').value;
       const raw = document.getElementById('training-import-names').value;
       const file = document.getElementById('training-import-file')?.files[0];
@@ -1701,6 +1712,7 @@
       }
       if (fallbackWarning) toast(fallbackWarning, 'info');
       if (importErrors.length) toast(importErrors[0], 'error');
+      });
     });
 
     focusTrainingRosterRows(opts);
@@ -1761,3 +1773,4 @@
     };
   };
 })();
+

@@ -1,4 +1,4 @@
-﻿const http = require('http');
+const http = require('http');
 const crypto = require('crypto');
 const { URL } = require('url');
 
@@ -444,7 +444,9 @@ async function createAuditRow(input) {
 async function tryCreateAuditRow(input) {
   try {
     await createAuditRow(input);
-  } catch (_) { }
+  } catch (error) {
+    console.error('[audit] failed to create audit row', String(error && error.message || error || 'unknown error'), input && input.eventType ? 'event=' + input.eventType : '');
+  }
 }
 
 function buildApplicationSnapshot(application) {
@@ -534,7 +536,7 @@ async function generateUniqueUnitContactUsername() {
     const existing = await getSystemUserEntryByUsername(candidate);
     if (!existing) return candidate;
   }
-  throw new Error('????????????????????');
+  throw new Error('無法產生唯一的單位管理人登入帳號');
 }
 
 async function listAllSystemUsers() {

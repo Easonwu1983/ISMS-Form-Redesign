@@ -1,4 +1,4 @@
-﻿/* ========================================
+/* ========================================
    ISMS Internal Audit Tracking System - Light Theme Design System
    ======================================== */
 
@@ -2460,6 +2460,46 @@ tbody td:first-child {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.busy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.26);
+  backdrop-filter: blur(4px);
+}
+
+.busy-card {
+  min-width: 240px;
+  max-width: min(92vw, 360px);
+  padding: 20px 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(219, 231, 244, 0.96);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.98));
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.busy-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 3px solid rgba(148, 163, 184, 0.28);
+  border-top-color: var(--accent-primary);
+  animation: busySpin 720ms linear infinite;
+  flex: 0 0 auto;
+}
+
+.busy-title {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .toast {
@@ -7780,4 +7820,9 @@ tbody tr:hover {
   .review-actions--unit-contact {
     grid-template-columns: 1fr;
   }
+}
+
+@keyframes busySpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

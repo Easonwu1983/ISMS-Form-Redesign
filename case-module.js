@@ -1133,7 +1133,7 @@ function renderRespond(id) {
         text: '這一輪先由處理人員提出追蹤建議，再由管理者決定是否結案或繼續追蹤。',
         bodyHtml: buildEditorSummaryItems([
           { label: '案件編號', value: esc(item.id) },
-          { label: '追蹤輪次', value: '第 ' + round + ' 次' },
+          { label: '追蹤輪次', value: '第 ' + round + ' 次（' + round + '/3）' },
           { label: '填報日期', value: fmt(new Date().toISOString().split('T')[0]), id: 'track-summary-date' },
           { label: '提報建議', value: '待判定', id: 'track-summary-result' },
           { label: '下一次追蹤', value: '未指定', id: 'track-summary-next' }
@@ -1158,7 +1158,7 @@ function renderRespond(id) {
       + '</div>';
 
     return `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">第 ${round} 次追蹤提報</h1><p class="page-subtitle">${esc(item.id)} · ${esc(item.handlerName || '')}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">返回單據</a></div>
+      <div class="page-header"><div><h1 class="page-title">第 ${round}/3 次追蹤提報</h1><p class="page-subtitle">${esc(item.id)} · ${esc(item.handlerName || '')}</p></div><a href="#detail/${item.id}" class="btn btn-secondary">返回單據</a></div>
       <div class="editor-shell editor-shell--tracking">
         <section class="editor-main">
           <div class="card editor-card"><form id="track-form">
@@ -1370,3 +1370,4 @@ function renderTracking(id) {
     };
   };
 })();
+
