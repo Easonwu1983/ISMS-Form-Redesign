@@ -3,7 +3,6 @@ const {
   GRAPH_ROOT,
   acquireDelegatedGraphTokenFromCli,
   graphGet,
-  graphPatch,
   loadBackendConfig,
   resolveSiteIdFromUrl
 } = require('./_m365-a3-backend-utils.cjs');
@@ -241,29 +240,6 @@ async function findApplicationListItem(context, applicationId) {
   return (body.value || []).find((entry) => cleanText(entry && entry.fields && entry.fields.ApplicationId) === applicationId) || null;
 }
 
-async function patchApplicationToActive(context, applicationId, username) {
-  const item = await findApplicationListItem(context, applicationId);
-  if (!item) throw new Error(`Application ${applicationId} not found in SharePoint`);
-  const nowIso = new Date().toISOString();
-  const fields = filterFields({
-    Status: 'active',
-    StatusLabel: '已啟用',
-    StatusDetail: `帳號已啟用，請使用 ${username} 登入系統。`,
-    ReviewedAt: nowIso,
-    ReviewedBy: 'smoke-script',
-    ReviewComment: 'smoke auto approved',
-    ActivationSentAt: nowIso,
-    ActivatedAt: nowIso,
-    ProvisionedAt: nowIso,
-    ProvisionedBy: 'smoke-script',
-    ProvisioningNote: `Account ready: ${username}`,
-    AppUsername: username,
-    ExternalUserId: username
-  }, context.columnNames);
-  await graphPatch(context.accessToken, `${GRAPH_ROOT}/sites/${context.siteId}/lists/${context.listId}/items/${item.id}/fields`, fields);
-  return item.id;
-}
-
 async function deleteApplicationListItem(context, itemId) {
   if (!itemId) return;
   const response = await fetch(`${GRAPH_ROOT}/sites/${context.siteId}/lists/${context.listId}/items/${itemId}`, {
@@ -278,6 +254,22 @@ async function deleteApplicationListItem(context, itemId) {
 }
 
 async function chooseUnitByLabel(page, baseId, unitLabel) {
+  const searchSelector = `#${baseId}-search`;
+  const hiddenSelector = `#${baseId}`;
+  const searchToken = cleanText(String(unitLabel || '').split(UNIT_SEPARATOR).pop() || unitLabel).slice(0, 6);
+  if (searchToken) {
+    await page.fill(searchSelector, searchToken);
+    await page.waitForTimeout(250);
+    const directMatch = page.locator(`#${baseId}-search-results [data-unit-value="${unitLabel}"]`).first();
+    if (await directMatch.count()) {
+      await directMatch.click();
+      await page.waitForFunction(({ selector, value }) => {
+        const hidden = document.querySelector(selector);
+        return !!hidden && String(hidden.value || '').trim() === String(value || '').trim();
+      }, { selector: hiddenSelector, value: unitLabel }, { timeout: 10000 });
+      return;
+    }
+  }
   await page.evaluate(({ baseId, unitLabel }) => {
     const categorySelect = document.getElementById(`${baseId}-category`);
     const parentSelect = document.getElementById(`${baseId}-parent`);
@@ -421,33 +413,54 @@ async function loginViaPage(page, username, password) {
       return { cardText: cardText.slice(0, 240) };
     });
 
-    await runStep(results, 'ACCOUNT-FLOW-4', 'admin', 'provision reporter account for the approved application', async () => {
-      await upsertSystemUser(adminToken, {
+    await runStep(results, 'ACCOUNT-FLOW-4', 'admin', 'approve application and align smoke password', async () => {
+      const login = await loginAsAdmin();
+      adminToken = login.token;
+      const reviewBody = await apiJson('POST', '/api/unit-contact/review', {
+        action: 'unit-contact.review',
+        payload: {
+          id: createdApplicationId,
+          status: 'approved',
+          reviewComment: 'smoke auto approved'
+        }
+      }, authHeaders(adminToken));
+      const reviewedItem = reviewBody && reviewBody.item;
+      if (cleanText(reviewedItem && reviewedItem.status) !== 'active') {
+        throw new Error(`Application did not become active after approval: ${cleanText(reviewedItem && reviewedItem.status)}`);
+      }
+      if (cleanText(reviewedItem && reviewedItem.externalUserId) !== testUsername) {
+        throw new Error(`Unexpected login username after approval: ${cleanText(reviewedItem && reviewedItem.externalUserId)}`);
+      }
+      if (!(reviewBody && reviewBody.delivery && reviewBody.delivery.sent)) {
+        throw new Error('Approval delivery did not succeed');
+      }
+      const systemUserBody = await upsertSystemUser(adminToken, {
         username: testUsername,
         password: testPassword,
         forcePasswordChange: false,
         name: applicantName,
         email: testEmail,
-        role: ROLE_REPORTER,
+        role: '單位管理員',
         unit: targetUnit,
         units: [targetUnit],
         activeUnit: targetUnit,
-          actorName: '系統管理員',
+        actorName: '系統管理員',
         actorEmail: 'admin@company.com'
       });
-      createdApplicationListItemId = await patchApplicationToActive(graphContext, createdApplicationId, testUsername);
-      const login = await loginAsUser(testUsername, testPassword);
+      createdApplicationListItemId = await findApplicationListItem(graphContext, createdApplicationId).then((item) => cleanText(item && item.id));
+      const reporterLogin = await loginAsUser(testUsername, testPassword);
       const application = await waitForApplicationStatus(testEmail, createdApplicationId, (entry) => {
         return cleanText(entry && entry.status) === 'active' && cleanText(entry && entry.statusLabel) === ACTIVE_LABEL;
       });
       if (!application) throw new Error('Updated application not found after provisioning');
       if (application.status !== 'active') throw new Error(`Application status not updated: ${application.status}`);
       if (cleanText(application.statusLabel) !== ACTIVE_LABEL) throw new Error(`Unexpected status label: ${application.statusLabel}`);
-      if (login.body && login.body.mustChangePassword === true) throw new Error('Provisioned reporter still requires password change');
+      if (reporterLogin.body && reporterLogin.body.mustChangePassword === true) throw new Error('Provisioned reporter still requires password change');
       return {
         username: testUsername,
         status: application.status,
-        statusLabel: application.statusLabel
+        statusLabel: application.statusLabel,
+        created: !!(systemUserBody && systemUserBody.created)
       };
     });
 
