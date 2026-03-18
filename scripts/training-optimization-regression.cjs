@@ -18,7 +18,9 @@ const {
 const runMeta = createArtifactRun('training-optimization-regression');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-optimization-regression.json');
 const IMPORT_NAMES = [`ImportDiag${Date.now()}A`, `ImportDiag${Date.now()}B`];
-const TEST_TRAINING_YEAR = String(new Date().getFullYear() - 1910);
+const TEST_TRAINING_YEAR = String(new Date().getFullYear() - 1901);
+const DELETE_ROW_NAME = `測試刪除人員${Date.now()}`;
+const UNDO_ROW_NAME = `流程撤回人員${Date.now()}`;
 
 function getTrainingStore(page) {
   return readJsonFromStorage(page, 'cats_training_hours');
@@ -155,25 +157,25 @@ async function deleteRosterRowsByNames(page, names) {
       await page.fill('#tr-year', TEST_TRAINING_YEAR);
       await page.fill('#tr-date', new Date().toISOString().slice(0, 10));
 
-      await page.fill('#tr-new-name', '測試刪除人員');
+      await page.fill('#tr-new-name', DELETE_ROW_NAME);
       await page.fill('#tr-new-unit-name', '資訊網路組');
       await page.fill('#tr-new-identity', '主管');
       await page.fill('#tr-new-job-title', '組長');
       await page.click('#training-add-person');
-      await page.waitForFunction(() => Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes('測試刪除人員')), undefined, { timeout: 45000 });
+      await page.waitForFunction((targetName) => Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes(targetName)), DELETE_ROW_NAME, { timeout: 45000 });
 
-      const deleteButton = page.locator('tr:has-text("測試刪除人員") .training-row-delete').first();
+      const deleteButton = page.locator(`tr:has-text("${DELETE_ROW_NAME}") .training-row-delete`).first();
       if (!await deleteButton.count()) throw new Error('manual draft row does not expose delete action');
       await page.evaluate(() => { window.confirm = () => true; });
       await deleteButton.click();
-      await page.waitForFunction(() => !Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes('測試刪除人員')), undefined, { timeout: 45000 });
+      await page.waitForFunction((targetName) => !Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes(targetName)), DELETE_ROW_NAME, { timeout: 45000 });
 
-      await page.fill('#tr-new-name', '流程撤回人員');
+      await page.fill('#tr-new-name', UNDO_ROW_NAME);
       await page.fill('#tr-new-unit-name', '資訊網路組');
       await page.fill('#tr-new-identity', '填報人');
       await page.fill('#tr-new-job-title', '工程師');
       await page.click('#training-add-person');
-      await page.waitForFunction(() => Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes('流程撤回人員')), undefined, { timeout: 45000 });
+      await page.waitForFunction((targetName) => Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes(targetName)), UNDO_ROW_NAME, { timeout: 45000 });
 
       const rowCount = await page.locator('select[data-field="status"]').count();
       for (let index = 0; index < rowCount; index += 1) {
@@ -226,7 +228,7 @@ async function deleteRosterRowsByNames(page, names) {
         throw new Error('stepOneSubmittedAt should be cleared after undo');
       }
 
-      const rosterRows = (storeAfterUndo?.rosters || []).filter((row) => row.name === '流程撤回人員');
+      const rosterRows = (storeAfterUndo?.rosters || []).filter((row) => row.name === UNDO_ROW_NAME);
       if (!rosterRows.length) {
         throw new Error('manually added row missing from roster after undo flow');
       }

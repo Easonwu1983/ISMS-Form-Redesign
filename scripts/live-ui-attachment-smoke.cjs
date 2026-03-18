@@ -35,7 +35,7 @@ const results = createResultEnvelope({
   cleanup: [],
   context: {
     admin: { username: 'admin', password: 'admin123' },
-    reporter: { username: 'user1', password: 'user123', name: '李工程師' }
+    reporter: { username: 'unit1', password: 'unit123', name: '計中管理者' }
   }
 });
 
@@ -151,9 +151,10 @@ async function login(page, username, password) {
   await page.fill('[data-testid="login-user"]', username);
   await page.fill('[data-testid="login-pass"]', password);
   await Promise.all([
-    page.waitForFunction(() => !document.querySelector('[data-testid="login-form"]') && !!document.querySelector('.btn-logout'), { timeout: 15000 }),
+    page.waitForFunction(() => !!document.querySelector('.btn-logout'), { timeout: 15000 }),
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
   ]);
+  await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending', { timeout: 45000 });
   await page.waitForTimeout(400);
 }
 
@@ -200,19 +201,27 @@ async function selectHandlerUsername(page, username) {
   await page.waitForTimeout(250);
 }
 
-async function apiGetJson(pathname) {
-  const response = await fetch(new URL(pathname, BASE_URL));
-  const body = await response.json();
-  if (!response.ok) {
-    throw new Error(`${pathname} failed: HTTP ${response.status} ${JSON.stringify(body)}`);
+async function getSessionToken(page) {
+  return await page.evaluate(() => window._authModule?.currentUser?.()?.sessionToken || '');
+}
+
+async function apiGetJson(pathname, token) {
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const authed = await fetch(new URL(pathname, BASE_URL), { headers });
+  const body = await authed.json();
+  if (!authed.ok) {
+    throw new Error(`${pathname} failed: HTTP ${authed.status} ${JSON.stringify(body)}`);
   }
   return body;
 }
 
-async function apiPostJson(pathname, payload) {
+async function apiPostJson(pathname, payload, token) {
   const response = await fetch(new URL(pathname, BASE_URL), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
     body: JSON.stringify(payload)
   });
   const body = await response.json();
@@ -225,7 +234,7 @@ async function apiPostJson(pathname, payload) {
 async function cleanupTrainingArtifacts(trainingId, actor) {
   if (!trainingId) return;
   try {
-    const detail = await apiGetJson(`/api/training/forms/${encodeURIComponent(trainingId)}`);
+    const detail = await apiGetJson(`/api/training/forms/${encodeURIComponent(trainingId)}`, actor.token);
     const form = detail && detail.item;
     const files = Array.isArray(form && form.signedFiles) ? form.signedFiles : [];
     for (const entry of files) {
@@ -237,7 +246,7 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
           actorName: actor.name,
           actorUsername: actor.username
         }
-      });
+      }, actor.token);
       results.cleanup.push({ type: 'training-attachment', deletedId: entry.driveItemId });
     }
     await apiPostJson(`/api/training/forms/${encodeURIComponent(trainingId)}/delete`, {
@@ -247,7 +256,7 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
         actorName: actor.name,
         actorUsername: actor.username
       }
-    });
+    }, actor.token);
     results.cleanup.push({ type: 'training-form', deletedId: trainingId });
   } catch (error) {
     results.cleanup.push({ type: 'training-cleanup-error', trainingId, error: String(error && error.message || error) });
@@ -319,7 +328,7 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
       ]);
       await page.waitForSelector('#case-evidence-main .file-preview-item', { timeout: 10000 });
       const mainCount = await page.locator('#case-evidence-main .file-preview-item').count();
-      const actionCount = await page.locator('#case-evidence-main .file-preview-actions a').count();
+      const actionCount = await page.locator('#case-evidence-main .file-preview-actions a, #case-evidence-main .file-preview-actions button').count();
       if (mainCount < 1) throw new Error(`expected >=1 evidence items, got ${mainCount}`);
       if (actionCount < 2) throw new Error(`expected preview/download actions, got ${actionCount}`);
       await saveScreenshot(page, 'corrective-responded.png');
@@ -381,7 +390,7 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
       await gotoHash(page, 'detail/' + correctiveCaseId, { handleUnsaved: false });
       await page.waitForSelector('#case-evidence-main .file-preview-item', { timeout: 10000 });
       const evidenceCount = await page.locator('#case-evidence-main .file-preview-item').count();
-      const detail = await apiGetJson(`/api/corrective-actions/${encodeURIComponent(correctiveCaseId)}`);
+      const detail = await apiGetJson(`/api/corrective-actions/${encodeURIComponent(correctiveCaseId)}`, await getSessionToken(page));
       const item = detail && detail.item;
       if (!item || item.status !== '結案') {
         throw new Error(`expected closed status, got ${JSON.stringify(item && item.status)}`);
@@ -400,7 +409,7 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
       await gotoHash(page, 'training-fill');
       await page.waitForSelector('#training-form');
       await page.fill('#tr-phone', '02-3366-1234');
-      await page.fill('#tr-email', 'user1@g.ntu.edu.tw');
+      await page.fill('#tr-email', 'unit1@g.ntu.edu.tw');
       await page.fill('#tr-year', trainingYear);
       await page.fill('#tr-date', isoDate(0));
       await page.waitForFunction(() => document.querySelectorAll('select[data-field="status"]').length >= 1, { timeout: 10000 });
@@ -428,14 +437,14 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
       await page.waitForSelector('#training-file-input', { timeout: 10000 });
       await page.setInputFiles('#training-file-input', EVIDENCE_PATH);
       await page.waitForSelector('#training-file-previews .training-file-card', { timeout: 10000 });
-      const previewActions = await page.locator('#training-file-previews .training-file-actions a').count();
+      const previewActions = await page.locator('#training-file-previews .training-file-actions a, #training-file-previews .training-file-actions button').count();
       if (previewActions < 2) throw new Error(`expected preview/download actions, got ${previewActions}`);
       await page.click('#training-finalize-submit');
       await page.waitForFunction(() => !document.querySelector('#training-finalize-submit'), { timeout: 12000 });
       await page.waitForSelector('#training-signed-files-readonly .training-file-card', { timeout: 10000 });
-      const readonlyActions = await page.locator('#training-signed-files-readonly .training-file-actions a').count();
+      const readonlyActions = await page.locator('#training-signed-files-readonly .training-file-actions a, #training-signed-files-readonly .training-file-actions button').count();
       if (readonlyActions < 2) throw new Error(`expected readonly preview/download actions, got ${readonlyActions}`);
-      const detail = await apiGetJson(`/api/training/forms/${encodeURIComponent(trainingId)}`);
+      const detail = await apiGetJson(`/api/training/forms/${encodeURIComponent(trainingId)}`, await getSessionToken(page));
       const form = detail && detail.item;
       if (!form || !Array.isArray(form.signedFiles) || form.signedFiles.length < 1) {
         throw new Error(`training signed files missing after finalize: ${JSON.stringify(form)}`);
@@ -447,7 +456,11 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
 
     await runStep('TRN-03', '系統', '清理教育訓練 smoke 資料', async () => {
       if (!trainingId) throw new Error('missing training id for cleanup');
-      await cleanupTrainingArtifacts(trainingId, results.context.reporter);
+      await login(page, results.context.reporter.username, results.context.reporter.password);
+      await cleanupTrainingArtifacts(trainingId, {
+        ...results.context.reporter,
+        token: await getSessionToken(page)
+      });
       return `deleted training form ${trainingId}`;
     });
 
