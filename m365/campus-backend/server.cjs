@@ -10,6 +10,7 @@ const {
   buildJsonResponse,
   createApplicationRecord,
   mapApplicationForClient,
+  mapApplicationForPublicClient,
   mapApplicationToGraphFields,
   mapGraphFieldsToApplication,
   normalizeApplyPayload,
@@ -268,10 +269,25 @@ function registerApplyAttempt(payload, clientAddress) {
   return { limited: false, retryAfterMs: 0 };
 }
 
+function isTrustedProxyAddress(address) {
+  const value = cleanText(address);
+  if (!value) return false;
+  if (value === '::1' || value === '127.0.0.1' || value === 'localhost') return true;
+  if (value.startsWith('::ffff:127.')) return true;
+  if (/^10\./.test(value)) return true;
+  if (/^192\.168\./.test(value)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(value)) return true;
+  if (/^fc[0-9a-f]{2}:/i.test(value) || /^fd[0-9a-f]{2}:/i.test(value)) return true;
+  return false;
+}
+
 function readClientAddress(req) {
+  const remoteAddress = cleanText(req && req.socket && req.socket.remoteAddress);
   const forwarded = cleanText(req && req.headers && req.headers['x-forwarded-for']);
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return cleanText(req && req.socket && req.socket.remoteAddress);
+  if (forwarded && isTrustedProxyAddress(remoteAddress)) {
+    return forwarded.split(',')[0].trim();
+  }
+  return remoteAddress;
 }
 
 function getSystemUsersListName() {
@@ -957,7 +973,7 @@ async function handleApply(req, res, origin) {
     const notifications = await notifyUnitContactApplicationSubmitted(created);
     return writeJson(res, buildJsonResponse(201, {
       ok: true,
-      application: mapApplicationForClient(created),
+      application: mapApplicationForPublicClient(created),
       notifications,
       contractVersion: CONTRACT_VERSION
     }), origin);
@@ -1171,7 +1187,7 @@ async function handleLookup(req, res, origin, url) {
     });
     return writeJson(res, buildJsonResponse(200, {
       ok: true,
-      applications: applications.map(mapApplicationForClient),
+      applications: applications.map(mapApplicationForPublicClient),
       contractVersion: CONTRACT_VERSION
     }), origin);
   } catch (error) {

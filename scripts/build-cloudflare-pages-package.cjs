@@ -1,4 +1,5 @@
-﻿const fs = require('fs');
+﻿const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -46,6 +47,32 @@ function ensureDir(target) {
   fs.mkdirSync(target, { recursive: true });
 }
 
+function walkFiles(dir, baseDir = dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const absolute = path.join(dir, entry.name);
+    if (entry.isDirectory()) return walkFiles(absolute, baseDir);
+    return [path.relative(baseDir, absolute)];
+  });
+}
+
+function sha256Integrity(filePath) {
+  const content = fs.readFileSync(filePath);
+  return `sha256-${crypto.createHash('sha256').update(content).digest('base64')}`;
+}
+
+function collectAssetIntegrity() {
+  if (!fs.existsSync(outputDir)) return {};
+  return walkFiles(outputDir).reduce((result, relPath) => {
+    const normalized = relPath.replace(/\\/g, '/');
+    if (normalized === 'deploy-manifest.json') return result;
+    const absolute = path.join(outputDir, relPath);
+    const stat = fs.statSync(absolute);
+    if (!stat.isFile()) return result;
+    result[normalized] = sha256Integrity(absolute);
+    return result;
+  }, {});
+}
+
 function copyRelative(relPath) {
   const source = path.join(ROOT, relPath);
   const target = path.join(outputDir, relPath);
@@ -58,7 +85,7 @@ function copyRelative(relPath) {
   fs.copyFileSync(source, target);
 }
 
-function rewriteIndex() {
+function rewriteIndex(assetIntegrity) {
   const indexPath = path.join(outputDir, 'index.html');
   let html = fs.readFileSync(indexPath, 'utf8');
   const connectTarget = mode === 'full-proxy'
@@ -81,6 +108,13 @@ function rewriteIndex() {
     /<meta http-equiv="Content-Security-Policy"[\s\S]*?content="[^"]*">/,
     `  <meta http-equiv="Content-Security-Policy"\n    content="${csp}">`
   );
+  const loaderIntegrity = assetIntegrity && assetIntegrity['asset-loader.js'];
+  if (loaderIntegrity) {
+    html = html.replace(
+      '<script src="asset-loader.js"></script>',
+      `<script src="asset-loader.js" integrity="${loaderIntegrity}" crossorigin="anonymous"></script>`
+    );
+  }
   fs.writeFileSync(indexPath, html, 'utf8');
 }
 
@@ -292,6 +326,12 @@ function writeHeaders() {
     '/index.html',
     '  Cache-Control: no-store, no-cache, must-revalidate',
     '',
+    '/asset-loader.js',
+    '  Cache-Control: no-store, no-cache, must-revalidate',
+    '',
+    '/deploy-manifest.json',
+    '  Cache-Control: no-store, no-cache, must-revalidate',
+    '',
     '/m365-config.override.js',
     '  Cache-Control: no-store, no-cache, must-revalidate'
   ].join('\n');
@@ -303,13 +343,14 @@ function writeReadme() {
   fs.writeFileSync(path.join(outputDir, 'README-cloudflare-pages.txt'), content, 'utf8');
 }
 
-function writeManifest() {
+function writeManifest(assetIntegrity) {
   fs.writeFileSync(path.join(outputDir, 'deploy-manifest.json'), JSON.stringify({
     builtAt: new Date().toISOString(),
     mode,
     backendBase,
     redirectTarget,
-    platform: 'cloudflare-pages'
+    platform: 'cloudflare-pages',
+    assetIntegrity
   }, null, 2), 'utf8');
 }
 
@@ -317,15 +358,19 @@ fs.rmSync(outputDir, { recursive: true, force: true });
 ensureDir(outputDir);
 if (mode === 'redirect') {
   writeRedirectIndex();
+  writeHeaders();
+  writeReadme();
+  writeManifest({});
 } else {
   filesToCopy.forEach(copyRelative);
-  rewriteIndex();
   writeOverride();
   writeWorkerProxy();
+  const assetIntegrity = collectAssetIntegrity();
+  rewriteIndex(assetIntegrity);
+  writeHeaders();
+  writeReadme();
+  writeManifest(assetIntegrity);
 }
-writeHeaders();
-writeReadme();
-writeManifest();
 
 console.log(`cloudflare pages package ready: ${outputDir}`);
 console.log(`backend base: ${backendBase}`);

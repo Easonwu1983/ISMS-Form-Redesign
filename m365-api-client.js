@@ -40,6 +40,8 @@
       DELETE: 'training.roster.delete'
     };
     let requestCounter = 0;
+    let cachedConfig = null;
+    let cachedRuntimeConfigSource = null;
     const DEFAULT_CONFIG = {
       unitContactMode: 'local-emulator',
       unitContactSubmitEndpoint: '',
@@ -112,6 +114,79 @@
       return cleanText(value).toLowerCase();
     }
 
+    function sanitizeSharedHeaders(value) {
+      if (!value || typeof value !== 'object') return {};
+      return Object.entries(value).reduce((result, [key, headerValue]) => {
+        const name = String(key || '').trim();
+        const text = cleanText(headerValue);
+        if (!/^x-isms-/i.test(name) || !text) return result;
+        result[name] = text;
+        return result;
+      }, {});
+    }
+
+    function sanitizeRuntimeEndpoint(value, allowHash) {
+      const raw = cleanText(value);
+      if (!raw) return '';
+      if (allowHash && raw.startsWith('#')) return raw;
+      if (raw.startsWith('/')) return raw.replace(/\/$/, '');
+      try {
+        const resolved = new URL(raw, typeof window !== 'undefined' ? window.location.href : undefined);
+        if (typeof window === 'undefined' || !window.location || resolved.origin === window.location.origin) {
+          return `${resolved.pathname.replace(/\/$/, '')}${resolved.search}${resolved.hash}`;
+        }
+      } catch (_) {}
+      return '';
+    }
+
+    function resolveRequestUrl(value) {
+      const raw = cleanText(value);
+      if (!raw) return '';
+      try {
+        const resolved = new URL(raw, typeof window !== 'undefined' ? window.location.href : undefined);
+        if (typeof window === 'undefined' || !window.location || resolved.origin === window.location.origin) {
+          return resolved.toString();
+        }
+      } catch (_) {}
+      return '';
+    }
+
+    function sanitizeRuntimeConfig(runtime) {
+      const source = runtime && typeof runtime === 'object' ? runtime : {};
+      return {
+        ...source,
+        unitContactSubmitEndpoint: sanitizeRuntimeEndpoint(source.unitContactSubmitEndpoint, false),
+        unitContactStatusEndpoint: sanitizeRuntimeEndpoint(source.unitContactStatusEndpoint, false),
+        unitContactActivationEndpoint: sanitizeRuntimeEndpoint(source.unitContactActivationEndpoint, true) || sanitizeRuntimeEndpoint(source.activationPathBase, true),
+        unitContactSharedHeaders: sanitizeSharedHeaders(source.unitContactSharedHeaders),
+        correctiveActionsEndpoint: sanitizeRuntimeEndpoint(source.correctiveActionsEndpoint, false),
+        correctiveActionsHealthEndpoint: sanitizeRuntimeEndpoint(source.correctiveActionsHealthEndpoint, false),
+        correctiveActionsSharedHeaders: sanitizeSharedHeaders(source.correctiveActionsSharedHeaders),
+        checklistEndpoint: sanitizeRuntimeEndpoint(source.checklistEndpoint, false),
+        checklistHealthEndpoint: sanitizeRuntimeEndpoint(source.checklistHealthEndpoint, false),
+        checklistSharedHeaders: sanitizeSharedHeaders(source.checklistSharedHeaders),
+        trainingFormsEndpoint: sanitizeRuntimeEndpoint(source.trainingFormsEndpoint, false),
+        trainingRostersEndpoint: sanitizeRuntimeEndpoint(source.trainingRostersEndpoint, false),
+        trainingHealthEndpoint: sanitizeRuntimeEndpoint(source.trainingHealthEndpoint, false),
+        trainingSharedHeaders: sanitizeSharedHeaders(source.trainingSharedHeaders),
+        authEndpoint: sanitizeRuntimeEndpoint(source.authEndpoint, false),
+        authHealthEndpoint: sanitizeRuntimeEndpoint(source.authHealthEndpoint, false),
+        authSharedHeaders: sanitizeSharedHeaders(source.authSharedHeaders),
+        systemUsersEndpoint: sanitizeRuntimeEndpoint(source.systemUsersEndpoint, false),
+        systemUsersHealthEndpoint: sanitizeRuntimeEndpoint(source.systemUsersHealthEndpoint, false),
+        systemUsersSharedHeaders: sanitizeSharedHeaders(source.systemUsersSharedHeaders),
+        reviewScopesEndpoint: sanitizeRuntimeEndpoint(source.reviewScopesEndpoint, false),
+        reviewScopesHealthEndpoint: sanitizeRuntimeEndpoint(source.reviewScopesHealthEndpoint, false),
+        reviewScopesSharedHeaders: sanitizeSharedHeaders(source.reviewScopesSharedHeaders),
+        auditTrailEndpoint: sanitizeRuntimeEndpoint(source.auditTrailEndpoint, false),
+        auditTrailHealthEndpoint: sanitizeRuntimeEndpoint(source.auditTrailHealthEndpoint, false),
+        auditTrailSharedHeaders: sanitizeSharedHeaders(source.auditTrailSharedHeaders),
+        attachmentsEndpoint: sanitizeRuntimeEndpoint(source.attachmentsEndpoint, false),
+        attachmentsHealthEndpoint: sanitizeRuntimeEndpoint(source.attachmentsHealthEndpoint, false),
+        attachmentsSharedHeaders: sanitizeSharedHeaders(source.attachmentsSharedHeaders)
+      };
+    }
+
     function cleanArray(value) {
       return Array.isArray(value)
         ? value.map((entry) => cleanText(entry)).filter(Boolean)
@@ -128,10 +203,13 @@
 
     function getConfig() {
       const runtime = (typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__) || {};
-      return {
+      if (cachedRuntimeConfigSource === runtime && cachedConfig) return cachedConfig;
+      cachedRuntimeConfigSource = runtime;
+      cachedConfig = {
         ...DEFAULT_CONFIG,
-        ...(runtime && typeof runtime === 'object' ? runtime : {})
+        ...sanitizeRuntimeConfig(runtime)
       };
+      return cachedConfig;
     }
 
     function getMode() {
@@ -281,10 +359,19 @@
       const sessionHeaders = typeof getSessionAuthHeaders === 'function'
         ? (getSessionAuthHeaders() || {})
         : {};
+      const sharedHeaders = opts.sharedHeaders && typeof opts.sharedHeaders === 'object'
+        ? Object.entries(opts.sharedHeaders).reduce((result, [key, value]) => {
+            const name = String(key || '').trim();
+            const text = cleanText(value);
+            if (!/^x-isms-/i.test(name) || !text) return result;
+            result[name] = text;
+            return result;
+          }, {})
+        : {};
       return {
         'Content-Type': 'application/json',
         'X-ISMS-Contract-Version': cleanText(opts.contractVersion) || CONTRACT_VERSION,
-        ...(opts.sharedHeaders && typeof opts.sharedHeaders === 'object' ? opts.sharedHeaders : {}),
+        ...sharedHeaders,
         ...(sessionHeaders && typeof sessionHeaders === 'object' ? sessionHeaders : {}),
         ...(extraHeaders || {})
       };
@@ -293,6 +380,8 @@
     async function requestJson(url, options) {
       const requestOptions = options || {};
       const config = getConfig();
+      const safeUrl = resolveRequestUrl(url);
+      if (!safeUrl) throw new Error('Invalid request endpoint');
       const method = String(requestOptions.method || 'POST').toUpperCase();
       const maxAttempts = method === 'GET' ? 2 : 1;
       let lastError = null;
@@ -307,7 +396,7 @@
           timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         }
         try {
-          const response = await fetch(url, {
+          const response = await fetch(safeUrl, {
             method,
             headers: buildHeaders(requestOptions.headers, {
               contractVersion: requestOptions.contractVersion,
@@ -1557,8 +1646,11 @@
       const base = cleanText(config.unitContactActivationEndpoint) || cleanText(config.activationPathBase) || '#activate-unit-contact';
       const safeId = encodeURIComponent(cleanText(applicationId));
       if (!safeId) return base;
-      if (base.indexOf('http://') === 0 || base.indexOf('https://') === 0) {
-        const url = new URL(base);
+      if (/^https?:\/\//i.test(base)) {
+        const url = new URL(base, typeof window !== 'undefined' ? window.location.href : undefined);
+        if (typeof window !== 'undefined' && window.location && url.origin !== window.location.origin) {
+          return '#activate-unit-contact';
+        }
         url.searchParams.set('applicationId', safeId);
         return url.toString();
       }

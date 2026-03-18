@@ -134,7 +134,6 @@ function createRequestAuthz(deps) {
   function resolveActiveUnit(req, user) {
     const requested = decodeHeaderUnit(readHeader(req, 'x-isms-active-unit'));
     const authorizedUnits = parseUnits(user && user.units);
-    if (user && user.role === USER_ROLES.ADMIN) return requested || '';
     if (requested && authorizedUnits.includes(requested)) return requested;
     return cleanText(user && user.activeUnit) || authorizedUnits[0] || '';
   }
@@ -313,4 +312,3 @@ function createRequestAuthz(deps) {
 module.exports = {
   createRequestAuthz
 };
-

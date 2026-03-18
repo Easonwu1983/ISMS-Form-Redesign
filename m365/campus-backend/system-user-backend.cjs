@@ -67,7 +67,10 @@ function createSystemUserRouter(deps) {
     listMap: null,
     listColumnsMap: new Map(),
     loginFailures: new Map(),
-    resetRequests: new Map()
+    resetRequests: new Map(),
+    legacyPasswordMigrationPromise: null,
+    legacyPasswordMigrationDone: false,
+    legacyPasswordMigrationCount: 0
   };
 
   function getEnv(name, fallback) {
@@ -105,10 +108,25 @@ function createSystemUserRouter(deps) {
     return Number.isFinite(raw) && raw > 0 ? raw : 3;
   }
 
+  function isTrustedProxyAddress(address) {
+    const value = cleanText(address);
+    if (!value) return false;
+    if (value === '::1' || value === '127.0.0.1' || value === 'localhost') return true;
+    if (value.startsWith('::ffff:127.')) return true;
+    if (/^10\./.test(value)) return true;
+    if (/^192\.168\./.test(value)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(value)) return true;
+    if (/^fc[0-9a-f]{2}:/i.test(value) || /^fd[0-9a-f]{2}:/i.test(value)) return true;
+    return false;
+  }
+
   function readClientAddress(req) {
+    const remoteAddress = cleanText(req && req.socket && req.socket.remoteAddress);
     const forwarded = cleanText(req && req.headers && req.headers['x-forwarded-for']);
-    if (forwarded) return cleanText(forwarded.split(',')[0]);
-    return cleanText(req && req.socket && req.socket.remoteAddress);
+    if (forwarded && isTrustedProxyAddress(remoteAddress)) {
+      return cleanText(forwarded.split(',')[0]);
+    }
+    return remoteAddress;
   }
 
   function buildLoginFailureKey(username) {
@@ -328,7 +346,10 @@ function createSystemUserRouter(deps) {
       });
       return serializePasswordSecret(secret);
     }
-    return existingPassword;
+    if (!existingPassword) return '';
+    const parsed = parsePasswordSecret(existingPassword);
+    if (parsed.hasPassword && !parsed.legacy) return existingPassword;
+    return serializePasswordSecret(upgradePasswordSecret(parsed.plaintext || parsed.raw || existingPassword, parsed.raw || existingPassword));
   }
 
   function routeUserName(value) {
@@ -411,6 +432,51 @@ function createSystemUserRouter(deps) {
       nextUrl = cleanText(body && body['@odata.nextLink']);
     }
     return rows;
+  }
+
+  async function upgradeLegacyPasswordStorage() {
+    if (state.legacyPasswordMigrationDone) {
+      return {
+        upgradedCount: state.legacyPasswordMigrationCount || 0,
+        done: true
+      };
+    }
+    if (state.legacyPasswordMigrationPromise) return state.legacyPasswordMigrationPromise;
+    state.legacyPasswordMigrationPromise = (async () => {
+      const rows = await listAllUsers();
+      const legacyRows = rows.filter((entry) => readStoredPasswordState(entry && entry.item && entry.item.password).legacy);
+      if (!legacyRows.length) {
+        state.legacyPasswordMigrationDone = true;
+        state.legacyPasswordMigrationCount = 0;
+        return { upgradedCount: 0, done: true };
+      }
+      let upgradedCount = 0;
+      for (const entry of legacyRows) {
+        const passwordState = readStoredPasswordState(entry.item.password);
+        const upgradedSecret = upgradePasswordSecret(passwordState.plaintext || passwordState.raw || entry.item.password, entry.item.password);
+        const now = new Date().toISOString();
+        await upsertUser(entry, {
+          ...entry.item,
+          password: serializePasswordSecret(upgradedSecret),
+          mustChangePassword: passwordState.mustChangePassword === true,
+          passwordChangedAt: upgradedSecret.passwordChangedAt,
+          resetRequestedAt: '',
+          resetTokenExpiresAt: '',
+          sessionVersion: upgradedSecret.sessionVersion,
+          updatedAt: now
+        });
+        upgradedCount += 1;
+      }
+      state.legacyPasswordMigrationDone = true;
+      state.legacyPasswordMigrationCount = upgradedCount;
+      return { upgradedCount, done: true };
+    })().catch((error) => {
+      console.error('[system-users] legacy password migration failed:', error && error.stack ? error.stack : error);
+      return { upgradedCount: 0, done: false, error: String(error && error.message || error || 'legacy password migration failed') };
+    }).finally(() => {
+      state.legacyPasswordMigrationPromise = null;
+    });
+    return state.legacyPasswordMigrationPromise;
   }
 
   async function getUserEntryByUsername(username) {
@@ -511,6 +577,10 @@ function createSystemUserRouter(deps) {
     };
     try {
       health.usersList = await resolveUsersList();
+      const migration = await upgradeLegacyPasswordStorage();
+      if (migration && Number(migration.upgradedCount || 0) > 0) {
+        health.legacyPasswordMigration = migration.upgradedCount;
+      }
     } catch (error) {
       health.ok = false;
       health.ready = false;
@@ -547,6 +617,7 @@ function createSystemUserRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, 'Only admin can list system users');
+      await upgradeLegacyPasswordStorage();
       const rows = await listAllUsers();
       const items = filterUsers(rows.map((entry) => entry.item), url);
       await writeJson(res, buildJsonResponse(200, {
@@ -582,31 +653,63 @@ function createSystemUserRouter(deps) {
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, USER_ACTIONS.UPSERT);
       const incoming = normalizeSystemUserPayload(envelope.payload);
-      if (cleanText(incoming.password)) {
-        validatePasswordComplexity(incoming.password, 'password');
+      const incomingPassword = cleanText(incoming.password);
+      if (incomingPassword) {
+        validatePasswordComplexity(incomingPassword, 'password');
       }
       const existing = await getUserEntryByUsername(incoming.username).catch(() => null);
       const existingAuthState = readStoredPasswordState(existing && existing.item && existing.item.password);
-      const payload = {
-        ...(existing ? existing.item : {}),
-        ...incoming,
-        password: preparePasswordForPersist(incoming, {
-          existingPassword: cleanText(existing && existing.item && existing.item.password),
-          forcePasswordChange: cleanText(incoming.password) ? (envelope.payload && envelope.payload.forcePasswordChange !== false) : existingAuthState.mustChangePassword,
-          sessionVersion: existingAuthState.sessionVersion || 1
-        })
-      };
+      const source = existing && existing.item ? existing.item : {};
+      const now = new Date().toISOString();
+      const payload = normalizeSystemUserPayload({
+        username: source.username || incoming.username,
+        password: incomingPassword,
+        name: cleanText(incoming.name) || cleanText(source.name),
+        email: cleanText(incoming.email) || cleanText(source.email),
+        role: cleanText(incoming.role) || cleanText(source.role),
+        unit: cleanText(incoming.unit) || cleanText(source.unit),
+        units: Array.isArray(incoming.units) && incoming.units.length ? incoming.units : source.units,
+        activeUnit: cleanText(incoming.activeUnit) || cleanText(source.activeUnit),
+        createdAt: cleanText(source.createdAt) || cleanText(incoming.createdAt),
+        updatedAt: now,
+        passwordChangedAt: cleanText(source.passwordChangedAt),
+        resetTokenExpiresAt: cleanText(source.resetTokenExpiresAt),
+        resetRequestedAt: cleanText(source.resetRequestedAt),
+        mustChangePassword: incomingPassword ? (envelope.payload && envelope.payload.forcePasswordChange !== false) : existingAuthState.mustChangePassword,
+        sessionVersion: existingAuthState.sessionVersion || 1,
+        backendMode: cleanText(source.backendMode) || 'a3-campus-backend',
+        recordSource: cleanText(source.recordSource) || 'frontend'
+      });
       validateSystemUserPayload(payload, { requirePassword: !existing });
       const emailDuplicate = await findDuplicateEmail(payload.email, payload.username);
       if (emailDuplicate) {
         throw createError('Another user already uses this email', 409);
       }
-      const now = new Date().toISOString();
+      const persistPassword = preparePasswordForPersist({
+        password: incomingPassword
+      }, {
+        existingPassword: cleanText(existing && existing.item && existing.item.password),
+        forcePasswordChange: incomingPassword ? (envelope.payload && envelope.payload.forcePasswordChange !== false) : existingAuthState.mustChangePassword,
+        sessionVersion: existingAuthState.sessionVersion || 1
+      });
       const saved = await upsertUser(existing, {
-        ...(existing ? existing.item : {}),
-        ...payload,
-        createdAt: existing ? existing.item.createdAt : (payload.createdAt || now),
-        updatedAt: now
+        username: payload.username,
+        password: persistPassword,
+        name: payload.name,
+        email: payload.email,
+        role: payload.role,
+        unit: payload.unit,
+        units: payload.units,
+        activeUnit: payload.activeUnit,
+        createdAt: existing ? cleanText(source.createdAt) || now : (payload.createdAt || now),
+        updatedAt: now,
+        passwordChangedAt: payload.passwordChangedAt || cleanText(source.passwordChangedAt),
+        resetTokenExpiresAt: payload.resetTokenExpiresAt || cleanText(source.resetTokenExpiresAt),
+        resetRequestedAt: payload.resetRequestedAt || cleanText(source.resetRequestedAt),
+        mustChangePassword: payload.mustChangePassword,
+        sessionVersion: payload.sessionVersion || 1,
+        backendMode: payload.backendMode,
+        recordSource: payload.recordSource
       });
       const actor = buildActorAudit(authz);
       await createAuditRow({

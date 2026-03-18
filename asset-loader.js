@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   var cacheKey = String(Date.now());
   var head = document.head;
   var body = document.body;
@@ -25,15 +25,57 @@
     'app.js'
   ];
   var index = 0;
+  var integrityMap = {};
+  var manifestPromise = null;
 
   window.__APP_ASSET_VERSION__ = cacheKey;
+
+  function normalizeAssetPath(assetPath) {
+    return String(assetPath || '').replace(/^\.?\//, '').replace(/\?.*$/, '');
+  }
+
+  function getAssetIntegrity(assetPath) {
+    return integrityMap[normalizeAssetPath(assetPath)] || '';
+  }
+
+  function applyIntegrity(node, assetPath) {
+    var integrity = getAssetIntegrity(assetPath);
+    if (integrity) {
+      node.integrity = integrity;
+      node.crossOrigin = 'anonymous';
+    }
+  }
 
   function appendLink(rel, href, type) {
     var link = document.createElement('link');
     link.rel = rel;
     link.href = href + '?v=' + cacheKey;
     if (type) link.type = type;
+    applyIntegrity(link, href);
     head.appendChild(link);
+  }
+
+  function loadManifest() {
+    if (manifestPromise) return manifestPromise;
+    manifestPromise = fetch('deploy-manifest.json?v=' + cacheKey, { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('manifest load failed: ' + response.status);
+        return response.json();
+      })
+      .then(function (manifest) {
+        integrityMap = (manifest && manifest.assetIntegrity && typeof manifest.assetIntegrity === 'object') ? manifest.assetIntegrity : {};
+        window.__APP_ASSET_MANIFEST__ = manifest || {};
+        window.__APP_ASSET_INTEGRITY__ = integrityMap;
+        return manifest;
+      })
+      .catch(function (error) {
+        console.warn('Failed to load asset manifest:', error && error.message ? error.message : error);
+        integrityMap = {};
+        window.__APP_ASSET_MANIFEST__ = window.__APP_ASSET_MANIFEST__ || {};
+        window.__APP_ASSET_INTEGRITY__ = integrityMap;
+        return null;
+      });
+    return manifestPromise;
   }
 
   function loadNextScript() {
@@ -44,6 +86,7 @@
     var optional = !!(assetEntry && typeof assetEntry === 'object' && assetEntry.optional);
 
     var script = document.createElement('script');
+    applyIntegrity(script, assetSrc);
     script.src = assetSrc + '?v=' + cacheKey;
     script.async = false;
     script.onload = function () {
@@ -69,14 +112,17 @@
     mount.appendChild(script);
   }
 
-  function bootstrap() {
+  async function bootstrap() {
+    await loadManifest();
     appendLink('icon', 'favicon.svg', 'image/svg+xml');
     appendLink('stylesheet', 'styles.css');
     loadNextScript();
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bootstrap, { once: true });
+    document.addEventListener('DOMContentLoaded', function () {
+      bootstrap();
+    }, { once: true });
   } else {
     bootstrap();
   }

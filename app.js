@@ -825,7 +825,48 @@
     return { ...systemUserRepositoryState };
   }
   function getRuntimeM365Config() {
-    return (typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__) || {};
+    const raw = (typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__) || {};
+    const sameOriginUrl = function (value) {
+      const rawValue = String(value || '').trim();
+      if (!rawValue) return '';
+      if (/^#/.test(rawValue)) return rawValue;
+      if (/^\//.test(rawValue)) return rawValue.replace(/\/$/, '');
+      try {
+        const resolved = new URL(rawValue, window.location.href);
+        if (resolved.origin === window.location.origin) {
+          return `${resolved.pathname.replace(/\/$/, '')}${resolved.search}${resolved.hash}`;
+        }
+      } catch (_) {}
+      return '';
+    };
+    const sharedHeaders = function (value) {
+      if (!value || typeof value !== 'object') return {};
+      return Object.entries(value).reduce(function (result, entry) {
+        const key = String(entry[0] || '').trim();
+        const headerValue = String(entry[1] || '').trim();
+        if (!/^x-isms-/i.test(key) || !headerValue) return result;
+        result[key] = headerValue;
+        return result;
+      }, {});
+    };
+    return {
+      ...raw,
+      systemUsersEndpoint: sameOriginUrl(raw.systemUsersEndpoint),
+      systemUsersHealthEndpoint: sameOriginUrl(raw.systemUsersHealthEndpoint),
+      systemUsersSharedHeaders: sharedHeaders(raw.systemUsersSharedHeaders),
+      reviewScopesEndpoint: sameOriginUrl(raw.reviewScopesEndpoint),
+      reviewScopesHealthEndpoint: sameOriginUrl(raw.reviewScopesHealthEndpoint),
+      reviewScopesSharedHeaders: sharedHeaders(raw.reviewScopesSharedHeaders),
+      auditTrailEndpoint: sameOriginUrl(raw.auditTrailEndpoint),
+      auditTrailHealthEndpoint: sameOriginUrl(raw.auditTrailHealthEndpoint),
+      auditTrailSharedHeaders: sharedHeaders(raw.auditTrailSharedHeaders),
+      authEndpoint: sameOriginUrl(raw.authEndpoint),
+      authHealthEndpoint: sameOriginUrl(raw.authHealthEndpoint),
+      authSharedHeaders: sharedHeaders(raw.authSharedHeaders),
+      attachmentsEndpoint: sameOriginUrl(raw.attachmentsEndpoint),
+      attachmentsHealthEndpoint: sameOriginUrl(raw.attachmentsHealthEndpoint),
+      attachmentsSharedHeaders: sharedHeaders(raw.attachmentsSharedHeaders)
+    };
   }
   function isStrictRemoteDataMode() {
     const config = getRuntimeM365Config();
@@ -947,6 +988,17 @@
     const config = getRuntimeM365Config();
     return config.attachmentsSharedHeaders && typeof config.attachmentsSharedHeaders === 'object' ? config.attachmentsSharedHeaders : {};
   }
+  function normalizeRequestUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const resolved = new URL(raw, typeof window !== 'undefined' ? window.location.href : undefined);
+      if (typeof window === 'undefined' || !window.location || resolved.origin === window.location.origin) {
+        return resolved.toString();
+      }
+    } catch (_) {}
+    return '';
+  }
   async function hashLocalPasswordValue(password) {
     const cleanPassword = String(password || '');
     if (!window.crypto || !window.crypto.subtle || typeof window.crypto.subtle.digest !== 'function') {
@@ -1050,6 +1102,8 @@
   async function requestSystemUserJson(url, options) {
     const requestOptions = options || {};
     const config = getRuntimeM365Config();
+    const safeUrl = normalizeRequestUrl(url);
+    if (!safeUrl) throw new Error('未設定或無效的請求端點');
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutMs = Number(config.unitContactRequestTimeoutMs || 15000);
     let timeoutId = null;
@@ -1153,7 +1207,8 @@
     const endpoint = getAttachmentsEndpoint();
     if (!endpoint) throw new Error('未設定 attachmentsEndpoint');
     const suffix = String(path || '').trim();
-    const url = suffix ? (endpoint + suffix) : endpoint;
+    const url = normalizeRequestUrl(suffix ? (endpoint + suffix) : endpoint);
+    if (!url) throw new Error('未設定或無效的附件端點');
     const requestOptions = options || {};
     const config = getRuntimeM365Config();
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -1161,7 +1216,7 @@
     let timeoutId = null;
     if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
     try {
-      const response = await fetch(url, {
+      const response = await fetch(safeUrl, {
         method: requestOptions.method || 'GET',
         headers: {
           'X-ISMS-Contract-Version': ATTACHMENT_CONTRACT_VERSION,

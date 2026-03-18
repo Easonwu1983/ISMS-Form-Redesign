@@ -222,8 +222,10 @@
 
     function csvCell(value) {
       const text = String(value === null || value === undefined ? '' : value);
-      if (text.includes(',') || text.includes('"') || text.includes('\n')) return '"' + text.replace(/"/g, '""') + '"';
-      return text;
+      const trimmed = text.replace(/^[\u0000-\u0020\uFEFF]+/, '');
+      const safeText = /^[=+\-@]/.test(trimmed) ? "'" + text : text;
+      if (safeText.includes(',') || safeText.includes('"') || safeText.includes('\n')) return '"' + safeText.replace(/"/g, '""') + '"';
+      return safeText;
     }
 
     function downloadWorkbook(filename, sheets) {

@@ -74,6 +74,14 @@
       return '';
     }
 
+    function getRoleBadgeClass(role) {
+      return ROLE_BADGE[role] || 'badge-viewer';
+    }
+
+    function getRoleLabel(role) {
+      return esc(String(role || '—'));
+    }
+
     function focusRouteContent() {
       window.requestAnimationFrame(function () {
         var heading = document.querySelector('[data-route-heading]');
@@ -321,7 +329,7 @@
 
       var sidebarEl = document.getElementById('sidebar');
       if (!sidebarEl) return;
-      sidebarEl.innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + ROLE_BADGE[u.role] + '">' + u.role + '</span></div>';
+      sidebarEl.innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div>';
       sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
         link.addEventListener('click', function () {
           if (isMobileViewport()) closeSidebar();
@@ -344,7 +352,7 @@
 
       var headerEl = document.getElementById('header');
       if (!headerEl) return;
-      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><span class="header-title">' + getRouteTitle(route.page) + '</span></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + u.role + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout">登出</button></div>';
+      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><span class="header-title">' + getRouteTitle(route.page) + '</span></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout">登出</button></div>';
 
       var switcher = document.getElementById('header-unit-switch');
       if (switcher) {

@@ -80,6 +80,11 @@ body {
   overflow-x: hidden;
 }
 
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.42);
+  outline-offset: 2px;
+}
+
 .skip-link {
   position: fixed;
   top: 12px;
@@ -300,7 +305,6 @@ body {
   color: var(--text-primary);
   font-family: inherit;
   font-size: 0.95rem;
-  outline: none;
   transition: all var(--transition-fast);
 }
 
@@ -886,8 +890,18 @@ body {
 }
 
 .chk-label input,
-.radio-label input {
-  display: none;
+.radio-label input,
+.cl-radio-label input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .chk-box {
@@ -985,7 +999,6 @@ body {
 }
 
 .form-textarea:focus {
-  outline: none;
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
@@ -1736,7 +1749,6 @@ tbody td:first-child {
   font-family: inherit;
   font-size: 0.9rem;
   transition: all var(--transition-fast);
-  outline: none;
 }
 
 .form-input:focus,
@@ -2061,7 +2073,6 @@ tbody td:first-child {
   color: var(--text-primary);
   font-family: inherit;
   font-size: 0.88rem;
-  outline: none;
   transition: all var(--transition-fast);
 }
 
@@ -2761,10 +2772,6 @@ tbody td:first-child {
   font-weight: 500;
   transition: all var(--transition-fast);
   user-select: none;
-}
-
-.cl-radio-label input {
-  display: none;
 }
 
 .cl-radio-indicator {
@@ -3583,7 +3590,8 @@ tbody td:first-child {
 }
 
 .training-chart-group-summary:focus-visible {
-  outline: none;
+  outline: 2px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
   box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.24);
 }
 
@@ -6264,10 +6272,14 @@ tbody tr:hover {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.unit-cascade-search-option:hover,
+.unit-cascade-search-option:hover {
+  background: #eff6ff;
+}
+
 .unit-cascade-search-option:focus-visible {
   background: #eff6ff;
-  outline: none;
+  outline: 2px solid rgba(37, 99, 235, 0.24);
+  outline-offset: 2px;
 }
 
 .unit-cascade-search-option.is-active {
@@ -7819,6 +7831,21 @@ tbody tr:hover {
 @media (max-width: 1520px) {
   .review-actions--unit-contact {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
