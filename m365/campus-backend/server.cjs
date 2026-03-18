@@ -75,6 +75,10 @@ const state = {
   tokenExp: 0,
   tokenMode: ''
 };
+const MAX_JSON_BODY_BYTES = Number(process.env.UNIT_CONTACT_MAX_JSON_BODY_BYTES || 1024 * 1024);
+const APPLY_RATE_LIMIT_WINDOW_MS = Number(process.env.UNIT_CONTACT_APPLY_WINDOW_MS || 15 * 60 * 1000);
+const APPLY_RATE_LIMIT_MAX_REQUESTS = Number(process.env.UNIT_CONTACT_APPLY_MAX_REQUESTS || 5);
+const applyThrottle = new Map();
 
 function cleanText(value) {
   return String(value || '').trim();
@@ -94,19 +98,35 @@ function getAllowedOrigins() {
     .filter(Boolean);
 }
 
+function createHttpError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode || 400;
+  return error;
+}
+
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
+    let totalBytes = 0;
+    req.on('data', (chunk) => {
+      totalBytes += Buffer.byteLength(chunk);
+      if (totalBytes > MAX_JSON_BODY_BYTES) {
+        req.destroy(createHttpError('Request body too large', 413));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => {
       try {
         const raw = Buffer.concat(chunks).toString('utf8');
         resolve(raw ? JSON.parse(raw) : {});
       } catch (_) {
-        reject(new Error('Invalid JSON body'));
+        reject(createHttpError('Invalid JSON body', 400));
       }
     });
-    req.on('error', reject);
+    req.on('error', (error) => {
+      reject(Number(error && error.statusCode) ? error : createHttpError(String(error && error.message || 'Request body read failed'), 400));
+    });
   });
 }
 
@@ -225,6 +245,33 @@ async function resolveNamedList(name) {
     throw new Error('SharePoint list not found: ' + listName);
   }
   return list;
+}
+
+function buildApplyThrottleKey(payload, clientAddress) {
+  return [cleanText(payload && payload.applicantEmail).toLowerCase(), cleanText(clientAddress)].filter(Boolean).join('::');
+}
+
+function registerApplyAttempt(payload, clientAddress) {
+  const now = Date.now();
+  const key = buildApplyThrottleKey(payload, clientAddress);
+  if (!key) return { limited: false, retryAfterMs: 0 };
+  const activeSince = now - APPLY_RATE_LIMIT_WINDOW_MS;
+  const attempts = (applyThrottle.get(key) || []).filter((ts) => ts > activeSince);
+  attempts.push(now);
+  applyThrottle.set(key, attempts);
+  if (attempts.length > APPLY_RATE_LIMIT_MAX_REQUESTS) {
+    return {
+      limited: true,
+      retryAfterMs: Math.max(1000, APPLY_RATE_LIMIT_WINDOW_MS - (now - attempts[0]))
+    };
+  }
+  return { limited: false, retryAfterMs: 0 };
+}
+
+function readClientAddress(req) {
+  const forwarded = cleanText(req && req.headers && req.headers['x-forwarded-for']);
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return cleanText(req && req.socket && req.socket.remoteAddress);
 }
 
 function getSystemUsersListName() {
@@ -897,6 +944,12 @@ async function handleApply(req, res, origin) {
     validateActionEnvelope(envelope, ACTIONS.APPLY);
     payload = normalizeApplyPayload(envelope.payload);
     validateApplyPayload(payload);
+    const throttle = registerApplyAttempt(payload, readClientAddress(req));
+    if (throttle.limited) {
+      const rateError = createHttpError('Too many application requests. Please try again later.', 429);
+      rateError.retryAfterMs = throttle.retryAfterMs;
+      throw rateError;
+    }
     await ensureNoDuplicateActiveApplication(payload);
     const created = await createApplication(payload);
     const notifications = await notifyUnitContactApplicationSubmitted(created);
@@ -921,7 +974,14 @@ async function handleApply(req, res, origin) {
         })
       });
     }
-    return writeJson(res, buildErrorResponse(error, 'Failed to submit application.'), origin);
+    const response = buildErrorResponse(error, 'Failed to submit application.');
+    if (Number(error && error.statusCode) === 429 && Number(error && error.retryAfterMs) > 0) {
+      response.headers = {
+        ...(response.headers || {}),
+        'Retry-After': String(Math.ceil(Number(error.retryAfterMs) / 1000))
+      };
+    }
+    return writeJson(res, response, origin);
   }
 }
 

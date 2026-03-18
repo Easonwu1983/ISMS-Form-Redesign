@@ -3,7 +3,6 @@
     const {
       AUTH_KEY,
       ROLES,
-      DEFAULT_USERS,
       loadData,
       saveData,
       getAuthorizedUnits,
@@ -212,15 +211,6 @@
 
       let changed = false;
       let admin = data.users.find(function (user) { return user.username === 'admin'; });
-      if (!admin) {
-        const defaultAdmin = DEFAULT_USERS.find(function (user) { return user.username === 'admin'; });
-        if (defaultAdmin) {
-          admin = { ...defaultAdmin };
-          data.users.unshift(admin);
-          changed = true;
-        }
-      }
-
       if (!admin) return;
       if (admin.role !== ROLES.ADMIN) {
         admin.role = ROLES.ADMIN;
@@ -237,6 +227,40 @@
       if (auth && auth.username === 'admin') {
         writeAuthSession({ ...auth, role: ROLES.ADMIN, name: PRIMARY_ADMIN_NAME });
       }
+    }
+
+    function hasLocalUsers() {
+      const data = loadData();
+      return !!(data && Array.isArray(data.users) && data.users.length);
+    }
+
+    async function bootstrapLocalAdminAccount(input) {
+      const payload = input && typeof input === 'object' ? input : {};
+      const username = String(payload.username || '').trim();
+      const password = String(payload.password || '');
+      const name = String(payload.name || PRIMARY_ADMIN_NAME).trim() || PRIMARY_ADMIN_NAME;
+      const email = String(payload.email || '').trim().toLowerCase();
+      if (!username) throw new Error('請輸入帳號');
+      if (!email) throw new Error('請輸入電子郵件');
+      validateLocalPasswordComplexity(password);
+      if (findUser(username)) throw new Error('此帳號已存在');
+      if (findUserByEmail(email)) throw new Error('此電子郵件已被使用');
+      const data = loadData();
+      if (!data || !Array.isArray(data.users)) throw new Error('本機帳號資料初始化失敗');
+      const created = normalizeUserRecord({
+        username: username,
+        password: '',
+        passwordHash: await hashLocalPassword(password),
+        name: name,
+        role: ROLES.ADMIN,
+        unit: '',
+        units: [],
+        email: email,
+        mustChangePassword: true
+      });
+      data.users.unshift(created);
+      saveData(data);
+      return created;
     }
 
     async function resetPasswordByEmail(input) {
@@ -308,6 +332,8 @@
       getScopedUnit,
       switchCurrentUserUnit,
       ensurePrimaryAdminProfile,
+      hasLocalUsers,
+      bootstrapLocalAdminAccount,
       resetPasswordByEmail,
       redeemResetPassword,
       changePassword

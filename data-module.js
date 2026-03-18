@@ -38,6 +38,7 @@
     } = deps;
 
     const STORAGE_CACHE = Object.create(null);
+    let storageListenerInstalled = false;
     const STORE_VERSIONS = {
       [DATA_KEY]: 1,
       [CHECKLIST_KEY]: 1,
@@ -80,7 +81,44 @@
         && Object.prototype.hasOwnProperty.call(value, 'payload');
     }
 
+    function installStorageCacheInvalidation() {
+      if (storageListenerInstalled || typeof window === 'undefined' || !window.addEventListener) return;
+      window.addEventListener('storage', function (event) {
+        if (!event || !event.key) {
+          Object.keys(STORAGE_CACHE).forEach(function (cacheKey) {
+            delete STORAGE_CACHE[cacheKey];
+          });
+          return;
+        }
+        delete STORAGE_CACHE[event.key];
+      });
+      storageListenerInstalled = true;
+    }
+
+    function hasQuotaExceededError(error) {
+      const code = Number(error && error.code);
+      const name = String(error && error.name || '').trim();
+      return code === 22 || code === 1014 || name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+    }
+
+    function createStorageWriteError(error) {
+      const wrapped = new Error(
+        hasQuotaExceededError(error)
+          ? '瀏覽器本機儲存空間不足，請清理瀏覽資料後再試。'
+          : '無法寫入本機資料，請稍後再試。'
+      );
+      wrapped.code = hasQuotaExceededError(error) ? 'LOCAL_STORAGE_QUOTA' : 'LOCAL_STORAGE_WRITE_FAILED';
+      wrapped.cause = error;
+      return wrapped;
+    }
+
+    function cloneStoreValue(value) {
+      if (value === null || value === undefined) return value;
+      return JSON.parse(JSON.stringify(value));
+    }
+
     function readCachedJson(key, fallbackFactory) {
+      installStorageCacheInvalidation();
       const raw = localStorage.getItem(key);
       const hit = STORAGE_CACHE[key];
       if (hit && hit.raw === raw) return hit.parsed;
@@ -89,7 +127,10 @@
           const parsed = JSON.parse(raw);
           STORAGE_CACHE[key] = { raw, parsed };
           return parsed;
-        } catch (_) { }
+        } catch (_) {
+          delete STORAGE_CACHE[key];
+          localStorage.removeItem(key);
+        }
       }
       const fallback = fallbackFactory();
       STORAGE_CACHE[key] = { raw: JSON.stringify(fallback), parsed: fallback };
@@ -98,8 +139,12 @@
 
     function writeCachedJson(key, value) {
       const raw = JSON.stringify(value);
+      try {
+        localStorage.setItem(key, raw);
+      } catch (error) {
+        throw createStorageWriteError(error);
+      }
       STORAGE_CACHE[key] = { raw, parsed: value };
-      localStorage.setItem(key, raw);
     }
 
     function removeCachedJson(key) {
@@ -222,6 +267,15 @@
 
     function writeVersionedStore(key, payload) {
       writeCachedJson(key, createStoreEnvelope(key, payload));
+    }
+
+    function mutateVersionedStore(key, fallbackFactory, mutator) {
+      const current = readVersionedStore(key, fallbackFactory);
+      const draft = cloneStoreValue(current);
+      const result = typeof mutator === 'function' ? mutator(draft) : undefined;
+      const nextValue = result === undefined ? draft : result;
+      writeVersionedStore(key, nextValue);
+      return nextValue;
     }
 
     function migrateAllStores() {
@@ -528,36 +582,42 @@
     function getAllItems() { return loadData().items.slice(); }
     function getItem(id) { return loadData().items.find((item) => item.id === id); }
     function addItem(item) {
-      const data = loadData();
-      data.items.push(item);
-      saveData(data);
+      mutateVersionedStore(DATA_KEY, createDefaultData, function (data) {
+        if (!Array.isArray(data.items)) data.items = [];
+        data.items.push(item);
+      });
     }
     function updateItem(id, updates) {
-      const data = loadData();
-      const index = data.items.findIndex((item) => item.id === id);
-      if (index >= 0) {
-        data.items[index] = { ...data.items[index], ...updates };
-        saveData(data);
-      }
+      mutateVersionedStore(DATA_KEY, createDefaultData, function (data) {
+        if (!Array.isArray(data.items)) data.items = [];
+        const index = data.items.findIndex((item) => item.id === id);
+        if (index >= 0) {
+          data.items[index] = { ...data.items[index], ...updates };
+        }
+      });
     }
     function getUsers() { return loadData().users.slice().map((user) => normalizeUserRecord(user)); }
+    function hasUsers() { return getUsers().length > 0; }
     function addUser(user) {
-      const data = loadData();
-      data.users.push(normalizeUserRecord(user));
-      saveData(data);
+      mutateVersionedStore(DATA_KEY, createDefaultData, function (data) {
+        if (!Array.isArray(data.users)) data.users = [];
+        data.users.push(normalizeUserRecord(user));
+      });
     }
     function updateUser(username, updates) {
-      const data = loadData();
-      const index = data.users.findIndex((user) => user.username === username);
-      if (index >= 0) {
-        data.users[index] = normalizeUserRecord({ ...data.users[index], ...updates });
-        saveData(data);
-      }
+      mutateVersionedStore(DATA_KEY, createDefaultData, function (data) {
+        if (!Array.isArray(data.users)) data.users = [];
+        const index = data.users.findIndex((user) => user.username === username);
+        if (index >= 0) {
+          data.users[index] = normalizeUserRecord({ ...data.users[index], ...updates });
+        }
+      });
     }
     function deleteUser(username) {
-      const data = loadData();
-      data.users = data.users.filter((user) => user.username !== username);
-      saveData(data);
+      mutateVersionedStore(DATA_KEY, createDefaultData, function (data) {
+        if (!Array.isArray(data.users)) data.users = [];
+        data.users = data.users.filter((user) => user.username !== username);
+      });
     }
     function findUser(username) {
       const user = loadData().users.find((entry) => entry.username === username);
@@ -578,16 +638,18 @@
     }
 
     function addLoginLog(username, user, success) {
-      const logs = loadLoginLogs();
-      logs.push({
-        time: new Date().toISOString(),
-        username: String(username || '').trim(),
-        name: user?.name || '',
-        role: user?.role || '',
-        success: !!success
+      mutateVersionedStore(LOGIN_LOG_KEY, () => [], function (logs) {
+        if (!Array.isArray(logs)) logs = [];
+        logs.push({
+          time: new Date().toISOString(),
+          username: String(username || '').trim(),
+          name: user?.name || '',
+          role: user?.role || '',
+          success: !!success
+        });
+        if (logs.length > 500) logs.splice(0, logs.length - 500);
+        return logs;
       });
-      if (logs.length > 500) logs.splice(0, logs.length - 500);
-      saveLoginLogs(logs);
     }
 
     function clearLoginLogs() {
@@ -954,20 +1016,22 @@
     }
 
     function upsertTrainingForm(form) {
-      const store = loadTrainingStore();
-      const normalized = normalizeTrainingForm(form);
-      const index = store.forms.findIndex((item) => item.id === normalized.id);
-      if (index >= 0) store.forms[index] = normalized;
-      else store.forms.push(normalized);
-      saveTrainingStore(store);
+      mutateVersionedStore(TRAINING_KEY, emptyTrainingStore, function (store) {
+        if (!Array.isArray(store.forms)) store.forms = [];
+        const normalized = normalizeTrainingForm(form);
+        const index = store.forms.findIndex((item) => item.id === normalized.id);
+        if (index >= 0) store.forms[index] = normalized;
+        else store.forms.push(normalized);
+      });
     }
 
     function updateTrainingForm(id, updates) {
-      const store = loadTrainingStore();
-      const index = store.forms.findIndex((item) => item.id === id);
-      if (index < 0) return;
-      store.forms[index] = normalizeTrainingForm({ ...store.forms[index], ...updates });
-      saveTrainingStore(store);
+      mutateVersionedStore(TRAINING_KEY, emptyTrainingStore, function (store) {
+        if (!Array.isArray(store.forms)) store.forms = [];
+        const index = store.forms.findIndex((item) => item.id === id);
+        if (index < 0) return;
+        store.forms[index] = normalizeTrainingForm({ ...store.forms[index], ...updates });
+      });
     }
 
     function getAllTrainingRosters() {
@@ -1032,20 +1096,24 @@
     }
 
     function deleteTrainingRosterPerson(id) {
-      const store = loadTrainingStore();
-      store.rosters = store.rosters.filter((row) => row.id !== id);
-      saveTrainingStore(store);
+      mutateVersionedStore(TRAINING_KEY, emptyTrainingStore, function (store) {
+        if (!Array.isArray(store.rosters)) store.rosters = [];
+        store.rosters = store.rosters.filter((row) => row.id !== id);
+      });
     }
 
     function updateTrainingRosterPerson(id, updates) {
       const cleanId = String(id || '').trim();
       if (!cleanId) return null;
-      const store = loadTrainingStore();
-      const index = store.rosters.findIndex((row) => row.id === cleanId);
-      if (index < 0) return null;
-      store.rosters[index] = normalizeTrainingRosterRow({ ...store.rosters[index], ...(updates || {}) }, store.rosters[index].unit);
-      saveTrainingStore(store);
-      return store.rosters[index];
+      let updatedRow = null;
+      mutateVersionedStore(TRAINING_KEY, emptyTrainingStore, function (store) {
+        if (!Array.isArray(store.rosters)) store.rosters = [];
+        const index = store.rosters.findIndex((row) => row.id === cleanId);
+        if (index < 0) return;
+        store.rosters[index] = normalizeTrainingRosterRow({ ...store.rosters[index], ...(updates || {}) }, store.rosters[index].unit);
+        updatedRow = store.rosters[index];
+      });
+      return updatedRow;
     }
 
     function loadUnitContactApplicationStore() {
@@ -1132,6 +1200,7 @@
       addItem,
       updateItem,
       getUsers,
+      hasUsers,
       addUser,
       updateUser,
       deleteUser,

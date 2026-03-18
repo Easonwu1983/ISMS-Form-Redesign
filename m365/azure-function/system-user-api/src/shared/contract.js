@@ -1,4 +1,7 @@
-﻿const CONTRACT_VERSION = '2026-03-13';
+﻿const crypto = require('crypto');
+
+
+const CONTRACT_VERSION = '2026-03-13';
 
 const USER_ACTIONS = {
   LIST: 'system-user.list',
@@ -306,9 +309,10 @@ function validateSystemUserPayload(payload, options) {
 
 function generatePassword(length) {
   const size = Number.isFinite(Number(length)) ? Number(length) : 8;
+  const bytes = crypto.randomBytes(size);
   let password = '';
   for (let index = 0; index < size; index += 1) {
-    password += PASSWORD_CHARS[Math.floor(Math.random() * PASSWORD_CHARS.length)];
+    password += PASSWORD_CHARS[bytes[index] % PASSWORD_CHARS.length];
   }
   return password;
 }
@@ -355,3 +359,4 @@ module.exports = {
   validateActionEnvelope,
   validateSystemUserPayload
 };
+

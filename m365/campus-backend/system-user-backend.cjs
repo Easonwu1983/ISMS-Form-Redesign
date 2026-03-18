@@ -710,7 +710,6 @@ function createSystemUserRouter(deps) {
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         item: sanitizeUserForClient(saved.item),
-        resetToken: '',
         resetTokenExpiresAt: reset.expiresAt,
         contractVersion: CONTRACT_VERSION
       }), origin);
@@ -945,7 +944,6 @@ function createSystemUserRouter(deps) {
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         item: sanitizeUserForClient(saved.item),
-        resetToken: '',
         resetTokenExpiresAt: reset.expiresAt,
         delivery,
         contractVersion: AUTH_CONTRACT_VERSION

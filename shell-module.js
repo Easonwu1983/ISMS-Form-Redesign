@@ -7,6 +7,9 @@
       currentUser,
       login,
       logout,
+      getAuthMode,
+      hasLocalUsers,
+      bootstrapLocalAdminAccount,
       resetPasswordByEmail,
       redeemResetPassword,
       changePassword,
@@ -71,11 +74,28 @@
       return '';
     }
 
+    function focusRouteContent() {
+      window.requestAnimationFrame(function () {
+        var heading = document.querySelector('[data-route-heading]');
+        if (heading && typeof heading.focus === 'function') {
+          heading.setAttribute('tabindex', '-1');
+          heading.focus({ preventScroll: false });
+          return;
+        }
+        var main = document.getElementById('app');
+        if (main && typeof main.focus === 'function') {
+          main.focus({ preventScroll: false });
+        }
+      });
+    }
+
     function renderLogin() {
-      document.body.innerHTML = '<div class="login-page"><div class="login-card">' +
+      var needsLocalBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
+      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="login-page"><div class="login-card" id="app" tabindex="-1">' +
         '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div>' +
         '<div class="login-error" id="login-error" data-testid="login-error">帳號或密碼錯誤</div>' +
-        '<div id="login-panel"><form class="login-form" id="login-form" data-testid="login-form">' +
+        '<div id="bootstrap-panel" style="display:' + (needsLocalBootstrap ? 'block' : 'none') + '"><div class="login-entry-card login-entry-card--setup"><div class="login-entry-eyebrow">Setup</div><h3 class="login-entry-title">建立本機管理員帳號</h3><p class="login-entry-text">目前沒有任何本機帳號。請先建立一組本機管理員帳號，之後再登入系統。</p><form class="login-form" id="bootstrap-form"><div class="form-group"><label class="form-label">管理員姓名</label><input type="text" class="form-input" id="bootstrap-name" placeholder="請輸入管理員姓名" value="本機管理員" required></div><div class="form-group"><label class="form-label">管理員帳號</label><input type="text" class="form-input" id="bootstrap-user" placeholder="請輸入登入帳號" required></div><div class="form-group"><label class="form-label">電子郵件</label><input type="email" class="form-input" id="bootstrap-email" placeholder="請輸入電子郵件" required></div><div class="form-group"><label class="form-label">初始密碼</label><input type="password" class="form-input" id="bootstrap-pass" placeholder="至少 8 碼，含大小寫與數字" required></div><button type="submit" class="login-btn">建立本機管理員</button></form></div></div>' +
+        '<div id="login-panel" style="display:' + (needsLocalBootstrap ? 'none' : 'block') + '"><form class="login-form" id="login-form" data-testid="login-form">' +
         '<div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="login-user" data-testid="login-user" placeholder="請輸入帳號" required autofocus></div>' +
         '<div class="form-group"><label class="form-label">密碼</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" placeholder="請輸入密碼" required></div>' +
         '<button type="submit" class="login-btn" data-testid="login-submit">登入系統 ' + ic('arrow-right', 'icon-sm') + '</button>' +
@@ -96,19 +116,44 @@
         '<p style="font-size:.82rem;color:var(--text-secondary)">帳號：<strong id="reset-username"></strong></p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary)">有效期限：<strong id="reset-expire"></strong></p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary);margin-top:6px" id="reset-result-message"></p>' +
-        '<p style="font-size:1.1rem;font-weight:700;color:var(--text-heading);margin-top:6px;font-family:monospace;background:#f0f2f7;padding:8px;border-radius:8px" id="reset-token"></p>' +
         '<form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><div class="form-group"><label class="form-label">重設代碼</label><input type="text" class="form-input" id="redeem-token" placeholder="請輸入信件中的重設代碼" required></div><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="redeem-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="redeem-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' 完成重設</button></form></div>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
         '</div></div><div class="toast-container" id="toast-container"></div>';
 
       function switchPanel(target) {
-        ['login-panel', 'forgot-panel', 'change-panel'].forEach(function (id) {
+        ['bootstrap-panel', 'login-panel', 'forgot-panel', 'change-panel'].forEach(function (id) {
           var panel = document.getElementById(id);
           if (panel) panel.style.display = id === target ? 'block' : 'none';
         });
         ['login-error', 'forgot-error', 'change-error'].forEach(function (id) {
           var errorEl = document.getElementById(id);
           if (errorEl) errorEl.classList.remove('show');
+        });
+      }
+
+      var bootstrapForm = document.getElementById('bootstrap-form');
+      if (bootstrapForm) {
+        bootstrapForm.addEventListener('submit', async function (e) {
+          e.preventDefault();
+          var username = document.getElementById('bootstrap-user').value.trim();
+          var password = document.getElementById('bootstrap-pass').value;
+          var email = document.getElementById('bootstrap-email').value.trim();
+          var name = document.getElementById('bootstrap-name').value.trim();
+          var passwordError = validatePasswordComplexity(password);
+          if (passwordError) {
+            toast(passwordError, 'error');
+            return;
+          }
+          try {
+            await bootstrapLocalAdminAccount({ username: username, password: password, email: email, name: name });
+            toast('本機管理員帳號已建立，請使用新帳號登入', 'success');
+            switchPanel('login-panel');
+            document.getElementById('login-user').value = username;
+            document.getElementById('login-pass').value = '';
+            document.getElementById('login-user').focus();
+          } catch (error) {
+            toast(String(error && error.message || error || '建立本機管理員失敗'), 'error');
+          }
         });
       }
 
@@ -204,8 +249,6 @@
           document.getElementById('reset-result-message').textContent = deliveredByMail
             ? ('系統已將重設代碼寄送到 ' + (resetResult.user.email || email) + '，請查看信件後貼到下方欄位。')
             : '系統暫時無法寄送重設信，請稍後再試，或聯絡最高管理員協助重設。';
-          document.getElementById('reset-token').textContent = '';
-          document.getElementById('reset-token').style.display = 'none';
           document.getElementById('redeem-username').value = resetResult.user.username;
           document.getElementById('redeem-token').value = '';
           document.getElementById('redeem-form').style.display = deliveredByMail ? '' : 'none';
@@ -347,12 +390,14 @@
       renderHeader();
       closeSidebar();
       getRouteMeta(page).render(route.param);
+      focusRouteContent();
     }
 
     function renderPublicPage(page, param) {
-      document.body.innerHTML = '<div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>內部稽核管考追蹤系統</strong><span>ISMS 管考與追蹤平台</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">進入系統</a>' : '<a class="btn btn-secondary" href="#">登入系統</a>') + '</div></header><main class="public-main" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div></div>';
+      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>內部稽核管考追蹤系統</strong><span>ISMS 管考與追蹤平台</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">進入系統</a>' : '<a class="btn btn-secondary" href="#">登入系統</a>') + '</div></header><main class="public-main" id="app" tabindex="-1"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div></div>';
       getRouteMeta(page).render(param);
       refreshIcons();
+      focusRouteContent();
     }
 
     function renderApp() {
@@ -361,7 +406,7 @@
         handleRoute();
         return;
       }
-      document.body.innerHTML = '<aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
+      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
       renderBootstrapShell();
       Promise.resolve(ensureAuthenticatedRemoteBootstrap()).then(function () {
         if (currentUser()) handleRoute();

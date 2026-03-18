@@ -33,16 +33,7 @@
   const DEF_TYPES = ['主要缺失', '次要缺失', '觀察', '建議'];
   const SOURCES = ['內部稽核', '外部稽核', '教育部稽核', '資安事故', '系統變更', '使用者抱怨', '其他'];
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
-  const DEFAULT_USERS = [
-    { username: 'admin', password: 'admin123', name: '計算機及資訊網路中心', role: ROLES.ADMIN, unit: '計算機及資訊網路中心／資訊網路組', units: ['計算機及資訊網路中心／資訊網路組'], email: 'admin@company.com' },
-    { username: 'unit1', password: 'unit123', name: '王經理', role: ROLES.UNIT_ADMIN, unit: '計算機及資訊網路中心／資訊網路組', units: ['計算機及資訊網路中心／資訊網路組'], email: 'wang@company.com' },
-    { username: 'unit2', password: 'unit123', name: '張稽核員', role: ROLES.UNIT_ADMIN, unit: '稽核室', units: ['稽核室'], email: 'zhang@company.com' },
-    { username: 'user1', password: 'user123', name: '李工程師', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', units: ['計算機及資訊網路中心／資訊網路組'], email: 'li@company.com' },
-    { username: 'user2', password: 'user123', name: '陳資安主管', role: ROLES.REPORTER, unit: '計算機及資訊網路中心／資訊網路組', units: ['計算機及資訊網路中心／資訊網路組', '總務處／營繕組'], activeUnit: '計算機及資訊網路中心／資訊網路組', email: 'chen@company.com' },
-    { username: 'user3', password: 'user123', name: '黃工程師', role: ROLES.REPORTER, unit: '總務處／營繕組', units: ['總務處／營繕組'], email: 'huang@company.com' },
-    { username: 'user4', password: 'user123', name: '劉文管人員', role: ROLES.REPORTER, unit: '人事室／綜合業務組', units: ['人事室／綜合業務組'], email: 'liu@company.com' },
-    { username: 'viewer1', password: 'viewer123', name: '跨單位檢視者', role: ROLES.VIEWER, unit: '', units: [], email: 'viewer@company.com' },
-  ];
+  const DEFAULT_USERS = [];
 
   const UNIT_CUSTOM_VALUE = '__unit_custom__';
   const UNIT_CUSTOM_LABEL = '其他（手動輸入）';
@@ -951,6 +942,32 @@
     const config = getRuntimeM365Config();
     return config.attachmentsSharedHeaders && typeof config.attachmentsSharedHeaders === 'object' ? config.attachmentsSharedHeaders : {};
   }
+  async function hashLocalPasswordValue(password) {
+    const cleanPassword = String(password || '');
+    if (!window.crypto || !window.crypto.subtle || typeof window.crypto.subtle.digest !== 'function') {
+      throw new Error('瀏覽器不支援本機密碼雜湊');
+    }
+    const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(cleanPassword));
+    return Array.from(new Uint8Array(digest)).map(function (byte) {
+      return byte.toString(16).padStart(2, '0');
+    }).join('');
+  }
+  async function verifyLocalPasswordValue(user, password) {
+    const storedHash = String(user && user.passwordHash || '').trim();
+    if (storedHash) {
+      return storedHash === await hashLocalPasswordValue(password);
+    }
+    const legacyPassword = String(user && user.password || '').trim();
+    if (!legacyPassword) return false;
+    const ok = legacyPassword === String(password || '');
+    if (ok && user && user.username) {
+      updateUser(user.username, {
+        password: '',
+        passwordHash: await hashLocalPasswordValue(password)
+      });
+    }
+    return ok;
+  }
   function buildSystemUserEnvelope(action, payload) {
     return {
       action: String(action || '').trim(),
@@ -1596,15 +1613,22 @@
     });
     if (!requestPayload.username) throw new Error('缺少帳號');
     if (!requestPayload.password && !existing) throw new Error('缺少密碼');
+    validateSystemUserPayload(requestPayload, { requirePassword: !existing });
     if (getSystemUsersMode() !== 'm365-api') {
+      const localPayload = {
+        ...requestPayload,
+        password: '',
+        passwordHash: requestPayload.password
+          ? await hashLocalPasswordValue(requestPayload.password)
+          : String(existing && existing.passwordHash || '').trim()
+      };
       if (existing) {
         updateUser(requestPayload.username, {
-          ...requestPayload,
-          password: requestPayload.password || String(existing.password || '').trim()
+          ...localPayload
         });
       }
-      else addUser(requestPayload);
-      return { ok: true, item: findUser(requestPayload.username) || requestPayload, source: 'local' };
+      else addUser(localPayload);
+      return { ok: true, item: findUser(requestPayload.username) || localPayload, source: 'local' };
     }
     try {
       const body = await requestSystemUserJson(getSystemUsersEndpoint() + '/upsert', {
@@ -1619,10 +1643,17 @@
         setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式帳號寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
         throw new Error(buildStrictRemoteError('帳號資料寫入', error));
       }
-      if (existing) updateUser(requestPayload.username, requestPayload);
-      else addUser(requestPayload);
+      const localFallbackPayload = {
+        ...requestPayload,
+        password: '',
+        passwordHash: requestPayload.password
+          ? await hashLocalPasswordValue(requestPayload.password)
+          : String(existing && existing.passwordHash || '').trim()
+      };
+      if (existing) updateUser(requestPayload.username, localFallbackPayload);
+      else addUser(localFallbackPayload);
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
-      return { ok: true, item: findUser(requestPayload.username) || requestPayload, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
+      return { ok: true, item: findUser(requestPayload.username) || localFallbackPayload, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
     }
   }
   async function submitUserDelete(username, payload) {
@@ -1657,7 +1688,15 @@
     if (!username) return null;
     if (getSystemUsersMode() !== 'm365-api') {
       const fallbackPassword = String(input.password || '').trim() || generatePassword();
-      updateUser(username, { password: fallbackPassword });
+      validateSystemUserPayload({
+        username: username,
+        name: String((matchedUser && matchedUser.name) || '').trim() || username,
+        email: String((matchedUser && matchedUser.email) || input.email || '').trim(),
+        role: String((matchedUser && matchedUser.role) || USER_ROLES.REPORTER).trim(),
+        units: parseUserUnits((matchedUser && matchedUser.units) || (matchedUser && matchedUser.unit) || []),
+        password: fallbackPassword
+      }, { requirePassword: true });
+      updateUser(username, { password: '', passwordHash: await hashLocalPasswordValue(fallbackPassword), mustChangePassword: true });
       return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local' };
     }
     try {
@@ -1670,7 +1709,6 @@
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastSyncAt: new Date().toISOString(), message: '密碼重設代碼已寫入正式後端', error: '' });
       return {
         user: stored,
-        resetToken: String(body && body.resetToken || '').trim(),
         resetTokenExpiresAt: String(body && body.resetTokenExpiresAt || '').trim(),
         source: 'remote'
       };
@@ -1680,7 +1718,15 @@
         throw new Error(buildStrictRemoteError('重設密碼', error));
       }
       const fallbackPassword = String(input.password || '').trim() || generatePassword();
-      updateUser(username, { password: fallbackPassword });
+      validateSystemUserPayload({
+        username: username,
+        name: String((matchedUser && matchedUser.name) || '').trim() || username,
+        email: String((matchedUser && matchedUser.email) || input.email || '').trim(),
+        role: String((matchedUser && matchedUser.role) || USER_ROLES.REPORTER).trim(),
+        units: parseUserUnits((matchedUser && matchedUser.units) || (matchedUser && matchedUser.unit) || []),
+        password: fallbackPassword
+      }, { requirePassword: true });
+      updateUser(username, { password: '', passwordHash: await hashLocalPasswordValue(fallbackPassword), mustChangePassword: true });
       setSystemUserRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式帳號後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
     }
@@ -1692,7 +1738,7 @@
 
     if (getAuthMode() !== 'm365-api') {
       const localUser = findUser(cleanUsername);
-      if (!localUser || String(localUser.password || '') !== cleanPassword) return null;
+      if (!localUser || !(await verifyLocalPasswordValue(localUser, cleanPassword))) return null;
       return normalizeUserRecord(localUser);
     }
 
@@ -1790,7 +1836,6 @@
       const stored = upsertSystemUserInStore(item);
       return {
         user: stored,
-        resetToken: String(body && body.resetToken || '').trim(),
         resetTokenExpiresAt: String(body && body.resetTokenExpiresAt || '').trim(),
         delivery: body && body.delivery ? body.delivery : null,
         source: 'remote'
@@ -2768,6 +2813,9 @@
       currentUser,
       login,
       logout,
+      getAuthMode,
+      hasLocalUsers: function () { return getAuthModule().hasLocalUsers(); },
+      bootstrapLocalAdminAccount: function (input) { return getAuthModule().bootstrapLocalAdminAccount(input); },
       resetPasswordByEmail,
       redeemResetPassword,
       changePassword,

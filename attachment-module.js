@@ -15,12 +15,13 @@
     const ACTIVE_URLS = new Set();
     const REMOTE_BLOB_CACHE = new Map();
     let dbPromise = null;
+    let attachmentCounter = 0;
 
     function openDb() {
       if (dbPromise) return dbPromise;
       dbPromise = new Promise((resolve, reject) => {
         if (typeof indexedDB === 'undefined') {
-          reject(new Error('IndexedDB not supported'));
+          resolve(null);
           return;
         }
         const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -84,7 +85,12 @@
       if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
         window.crypto.getRandomValues(bytes);
       } else {
-        for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+        attachmentCounter = (attachmentCounter + 1) % 0xffffff;
+        const seed = String(Date.now()) + ':' + String(attachmentCounter) + ':' + String((typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : 0);
+        for (let index = 0; index < bytes.length; index += 1) {
+          const code = seed.charCodeAt(index % seed.length) || 0;
+          bytes[index] = (code + (index * 37) + attachmentCounter) % 256;
+        }
       }
       const salt = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
       return head + '_' + stamp + '_' + salt;

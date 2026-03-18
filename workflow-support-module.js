@@ -161,7 +161,7 @@
 
     function validateUploadFile(file, options) {
       const opts = options || {};
-      const fileLabel = String(opts.fileLabel || '檔案').trim();
+      const fileLabel = String(opts.fileLabel || '附件').trim();
       const allowedExtensions = Array.isArray(opts.allowedExtensions) ? opts.allowedExtensions.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean) : [];
       const allowedMimeTypes = Array.isArray(opts.allowedMimeTypes) ? opts.allowedMimeTypes.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean) : [];
       const maxSize = Number(opts.maxSize || 0);
@@ -172,19 +172,19 @@
       const extension = getFileExtension(name);
 
       if (!name) {
-        return { ok: false, message: `${fileLabel}缺少檔名，請重新選擇`, meta: null };
+        return { ok: false, message: `${fileLabel}缺少檔名，請重新選擇檔案。`, meta: null };
       }
       if (!size || size <= 0) {
-        return { ok: false, message: `「${name}」是空檔，請重新輸出或掃描後再上傳`, meta: null };
+        return { ok: false, message: `附件 ${name} 沒有有效內容，請重新選擇檔案。`, meta: null };
       }
       if (maxSize > 0 && size > maxSize) {
-        return { ok: false, message: `「${name}」超過 ${maxSizeLabel}`, meta: null };
+        return { ok: false, message: `附件 ${name} 超過大小限制 ${maxSizeLabel}。`, meta: null };
       }
       if (allowedExtensions.length && !allowedExtensions.includes(extension)) {
-        return { ok: false, message: `「${name}」副檔名不支援，僅接受 ${allowedExtensions.map((entry) => '.' + entry).join('、')}`, meta: null };
+        return { ok: false, message: `附件 ${name} 的副檔名不符合規定，只接受 ${allowedExtensions.map((entry) => '.' + entry).join('、')}。`, meta: null };
       }
       if (allowedMimeTypes.length && type && type !== 'application/octet-stream' && !allowedMimeTypes.some((rule) => matchesMimeRule(type, rule))) {
-        return { ok: false, message: `「${name}」檔案格式不支援`, meta: null };
+        return { ok: false, message: `附件 ${name} 的檔案格式不符合規定。`, meta: null };
       }
 
       const meta = {
@@ -204,11 +204,11 @@
       Array.from(incomingFiles || []).forEach((file) => {
         const checked = validateUploadFile(file, options);
         if (!checked.ok || !checked.meta) {
-          errors.push(checked.message || '檔案驗證失敗');
+          errors.push(checked.message || '附件驗證失敗');
           return;
         }
         if (known.has(checked.meta.signature)) {
-          errors.push(`「${checked.meta.name}」已重複上傳`);
+          errors.push(`附件 ${checked.meta.name} 已存在，請勿重複上傳。`);
           return;
         }
         known.add(checked.meta.signature);

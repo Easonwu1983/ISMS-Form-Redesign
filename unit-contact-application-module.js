@@ -207,6 +207,7 @@
 
       initUnitCascade('uca-unit', '', { disabled: false });
       const form = document.getElementById('unit-contact-apply-form');
+      const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
       form.addEventListener('input', markDirty);
       form.addEventListener('change', markDirty);
       form.addEventListener('submit', async function (event) {
@@ -227,6 +228,11 @@
         }
 
         try {
+          if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.dataset.originalText = submitButton.innerHTML;
+            submitButton.innerHTML = '送出中...';
+          }
           const result = await submitUnitContactApplication({
             ...unitState,
             unitCode: getUnitCode(unitState.unitValue),
@@ -242,6 +248,11 @@
           navigate('apply-unit-contact-success/' + encodeURIComponent(result.application.id), { allowDirtyNavigation: true });
         } catch (error) {
           toast(String(error && error.message || error || '申請送出失敗。'), 'error');
+        } finally {
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = submitButton.dataset.originalText || (ic('send', 'icon-sm') + ' 送出申請');
+          }
         }
       });
       refreshIcons();

@@ -39,6 +39,7 @@
       UPSERT_BATCH: 'training.roster.upsert-batch',
       DELETE: 'training.roster.delete'
     };
+    let requestCounter = 0;
     const DEFAULT_CONFIG = {
       unitContactMode: 'local-emulator',
       unitContactSubmitEndpoint: '',
@@ -115,7 +116,11 @@
     }
 
     function makeRequestId(prefix) {
-      return prefix + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      requestCounter = (requestCounter + 1) % 0xffffff;
+      const seed = (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function')
+        ? Array.from(window.crypto.getRandomValues(new Uint8Array(4)), function (value) { return value.toString(16).padStart(2, '0'); }).join('')
+        : (Date.now().toString(36) + requestCounter.toString(36)).slice(-8);
+      return prefix + '-' + Date.now() + '-' + seed;
     }
 
     function getConfig() {
@@ -445,6 +450,37 @@
 
       const single = normalizeRemoteApplication(body && (body.application || body.item || body.data || body.result || body));
       return single ? [single] : [];
+    }
+
+    function buildRemoteApplicationFallback(payload, body) {
+      const source = body && typeof body === 'object' ? body : {};
+      return decorateApplication({
+        id: cleanText(source.id || source.applicationId || source.ApplicationId || source.Title) || ('pending-' + Date.now()),
+        applicantName: cleanText(payload && payload.applicantName),
+        applicantEmail: cleanEmail(payload && payload.applicantEmail),
+        extensionNumber: cleanText(payload && payload.extensionNumber),
+        unitCategory: cleanText(payload && payload.unitCategory),
+        primaryUnit: cleanText(payload && payload.primaryUnit),
+        secondaryUnit: cleanText(payload && payload.secondaryUnit),
+        unitValue: cleanText(payload && payload.unitValue),
+        unitCode: cleanText(payload && payload.unitCode),
+        contactType: cleanText(payload && payload.contactType) || 'primary',
+        note: cleanText(payload && payload.note),
+        status: cleanText(source.status || source.Status) || UNIT_CONTACT_APPLICATION_STATUSES.PENDING_REVIEW,
+        statusLabel: cleanText(source.statusLabel || source.StatusLabel),
+        statusDetail: cleanText(source.statusDetail || source.StatusDetail),
+        source: 'remote',
+        backendMode: getMode(),
+        submittedAt: cleanText(source.submittedAt || source.SubmittedAt) || nowIso(),
+        updatedAt: cleanText(source.updatedAt || source.UpdatedAt) || nowIso(),
+        reviewedAt: cleanText(source.reviewedAt || source.ReviewedAt),
+        reviewedBy: cleanText(source.reviewedBy || source.ReviewedBy),
+        reviewComment: cleanText(source.reviewComment || source.ReviewComment),
+        activationSentAt: cleanText(source.activationSentAt || source.ActivationSentAt),
+        activatedAt: cleanText(source.activatedAt || source.ActivatedAt),
+        externalUserId: cleanText(source.externalUserId || source.ExternalUserId),
+        hasRequestedPassword: false
+      });
     }
 
     function normalizeCorrectiveAttachment(entry) {
@@ -845,6 +881,15 @@
       });
       const applications = normalizeRemoteApplications(body);
       if (!applications.length) {
+        if (body && typeof body === 'object' && body.ok !== false) {
+          return {
+            ok: true,
+            mode: getMode(),
+            application: buildRemoteApplicationFallback(normalizedPayload, body),
+            raw: body,
+            warning: '遠端服務未完整回傳申請資料，已使用送件內容建立暫時結果。'
+          };
+        }
         throw new Error('遠端服務沒有回傳申請資料');
       }
       return {
