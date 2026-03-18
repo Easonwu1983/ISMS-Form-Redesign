@@ -92,16 +92,23 @@ async function waitForTrainingRosterRowsByNames(page, names, timeout = 45000) {
   }, names, { timeout });
 }
 
+async function confirmTrainingModal(page) {
+  const confirm = page.locator('[data-modal-confirm]').first();
+  await confirm.waitFor({ state: 'visible', timeout: 10000 });
+  await confirm.click();
+  await page.waitForTimeout(120);
+}
+
 async function deleteRosterRowsByNames(page, names) {
   await gotoHash(page, 'training-roster');
   await page.waitForSelector('[data-testid^="training-roster-delete-"]', { timeout: 45000 });
-  await page.evaluate(() => { window.confirm = () => true; });
   for (const name of names) {
     const row = page.locator(`tr[data-roster-name="${name}"]`).first();
     if (!(await row.count())) continue;
     const button = row.locator('[data-testid^="training-roster-delete-"]').first();
     if (!(await button.count())) continue;
     await button.click();
+    await confirmTrainingModal(page);
     await page.waitForTimeout(250);
   }
 }
@@ -166,8 +173,8 @@ async function deleteRosterRowsByNames(page, names) {
 
       const deleteButton = page.locator(`tr:has-text("${DELETE_ROW_NAME}") .training-row-delete`).first();
       if (!await deleteButton.count()) throw new Error('manual draft row does not expose delete action');
-      await page.evaluate(() => { window.confirm = () => true; });
       await deleteButton.click();
+      await confirmTrainingModal(page);
       await page.waitForFunction((targetName) => !Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes(targetName)), DELETE_ROW_NAME, { timeout: 45000 });
 
       await page.fill('#tr-new-name', UNDO_ROW_NAME);
@@ -214,8 +221,8 @@ async function deleteRosterRowsByNames(page, names) {
         throw new Error('training form did not enter pending signoff state');
       }
 
-      await page.evaluate(() => { window.confirm = () => true; });
       await page.click('#training-undo-step-one');
+      await confirmTrainingModal(page);
       await page.waitForSelector('#training-form', { timeout: 45000 });
       await page.waitForFunction((id) => window.location.hash === '#training-fill/' + id, trainingId, { timeout: 45000 });
 
@@ -254,6 +261,14 @@ async function deleteRosterRowsByNames(page, names) {
       );
       await page.click('[data-testid="training-import-submit"]');
       await waitForTrainingRosterRowsByNames(page, results.context.importNames, 45000);
+      await page.waitForFunction((targetNames) => {
+        const active = document.activeElement;
+        if (!active || !active.matches || !active.matches('.training-row-delete')) return false;
+        const row = active.closest('tr[data-roster-name]');
+        if (!row) return false;
+        const rowName = String(row.dataset.rosterName || '').trim();
+        return targetNames.includes(rowName);
+      }, results.context.importNames, { timeout: 45000 });
 
       const verifyContext = await browser.newContext({ viewport: { width: 1440, height: 1024 } });
       const verifyPage = await verifyContext.newPage();

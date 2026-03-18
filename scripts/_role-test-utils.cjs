@@ -135,7 +135,14 @@ async function login(page, username, password) {
 async function logout(page) {
   if (await page.locator('.btn-logout').count()) {
     await acceptNextDialog(page, 'accept');
-    await page.click('.btn-logout');
+    const button = page.locator('.btn-logout').first();
+    try {
+      await button.click({ timeout: 5000 });
+    } catch (error) {
+      await button.evaluate((element) => {
+        if (element && typeof element.click === 'function') element.click();
+      });
+    }
     await page.waitForSelector('[data-testid="login-form"]');
   }
 }

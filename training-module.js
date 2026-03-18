@@ -1443,6 +1443,125 @@
     return rosters.map((row) => buildTrainingRosterRow(row)).join('');
   }
 
+  function captureTrainingRosterFocusState() {
+    const active = document.activeElement;
+    if (!active || typeof active.closest !== 'function') return null;
+    const row = active.closest('tr[data-roster-id]');
+    if (!row) return null;
+    const rows = Array.from(document.querySelectorAll('tr[data-roster-id]'));
+    const rowIndex = rows.indexOf(row);
+    const rowId = String(row.dataset.rosterId || '').trim();
+    if (!rowId) return null;
+    const state = { rowId, rowIndex };
+    if (active.matches('.training-row-check')) {
+      state.kind = 'check';
+      return state;
+    }
+    if (active.matches('.training-row-select')) {
+      state.kind = 'select';
+      state.field = String(active.dataset.field || '').trim();
+      return state;
+    }
+    if (active.matches('.training-row-meta')) {
+      state.kind = 'meta';
+      state.field = String(active.dataset.field || '').trim();
+      state.selectionStart = Number.isInteger(active.selectionStart) ? active.selectionStart : null;
+      state.selectionEnd = Number.isInteger(active.selectionEnd) ? active.selectionEnd : null;
+      state.selectionDirection = active.selectionDirection || 'none';
+      return state;
+    }
+    if (active.matches('.training-row-note')) {
+      state.kind = 'note';
+      state.selectionStart = Number.isInteger(active.selectionStart) ? active.selectionStart : null;
+      state.selectionEnd = Number.isInteger(active.selectionEnd) ? active.selectionEnd : null;
+      state.selectionDirection = active.selectionDirection || 'none';
+      return state;
+    }
+    if (active.matches('.training-binary-btn[data-field]')) {
+      state.kind = 'binary';
+      state.field = String(active.dataset.field || '').trim();
+      state.value = String(active.dataset.value || '').trim();
+      return state;
+    }
+    if (active.matches('.training-row-delete')) {
+      state.kind = 'delete';
+      return state;
+    }
+    return null;
+  }
+
+  function focusTrainingRosterElement(element, state) {
+    if (!element) return false;
+    try {
+      if (typeof element.focus === 'function') {
+        element.focus({ preventScroll: true });
+      } else if (typeof element.focus === 'function') {
+        element.focus();
+      }
+    } catch (_) {
+      try {
+        element.focus();
+      } catch (_) {
+        // ignore focus failures
+      }
+    }
+    if (!state) return true;
+    if ((state.kind === 'meta' || state.kind === 'note') && typeof element.setSelectionRange === 'function'
+      && Number.isInteger(state.selectionStart) && Number.isInteger(state.selectionEnd)) {
+      try {
+        element.setSelectionRange(state.selectionStart, state.selectionEnd, state.selectionDirection || 'none');
+      } catch (_) {
+        // ignore selection failures
+      }
+    }
+    return true;
+  }
+
+  function restoreTrainingRosterFocusState(state) {
+    if (!state) return false;
+    const rows = Array.from(document.querySelectorAll('tr[data-roster-id]'));
+    if (!rows.length) return false;
+    const rowId = String(state.rowId || '').trim();
+    let row = rowId ? rows.find((entry) => String(entry.dataset.rosterId || '').trim() === rowId) : null;
+    if (!row && Number.isInteger(state.rowIndex) && state.rowIndex >= 0 && state.rowIndex < rows.length) {
+      row = rows[state.rowIndex];
+    }
+    if (!row) row = rows[0];
+    if (!row) return false;
+    row.classList.add('training-roster-row-focused');
+
+    let target = null;
+    const field = String(state.field || '').trim();
+    switch (state.kind) {
+      case 'check':
+        target = row.querySelector('.training-row-check');
+        break;
+      case 'select':
+        target = Array.from(row.querySelectorAll('.training-row-select')).find((element) => String(element.dataset.field || '').trim() === field) || null;
+        break;
+      case 'meta':
+        target = Array.from(row.querySelectorAll('.training-row-meta')).find((element) => String(element.dataset.field || '').trim() === field) || null;
+        break;
+      case 'note':
+        target = row.querySelector('.training-row-note');
+        break;
+      case 'binary':
+        target = Array.from(row.querySelectorAll('.training-binary-btn[data-field]')).find((element) => String(element.dataset.field || '').trim() === field && String(element.dataset.value || '').trim() === String(state.value || '').trim()) || null;
+        break;
+      case 'delete':
+        target = row.querySelector('.training-row-delete');
+        break;
+      default:
+        target = row.querySelector('.training-row-delete')
+          || row.querySelector('.training-row-check')
+          || row.querySelector('.training-row-select')
+          || row.querySelector('.training-row-note');
+        break;
+    }
+    if (!target) return false;
+    return focusTrainingRosterElement(target, state);
+  }
+
   function focusTrainingRosterRows(options) {
     const opts = options || {};
     const ids = new Set((Array.isArray(opts.rosterIds) ? opts.rosterIds : []).map((value) => String(value || '').trim()).filter(Boolean));
@@ -1463,6 +1582,11 @@
     if (!matchedRows.length) return;
     matchedRows.forEach((row) => row.classList.add('training-roster-row-focused'));
     matchedRows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const preferredFocus = matchedRows[0].querySelector('.training-row-delete')
+      || matchedRows[0].querySelector('.training-row-check')
+      || matchedRows[0].querySelector('.training-row-select')
+      || matchedRows[0].querySelector('.training-row-note');
+    focusTrainingRosterElement(preferredFocus, { kind: 'delete' });
   }
 
   function mergeTrainingRosterItemsIntoLocalStore(items) {
@@ -1523,6 +1647,7 @@
         console.warn('training roster page sync failed', error);
       }
     }
+    const focusState = captureTrainingRosterFocusState();
 
     const rawRosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
       const statsCompare = compareZhStroke(String(a.statsUnit || getTrainingStatsUnit(a.unit)), String(b.statsUnit || getTrainingStatsUnit(b.unit)));
@@ -1572,9 +1697,9 @@
       }
       fileCopy.innerHTML = buildTrainingRosterFileCopy(file.name || '');
     });
-    document.getElementById('training-import-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      await runWithBusyState('\u6b63\u5728\u532f\u5165\u6559\u80b2\u8a13\u7df4\u540d\u55ae\u2026', async () => {
+      document.getElementById('training-import-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await runWithBusyState('\u6b63\u5728\u532f\u5165\u6559\u80b2\u8a13\u7df4\u540d\u55ae\u2026', async () => {
       const unit = document.getElementById('training-import-unit').value;
       const raw = document.getElementById('training-import-names').value;
       const file = document.getElementById('training-import-file')?.files[0];
@@ -1715,7 +1840,16 @@
       });
     });
 
-    focusTrainingRosterRows(opts);
+    const restoreFocus = function () {
+      if (!restoreTrainingRosterFocusState(focusState)) {
+        focusTrainingRosterRows(opts);
+      }
+    };
+    if (typeof window.setTimeout === 'function') {
+      window.setTimeout(restoreFocus, 0);
+    } else {
+      restoreFocus();
+    }
     refreshIcons();
   }
 

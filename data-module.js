@@ -38,6 +38,7 @@
     } = deps;
 
     const STORAGE_CACHE = Object.create(null);
+    const STORE_LOCKS = Object.create(null);
     let storageListenerInstalled = false;
     const STORAGE_WARNING_KEYS = Object.create(null);
     const STORE_VERSIONS = {
@@ -167,8 +168,79 @@
     }
 
     function removeCachedJson(key) {
-      delete STORAGE_CACHE[key];
-      localStorage.removeItem(key);
+      withStoreLock(key, function () {
+        delete STORAGE_CACHE[key];
+        localStorage.removeItem(key);
+      });
+    }
+
+    function parseStoreLockPayload(rawValue) {
+      if (!rawValue) return null;
+      try {
+        const parsed = JSON.parse(rawValue);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return {
+          owner: String(parsed.owner || '').trim(),
+          expiresAt: Number(parsed.expiresAt || 0)
+        };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function acquireStoreLock(key) {
+      const cleanKey = String(key || '').trim();
+      if (!cleanKey) return null;
+      const existing = STORE_LOCKS[cleanKey];
+      if (existing) {
+        existing.depth += 1;
+        return existing;
+      }
+      const lockKey = cleanKey + '::__lock__';
+      const owner = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      const timeoutMs = 2500;
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() <= deadline) {
+        const current = parseStoreLockPayload(localStorage.getItem(lockKey));
+        if (!current || !current.owner || !Number.isFinite(current.expiresAt) || current.expiresAt < Date.now()) {
+          const next = JSON.stringify({ owner, expiresAt: Date.now() + timeoutMs });
+          localStorage.setItem(lockKey, next);
+          if (localStorage.getItem(lockKey) === next) {
+            const token = { key: cleanKey, lockKey, owner, depth: 1 };
+            STORE_LOCKS[cleanKey] = token;
+            return token;
+          }
+        }
+        const pauseUntil = Date.now() + 5;
+        while (Date.now() < pauseUntil) {
+          // short spin to keep the lock synchronous and deterministic in browser storage
+        }
+      }
+      throw new Error('瀏覽器暫存正在忙碌中，請稍後再試。');
+    }
+
+    function releaseStoreLock(token) {
+      if (!token || !token.key) return;
+      const current = STORE_LOCKS[token.key];
+      if (!current) return;
+      current.depth -= 1;
+      if (current.depth > 0) return;
+      delete STORE_LOCKS[token.key];
+      const stored = parseStoreLockPayload(localStorage.getItem(token.lockKey));
+      if (stored && stored.owner === token.owner) {
+        localStorage.removeItem(token.lockKey);
+      }
+    }
+
+    function withStoreLock(key, fn) {
+      const cleanKey = String(key || '').trim();
+      if (!cleanKey || typeof fn !== 'function') return fn();
+      const token = acquireStoreLock(cleanKey);
+      try {
+        return fn();
+      } finally {
+        releaseStoreLock(token);
+      }
     }
 
     function migrateDataStoreToV1(payload) {
@@ -285,16 +357,21 @@
     }
 
     function writeVersionedStore(key, payload) {
-      writeCachedJson(key, createStoreEnvelope(key, payload));
+      withStoreLock(key, function () {
+        writeCachedJson(key, createStoreEnvelope(key, payload));
+      });
     }
 
     function mutateVersionedStore(key, fallbackFactory, mutator) {
-      const current = readVersionedStore(key, fallbackFactory);
-      const draft = cloneStoreValue(current);
-      const result = typeof mutator === 'function' ? mutator(draft) : undefined;
-      const nextValue = result === undefined ? draft : result;
-      writeVersionedStore(key, nextValue);
-      return nextValue;
+      return withStoreLock(key, function () {
+        const current = readVersionedStore(key, fallbackFactory);
+        const draft = cloneStoreValue(current);
+        const result = typeof mutator === 'function' ? mutator(draft) : undefined;
+        const nextValue = result === undefined ? draft : result;
+        writeCachedJson(key, createStoreEnvelope(key, nextValue));
+        STORAGE_CACHE[key] = { raw: JSON.stringify(createStoreEnvelope(key, nextValue)), parsed: createStoreEnvelope(key, nextValue) };
+        return nextValue;
+      });
     }
 
     function migrateAllStores() {
