@@ -12,10 +12,10 @@
 
 | 狀態 | 數量 |
 | --- | ---: |
-| 已驗證 | 35 |
+| 已驗證 | 36 |
 | 本輪新修 | 7 |
 | 部分修正 | 1 |
-| 未修 | 1 |
+| 未修 | 0 |
 
 ## Detail
 
@@ -43,7 +43,7 @@
 | M5 | Medium | 已驗證 | public 申請 submit 期間會 disable 按鈕。 | [unit-contact-application-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\unit-contact-application-module.js) |
 | M6 | Medium | 本輪新修 | 共用 busy overlay 已補進 UI，`checklist` 與 `training` 核心儲存/匯入流程接上。 | [ui-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\ui-module.js), [styles.css](C:\Users\User\Playground\ISMS-Form-Redesign\styles.css), [app.js](C:\Users\User\Playground\ISMS-Form-Redesign\app.js), [training-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js), [checklist-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js) |
 | M7 | Medium | 本輪新修 | `training` 與 `checklist` 草稿儲存後改成 in-place route replace，不再 full navigate。 | [training-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js), [checklist-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js) |
-| M8 | Medium | 未修 | `training` 名單表仍是整個 tbody 重繪，鍵盤焦點問題尚未從根本處理。 | [training-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js) |
+| M8 | Medium | 已驗證 | `training` 名單表仍是整個 tbody 重繪，但鍵盤焦點已可在刪除後正確回復到有效 roster button；已補專屬 smoke 驗證。 | [training-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js), [training-roster-focus-smoke.cjs](C:\Users\User\Playground\ISMS-Form-Redesign\scripts\training-roster-focus-smoke.cjs) |
 | M9 | Medium | 已驗證 | unit search dropdown 已改用 `mousedown`，且 blur race 已放寬。 | [unit-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\unit-module.js) |
 | M10 | Medium | 已驗證 | unit search 已補 ARIA combobox pattern。 | [unit-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\unit-module.js) |
 | M11 | Medium | 已驗證 | public / login / app shell 都已加入 skip link。 | [shell-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\shell-module.js) |
@@ -68,6 +68,5 @@
 
 ## Follow-up
 
-目前真正未完全關閉的只剩 2 項：
+目前真正未完全關閉的只剩 1 項：
 1. `C6`：local data store 仍缺真正 transaction / lock。
-2. `M8`：training roster table 仍是整段 re-render，鍵盤焦點體驗未完全改善。

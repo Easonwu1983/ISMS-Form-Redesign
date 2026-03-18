@@ -11,7 +11,8 @@ const SUITE = [
   { label: 'unit-contact-public-visual-smoke', script: 'scripts/unit-contact-public-visual-smoke.cjs' },
   { label: 'campus-unit-contact-public-visual-smoke', script: 'scripts/campus-unit-contact-public-visual-smoke.cjs' },
   { label: 'unit-contact-admin-review-smoke', script: 'scripts/unit-contact-admin-review-smoke.cjs' },
-  { label: 'unit-contact-account-to-fill-smoke', script: 'scripts/unit-contact-account-to-fill-smoke.cjs' }
+  { label: 'unit-contact-account-to-fill-smoke', script: 'scripts/unit-contact-account-to-fill-smoke.cjs' },
+  { label: 'training-roster-focus-smoke', script: 'scripts/training-roster-focus-smoke.cjs' }
 ];
 
 function runScript(entry) {
