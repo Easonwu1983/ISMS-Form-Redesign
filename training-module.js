@@ -1850,10 +1850,12 @@
         window.requestAnimationFrame(function () {
           window.requestAnimationFrame(restoreFocus);
         });
+        window.setTimeout(restoreFocus, 250);
         return;
       }
       if (typeof window.setTimeout === 'function') {
         window.setTimeout(restoreFocus, 50);
+        window.setTimeout(restoreFocus, 250);
         return;
       }
       restoreFocus();
