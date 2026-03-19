@@ -2370,9 +2370,17 @@
     message: '',
     error: ''
   };
+  const TRAINING_SYNC_FRESHNESS_MS = 15000;
   function setTrainingRepositoryState(patch) {
     Object.assign(trainingRepositoryState, patch || {});
     return { ...trainingRepositoryState };
+  }
+  function isTrainingSyncFresh(kind) {
+    const lastSyncAt = kind === 'rosters' ? trainingRepositoryState.lastRostersSyncAt : trainingRepositoryState.lastFormsSyncAt;
+    if (!trainingRepositoryState.ready) return false;
+    const parsedAt = Date.parse(String(lastSyncAt || '').trim());
+    if (!Number.isFinite(parsedAt)) return false;
+    return (Date.now() - parsedAt) < TRAINING_SYNC_FRESHNESS_MS;
   }
   function mergeRemoteTrainingFormsIntoStore(items, options) {
     const strict = !!(options && options.strict);
@@ -2459,6 +2467,15 @@
     const client = getM365ApiClient();
     const mode = client.getTrainingMode();
     const strict = isStrictRemoteDataMode();
+    if (!opts.force && isTrainingSyncFresh('forms')) {
+      return setTrainingRepositoryState({
+        mode: 'm365-api',
+        source: 'remote',
+        ready: true,
+        message: '教育訓練草稿沿用近期同步資料',
+        error: ''
+      });
+    }
     setTrainingRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setTrainingRepositoryState({ ready: false, message: '目前使用本機暫存模式', error: '' });
@@ -2500,6 +2517,15 @@
     const client = getM365ApiClient();
     const mode = client.getTrainingMode();
     const strict = isStrictRemoteDataMode();
+    if (!opts.force && isTrainingSyncFresh('rosters')) {
+      return setTrainingRepositoryState({
+        mode: 'm365-api',
+        source: 'remote',
+        ready: true,
+        message: '教育訓練名單沿用近期同步資料',
+        error: ''
+      });
+    }
     setTrainingRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setTrainingRepositoryState({ ready: false, message: '目前使用本機暫存模式', error: '' });
