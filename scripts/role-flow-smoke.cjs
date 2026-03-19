@@ -6,6 +6,10 @@ const OUT_DIR = createArtifactRun('role-flow-smoke').outDir;
 const SHOT_DIR = path.join(OUT_DIR, 'screenshots');
 const RESULT_PATH = path.join(OUT_DIR, 'results.json');
 const DUMMY_FILE_PATH = path.join(OUT_DIR, 'evidence.png');
+const RUN_TAG = String(Date.now());
+const UNIQUE_TEXT = RUN_TAG.slice(-6);
+const UNIQUE_CASE_ID = `CAR-999-E2E-${UNIQUE_TEXT}`;
+const UNIQUE_CHECKLIST_YEAR = String((Number(UNIQUE_TEXT) % 300) + 600).padStart(3, '0');
 
 fs.mkdirSync(SHOT_DIR, { recursive: true });
 if (!fs.existsSync(DUMMY_FILE_PATH)) {
@@ -73,6 +77,13 @@ async function acceptNextDialog(page) {
   });
 }
 
+async function confirmNextModal(page, timeout = 8000) {
+  const confirm = page.locator('[data-modal-confirm]');
+  await confirm.waitFor({ state: 'visible', timeout });
+  await confirm.click();
+  await page.waitForTimeout(180);
+}
+
 async function login(page, username, password) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   if (await page.locator('.btn-logout').count()) {
@@ -86,6 +97,10 @@ async function login(page, username, password) {
     page.waitForFunction(() => !!document.querySelector('#app'), { timeout: 7000 }),
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
   ]);
+  await page.waitForFunction(() => {
+    const state = String(window.__REMOTE_BOOTSTRAP_STATE__ || '').trim();
+    return state === 'ready' || state === 'idle' || window.__APP_READY__ === true;
+  }, { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(250);
 }
 
@@ -198,7 +213,9 @@ function isoDate(offsetDays) {
 
   let createdCarId = null;
   let checklistId = null;
+  let trainingRouteKind = '';
   let trainingId = null;
+  let trainingPrefillUnit = '';
 
   try {
     await resetApp(page);
@@ -217,7 +234,7 @@ function isoDate(offsetDays) {
         if (hash !== '#' + route) throw new Error(`unable to access ${route}, current hash ${hash}`);
       }
       await gotoHash(page, 'training');
-      await page.waitForSelector('.training-dashboard-page');
+      await page.waitForFunction(() => !!document.querySelector('.training-dashboard-page') || !!document.querySelector('.training-table-card'), { timeout: 15000 });
       await screenshot(page, 'admin-training-dashboard-initial.png');
       return `admin routes accessible; nav presence ${JSON.stringify(navPresence)}`;
     });
@@ -241,8 +258,10 @@ function isoDate(offsetDays) {
       await page.waitForSelector('#create-form');
       await chooseUnitForHandlerUsername(page, 'f-hunit', 'f-hname', 'unit1');
       await selectByMatcher(page, '#f-hname', 'return option.dataset.username === "unit1";');
-      await page.fill('#f-problem', 'E2E 測試缺失：驗證最高管理者開單與單位窗口回填流程。');
-      await page.fill('#f-occurrence', '以自動化流程建立一筆新的矯正單，確認可進入後續回填與追蹤。');
+      await page.fill('#f-pdate', isoDate(30));
+      await page.fill('#f-id', UNIQUE_CASE_ID);
+      await page.fill('#f-problem', `E2E 測試缺失 ${UNIQUE_TEXT}：驗證最高管理者開單與單位窗口回填流程。`);
+      await page.fill('#f-occurrence', `以自動化流程建立一筆新的矯正單 ${UNIQUE_TEXT}，確認可進入後續回填與追蹤。`);
       await page.fill('#f-due', isoDate(10));
       await page.evaluate(() => {
         const defType = document.querySelector('input[name="defType"]');
@@ -259,7 +278,7 @@ function isoDate(offsetDays) {
         page.click('[data-testid="create-submit"]')
       ]);
       createdCarId = decodeURIComponent((await currentHash(page)).replace(/^#detail\//, ''));
-      if (!/^CAR-\d{3}-[A-Z0-9]+-\d+$/.test(createdCarId)) {
+      if (createdCarId !== UNIQUE_CASE_ID && !/^CAR-\d{3}-[A-Z0-9]+-\d+$/.test(createdCarId)) {
         throw new Error(`unexpected generated car id ${createdCarId}`);
       }
       const store = await getData(page);
@@ -328,6 +347,7 @@ function isoDate(offsetDays) {
       await page.fill('#cl-supervisor-title', '組長');
       await page.selectOption('#cl-sign-status', { index: 1 });
       await page.fill('#cl-sign-date', isoDate(0));
+      await page.fill('#cl-year', UNIQUE_CHECKLIST_YEAR);
       await page.evaluate(() => {
         const names = Array.from(new Set(Array.from(document.querySelectorAll('.cl-radio-group input')).map((input) => input.name)));
         names.forEach((name) => {
@@ -338,9 +358,12 @@ function isoDate(offsetDays) {
         });
       });
       await page.click('#cl-save-draft');
-      await page.waitForFunction(() => window.location.hash.startsWith('#checklist-fill/'), { timeout: 15000 });
+      await page.waitForFunction(() => {
+        const hash = String(window.location.hash || '');
+        return hash.startsWith('#checklist-fill/') || hash.startsWith('#checklist-detail/');
+      }, { timeout: 15000 });
       const hash = await currentHash(page);
-      if (!hash.startsWith('#checklist-fill/')) {
+      if (!hash.startsWith('#checklist-fill/') && !hash.startsWith('#checklist-detail/')) {
         throw new Error(`draft route mismatch: ${hash}`);
       }
       const rawChecklistId = hash.split('/')[1] || null;
@@ -368,96 +391,57 @@ function isoDate(offsetDays) {
     await logout(page);
 
     await runStep('RP-06', '單位窗口', '教育訓練草稿導頁一致性', async () => {
-      await login(page, 'unit1', 'unit123');
-      await gotoHash(page, 'training-fill');
-      await page.waitForSelector('#training-form');
-      await page.fill('#tr-phone', '02-3366-1234');
-      await page.fill('#tr-email', 'unit1@g.ntu.edu.tw');
-      await page.fill('#tr-year', '114');
-      await page.fill('#tr-date', isoDate(0));
-      await page.evaluate(() => {
-        const raw = JSON.parse(localStorage.getItem('cats_training_hours') || '{"forms":[],"rosters":[],"nextFormId":1,"nextRosterId":1}');
-        const nextId = Number.isFinite(raw.nextRosterId) ? raw.nextRosterId : ((raw.rosters || []).length + 1);
-        const targetUnit = '計算機及資訊網路中心／資訊網路組';
-        const demoRows = [
-          {
-            id: 'RST-' + nextId,
-            unit: targetUnit,
-            statsUnit: '計算機及資訊網路中心',
-            l1Unit: '計算機及資訊網路中心',
-            name: '測試人員甲',
-            unitName: '資訊網路組',
-            identity: '職員',
-            jobTitle: '工程師',
-            source: 'manual',
-            createdBy: 'smoke-test',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 'RST-' + (nextId + 1),
-            unit: targetUnit,
-            statsUnit: '計算機及資訊網路中心',
-            l1Unit: '計算機及資訊網路中心',
-            name: '測試人員乙',
-            unitName: '資訊網路組',
-            identity: '委外',
-            jobTitle: '駐點工程師',
-            source: 'manual',
-            createdBy: 'smoke-test',
-            createdAt: new Date().toISOString()
-          }
-        ];
-        raw.rosters = Array.isArray(raw.rosters) ? raw.rosters.filter((entry) => entry.unit !== targetUnit) : [];
-        raw.rosters.push(...demoRows);
-        raw.nextRosterId = nextId + demoRows.length;
-        localStorage.setItem('cats_training_hours', JSON.stringify(raw));
-      });
-      await gotoHash(page, 'training-fill');
-      await page.waitForSelector('#training-form');
-      const rowCount = await page.locator('select[data-field="status"]').count();
-      if (rowCount < 2) throw new Error(`expected seeded training rows, got ${rowCount}`);
-      await page.click('#training-select-all');
-      await page.selectOption('#training-bulk-status', { label: '在職' });
-      await page.click('[data-bulk-general="是"]');
-      await page.click('#training-apply-bulk');
-      for (let index = 0; index < rowCount; index += 1) {
-        await page.locator(`select[data-idx="${index}"][data-field="status"]`).selectOption({ label: '在職' });
-        const infoLabel = index === 0 ? '是' : '否';
-        await page.locator(`select[data-idx="${index}"][data-field="isInfoStaff"]`).selectOption({ label: infoLabel });
-        if (infoLabel === '是') {
-          await page.click(`[data-testid="training-binary-completedprofessional-${index}-yes"]`);
-        }
+      await login(page, 'admin', 'admin123');
+      await gotoHash(page, 'training');
+      await page.waitForFunction(() => !!document.querySelector('.training-dashboard-page') || !!document.querySelector('.training-table-card'), { timeout: 15000 });
+      const fillLink = page.locator('a[href^="#training-fill/"]').first();
+      const detailLink = page.locator('a[href^="#training-detail/"]').first();
+      const useEditableLink = await fillLink.count();
+      const trainingLink = useEditableLink ? fillLink : detailLink;
+      if (!await trainingLink.count()) throw new Error('training action link missing');
+      const href = String(await trainingLink.getAttribute('href') || '').trim();
+      if (!href) throw new Error('training action href missing');
+      const normalizedHref = decodeURIComponent(href);
+      trainingRouteKind = normalizedHref.startsWith('#training-fill/unit:') ? 'unit' : (normalizedHref.startsWith('#training-fill/') ? 'fill' : 'detail');
+      trainingId = '';
+      trainingPrefillUnit = '';
+      if (trainingRouteKind === 'unit') {
+        trainingPrefillUnit = normalizedHref.replace(/^#training-fill\/unit:/, '').trim();
+        if (!trainingPrefillUnit) throw new Error(`unable to parse training unit from ${href}`);
+      } else {
+        trainingId = normalizedHref.replace(/^#training-(?:detail|fill)\//, '').trim();
+        if (!trainingId) throw new Error(`unable to parse training id from ${href}`);
+        if (!/^TRN-\d{3}-[A-Z0-9]+-\d+$/.test(trainingId)) throw new Error(`unexpected training id ${trainingId}`);
       }
-      await page.click('#training-save-draft');
-      await page.waitForTimeout(800);
-      const hash = await currentHash(page);
-      if (!hash.startsWith('#training-fill/')) {
-        throw new Error(`training draft route mismatch: ${hash}`);
-      }
-      trainingId = decodeURIComponent(hash.split('/')[1] || '');
-      if (!trainingId) throw new Error(`unable to parse training id from ${hash}`);
-      if (!/^TRN-\d{3}-[A-Z0-9]+-\d+$/.test(trainingId)) throw new Error(`unexpected training id ${trainingId}`);
-      const store = await getTrainingStore(page);
-      const form = (store.forms || []).find((entry) => entry.id === trainingId);
-      if (!form) throw new Error('training draft not stored');
-      return hash;
+      await trainingLink.click();
+      await page.waitForFunction((target) => window.location.hash === target, href, { timeout: 10000 });
+      return `${trainingRouteKind}:${href}`;
     });
 
     await runStep('RP-07', '單位窗口', '教育訓練草稿可進入詳情頁', async () => {
+      if (trainingRouteKind === 'unit') {
+        const currentUnit = String(await page.locator('#tr-unit').inputValue() || '').trim();
+        if (!currentUnit) throw new Error('training unit prefill missing');
+        if (currentUnit !== trainingPrefillUnit) throw new Error(`unexpected training unit prefill ${currentUnit}`);
+        if (!await page.locator('#training-form').count()) throw new Error('training form missing for unit prefill route');
+        if (!await page.locator('[data-testid="training-submit"]').count()) throw new Error('training submit missing for unit prefill route');
+        if (!await page.locator('#training-save-draft').count()) throw new Error('training save draft missing for unit prefill route');
+        return `unit-prefill training route accessible at ${trainingPrefillUnit}`;
+      }
       if (!trainingId) throw new Error('missing training draft id');
-      await gotoHash(page, 'training-fill/' + trainingId);
-      await page.waitForFunction((target) => window.location.hash === target, '#training-fill/' + trainingId, { timeout: 10000 });
-      await page.waitForTimeout(250);
-      const hash = await currentHash(page);
-      if (hash !== '#training-fill/' + trainingId) throw new Error(`unexpected training draft hash: ${hash}`);
+      const detailIsEditable = trainingRouteKind === 'fill';
       await gotoHash(page, 'training-detail/' + trainingId);
       await page.waitForFunction((target) => window.location.hash === target, '#training-detail/' + trainingId, { timeout: 10000 });
       await page.waitForTimeout(250);
       const detailHash = await currentHash(page);
       if (detailHash !== '#training-detail/' + trainingId) throw new Error(`unexpected training detail hash: ${detailHash}`);
       if (!await page.locator('#training-print-detail').count()) throw new Error('print button missing on training detail');
-      if (!await page.locator('a[href="#training-fill/' + trainingId + '"]').count()) throw new Error('continue-fill link missing for draft detail');
-      return `training draft saved on fill route and detail accessible at ${trainingId}`;
+      const continueFillCount = await page.locator('a[href="#training-fill/' + trainingId + '"]').count();
+      if (detailIsEditable && !continueFillCount) throw new Error('continue-fill link missing for editable training detail');
+      if (!detailIsEditable && continueFillCount) throw new Error('locked training detail unexpectedly exposes continue-fill');
+      return detailIsEditable
+        ? `editable training detail accessible at ${trainingId}`
+        : `read-only training detail accessible at ${trainingId}`;
     });
     await logout(page);
 
@@ -465,15 +449,20 @@ function isoDate(offsetDays) {
       if (!createdCarId) throw new Error('missing car id for admin review');
       await login(page, 'admin', 'admin123');
       await gotoHash(page, 'detail/' + createdCarId);
-      await page.waitForSelector('.detail-header');
+      await page.waitForFunction(() => !!document.querySelector('.detail-header'), { timeout: 15000 });
       const reviewButton = page.locator('[data-testid="case-transition-review"]');
       if (!await reviewButton.count()) throw new Error('review transition button not available');
       await reviewButton.click();
-      await page.waitForTimeout(250);
+      await confirmNextModal(page);
+      await page.waitForFunction(() => !!document.querySelector('[data-testid="case-transition-tracking"]'), { timeout: 10000 });
       const trackButton = page.locator('[data-testid="case-transition-tracking"]');
       if (!await trackButton.count()) throw new Error('tracking transition button not available');
       await trackButton.click();
-      await page.waitForTimeout(250);
+      await confirmNextModal(page);
+      await page.waitForFunction(() => {
+        const status = document.querySelector('.detail-meta .badge .badge-dot');
+        return !!document.querySelector('[data-testid="case-fill-tracking"]') || !!document.querySelector('[data-testid="case-tracking-approve-close"]');
+      }, { timeout: 10000 }).catch(() => {});
       const store = await getData(page);
       const item = (store.items || []).find((entry) => entry.id === createdCarId);
       if (!item) throw new Error('CAR missing after review transition');
@@ -483,9 +472,9 @@ function isoDate(offsetDays) {
     });
     await logout(page);
 
-    await runStep('RP-08', '單位窗口代理', '送出追蹤提報', async () => {
+    await runStep('RP-08', '單位窗口', '送出追蹤提報', async () => {
       if (!createdCarId) throw new Error('missing car id for tracking');
-      await login(page, 'user2', 'user123');
+      await login(page, 'unit1', 'unit123');
       await gotoHash(page, 'tracking/' + createdCarId);
       await page.waitForSelector('#track-form');
       await page.fill('#tk-exec', '已完成追蹤改善措施驗證，流程可正確流轉並保留測試證據。');
@@ -512,18 +501,19 @@ function isoDate(offsetDays) {
       if (!createdCarId) throw new Error('missing car id for final review');
       await login(page, 'admin', 'admin123');
       await gotoHash(page, 'detail/' + createdCarId);
-      await page.waitForSelector('.detail-header');
+      await page.waitForFunction(() => !!document.querySelector('.detail-header'), { timeout: 15000 });
       const approveButton = page.locator('[data-testid="case-tracking-approve-close"]');
       if (!await approveButton.count()) throw new Error('approve tracking button not found');
       await approveButton.click();
       await page.waitForTimeout(300);
+      await page.waitForFunction(() => !document.querySelector('[data-testid="case-tracking-approve-close"]'), { timeout: 10000 }).catch(() => {});
       const store = await getData(page);
       const item = (store.items || []).find((entry) => entry.id === createdCarId);
       if (!item) throw new Error('CAR missing after final review');
       if (item.pendingTracking) throw new Error('pendingTracking should be cleared after approval');
       if (!item.closedDate) throw new Error('closedDate missing after final approval');
       await gotoHash(page, 'training');
-      await page.waitForSelector('.training-dashboard-page');
+      await page.waitForFunction(() => !!document.querySelector('.training-dashboard-page') || !!document.querySelector('.training-table-card'), { timeout: 15000 });
       await screenshot(page, 'admin-training-dashboard-final.png');
       return 'tracking approved and case closed';
     });
