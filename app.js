@@ -3752,9 +3752,9 @@
 
   async function initApp() {
     installGlobalDelegation();
-    await ensureAuthenticatedRemoteBootstrap();
     installAppEventListeners();
     renderApp();
+    void ensureAuthenticatedRemoteBootstrap();
     const scheduleStoreMigration = function () {
       const run = function () {
         try {
