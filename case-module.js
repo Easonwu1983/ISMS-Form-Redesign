@@ -15,6 +15,7 @@
       canAccessItem,
       canRespondItem,
       canSubmitTracking,
+      canManageUsers,
       isItemHandler,
       getVisibleItems,
       getCurrentNextTrackingDate,
