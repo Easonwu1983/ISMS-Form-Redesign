@@ -19,22 +19,45 @@
       window.__UNSAVED_CHANGES_GUARD__ = true;
     }
 
+    function getTaipeiDateParts(value) {
+      const date = value ? new Date(value) : new Date();
+      if (Number.isNaN(date.getTime())) return null;
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      const parts = formatter.formatToParts(date).reduce((result, part) => {
+        if (part.type !== 'literal') result[part.type] = part.value;
+        return result;
+      }, {});
+      return {
+        year: parts.year || '',
+        month: parts.month || '',
+        day: parts.day || '',
+        hour: parts.hour || '',
+        minute: parts.minute || '',
+        second: parts.second || ''
+      };
+    }
+
     function fmt(value) {
       if (!value) return '—';
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return '—';
-      return [
-        date.getFullYear(),
-        String(date.getMonth() + 1).padStart(2, '0'),
-        String(date.getDate()).padStart(2, '0')
-      ].join('/');
+      const parts = getTaipeiDateParts(value);
+      if (!parts) return '—';
+      return [parts.year, parts.month, parts.day].join('/');
     }
 
     function fmtTime(value) {
       if (!value) return '—';
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return '—';
-      return fmt(date) + ' ' + String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+      const parts = getTaipeiDateParts(value);
+      if (!parts) return '—';
+      return [parts.year, parts.month, parts.day].join('/') + ' ' + [parts.hour, parts.minute].join(':');
     }
 
     function esc(value) {

@@ -50,6 +50,7 @@
       unitContactRequestTimeoutMs: 15000,
       apiReadTimeoutMs: 15000,
       apiWriteTimeoutMs: 20000,
+      attachmentsRequestTimeoutMs: 15000,
       trainingBatchTimeoutMs: 45000,
       unitContactStatusLookupMethod: 'POST',
       unitContactStatusQueryParam: 'email',

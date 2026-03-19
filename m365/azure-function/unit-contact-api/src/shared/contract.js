@@ -353,6 +353,25 @@ function mapApplicationForPublicClient(application) {
   };
 }
 
+function mapApplicationForPublicStatus(application) {
+  const normalized = normalizeStoredApplication(application);
+  return {
+    id: normalized.id,
+    unitCategory: normalized.unitCategory,
+    primaryUnit: normalized.primaryUnit,
+    secondaryUnit: normalized.secondaryUnit,
+    unitValue: normalized.unitValue,
+    unitCode: normalized.unitCode,
+    contactType: normalized.contactType,
+    status: normalized.status,
+    statusLabel: normalized.statusLabel,
+    statusDetail: normalized.statusDetail,
+    statusTone: normalized.statusTone,
+    submittedAt: normalized.submittedAt,
+    updatedAt: normalized.updatedAt
+  };
+}
+
 function mapApplicationToGraphFields(application) {
   const normalized = normalizeStoredApplication(application);
   return {
@@ -448,6 +467,7 @@ module.exports = {
   createError,
   mapApplicationForClient,
   mapApplicationForPublicClient,
+  mapApplicationForPublicStatus,
   mapApplicationToGraphFields,
   mapGraphFieldsToApplication,
   isStrongPassword,

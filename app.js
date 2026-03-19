@@ -263,12 +263,17 @@
     }
     window.location.hash = target;
   }
+  function normalizeRouteParamValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw || raw === 'undefined' || raw === 'null') return '';
+    return raw;
+  }
   function getRoute() {
     const h = window.location.hash.slice(1) || 'dashboard';
     const p = h.split('/');
-    let param = p[1];
+    let param = normalizeRouteParamValue(p[1]);
     if (param) {
-      try { param = decodeURIComponent(param); } catch (_) { }
+      try { param = normalizeRouteParamValue(decodeURIComponent(param)); } catch (_) { param = ''; }
     }
     return { page: p[0], param };
   }
@@ -1109,7 +1114,7 @@
     let timeoutId = null;
     if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
     try {
-      const response = await fetch(url, {
+      const response = await fetch(safeUrl, {
         method: requestOptions.method || 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1212,11 +1217,11 @@
     const requestOptions = options || {};
     const config = getRuntimeM365Config();
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutMs = Number(config.unitContactRequestTimeoutMs || 15000);
+    const timeoutMs = Number(config.attachmentsRequestTimeoutMs || config.apiReadTimeoutMs || config.unitContactRequestTimeoutMs || 15000);
     let timeoutId = null;
     if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
     try {
-      const response = await fetch(safeUrl, {
+      const response = await fetch(url, {
         method: requestOptions.method || 'GET',
         headers: {
           'X-ISMS-Contract-Version': ATTACHMENT_CONTRACT_VERSION,
@@ -2985,15 +2990,15 @@
   }
   const ROUTE_WHITELIST = {
     'apply-unit-contact': { title: '申請單位資安窗口', public: true, allow: () => true, fallback: 'apply-unit-contact', render: () => getUnitContactApplicationModule().renderApplyForm() },
-    'apply-unit-contact-success': { title: '申請已送出', public: true, allow: () => true, fallback: 'apply-unit-contact', render: (param) => getUnitContactApplicationModule().renderApplySuccess(param) },
+    'apply-unit-contact-success': { title: '申請已送出', public: true, allow: () => true, fallback: 'apply-unit-contact', requiresParam: true, render: (param) => getUnitContactApplicationModule().renderApplySuccess(param) },
     'apply-unit-contact-status': { title: '查詢申請進度', public: true, allow: () => true, fallback: 'apply-unit-contact', render: () => getUnitContactApplicationModule().renderApplyStatus() },
-    'activate-unit-contact': { title: '窗口帳號開通', public: true, allow: () => true, fallback: 'apply-unit-contact', render: (param) => getUnitContactApplicationModule().renderActivate(param) },
+    'activate-unit-contact': { title: '窗口帳號開通', public: true, allow: () => true, fallback: 'apply-unit-contact', requiresParam: true, render: (param) => getUnitContactApplicationModule().renderActivate(param) },
     dashboard: { title: '\u5100\u8868\u677f', allow: () => !!currentUser(), render: () => getCaseModule().renderDashboard() },
     list: { title: '\u77ef\u6b63\u55ae\u5217\u8868', allow: () => !!currentUser(), render: () => getCaseModule().renderList() },
     create: { title: '\u958b\u7acb\u77ef\u6b63\u55ae', allow: () => canCreateCAR(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u958b\u7acb\u77ef\u6b63\u55ae\u6b0a\u9650', render: () => getCaseModule().renderCreate() },
-    detail: { title: '\u77ef\u6b63\u55ae\u8a73\u60c5', allow: () => !!currentUser(), render: (param) => getCaseModule().renderDetail(param) },
-    respond: { title: '\u56de\u586b\u77ef\u6b63\u63aa\u65bd', allow: () => !!currentUser(), render: (param) => getCaseModule().renderRespond(param) },
-    tracking: { title: '\u8ffd\u8e64\u76e3\u63a7', allow: () => !!currentUser(), render: (param) => getCaseModule().renderTracking(param) },
+    detail: { title: '\u77ef\u6b63\u55ae\u8a73\u60c5', allow: () => !!currentUser(), requiresParam: true, render: (param) => getCaseModule().renderDetail(param) },
+    respond: { title: '\u56de\u586b\u77ef\u6b63\u63aa\u65bd', allow: () => !!currentUser(), requiresParam: true, render: (param) => getCaseModule().renderRespond(param) },
+    tracking: { title: '\u8ffd\u8e64\u76e3\u63a7', allow: () => !!currentUser(), requiresParam: true, render: (param) => getCaseModule().renderTracking(param) },
     users: { title: '\u5e33\u865f\u7ba1\u7406', allow: () => canManageUsers(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u5e33\u865f\u7ba1\u7406\u6b0a\u9650', render: () => getAdminModule().renderUsers() },
     'unit-contact-review': { title: '單位管理人申請', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '僅最高管理員可審核單位管理人申請', render: () => getAdminModule().renderUnitContactReview() },
     'login-log': { title: '\u767b\u5165\u7d00\u9304', allow: () => canManageUsers(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u6aa2\u8996\u767b\u5165\u7d00\u9304\u6b0a\u9650', render: () => getAdminModule().renderLoginLog() },
@@ -3001,19 +3006,20 @@
     'schema-health': { title: '\u8cc7\u6599\u5065\u5eb7\u6aa2\u67e5', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u6aa2\u8996\u8cc7\u6599\u5065\u5eb7\u8cc7\u8a0a', render: () => getAdminModule().renderSchemaHealth() },
     checklist: { title: '\u5167\u7a3d\u6aa2\u6838\u8868', allow: () => !!currentUser(), render: () => getChecklistModule().renderChecklistList() },
     'checklist-fill': { title: '\u586b\u5831\u6aa2\u6838\u8868', allow: () => canFillChecklist(), fallback: 'checklist', deniedMessage: '\u60a8\u6c92\u6709\u586b\u5831\u6aa2\u6838\u8868\u6b0a\u9650', render: (param) => getChecklistModule().renderChecklistFill(param) },
-    'checklist-detail': { title: '\u6aa2\u6838\u8868\u8a73\u60c5', allow: () => !!currentUser(), render: (param) => getChecklistModule().renderChecklistDetail(param) },
+    'checklist-detail': { title: '\u6aa2\u6838\u8868\u8a73\u60c5', allow: () => !!currentUser(), requiresParam: true, render: (param) => getChecklistModule().renderChecklistDetail(param) },
     'checklist-manage': { title: '\u6aa2\u6838\u8868\u7ba1\u7406', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u7ba1\u7406\u6aa2\u6838\u8868', render: () => getChecklistModule().renderChecklistManage() },
     'unit-review': { title: '\u55ae\u4f4d\u6cbb\u7406', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u7ba1\u7406\u55ae\u4f4d\u6cbb\u7406\u7684\u6b0a\u9650', render: () => getAdminModule().renderUnitReview() },
     training: { title: '\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08', allow: () => !!currentUser(), render: () => getTrainingModule().renderTraining() },
     'training-fill': { title: '\u586b\u5831\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08', allow: () => canFillTraining(), fallback: 'training', deniedMessage: '\u60a8\u6c92\u6709\u586b\u5831\u6559\u80b2\u8a13\u7df4\u7684\u6b0a\u9650', render: (param) => getTrainingModule().renderTrainingFill(param) },
-    'training-detail': { title: '\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08\u8a73\u60c5', allow: () => !!currentUser(), render: (param) => getTrainingModule().renderTrainingDetail(param) },
+    'training-detail': { title: '\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08\u8a73\u60c5', allow: () => !!currentUser(), requiresParam: true, render: (param) => getTrainingModule().renderTrainingDetail(param) },
     'training-roster': { title: '\u6559\u80b2\u8a13\u7df4\u540d\u55ae\u7ba1\u7406', allow: () => isAdmin(), fallback: 'training', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u7ba1\u7406\u6559\u80b2\u8a13\u7df4\u540d\u55ae', render: () => getTrainingModule().renderTrainingRoster() }
   };
   function getRouteMeta(page) { return ROUTE_WHITELIST[page] || ROUTE_WHITELIST.dashboard; }
   function getRouteTitle(page) { return getRouteMeta(page).title || '\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71'; }
-  function canAccessRoute(page) {
+  function canAccessRoute(page, routeParam) {
     const meta = getRouteMeta(page);
     if (!meta || typeof meta.allow !== 'function') return true;
+    if (meta.requiresParam && !normalizeRouteParamValue(routeParam)) return false;
     try { return !!meta.allow(); } catch (_) { return false; }
   }
   function getRouteFallback(page) {
@@ -3568,25 +3574,51 @@
   }
 
   let lastStableHash = '';
-  let suppressHashGuard = false;
   function handleHashChange() {
     const nextHash = window.location.hash || '#dashboard';
-    if (suppressHashGuard) {
-      suppressHashGuard = false;
-      handleRoute();
-      lastStableHash = window.location.hash || '#dashboard';
-      return;
-    }
     if (nextHash !== lastStableHash && hasUnsavedChangesGuard()) {
-      const ok = confirmDiscardUnsavedChanges('目前有未儲存的變更，確定要離開此頁嗎？');
+      const ok = confirmDiscardUnsavedChanges('變更尚未儲存，確定要離開目前頁面嗎？');
       if (!ok) {
-        suppressHashGuard = true;
         window.history.replaceState(null, '', lastStableHash || '#dashboard');
         return;
       }
     }
     handleRoute();
     lastStableHash = window.location.hash || '#dashboard';
+  }
+
+  let appEventListenersInstalled = false;
+  function handleWindowResize() {
+    if (!isMobileViewport()) closeSidebar();
+  }
+  function handleWindowLoad() {
+    refreshIcons();
+  }
+  function handleWindowFocus() {
+    runSessionHeartbeat().catch(function (error) {
+      console.warn('session heartbeat failed', error);
+    });
+  }
+  function handleDocumentVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+      runSessionHeartbeat().catch(function (error) {
+        console.warn('session heartbeat failed', error);
+      });
+    }
+  }
+  function handleStorageWarningEvent(event) {
+    const message = String(event && event.detail && event.detail.message || '').trim();
+    if (message) toast(message, 'error');
+  }
+  function installAppEventListeners() {
+    if (appEventListenersInstalled) return;
+    appEventListenersInstalled = true;
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('resize', handleWindowResize);
+    window.addEventListener('load', handleWindowLoad);
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleDocumentVisibilityChange);
+    window.addEventListener('isms:storage-warning', handleStorageWarningEvent);
   }
 
   async function initApp() {
@@ -3597,25 +3629,7 @@
     getTrainingModule().seedTrainingData();
     await migrateAttachmentStores();
     await ensureAuthenticatedRemoteBootstrap();
-    window.addEventListener('hashchange', handleHashChange);
-    window.addEventListener('resize', function () { if (!isMobileViewport()) closeSidebar(); });
-    window.addEventListener('load', refreshIcons);
-    window.addEventListener('focus', function () {
-      runSessionHeartbeat().catch(function (error) {
-        console.warn('session heartbeat failed', error);
-      });
-    });
-    document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible') {
-        runSessionHeartbeat().catch(function (error) {
-          console.warn('session heartbeat failed', error);
-        });
-      }
-    });
-    window.addEventListener('isms:storage-warning', function (event) {
-      const message = String(event && event.detail && event.detail.message || '').trim();
-      if (message) toast(message, 'error');
-    });
+    installAppEventListeners();
     renderApp();
     lastStableHash = window.location.hash || '#dashboard';
     refreshIcons();

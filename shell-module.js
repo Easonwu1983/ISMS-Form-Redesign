@@ -387,7 +387,7 @@
         renderBootstrapShell();
         return;
       }
-      if (!canAccessRoute(page)) {
+      if (!canAccessRoute(page, route.param)) {
         const fallback = getRouteFallback(page);
         const message = getRouteMeta(page).deniedMessage;
         navigate(fallback, { replace: true });

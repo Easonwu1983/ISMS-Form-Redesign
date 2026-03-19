@@ -181,12 +181,12 @@
 
     function writeCachedJson(key, value) {
       const raw = JSON.stringify(value);
+      STORAGE_CACHE[key] = { raw, parsed: value };
       try {
         localStorage.setItem(key, raw);
       } catch (error) {
         throw createStorageWriteError(error);
       }
-      STORAGE_CACHE[key] = { raw, parsed: value };
     }
 
     function removeCachedJson(key) {
@@ -397,7 +397,6 @@
         const nextRevision = getStoreRevision(currentEnvelope) + 1;
         const nextEnvelope = createStoreEnvelope(key, nextValue, nextRevision);
         writeCachedJson(key, nextEnvelope);
-        STORAGE_CACHE[key] = { raw: JSON.stringify(nextEnvelope), parsed: nextEnvelope };
         return nextValue;
       });
     }

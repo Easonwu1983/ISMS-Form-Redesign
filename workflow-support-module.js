@@ -35,7 +35,7 @@
     function normalizeRocYear(value, fallbackDateValue) {
       const raw = String(value || '').trim();
       if (/^\d{4}$/.test(raw) && Number(raw) > 1911) return String(Number(raw) - 1911).padStart(3, '0');
-      if (/^\d{1,3}$/.test(raw)) return String(Number(raw)).padStart(3, '0');
+      if (/^\d{1,3}$/.test(raw) && Number(raw) > 0) return String(Number(raw)).padStart(3, '0');
       return getCorrectionYear(fallbackDateValue);
     }
 
@@ -144,6 +144,33 @@
       return match ? String(match[1] || '').toLowerCase() : '';
     }
 
+    function getTaipeiDateParts(value) {
+      const date = value ? new Date(value) : new Date();
+      if (Number.isNaN(date.getTime())) return null;
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      const parts = formatter.formatToParts(date).reduce((result, part) => {
+        if (part.type !== 'literal') result[part.type] = part.value;
+        return result;
+      }, {});
+      return {
+        year: parts.year || '',
+        month: parts.month || '',
+        day: parts.day || '',
+        hour: parts.hour || '',
+        minute: parts.minute || '',
+        second: parts.second || ''
+      };
+    }
+
     function buildUploadSignature(meta) {
       const name = String(meta?.name || '').trim().toLowerCase();
       const size = Number(meta?.size || 0);
@@ -183,7 +210,7 @@
       if (allowedExtensions.length && !allowedExtensions.includes(extension)) {
         return { ok: false, message: `附件 ${name} 的副檔名不符合規定，只接受 ${allowedExtensions.map((entry) => '.' + entry).join('、')}。`, meta: null };
       }
-      if (allowedMimeTypes.length && type && type !== 'application/octet-stream' && !allowedMimeTypes.some((rule) => matchesMimeRule(type, rule))) {
+      if (allowedMimeTypes.length && (!type || type === 'application/octet-stream' || !allowedMimeTypes.some((rule) => matchesMimeRule(type, rule)))) {
         return { ok: false, message: `附件 ${name} 的檔案格式不符合規定。`, meta: null };
       }
 
@@ -249,15 +276,18 @@
         if (!Array.isArray(row)) return String(row === null || row === undefined ? '' : row);
         return row.map(csvCell).join(',');
       });
-      const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([String.fromCharCode(0xFEFF) + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      window.URL.revokeObjectURL(url);
+      try {
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        if (anchor.parentNode) anchor.parentNode.removeChild(anchor);
+        window.URL.revokeObjectURL(url);
+      }
       return true;
     }
 
@@ -345,27 +375,15 @@
     }
 
     function formatTrainingExportDate(value) {
-      const date = value ? new Date(value) : new Date();
-      if (!Number.isFinite(date.getTime())) return new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      return [
-        String(date.getFullYear()),
-        String(date.getMonth() + 1).padStart(2, '0'),
-        String(date.getDate()).padStart(2, '0')
-      ].join('');
+      const parts = getTaipeiDateParts(value);
+      if (!parts) return new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      return [parts.year, parts.month, parts.day].join('');
     }
 
     function formatTrainingExportTimestamp(value) {
-      const date = value ? new Date(value) : new Date();
-      if (!Number.isFinite(date.getTime())) return '';
-      return new Intl.DateTimeFormat('zh-TW', {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      }).format(date);
+      const parts = getTaipeiDateParts(value);
+      if (!parts) return '';
+      return `${parts.year}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute}`;
     }
 
     function sanitizeTrainingFileNamePart(value, fallbackText) {
@@ -469,12 +487,12 @@
     }
 
     function getRocDateParts(value) {
-      const date = value ? new Date(value) : new Date();
-      if (!Number.isFinite(date.getTime())) return { year: '', month: '', day: '' };
+      const parts = getTaipeiDateParts(value);
+      if (!parts) return { year: '', month: '', day: '' };
       return {
-        year: String(date.getFullYear() - 1911),
-        month: String(date.getMonth() + 1),
-        day: String(date.getDate())
+        year: String(Number(parts.year) - 1911),
+        month: String(Number(parts.month)),
+        day: String(Number(parts.day))
       };
     }
 
@@ -643,8 +661,12 @@
 
     function resolveTrainingImportTargetUnit(defaultUnit, rawUnit, rawStatsUnit) {
       const selectedUnit = String(defaultUnit || '').trim();
-      const unitText = String(rawUnit || '').trim().replace(/\//g, '\uFF0F');
-      const statsText = String(rawStatsUnit || '').trim().replace(/\//g, '\uFF0F');
+      const normalizeUnitText = (value) => String(value || '')
+        .trim()
+        .replace(/\s*[\/\uFF0F]\s*/g, '\uFF0F')
+        .replace(/\uFF0F+/g, '\uFF0F');
+      const unitText = normalizeUnitText(rawUnit);
+      const statsText = normalizeUnitText(rawStatsUnit);
       if (unitText) {
         if (getOfficialUnitMeta(unitText) || getApprovedCustomUnits().includes(unitText)) return unitText;
         if (statsText && getOfficialUnitMeta(composeUnitValue(statsText, unitText))) return composeUnitValue(statsText, unitText);
@@ -675,12 +697,39 @@
       };
     }
 
+    function splitDelimitedLine(line, delimiter) {
+      const text = String(line || '');
+      const result = [];
+      let current = '';
+      let quoted = false;
+      for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        if (char === '"') {
+          if (quoted && text[index + 1] === '"') {
+            current += '"';
+            index += 1;
+          } else {
+            quoted = !quoted;
+          }
+          continue;
+        }
+        if (!quoted && char === delimiter) {
+          result.push(current);
+          current = '';
+          continue;
+        }
+        current += char;
+      }
+      result.push(current);
+      return result.map((part) => String(part || '').replace(/^\uFEFF/, '').trim());
+    }
+
     function parseTrainingRosterImport(text, unit) {
-      const rows = String(text || '')
+      const rows = String(text || '').replace(/^\uFEFF/, '')
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean)
-        .map((line) => (line.includes('\t') ? line.split('\t') : line.split(',')));
+        .map((line) => splitDelimitedLine(line, line.includes('\t') ? '\t' : ','));
       const { headerMap, dataRows } = resolveTrainingRosterDataRows(rows);
       return dataRows.map((parts) => parseTrainingRosterCells(parts, unit, headerMap)).filter((row) => row && row.name);
     }

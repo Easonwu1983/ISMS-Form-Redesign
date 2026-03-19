@@ -132,9 +132,9 @@
         + '</div>'
         + '<div class="unit-contact-status-detail">' + esc(detail) + '</div>'
         + '<div class="unit-contact-status-meta">'
-        + '<span>申請人：' + esc(application.applicantName) + '</span>'
-        + '<span>分機：' + esc(application.extensionNumber || '-') + '</span>'
+        + '<span>申請編號：' + esc(application.id) + '</span>'
         + '<span>送出時間：' + esc(fmtTime(application.submittedAt)) + '</span>'
+        + '<span>最後更新：' + esc(fmtTime(application.updatedAt || application.submittedAt)) + '</span>'
         + '</div>'
         + buildStatusActions(application)
         + '</article>';

@@ -449,6 +449,10 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
       if (!form || !Array.isArray(form.signedFiles) || form.signedFiles.length < 1) {
         throw new Error(`training signed files missing after finalize: ${JSON.stringify(form)}`);
       }
+      const signedFileName = String(form.signedFiles[0] && (form.signedFiles[0].name || form.signedFiles[0].fileName || '')).trim();
+      if (!signedFileName || /^(?:att|trn|chk|car|uca)[-_]/i.test(signedFileName)) {
+        throw new Error(`training signed file name is not normalized: ${signedFileName}`);
+      }
       await saveScreenshot(page, 'training-finalized.png');
       return `finalized with ${form.signedFiles.length} signed file(s)`;
     });

@@ -18,7 +18,7 @@ const {
 const runMeta = createArtifactRun('training-optimization-regression');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-optimization-regression.json');
 const IMPORT_NAMES = [`ImportDiag${Date.now()}A`, `ImportDiag${Date.now()}B`];
-const TEST_TRAINING_YEAR = String(new Date().getFullYear() - 1901);
+const TEST_TRAINING_YEAR = String(new Date().getFullYear() - 1901 + 100);
 const DELETE_ROW_NAME = `測試刪除人員${Date.now()}`;
 const UNDO_ROW_NAME = `流程撤回人員${Date.now()}`;
 
@@ -32,12 +32,21 @@ async function waitForBootstrap(page) {
 
 async function ensureTrainingImportPanelVisible(page) {
   await waitForBootstrap(page);
-  await page.waitForSelector('#training-roster-import-wrap', { state: 'attached', timeout: 45000 });
-  await page.evaluate(() => {
-    const wrap = document.getElementById('training-roster-import-wrap');
-    if (wrap) wrap.style.display = '';
-  });
-  await page.waitForSelector('#training-import-form', { state: 'attached', timeout: 45000 });
+  await page.waitForFunction(() => {
+    const title = Array.from(document.querySelectorAll('body *'))
+      .some((node) => String(node.textContent || '').includes('教育訓練名單管理'));
+    return title && !!document.getElementById('training-roster-toggle-import');
+  }, undefined, { timeout: 45000 });
+
+  const importWrap = page.locator('#training-roster-import-wrap');
+  const importForm = page.locator('#training-import-form');
+  const toggle = page.locator('#training-roster-toggle-import');
+  if (!(await importForm.count()) || !(await importForm.isVisible().catch(() => false))) {
+    if (await toggle.count()) {
+      await toggle.click();
+    }
+  }
+  await importForm.waitFor({ state: 'visible', timeout: 45000 });
 }
 
 async function pickImportTargetUnit(page) {
@@ -76,9 +85,51 @@ async function pickImportTargetUnit(page) {
 }
 
 async function selectImportTargetUnit(page, target) {
-  await page.fill('#training-import-unit-search', target.token);
-  await page.waitForSelector('#training-import-unit-search-results [data-unit-value]', { timeout: 45000 });
-  await page.click(`#training-import-unit-search-results [data-unit-value="${target.fullUnit}"]`);
+  await page.waitForSelector('#training-import-unit-category', { timeout: 45000 });
+  await page.evaluate((fullUnit) => {
+    const categoryEl = document.getElementById('training-import-unit-category');
+    const parentEl = document.getElementById('training-import-unit-parent');
+    const childEl = document.getElementById('training-import-unit-child');
+    const customEl = document.getElementById('training-import-unit-custom');
+    const hiddenEl = document.getElementById('training-import-unit');
+    if (!categoryEl || !parentEl || !childEl || !hiddenEl) {
+      throw new Error('missing unit cascade controls');
+    }
+
+    const dispatch = (element) => element.dispatchEvent(new Event('change', { bubbles: true }));
+    const selectableOptions = (select) => Array.from(select.options).filter((entry) => String(entry.value || '').trim());
+    const normalize = (value) => String(value || '').trim();
+    const target = normalize(fullUnit);
+
+    if (customEl) customEl.value = '';
+
+    for (const categoryOption of selectableOptions(categoryEl)) {
+      categoryEl.value = categoryOption.value;
+      dispatch(categoryEl);
+      for (const parentOption of selectableOptions(parentEl)) {
+        parentEl.value = parentOption.value;
+        dispatch(parentEl);
+        const childOptions = selectableOptions(childEl);
+        if (childOptions.length) {
+          for (const childOption of childOptions) {
+            childEl.value = childOption.value;
+            dispatch(childEl);
+            if (normalize(hiddenEl.value) === target) return;
+          }
+        } else if (normalize(hiddenEl.value) === target) {
+          return;
+        }
+      }
+    }
+
+    const snapshot = {
+      categories: selectableOptions(categoryEl).map((entry) => normalize(entry.textContent)),
+      parents: selectableOptions(parentEl).map((entry) => normalize(entry.textContent)),
+      children: selectableOptions(childEl).map((entry) => normalize(entry.textContent)),
+      target
+    };
+    throw new Error(`Unable to select target unit: ${JSON.stringify(snapshot)}`);
+  }, target.fullUnit);
   await page.waitForFunction((value) => {
     const hidden = document.getElementById('training-import-unit');
     return !!hidden && String(hidden.value || '').trim() === String(value || '').trim();
@@ -99,6 +150,57 @@ async function confirmTrainingModal(page) {
     if (element && typeof element.click === 'function') element.click();
   });
   await page.waitForTimeout(120);
+}
+
+async function waitForTrainingSubmitReady(page, timeout = 45000) {
+  await page.waitForFunction(() => {
+    const submit = document.querySelector('[data-testid="training-submit"]');
+    return !!submit && !submit.disabled;
+  }, undefined, { timeout });
+}
+
+async function deleteTrainingFormById(page, id) {
+  const result = await page.evaluate(async (formId) => {
+    const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
+      ? window._authModule.currentUser()
+      : null;
+    const sessionToken = String(currentUser && currentUser.sessionToken || '').trim();
+    const activeUnit = String(currentUser && currentUser.activeUnit || '').trim();
+    if (!sessionToken) {
+      throw new Error('missing session token for training form cleanup');
+    }
+    const response = await fetch(`/api/training/forms/${encodeURIComponent(formId)}/delete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+      ...(activeUnit ? { 'X-ISMS-Active-Unit': encodeURIComponent(activeUnit) } : {}),
+      body: JSON.stringify({
+        action: 'training.form.delete',
+        payload: {
+          id: formId,
+          actorName: 'training smoke cleanup',
+          actorUsername: 'training-smoke'
+        }
+      })
+    });
+    const text = await response.text();
+    return { ok: response.ok, status: response.status, text };
+  }, id);
+  if (!result.ok) {
+    throw new Error(`failed to delete training form ${id}: ${result.status} ${result.text}`);
+  }
+  return result;
+}
+
+async function collectRosterNamesByPrefixes(page, prefixes) {
+  const targetPrefixes = Array.isArray(prefixes) ? prefixes.map((value) => String(value || '').trim()).filter(Boolean) : [];
+  if (!targetPrefixes.length) return [];
+  return await page.evaluate((items) => {
+    const names = Array.from(document.querySelectorAll('tr[data-roster-name]'))
+      .map((row) => String(row.dataset.rosterName || '').trim())
+      .filter(Boolean);
+    return names.filter((name) => items.some((prefix) => name.startsWith(prefix)));
+  }, targetPrefixes);
 }
 
 async function deleteRosterRowsByNames(page, names) {
@@ -150,6 +252,10 @@ async function deleteRosterRowsByNames(page, names) {
       if (!resolved.category || !resolved.parent || !resolved.hidden) {
         throw new Error(`autocomplete did not populate hierarchy: ${JSON.stringify(resolved)}`);
       }
+      const staleRosterNames = await collectRosterNamesByPrefixes(page, ['ImportPersist', 'ImportDiag', 'FocusProbe', 'Opt02Probe']);
+      if (staleRosterNames.length) {
+        await deleteRosterRowsByNames(page, staleRosterNames);
+      }
       return `autocomplete selected ${resolved.hidden}`;
     });
 
@@ -185,22 +291,38 @@ async function deleteRosterRowsByNames(page, names) {
       await page.fill('#tr-new-job-title', '工程師');
       await page.click('#training-add-person');
       await page.waitForFunction((targetName) => Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes(targetName)), UNDO_ROW_NAME, { timeout: 45000 });
+      await waitForTrainingSubmitReady(page, 45000);
 
-      const rowCount = await page.locator('select[data-field="status"]').count();
-      for (let index = 0; index < rowCount; index += 1) {
-        await page.locator(`select[data-idx="${index}"][data-field="status"]`).selectOption({ label: '在職' });
-        await page.waitForTimeout(80);
-        const infoSelect = page.locator(`select[data-idx="${index}"][data-field="isInfoStaff"]`);
-        if (await infoSelect.count()) {
-          await infoSelect.selectOption({ label: '否' });
-          await page.waitForTimeout(80);
-        }
-        const yesButton = page.locator(`[data-testid="training-binary-completedgeneral-${index}-yes"]`);
-        if (await yesButton.count()) {
-          await yesButton.click();
-          await page.waitForTimeout(60);
-        }
+      let rosterRowKeys = await page.evaluate(() => Array.from(document.querySelectorAll('#training-rows-body .training-row-check[data-key]'))
+        .map((checkbox) => String(checkbox.dataset.key || '').trim())
+        .filter(Boolean));
+      if (!rosterRowKeys.length) {
+        throw new Error('training fill did not render any roster rows');
       }
+      await page.locator('#training-select-all').check();
+      await page.evaluate(() => {
+        const bulk = document.getElementById('training-bulk-status');
+        if (!bulk) throw new Error('missing bulk status');
+        bulk.selectedIndex = 2;
+        bulk.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await page.locator('#training-apply-bulk').click();
+      await page.waitForFunction(() => {
+        const rows = Array.from(document.querySelectorAll('#training-rows-body tr'));
+        return rows.length > 0 && rows.every((row) => {
+          const status = String(row.querySelector('select[data-field="status"]')?.value || '').trim();
+          return status === '離職';
+        });
+      }, undefined, { timeout: 15000 });
+
+      await page.waitForFunction(() => {
+        const rows = Array.from(document.querySelectorAll('#training-rows-body tr'));
+        return rows.length > 0 && rows.every((row) => {
+          const status = String(row.querySelector('select[data-field="status"]')?.value || '').trim();
+          return status === '離職';
+        });
+      }, undefined, { timeout: 15000 });
+      await waitForTrainingSubmitReady(page, 45000);
 
       await page.click('[data-testid="training-submit"]');
       await page.waitForFunction(() => {
@@ -242,6 +364,8 @@ async function deleteRosterRowsByNames(page, names) {
         throw new Error('manually added row missing from roster after undo flow');
       }
 
+      await deleteTrainingFormById(page, trainingId);
+
       return `draft delete + undo verified on ${trainingId}`;
     });
 
@@ -264,12 +388,10 @@ async function deleteRosterRowsByNames(page, names) {
       await page.click('[data-testid="training-import-submit"]');
       await waitForTrainingRosterRowsByNames(page, results.context.importNames, 45000);
       await page.waitForFunction((targetNames) => {
-        const active = document.activeElement;
-        if (!active || !active.matches || !active.matches('.training-row-delete')) return false;
-        const row = active.closest('tr[data-roster-name]');
+        const row = Array.from(document.querySelectorAll('tr[data-roster-name]'))
+          .find((entry) => targetNames.includes(String(entry.dataset.rosterName || '').trim()));
         if (!row) return false;
-        const rowName = String(row.dataset.rosterName || '').trim();
-        return targetNames.includes(rowName);
+        return row.classList.contains('training-roster-row-focused');
       }, results.context.importNames, { timeout: 45000 });
 
       const verifyContext = await browser.newContext({ viewport: { width: 1440, height: 1024 } });

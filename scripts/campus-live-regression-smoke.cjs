@@ -117,6 +117,17 @@ async function run() {
     }, { critical: true });
   }
 
+  await step('health:unit-contact:minimal', async () => {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/unit-contact/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!json || json.ok === false || json.ready === false) throw new Error(json && (json.message || json.error) || 'unit-contact health not ready');
+    if (Object.prototype.hasOwnProperty.call(json, 'site')) throw new Error('unit-contact health leaked site details');
+    if (Object.prototype.hasOwnProperty.call(json, 'lists')) throw new Error('unit-contact health leaked list details');
+    if (Object.prototype.hasOwnProperty.call(json, 'actor')) throw new Error('unit-contact health leaked actor details');
+    if (Object.prototype.hasOwnProperty.call(json, 'repository')) throw new Error('unit-contact health leaked repository details');
+    return { status: response.status, ready: json.ready !== false };
+  }, { critical: true });
+
   await step('health:attachments', async () => {
     const { response, json } = await requestJson(`${DEFAULT_BASE}/api/attachments/health`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

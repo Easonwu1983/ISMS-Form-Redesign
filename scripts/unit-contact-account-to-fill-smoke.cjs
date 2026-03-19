@@ -410,6 +410,12 @@ async function loginViaPage(page, username, password) {
       await page.waitForSelector('.unit-contact-status-card', { timeout: 20000 });
       const cardText = cleanText(await page.locator('.unit-contact-status-card').first().textContent());
       if (!cardText.includes(createdApplicationId)) throw new Error('Pending application lookup did not include application id');
+      if (cardText.includes(applicantName) || cardText.includes(testEmail) || cardText.includes('61234')) {
+        throw new Error('Public status card leaked applicant identity data');
+      }
+      const lookup = await lookupApplicationsByEmail(testEmail);
+      const leaked = lookup.find((entry) => cleanText(entry && entry.applicantName) || cleanText(entry && entry.applicantEmail) || cleanText(entry && entry.extensionNumber));
+      if (leaked) throw new Error('Public lookup API leaked applicant identity data');
       return { cardText: cardText.slice(0, 240) };
     });
 

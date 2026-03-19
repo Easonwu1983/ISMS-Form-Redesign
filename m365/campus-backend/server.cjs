@@ -11,6 +11,7 @@ const {
   createApplicationRecord,
   mapApplicationForClient,
   mapApplicationForPublicClient,
+  mapApplicationForPublicStatus,
   mapApplicationToGraphFields,
   mapGraphFieldsToApplication,
   normalizeApplyPayload,
@@ -137,14 +138,16 @@ function decodeJwt(accessToken) {
 
 function buildCorsHeaders(origin) {
   const allowedOrigins = getAllowedOrigins();
-  const allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-  return {
-    'Access-Control-Allow-Origin': allowOrigin,
+  const headers = {
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-ISMS-Contract-Version, X-ISMS-Active-Unit',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin'
   };
+  if (origin && allowedOrigins.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  return headers;
 }
 
 function buildSecurityHeaders(pathname) {
@@ -865,24 +868,21 @@ async function updateApplicationRecord(applicationId, updates) {
 }
 
 async function getHealth() {
-  const siteId = await resolveSiteId();
-  const lists = await resolveLists();
-  const { decoded, mode } = await getDelegatedToken();
-  return {
+  const health = {
     ok: true,
-    contractVersion: CONTRACT_VERSION,
-    repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
-    actor: summarizeTokenActor(decoded, mode),
-    site: {
-      id: siteId,
-      url: state.siteUrl
-    },
-    lists: {
-      applications: lists.applications,
-      unitAdmins: lists.unitAdmins,
-      audit: lists.audit
-    }
+    ready: true,
+    contractVersion: CONTRACT_VERSION
   };
+  try {
+    await resolveSiteId();
+    await resolveLists();
+  } catch (error) {
+    console.error('[unit-contact.health] readiness check failed:', error);
+    health.ok = false;
+    health.ready = false;
+    health.message = 'Backend is not ready.';
+  }
+  return health;
 }
 
 const requestAuthz = createRequestAuthz({
@@ -1187,7 +1187,7 @@ async function handleLookup(req, res, origin, url) {
     });
     return writeJson(res, buildJsonResponse(200, {
       ok: true,
-      applications: applications.map(mapApplicationForPublicClient),
+      applications: applications.map(mapApplicationForPublicStatus),
       contractVersion: CONTRACT_VERSION
     }), origin);
   } catch (error) {
@@ -1219,6 +1219,10 @@ function createServer() {
 
     try {
       if (url.pathname === '/api/unit-contact/health') {
+        if (req.method !== 'GET') {
+          await writeJson(res, buildErrorResponse(createHttpError('Method Not Allowed', 405), 'Method Not Allowed', 405), origin);
+          return;
+        }
         await handleHealth(req, res, origin);
         return;
       }

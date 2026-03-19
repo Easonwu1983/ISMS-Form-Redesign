@@ -132,6 +132,40 @@ async function run() {
       }, true);
     }
 
+    await step(target, 'unit-contact.health.minimal', async () => {
+      const { response, json } = await requestJson(`${target.base}/api/unit-contact/health`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!json || json.ok === false || json.ready === false) {
+        throw new Error(json && (json.message || json.error) || 'unit-contact health not ready');
+      }
+      if (Object.prototype.hasOwnProperty.call(json, 'site')) throw new Error('unit-contact health leaked site details');
+      if (Object.prototype.hasOwnProperty.call(json, 'lists')) throw new Error('unit-contact health leaked list details');
+      if (Object.prototype.hasOwnProperty.call(json, 'actor')) throw new Error('unit-contact health leaked actor details');
+      if (Object.prototype.hasOwnProperty.call(json, 'repository')) throw new Error('unit-contact health leaked repository details');
+      return { status: response.status, ready: json.ready !== false };
+    }, true);
+
+    await step(target, 'unit-contact.health.method.rejected', async () => {
+      const { response } = await requestJson(`${target.base}/api/unit-contact/health`, {
+        method: 'POST'
+      });
+      if (response.status !== 405) throw new Error(`expected 405, got ${response.status}`);
+      return { status: response.status };
+    }, true);
+
+    await step(target, 'unit-contact.health.cors.rejected', async () => {
+      const { response } = await requestJson(`${target.base}/api/unit-contact/health`, {
+        headers: {
+          Origin: 'https://evil.example'
+        }
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (response.headers.get('access-control-allow-origin')) {
+        throw new Error('unexpected ACAO header for disallowed origin');
+      }
+      return { status: response.status };
+    }, true);
+
     await step(target, 'auth.login.success', async () => {
       const { response, json } = await requestJson(`${target.base}/api/auth/login`, {
         method: 'POST',

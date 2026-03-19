@@ -1,5 +1,7 @@
 const CONTRACT_VERSION = '2026-03-13';
 
+const { randomBytes } = require('crypto');
+
 const ATTACHMENT_ACTIONS = {
   UPLOAD: 'attachment.upload',
   DELETE: 'attachment.delete'
@@ -42,7 +44,7 @@ function sanitizeFileName(value) {
 function generateAttachmentId(prefix) {
   const head = sanitizePathSegment(prefix, 'att').toLowerCase();
   const stamp = Date.now().toString(36);
-  const salt = Math.random().toString(36).slice(2, 8);
+  const salt = randomBytes(4).toString('hex');
   return `${head}_${stamp}_${salt}`;
 }
 

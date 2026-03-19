@@ -162,10 +162,12 @@ function createAttachmentRouter(deps) {
   function normalizeAttachmentDisplayName(filename) {
     const cleanName = cleanText(filename);
     if (!cleanName) return 'attachment.bin';
-    return cleanName
-      .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
-      .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
-      .trim() || cleanName;
+    const normalized = cleanName
+      .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
+      .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
+      .replace(/^([a-z0-9]{3,6}(?:[-_][a-z0-9]{3,}){2,})[-_]+/i, '')
+      .trim();
+    return normalized || cleanName;
   }
 
   function buildDrivePath(payload, attachmentId) {

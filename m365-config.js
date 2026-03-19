@@ -1,6 +1,7 @@
 ﻿(function () {
   const BASE_CONFIG = {
     unitContactRequestTimeoutMs: 15000,
+    attachmentsRequestTimeoutMs: 15000,
     unitContactStatusLookupMethod: 'POST',
     unitContactStatusQueryParam: 'email',
     unitContactSharedHeaders: {},
