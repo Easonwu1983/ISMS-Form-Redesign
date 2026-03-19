@@ -1659,7 +1659,18 @@
         return lookupFromRemote(cleanValue);
       }
 
-      return findUnitContactApplicationsByEmail(cleanValue).map(decorateApplication);
+      return findUnitContactApplicationsByEmail(cleanValue).map((application) => {
+        const decorated = decorateApplication(application);
+        return decorated ? {
+          id: decorated.id,
+          status: decorated.status,
+          statusLabel: decorated.statusLabel,
+          statusDetail: decorated.statusDetail,
+          statusTone: decorated.statusTone,
+          submittedAt: decorated.submittedAt,
+          updatedAt: decorated.updatedAt
+        } : null;
+      }).filter(Boolean);
     }
 
     function buildActivationUrl(applicationId) {

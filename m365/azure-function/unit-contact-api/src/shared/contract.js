@@ -235,6 +235,11 @@ function decorateStatus(application) {
   };
 }
 
+function resolvePublicStatusDetail(status) {
+  const meta = STATUS_META[cleanText(status)] || STATUS_META[STATUSES.PENDING_REVIEW];
+  return cleanText(meta.detail);
+}
+
 function createApplicationRecord(payload, sequence, now) {
   const createdAt = now instanceof Date ? now : new Date();
   return decorateStatus({
@@ -357,15 +362,9 @@ function mapApplicationForPublicStatus(application) {
   const normalized = normalizeStoredApplication(application);
   return {
     id: normalized.id,
-    unitCategory: normalized.unitCategory,
-    primaryUnit: normalized.primaryUnit,
-    secondaryUnit: normalized.secondaryUnit,
-    unitValue: normalized.unitValue,
-    unitCode: normalized.unitCode,
-    contactType: normalized.contactType,
     status: normalized.status,
     statusLabel: normalized.statusLabel,
-    statusDetail: normalized.statusDetail,
+    statusDetail: resolvePublicStatusDetail(normalized.status),
     statusTone: normalized.statusTone,
     submittedAt: normalized.submittedAt,
     updatedAt: normalized.updatedAt

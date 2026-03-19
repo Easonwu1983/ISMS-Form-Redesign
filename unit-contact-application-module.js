@@ -127,7 +127,7 @@
       return ''
         + '<article class="card unit-contact-status-card">'
         + '<div class="unit-contact-status-card-top">'
-        + '<div><div class="unit-contact-status-id">' + esc(application.id) + '</div><div class="unit-contact-status-unit">' + esc(application.unitValue) + '</div></div>'
+        + '<div><div class="unit-contact-status-id">' + esc(application.id) + '</div></div>'
         + buildStatusBadge(application)
         + '</div>'
         + '<div class="unit-contact-status-detail">' + esc(detail) + '</div>'

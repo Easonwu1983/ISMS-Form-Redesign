@@ -181,10 +181,16 @@
 
     function writeCachedJson(key, value) {
       const raw = JSON.stringify(value);
-      STORAGE_CACHE[key] = { raw, parsed: value };
+      const previous = STORAGE_CACHE[key];
       try {
         localStorage.setItem(key, raw);
+        STORAGE_CACHE[key] = { raw, parsed: value };
       } catch (error) {
+        if (previous) {
+          STORAGE_CACHE[key] = previous;
+        } else {
+          delete STORAGE_CACHE[key];
+        }
         throw createStorageWriteError(error);
       }
     }
