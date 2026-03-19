@@ -372,15 +372,106 @@ async function run() {
     }
     pushStep('case:list-loaded', true, 'smoke records visible');
 
+    await page.evaluate((ids) => {
+      const currentUser = window._authModule.currentUser();
+      const dataModule = window._dataModule;
+      const activeUnit = currentUser.activeUnit || currentUser.unit || '計算機及資訊網路中心／資訊網路組';
+      const now = '2026-03-15T08:00:00.000Z';
+      const ensureCase = (record) => {
+        if (dataModule.getItem(record.id)) {
+          dataModule.updateItem(record.id, record);
+        } else {
+          dataModule.addItem(record);
+        }
+      };
+      ensureCase({
+        id: ids.pending,
+        documentNo: 'CAR-999-UIR1',
+        deficiencyType: '主要缺失',
+        source: '內部稽核',
+        category: ['資訊', '服務'],
+        proposerUnit: activeUnit,
+        proposerUnitCode: 'A.B',
+        proposerName: '系統測試提出人',
+        proposerDate: '2026-03-15',
+        handlerUnit: activeUnit,
+        handlerUnitCode: 'A.B',
+        handlerName: currentUser.name,
+        handlerUsername: currentUser.username,
+        handlerEmail: currentUser.email || 'admin@company.com',
+        handlerDate: '2026-03-15',
+        problemDesc: 'Smoke 測試矯正單待矯正案件',
+        occurrence: 'Smoke 測試用問題描述',
+        clause: 'ISMS-A.5',
+        status: '待矯正',
+        correctiveDueDate: '2026-03-28',
+        createdAt: now,
+        updatedAt: now,
+        evidence: [],
+        trackings: [],
+        pendingTracking: null,
+        history: [
+          { time: now, action: '開立矯正單', user: '系統測試提出人' },
+          { time: now, action: '指派處理人員', user: currentUser.name }
+        ]
+      });
+      ensureCase({
+        id: ids.tracking,
+        documentNo: 'CAR-999-UIR2',
+        deficiencyType: '次要缺失',
+        source: '內部稽核',
+        category: ['資訊'],
+        proposerUnit: activeUnit,
+        proposerUnitCode: 'A.B',
+        proposerName: '系統測試提出人',
+        proposerDate: '2026-03-15',
+        handlerUnit: activeUnit,
+        handlerUnitCode: 'A.B',
+        handlerName: currentUser.name,
+        handlerUsername: currentUser.username,
+        handlerEmail: currentUser.email || 'admin@company.com',
+        handlerDate: '2026-03-15',
+        problemDesc: 'Smoke 測試矯正單追蹤案件',
+        occurrence: 'Smoke 測試用追蹤情境',
+        clause: 'ISMS-A.8',
+        correctiveAction: '已完成第一階段改善',
+        rootCause: 'Smoke 根因分析',
+        rootElimination: 'Smoke 根因消除措施',
+        status: '追蹤中',
+        correctiveDueDate: '2026-03-30',
+        createdAt: now,
+        updatedAt: now,
+        evidence: [],
+        trackings: [
+          {
+            round: 1,
+            tracker: currentUser.name,
+            trackDate: '2026-03-15',
+            execution: '已完成前一輪改善措施',
+            trackNote: '需再確認制度文件是否更新',
+            result: '建議持續追蹤',
+            nextTrackDate: '2026-04-05',
+            evidence: [],
+            submittedAt: now
+          }
+        ],
+        pendingTracking: null,
+        history: [
+          { time: now, action: '開立矯正單', user: '系統測試提出人' },
+          { time: now, action: '提交第 1 次追蹤', user: currentUser.name }
+        ]
+      });
+    }, smokeCaseIds);
+
     await page.goto(`${BASE_URL}/#detail/${smokeCaseIds.pending}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('歷程紀錄') && app.innerText.includes('回填矯正措施'));
-    }, undefined, { timeout: 20000 });
+    await page.waitForSelector('.detail-section, .timeline', { timeout: 45000 });
     const caseDetailText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(caseDetailText)) {
       throw new Error('case detail contains placeholder question marks');
+    }
+    if (!caseDetailText.includes(smokeCaseIds.pending)) {
+      throw new Error('case detail smoke record did not render as expected');
     }
     pushStep('case:detail-loaded', true, smokeCaseIds.pending);
 
