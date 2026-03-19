@@ -589,6 +589,14 @@ function createSystemUserRouter(deps) {
     });
   }
 
+  async function tryCreateAuditRow(input) {
+    try {
+      await createAuditRow(input);
+    } catch (error) {
+      console.error('[system-users] failed to create audit row', String(error && error.message || error || 'unknown error'), input && input.eventType ? 'event=' + input.eventType : '');
+    }
+  }
+
   function filterUsers(items, url) {
     const role = cleanText(url.searchParams.get('role'));
     const unit = cleanText(url.searchParams.get('unit'));
@@ -881,7 +889,7 @@ function createSystemUserRouter(deps) {
       validateLoginPayload(payload);
       const throttle = getLoginFailureState(payload.username);
       if (throttle.lockedUntil) {
-        await createAuditRow({
+        void tryCreateAuditRow({
           eventType: 'auth.login.locked',
           actorEmail: '',
           targetEmail: '',
@@ -906,7 +914,7 @@ function createSystemUserRouter(deps) {
       const existing = await getUserEntryByUsername(payload.username).catch(() => null);
       if (!existing) {
         const nextThrottle = registerFailedLogin(payload.username);
-        await createAuditRow({
+        void tryCreateAuditRow({
           eventType: 'auth.login.failed',
           actorEmail: '',
           targetEmail: '',
@@ -970,7 +978,7 @@ function createSystemUserRouter(deps) {
         });
       }
       clearFailedLogin(resolvedEntry.item.username);
-      await createAuditRow({
+      void tryCreateAuditRow({
         eventType: 'auth.login.success',
         actorEmail: resolvedEntry.item.email,
         targetEmail: resolvedEntry.item.email,
@@ -1013,7 +1021,7 @@ function createSystemUserRouter(deps) {
         updatedAt: now
       });
       clearFailedLogin(saved.item.username);
-      await createAuditRow({
+      void tryCreateAuditRow({
         eventType: 'auth.logout',
         actorEmail: saved.item.email,
         targetEmail: saved.item.email,
