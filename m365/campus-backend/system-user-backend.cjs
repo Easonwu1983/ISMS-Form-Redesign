@@ -508,7 +508,7 @@ function createSystemUserRouter(deps) {
   }
 
   async function listAllUsers() {
-    const ttlMs = 10 * 1000;
+    const ttlMs = 60 * 1000;
     const now = Date.now();
     if (Array.isArray(state.usersCache) && state.usersCache.length && now - state.usersCacheAt < ttlMs) {
       return cloneUserRows(state.usersCache);
