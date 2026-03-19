@@ -2881,6 +2881,14 @@
       String(user.sessionExpiresAt || '').trim()
     ].join('|');
   }
+  function markAuthenticatedBootstrapReady(user) {
+    const activeUser = user || currentUser();
+    if (!activeUser) return '';
+    authenticatedBootstrapKey = buildAuthenticatedBootstrapKey(activeUser);
+    authenticatedBootstrapPromise = Promise.resolve(authenticatedBootstrapKey);
+    setAuthenticatedBootstrapState('ready');
+    return authenticatedBootstrapPromise;
+  }
   async function ensureAuthenticatedRemoteBootstrap() {
     const user = currentUser();
     if (!user) {
@@ -3088,6 +3096,7 @@
       navigate,
       toast,
       refreshIcons,
+      markAuthenticatedBootstrapReady,
       esc,
       ic,
       ntuLogo,
@@ -3744,12 +3753,38 @@
   async function initApp() {
     installGlobalDelegation();
     getDataModule().migrateAllStores();
-    seedData();
-    ensurePrimaryAdminProfile();
-    getTrainingModule().seedTrainingData();
     await ensureAuthenticatedRemoteBootstrap();
     installAppEventListeners();
     renderApp();
+    const scheduleLocalWarmup = function () {
+      const run = function () {
+        try {
+          seedData();
+        } catch (error) {
+          console.warn('seed data warmup failed', error);
+        }
+        try {
+          ensurePrimaryAdminProfile();
+        } catch (error) {
+          console.warn('primary admin warmup failed', error);
+        }
+        try {
+          getTrainingModule().seedTrainingData();
+        } catch (error) {
+          console.warn('training seed warmup failed', error);
+        }
+      };
+      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 2000 });
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        window.setTimeout(run, 0);
+        return;
+      }
+      run();
+    };
+    scheduleLocalWarmup();
     const scheduleAttachmentMigration = function () {
       const run = function () {
         void migrateAttachmentStores().catch(function (error) {
