@@ -3713,7 +3713,9 @@
     seedData();
     ensurePrimaryAdminProfile();
     getTrainingModule().seedTrainingData();
-    await migrateAttachmentStores();
+    void migrateAttachmentStores().catch(function (error) {
+      console.warn('attachment migration failed', error);
+    });
     await ensureAuthenticatedRemoteBootstrap();
     installAppEventListeners();
     renderApp();
