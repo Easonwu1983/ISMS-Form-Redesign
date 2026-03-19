@@ -321,74 +321,45 @@
   }
 
   function renderDashboard() {
-    var items = getVisibleItems();
-    var snapshot = buildDashboardSnapshot(items);
-    var total = snapshot.total;
-    var pending = snapshot.pendingCount;
-    var overdue = snapshot.overdueCount;
-    var closedM = snapshot.closedThisMonth;
-    var totalClosed = snapshot.closedCount;
-    var openCount = snapshot.openCount;
-    var distributionOrder = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, '已逾期', STATUSES.CLOSED];
-    var sc = snapshot.bucketCounts;
-    var cc = {};
-    cc[STATUSES.CREATED] = '#3b82f6';
-    cc[STATUSES.PENDING] = '#f59e0b';
-    cc[STATUSES.PROPOSED] = '#a855f7';
-    cc[STATUSES.REVIEWING] = '#06b6d4';
-    cc[STATUSES.TRACKING] = '#f97316';
-    cc['已逾期'] = '#ef4444';
-    cc[STATUSES.CLOSED] = '#22c55e';
-
-    var R = 60, C = 2 * Math.PI * R, segs = '', off = 0;
-    if (total > 0) {
-      distributionOrder.forEach(function (s) {
-        var c2 = sc[s];
-        if (!c2) return;
-        var l = c2 / total * C;
-        segs += '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="' + cc[s] + '" stroke-width="20" stroke-dasharray="' + l + ' ' + (C - l) + '" stroke-dashoffset="' + (-off) + '"/>';
-        off += l;
-      });
-    } else {
-      segs = '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="#e2e8f0" stroke-width="20"/>';
-    }
-
-    var svg = '<svg viewBox="0 0 160 160" class="donut-chart">' + segs + '<text x="80" y="74" text-anchor="middle" fill="#0f172a" font-size="24" font-weight="700" font-family="Inter">' + total + '</text><text x="80" y="94" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500" font-family="Inter">總計</text></svg>';
-    var leg = distributionOrder.map(function (s) {
-      return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>';
-    }).join('');
-
-    var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
-    var nextDueItem = snapshot.nextDueItem;
-    var focusLine = overdue > 0
-      ? '目前有 ' + overdue + ' 筆矯正單已逾期，建議優先追蹤。'
-      : (pending > 0 ? '目前有 ' + pending + ' 筆待矯正事項，可優先分派與提醒。' : '目前沒有逾期項目，整體進度維持穩定。');
-    var heroMeta = [
-      { label: '待矯正', value: pending },
-      { label: '已逾期', value: overdue },
-      { label: '本月結案', value: closedM }
-    ].map(function (item) {
-      return '<div class="dashboard-meta-chip"><span class="dashboard-meta-label">' + item.label + '</span><strong class="dashboard-meta-value">' + item.value + '</strong></div>';
-    }).join('');
-    var heroSide = '<div class="dashboard-hero-side"><div class="dashboard-focus-card"><div class="dashboard-focus-label">今日焦點</div><div class="dashboard-focus-text">' + focusLine + '</div><div class="dashboard-focus-list">'
-      + '<div class="dashboard-focus-item"><span>下一個截止</span><strong>' + (nextDueItem ? (esc(nextDueItem.id) + ' · ' + fmt(nextDueItem.correctiveDueDate)) : '目前無') + '</strong></div>'
-      + '<div class="dashboard-focus-item"><span>進行中案件</span><strong>' + openCount + '</strong></div>'
-      + '<div class="dashboard-focus-item"><span>最新處理人</span><strong>' + (snapshot.recent[0] ? esc(snapshot.recent[0].handlerName) : '—') + '</strong></div>'
-      + '</div></div>';
-
     var renderToken = ++dashboardRenderToken;
     var chartSlotId = 'dashboard-chart-slot';
     var recentSlotId = 'dashboard-recent-slot';
+    var heroMetaIds = {
+      pending: 'dashboard-meta-pending',
+      overdue: 'dashboard-meta-overdue',
+      closed: 'dashboard-meta-closed',
+      total: 'dashboard-stat-total',
+      pendingStat: 'dashboard-stat-pending',
+      overdueStat: 'dashboard-stat-overdue',
+      closedStat: 'dashboard-stat-closed',
+      focusText: 'dashboard-focus-text',
+      nextDue: 'dashboard-next-due',
+      openCount: 'dashboard-open-count',
+      latestHandler: 'dashboard-latest-handler'
+    };
+    var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     var recentShell = '<div id="' + recentSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入最近矯正單</div>';
     var chartShell = '<div id="' + chartSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入狀態分布</div>';
+    var heroMeta = [
+      { label: '待矯正', id: heroMetaIds.pending, value: '—' },
+      { label: '已逾期', id: heroMetaIds.overdue, value: '—' },
+      { label: '本月結案', id: heroMetaIds.closed, value: '—' }
+    ].map(function (item) {
+      return '<div class="dashboard-meta-chip"><span class="dashboard-meta-label">' + item.label + '</span><strong class="dashboard-meta-value" id="' + item.id + '">' + item.value + '</strong></div>';
+    }).join('');
+    var heroSide = '<div class="dashboard-hero-side"><div class="dashboard-focus-card"><div class="dashboard-focus-label">今日焦點</div><div class="dashboard-focus-text" id="' + heroMetaIds.focusText + '">正在整理近期案件與逾期資訊…</div><div class="dashboard-focus-list">'
+      + '<div class="dashboard-focus-item"><span>下一個截止</span><strong id="' + heroMetaIds.nextDue + '">載入中</strong></div>'
+      + '<div class="dashboard-focus-item"><span>進行中案件</span><strong id="' + heroMetaIds.openCount + '">—</strong></div>'
+      + '<div class="dashboard-focus-item"><span>最新處理人</span><strong id="' + heroMetaIds.latestHandler + '">—</strong></div>'
+      + '</div></div>';
 
     document.getElementById('app').innerHTML = '<div class="animate-in">'
         + '<section class="dashboard-hero"><div class="dashboard-hero-grid"><div class="dashboard-hero-copy"><div class="dashboard-hero-eyebrow">矯正單管考總覽</div><h1 class="dashboard-hero-title">儀表板</h1><p class="dashboard-hero-text">集中掌握矯正單進度、逾期風險與最近活動，讓主管與承辦人可以在同一個入口快速判斷優先順序。</p><div class="dashboard-meta-row">' + heroMeta + '</div><div class="dashboard-hero-actions">' + createBtn + '</div></div>' + heroSide + '</div></section>'
       + '<div class="stats-grid">'
-      + buildCaseStatCard('total', 'files', total, '矯正單總數')
-      + buildCaseStatCard('pending', 'clock', pending, '待矯正')
-      + buildCaseStatCard('overdue', 'alert-triangle', overdue, '已逾期')
-      + buildCaseStatCard('closed', 'check-circle-2', closedM, '本月結案')
+      + buildCaseStatCard('total', 'files', '—', '矯正單總數')
+      + buildCaseStatCard('pending', 'clock', '—', '待矯正')
+      + buildCaseStatCard('overdue', 'alert-triangle', '—', '已逾期')
+      + buildCaseStatCard('closed', 'check-circle-2', '—', '本月結案')
       + '</div>'
       + '<div class="dashboard-grid">'
       + buildCaseCard('<span class="card-title">狀態分布</span>', chartShell, { cardClass: 'dashboard-panel dashboard-chart-panel' })
@@ -399,6 +370,43 @@
     bindCopyButtons();
     scheduleDashboardHydration(function () {
       if (renderToken !== dashboardRenderToken) return;
+      var items = getVisibleItems();
+      var snapshot = buildDashboardSnapshot(items);
+      var total = snapshot.total;
+      var pending = snapshot.pendingCount;
+      var overdue = snapshot.overdueCount;
+      var closedM = snapshot.closedThisMonth;
+      var openCount = snapshot.openCount;
+      var distributionOrder = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, '已逾期', STATUSES.CLOSED];
+      var sc = snapshot.bucketCounts;
+      var cc = {};
+      cc[STATUSES.CREATED] = '#3b82f6';
+      cc[STATUSES.PENDING] = '#f59e0b';
+      cc[STATUSES.PROPOSED] = '#a855f7';
+      cc[STATUSES.REVIEWING] = '#06b6d4';
+      cc[STATUSES.TRACKING] = '#f97316';
+      cc['已逾期'] = '#ef4444';
+      cc[STATUSES.CLOSED] = '#22c55e';
+      var R = 60, C = 2 * Math.PI * R, segs = '', off = 0;
+      if (total > 0) {
+        distributionOrder.forEach(function (s) {
+          var c2 = sc[s];
+          if (!c2) return;
+          var l = c2 / total * C;
+          segs += '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="' + cc[s] + '" stroke-width="20" stroke-dasharray="' + l + ' ' + (C - l) + '" stroke-dashoffset="' + (-off) + '"/>';
+          off += l;
+        });
+      } else {
+        segs = '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="#e2e8f0" stroke-width="20"/>';
+      }
+      var svg = '<svg viewBox="0 0 160 160" class="donut-chart">' + segs + '<text x="80" y="74" text-anchor="middle" fill="#0f172a" font-size="24" font-weight="700" font-family="Inter">' + total + '</text><text x="80" y="94" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500" font-family="Inter">總計</text></svg>';
+      var leg = distributionOrder.map(function (s) {
+        return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>';
+      }).join('');
+      var nextDueItem = snapshot.nextDueItem;
+      var focusLine = overdue > 0
+        ? '目前有 ' + overdue + ' 筆矯正單已逾期，建議優先追蹤。'
+        : (pending > 0 ? '目前有 ' + pending + ' 筆待矯正事項，可優先分派與提醒。' : '目前沒有逾期項目，整體進度維持穩定。');
       var chartSlot = document.getElementById(chartSlotId);
       var recentSlot = document.getElementById(recentSlotId);
       if (!chartSlot || !recentSlot) return;
@@ -406,6 +414,22 @@
         var lastActivityText = entry.lastActivity ? fmtTime(new Date(entry.lastActivity).toISOString()) : '—';
         return renderDashboardTableRow(entry.item, lastActivityText);
       }).join('') : buildCaseEmptyTableRow(7, 'inbox', '沒有矯正單資料', 40);
+      var totalStat = document.getElementById(heroMetaIds.total);
+      var pendingStat = document.getElementById(heroMetaIds.pendingStat);
+      var overdueStat = document.getElementById(heroMetaIds.overdueStat);
+      var closedStat = document.getElementById(heroMetaIds.closedStat);
+      if (totalStat) totalStat.textContent = String(total);
+      if (pendingStat) pendingStat.textContent = String(pending);
+      if (overdueStat) overdueStat.textContent = String(overdue);
+      if (closedStat) closedStat.textContent = String(closedM);
+      var focusTextEl = document.getElementById(heroMetaIds.focusText);
+      if (focusTextEl) focusTextEl.textContent = focusLine;
+      var nextDueEl = document.getElementById(heroMetaIds.nextDue);
+      if (nextDueEl) nextDueEl.textContent = nextDueItem ? (String(nextDueItem.id || '') + ' · ' + fmt(nextDueItem.correctiveDueDate)) : '目前無';
+      var openCountEl = document.getElementById(heroMetaIds.openCount);
+      if (openCountEl) openCountEl.textContent = String(openCount);
+      var latestHandlerEl = document.getElementById(heroMetaIds.latestHandler);
+      if (latestHandlerEl) latestHandlerEl.textContent = snapshot.recent[0] ? String(snapshot.recent[0].item && snapshot.recent[0].item.handlerName || '—') : '—';
       chartSlot.classList.remove('dashboard-card-loading');
       chartSlot.innerHTML = buildDashboardStatusOverview(snapshot) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>';
       recentSlot.classList.remove('dashboard-card-loading');
