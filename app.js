@@ -2929,8 +2929,22 @@
       if (activeUser.role === ROLES.ADMIN || activeUser.role === ROLES.UNIT_ADMIN) {
         syncTasks.push(syncReviewScopesFromM365({ silent: true }));
       }
-      await Promise.all(syncTasks);
       setAuthenticatedBootstrapState('ready');
+      void Promise.allSettled(syncTasks).then((results) => {
+        const labels = [
+          'training bootstrap warmup failed',
+          'training roster bootstrap warmup failed',
+          'checklist bootstrap warmup failed',
+          'corrective action bootstrap warmup failed',
+          'user bootstrap warmup failed',
+          'review scope bootstrap warmup failed'
+        ];
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            console.warn(labels[index] || 'authenticated bootstrap warmup failed', result.reason);
+          }
+        });
+      });
       return nextKey;
     })();
     return authenticatedBootstrapPromise;
