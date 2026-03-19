@@ -18,6 +18,10 @@ const {
   validateSystemUserPayload
 } = require('../azure-function/system-user-api/src/shared/contract');
 const {
+  STATUSES: CORRECTIVE_ACTION_STATUSES,
+  mapGraphFieldsToCase
+} = require('../azure-function/corrective-action-api/src/shared/contract');
+const {
   CONTRACT_VERSION: AUTH_CONTRACT_VERSION,
   AUTH_ACTIONS,
   cleanEmail,
@@ -417,6 +421,48 @@ function createSystemUserRouter(deps) {
     return resolveNamedList(getAuditListName());
   }
 
+
+  function normalizeUsernameKey(value) {
+    return cleanText(value).toLowerCase();
+  }
+
+  async function listCorrectiveActionsByUsername(username) {
+    const target = normalizeUsernameKey(username);
+    if (!target) return [];
+    const siteId = await resolveSiteId();
+    const list = await resolveNamedList(getEnv('CORRECTIVE_ACTIONS_LIST', 'CorrectiveActions'));
+    const rows = [];
+    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
+    while (nextUrl) {
+      const body = await graphRequest('GET', nextUrl);
+      const batch = Array.isArray(body && body.value) ? body.value : [];
+      batch.forEach((entry) => {
+        const item = mapGraphFieldsToCase(entry && entry.fields ? entry.fields : {});
+        const status = cleanText(item && item.status);
+        if (status === CORRECTIVE_ACTION_STATUSES.CLOSED) return;
+        const refs = [];
+        const pushRef = (label, candidate) => {
+          if (normalizeUsernameKey(candidate) === target) refs.push(label);
+        };
+        pushRef('handler', item && item.handlerUsername);
+        pushRef('reviewer', item && item.reviewer);
+        (Array.isArray(item && item.trackings) ? item.trackings : []).forEach((tracking) => {
+          pushRef('tracker', tracking && tracking.tracker);
+          pushRef('tracking-reviewer', tracking && tracking.reviewer);
+        });
+        if (refs.length) {
+          rows.push({
+            id: cleanText(item && item.id),
+            status,
+            refs: Array.from(new Set(refs))
+          });
+        }
+      });
+      nextUrl = cleanText(body && body['@odata.nextLink']);
+    }
+    return rows;
+  }
+
   async function listAllUsers() {
     const siteId = await resolveSiteId();
     const list = await resolveUsersList();
@@ -743,11 +789,17 @@ function createSystemUserRouter(deps) {
       requestAuthz.requireAdmin(authz, 'Only admin can delete system users');
       const existing = await getUserEntryByUsername(username);
       if (!existing) throw createError('System user not found', 404);
+      const cleanUsername = cleanText(username).toLowerCase();
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, USER_ACTIONS.DELETE);
       const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       if (existing.item.role === USER_ROLES.ADMIN) {
         throw createError('Primary admin cannot be deleted', 409);
+      }
+      const blockingCases = await listCorrectiveActionsByUsername(cleanUsername);
+      if (blockingCases.length) {
+        const caseSummary = blockingCases.slice(0, 5).map((entry) => `${entry.id}${entry.refs && entry.refs.length ? `(${entry.refs.join('、')})` : ''}`).join('、');
+        throw createError(`此帳號仍關聯 ${blockingCases.length} 筆未結案矯正單，請先轉派或結案後再刪除${caseSummary ? `：${caseSummary}` : ''}`, 409);
       }
       const now = new Date().toISOString();
       await deleteUserEntry(existing);

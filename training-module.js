@@ -1252,7 +1252,15 @@
         await saveTrainingForm(TRAINING_STATUSES.PENDING_SIGNOFF);
       });
     });
-    document.getElementById('training-search').addEventListener('input', renderRows);
+    let trainingSearchTimer = null;
+    const scheduleTrainingRowsRender = function () {
+      if (trainingSearchTimer) window.clearTimeout(trainingSearchTimer);
+      trainingSearchTimer = window.setTimeout(function () {
+        trainingSearchTimer = null;
+        renderRows();
+      }, 120);
+    };
+    document.getElementById('training-search').addEventListener('input', scheduleTrainingRowsRender);
     document.getElementById('training-only-focus').addEventListener('change', renderRows);
     trainingForm.addEventListener('input', (event) => {
       clearTrainingFeedback();

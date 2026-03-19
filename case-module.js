@@ -350,7 +350,15 @@
       buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', rows), { style: 'padding:0;overflow:hidden;' }) + '</div>';
     refreshIcons();
     bindCopyButtons();
-    document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; renderList(); });
+    let searchRenderTimer = null;
+    const scheduleRenderList = function () {
+      if (searchRenderTimer) window.clearTimeout(searchRenderTimer);
+      searchRenderTimer = window.setTimeout(function () {
+        searchRenderTimer = null;
+        renderList();
+      }, 120);
+    };
+    document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; scheduleRenderList(); });
     document.getElementById('filter-tabs').addEventListener('click', function (e) { if (e.target.classList.contains('filter-tab')) { curFilter = e.target.dataset.filter; renderList(); } });
   }
 
@@ -510,11 +518,18 @@ function renderCreate() {
       summaryNotify.textContent = notifyInput.checked ? '\u9001\u51fa\u5f8c\u5bc4\u9001\u901a\u77e5' : '\u50c5\u5efa\u7acb\u55ae\u64da\uff0c\u4e0d\u5bc4\u9001\u901a\u77e5';
     }
 
+    const currentUsername = String((u && u.username) || '').trim().toLowerCase();
+    const currentEmail = String((u && u.email) || '').trim().toLowerCase();
+
     function filterUsersByUnit(unit) {
       if (!unit) return users;
       const selected = splitUnitValue(unit);
       return users.filter((entry) => {
         const userUnit = String(entry.unit || '').trim();
+        const entryUsername = String(entry.username || '').trim().toLowerCase();
+        const entryEmail = String(entry.email || '').trim().toLowerCase();
+        if (entryUsername && entryUsername === currentUsername) return false;
+        if (entryEmail && entryEmail === currentEmail) return false;
         if (!userUnit) return false;
         if (userUnit === unit) return true;
         const target = splitUnitValue(userUnit);
