@@ -72,6 +72,9 @@ function createSystemUserRouter(deps) {
     listColumnsMap: new Map(),
     loginFailures: new Map(),
     resetRequests: new Map(),
+    usersCache: null,
+    usersCacheAt: 0,
+    usersCachePromise: null,
     legacyPasswordMigrationPromise: null,
     legacyPasswordMigrationDone: false,
     legacyPasswordMigrationCount: 0
@@ -178,6 +181,21 @@ function createSystemUserRouter(deps) {
 
   function clearFailedLogin(username) {
     state.loginFailures.delete(buildLoginFailureKey(username));
+  }
+
+  function invalidateUsersCache() {
+    state.usersCache = null;
+    state.usersCacheAt = 0;
+    state.usersCachePromise = null;
+  }
+
+  function cloneUserRows(rows) {
+    return Array.isArray(rows)
+      ? rows.map((entry) => ({
+          listItemId: cleanText(entry && entry.listItemId),
+          item: entry && entry.item ? JSON.parse(JSON.stringify(entry.item)) : null
+        }))
+      : [];
   }
 
   function buildResetRequestKey(username, email, clientAddress) {
@@ -464,20 +482,40 @@ function createSystemUserRouter(deps) {
   }
 
   async function listAllUsers() {
-    const siteId = await resolveSiteId();
-    const list = await resolveUsersList();
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      rows.push(...batch.map((entry) => ({
-        listItemId: cleanText(entry && entry.id),
-        item: mapGraphFieldsToSystemUser(entry && entry.fields ? entry.fields : {})
-      })));
-      nextUrl = cleanText(body && body['@odata.nextLink']);
+    const ttlMs = 10 * 1000;
+    const now = Date.now();
+    if (Array.isArray(state.usersCache) && state.usersCache.length && now - state.usersCacheAt < ttlMs) {
+      return cloneUserRows(state.usersCache);
     }
-    return rows;
+    if (state.usersCachePromise) {
+      const cached = await state.usersCachePromise;
+      return cloneUserRows(cached);
+    }
+    state.usersCachePromise = (async () => {
+      const siteId = await resolveSiteId();
+      const list = await resolveUsersList();
+      const rows = [];
+      let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
+      while (nextUrl) {
+        const body = await graphRequest('GET', nextUrl);
+        const batch = Array.isArray(body && body.value) ? body.value : [];
+        rows.push(...batch.map((entry) => ({
+          listItemId: cleanText(entry && entry.id),
+          item: mapGraphFieldsToSystemUser(entry && entry.fields ? entry.fields : {})
+        })));
+        nextUrl = cleanText(body && body['@odata.nextLink']);
+      }
+      state.usersCache = rows;
+      state.usersCacheAt = Date.now();
+      return rows;
+    })().catch((error) => {
+      state.usersCache = null;
+      state.usersCacheAt = 0;
+      throw error;
+    }).finally(() => {
+      state.usersCachePromise = null;
+    });
+    return cloneUserRows(await state.usersCachePromise);
   }
 
   async function upgradeLegacyPasswordStorage() {
@@ -558,11 +596,13 @@ function createSystemUserRouter(deps) {
     const graphFields = filterFieldsForExistingColumns(mapSystemUserToGraphFields(normalized), columnNames);
     if (existingEntry) {
       await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, graphFields);
+      invalidateUsersCache();
       return { created: false, item: normalized };
     }
     await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
       fields: graphFields
     });
+    invalidateUsersCache();
     return { created: true, item: normalized };
   }
 
@@ -570,6 +610,7 @@ function createSystemUserRouter(deps) {
     const siteId = await resolveSiteId();
     const list = await resolveUsersList();
     await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`);
+    invalidateUsersCache();
   }
 
   async function createAuditRow(input) {
