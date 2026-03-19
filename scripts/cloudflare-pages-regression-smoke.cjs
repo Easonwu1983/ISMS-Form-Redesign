@@ -672,14 +672,14 @@ async function run() {
 
     await page.goto(`${BASE_URL}/#unit-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      const text = String(app && app.innerText || '');
-      return !!(text && (text.includes('自訂單位審核與合併') || text.includes('單位治理')) && text.includes('自訂單位清單'));
-    }, undefined, { timeout: 90000 });
+    await page.locator('.review-table-card').waitFor({ state: 'visible', timeout: 90000 });
+    await page.locator('.review-history-card').waitFor({ state: 'visible', timeout: 90000 });
     const unitReviewText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(unitReviewText)) {
       throw new Error('unit review contains placeholder question marks');
+    }
+    if (!unitReviewText.includes('自訂單位審核與合併') || !unitReviewText.includes('自訂單位清單')) {
+      throw new Error('unit review page text did not match expected headings');
     }
     pushStep('unit-review:loaded', true, 'unit review page ready');
 

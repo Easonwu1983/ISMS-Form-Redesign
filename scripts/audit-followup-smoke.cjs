@@ -140,14 +140,21 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
     attachDiagnostics(page, RESULTS);
     try {
-      await login(page, 'unit1', 'unit123');
+      await login(page, 'admin', 'admin123');
       await page.goto(`${BASE_URL}#create`, { waitUntil: 'networkidle', timeout: 45000 });
-      await page.waitForSelector('#f-hname', { timeout: 15000 });
+      await page.waitForSelector('#f-hunit', { state: 'attached', timeout: 15000 });
+      await page.waitForSelector('#f-hname', { state: 'attached', timeout: 15000 });
       await page.waitForFunction(() => window._authModule && typeof window._authModule.currentUser === 'function' && !!window._authModule.currentUser(), { timeout: 15000 });
       const currentUser = await page.evaluate(() => window._authModule.currentUser());
       const currentUsername = String(currentUser && currentUser.username || '').trim();
-      const currentUnit = String(currentUser && (currentUser.unit || currentUser.activeUnit || '') || '').trim();
+      let currentUnit = String(currentUser && (currentUser.unit || currentUser.activeUnit || '') || '').trim();
       if (!currentUsername) throw new Error('current user username unavailable');
+      if (!currentUnit) {
+        currentUnit = await page.$$eval('#f-hunit option', (entries) => {
+          const values = entries.map((entry) => String(entry.value || '').trim()).filter(Boolean);
+          return values[0] || '';
+        });
+      }
       if (!currentUnit) throw new Error('current user unit unavailable');
 
       await page.evaluate((unit) => {
