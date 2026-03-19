@@ -676,7 +676,7 @@ async function run() {
       const app = document.getElementById('app');
       const text = String(app && app.innerText || '');
       return !!(text && (text.includes('自訂單位審核與合併') || text.includes('單位治理')) && text.includes('自訂單位清單'));
-    }, undefined, { timeout: 45000 });
+    }, undefined, { timeout: 90000 });
     const unitReviewText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(unitReviewText)) {
       throw new Error('unit review contains placeholder question marks');

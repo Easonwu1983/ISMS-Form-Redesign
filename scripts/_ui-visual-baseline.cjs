@@ -84,12 +84,44 @@ async function seedSyntheticUnitContactSuccess(page) {
       applications,
       nextId
     });
-    try {
-      window.sessionStorage.setItem('unit-contact-last-email', app.applicantEmail);
-    } catch (_) {
-      // ignore session storage failures in smoke mode
+  try {
+    window.sessionStorage.setItem('unit-contact-last-email', app.applicantEmail);
+  } catch (_) {
+    // ignore session storage failures in smoke mode
+  }
+  });
+}
+
+async function seedSyntheticUnitReview(page) {
+  await page.waitForFunction(() => {
+    const table = document.querySelector('.review-table-card table');
+    const history = document.querySelector('.review-history-card .review-history-list');
+    return !!table && !!history;
+  }, { timeout: 30000 });
+
+  await page.evaluate(() => {
+    const tableBody = document.querySelector('.review-table-card table tbody');
+    if (tableBody) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="5">
+            <div class="empty-state review-empty">
+              <div class="empty-state-icon" aria-hidden="true">○</div>
+              <div class="empty-state-title">目前沒有待治理的自訂單位</div>
+              <div class="empty-state-desc">所有單位都已符合正式名錄，或已由最高管理員審核完成。</div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
+    const history = document.querySelector('.review-history-card .review-history-list');
+    if (history) {
+      history.innerHTML = '<div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">尚無治理紀錄</div></div>';
     }
   });
+
+  await page.waitForTimeout(150);
 }
 
 function getVisualSmokeStyles(slug, mode) {
@@ -239,13 +271,16 @@ async function stabilizeVisualRoute(page, slug, mode) {
 
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
   if (spec && (spec.slug === 'unit-contact-success' || spec.slug === 'unit-contact-activate')) {
-  await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/`, { waitUntil: 'networkidle', timeout: 45000 });
-  await page.waitForTimeout(600);
+    await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.waitForTimeout(600);
     await seedSyntheticUnitContactSuccess(page);
   }
   await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil: 'networkidle', timeout: 45000 });
   await page.waitForTimeout(900);
   await stabilizeVisualRoute(page, spec.slug, mode);
+  if (spec && spec.slug === 'unit-review') {
+    await seedSyntheticUnitReview(page);
+  }
   const options = spec.clip
     ? { path: outputPath, clip: spec.clip }
     : { path: outputPath };
