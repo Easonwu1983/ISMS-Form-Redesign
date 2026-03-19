@@ -136,6 +136,10 @@ async function login(page, username, password) {
     return !!(currentUser && String(currentUser.sessionToken || '').trim())
       || !!document.querySelector('.btn-logout');
   }, { timeout: 15000 });
+  await page.waitForFunction(() => {
+    const state = String(window.__REMOTE_BOOTSTRAP_STATE__ || '').trim();
+    return state === 'ready' || state === 'idle';
+  }, { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(150);
 }
 
