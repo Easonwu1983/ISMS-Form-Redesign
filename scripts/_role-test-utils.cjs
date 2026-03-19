@@ -197,6 +197,15 @@ async function readJsonFromStorage(page, key) {
 }
 
 async function chooseUnitForHandlerUsername(page, baseId, handlerSelectId, username) {
+  try {
+    await page.waitForFunction(({ handlerSelectId }) => {
+      const handlerSelect = document.getElementById(handlerSelectId);
+      return !!handlerSelect && Array.from(handlerSelect.options).some((entry) => String(entry.value || '').trim());
+    }, { handlerSelectId }, { timeout: 15000 });
+  } catch (_) {
+    // Fall through to the direct selector search below; this still gives the page time
+    // to finish background user sync before we start iterating the cascade.
+  }
   await page.evaluate(({ baseId, handlerSelectId, username }) => {
     const categorySelect = document.getElementById(baseId + '-category');
     const parentSelect = document.getElementById(baseId + '-parent');

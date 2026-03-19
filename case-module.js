@@ -58,6 +58,7 @@
       buildUnitCascadeControl,
       initUnitCascade,
       syncCorrectiveActionsFromM365,
+      syncUsersFromM365,
       submitCreateCase,
       submitRespondCase,
       submitReviewDecision,
@@ -546,11 +547,32 @@
       </div></div>`;
   }
 
-function renderCreate() {
+  function renderCreate() {
     if (!canCreateCAR()) { navigate('dashboard'); toast('您沒有開立矯正單權限', 'error'); return; }
     const u = currentUser();
     const allUsers = getUsers();
     const users = allUsers.filter(x => x.role === ROLES.REPORTER || x.role === ROLES.UNIT_ADMIN);
+
+    if (canManageUsers(u) && !users.length) {
+      const appRoot = document.getElementById('app');
+      if (appRoot) {
+        appRoot.innerHTML = '<div class="busy-overlay" aria-live="polite" aria-busy="true"><div class="busy-card"><span class="busy-spinner" aria-hidden="true"></span><div class="busy-title">正在同步處理人員清單…</div></div></div>';
+      }
+      if (!renderCreate._usersSyncPromise && typeof syncUsersFromM365 === 'function') {
+        renderCreate._usersSyncPromise = Promise.resolve()
+          .then(() => syncUsersFromM365({ silent: true }))
+          .catch((error) => {
+            console.warn('create handler sync failed', error);
+          })
+          .finally(() => {
+            renderCreate._usersSyncPromise = null;
+            if (String(window.location.hash || '').startsWith('#create')) {
+              navigate('create', { replace: true, allowDirtyNavigation: true });
+            }
+          });
+      }
+      return;
+    }
 
     document.getElementById('app').innerHTML = buildCreatePage(u);
     refreshIcons();

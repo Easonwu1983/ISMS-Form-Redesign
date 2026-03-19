@@ -86,7 +86,7 @@ async function cleanupApplicationById(applicationId) {
     env: {
       ...process.env,
       PORT: String(BACKEND_PORT),
-      UNIT_CONTACT_ALLOWED_ORIGINS: 'http://127.0.0.1:8080,http://localhost:8080'
+      UNIT_CONTACT_ALLOWED_ORIGINS: 'http://127.0.0.1:8088,http://localhost:8088'
     },
     stdio: 'pipe'
   });

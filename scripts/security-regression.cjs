@@ -1,6 +1,7 @@
-const path = require('path');
+﻿const path = require('path');
 const {
   attachDiagnostics,
+  BASE_URL,
   createArtifactRun,
   createResultEnvelope,
   currentHash,
@@ -18,9 +19,9 @@ const RESULT_PATH = path.join(OUT_DIR, 'security-regression.json');
 const CASE_ID = 'CAR-SECURITY-XSS';
 const CHECKLIST_ID = 'CHK-114-SECURITY-1';
 const TRAINING_ID = 'TRN-114-SECURITY-1';
-const CASE_UNIT = '人事室';
-const TRAINING_UNIT = '人事室';
-const TRAINING_STATS_UNIT = '人事室';
+const CASE_UNIT = '計算機及資訊網路中心／資訊網路組';
+const TRAINING_UNIT = '計算機及資訊網路中心／資訊網路組';
+const TRAINING_STATS_UNIT = '計算機及資訊網路中心';
 const XSS_PAYLOAD = '<img src=x onerror="window.__SECURITY_XSS__=(window.__SECURITY_XSS__||0)+1">';
 
 async function seedSecurityFixtures(page) {
@@ -57,9 +58,9 @@ async function seedSecurityFixtures(page) {
       handlerUsername: 'unit1',
       handlerEmail: 'security@g.ntu.edu.tw',
       handlerDate: today,
-      deficiencyType: '文件缺失',
-      source: '內部稽核',
-      category: ['文件管理'],
+      deficiencyType: '資訊安全缺失',
+      source: '管理者匯入',
+      category: ['教育訓練'],
       clause: payload,
       problemDesc: payload,
       occurrence: payload,
@@ -92,7 +93,7 @@ async function seedSecurityFixtures(page) {
     checklistStore.items.push({
       id: checklistId,
       unit,
-      fillerName: '最高管理員',
+      fillerName: '測試填報人',
       fillerUsername: 'admin',
       fillDate: today,
       auditYear: '114',
@@ -118,13 +119,13 @@ async function seedSecurityFixtures(page) {
       id: trainingId,
       unit,
       statsUnit,
-      fillerName: '最高管理員',
+      fillerName: '測試填報人',
       fillerUsername: 'admin',
       submitterPhone: '02-3366-1234',
       submitterEmail: 'security@g.ntu.edu.tw',
       fillDate: today,
       trainingYear: '114',
-      status: '已完成填報',
+      status: '已填報',
       records: [
         {
           rosterId: null,
@@ -137,13 +138,13 @@ async function seedSecurityFixtures(page) {
           identity: payload,
           jobTitle: payload,
           source: 'manual',
-          createdBy: '最高管理員',
+          createdBy: '測試填報人',
           createdByUsername: 'admin',
           createdAt: now,
           status: '在職',
           completedGeneral: '是',
           isInfoStaff: '否',
-          completedProfessional: '不適用',
+          completedProfessional: '否',
           note: payload
         }
       ],
@@ -178,18 +179,13 @@ async function assertNoXssExecution(page, label) {
   const state = await page.evaluate(() => ({
     xss: Number(window.__SECURITY_XSS__ || 0),
     rawCount: document.querySelectorAll('#app img[src="x"]').length,
-    html: document.getElementById('app') ? document.getElementById('app').innerHTML : '',
     text: document.getElementById('app') ? document.getElementById('app').textContent || '' : ''
   }));
 
-  if (state.xss !== 0) {
-    throw new Error(label + ' executed payload');
-  }
-  if (state.rawCount !== 0) {
-    throw new Error(label + ' rendered raw injected img element');
-  }
+  if (state.xss !== 0) throw new Error(`${label} executed payload`);
+  if (state.rawCount !== 0) throw new Error(`${label} rendered raw injected img element`);
   if (!String(state.text || '').includes('<img src=x onerror=')) {
-    throw new Error(label + ' did not preserve payload as escaped text');
+    throw new Error(`${label} did not preserve payload as escaped text`);
   }
 }
 
@@ -203,7 +199,7 @@ async function assertNoXssExecution(page, label) {
     await resetApp(page);
 
     await runStep(results, 'SEC-01', 'Browser', 'Security meta policies are present', async () => {
-      await page.goto('http://127.0.0.1:8080/', { waitUntil: 'domcontentloaded' });
+      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 30000 });
       const meta = await page.evaluate(() => ({
         csp: document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content || '',
@@ -224,7 +220,7 @@ async function assertNoXssExecution(page, label) {
       const hash = await currentHash(page);
       const title = await page.locator('.page-title').first().textContent().catch(() => '');
       if (hash === '#schema-health') throw new Error('non-admin stayed on schema-health route');
-      if (String(title || '').includes('資料健康檢查')) throw new Error('schema health page rendered for non-admin');
+      if (String(title || '').includes('稽核')) throw new Error('schema health page rendered for non-admin');
       return 'schema health remained protected';
     });
 

@@ -585,6 +585,7 @@
       buildUnitCascadeControl,
       initUnitCascade,
       syncCorrectiveActionsFromM365,
+      syncUsersFromM365,
       submitCreateCase,
       submitRespondCase,
       submitReviewDecision,

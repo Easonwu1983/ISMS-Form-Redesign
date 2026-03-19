@@ -1,8 +1,7 @@
 ﻿const fs = require('fs');
 const path = require('path');
-const { chooseUnitForHandlerUsername, createArtifactRun, launchBrowser } = require('./_role-test-utils.cjs');
+const { BASE_URL, chooseUnitForHandlerUsername, createArtifactRun, launchBrowser } = require('./_role-test-utils.cjs');
 
-const BASE_URL = 'http://127.0.0.1:8080/';
 const OUT_DIR = createArtifactRun('role-flow-smoke').outDir;
 const SHOT_DIR = path.join(OUT_DIR, 'screenshots');
 const RESULT_PATH = path.join(OUT_DIR, 'results.json');
@@ -23,8 +22,8 @@ const results = {
   artifacts: [],
   context: {
     admin: { username: 'admin', password: 'admin123' },
-    reporter: { username: 'unit1', password: 'unit123' },
-    proxyReporter: { username: 'user1', password: 'user123' },
+    reporter: { username: 'user3', password: 'user123' },
+    proxyReporter: { username: 'user2', password: 'user123' },
     viewer: { username: 'viewer1', password: 'viewer123' }
   }
 };
@@ -66,10 +65,19 @@ async function screenshot(page, fileName) {
   return filePath;
 }
 
+async function acceptNextDialog(page) {
+  page.once('dialog', async (dialog) => {
+    try {
+      await dialog.accept();
+    } catch (_) {}
+  });
+}
+
 async function login(page, username, password) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   if (await page.locator('.btn-logout').count()) {
-    await page.evaluate(() => window._logout());
+    await acceptNextDialog(page);
+    await page.evaluate(() => window._logout?.());
   }
   await page.waitForSelector('[data-testid="login-form"]');
   await page.fill('[data-testid="login-user"]', username);
@@ -82,9 +90,26 @@ async function login(page, username, password) {
 }
 
 async function logout(page) {
-  if (await page.locator('.btn-logout').count()) {
-    await page.click('.btn-logout');
-    await page.waitForSelector('[data-testid="login-form"]');
+  if (!(await page.locator('.btn-logout').count())) return;
+  await acceptNextDialog(page);
+  await page.evaluate(() => window._logout?.());
+  await page.waitForTimeout(300);
+  if (await page.locator('[data-testid="login-form"]').count()) return;
+  const button = page.locator('.btn-logout').first();
+  try {
+    await button.click({ timeout: 5000 });
+  } catch (_) {
+    try {
+      await button.evaluate((element) => {
+        if (element && typeof element.click === 'function') element.click();
+      });
+    } catch (_) {}
+  }
+  try {
+    await page.waitForSelector('[data-testid="login-form"]', { timeout: 15000 });
+  } catch (_) {
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-form"]', { timeout: 15000 });
   }
 }
 
@@ -199,7 +224,7 @@ function isoDate(offsetDays) {
     await logout(page);
 
     await runStep('RP-01', '單位窗口', '登入與管理頁限制', async () => {
-      await login(page, 'unit1', 'unit123');
+      await login(page, 'user3', 'user123');
       if (await page.locator('a[href="#create"]').count()) throw new Error('reporter should not see create link');
       if (await page.locator('a[href="#users"]').count()) throw new Error('reporter should not see users link');
       await gotoHash(page, 'users');
@@ -261,7 +286,7 @@ function isoDate(offsetDays) {
     });
 
     await runStep('RP-02', '單位窗口代理', '同單位代理權限', async () => {
-      await login(page, 'user1', 'user123');
+      await login(page, 'user2', 'user123');
       if (await page.locator('a[href="#create"]').count()) throw new Error('reporter should not see create link');
       await gotoHash(page, 'users');
       await page.waitForTimeout(240);
@@ -293,8 +318,10 @@ function isoDate(offsetDays) {
       if (!item || !item.correctiveAction || !item.rootCause || !item.rootElimination) throw new Error('response fields were not saved');
       return 'response submitted and stored';
     });
+    await logout(page);
 
     await runStep('RP-04', '單位窗口', '檢核表草稿導頁一致性', async () => {
+      await login(page, 'unit1', 'unit123');
       await gotoHash(page, 'checklist-fill');
       await page.waitForSelector('#checklist-form');
       await page.fill('#cl-supervisor-name', '測試主管');
@@ -311,7 +338,7 @@ function isoDate(offsetDays) {
         });
       });
       await page.click('#cl-save-draft');
-      await page.waitForTimeout(800);
+      await page.waitForFunction(() => window.location.hash.startsWith('#checklist-fill/'), { timeout: 15000 });
       const hash = await currentHash(page);
       if (!hash.startsWith('#checklist-fill/')) {
         throw new Error(`draft route mismatch: ${hash}`);
@@ -338,8 +365,10 @@ function isoDate(offsetDays) {
       if (String(item.status || '').includes('草稿')) throw new Error('checklist still in draft status after submit');
       return checklistId;
     });
+    await logout(page);
 
     await runStep('RP-06', '單位窗口', '教育訓練草稿導頁一致性', async () => {
+      await login(page, 'unit1', 'unit123');
       await gotoHash(page, 'training-fill');
       await page.waitForSelector('#training-form');
       await page.fill('#tr-phone', '02-3366-1234');
@@ -416,13 +445,19 @@ function isoDate(offsetDays) {
 
     await runStep('RP-07', '單位窗口', '教育訓練草稿可進入詳情頁', async () => {
       if (!trainingId) throw new Error('missing training draft id');
-      await gotoHash(page, 'training-detail/' + trainingId);
+      await gotoHash(page, 'training-fill/' + trainingId);
+      await page.waitForFunction((target) => window.location.hash === target, '#training-fill/' + trainingId, { timeout: 10000 });
       await page.waitForTimeout(250);
       const hash = await currentHash(page);
-      if (hash !== '#training-detail/' + trainingId) throw new Error(`unexpected training detail hash: ${hash}`);
+      if (hash !== '#training-fill/' + trainingId) throw new Error(`unexpected training draft hash: ${hash}`);
+      await gotoHash(page, 'training-detail/' + trainingId);
+      await page.waitForFunction((target) => window.location.hash === target, '#training-detail/' + trainingId, { timeout: 10000 });
+      await page.waitForTimeout(250);
+      const detailHash = await currentHash(page);
+      if (detailHash !== '#training-detail/' + trainingId) throw new Error(`unexpected training detail hash: ${detailHash}`);
       if (!await page.locator('#training-print-detail').count()) throw new Error('print button missing on training detail');
       if (!await page.locator('a[href="#training-fill/' + trainingId + '"]').count()) throw new Error('continue-fill link missing for draft detail');
-      return `training draft detail accessible at ${trainingId}`;
+      return `training draft saved on fill route and detail accessible at ${trainingId}`;
     });
     await logout(page);
 
@@ -450,7 +485,7 @@ function isoDate(offsetDays) {
 
     await runStep('RP-08', '單位窗口代理', '送出追蹤提報', async () => {
       if (!createdCarId) throw new Error('missing car id for tracking');
-      await login(page, 'user1', 'user123');
+      await login(page, 'user2', 'user123');
       await gotoHash(page, 'tracking/' + createdCarId);
       await page.waitForSelector('#track-form');
       await page.fill('#tk-exec', '已完成追蹤改善措施驗證，流程可正確流轉並保留測試證據。');
@@ -519,4 +554,3 @@ function isoDate(offsetDays) {
   console.error(results.fatal);
   process.exit(1);
 });
-
