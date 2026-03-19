@@ -115,6 +115,11 @@ function createSystemUserRouter(deps) {
     return Number.isFinite(raw) && raw > 0 ? raw : 3;
   }
 
+  function getUsersCacheTtlMs() {
+    const raw = Number(process.env.SYSTEM_USERS_CACHE_TTL_MS || '');
+    return Number.isFinite(raw) && raw >= 0 ? raw : (5 * 60 * 1000);
+  }
+
   function isTrustedProxyAddress(address) {
     const value = cleanText(address);
     if (!value) return false;
@@ -508,7 +513,7 @@ function createSystemUserRouter(deps) {
   }
 
   async function listAllUsers() {
-    const ttlMs = 60 * 1000;
+    const ttlMs = getUsersCacheTtlMs();
     const now = Date.now();
     if (Array.isArray(state.usersCache) && state.usersCache.length && now - state.usersCacheAt < ttlMs) {
       return cloneUserRows(state.usersCache);

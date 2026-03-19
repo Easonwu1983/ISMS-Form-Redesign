@@ -39,7 +39,13 @@ function createTrainingRouter(deps) {
   const state = {
     listMap: null,
     nextRosterSequence: null,
-    rosterSequenceLock: Promise.resolve()
+    rosterSequenceLock: Promise.resolve(),
+    formsCache: null,
+    formsCacheAt: 0,
+    formsCachePromise: null,
+    rostersCache: null,
+    rostersCacheAt: 0,
+    rostersCachePromise: null
   };
 
   function getEnv(name, fallback) {
@@ -158,6 +164,26 @@ function createTrainingRouter(deps) {
     return getEnv('TRAINING_ROSTERS_LIST', 'TrainingRosters');
   }
 
+  function getTrainingListCacheTtlMs() {
+    const raw = Number(process.env.TRAINING_LIST_CACHE_TTL_MS || '');
+    return Number.isFinite(raw) && raw >= 0 ? raw : (30 * 1000);
+  }
+
+  function getTrainingListCacheHit(cacheAt) {
+    const ttlMs = getTrainingListCacheTtlMs();
+    if (ttlMs <= 0) return false;
+    return !!cacheAt && (Date.now() - cacheAt) < ttlMs;
+  }
+
+  function invalidateTrainingListCaches() {
+    state.formsCache = null;
+    state.formsCacheAt = 0;
+    state.formsCachePromise = null;
+    state.rostersCache = null;
+    state.rostersCacheAt = 0;
+    state.rostersCachePromise = null;
+  }
+
   function getAuditListName() {
     return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
   }
@@ -175,6 +201,13 @@ function createTrainingRouter(deps) {
   }
 
   async function listAllForms() {
+    if (Array.isArray(state.formsCache) && getTrainingListCacheHit(state.formsCacheAt)) {
+      return state.formsCache.slice();
+    }
+    if (state.formsCachePromise) {
+      return state.formsCachePromise.then((rows) => Array.isArray(rows) ? rows.slice() : []);
+    }
+    state.formsCachePromise = (async function loadForms() {
     const siteId = await resolveSiteId();
     const list = await resolveTrainingFormsList();
     const rows = [];
@@ -188,10 +221,26 @@ function createTrainingRouter(deps) {
       })));
       nextUrl = cleanText(body && body['@odata.nextLink']);
     }
-    return rows;
+      state.formsCache = rows.slice();
+      state.formsCacheAt = Date.now();
+      return rows;
+    })();
+    try {
+      const rows = await state.formsCachePromise;
+      return Array.isArray(rows) ? rows.slice() : [];
+    } finally {
+      state.formsCachePromise = null;
+    }
   }
 
   async function listAllRosters() {
+    if (Array.isArray(state.rostersCache) && getTrainingListCacheHit(state.rostersCacheAt)) {
+      return state.rostersCache.slice();
+    }
+    if (state.rostersCachePromise) {
+      return state.rostersCachePromise.then((rows) => Array.isArray(rows) ? rows.slice() : []);
+    }
+    state.rostersCachePromise = (async function loadRosters() {
     const siteId = await resolveSiteId();
     const list = await resolveTrainingRostersList();
     const rows = [];
@@ -205,7 +254,16 @@ function createTrainingRouter(deps) {
       })));
       nextUrl = cleanText(body && body['@odata.nextLink']);
     }
-    return rows;
+      state.rostersCache = rows.slice();
+      state.rostersCacheAt = Date.now();
+      return rows;
+    })();
+    try {
+      const rows = await state.rostersCachePromise;
+      return Array.isArray(rows) ? rows.slice() : [];
+    } finally {
+      state.rostersCachePromise = null;
+    }
   }
 
   function parseRosterSequence(rosterId) {
@@ -346,11 +404,13 @@ function createTrainingRouter(deps) {
     const normalized = createTrainingFormRecord(nextItem, nextItem.status, nextItem.updatedAt || new Date().toISOString());
     if (existingEntry) {
       await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapTrainingFormToGraphFields(normalized));
+      invalidateTrainingListCaches();
       return { created: false, item: normalized };
     }
     await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
       fields: mapTrainingFormToGraphFields(normalized)
     });
+    invalidateTrainingListCaches();
     return { created: true, item: normalized };
   }
 
@@ -360,11 +420,13 @@ function createTrainingRouter(deps) {
     const normalized = createTrainingRosterRecord(nextItem, nextItem.updatedAt || new Date().toISOString());
     if (existingEntry) {
       await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapTrainingRosterToGraphFields(normalized));
+      invalidateTrainingListCaches();
       return { created: false, item: normalized };
     }
     await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
       fields: mapTrainingRosterToGraphFields(normalized)
     });
+    invalidateTrainingListCaches();
     return { created: true, item: normalized };
   }
 
@@ -372,12 +434,14 @@ function createTrainingRouter(deps) {
     const siteId = await resolveSiteId();
     const list = await resolveTrainingFormsList();
     await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`);
+    invalidateTrainingListCaches();
   }
 
   async function deleteRosterEntry(existingEntry) {
     const siteId = await resolveSiteId();
     const list = await resolveTrainingRostersList();
     await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`);
+    invalidateTrainingListCaches();
   }
 
   async function createAuditRow(input) {
