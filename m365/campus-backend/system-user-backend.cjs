@@ -198,6 +198,32 @@ function createSystemUserRouter(deps) {
       : [];
   }
 
+  function upsertUsersCache(listItemId, nextItem) {
+    const cleanListItemId = cleanText(listItemId);
+    const cleanNextItem = nextItem && typeof nextItem === 'object' ? JSON.parse(JSON.stringify(nextItem)) : null;
+    if (!cleanNextItem) return;
+    const now = Date.now();
+    if (!Array.isArray(state.usersCache)) {
+      state.usersCache = [{ listItemId: cleanListItemId, item: cleanNextItem }];
+      state.usersCacheAt = now;
+      return;
+    }
+    const index = state.usersCache.findIndex((entry) => cleanText(entry && entry.listItemId) === cleanListItemId);
+    if (index >= 0) {
+      state.usersCache[index] = { listItemId: cleanListItemId, item: cleanNextItem };
+    } else {
+      state.usersCache.push({ listItemId: cleanListItemId, item: cleanNextItem });
+    }
+    state.usersCacheAt = now;
+  }
+
+  function removeUsersCache(listItemId) {
+    const cleanListItemId = cleanText(listItemId);
+    if (!cleanListItemId || !Array.isArray(state.usersCache) || !state.usersCache.length) return;
+    state.usersCache = state.usersCache.filter((entry) => cleanText(entry && entry.listItemId) !== cleanListItemId);
+    state.usersCacheAt = Date.now();
+  }
+
   function buildResetRequestKey(username, email, clientAddress) {
     return [cleanText(username).toLowerCase(), cleanText(email).toLowerCase(), cleanText(clientAddress).toLowerCase()].join('::');
   }
@@ -596,13 +622,18 @@ function createSystemUserRouter(deps) {
     const graphFields = filterFieldsForExistingColumns(mapSystemUserToGraphFields(normalized), columnNames);
     if (existingEntry) {
       await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, graphFields);
-      invalidateUsersCache();
+      upsertUsersCache(existingEntry.listItemId, normalized);
       return { created: false, item: normalized };
     }
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
+    const created = await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
       fields: graphFields
     });
-    invalidateUsersCache();
+    const createdListItemId = cleanText(created && created.id);
+    if (createdListItemId) {
+      upsertUsersCache(createdListItemId, normalized);
+    } else {
+      invalidateUsersCache();
+    }
     return { created: true, item: normalized };
   }
 
@@ -610,7 +641,7 @@ function createSystemUserRouter(deps) {
     const siteId = await resolveSiteId();
     const list = await resolveUsersList();
     await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`);
-    invalidateUsersCache();
+    removeUsersCache(existingEntry && existingEntry.listItemId);
   }
 
   async function createAuditRow(input) {
