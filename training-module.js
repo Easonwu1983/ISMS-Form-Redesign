@@ -773,12 +773,15 @@
     const user = currentUser();
     const defaultTrainingYear = String(new Date().getFullYear() - 1911);
     const lockedUserUnit = getScopedUnit(user) || user.unit || '';
-    try {
-      await syncTrainingRostersFromM365({ silent: true });
-      await syncTrainingFormsFromM365({ silent: true });
-    } catch (error) {
-      console.warn('training fill bootstrap sync failed', error);
-    }
+    const syncResults = await Promise.allSettled([
+      syncTrainingRostersFromM365({ silent: true }),
+      syncTrainingFormsFromM365({ silent: true })
+    ]);
+    syncResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn(index === 0 ? 'training roster bootstrap sync failed' : 'training form bootstrap sync failed', result.reason);
+      }
+    });
     if (!id && !isAdmin() && lockedUserUnit) {
       const duplicateDraft = findExistingTrainingFormForUnitYear(lockedUserUnit, defaultTrainingYear);
       if (duplicateDraft && isTrainingVisible(duplicateDraft)) {
@@ -1782,13 +1785,7 @@
         .filter(Boolean)
     );
 
-    const rawRosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
-      const statsCompare = compareZhStroke(String(a.statsUnit || getTrainingStatsUnit(a.unit)), String(b.statsUnit || getTrainingStatsUnit(b.unit)));
-      if (statsCompare !== 0) return statsCompare;
-      const unitCompare = compareZhStroke(String(a.unit || ''), String(b.unit || ''));
-      if (unitCompare !== 0) return unitCompare;
-      return 0;
-    });
+    const rawRosters = getAllTrainingRosters().slice();
     const rosters = rawRosters.filter((row) => isRenderableTrainingRoster(row));
     const hiddenCount = rawRosters.length - rosters.length;
     const summary = {

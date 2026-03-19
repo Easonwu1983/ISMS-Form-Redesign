@@ -432,6 +432,10 @@
       }
       document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
       renderBootstrapShell();
+      if (typeof window !== 'undefined' && window.__REMOTE_BOOTSTRAP_STATE__ === 'ready') {
+        handleRoute();
+        return;
+      }
       Promise.resolve(ensureAuthenticatedRemoteBootstrap()).then(function () {
         if (currentUser()) handleRoute();
       }).catch(function (error) {
