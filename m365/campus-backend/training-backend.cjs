@@ -958,9 +958,7 @@ function createTrainingRouter(deps) {
       });
 
       const now = new Date().toISOString();
-      for (const entry of uniqueEntries) {
-        await deleteRosterEntry(entry);
-      }
+      await Promise.all(uniqueEntries.map((entry) => deleteRosterEntry(entry)));
 
       const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({

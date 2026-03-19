@@ -37,7 +37,8 @@
     const TRAINING_ROSTER_ACTIONS = {
       UPSERT: 'training.roster.upsert',
       UPSERT_BATCH: 'training.roster.upsert-batch',
-      DELETE: 'training.roster.delete'
+      DELETE: 'training.roster.delete',
+      DELETE_BATCH: 'training.roster.delete-batch'
     };
     let requestCounter = 0;
     let cachedConfig = null;

@@ -129,7 +129,14 @@ async function login(page, username, password) {
     page.waitForFunction(() => !!document.querySelector('#app'), { timeout: 7000 }),
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
   ]);
-  await page.waitForTimeout(250);
+  await page.waitForFunction(() => {
+    const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
+      ? window._authModule.currentUser()
+      : null;
+    return !!(currentUser && String(currentUser.sessionToken || '').trim())
+      || !!document.querySelector('.btn-logout');
+  }, { timeout: 15000 });
+  await page.waitForTimeout(150);
 }
 
 async function logout(page) {

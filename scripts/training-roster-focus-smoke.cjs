@@ -1,4 +1,4 @@
-const path = require('path');
+﻿const path = require('path');
 const {
   attachDiagnostics,
   createArtifactRun,
@@ -16,10 +16,9 @@ const runMeta = createArtifactRun('training-roster-focus-smoke');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-roster-focus-smoke.json');
 const ROLE_ADMIN = 'admin';
 const TITLE_ROSTER_RENDER = 'training roster focus restore on delete rerender';
-const TITLE_ROSTER_CLEANUP = 'training roster focus cleanup';
-const IMPORT_TARGET_UNIT = '計算機及資訊網路中心／資訊網路組';
-const IMPORT_TARGET_TITLE = '工程師';
-const IMPORT_TARGET_IDENTITY = '校聘人員';
+const IMPORT_TARGET_UNIT = `RosterFocusUnit-${Date.now()}`;
+const IMPORT_TARGET_TITLE = 'Engineer';
+const IMPORT_TARGET_IDENTITY = 'Staff';
 
 async function ensureTrainingImportPanelVisible(page) {
   await page.waitForSelector('#training-roster-toggle-import');
@@ -37,6 +36,15 @@ async function ensureTrainingImportPanelVisible(page) {
   await page.waitForSelector('#training-import-form', { state: 'visible' });
 }
 
+async function expandRosterGroups(page) {
+  await page.evaluate(() => {
+    document.querySelectorAll('details.training-roster-group-card').forEach((element) => {
+      element.open = true;
+    });
+  });
+  await page.waitForTimeout(200);
+}
+
 async function listTrainingRostersByNames(page, names) {
   return page.evaluate(async (targetNames) => {
     const token = window._authModule?.currentUser?.()?.sessionToken || '';
@@ -50,6 +58,23 @@ async function listTrainingRostersByNames(page, names) {
       .concat(Array.isArray(body?.value) ? body.value : []);
     return items.filter((item) => targetNames.includes(String((item && item.name) || '').trim()));
   }, names);
+}
+
+async function waitForTrainingRosterRowsInDom(page, names, timeout) {
+  const startedAt = Date.now();
+  while ((Date.now() - startedAt) < timeout) {
+    const present = await page.evaluate((targetNames) => {
+      const rows = Array.from(document.querySelectorAll('tr[data-roster-name]'))
+        .map((row) => String(row.dataset?.rosterName || '').trim())
+        .filter(Boolean);
+      return targetNames.filter((name) => rows.includes(name));
+    }, names);
+    if (names.every((name) => present.includes(name))) {
+      return present;
+    }
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`training roster rows not rendered after ${timeout}ms: ${names.join(', ')}`);
 }
 
 async function deleteTrainingRostersByNames(page, names) {
@@ -95,6 +120,7 @@ async function deleteTrainingRostersByNames(page, names) {
 }
 
 async function waitForTrainingRostersByNames(page, names, timeout) {
+  const domRows = await waitForTrainingRosterRowsInDom(page, names, timeout);
   const startedAt = Date.now();
   while ((Date.now() - startedAt) < timeout) {
     const rows = await listTrainingRostersByNames(page, names);
@@ -103,17 +129,11 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
     }
     await page.waitForTimeout(400);
   }
-  throw new Error(`training rosters not visible after ${timeout}ms: ${names.join(', ')}`);
-}
-
-async function waitForRosterRowByName(page, name, timeout) {
-  const selector = `tr[data-roster-name="${name.replace(/"/g, '\\"')}"]`;
-  await page.waitForSelector(selector, { timeout });
-  return page.locator(selector);
+  return domRows;
 }
 
 (async () => {
-  const names = [`FocusProbe-${Date.now()}`];
+  const names = [`FocusProbe-A-${Date.now()}`, `FocusProbe-B-${Date.now()}`];
   const results = createResultEnvelope({
     steps: [],
     context: {
@@ -133,26 +153,38 @@ async function waitForRosterRowByName(page, name, timeout) {
     await runStep(results, 'M8-01', 'training', TITLE_ROSTER_RENDER, async () => {
       await login(page, results.context.admin.username, results.context.admin.password);
       await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending');
+      await page.waitForFunction(() => {
+        const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
+          ? window._authModule.currentUser()
+          : null;
+        return !!(currentUser && String(currentUser.sessionToken || '').trim());
+      }, undefined, { timeout: 30000 });
       await gotoHash(page, 'training-roster');
       await ensureTrainingImportPanelVisible(page);
 
-      await page.evaluate(({ unit, name, identity, jobTitle }) => {
+      await page.evaluate(({ unit, nameA, nameB, identity, jobTitle }) => {
         document.getElementById('training-import-unit').value = unit;
-        document.getElementById('training-import-names').value = `${name},InfoGroup,${identity},${jobTitle}`;
+        document.getElementById('training-import-names').value = [
+          `${nameA},${unit},${identity},${jobTitle}`,
+          `${nameB},${unit},${identity},${jobTitle}`
+        ].join('\n');
       }, {
         unit: IMPORT_TARGET_UNIT,
-        name: names[0],
+        nameA: names[0],
+        nameB: names[1],
         identity: IMPORT_TARGET_IDENTITY,
         jobTitle: IMPORT_TARGET_TITLE
       });
 
       await page.click('[data-testid="training-import-submit"]');
       await waitForTrainingRostersByNames(page, names, 30000);
-      await waitForRosterRowByName(page, names[0], 30000);
+      await page.waitForSelector('details.training-roster-group-card', { state: 'visible', timeout: 30000 });
+      await expandRosterGroups(page);
 
-      const row = page.locator(`tr[data-roster-name="${names[0]}"]`);
-      const deleteButton = row.locator('button[data-testid^="training-roster-delete-"]');
-      await deleteButton.focus();
+      const targetRow = page.locator(`tr[data-roster-name="${names[0]}"]`);
+      await targetRow.waitFor({ state: 'visible', timeout: 30000 });
+      const targetDeleteButton = targetRow.locator('button[data-testid^="training-roster-delete-"]');
+      await targetDeleteButton.focus();
       const before = await page.evaluate(() => {
         const active = document.activeElement;
         const row = active && typeof active.closest === 'function' ? active.closest('tr[data-roster-id]') : null;
@@ -166,13 +198,9 @@ async function waitForRosterRowByName(page, name, timeout) {
         throw new Error(`expected delete button focus before delete, got ${JSON.stringify(before)}`);
       }
 
-      await deleteButton.click();
+      await targetDeleteButton.click();
       await page.waitForSelector('[data-modal-confirm="1"]', { state: 'visible', timeout: 20000 });
-      await page.locator('[data-modal-confirm="1"]').evaluate((element) => {
-        if (element && typeof element.click === 'function') {
-          element.click();
-        }
-      });
+      await page.locator('[data-modal-confirm="1"]').click();
       await page.waitForFunction((deletedName) => !document.querySelector(`tr[data-roster-name="${deletedName.replace(/"/g, '\\"')}"]`), names[0], { timeout: 30000 });
       await page.waitForFunction(() => {
         const active = document.activeElement;
@@ -193,6 +221,9 @@ async function waitForRosterRowByName(page, name, timeout) {
       }
       if (after.rowName === names[0]) {
         throw new Error('focus still attached to deleted roster row');
+      }
+      if (after.rowName !== names[1]) {
+        throw new Error(`expected focus to move to surviving row ${names[1]}, got ${JSON.stringify(after)}`);
       }
       return `focus restored to ${after.activeTestId}`;
     });

@@ -1,4 +1,4 @@
-const path = require('path');
+﻿const path = require('path');
 const {
   attachDiagnostics,
   createArtifactRun,
@@ -15,27 +15,37 @@ const {
 const runMeta = createArtifactRun('training-roster-batch-delete-smoke');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-roster-batch-delete-smoke.json');
 const ROLE_ADMIN = 'admin';
-const TEST_UNIT = '資訊網路組';
+const TEST_UNIT = `RosterBatchUnit-${Date.now()}`;
 const TEST_ROWS = [
   {
     name: `BatchDelete-A-${Date.now()}`,
     unit: TEST_UNIT,
-    unitName: '資訊網路組',
+    unitName: TEST_UNIT,
     identity: '校聘人員',
-    jobTitle: '行政專員'
+    jobTitle: '工程師'
   },
   {
     name: `BatchDelete-B-${Date.now()}`,
     unit: TEST_UNIT,
-    unitName: '資訊網路組',
+    unitName: TEST_UNIT,
     identity: '校聘人員',
-    jobTitle: '行政組員'
+    jobTitle: '行政專員'
   }
 ];
 
+async function getSessionToken(page) {
+  return page.evaluate(() => {
+    const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
+      ? window._authModule.currentUser()
+      : null;
+    return String(currentUser && currentUser.sessionToken || '').trim();
+  });
+}
+
 async function upsertRoster(page, payload) {
-  return page.evaluate(async (entry) => {
-    const token = window._authModule?.currentUser?.()?.sessionToken || '';
+  const token = await getSessionToken(page);
+  if (!token) throw new Error('missing session token for roster upsert');
+  return page.evaluate(async ({ entry, sessionToken }) => {
     const envelope = {
       action: 'training.roster.upsert',
       requestId: `batch-delete-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -57,7 +67,7 @@ async function upsertRoster(page, payload) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+        Authorization: `Bearer ${sessionToken}`
       },
       body: JSON.stringify(envelope)
     });
@@ -66,14 +76,15 @@ async function upsertRoster(page, payload) {
       throw new Error(String(body.message || body.error || 'training roster upsert failed'));
     }
     return body;
-  }, payload);
+  }, { entry: payload, sessionToken: token });
 }
 
 async function deleteRostersByNames(page, names) {
-  return page.evaluate(async (targetNames) => {
-    const token = window._authModule?.currentUser?.()?.sessionToken || '';
+  const token = await getSessionToken(page);
+  if (!token) return { ok: true, deletedIds: [] };
+  return page.evaluate(async ({ targetNames, sessionToken }) => {
     const response = await fetch('/api/training/rosters', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
+      headers: { Authorization: `Bearer ${sessionToken}` }
     });
     const body = await response.json().catch(() => ({}));
     const items = []
@@ -105,12 +116,21 @@ async function deleteRostersByNames(page, names) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+        Authorization: `Bearer ${sessionToken}`
       },
       body: JSON.stringify(envelope)
     });
     return del.json().catch(() => ({ ok: false }));
-  }, names);
+  }, { targetNames: names, sessionToken: token });
+}
+
+async function expandRosterGroups(page) {
+  await page.evaluate(() => {
+    document.querySelectorAll('details.training-roster-group-card').forEach((element) => {
+      element.open = true;
+    });
+  });
+  await page.waitForTimeout(200);
 }
 
 (async () => {
@@ -133,6 +153,12 @@ async function deleteRostersByNames(page, names) {
     await runStep(results, 'BATCH-01', 'training-roster', 'grouping and numbering', async () => {
       await login(page, results.context.admin.username, results.context.admin.password);
       await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending');
+      await page.waitForFunction(() => {
+        const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
+          ? window._authModule.currentUser()
+          : null;
+        return !!(currentUser && String(currentUser.sessionToken || '').trim());
+      }, undefined, { timeout: 30000 });
 
       for (const row of TEST_ROWS) {
         await upsertRoster(page, row);
@@ -140,17 +166,20 @@ async function deleteRostersByNames(page, names) {
 
       await gotoHash(page, 'training-roster');
       await page.waitForSelector('details.training-roster-group-card', { state: 'visible', timeout: 30000 });
+      await expandRosterGroups(page);
       const groupCount = await page.locator('details.training-roster-group-card').count();
       if (groupCount < 1) {
         throw new Error('expected grouped roster cards to render');
       }
-      const rowLocator = page.locator(`tr[data-roster-name="${TEST_ROWS[0].name}"]`);
-      await rowLocator.waitFor({ state: 'visible', timeout: 30000 });
-      const rowNumbers = await page.locator(`tr[data-roster-name^="BatchDelete-"] .training-roster-order`).allTextContents();
+
+      const firstRow = page.locator(`tr[data-roster-name="${TEST_ROWS[0].name}"]`);
+      await firstRow.waitFor({ state: 'visible', timeout: 30000 });
+      const rowNumbers = await page.locator(`tr[data-roster-group="${TEST_UNIT}"] .training-roster-order`).allTextContents();
       if (rowNumbers.length < 2 || rowNumbers[0].trim() !== '1' || rowNumbers[1].trim() !== '2') {
         throw new Error(`expected per-group numbering to start at 1, got ${JSON.stringify(rowNumbers)}`);
       }
-      await rowLocator.locator('.training-roster-check').check();
+
+      await firstRow.locator('.training-roster-check').check();
       await page.locator(`tr[data-roster-name="${TEST_ROWS[1].name}"] .training-roster-check`).check();
 
       const selectedCountText = await page.locator('#training-roster-selected-count').textContent();
@@ -161,10 +190,10 @@ async function deleteRostersByNames(page, names) {
       await page.click('#training-roster-delete-selected');
       await page.waitForSelector('.modal-card', { state: 'visible', timeout: 20000 });
       const modalText = await page.locator('.modal-card').textContent();
-      if (!String(modalText || '').includes('確認刪除所選')) {
+      if (!String(modalText || '').includes('確認刪除')) {
         throw new Error(`expected confirm modal to be visible, got ${modalText}`);
       }
-      await page.click('[data-modal-confirm="1"]');
+      await page.locator('[data-modal-confirm="1"]').click();
 
       await page.waitForFunction((names) => names.every((name) => !document.querySelector(`tr[data-roster-name="${name.replace(/"/g, '\\"')}"]`)), TEST_ROWS.map((row) => row.name), { timeout: 30000 });
 

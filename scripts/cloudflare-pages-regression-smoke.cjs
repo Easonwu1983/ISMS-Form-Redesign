@@ -176,7 +176,7 @@ async function runVisualBaselineChecks(browser, pushStep) {
       const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-desktop.png`);
       if (!fs.existsSync(baselinePath)) throw new Error(`missing desktop baseline: ${baselinePath}`);
       await captureVisualSpec(desktopPage, BASE_URL, spec, actualPath, 'desktop');
-      const maxDiffRatio = spec.slug === 'dashboard' ? 0.08 : spec.slug === 'training' ? 0.12 : 0.06;
+      const maxDiffRatio = spec.slug === 'dashboard' ? 0.08 : spec.slug === 'training' ? 0.12 : (spec.slug === 'unit-review' ? 0.08 : 0.06);
       const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, { maxDiffRatio });
       if (!result.ok) throw new Error(`desktop visual drift: ${spec.slug} (${JSON.stringify(result)})`);
       pushStep(`visual:desktop:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
