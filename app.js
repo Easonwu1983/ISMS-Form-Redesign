@@ -3713,12 +3713,12 @@
     seedData();
     ensurePrimaryAdminProfile();
     getTrainingModule().seedTrainingData();
-    void migrateAttachmentStores().catch(function (error) {
-      console.warn('attachment migration failed', error);
-    });
     await ensureAuthenticatedRemoteBootstrap();
     installAppEventListeners();
     renderApp();
+    void migrateAttachmentStores().catch(function (error) {
+      console.warn('attachment migration failed', error);
+    });
     lastStableHash = window.location.hash || '#dashboard';
     refreshIcons();
     if (typeof window !== 'undefined') {
