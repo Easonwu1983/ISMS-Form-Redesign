@@ -917,6 +917,82 @@ function createTrainingRouter(deps) {
     }
   }
 
+  async function handleRosterDeleteBatch(req, res, origin) {
+    try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      const envelope = await parseJsonBody(req);
+      validateActionEnvelope(envelope, ROSTER_ACTIONS.DELETE_BATCH);
+      const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
+      const rawIds = Array.isArray(payload.ids)
+        ? payload.ids
+        : (Array.isArray(payload.rosterIds) ? payload.rosterIds : []);
+      const ids = Array.from(new Set(rawIds.map((value) => cleanText(value)).filter(Boolean)));
+      if (!ids.length) {
+        throw createError('Training roster ids are required', 400);
+      }
+      if (ids.length > 200) {
+        throw createError('Training roster batch exceeds the 200 item limit', 400);
+      }
+
+      const matchedEntries = [];
+      const skippedIds = [];
+      for (const rosterId of ids) {
+        const entries = await getRosterEntriesById(rosterId);
+        if (!entries.length) {
+          skippedIds.push(rosterId);
+          continue;
+        }
+        if (entries.some((entry) => !requestAuthz.canManageTrainingRoster(authz, entry.item))) {
+          throw requestAuthz.createHttpError('You do not have permission to delete this training roster', 403);
+        }
+        matchedEntries.push(...entries);
+      }
+
+      const uniqueEntries = [];
+      const seenListItemIds = new Set();
+      matchedEntries.forEach((entry) => {
+        const key = cleanText(entry && entry.listItemId);
+        if (!key || seenListItemIds.has(key)) return;
+        seenListItemIds.add(key);
+        uniqueEntries.push(entry);
+      });
+
+      const now = new Date().toISOString();
+      for (const entry of uniqueEntries) {
+        await deleteRosterEntry(entry);
+      }
+
+      const actor = requestAuthz.buildActorDetails(authz);
+      await createAuditRow({
+        eventType: 'training.roster_deleted',
+        actorEmail: actor.actorEmail,
+        targetEmail: '',
+        unitCode: '',
+        recordId: uniqueEntries.length ? cleanText(uniqueEntries[0].item.id) : ids.join(','),
+        occurredAt: now,
+        payloadJson: JSON.stringify({
+          action: ROSTER_ACTIONS.DELETE_BATCH,
+          actor: actor.actorName || actorLabel(payload, ids.join(', ')),
+          actorUsername: actor.actorUsername,
+          deletedState: uniqueEntries.map((entry) => buildTrainingRosterSnapshot(entry.item)),
+          deletedCount: uniqueEntries.length,
+          deletedIds: ids,
+          skippedIds
+        })
+      });
+
+      await writeJson(res, buildJsonResponse(200, {
+        ok: true,
+        deletedIds: ids,
+        deletedCount: uniqueEntries.length,
+        skippedIds,
+        contractVersion: CONTRACT_VERSION
+      }), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to delete training rosters.', 500), origin);
+    }
+  }
+
   function buildDraftHistory(existingItem, actor, now) {
     if (existingItem && existingItem.status === FORM_STATUSES.RETURNED) {
       return appendHistory(existingItem.history, 'Returned form saved as draft again', actor, now);
@@ -931,6 +1007,7 @@ function createTrainingRouter(deps) {
     const rosterCollectionMatch = url.pathname.match(/^\/api\/training\/rosters\/?$/);
     const rosterBatchUpsertMatch = url.pathname.match(/^\/api\/training\/rosters\/upsert-batch\/?$/);
     const rosterUpsertMatch = url.pathname.match(/^\/api\/training\/rosters\/upsert\/?$/);
+    const rosterDeleteBatchMatch = url.pathname.match(/^\/api\/training\/rosters\/delete-batch\/?$/);
     const rosterDeleteMatch = url.pathname.match(/^\/api\/training\/rosters\/([^/]+)\/delete\/?$/);
 
     if (url.pathname === '/api/training/health' && req.method === 'GET') {
@@ -1075,6 +1152,9 @@ function createTrainingRouter(deps) {
     }
     if (rosterUpsertMatch && req.method === 'POST') {
       return handleRosterUpsert(req, res, origin).then(() => true);
+    }
+    if (rosterDeleteBatchMatch && req.method === 'POST') {
+      return handleRosterDeleteBatch(req, res, origin).then(() => true);
     }
     if (rosterDeleteMatch && req.method === 'POST') {
       return handleRosterDelete(req, res, origin, routeId(rosterDeleteMatch[1])).then(() => true);

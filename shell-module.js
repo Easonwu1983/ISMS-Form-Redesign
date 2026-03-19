@@ -113,7 +113,7 @@
         '<div id="change-panel" style="display:none">' +
         '<div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">首次登入需變更密碼</h3><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
         '<div class="login-error" id="change-error">密碼變更失敗</div>' +
-        '<form class="login-form" id="change-form"><input type="hidden" id="change-username"><input type="hidden" id="change-current-password"><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="change-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="change-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' 立即更新密碼</button></form>' +
+        '<form class="login-form" id="change-form"><input type="hidden" id="change-username"><div class="form-group"><label class="form-label">目前密碼</label><input type="password" class="form-input" id="change-current-password" placeholder="請輸入目前密碼" required></div><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="change-pass" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="change-pass-confirm" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' 立即更新密碼</button></form>' +
         '<p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
         '<div id="forgot-panel" style="display:none">' +
         '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h3><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">新密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
@@ -296,6 +296,14 @@
         }
       });
 
+      var loggedInUser = currentUser();
+      if (loggedInUser && loggedInUser.mustChangePassword) {
+        switchPanel('change-panel');
+        document.getElementById('change-username').value = loggedInUser.username || '';
+        var currentPasswordInput = document.getElementById('change-current-password');
+        if (currentPasswordInput) currentPasswordInput.focus();
+      }
+
       refreshIcons();
     }
 
@@ -383,6 +391,10 @@
         renderLogin();
         return;
       }
+      if (currentUser() && currentUser().mustChangePassword) {
+        renderLogin();
+        return;
+      }
       if (isAuthenticatedRemoteBootstrapPending()) {
         renderBootstrapShell();
         return;
@@ -412,6 +424,10 @@
       var u = currentUser();
       if (!u) {
         handleRoute();
+        return;
+      }
+      if (u.mustChangePassword) {
+        renderLogin();
         return;
       }
       document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';

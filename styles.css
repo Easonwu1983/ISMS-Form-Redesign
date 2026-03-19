@@ -2559,24 +2559,112 @@ tbody td:first-child {
   animation: fadeIn 200ms ease;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
+.modal-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 501;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.modal-card,
 .modal {
   background: white;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: 28px;
-  width: 90%;
-  max-width: 560px;
+  width: min(90vw, 560px);
   max-height: 85vh;
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
   animation: slideUp 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  pointer-events: auto;
+}
+
+.modal-card--confirm {
+  max-width: 520px;
+}
+
+.modal-card--prompt {
+  max-width: 560px;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.96);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.modal-close-btn:hover {
+  border-color: rgba(59, 130, 246, 0.35);
+  color: var(--text-primary);
+  box-shadow: 0 8px 16px -14px rgba(15, 23, 42, 0.35);
 }
 
 .modal-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding-right: 46px;
+}
+
+.modal-kicker {
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.modal-body {
+  display: grid;
+  gap: 16px;
+}
+
+.modal-message {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.modal-form {
+  gap: 18px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding-right: 46px;
 }
 
 .modal-title {
@@ -6733,6 +6821,29 @@ tbody tr:hover {
   border: none;
   border-radius: 0;
   box-shadow: none;
+}
+
+.training-roster-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2ch;
+}
+
+.training-roster-check,
+.training-roster-group-select-all {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.training-group-card tr.is-selected > td {
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.training-group-card tr.training-roster-row-focused > td {
+  background: rgba(37, 99, 235, 0.12);
 }
 
 .checklist-empty-card {

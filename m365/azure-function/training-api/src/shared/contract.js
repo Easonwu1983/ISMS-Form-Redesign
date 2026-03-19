@@ -16,7 +16,8 @@ const ROSTER_ACTIONS = {
   LIST: 'training.roster.list',
   UPSERT: 'training.roster.upsert',
   UPSERT_BATCH: 'training.roster.upsert-batch',
-  DELETE: 'training.roster.delete'
+  DELETE: 'training.roster.delete',
+  DELETE_BATCH: 'training.roster.delete-batch'
 };
 
 const FORM_STATUSES = {

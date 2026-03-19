@@ -743,6 +743,7 @@
       submitTrainingRosterUpsert,
       submitTrainingRosterBatchUpsert,
       submitTrainingRosterDelete,
+      submitTrainingRosterBatchDelete,
       getVisibleTrainingForms,
       isTrainingVisible,
       canEditTrainingForm,
@@ -2437,6 +2438,14 @@
     if (!cleanId) return;
     deleteTrainingRosterPerson(cleanId);
   }
+  function deleteTrainingRostersFromStore(ids) {
+    const uniqueIds = Array.from(new Set((Array.isArray(ids) ? ids : []).map(function (value) {
+      return String(value || '').trim();
+    }).filter(Boolean)));
+    uniqueIds.forEach(function (id) {
+      deleteTrainingRosterFromStore(id);
+    });
+  }
   function persistLocalTrainingForm(payload) {
     return upsertTrainingFormInStore(payload);
   }
@@ -2754,6 +2763,43 @@
       deleteTrainingRosterFromStore(cleanId);
       setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式教育訓練名單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, deletedId: cleanId, source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
+    }
+  }
+  async function submitTrainingRosterBatchDelete(payload) {
+    const client = getM365ApiClient();
+    const inputIds = Array.isArray(payload && payload.ids) ? payload.ids : [];
+    const cleanIds = Array.from(new Set(inputIds.map(function (value) {
+      return String(value || '').trim();
+    }).filter(Boolean)));
+    if (!cleanIds.length) {
+      return { ok: true, deletedIds: [], deletedCount: 0, skippedIds: [], source: 'noop' };
+    }
+    if (client.getTrainingMode() !== 'm365-api') {
+      deleteTrainingRostersFromStore(cleanIds);
+      return { ok: true, deletedIds: cleanIds, deletedCount: cleanIds.length, skippedIds: [], source: 'local' };
+    }
+    try {
+      const response = await client.deleteTrainingRosterBatch({ ...payload, ids: cleanIds });
+      const deletedIds = Array.isArray(response && response.deletedIds)
+        ? response.deletedIds.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
+        : cleanIds;
+      deleteTrainingRostersFromStore(deletedIds);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'remote', ready: true, lastRostersSyncAt: new Date().toISOString(), message: '訓練名單已同步刪除', error: '' });
+      return {
+        ok: true,
+        deletedIds,
+        deletedCount: Number(response && response.deletedCount || deletedIds.length),
+        skippedIds: Array.isArray(response && response.skippedIds) ? response.skippedIds : [],
+        source: 'remote'
+      };
+    } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setTrainingRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '訓練名單刪除失敗', error: String(error && error.message || error || '') });
+        throw new Error(buildStrictRemoteError('刪除訓練名單', error));
+      }
+      deleteTrainingRostersFromStore(cleanIds);
+      setTrainingRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '訓練名單刪除改用本機暫存', error: String(error && error.message || error || '') });
+      return { ok: true, deletedIds: cleanIds, deletedCount: cleanIds.length, skippedIds: [], source: 'local-fallback', warning: buildTrainingFallbackWarning(error) };
     }
   }
   let unitContactApplicationModuleApi = null;

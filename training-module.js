@@ -72,6 +72,7 @@
       submitTrainingRosterUpsert,
       submitTrainingRosterBatchUpsert,
       submitTrainingRosterDelete,
+      submitTrainingRosterBatchDelete,
       getVisibleTrainingForms,
       isTrainingVisible,
       canEditTrainingForm,
@@ -367,9 +368,89 @@
       + buildTrainingStatCard('pending', 'user-plus', summary.manual, '填報新增');
   }
 
-  function buildTrainingRosterRow(row) {
-    const rowAttrs = ' data-roster-id="' + esc(row.id) + '" data-roster-name="' + esc(row.name || '') + '" data-roster-unit="' + esc(row.unit || '') + '"';
-    return '<tr' + rowAttrs + '><td>' + esc(row.statsUnit || getTrainingStatsUnit(row.unit)) + '</td><td>' + esc(row.unit) + '</td><td>' + esc(row.name) + '</td><td>' + esc(row.unitName || '—') + '</td><td>' + esc(row.identity || '—') + '</td><td>' + esc(row.jobTitle || '—') + '</td><td>' + (row.source === 'import' ? '管理者匯入' : '填報新增') + '</td><td>' + esc(row.createdBy || '') + '</td><td>' + fmtTime(row.createdAt) + '</td><td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '">' + ic('trash-2', 'btn-icon-svg') + '</button></td></tr>';
+  function getTrainingRosterGroupKey(row) {
+    const unit = String(row && row.unit || row && row.statsUnit || '').trim();
+    return unit || '未指定單位';
+  }
+
+  function groupTrainingRosterEntries(rows) {
+    const groups = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const key = getTrainingRosterGroupKey(row);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          unit: String(row && row.unit || '').trim() || key,
+          statsUnit: String(row && row.statsUnit || getTrainingStatsUnit(row && row.unit) || '').trim() || getTrainingStatsUnit(row && row.unit) || key,
+          rows: []
+        });
+      }
+      groups.get(key).rows.push(row);
+    });
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        rows: sortTrainingRosterEntries(group.rows || [])
+      }))
+      .sort((a, b) => compareZhStroke(a.unit, b.unit) || compareZhStroke(a.statsUnit, b.statsUnit));
+  }
+
+  function buildTrainingRosterGroupSummary(group) {
+    const rows = Array.isArray(group && group.rows) ? group.rows : [];
+    const imported = rows.filter((row) => row.source === 'import').length;
+    const manual = rows.filter((row) => row.source === 'manual').length;
+    const stats = [
+      ['總筆數', rows.length],
+      ['管理者匯入', imported],
+      ['填報新增', manual]
+    ];
+    return '<div class="training-group-summary-grid">' + stats.map(([label, value]) => '<span class="training-group-summary-chip"><strong>' + esc(String(value)) + '</strong><small>' + esc(label) + '</small></span>').join('') + '</div>';
+  }
+
+  function buildTrainingRosterRow(row, rowNumber, selected) {
+    const sourceLabel = row.source === 'import' ? '管理者匯入' : '填報新增';
+    const sourceTone = row.source === 'import' ? 'import' : 'manual';
+    const rowAttrs = [
+      'data-roster-id="' + esc(row.id) + '"',
+      'data-roster-name="' + esc(row.name || '') + '"',
+      'data-roster-unit="' + esc(row.unit || '') + '"',
+      'data-roster-group="' + esc(getTrainingRosterGroupKey(row)) + '"'
+    ].join(' ');
+    return '<tr ' + rowAttrs + '>'
+      + '<td><input type="checkbox" class="training-roster-check" data-roster-id="' + esc(row.id) + '" data-roster-group="' + esc(getTrainingRosterGroupKey(row)) + '" ' + (selected ? 'checked' : '') + '></td>'
+      + '<td><strong class="training-roster-order">' + esc(String(rowNumber || 0)) + '</strong></td>'
+      + '<td><div class="training-person-cell"><div class="training-person-name">' + esc(row.name) + '</div><span class="training-source-tag ' + sourceTone + '">' + esc(sourceLabel) + '</span></div></td>'
+      + '<td>' + esc(row.unitName || '—') + '</td>'
+      + '<td>' + esc(row.identity || '—') + '</td>'
+      + '<td>' + esc(row.jobTitle || '—') + '</td>'
+      + '<td>' + esc(row.createdBy || '') + '</td>'
+      + '<td>' + fmtTime(row.createdAt) + '</td>'
+      + '<td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '">' + ic('trash-2', 'btn-icon-svg') + '</button></td>'
+      + '</tr>';
+  }
+
+  function buildTrainingRosterGroupTable(group, selectedRosterIds, index) {
+    const rows = Array.isArray(group && group.rows) ? group.rows : [];
+    const bodyRows = rows.length
+      ? rows.map((row, rowIndex) => buildTrainingRosterRow(row, rowIndex + 1, selectedRosterIds.has(row.id))).join('')
+      : buildTrainingEmptyTableRow(9, '尚無名單資料', '', 24);
+    const subtitle = '統計單位：' + esc(group.statsUnit || '—') + '｜填報單位：' + esc(group.unit || '—') + '｜可展開 ' + rows.length + ' 位人員';
+    return '<details class="training-group-card training-roster-group-card" ' + (index === 0 ? 'open' : '') + '>'
+      + '<summary class="training-group-summary">'
+      + '<div><span class="training-group-title">' + esc(group.unit || '未指定單位') + '</span><div class="training-group-subtitle">' + subtitle + '</div>' + buildTrainingRosterGroupSummary(group) + '</div>'
+      + '<div class="training-group-meta"><span class="training-inline-status">' + esc(String(rows.length || 0)) + ' 人</span><span class="training-group-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div>'
+      + '</summary>'
+      + buildTrainingTableMarkup('<th style="width:56px"><input type="checkbox" class="training-roster-group-select-all" data-roster-group="' + esc(group.key || '') + '"></th><th style="width:68px">編號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:160px">建立者</th><th style="width:160px">建立時間</th><th style="width:120px">操作</th>', bodyRows)
+      + '</details>';
+  }
+
+  function buildTrainingRosterRows(rosters, selectedRosterIds) {
+    const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
+    const groups = groupTrainingRosterEntries(rosters);
+    if (!groups.length) {
+      return '<div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無名單資料</div><div class="empty-state-desc">請先由管理者匯入名單，或由填報人新增名單外人員。</div></div>';
+    }
+    return groups.map((group, index) => buildTrainingRosterGroupTable(group, selectedSet, index)).join('');
   }
 
   function buildTrainingRosterFileCopy(fileName) {
@@ -467,20 +548,22 @@
     const focusState = captureTrainingRosterFocusState() || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null);
     const confirmed = await openConfirmDialog('\u78ba\u5b9a\u522a\u9664 ' + roster.unit + ' \u7684 ' + roster.name + ' \u55ce\uff1f\u5df2\u586b\u5831\u7684\u6b77\u53f2\u8cc7\u6599\u4e0d\u6703\u88ab\u522a\u9664\u3002', { title: '\u78ba\u8a8d\u522a\u9664\u540d\u55ae', confirmText: '\u78ba\u8a8d\u522a\u9664', cancelText: '\u53d6\u6d88' });
     if (!confirmed) return;
-    const result = await submitTrainingRosterDelete(id, {
-      id,
-      actorName: currentUser()?.name || '',
-      actorUsername: currentUser()?.username || ''
+    await runWithBusyState('正在刪除名單…', async () => {
+      const result = await submitTrainingRosterBatchDelete({
+        ids: [id],
+        actorName: currentUser()?.name || '',
+        actorUsername: currentUser()?.username || ''
+      });
+      await renderTrainingRoster({
+        skipSync: true,
+        restoreFocusState: focusState || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null)
+      });
+      const deletedCount = Number(result && result.deletedCount || 0);
+      toast(deletedCount > 1 ? ('名單已刪除，並同步清理重複資料 ' + deletedCount + ' 筆') : '名單已刪除', 'success');
+      if (result && result.warning) {
+        toast(result.warning, 'info');
+      }
     });
-    await renderTrainingRoster({
-      skipSync: true,
-      restoreFocusState: focusState || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null)
-    });
-    const deletedCount = Number(result && result.raw && result.raw.deletedCount || 0);
-    toast(deletedCount > 1 ? ('名單已刪除，並同步清理重複資料 ' + deletedCount + ' 筆') : '名單已刪除', 'success');
-    if (result && result.warning) {
-      toast(result.warning, 'info');
-    }
   }
 
   function handleTrainingPrintDetail(id) {
@@ -1445,11 +1528,6 @@
     bindCopyButtons();
   }
 
-  function buildTrainingRosterRows(rosters) {
-    if (!rosters.length) return buildTrainingEmptyTableRow(10, '尚無名單資料', '', 24);
-    return rosters.map((row) => buildTrainingRosterRow(row)).join('');
-  }
-
   function captureTrainingRosterFocusState() {
     const active = document.activeElement;
     if (!active || typeof active.closest !== 'function') return null;
@@ -1548,6 +1626,10 @@
     }
     if (!row) row = rows[0];
     if (!row) return false;
+    const groupCard = row.closest('.training-roster-group-card');
+    if (groupCard && !groupCard.open) {
+      groupCard.open = true;
+    }
     row.classList.add('training-roster-row-focused');
 
     let target = null;
@@ -1605,6 +1687,10 @@
     });
     if (!matchedRows.length) return;
     matchedRows.forEach((row) => row.classList.add('training-roster-row-focused'));
+    matchedRows.forEach((row) => {
+      const groupCard = row.closest('.training-roster-group-card');
+      if (groupCard && !groupCard.open) groupCard.open = true;
+    });
     matchedRows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     const preferredFocus = matchedRows[0].querySelector('button[data-testid^="training-roster-delete-"]')
       || matchedRows[0].querySelector('.training-row-check')
@@ -1645,11 +1731,11 @@
     if (changed) saveTrainingStore(store);
   }
 
-  function buildTrainingRosterPage(summary, rowsHtml, hiddenCount) {
+  function buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedCount) {
     const hiddenNote = hiddenCount
       ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
       : '';
-    const rosterActions = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">名單管理</span><div class="training-table-subtitle">可依單位匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</div></div><div class="training-group-header-actions"><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></div><div id="training-roster-import-wrap" style="display:none">' + buildTrainingRosterImportCard() + '</div>' + buildTrainingTableMarkup('<th>統計單位</th><th>填報單位</th><th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>來源</th><th>建立者</th><th>建立時間</th><th>操作</th>', rowsHtml) + '</div>';
+    const rosterActions = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">名單管理</span><div class="training-table-subtitle">依單位分區展開檢視；填報人只能新增名單外人員，不能刪除原名單。</div></div><div class="training-group-header-actions"><span class="training-inline-status" id="training-roster-selected-count">' + esc(selectedCount > 0 ? ('已選取 ' + selectedCount + ' 筆') : '尚未選取人員') + '</span><button type="button" class="btn btn-secondary btn-sm" id="training-roster-select-all">' + ic('check-square', 'icon-sm') + ' 全選</button><button type="button" class="btn btn-secondary btn-sm" id="training-roster-clear-selection">' + ic('square', 'icon-sm') + ' 清除選取</button><button type="button" class="btn btn-danger btn-sm" id="training-roster-delete-selected" ' + (selectedCount ? '' : 'disabled') + '>' + ic('trash-2', 'icon-sm') + ' 刪除所選</button><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></div><div id="training-roster-import-wrap" style="display:none">' + buildTrainingRosterImportCard() + '</div><div class="training-group-stack" id="training-roster-groups">' + (groupsHtml || buildTrainingEmptyTableRow(9, '尚無名單資料', '', 24)) + '</div></div>';
     return '<div class="animate-in">'
       + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><div><a href="#training" class="btn btn-secondary">← 返回統計</a></div></div>'
       + '<div class="stats-grid">'
@@ -1682,6 +1768,11 @@
     const focusState = opts.restoreFocusState
       ? { ...opts.restoreFocusState }
       : (captureTrainingRosterFocusState() || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null));
+    const selectedRosterIds = new Set(
+      (Array.isArray(opts.selectedRosterIds) ? opts.selectedRosterIds : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    );
 
     const rawRosters = sortTrainingRosterEntries(getAllTrainingRosters().slice()).sort((a, b) => {
       const statsCompare = compareZhStroke(String(a.statsUnit || getTrainingStatsUnit(a.unit)), String(b.statsUnit || getTrainingStatsUnit(b.unit)));
@@ -1697,8 +1788,8 @@
       imported: rosters.filter((row) => row.source === 'import').length,
       manual: rosters.filter((row) => row.source === 'manual').length
     };
-    const rows = buildTrainingRosterRows(rosters);
-    document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, rows, hiddenCount);
+    const groupsHtml = buildTrainingRosterRows(rosters, selectedRosterIds);
+    document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size);
 
     const toggleBtn = document.getElementById('training-roster-toggle-import');
     const importWrap = document.getElementById('training-roster-import-wrap');
@@ -1708,6 +1799,128 @@
         importWrap.style.display = visible ? 'none' : '';
       });
     }
+
+    const selectedCountLabel = document.getElementById('training-roster-selected-count');
+    const deleteSelectedButton = document.getElementById('training-roster-delete-selected');
+    const selectAllButton = document.getElementById('training-roster-select-all');
+    const clearSelectionButton = document.getElementById('training-roster-clear-selection');
+
+    function getRosterRowsInDom() {
+      return Array.from(document.querySelectorAll('tr[data-roster-id]'));
+    }
+
+    function syncRosterSelectionDom() {
+      const rows = getRosterRowsInDom();
+      rows.forEach((row) => {
+        const rosterId = String(row.dataset.rosterId || '').trim();
+        const checked = selectedRosterIds.has(rosterId);
+        row.classList.toggle('is-selected', checked);
+        const checkbox = row.querySelector('.training-roster-check');
+        if (checkbox) checkbox.checked = checked;
+      });
+      document.querySelectorAll('.training-roster-group-select-all').forEach((checkbox) => {
+        const groupKey = String(checkbox.dataset.rosterGroup || '').trim();
+        const groupRows = rows.filter((row) => String(row.dataset.rosterGroup || '').trim() === groupKey);
+        const checkedCount = groupRows.filter((row) => selectedRosterIds.has(String(row.dataset.rosterId || '').trim())).length;
+        checkbox.checked = !!groupRows.length && checkedCount === groupRows.length;
+        checkbox.indeterminate = checkedCount > 0 && checkedCount < groupRows.length;
+      });
+      if (selectedCountLabel) {
+        selectedCountLabel.textContent = selectedRosterIds.size ? ('已選取 ' + selectedRosterIds.size + ' 筆') : '尚未選取人員';
+      }
+      if (deleteSelectedButton) {
+        deleteSelectedButton.disabled = !selectedRosterIds.size;
+      }
+    }
+
+    async function deleteSelectedRosters(selectedIds) {
+      const ids = Array.from(new Set((selectedIds || []).map((value) => String(value || '').trim()).filter(Boolean)));
+      if (!ids.length) {
+        toast('請先選取要刪除的人員', 'error');
+        return;
+      }
+      const focusState = captureTrainingRosterFocusState() || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null);
+      const previewRows = rosters.filter((row) => ids.includes(String(row.id || '').trim()));
+      const previewText = previewRows.slice(0, 3).map((row) => row.name).filter(Boolean).join('、');
+      const confirmed = await openConfirmDialog('確定刪除已選取的 ' + ids.length + ' 位人員嗎？' + (previewText ? ('（' + previewText + (previewRows.length > 3 ? '…' : '') + '）') : '') + ' 已填報的歷史資料不會被刪除。', { title: '確認刪除所選', confirmText: '確認刪除', cancelText: '取消' });
+      if (!confirmed) return;
+      await runWithBusyState('正在刪除所選名單…', async () => {
+        const result = await submitTrainingRosterBatchDelete({
+          ids,
+          actorName: currentUser()?.name || '',
+          actorUsername: currentUser()?.username || ''
+        });
+        selectedRosterIds.clear();
+        await renderTrainingRoster({
+          skipSync: true,
+          restoreFocusState: focusState,
+          selectedRosterIds: []
+        });
+        const deletedCount = Number(result && result.deletedCount || ids.length);
+        toast(deletedCount > 1 ? ('名單已刪除，並同步清理重複資料 ' + deletedCount + ' 筆') : '名單已刪除', 'success');
+        if (result && result.warning) {
+          toast(result.warning, 'info');
+        }
+      });
+    }
+
+    syncRosterSelectionDom();
+
+    if (selectAllButton) {
+      selectAllButton.addEventListener('click', () => {
+        getRosterRowsInDom().forEach((row) => {
+          const rosterId = String(row.dataset.rosterId || '').trim();
+          if (rosterId) selectedRosterIds.add(rosterId);
+        });
+        syncRosterSelectionDom();
+      });
+    }
+
+    if (clearSelectionButton) {
+      clearSelectionButton.addEventListener('click', () => {
+        selectedRosterIds.clear();
+        syncRosterSelectionDom();
+      });
+    }
+
+    if (deleteSelectedButton) {
+      deleteSelectedButton.addEventListener('click', () => {
+        deleteSelectedRosters(Array.from(selectedRosterIds));
+      });
+    }
+
+    document.querySelectorAll('.training-roster-group-select-all').forEach((checkbox) => {
+      checkbox.addEventListener('change', (event) => {
+        const groupKey = String(event.target.dataset.rosterGroup || '').trim();
+        const rows = getRosterRowsInDom().filter((row) => String(row.dataset.rosterGroup || '').trim() === groupKey);
+        rows.forEach((row) => {
+          const rosterId = String(row.dataset.rosterId || '').trim();
+          if (!rosterId) return;
+          if (event.target.checked) selectedRosterIds.add(rosterId); else selectedRosterIds.delete(rosterId);
+        });
+        syncRosterSelectionDom();
+      });
+    });
+
+    document.querySelectorAll('.training-roster-check').forEach((checkbox) => {
+      checkbox.addEventListener('change', (event) => {
+        const rosterId = String(event.target.dataset.rosterId || '').trim();
+        if (!rosterId) return;
+        if (event.target.checked) selectedRosterIds.add(rosterId); else selectedRosterIds.delete(rosterId);
+        syncRosterSelectionDom();
+      });
+    });
+
+    document.querySelectorAll('button[data-testid^="training-roster-delete-"]').forEach((button) => {
+      button.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const rosterId = String(button.dataset.id || '').trim();
+        if (!rosterId) return;
+        await deleteSelectedRosters([rosterId]);
+      });
+    });
+
     initUnitCascade('training-import-unit', '', { disabled: false });
     const fileInput = document.getElementById('training-import-file');
     const fileCopy = document.getElementById('training-import-file-copy');

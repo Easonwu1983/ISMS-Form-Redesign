@@ -17,6 +17,7 @@
                     "test:training:import:persistence":  "node scripts/training-import-persistence-smoke.cjs",
                     "test:training:acceptance":  "node scripts/training-flow-acceptance.cjs",
                     "test:training:roster-focus":  "node scripts/training-roster-focus-smoke.cjs",
+                    "test:training:roster-batch-delete":  "node scripts/training-roster-batch-delete-smoke.cjs",
                     "test:training:all":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs training\"",
                     "test:bonus:all":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs bonus\"",
                     "test:unit-contact:smoke":  "node scripts/run-with-local-server.cjs \"node scripts/unit-contact-public-smoke.cjs\"",

@@ -1605,6 +1605,25 @@
       };
     }
 
+    async function deleteTrainingRosterBatch(payload) {
+      const config = getConfig();
+      const body = await requestTrainingRosters('/delete-batch', {
+        method: 'POST',
+        timeoutMs: Number(config.trainingBatchTimeoutMs || config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 45000),
+        body: buildTrainingEnvelope(TRAINING_ROSTER_ACTIONS.DELETE_BATCH, payload)
+      });
+      const items = normalizeRemoteTrainingRosters(body);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getTrainingMode(),
+        items,
+        deletedIds: Array.isArray(body && body.deletedIds) ? body.deletedIds.map(cleanText).filter(Boolean) : [],
+        deletedCount: Number(body && body.deletedCount || 0),
+        skippedIds: Array.isArray(body && body.skippedIds) ? body.skippedIds.map(cleanText).filter(Boolean) : [],
+        raw: body
+      };
+    }
+
     async function submitUnitContactApplication(payload) {
       const normalized = normalizePayload(payload);
       assertApplicationPayload(normalized);
@@ -1725,7 +1744,8 @@
       listTrainingRosters,
       upsertTrainingRoster,
       upsertTrainingRosterBatch,
-      deleteTrainingRoster
+      deleteTrainingRoster,
+      deleteTrainingRosterBatch
     };
   };
 })();
