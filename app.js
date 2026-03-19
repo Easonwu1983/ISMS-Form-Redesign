@@ -3716,9 +3716,23 @@
     await ensureAuthenticatedRemoteBootstrap();
     installAppEventListeners();
     renderApp();
-    void migrateAttachmentStores().catch(function (error) {
-      console.warn('attachment migration failed', error);
-    });
+    const scheduleAttachmentMigration = function () {
+      const run = function () {
+        void migrateAttachmentStores().catch(function (error) {
+          console.warn('attachment migration failed', error);
+        });
+      };
+      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 2000 });
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        window.setTimeout(run, 0);
+        return;
+      }
+      run();
+    };
+    scheduleAttachmentMigration();
     lastStableHash = window.location.hash || '#dashboard';
     refreshIcons();
     if (typeof window !== 'undefined') {
