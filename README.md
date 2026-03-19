@@ -1,156 +1,77 @@
 # ISMS Form Redesign
 
-國立臺灣大學 ISMS 內部稽核管考追蹤系統前端原型與回歸測試專案。
+ISMS 管考與追蹤平台前後端專案。
 
-目前已模組化為：
+## 簡介
 
-- `app.js`: 核心殼層與委派入口
-- `auth-module.js`: 登入與 session
-- `data-module.js`: `localStorage` schema / migration / store
-- `shell-module.js`: header / sidebar / route shell
-- `case-module.js`: 矯正單流程
-- `checklist-module.js`: 內稽檢核表流程
-- `training-module.js`: 資安教育訓練流程
-- `admin-module.js`: 系統管理與資料健康檢查
-- `workflow-support-module.js`: 編號、匯出、匯入與上傳輔助
+這個專案提供以下主要模組：
 
-## 啟動
+- 矯正單
+- 內稽檢核表
+- 資安教育訓練統計
+- 單位管理人申請
+- 帳號管理
+- 稽核追蹤
+- 附件預覽與下載
 
-先安裝套件：
+目前 live 入口：
+
+- [正式入口](https://isms-campus-portal.pages.dev/)
+- [校內入口](http://140.112.3.65:8088/)
+
+## 開發環境
+
+安裝依賴：
 
 ```bash
 npm ci
 ```
 
-啟動本地預覽：
+本機預覽：
 
 ```bash
 npm run preview:start
 ```
 
-或在 Windows 直接雙擊：
+## 測試
 
-- `start-local.cmd`
+常用測試命令：
 
-本地網址：
-
-```text
-http://127.0.0.1:8080/
-```
-
-## 測試分層
-
-### 標準回歸
-
-這組適合日常修改後固定跑，也會納入 CI：
-
-```bash
-npm run test:all
-```
-
-內容包含：
-
-- 角色與權限流程
-- 教育訓練流程
-- 上傳安全驗證
-- 單位管理者 / 填報人日常 UAT 模擬
-- 大量資料壓力測試
-
-### 本機加值回歸
-
-這組適合發版前在本機補跑：
-
-```bash
-npm run test:all:plus
-```
-
-除了標準回歸，還會額外跑：
-
-- Chrome / Edge `125%`、`150%` 縮放檢查
-
-如果本機沒有安裝 Chrome 或 Edge，縮放測試會明確標示 `skipped`。
-
-### Windows 本機一鍵入口
-
-```bash
-npm run test:role:all:local
-npm run test:training:all:local
-npm run test:all:local
-```
-
-## 主要測試指令
-
-- `npm run test:role:all`
-- `npm run test:training:all`
-- `npm run test:bonus:all`
+- `npm run test:all`
+- `npm run test:live:all`
+- `npm run test:security`
 - `npm run test:upload:security`
-- `npm run test:uat:daily`
-- `npm run test:stress`
+- `npm run test:training:all`
+- `npm run test:role:all`
 - `npm run test:zoom:browsers`
 
-## 測試產物
+回歸測試與煙霧測試結果會輸出到：
 
-所有測試結果會輸出到：
-
+- `logs/`
 - `test-artifacts/`
 
-JSON 結果、下載檔、fixture 與 screenshot 都會依日期分資料夾保存。
+## 部署
+
+專案會使用以下幾種部署模式：
+
+- Cloudflare Pages
+- 校內 Windows host + Ubuntu guest backend
+- Azure Static Web Apps / Azure Web App 手動部署工作流
+
+相關腳本與工作流可直接從 `scripts/` 與 `.github/workflows/` 目錄查看。
 
 ## 文件
 
-- `docs/qa-regression.md`
-- `docs/uat-daily-checklist.md`
-- `docs/pre-launch-checklist.md`
+建議先看：
+
+- `docs/project-execution-flow.md`
 - `docs/system-operation-manual.md`
-- `docs/module-architecture.md`
-- `docs/engineering-roadmap.md`
-- `docs/m365-unit-contact-implementation-blueprint.md`
-- `docs/m365-a3-unit-contact-blueprint.md`
-- `docs/m365-a3-implementation-worksheet.md`
-- `docs/m365-unit-contact-setup-checklist.md`
+- `docs/qa-regression.md`
 - `docs/m365-unit-contact-api-contract.md`
-- `docs/m365-unit-contact-go-live-runbook.md`
+- `docs/cloudflare-pages-and-tunnel-runbook.md`
 
-## M365 Unit Contact Flow
+## 重要提醒
 
-The new public-facing `申請單位資安窗口` flow now exists in the frontend and is ready to move from local emulation to M365-backed endpoints.
-
-Recommended A3 path:
-
-- no tenant admin available: `a3SiteOwnerFlow`
-- tenant admin available: `a3CampusFlow`
-- future API upgrade: `azureFunctionCampus`
-
-Core files:
-
-- `unit-contact-application-module.js`
-- `m365-api-client.js`
-- `m365-config.js`
-- `m365/sharepoint/unit-contact-lists.schema.json`
-- `m365/power-automate/unit-contact-flows.md`
-- `m365/azure-function/unit-contact-api/`
-- `docs/m365-unit-contact-api-contract.md`
-- `docs/m365-a3-site-owner-fallback.md`
-- `docs/m365-a3-site-owner-request-template.md`
-
-Helpful commands:
-
-- `npm run m365:a3:site-owner:health`
-- `npm run m365:a3:site-owner:provision`
-- `npm run m365:a3:health`
-- `npm run m365:a3:provision`
-
-## NotebookLM
-
-本專案已整合 NotebookLM 工作流，可用：
-
-```bash
-notebooklm-workflow.cmd doctor
-notebooklm-workflow.cmd login
-```
-
-Notebook alias：
-
-```text
-isms-form-redesign-dev
-```
+- 不要把密鑰、token、password 寫進 repo。
+- 新增功能後，先跑對應 smoke，再更新 live。
+- 若修改登入、附件、教育訓練或單位申請流程，請同步更新對應 smoke。

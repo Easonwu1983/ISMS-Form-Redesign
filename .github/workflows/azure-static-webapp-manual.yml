@@ -8,6 +8,9 @@ on:
         required: true
         default: "https://YOUR-BACKEND.azurewebsites.net"
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

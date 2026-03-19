@@ -8,6 +8,9 @@ on:
         required: true
         default: "isms-campus-backend"
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
