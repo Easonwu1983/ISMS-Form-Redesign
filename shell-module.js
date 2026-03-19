@@ -191,10 +191,12 @@
             }
             renderApp();
           } else {
-            document.getElementById('login-error').classList.add('show');
+            var loginError = document.getElementById('login-error');
+            if (loginError) loginError.classList.add('show');
           }
         } catch (error) {
-          document.getElementById('login-error').classList.add('show');
+          var loginError = document.getElementById('login-error');
+          if (loginError) loginError.classList.add('show');
           toast(String(error && error.message || error || '登入失敗'), 'error');
         }
       });
@@ -207,20 +209,23 @@
         var confirmPassword = document.getElementById('change-pass-confirm').value;
         if (nextPassword !== confirmPassword) {
           document.getElementById('change-error').textContent = '兩次輸入的新密碼不一致';
-          document.getElementById('change-error').classList.add('show');
+          var changeError = document.getElementById('change-error');
+          if (changeError) changeError.classList.add('show');
           return;
         }
         var changePasswordError = validatePasswordComplexity(nextPassword);
         if (changePasswordError) {
           document.getElementById('change-error').textContent = changePasswordError;
-          document.getElementById('change-error').classList.add('show');
+          var changeError = document.getElementById('change-error');
+          if (changeError) changeError.classList.add('show');
           return;
         }
         try {
           var updatedUser = await changePassword({ username: username, currentPassword: currentPassword, newPassword: nextPassword });
           if (!updatedUser) {
             document.getElementById('change-error').textContent = '密碼變更失敗';
-            document.getElementById('change-error').classList.add('show');
+            var changeError = document.getElementById('change-error');
+            if (changeError) changeError.classList.add('show');
             return;
           }
           toast('密碼已更新，請重新登入系統', 'success');
@@ -229,7 +234,8 @@
           document.getElementById('login-pass').value = '';
         } catch (error) {
           document.getElementById('change-error').textContent = String(error && error.message || error || '密碼變更失敗');
-          document.getElementById('change-error').classList.add('show');
+          var changeError = document.getElementById('change-error');
+          if (changeError) changeError.classList.add('show');
         }
       });
 
@@ -255,10 +261,12 @@
         try {
           var resetResult = await resetPasswordByEmail({ username: username, email: email });
           if (!resetResult) {
-            document.getElementById('forgot-error').classList.add('show');
+            var forgotError = document.getElementById('forgot-error');
+            if (forgotError) forgotError.classList.add('show');
             return;
           }
-          document.getElementById('forgot-error').classList.remove('show');
+          var forgotError = document.getElementById('forgot-error');
+          if (forgotError) forgotError.classList.remove('show');
           document.getElementById('reset-username').textContent = resetResult.user.username;
           document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || '依系統設定';
           var deliveredByMail = !!(resetResult.delivery && resetResult.delivery.sent);
@@ -273,7 +281,8 @@
           toast(deliveredByMail ? '重設信已寄出' : '目前無法寄送重設信', deliveredByMail ? 'success' : 'error');
         } catch (error) {
           document.getElementById('forgot-error').textContent = String(error && error.message || error || '密碼重設失敗');
-          document.getElementById('forgot-error').classList.add('show');
+          var forgotError = document.getElementById('forgot-error');
+          if (forgotError) forgotError.classList.add('show');
         }
       });
 
