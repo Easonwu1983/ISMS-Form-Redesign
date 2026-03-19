@@ -364,7 +364,7 @@
     var heroSide = '<div class="dashboard-hero-side"><div class="dashboard-focus-card"><div class="dashboard-focus-label">今日焦點</div><div class="dashboard-focus-text">' + focusLine + '</div><div class="dashboard-focus-list">'
       + '<div class="dashboard-focus-item"><span>下一個截止</span><strong>' + (nextDueItem ? (esc(nextDueItem.id) + ' · ' + fmt(nextDueItem.correctiveDueDate)) : '目前無') + '</strong></div>'
       + '<div class="dashboard-focus-item"><span>進行中案件</span><strong>' + openCount + '</strong></div>'
-      + '<div class="dashboard-focus-item"><span>最新處理人</span><strong>' + (recent[0] ? esc(recent[0].handlerName) : '—') + '</strong></div>'
+      + '<div class="dashboard-focus-item"><span>最新處理人</span><strong>' + (snapshot.recent[0] ? esc(snapshot.recent[0].handlerName) : '—') + '</strong></div>'
       + '</div></div>';
 
     document.getElementById('app').innerHTML = '<div class="animate-in">'
