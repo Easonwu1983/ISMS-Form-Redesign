@@ -226,7 +226,8 @@
       }
       const lockKey = cleanKey + '::__lock__';
       const owner = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-      const timeoutMs = 2500;
+      // Keep lock acquisition short to avoid freezing the main thread during contention.
+      const timeoutMs = 120;
       const deadline = Date.now() + timeoutMs;
       while (Date.now() <= deadline) {
         const current = parseStoreLockPayload(localStorage.getItem(lockKey));
@@ -239,7 +240,7 @@
             return token;
           }
         }
-        const pauseUntil = Date.now() + 5;
+        const pauseUntil = Date.now() + 1;
         while (Date.now() < pauseUntil) {
           // short spin to keep the lock synchronous and deterministic in browser storage
         }
