@@ -306,6 +306,20 @@
     return isOverdue(item) ? '已逾期' : item.status;
   }
 
+  let dashboardRenderToken = 0;
+
+  function scheduleDashboardHydration(task) {
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(task, { timeout: 1500 });
+      return;
+    }
+    if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+      window.setTimeout(task, 0);
+      return;
+    }
+    task();
+  }
+
   function renderDashboard() {
     var items = getVisibleItems();
     var snapshot = buildDashboardSnapshot(items);
@@ -344,11 +358,6 @@
       return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>';
     }).join('');
 
-    var recentRows = snapshot.recent.length ? snapshot.recent.map(function (entry) {
-      var lastActivityText = entry.lastActivity ? fmtTime(new Date(entry.lastActivity).toISOString()) : '—';
-      return renderDashboardTableRow(entry.item, lastActivityText);
-    }).join('') : buildCaseEmptyTableRow(7, 'inbox', '沒有矯正單資料', 40);
-
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     var nextDueItem = snapshot.nextDueItem;
     var focusLine = overdue > 0
@@ -367,6 +376,12 @@
       + '<div class="dashboard-focus-item"><span>最新處理人</span><strong>' + (snapshot.recent[0] ? esc(snapshot.recent[0].handlerName) : '—') + '</strong></div>'
       + '</div></div>';
 
+    var renderToken = ++dashboardRenderToken;
+    var chartSlotId = 'dashboard-chart-slot';
+    var recentSlotId = 'dashboard-recent-slot';
+    var recentShell = '<div id="' + recentSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入最近矯正單</div>';
+    var chartShell = '<div id="' + chartSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入狀態分布</div>';
+
     document.getElementById('app').innerHTML = '<div class="animate-in">'
         + '<section class="dashboard-hero"><div class="dashboard-hero-grid"><div class="dashboard-hero-copy"><div class="dashboard-hero-eyebrow">矯正單管考總覽</div><h1 class="dashboard-hero-title">儀表板</h1><p class="dashboard-hero-text">集中掌握矯正單進度、逾期風險與最近活動，讓主管與承辦人可以在同一個入口快速判斷優先順序。</p><div class="dashboard-meta-row">' + heroMeta + '</div><div class="dashboard-hero-actions">' + createBtn + '</div></div>' + heroSide + '</div></section>'
       + '<div class="stats-grid">'
@@ -376,12 +391,28 @@
       + buildCaseStatCard('closed', 'check-circle-2', closedM, '本月結案')
       + '</div>'
       + '<div class="dashboard-grid">'
-      + buildCaseCard('<span class="card-title">狀態分布</span>', buildDashboardStatusOverview(snapshot) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { cardClass: 'dashboard-panel dashboard-chart-panel' })
-      + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>最後活動</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', cardClass: 'dashboard-panel dashboard-table-panel', wrapperClass: 'dashboard-recent-table-wrapper', tableClass: 'dashboard-recent-table' })
+      + buildCaseCard('<span class="card-title">狀態分布</span>', chartShell, { cardClass: 'dashboard-panel dashboard-chart-panel' })
+      + buildCaseCard('<span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', recentShell, { cardClass: 'dashboard-panel dashboard-table-panel' })
         + '</div></div>';
 
     refreshIcons();
     bindCopyButtons();
+    scheduleDashboardHydration(function () {
+      if (renderToken !== dashboardRenderToken) return;
+      var chartSlot = document.getElementById(chartSlotId);
+      var recentSlot = document.getElementById(recentSlotId);
+      if (!chartSlot || !recentSlot) return;
+      var recentRows = snapshot.recent.length ? snapshot.recent.map(function (entry) {
+        var lastActivityText = entry.lastActivity ? fmtTime(new Date(entry.lastActivity).toISOString()) : '—';
+        return renderDashboardTableRow(entry.item, lastActivityText);
+      }).join('') : buildCaseEmptyTableRow(7, 'inbox', '沒有矯正單資料', 40);
+      chartSlot.classList.remove('dashboard-card-loading');
+      chartSlot.innerHTML = buildDashboardStatusOverview(snapshot) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>';
+      recentSlot.classList.remove('dashboard-card-loading');
+      recentSlot.innerHTML = buildCaseTableMarkup('<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>最後活動</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { wrapperClass: 'dashboard-recent-table-wrapper', tableClass: 'dashboard-recent-table' });
+      refreshIcons();
+      bindCopyButtons(recentSlot);
+    });
   }
 
   var curFilter = '全部', curSearch = '';
