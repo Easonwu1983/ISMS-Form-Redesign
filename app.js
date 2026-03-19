@@ -537,6 +537,7 @@
       ROLES,
       currentUser,
         canCreateCAR,
+        canManageUsers,
         canReview,
         canReviewItem,
         canAccessItem,
