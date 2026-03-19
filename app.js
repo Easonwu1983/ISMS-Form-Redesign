@@ -3752,10 +3752,27 @@
 
   async function initApp() {
     installGlobalDelegation();
-    getDataModule().migrateAllStores();
     await ensureAuthenticatedRemoteBootstrap();
     installAppEventListeners();
     renderApp();
+    const scheduleStoreMigration = function () {
+      const run = function () {
+        try {
+          getDataModule().migrateAllStores();
+        } catch (error) {
+          console.warn('store migration failed', error);
+        }
+      };
+      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 2000 });
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        window.setTimeout(run, 0);
+        return;
+      }
+      run();
+    };
     const scheduleLocalWarmup = function () {
       const run = function () {
         try {
@@ -3802,6 +3819,7 @@
       run();
     };
     scheduleAttachmentMigration();
+    scheduleStoreMigration();
     lastStableHash = window.location.hash || '#dashboard';
     refreshIcons();
     if (typeof window !== 'undefined') {
