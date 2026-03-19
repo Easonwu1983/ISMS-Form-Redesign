@@ -3165,7 +3165,23 @@
     }, {});
   };
   function refreshIcons() { return getUiModule().refreshIcons(); }
-  function getVisibleItems(user = currentUser()) { return getPolicyModule().getVisibleItems(user); }
+  let visibleItemsCacheKey = '';
+  let visibleItemsCacheValue = [];
+  function getVisibleItems(user = currentUser()) {
+    const rawDataFingerprint = String(typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem(DATA_KEY) || '' : '');
+    const current = user || null;
+    const cacheKey = [
+      rawDataFingerprint,
+      String(current && current.username || ''),
+      String(current && current.role || ''),
+      String(current && current.activeUnit || ''),
+      Array.isArray(current && current.units) ? current.units.join('|') : ''
+    ].join('::');
+    if (visibleItemsCacheKey === cacheKey) return visibleItemsCacheValue.slice();
+    visibleItemsCacheValue = getPolicyModule().getVisibleItems(user);
+    visibleItemsCacheKey = cacheKey;
+    return visibleItemsCacheValue.slice();
+  }
   function canAccessItem(item, user = currentUser()) { return getPolicyModule().canAccessItem(item, user); }
   function isItemHandler(item, user = currentUser()) { return getPolicyModule().isItemHandler(item, user); }
   function canRespondItem(item, user = currentUser()) { return getPolicyModule().canRespondItem(item, user); }
