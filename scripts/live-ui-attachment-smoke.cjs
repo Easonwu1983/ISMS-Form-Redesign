@@ -340,10 +340,54 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'detail/' + correctiveCaseId);
       await page.waitForSelector('.detail-header');
-      await page.click('[data-testid="case-transition-review"]');
-      await page.waitForTimeout(300);
-      await page.click('[data-testid="case-transition-tracking"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="case-transition-review"]', { timeout: 15000 });
+      const reviewResult = await page.evaluate(async (id) => {
+        const api = window._m365ApiClient;
+        const user = window._authModule?.currentUser?.() || {};
+        if (!api || typeof api.reviewCorrectiveAction !== 'function') {
+          throw new Error('missing corrective action api client');
+        }
+        const result = await api.reviewCorrectiveAction(id, {
+          decision: 'start_review',
+          actorName: user.name || user.username || 'admin',
+          actorUsername: user.username || 'admin'
+        });
+        return {
+          status: result && result.item && result.item.status,
+          reviewResult: result && result.item && result.item.reviewResult
+        };
+      }, correctiveCaseId);
+      if (!reviewResult || reviewResult.status !== '審核中') {
+        throw new Error(`review did not transition to 審核中: ${JSON.stringify(reviewResult)}`);
+      }
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await waitForAppReady(page);
+      await gotoHash(page, 'detail/' + correctiveCaseId, { handleUnsaved: false });
+      await page.waitForSelector('.detail-header');
+      await page.waitForSelector('[data-testid="case-transition-tracking"]', { timeout: 15000 });
+      const trackingResult = await page.evaluate(async (id) => {
+        const api = window._m365ApiClient;
+        const user = window._authModule?.currentUser?.() || {};
+        if (!api || typeof api.reviewCorrectiveAction !== 'function') {
+          throw new Error('missing corrective action api client');
+        }
+        const result = await api.reviewCorrectiveAction(id, {
+          decision: 'tracking',
+          actorName: user.name || user.username || 'admin',
+          actorUsername: user.username || 'admin'
+        });
+        return {
+          status: result && result.item && result.item.status,
+          reviewResult: result && result.item && result.item.reviewResult
+        };
+      }, correctiveCaseId);
+      if (!trackingResult || trackingResult.status !== '追蹤中') {
+        throw new Error(`tracking transition did not reach 追蹤中: ${JSON.stringify(trackingResult)}`);
+      }
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await waitForAppReady(page);
+      await gotoHash(page, 'detail/' + correctiveCaseId, { handleUnsaved: false });
+      await page.waitForSelector('.detail-header');
       await saveScreenshot(page, 'corrective-tracking-state.png');
       return 'moved to tracking';
     });
@@ -383,8 +427,26 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'detail/' + correctiveCaseId);
       await page.waitForSelector('.detail-header');
-      await page.click('[data-testid="pending-tracking-approve-close"]');
-      await page.waitForTimeout(800);
+      await page.waitForSelector('[data-testid="pending-tracking-approve-close"]', { timeout: 15000 });
+      const reviewTrackingResult = await page.evaluate(async (id) => {
+        const api = window._m365ApiClient;
+        const user = window._authModule?.currentUser?.() || {};
+        if (!api || typeof api.reviewCorrectiveActionTracking !== 'function') {
+          throw new Error('missing corrective action tracking review api client');
+        }
+        const result = await api.reviewCorrectiveActionTracking(id, {
+          decision: 'close',
+          actorName: user.name || user.username || 'admin',
+          actorUsername: user.username || 'admin'
+        });
+        return {
+          status: result && result.item && result.item.status,
+          reviewResult: result && result.item && result.item.reviewResult
+        };
+      }, correctiveCaseId);
+      if (!reviewTrackingResult || reviewTrackingResult.status !== '結案') {
+        throw new Error(`tracking review did not close: ${JSON.stringify(reviewTrackingResult)}`);
+      }
       await page.reload({ waitUntil: 'domcontentloaded' });
       await waitForAppReady(page);
       await gotoHash(page, 'detail/' + correctiveCaseId, { handleUnsaved: false });
