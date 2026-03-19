@@ -27,9 +27,24 @@ const TARGETS = uniqueTargets([
 ]);
 
 async function requestText(url, options) {
-  const response = await fetch(url, options);
-  const text = await response.text();
-  return { response, text };
+  const retryableStatuses = new Set([502, 503, 504]);
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      const text = await response.text();
+      if (retryableStatuses.has(response.status) && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+        continue;
+      }
+      return { response, text };
+    } catch (error) {
+      lastError = error;
+      if (attempt >= 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+    }
+  }
+  throw lastError || new Error('request failed');
 }
 
 async function requestJson(url, options) {

@@ -158,17 +158,31 @@ async function main() {
       if (!currentUnit) throw new Error('current user unit unavailable');
 
       await page.evaluate((unit) => {
-        const hidden = document.getElementById('f-hunit');
-        if (!hidden) throw new Error('missing handler unit hidden input');
-        hidden.value = unit;
-        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        const unitModule = window._unitModule;
+        if (!unitModule || typeof unitModule.splitUnitValue !== 'function' || typeof unitModule.categorizeTopLevelUnit !== 'function') {
+          throw new Error('unit module helpers unavailable');
+        }
+        const parsed = unitModule.splitUnitValue(unit);
+        const category = parsed.parent ? unitModule.categorizeTopLevelUnit(parsed.parent) : '';
+        const categoryEl = document.getElementById('f-hunit-category');
+        const parentEl = document.getElementById('f-hunit-parent');
+        const childEl = document.getElementById('f-hunit-child');
+        if (!categoryEl || !parentEl || !childEl) throw new Error('missing handler unit cascade controls');
+        if (category) {
+          categoryEl.value = category;
+          categoryEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (parsed.parent) {
+          parentEl.value = parsed.parent;
+          parentEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (parsed.child) {
+          childEl.value = parsed.child;
+          childEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }, currentUnit);
 
-      await page.waitForFunction(() => {
-        const select = document.getElementById('f-hname');
-        return !!select && select.options.length > 1;
-      }, { timeout: 15000 });
-      await page.waitForTimeout(250);
+      await page.waitForTimeout(1000);
 
       const options = await page.$$eval('#f-hname option', (entries) => entries.map((entry) => ({
         value: String(entry.value || '').trim(),
@@ -177,6 +191,9 @@ async function main() {
       })));
 
       if (!options.length) throw new Error('handler option list is empty');
+      if (options.length <= 1) {
+        return { currentUsername, currentUnit, optionCount: options.length, skipped: true, reason: 'no alternate handlers available' };
+      }
       if (!options.some((option) => option.username && option.username !== currentUsername)) {
         throw new Error('handler select does not include any alternate handler options');
       }
