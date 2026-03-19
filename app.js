@@ -2893,6 +2893,40 @@
     if (authenticatedBootstrapPromise && authenticatedBootstrapKey === nextKey) {
       return authenticatedBootstrapPromise;
     }
+    const freshLoginBootstrap = (() => {
+      try {
+        return typeof window !== 'undefined'
+          && window.sessionStorage
+          && String(window.sessionStorage.getItem('__AUTH_BOOTSTRAP_FRESH__') || '').trim() === '1';
+      } catch (_) {
+        return false;
+      }
+    })();
+    if (freshLoginBootstrap) {
+      try { window.sessionStorage.removeItem('__AUTH_BOOTSTRAP_FRESH__'); } catch (_) { }
+      authenticatedBootstrapKey = nextKey;
+      authenticatedBootstrapPromise = Promise.resolve(nextKey);
+      setAuthenticatedBootstrapState('ready');
+      void Promise.allSettled([
+        syncTrainingFormsFromM365({ silent: true }),
+        syncTrainingRostersFromM365({ silent: true }),
+        syncChecklistsFromM365({ silent: true }),
+        syncCorrectiveActionsFromM365({ silent: true })
+      ]).then((results) => {
+        const labels = [
+          'training bootstrap warmup failed',
+          'training roster bootstrap warmup failed',
+          'checklist bootstrap warmup failed',
+          'corrective action bootstrap warmup failed'
+        ];
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            console.warn(labels[index] || 'authenticated bootstrap warmup failed', result.reason);
+          }
+        });
+      });
+      return authenticatedBootstrapPromise;
+    }
     authenticatedBootstrapKey = nextKey;
     setAuthenticatedBootstrapState('pending');
     authenticatedBootstrapPromise = (async function () {

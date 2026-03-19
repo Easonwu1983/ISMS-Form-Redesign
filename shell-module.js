@@ -180,6 +180,9 @@
               return;
             }
             toast('登入成功，歡迎 ' + user.name, 'success');
+            try {
+              sessionStorage.setItem('__AUTH_BOOTSTRAP_FRESH__', '1');
+            } catch (_) { }
             renderApp();
           } else {
             document.getElementById('login-error').classList.add('show');
