@@ -80,13 +80,13 @@
     return '<div class="copy-id-cell copy-id-cell--strong dashboard-recent-id-cell"><span class="copy-id-text dashboard-recent-id-text">' + esc(item.id || '') + '</span>' + renderCopyIdButton(item.id, '矯正單號') + '</div>';
   }
 
-  function renderDashboardTableRow(item) {
+  function renderDashboardTableRow(item, lastActivityText) {
     var problemDesc = String(item.problemDesc || '').trim();
     return '<tr data-route="detail/' + item.id + '">'
       + '<td class="record-id-col">' + renderDashboardIdCell(item) + '</td>'
       + '<td class="dashboard-recent-desc-cell" title="' + esc(problemDesc) + '"><span class="dashboard-recent-desc">' + esc(problemDesc || '—') + '</span></td>'
       + '<td class="dashboard-recent-status-cell">' + renderCaseStatusCell(item, false) + '</td>'
-      + '<td class="dashboard-recent-date-cell"><span class="dashboard-recent-date-value">' + formatCaseLastActivity(item) + '</span></td>'
+      + '<td class="dashboard-recent-date-cell"><span class="dashboard-recent-date-value">' + esc(lastActivityText || formatCaseLastActivity(item)) + '</span></td>'
       + '<td class="dashboard-recent-handler-cell"><span class="dashboard-recent-handler-name">' + esc(item.handlerName || '—') + '</span></td>'
       + '<td class="dashboard-recent-date-cell"><span class="dashboard-recent-date-value">' + fmt(item.correctiveDueDate) + '</span></td>'
       + '<td class="dashboard-recent-date-cell"><span class="dashboard-recent-date-value">' + fmt(getCurrentNextTrackingDate(item)) + '</span></td>'
@@ -124,22 +124,82 @@
     return buildCaseCard(headerHtml, buildCaseTableMarkup(headersHtml, rowsHtml, opts), { style: cardStyle, headerClass: headerClass, cardClass: opts.cardClass || '' });
   }
 
-  function buildDashboardStatusOverview(items) {
-    var total = items.length;
-    var open = items.filter(function (item) { return item.status !== STATUSES.CLOSED; }).length;
-    var overdue = items.filter(function (item) { return isOverdue(item); }).length;
-    var closed = items.filter(function (item) { return item.status === STATUSES.CLOSED; }).length;
+  function buildDashboardStatusOverview(summary) {
     var stats = [
-      { label: '進行中', value: open },
-      { label: '已結案', value: closed },
-      { label: '逾期', value: overdue }
+      { label: '進行中', value: summary.openCount || 0 },
+      { label: '已結案', value: summary.closedCount || 0 },
+      { label: '逾期', value: summary.overdueCount || 0 }
     ];
     return '<div class="dashboard-panel-summary">'
       + stats.map(function (stat) {
         return '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">' + stat.label + '</span><strong class="dashboard-panel-pill-value">' + stat.value + '</strong></div>';
       }).join('')
-      + '<div class="dashboard-panel-note">狀態分布依目前可見案件計算，總數 ' + total + ' 筆。</div>'
+      + '<div class="dashboard-panel-note">狀態分布依目前可見案件計算，總數 ' + (summary.total || 0) + ' 筆。</div>'
       + '</div>';
+  }
+
+  function buildDashboardSnapshot(items) {
+    var list = Array.isArray(items) ? items : [];
+    var now = new Date();
+    var currentMonth = now.getMonth();
+    var currentYear = now.getFullYear();
+    var bucketCounts = {};
+    bucketCounts[STATUSES.CREATED] = 0;
+    bucketCounts[STATUSES.PENDING] = 0;
+    bucketCounts[STATUSES.PROPOSED] = 0;
+    bucketCounts[STATUSES.REVIEWING] = 0;
+    bucketCounts[STATUSES.TRACKING] = 0;
+    bucketCounts['已逾期'] = 0;
+    bucketCounts[STATUSES.CLOSED] = 0;
+    var snapshot = {
+      total: list.length,
+      openCount: 0,
+      closedCount: 0,
+      overdueCount: 0,
+      pendingCount: 0,
+      closedThisMonth: 0,
+      bucketCounts: bucketCounts,
+      nextDueItem: null,
+      recent: []
+    };
+    var nextDueTimestamp = 0;
+    list.forEach(function (item) {
+      if (!item) return;
+      var status = item.status || STATUSES.CREATED;
+      var isClosed = status === STATUSES.CLOSED;
+      var isLate = isOverdue(item);
+      var bucket = isLate ? '已逾期' : status;
+      if (bucketCounts[bucket] !== undefined) bucketCounts[bucket] += 1;
+      if (status === STATUSES.PENDING) snapshot.pendingCount += 1;
+      if (isClosed) {
+        snapshot.closedCount += 1;
+        var closedDate = String(item.closedDate || '').trim();
+        if (closedDate) {
+          var closedTime = new Date(closedDate);
+          if (closedTime.getMonth() === currentMonth && closedTime.getFullYear() === currentYear) snapshot.closedThisMonth += 1;
+        }
+      } else {
+        snapshot.openCount += 1;
+      }
+      if (isLate) snapshot.overdueCount += 1;
+      var dueTime = toTimestamp(item.correctiveDueDate);
+      if (!isClosed && dueTime && (!nextDueTimestamp || dueTime < nextDueTimestamp)) {
+        nextDueTimestamp = dueTime;
+        snapshot.nextDueItem = item;
+      }
+      snapshot.recent.push({
+        item: item,
+        lastActivity: getCaseLastActivityTime(item)
+      });
+    });
+    snapshot.recent.sort(function (a, b) {
+      var aClosed = a.item && a.item.status === STATUSES.CLOSED ? 1 : 0;
+      var bClosed = b.item && b.item.status === STATUSES.CLOSED ? 1 : 0;
+      if (aClosed !== bClosed) return aClosed - bClosed;
+      return b.lastActivity - a.lastActivity;
+    });
+    snapshot.recent = snapshot.recent.slice(0, 5);
+    return snapshot;
   }
 
   function buildCaseEmptyTableRow(colspan, iconName, title, padding) {
@@ -248,22 +308,15 @@
 
   function renderDashboard() {
     var items = getVisibleItems();
-    var total = items.length;
-    var pending = items.filter(function (i) { return i.status === STATUSES.PENDING; }).length;
-    var overdue = items.filter(function (i) { return isOverdue(i); }).length;
-    var now2 = new Date();
-    var closedM = items.filter(function (i) {
-      return i.status === STATUSES.CLOSED && i.closedDate && new Date(i.closedDate).getMonth() === now2.getMonth() && new Date(i.closedDate).getFullYear() === now2.getFullYear();
-    }).length;
-    var totalClosed = items.filter(function (i) { return i.status === STATUSES.CLOSED; }).length;
-    var openCount = items.filter(function (i) { return i.status !== STATUSES.CLOSED; }).length;
+    var snapshot = buildDashboardSnapshot(items);
+    var total = snapshot.total;
+    var pending = snapshot.pendingCount;
+    var overdue = snapshot.overdueCount;
+    var closedM = snapshot.closedThisMonth;
+    var totalClosed = snapshot.closedCount;
+    var openCount = snapshot.openCount;
     var distributionOrder = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, '已逾期', STATUSES.CLOSED];
-    var sc = {};
-    distributionOrder.forEach(function (s) { sc[s] = 0; });
-    items.forEach(function (i) {
-      var bucket = getDashboardStatusBucket(i);
-      if (sc[bucket] !== undefined) sc[bucket]++;
-    });
+    var sc = snapshot.bucketCounts;
     var cc = {};
     cc[STATUSES.CREATED] = '#3b82f6';
     cc[STATUSES.PENDING] = '#f59e0b';
@@ -291,17 +344,13 @@
       return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>';
     }).join('');
 
-    var recent = items.slice().sort(function (a, b) {
-      var closedCompare = (a.status === STATUSES.CLOSED ? 1 : 0) - (b.status === STATUSES.CLOSED ? 1 : 0);
-      if (closedCompare !== 0) return closedCompare;
-      return getCaseLastActivityTime(b) - getCaseLastActivityTime(a);
-    }).slice(0, 5);
-    var recentRows = recent.length ? recent.map(function (i) {
-      return renderDashboardTableRow(i);
+    var recentRows = snapshot.recent.length ? snapshot.recent.map(function (entry) {
+      var lastActivityText = entry.lastActivity ? fmtTime(new Date(entry.lastActivity).toISOString()) : '—';
+      return renderDashboardTableRow(entry.item, lastActivityText);
     }).join('') : buildCaseEmptyTableRow(7, 'inbox', '沒有矯正單資料', 40);
 
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
-    var nextDueItem = items.filter(function (i) { return i.status !== STATUSES.CLOSED && i.correctiveDueDate; }).sort(function (a, b) { return new Date(a.correctiveDueDate) - new Date(b.correctiveDueDate); })[0] || null;
+    var nextDueItem = snapshot.nextDueItem;
     var focusLine = overdue > 0
       ? '目前有 ' + overdue + ' 筆矯正單已逾期，建議優先追蹤。'
       : (pending > 0 ? '目前有 ' + pending + ' 筆待矯正事項，可優先分派與提醒。' : '目前沒有逾期項目，整體進度維持穩定。');
@@ -327,7 +376,7 @@
       + buildCaseStatCard('closed', 'check-circle-2', closedM, '本月結案')
       + '</div>'
       + '<div class="dashboard-grid">'
-      + buildCaseCard('<span class="card-title">狀態分布</span>', buildDashboardStatusOverview(items) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { cardClass: 'dashboard-panel dashboard-chart-panel' })
+      + buildCaseCard('<span class="card-title">狀態分布</span>', buildDashboardStatusOverview(snapshot) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>', { cardClass: 'dashboard-panel dashboard-chart-panel' })
       + buildCaseTableCard('最近矯正單', '<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>最後活動</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { actionHtml: '<a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', cardClass: 'dashboard-panel dashboard-table-panel', wrapperClass: 'dashboard-recent-table-wrapper', tableClass: 'dashboard-recent-table' })
         + '</div></div>';
 
