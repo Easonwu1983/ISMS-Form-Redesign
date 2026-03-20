@@ -3194,7 +3194,10 @@
   let visibleItemsCacheKey = '';
   let visibleItemsCacheValue = [];
   function getVisibleItems(user = currentUser()) {
-    const rawDataFingerprint = String(typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem(DATA_KEY) || '' : '');
+    const dataModule = getDataModule();
+    const rawDataFingerprint = dataModule && typeof dataModule.getStoreTouchToken === 'function'
+      ? dataModule.getStoreTouchToken(DATA_KEY)
+      : String(typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem(DATA_KEY) || '' : '');
     const current = user || null;
     const cacheKey = [
       rawDataFingerprint,

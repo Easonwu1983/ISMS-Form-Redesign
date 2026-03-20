@@ -38,6 +38,7 @@
     } = deps;
 
     const STORAGE_CACHE = Object.create(null);
+    const STORE_TOUCH_TOKENS = Object.create(null);
     const STORE_LOCKS = Object.create(null);
     let storageListenerInstalled = false;
     const STORAGE_WARNING_KEYS = Object.create(null);
@@ -101,11 +102,21 @@
           Object.keys(STORAGE_CACHE).forEach(function (cacheKey) {
             delete STORAGE_CACHE[cacheKey];
           });
+          Object.keys(STORE_TOUCH_TOKENS).forEach(function (storeKey) {
+            delete STORE_TOUCH_TOKENS[storeKey];
+          });
           return;
         }
         delete STORAGE_CACHE[event.key];
+        touchStore(event.key);
       });
       storageListenerInstalled = true;
+    }
+
+    function touchStore(key) {
+      const cleanKey = String(key || '').trim();
+      if (!cleanKey) return;
+      STORE_TOUCH_TOKENS[cleanKey] = (Number(STORE_TOUCH_TOKENS[cleanKey]) || 0) + 1;
     }
 
     function hasQuotaExceededError(error) {
@@ -160,6 +171,7 @@
         } catch (_) {
           delete STORAGE_CACHE[key];
           localStorage.removeItem(key);
+          touchStore(key);
           emitStorageWarning(key, '\u5075\u6e2c\u5230\u700f\u89bd\u5668\u66ab\u5b58\u8cc7\u6599\u640d\u6bc0\uff0c\u7cfb\u7d71\u5df2\u81ea\u52d5\u6e05\u9664\u4e26\u91cd\u65b0\u8f09\u5165\u3002');
         }
       }
@@ -185,6 +197,7 @@
       try {
         localStorage.setItem(key, raw);
         STORAGE_CACHE[key] = { raw, parsed: value };
+        touchStore(key);
       } catch (error) {
         if (previous) {
           STORAGE_CACHE[key] = previous;
@@ -199,6 +212,7 @@
       withStoreLock(key, function () {
         delete STORAGE_CACHE[key];
         localStorage.removeItem(key);
+        touchStore(key);
       });
     }
 
@@ -585,6 +599,12 @@
         stores,
         totals
       };
+    }
+
+    function getStoreTouchToken(key) {
+      const cleanKey = String(key || '').trim();
+      if (!cleanKey) return '0';
+      return String(STORE_TOUCH_TOKENS[cleanKey] || 0);
     }
 
     function createDefaultData() {
@@ -1393,6 +1413,7 @@
       findUnitContactApplicationsByEmail,
       migrateAllStores,
       getStoreVersion,
+      getStoreTouchToken,
       getSchemaHealth,
       exportManagedStoreSnapshot
     };
