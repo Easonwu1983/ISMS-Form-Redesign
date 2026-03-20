@@ -552,7 +552,7 @@
     if (!canCreateCAR()) { navigate('dashboard'); toast('您沒有開立矯正單權限', 'error'); return; }
     const u = currentUser();
     const allUsers = getUsers();
-    const users = allUsers.filter(x => x.role === ROLES.REPORTER || x.role === ROLES.UNIT_ADMIN);
+    const users = allUsers.filter((x) => x.role === ROLES.UNIT_ADMIN);
 
     if (canManageUsers(u) && !users.length) {
       const appRoot = document.getElementById('app');
@@ -1306,7 +1306,7 @@ function renderRespond(id) {
           <div class="card editor-card"><form id="track-form">
             <div class="section-header">${ic('clipboard-check', 'icon-sm')} 追蹤提報</div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">填報人員</label><input type="text" class="form-input" id="tk-tracker" value="${esc(currentUser().name)}" readonly></div>
+              <div class="form-group"><label class="form-label form-required">編修人員</label><input type="text" class="form-input" id="tk-tracker" value="${esc(currentUser().name)}" readonly></div>
               <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tk-date" value="${new Date().toISOString().split('T')[0]}" required></div>
             </div>
             <div class="form-group"><label class="form-label form-required">改善措施執行情形</label><textarea class="form-textarea" id="tk-exec" placeholder="請說明目前的改善進度、已完成內容與尚待處理事項" required style="min-height:112px"></textarea></div>
@@ -1489,7 +1489,6 @@ function renderTracking(id) {
 
   function formatUserUnitSummary(user) {
     const units = getAuthorizedUnits(user);
-    if (user?.role === ROLES.VIEWER && !units.length) return '全校唯讀';
     if (!units.length) return '未指定';
     return units.join('、');
   }

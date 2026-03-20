@@ -10,8 +10,8 @@
   const STATUSES = { CREATED: '開立', PENDING: '待矯正', PROPOSED: '已提案', REVIEWING: '審核中', TRACKING: '追蹤中', CLOSED: '結案' };
   const STATUS_CLASSES = { [STATUSES.CREATED]: 'created', [STATUSES.PENDING]: 'pending', [STATUSES.PROPOSED]: 'proposed', [STATUSES.REVIEWING]: 'reviewing', [STATUSES.TRACKING]: 'tracking', [STATUSES.CLOSED]: 'closed' };
   const STATUS_FLOW = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, STATUSES.CLOSED];
-  const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員', REPORTER: '填報人', VIEWER: '跨單位檢視者' };
-  const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin', [ROLES.REPORTER]: 'badge-reporter', [ROLES.VIEWER]: 'badge-viewer' };
+  const ROLES = { ADMIN: '最高管理員', UNIT_ADMIN: '單位管理員' };
+  const ROLE_BADGE = { [ROLES.ADMIN]: 'badge-admin', [ROLES.UNIT_ADMIN]: 'badge-unit-admin' };
   const CHECKLIST_STATUS_DRAFT = '\u8349\u7a3f';
   const CHECKLIST_STATUS_SUBMITTED = '\u5df2\u9001\u51fa';
   const TRAINING_STATUSES = { DRAFT: '暫存', PENDING_SIGNOFF: '待簽核', SUBMITTED: '已完成填報', RETURNED: '退回更正' };
@@ -1764,7 +1764,7 @@
         username: username,
         name: String((matchedUser && matchedUser.name) || '').trim() || username,
         email: String((matchedUser && matchedUser.email) || input.email || '').trim(),
-        role: String((matchedUser && matchedUser.role) || USER_ROLES.REPORTER).trim(),
+        role: String((matchedUser && matchedUser.role) || USER_ROLES.UNIT_ADMIN).trim(),
         units: parseUserUnits((matchedUser && matchedUser.units) || (matchedUser && matchedUser.unit) || []),
         password: fallbackPassword
       }, { requirePassword: true });
@@ -1794,7 +1794,7 @@
         username: username,
         name: String((matchedUser && matchedUser.name) || '').trim() || username,
         email: String((matchedUser && matchedUser.email) || input.email || '').trim(),
-        role: String((matchedUser && matchedUser.role) || USER_ROLES.REPORTER).trim(),
+        role: String((matchedUser && matchedUser.role) || USER_ROLES.UNIT_ADMIN).trim(),
         units: parseUserUnits((matchedUser && matchedUser.units) || (matchedUser && matchedUser.unit) || []),
         password: fallbackPassword
       }, { requirePassword: true });

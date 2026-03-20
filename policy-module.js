@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createPolicyModule = function createPolicyModule(deps) {
     const {
       ROLES,
@@ -8,7 +8,6 @@
       currentUser,
       getAuthorizedUnits,
       getReviewUnits,
-      getActiveUnit,
       getAllItems,
       getAllChecklists,
       getAllTrainingForms,
@@ -24,23 +23,19 @@
       return user?.role === ROLES.UNIT_ADMIN;
     }
 
-    function isViewer(user = currentUser()) {
-      return user?.role === ROLES.VIEWER;
+    function isViewer() {
+      return false;
     }
 
     function hasGlobalReadScope(user = currentUser()) {
-      return !!user && (user.role === ROLES.ADMIN || user.role === ROLES.VIEWER);
+      return !!user && user.role === ROLES.ADMIN;
     }
 
     function hasUnitAccess(unit, user = currentUser()) {
       if (!user) return false;
       const target = String(unit || '').trim();
       if (!target) return isAdmin(user);
-      if (user.role === ROLES.ADMIN) return true;
-      if (user.role === ROLES.VIEWER) {
-        const scoped = getActiveUnit(user);
-        return !!scoped && scoped === target;
-      }
+      if (isAdmin(user)) return true;
       return getAuthorizedUnits(user).includes(target);
     }
 
@@ -75,11 +70,11 @@
     }
 
     function canFillChecklist(user = currentUser()) {
-      return !!user && !isViewer(user);
+      return !!user;
     }
 
     function canFillTraining(user = currentUser()) {
-      return !!user && !isViewer(user);
+      return !!user;
     }
 
     function canManageUsers(user = currentUser()) {
@@ -106,12 +101,12 @@
 
     function canRespondItem(item, user = currentUser()) {
       if (!item || !user) return false;
-      return item.status === STATUSES.PENDING && !isViewer(user) && (isItemHandler(item, user) || user.role === ROLES.ADMIN);
+      return item.status === STATUSES.PENDING && (isItemHandler(item, user) || user.role === ROLES.ADMIN);
     }
 
     function canSubmitTracking(item, user = currentUser()) {
       if (!item || !user) return false;
-      return item.status === STATUSES.TRACKING && !isViewer(user) && isItemHandler(item, user) && !item.pendingTracking;
+      return item.status === STATUSES.TRACKING && isItemHandler(item, user) && !item.pendingTracking;
     }
 
     function isChecklistOwner(item, user = currentUser()) {
@@ -149,11 +144,11 @@
       if (!user || !form) return false;
       if (!(form.status === TRAINING_STATUSES.DRAFT || form.status === TRAINING_STATUSES.RETURNED)) return false;
       const inScope = user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
-      return inScope && !isViewer(user);
+      return inScope;
     }
 
     function canManageTrainingForm(form, user = currentUser()) {
-      if (!user || !form || isViewer(user)) return false;
+      if (!user || !form) return false;
       return user.role === ROLES.ADMIN || form.fillerUsername === user.username;
     }
 
@@ -231,4 +226,3 @@
     };
   };
 })();
-

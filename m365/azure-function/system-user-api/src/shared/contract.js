@@ -1,7 +1,7 @@
 ﻿const crypto = require('crypto');
 
 
-const CONTRACT_VERSION = '2026-03-13';
+const CONTRACT_VERSION = '2026-03-20';
 
 const USER_ACTIONS = {
   LIST: 'system-user.list',
@@ -13,9 +13,7 @@ const USER_ACTIONS = {
 
 const USER_ROLES = {
   ADMIN: '最高管理員',
-  UNIT_ADMIN: '單位管理員',
-  REPORTER: '填報人',
-  VIEWER: '跨單位檢視者'
+  UNIT_ADMIN: '單位管理員'
 };
 const SECURITY_ROLES = new Set(['二級單位資安窗口', '一級單位資安窗口']);
 const DEFAULT_DISPLAY_NAME_BY_USERNAME = {
@@ -26,7 +24,7 @@ const DEFAULT_DISPLAY_NAME_BY_USERNAME = {
   user2: '陳資安主管',
   user3: '黃工程師',
   user4: '劉文管人員',
-  viewer1: '跨單位檢視者'
+  viewer1: '測試單位管理員'
 };
 
 const PASSWORD_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -101,9 +99,7 @@ function parseSecurityRoles(value) {
 function normalizeUserRole(role) {
   const cleanRole = cleanText(role);
   if (cleanRole === USER_ROLES.ADMIN) return USER_ROLES.ADMIN;
-  if (cleanRole === USER_ROLES.UNIT_ADMIN) return USER_ROLES.UNIT_ADMIN;
-  if (cleanRole === USER_ROLES.VIEWER || cleanRole.toLowerCase() === 'super_viewer') return USER_ROLES.VIEWER;
-  return USER_ROLES.REPORTER;
+  return USER_ROLES.UNIT_ADMIN;
 }
 
 function normalizeSystemUserPayload(payload) {
@@ -326,7 +322,7 @@ function validateSystemUserPayload(payload, options) {
   if (!cleanEmail(payload.email)) throw createError('Missing email', 400);
   if (opts.requirePassword && !cleanText(payload.password)) throw createError('Missing password', 400);
   if (cleanText(payload.password)) validatePasswordComplexity(payload.password, 'password');
-  if (payload.role !== USER_ROLES.ADMIN && payload.role !== USER_ROLES.VIEWER && !payload.units.length) {
+  if (payload.role !== USER_ROLES.ADMIN && !payload.units.length) {
     throw createError('At least one authorized unit is required', 400);
   }
   if (payload.role === USER_ROLES.UNIT_ADMIN && !Array.isArray(payload.securityRoles) && !parseSecurityRoles(payload.securityRoles).length) {

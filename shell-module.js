@@ -76,7 +76,7 @@
     }
 
     function getRoleBadgeClass(role) {
-      return ROLE_BADGE[role] || 'badge-viewer';
+      return ROLE_BADGE[role] || 'badge-unit-admin';
     }
 
     function getRoleLabel(role) {

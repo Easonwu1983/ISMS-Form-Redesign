@@ -448,7 +448,7 @@
     const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
     const groups = groupTrainingRosterEntries(rosters);
     if (!groups.length) {
-      return '<div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無名單資料</div><div class="empty-state-desc">請先由管理者匯入名單，或由填報人新增名單外人員。</div></div>';
+      return '<div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無名單資料</div><div class="empty-state-desc">請先由管理者匯入名單，或由單位管理員新增名單外人員。</div></div>';
     }
     return groups.map((group, index) => buildTrainingRosterGroupTable(group, selectedSet, index)).join('');
   }
@@ -498,7 +498,7 @@
       submittedAt: null,
       history: [...(form.history || []), {
         time: now,
-        action: '填報人撤回流程一，重新開放編修（剩餘撤回時限 ' + remainingMinutes + ' 分鐘）',
+        action: '單位管理員撤回流程一，重新開放編修（剩餘撤回時限 ' + remainingMinutes + ' 分鐘）',
         user: user.name
       }]
     };
@@ -533,7 +533,7 @@
       updatedAt: now,
       history: [...(form.history || []), { time: now, action: '管理者退回更正：' + trimmed, user: currentUser().name }]
     });
-    showTrainingRepositoryFallback(result, '已退回 ' + id + ' 供填報人更正');
+    showTrainingRepositoryFallback(result, '已退回 ' + id + ' 供單位管理員更正');
     const route = getRoute();
     if (route.page === 'training-detail') renderTrainingDetail(id); else renderTraining();
   }
@@ -739,7 +739,7 @@
     return '<div class="animate-in">'
       + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">此頁為流程一：逐人填報教育訓練完成情形。送出後會先鎖定；若尚未列印簽核表，可於 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。</p></div><div class="training-toolbar-actions"><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
       + (existing && existing.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(existing.returnReason || '未提供') + '</div>' : '')
-      + (takeoverDraft ? '<div class="training-return-banner">' + ic('user-cog', 'icon-sm') + ' 此草稿原填報人為 ' + esc(existing.fillerName || '未指定') + '，本次儲存後將改由目前單位管理員 ' + esc(user.name) + ' 接手填報。</div>' : '')
+      + (takeoverDraft ? '<div class="training-return-banner">' + ic('user-cog', 'icon-sm') + ' 此草稿原送件者為 ' + esc(existing.fillerName || '未指定') + '，本次儲存後將改由目前單位管理員 ' + esc(user.name) + ' 接手編修。</div>' : '')
       + '<div class="training-editor-layout">'
       + '<div class="card training-editor-card"><form id="training-form" data-testid="training-form">'
       + '<div class="form-feedback" id="training-feedback" data-state="idle" aria-live="polite" hidden></div>'
@@ -1016,7 +1016,7 @@
       const body = document.getElementById('training-rows-body');
       const visibleRows = getFilteredRows();
       if (!rowsState.length) {
-        body.innerHTML = buildTrainingEmptyTableRow(13, '此單位尚未建立名單', '請由管理者匯入名單，或由填報人新增名單外人員。', 28);
+        body.innerHTML = buildTrainingEmptyTableRow(13, '此單位尚未建立名單', '請由管理者匯入名單，或由單位管理員新增名單外人員。', 28);
         renderSummary();
         updateBulkSelectionText();
         return;
@@ -1201,7 +1201,7 @@
         }
       }
       const history = [...(existing?.history || [])];
-      if (takeoverDraft) history.push({ time: now, action: '單位管理員接手編修草稿，填報人改為目前編修者', user: user.name });
+      if (takeoverDraft) history.push({ time: now, action: '單位管理員接手編修草稿，送件者改為目前編修者', user: user.name });
       history.push({ time: now, action: targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF ? '完成流程一並鎖定填報內容' : '儲存教育訓練統計暫存', user: user.name });
       const payload = {
         id: formId,
@@ -1746,9 +1746,9 @@
     const hiddenNote = hiddenCount
       ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
       : '';
-    const rosterActions = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">名單管理</span><div class="training-table-subtitle">依單位分區展開檢視；填報人只能新增名單外人員，不能刪除原名單。</div></div><div class="training-group-header-actions"><span class="training-inline-status" id="training-roster-selected-count">' + esc(selectedCount > 0 ? ('已選取 ' + selectedCount + ' 筆') : '尚未選取人員') + '</span><button type="button" class="btn btn-secondary btn-sm" id="training-roster-select-all">' + ic('check-square', 'icon-sm') + ' 全選</button><button type="button" class="btn btn-secondary btn-sm" id="training-roster-clear-selection">' + ic('square', 'icon-sm') + ' 清除選取</button><button type="button" class="btn btn-danger btn-sm" id="training-roster-delete-selected" ' + (selectedCount ? '' : 'disabled') + '>' + ic('trash-2', 'icon-sm') + ' 刪除所選</button><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></div><div id="training-roster-import-wrap" style="display:none">' + buildTrainingRosterImportCard() + '</div><div class="training-group-stack" id="training-roster-groups">' + (groupsHtml || buildTrainingEmptyTableRow(9, '尚無名單資料', '', 24)) + '</div></div>';
+    const rosterActions = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">名單管理</span><div class="training-table-subtitle">依單位分區展開檢視；單位管理員只能新增名單外人員，不能刪除原名單。</div></div><div class="training-group-header-actions"><span class="training-inline-status" id="training-roster-selected-count">' + esc(selectedCount > 0 ? ('已選取 ' + selectedCount + ' 筆') : '尚未選取人員') + '</span><button type="button" class="btn btn-secondary btn-sm" id="training-roster-select-all">' + ic('check-square', 'icon-sm') + ' 全選</button><button type="button" class="btn btn-secondary btn-sm" id="training-roster-clear-selection">' + ic('square', 'icon-sm') + ' 清除選取</button><button type="button" class="btn btn-danger btn-sm" id="training-roster-delete-selected" ' + (selectedCount ? '' : 'disabled') + '>' + ic('trash-2', 'icon-sm') + ' 刪除所選</button><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></div><div id="training-roster-import-wrap" style="display:none">' + buildTrainingRosterImportCard() + '</div><div class="training-group-stack" id="training-roster-groups">' + (groupsHtml || buildTrainingEmptyTableRow(9, '尚無名單資料', '', 24)) + '</div></div>';
     return '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可匯入正式名單；填報人只能新增名單外人員，不能刪除原名單。</p></div><div><a href="#training" class="btn btn-secondary">← 返回統計</a></div></div>'
+      + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可匯入正式名單；單位管理員只能新增名單外人員，不能刪除原名單。</p></div><div><a href="#training" class="btn btn-secondary">← 返回統計</a></div></div>'
       + '<div class="stats-grid">'
       + buildTrainingRosterStats(summary)
       + '</div>'
@@ -2121,7 +2121,7 @@
     if (store.rosters.length > 0) return;
     const now = new Date().toISOString();
     const seen = new Set();
-    getUsers().filter((user) => user.role !== ROLES.ADMIN && user.role !== ROLES.VIEWER).forEach((user) => {
+    getUsers().filter((user) => user.role !== ROLES.ADMIN).forEach((user) => {
       getAuthorizedUnits(user).forEach((unit) => {
         const key = (unit + '::' + user.name).toLowerCase();
         if (seen.has(key)) return;
@@ -2131,7 +2131,7 @@
           unit,
           name: user.name,
           unitName: getTrainingJobUnit(unit),
-          identity: user.role === ROLES.UNIT_ADMIN ? '單位管理員' : '填報人',
+          identity: '單位管理員',
           jobTitle: '',
           source: 'import',
           createdBy: '系統初始化',

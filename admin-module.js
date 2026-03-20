@@ -243,7 +243,7 @@
     }
 
     function getRoleBadgeClass(role) {
-      return ROLE_BADGE[role] || 'badge-viewer';
+      return ROLE_BADGE[role] || 'badge-unit-admin';
     }
 
     function getRoleLabel(role) {
@@ -272,7 +272,7 @@
       <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>
       <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
       <div class="form-group"><label class="form-label form-required">電子郵件</label><input type="email" class="form-input" id="u-email" value="${isE ? esc(eu.email || '') : ''}" required></div>
-      <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.REPORTER}" ${isE && eu.role === ROLES.REPORTER ? 'selected' : ''}>填報人</option><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.VIEWER}" ${isE && eu.role === ROLES.VIEWER ? 'selected' : ''}>跨單位檢視者</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option></select></div>
+      <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理者</option></select></div>
       <div class="form-group"><label class="form-label" id="u-unit-label">主要單位</label>${buildUnitCascadeControl('u-unit', initUnit, false, false)}</div></div>
       <div class="form-group" id="u-security-role-group"><label class="form-label form-required">資安角色</label>${buildSecurityRoleCheckboxes(selectedSecurityRoles)}<div class="form-hint">請至少選擇一種資安角色身分。</div></div>
       <div class="form-group"><label class="form-label">額外授權單位</label>${buildUnitMultiSelectControl('u-units', units.slice(1), '請輸入單位名稱', '可搜尋並加入多個授權單位。')}</div>
@@ -312,10 +312,9 @@
     }
 
     function syncRoleFields() {
-      const viewerMode = roleEl.value === ROLES.VIEWER;
       const unitAdminMode = roleEl.value === ROLES.UNIT_ADMIN;
-      unitLabel.textContent = viewerMode ? '主要單位（留空代表全校唯讀）' : '主要單位';
-      parentEl.required = !viewerMode;
+      unitLabel.textContent = unitAdminMode ? '主要單位' : '主要單位（選填）';
+      parentEl.required = unitAdminMode;
       if (securityRoleGroup) {
         securityRoleGroup.style.display = unitAdminMode ? '' : 'none';
       }
@@ -325,8 +324,7 @@
       syncScopedUnits();
     }
 
-    syncRoleFields();
-    unitEl.addEventListener('change', syncScopedUnits);
+    syncRoleFields();    unitEl.addEventListener('change', syncScopedUnits);
     roleEl.addEventListener('change', syncRoleFields);
     document.querySelectorAll('input[name="u-security-roles"]').forEach((input) => {
       input.addEventListener('change', syncScopedUnits);
@@ -345,7 +343,7 @@
       const pw = document.getElementById('u-pass').value;
       const finalUnits = Array.from(new Set([ut, ...extraUnits].filter(Boolean)));
 
-      if (rl !== ROLES.VIEWER && !finalUnits.length) { toast('請至少指定一個授權單位', 'error'); return; }
+      if (rl === ROLES.UNIT_ADMIN && !finalUnits.length) { toast('請至少指定一個授權單位', 'error'); return; }
       if (rl === ROLES.UNIT_ADMIN && !securityRoles.length) { toast('請至少選擇一種資安角色身分', 'error'); return; }
 
       const payload = { name: nm, email: em, role: rl, unit: finalUnits[0] || '', units: finalUnits, activeUnit: finalUnits[0] || '', securityRoles };

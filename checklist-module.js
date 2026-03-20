@@ -154,7 +154,7 @@
 
     const sectionsHtml = buildChecklistSectionsHtml(existing);
 
-    const checklistUnitLocked = u.role === ROLES.REPORTER;
+    const checklistUnitLocked = !isAdmin(u) && getAuthorizedUnits(u).length <= 1;
     const selectedUnit = checklistUnitLocked ? (getScopedUnit(u) || existing?.unit || '') : (existing ? existing.unit : (getScopedUnit(u) || u.unit || ''));
     const today = new Date().toISOString().split('T')[0];
     const totalItems = getChecklistSectionsState().reduce((sum, sec) => sum + sec.items.length, 0);
@@ -614,7 +614,7 @@
         <div class="card"><div class="card-header"><span class="card-title">基本資料與簽核資訊</span></div>
           <div class="detail-grid">
             <div class="detail-field"><div class="detail-field-label">受稽單位</div><div class="detail-field-value">${esc(cl.unit)}</div></div>
-            <div class="detail-field"><div class="detail-field-label">填報人員</div><div class="detail-field-value">${esc(cl.fillerName)}</div></div>
+            <div class="detail-field"><div class="detail-field-label">編修人員</div><div class="detail-field-value">${esc(cl.fillerName)}</div></div>
             <div class="detail-field"><div class="detail-field-label">稽核年度</div><div class="detail-field-value">${esc(cl.auditYear)} 年</div></div>
             <div class="detail-field"><div class="detail-field-label">填報日期</div><div class="detail-field-value">${fmt(cl.fillDate)}</div></div>
             <div class="detail-field"><div class="detail-field-label">權責主管姓名</div><div class="detail-field-value">${esc(cl.supervisorName || cl.supervisor || '—')}</div></div>

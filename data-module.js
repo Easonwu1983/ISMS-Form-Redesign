@@ -691,9 +691,7 @@
 
     function normalizeUserRole(role) {
       if (role === ROLES.ADMIN) return ROLES.ADMIN;
-      if (role === ROLES.VIEWER || String(role || '').trim().toLowerCase() === 'super_viewer') return ROLES.VIEWER;
-      if (role === ROLES.UNIT_ADMIN || role === ROLES.REPORTER) return role;
-      return ROLES.REPORTER;
+      return ROLES.UNIT_ADMIN;
     }
 
     function getAuthorizedUnits(user) {

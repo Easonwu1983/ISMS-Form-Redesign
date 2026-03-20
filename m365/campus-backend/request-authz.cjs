@@ -185,8 +185,8 @@ function createRequestAuthz(deps) {
     return cleanText(authz && authz.role) === USER_ROLES.UNIT_ADMIN;
   }
 
-  function isViewer(authz) {
-    return cleanText(authz && authz.role) === USER_ROLES.VIEWER;
+  function isViewer() {
+    return false;
   }
 
   function matchesUsername(authz, username) {
@@ -198,10 +198,6 @@ function createRequestAuthz(deps) {
     const target = cleanText(unit);
     if (!target) return isAdmin(authz);
     if (isAdmin(authz)) return true;
-    if (isViewer(authz)) {
-      const scoped = cleanText(authz.activeUnit);
-      return !!scoped && scoped === target;
-    }
     return parseUnits(authz.authorizedUnits).includes(target);
   }
 
@@ -240,7 +236,7 @@ function createRequestAuthz(deps) {
   }
 
   function canEditChecklist(authz, item) {
-    if (!authz || !item || isViewer(authz)) return false;
+    if (!authz || !item) return false;
     if (isAdmin(authz)) return true;
     return hasUnitAccess(authz, item.unit) || matchesUsername(authz, item.fillerUsername);
   }
@@ -252,13 +248,13 @@ function createRequestAuthz(deps) {
   }
 
   function canManageTrainingForm(authz, form) {
-    if (!authz || !form || isViewer(authz)) return false;
+    if (!authz || !form) return false;
     if (isAdmin(authz)) return true;
     return matchesUsername(authz, form.fillerUsername);
   }
 
   function canManageTrainingRoster(authz, roster) {
-    if (!authz || !roster || isViewer(authz)) return false;
+    if (!authz || !roster) return false;
     if (isAdmin(authz)) return true;
     return isUnitAdmin(authz) ? hasUnitAccess(authz, roster.unit) : matchesUsername(authz, roster.createdByUsername);
   }
