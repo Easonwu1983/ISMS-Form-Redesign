@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createM365ApiClient = function createM365ApiClient(deps) {
     const {
       UNIT_CONTACT_APPLICATION_STATUSES,
@@ -11,7 +11,7 @@
       getSessionAuthHeaders
     } = deps;
 
-    const CONTRACT_VERSION = '2026-03-11';
+    const CONTRACT_VERSION = '2026-03-20';
     const CORRECTIVE_ACTIONS_CONTRACT_VERSION = '2026-03-12';
     const CHECKLISTS_CONTRACT_VERSION = '2026-03-12';
     const TRAINING_CONTRACT_VERSION = '2026-03-12';
@@ -349,7 +349,13 @@
         unitCode: cleanText(payload && payload.unitCode) || cleanText(officialMeta && officialMeta.code),
         contactType: cleanText(payload && payload.contactType) || 'primary',
         note: cleanText(payload && payload.note),
-        securityRoles: parseSecurityRoles(payload && payload.securityRoles)
+        securityRoles: parseSecurityRoles(payload && payload.securityRoles),
+        authorizationDocAttachmentId: cleanText(payload && payload.authorizationDocAttachmentId),
+        authorizationDocFileName: cleanText(payload && payload.authorizationDocFileName),
+        authorizationDocContentType: cleanText(payload && payload.authorizationDocContentType),
+        authorizationDocSize: Number(payload && payload.authorizationDocSize || 0),
+        authorizationDocUploadedAt: cleanText(payload && payload.authorizationDocUploadedAt),
+        authorizationDocDriveItemId: cleanText(payload && payload.authorizationDocDriveItemId)
       };
     }
 
@@ -360,6 +366,7 @@
       if (!payload.applicantEmail) throw new Error('請填寫電子郵件');
       if (!payload.unitCode) throw new Error('找不到對應的正式單位代碼，請先確認單位資料');
       if (!Array.isArray(payload.securityRoles) || !payload.securityRoles.length) throw new Error('請至少選擇一種資安角色身分');
+      if (!payload.authorizationDocAttachmentId && !payload.authorizationDocDriveItemId) throw new Error('請上傳主管授權同意書');
     }
 
     function assertNoDuplicateActiveApplication(payload) {
@@ -549,6 +556,13 @@
         activationSentAt: source.ActivationSentAt || source.activationSentAt || null,
         activatedAt: source.ActivatedAt || source.activatedAt || null,
         externalUserId: cleanText(source.ExternalUserId || source.externalUserId),
+        authorizationDocAttachmentId: cleanText(source.AuthorizationDocAttachmentId || source.authorizationDocAttachmentId),
+        authorizationDocFileName: cleanText(source.AuthorizationDocFileName || source.authorizationDocFileName),
+        authorizationDocContentType: cleanText(source.AuthorizationDocContentType || source.authorizationDocContentType),
+        authorizationDocSize: Number(source.AuthorizationDocSize || source.authorizationDocSize || 0),
+        authorizationDocUploadedAt: cleanText(source.AuthorizationDocUploadedAt || source.authorizationDocUploadedAt),
+        authorizationDocDriveItemId: cleanText(source.AuthorizationDocDriveItemId || source.authorizationDocDriveItemId),
+        hasAuthorizationDoc: !!cleanText(source.AuthorizationDocAttachmentId || source.authorizationDocAttachmentId || source.AuthorizationDocDriveItemId || source.authorizationDocDriveItemId),
         hasRequestedPassword: source.hasRequestedPassword === true || cleanText(source.HasRequestedPassword).toLowerCase() === 'true'
       };
       return decorateApplication(normalized);
@@ -598,6 +612,13 @@
         activationSentAt: cleanText(source.activationSentAt || source.ActivationSentAt),
         activatedAt: cleanText(source.activatedAt || source.ActivatedAt),
         externalUserId: cleanText(source.externalUserId || source.ExternalUserId),
+        authorizationDocAttachmentId: cleanText(source.authorizationDocAttachmentId || source.AuthorizationDocAttachmentId),
+        authorizationDocFileName: cleanText(source.authorizationDocFileName || source.AuthorizationDocFileName),
+        authorizationDocContentType: cleanText(source.authorizationDocContentType || source.AuthorizationDocContentType),
+        authorizationDocSize: Number(source.authorizationDocSize || source.AuthorizationDocSize || 0),
+        authorizationDocUploadedAt: cleanText(source.authorizationDocUploadedAt || source.AuthorizationDocUploadedAt),
+        authorizationDocDriveItemId: cleanText(source.authorizationDocDriveItemId || source.AuthorizationDocDriveItemId),
+        hasAuthorizationDoc: !!cleanText(source.authorizationDocAttachmentId || source.AuthorizationDocAttachmentId || source.authorizationDocDriveItemId || source.AuthorizationDocDriveItemId),
         hasRequestedPassword: false
       });
     }

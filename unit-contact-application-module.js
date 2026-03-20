@@ -15,12 +15,17 @@
       getUnitCode,
       getM365ModeLabel,
       getM365ModeKey,
+      submitAttachmentUpload,
+      requestUnitContactAuthorizationDocument,
       submitUnitContactApplication,
       getUnitContactApplication,
       lookupUnitContactApplicationsByEmail
     } = deps;
 
     const LAST_EMAIL_KEY = 'unit-contact-last-email';
+    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.doc';
+    const AUTHORIZATION_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+    const AUTHORIZATION_UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
     const SECURITY_ROLE_OPTIONS = [
       '二級單位資安窗口',
       '一級單位資安窗口'
@@ -86,6 +91,133 @@
         .filter(Boolean);
     }
 
+    function validateAuthorizationDocument(file) {
+      if (!(file instanceof File)) throw new Error('請上傳主管授權同意書');
+      const size = Number(file.size || 0);
+      const name = String(file.name || '').trim().toLowerCase();
+      if (!size) throw new Error('請上傳主管授權同意書');
+      if (size > AUTHORIZATION_UPLOAD_MAX_BYTES) throw new Error('主管授權同意書檔案不可超過 5MB');
+      if (!/\.(pdf|jpe?g|png)$/i.test(name)) throw new Error('主管授權同意書僅限 PDF、JPG 或 PNG');
+      return file;
+    }
+
+    function buildAuthorizationTemplateHtml() {
+      return [
+        '<!doctype html>',
+        '<html lang="zh-Hant">',
+        '<head>',
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        '<title>單位資安窗口授權同意書</title>',
+        '<style>',
+        'body{margin:0;padding:40px;font-family:"Microsoft JhengHei",Arial,sans-serif;line-height:1.8;color:#1f2937;background:#fff}',
+        '.sheet{max-width:760px;margin:0 auto;border:1px solid #d7dde7;border-radius:20px;padding:40px 44px}',
+        'h1{margin:0 0 8px;font-size:28px;letter-spacing:.04em}',
+        '.muted{color:#6b7280;font-size:14px}',
+        '.field{margin-top:26px;padding:16px 18px;border:1px solid #e4e8ef;border-radius:14px;background:#f9fbfe}',
+        '.label{font-size:14px;color:#667085;margin-bottom:8px}',
+        '.line{display:block;min-height:24px;border-bottom:1px solid #cfd8e3;margin-top:8px}',
+        '.check{margin-top:20px;padding:18px;border-left:4px solid #2f6fb5;background:#f4f8fc;border-radius:12px}',
+        '.foot{margin-top:28px;font-size:14px;color:#475467}',
+        '</style>',
+        '</head>',
+        '<body>',
+        '<div class="sheet">',
+        '<h1>單位資安窗口授權同意書</h1>',
+        '<div class="muted">請由單位主管簽章後，作為申請單位管理員帳號之附件。</div>',
+        '<div class="field"><div class="label">申請單位</div><span class="line">&nbsp;</span></div>',
+        '<div class="field"><div class="label">申請人姓名</div><span class="line">&nbsp;</span></div>',
+        '<div class="field"><div class="label">申請電子郵件</div><span class="line">&nbsp;</span></div>',
+        '<div class="field"><div class="label">授權項目</div><div class="check">□ 二級單位資安窗口　□ 一級單位資安窗口</div></div>',
+        '<div class="field"><div class="label">主管簽章</div><span class="line">&nbsp;</span></div>',
+        '<div class="field"><div class="label">日期</div><span class="line">&nbsp;</span></div>',
+        '<div class="foot">填妥後請掃描成 PDF、JPG 或 PNG，上傳至申請表單。</div>',
+        '</div>',
+        '</body>',
+        '</html>'
+      ].join('');
+    }
+
+    function downloadAuthorizationTemplate() {
+      const blob = new Blob([buildAuthorizationTemplateHtml()], { type: 'application/msword;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = AUTHORIZATION_TEMPLATE_FILENAME;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => {
+        try { URL.revokeObjectURL(url); } catch (_) { }
+      }, 1000);
+    }
+
+    function renderAuthorizationDocumentSelection() {
+      const input = document.getElementById('uca-authorization-doc');
+      const preview = document.getElementById('uca-authorization-doc-preview');
+      if (!preview) return;
+      const file = input && input.files && input.files[0] ? input.files[0] : null;
+      if (!file) {
+        preview.innerHTML = '<span class="unit-contact-file-empty">尚未選擇檔案</span>';
+        return;
+      }
+      preview.innerHTML = '<span class="unit-contact-file-name">' + esc(file.name) + '</span>'
+        + '<button type="button" class="btn btn-ghost btn-sm" data-action="unit-contact-clear-auth-doc">移除檔案</button>';
+    }
+
+    function ensureAuthorizationDocumentSection(form) {
+      if (!form || document.getElementById('uca-authorization-doc-card')) return null;
+      const card = document.createElement('div');
+      card.className = 'card unit-contact-auth-doc-card';
+      card.id = 'uca-authorization-doc-card';
+      card.innerHTML = ''
+        + '<div class="section-header">' + ic('file-text', 'icon-sm') + ' 下載單位資安窗口授權同意書</div>'
+        + '<div class="form-hint" style="margin-top:8px">請先下載本同意書，經單位主管簽章後，再上傳掃描檔。</div>'
+        + '<div class="form-actions" style="margin-top:14px">'
+        + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 下載同意書</button>'
+        + '</div>'
+        + '<div class="form-group" style="margin-top:18px">'
+        + '<label class="form-label form-required">上傳主管簽章之授權同意書</label>'
+        + '<input type="file" class="form-input" id="uca-authorization-doc" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" data-testid="unit-contact-authorization-doc-input">'
+        + '<div class="form-hint">僅限 PDF、JPG、PNG，大小上限 5MB。</div>'
+        + '<div class="unit-contact-auth-doc-preview" id="uca-authorization-doc-preview"><span class="unit-contact-file-empty">尚未選擇檔案</span></div>'
+        + '</div>';
+      const actions = form.querySelector('.form-actions');
+      if (actions && actions.parentNode === form) {
+        form.insertBefore(card, actions);
+      } else {
+        form.appendChild(card);
+      }
+      card.querySelector('[data-action="unit-contact-download-auth-template"]')?.addEventListener('click', downloadAuthorizationTemplate);
+      const input = card.querySelector('#uca-authorization-doc');
+      input && input.addEventListener('change', renderAuthorizationDocumentSelection);
+      card.addEventListener('click', function (event) {
+        const button = event.target && event.target.closest ? event.target.closest('[data-action="unit-contact-clear-auth-doc"]') : null;
+        if (!button) return;
+        const fileInput = document.getElementById('uca-authorization-doc');
+        if (fileInput) fileInput.value = '';
+        renderAuthorizationDocumentSelection();
+      });
+      renderAuthorizationDocumentSelection();
+      return card;
+    }
+
+    async function openAuthorizationDocumentPreview(applicationId, email, options) {
+      const response = await requestUnitContactAuthorizationDocument(applicationId, {
+        email: email || "",
+        download: options && options.download ? "1" : ""
+      });
+      const blob = response && response.blob;
+      if (!(blob instanceof Blob)) throw new Error('無法載入授權同意書');
+      const objectUrl = URL.createObjectURL(blob);
+      const previewWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      if (!previewWindow) window.location.href = objectUrl;
+      setTimeout(() => {
+        try { URL.revokeObjectURL(objectUrl); } catch (_) { }
+      }, 10000);
+      return objectUrl;
+    }
+
     function buildPublicHero(eyebrow, title, subtitle, actions) {
       return ''
         + '<div class="page-header unit-contact-hero">'
@@ -135,31 +267,34 @@
         + '</div>';
     }
 
-    function buildStatusActions(application) {
+    function buildStatusActions(application, lookupEmail) {
       const status = String(application && application.status || '').trim();
       const id = encodeURIComponent(String(application && application.id || '').trim());
       const actions = [];
       if (status === UNIT_CONTACT_APPLICATION_STATUSES.RETURNED) {
-        actions.push('<a class="btn btn-primary" href="#apply-unit-contact">補件後重新送出</a>');
+        actions.push('<a class="btn btn-primary" href="#apply-unit-contact">重新送出申請</a>');
         actions.push('<a class="btn btn-secondary" href="#apply-unit-contact-status">重新查詢</a>');
       } else if (
         status === UNIT_CONTACT_APPLICATION_STATUSES.APPROVED
         || status === UNIT_CONTACT_APPLICATION_STATUSES.ACTIVATION_PENDING
         || status === UNIT_CONTACT_APPLICATION_STATUSES.ACTIVE
       ) {
-        actions.push('<a class="btn btn-primary" href="#activate-unit-contact/' + id + '">查看啟用說明</a>');
-        actions.push('<a class="btn btn-secondary" href="#apply-unit-contact-status">返回查詢</a>');
+        actions.push('<a class="btn btn-primary" href="#activate-unit-contact/' + id + '">啟用帳號</a>');
+        actions.push('<a class="btn btn-secondary" href="#apply-unit-contact-status">重新查詢</a>');
       } else if (status === UNIT_CONTACT_APPLICATION_STATUSES.REJECTED) {
         actions.push('<a class="btn btn-primary" href="#apply-unit-contact">重新送出申請</a>');
         actions.push('<a class="btn btn-secondary" href="#apply-unit-contact-status">重新查詢</a>');
+      }
+      if (application && application.hasAuthorizationDoc) {
+        actions.push('<button type="button" class="btn btn-secondary" data-action="unit-contact-view-auth-doc" data-application-id="' + esc(String(application.id || '').trim()) + '" data-lookup-email="' + esc(String(lookupEmail || '').trim().toLowerCase()) + '">' + ic('file-text', 'icon-sm') + ' 檢視授權同意書</button>');
       }
       if (!actions.length) return '';
       return '<div class="form-actions unit-contact-status-actions">' + actions.join('') + '</div>';
     }
 
-    function buildApplicationStatusCard(application) {
+    function buildApplicationStatusCard(application, lookupEmail) {
       const detail = String(application && application.statusDetail || '').trim()
-        || '申請已送出，請留意後續審核通知並使用申請電子郵件回到系統查詢進度。';
+        || '已送出申請，請留意後續狀態更新。';
       const roles = normalizeSecurityRoles(application && application.securityRoles);
       return ''
         + '<article class="card unit-contact-status-card">'
@@ -174,10 +309,9 @@
         + '<span>最後更新：' + esc(fmtTime(application.updatedAt || application.submittedAt)) + '</span>'
         + (roles.length ? '<span>資安角色：' + esc(roles.join('、')) + '</span>' : '')
         + '</div>'
-        + buildStatusActions(application)
+        + buildStatusActions(application, lookupEmail)
         + '</article>';
     }
-
     function readUnitFormState(baseId) {
       return {
         unitValue: String(document.getElementById(baseId)?.value || '').trim(),
@@ -250,6 +384,7 @@
       initUnitCascade('uca-unit', '', { disabled: false });
 
       const form = document.getElementById('unit-contact-apply-form');
+      ensureAuthorizationDocumentSection(form);
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
 
       form.addEventListener('input', markDirty);
@@ -262,6 +397,8 @@
         const applicantEmail = String(document.getElementById('uca-email').value || '').trim().toLowerCase();
         const note = String(document.getElementById('uca-note').value || '').trim();
         const securityRoles = readSelectedSecurityRoles();
+        const authDocInput = document.getElementById('uca-authorization-doc');
+        const authDocFile = authDocInput && authDocInput.files && authDocInput.files[0] ? authDocInput.files[0] : null;
 
         if (!unitState.unitValue) {
           toast('請先選擇申請單位。', 'error');
@@ -276,21 +413,40 @@
           return;
         }
 
+        if (!authDocFile) {
+          toast('??????????', 'error');
+          return;
+        }
+
         try {
+          validateAuthorizationDocument(authDocFile);
+
           if (submitButton) {
             submitButton.disabled = true;
             submitButton.dataset.originalText = submitButton.innerHTML;
             submitButton.innerHTML = '送出中...';
           }
 
+          const uploadedAuthDoc = await submitAttachmentUpload({ file: authDocFile, name: authDocFile.name, type: authDocFile.type }, {
+            scope: 'unit-contact-authorization-doc',
+            ownerId: applicantEmail,
+            recordType: 'unit-contact-application',
+            fileName: authDocFile.name
+          });
+          if (!uploadedAuthDoc || !uploadedAuthDoc.attachmentId) throw new Error('請上傳主管授權同意書');
           const result = await submitUnitContactApplication({
             ...unitState,
             unitCode: getUnitCode(unitState.unitValue),
             applicantName,
             extensionNumber,
             applicantEmail,
-            note,
-            securityRoles
+            note,            securityRoles,
+            authorizationDocAttachmentId: String(uploadedAuthDoc && uploadedAuthDoc.attachmentId || '').trim(),
+            authorizationDocDriveItemId: String(uploadedAuthDoc && uploadedAuthDoc.driveItemId || '').trim(),
+            authorizationDocFileName: String(uploadedAuthDoc && uploadedAuthDoc.name || authDocFile.name || '').trim(),
+            authorizationDocContentType: String(uploadedAuthDoc && uploadedAuthDoc.contentType || authDocFile.type || '').trim(),
+            authorizationDocSize: Number(uploadedAuthDoc && uploadedAuthDoc.size || authDocFile.size || 0),
+            authorizationDocUploadedAt: String(uploadedAuthDoc && uploadedAuthDoc.uploadedAt || new Date().toISOString()).trim()
           });
 
           if (!result || !result.application) throw new Error('申請送出後未收到有效回應。');
@@ -355,6 +511,7 @@
       if (!mount) return;
       clearDirty();
       const defaultEmail = loadLastEmail();
+      let currentLookupEmail = defaultEmail;
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
@@ -385,6 +542,34 @@
 
       const form = document.getElementById('unit-contact-status-form');
       const resultsEl = document.getElementById('unit-contact-status-results');
+      if (resultsEl && !resultsEl.dataset.authDocPreviewBound) {
+        resultsEl.dataset.authDocPreviewBound = '1';
+        resultsEl.addEventListener('click', async function (event) {
+          const button = event.target && event.target.closest ? event.target.closest('[data-action=\"unit-contact-view-auth-doc\"]') : null;
+          if (!button) return;
+          event.preventDefault();
+          const applicationId = String(button.getAttribute('data-application-id') || '').trim();
+          const lookupEmail = String(button.getAttribute('data-lookup-email') || currentLookupEmail || '').trim().toLowerCase();
+          if (!applicationId) return;
+          const originalText = button.innerHTML;
+          button.disabled = true;
+          button.innerHTML = ic('loader-circle', 'icon-sm') + ' 載入中...';
+          try {
+            const response = await requestUnitContactAuthorizationDocument(applicationId, { email: lookupEmail });
+            const blob = response && response.blob;
+            if (!(blob instanceof Blob)) throw new Error('無法讀取授權同意書');
+            const objectUrl = URL.createObjectURL(blob);
+            const previewWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+            if (!previewWindow) window.location.href = objectUrl;
+            setTimeout(() => { try { URL.revokeObjectURL(objectUrl); } catch (_) { } }, 10000);
+          } catch (error) {
+            toast(String(error && error.message || error || '無法讀取授權同意書'), 'error');
+          } finally {
+            button.disabled = false;
+            button.innerHTML = originalText;
+          }
+        });
+      }
 
       async function runLookup() {
         const email = String(document.getElementById('uca-status-email').value || '').trim().toLowerCase();
@@ -405,7 +590,7 @@
             refreshIcons();
             return;
           }
-          resultsEl.innerHTML = '<div class="unit-contact-status-list">' + applications.map(buildApplicationStatusCard).join('') + '</div>';
+          resultsEl.innerHTML = '<div class="unit-contact-status-list">' + applications.map((application) => buildApplicationStatusCard(application, currentLookupEmail)).join('') + '</div>';
           refreshIcons();
         } catch (error) {
           resultsEl.innerHTML = '';
@@ -413,6 +598,13 @@
         }
       }
 
+      form.addEventListener('click', function (event) {
+        const button = event.target && event.target.closest ? event.target.closest('[data-action=\"unit-contact-clear-auth-doc\"]') : null;
+        if (!button) return;
+        const authDocInput = document.getElementById('uca-authorization-doc');
+        if (authDocInput) authDocInput.value = '';
+        renderAuthorizationDocumentSelection();
+      });
       form.addEventListener('submit', function (event) {
         event.preventDefault();
         runLookup();

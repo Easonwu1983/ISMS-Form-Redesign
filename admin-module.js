@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createAdminModule = function createAdminModule(deps) {
     const {
       ROLES,
@@ -48,7 +48,8 @@
       initUnitCascade,
       registerActionHandlers,
       closeModalRoot,
-      getUnitContactApplication
+      getUnitContactApplication,
+      requestUnitContactAuthorizationDocument
     } = deps;
 
     const DEFAULT_AUDIT_FILTERS = Object.freeze({
@@ -367,6 +368,23 @@
     });
   }
 
+  async function openUnitContactAuthorizationDocumentPreview(applicationId, email) {
+    const response = await requestUnitContactAuthorizationDocument(applicationId, { email });
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const popup = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+    if (!popup) {
+      window.location.href = blobUrl;
+      return;
+    }
+    const revoke = () => {
+      try { URL.revokeObjectURL(blobUrl); } catch (_) {}
+    };
+    popup.addEventListener('load', () => {
+      setTimeout(revoke, 5000);
+    }, { once: true });
+    popup.addEventListener('beforeunload', revoke, { once: true });
+  }
   function renderUnitContactReviewRows(items) {
     const rows = Array.isArray(items) ? items : [];
     if (!rows.length) {
@@ -381,6 +399,9 @@
         actionButtons.push(`<button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
         actionButtons.push(`<button type="button" class="btn btn-sm btn-danger" data-action="admin.unitContactReject" data-id="${esc(id)}">${ic('x-circle', 'icon-sm')} 拒絕</button>`);
       } else if (status === 'approved' || status === 'activation_pending' || status === 'active') {
+        if (item && item.hasAuthorizationDoc) {
+          actionButtons.push(`<button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactViewAuthDoc" data-id="${esc(id)}" data-applicant-email="${esc(item && item.applicantEmail || '')}">${ic('file-search', 'icon-sm')} 檢視授權同意書</button>`);
+        }
         actionButtons.push(`<button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactResendActivation" data-id="${esc(id)}">${ic('mail', 'icon-sm')} 重新寄送登入資訊</button>`);
         if (status !== 'active') {
           actionButtons.push(`<button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
@@ -888,6 +909,11 @@
     },
     unitContactResendActivation: function ({ dataset }) {
       promptActivationInfo(dataset.id, { mode: 'resend' });
+    },
+    unitContactViewAuthDoc: function ({ dataset }) {
+      openUnitContactAuthorizationDocumentPreview(dataset.id, dataset.applicantEmail).catch((error) => {
+        toast(String(error && error.message || error || '無法開啟授權同意書'), 'error');
+      });
     },
     viewAuditEntry: function ({ dataset }) {
       showAuditEntryModal(dataset.index);

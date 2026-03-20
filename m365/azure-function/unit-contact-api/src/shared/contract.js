@@ -1,4 +1,4 @@
-const CONTRACT_VERSION = '2026-03-11';
+const CONTRACT_VERSION = '2026-03-20';
 
 const ACTIONS = {
   APPLY: 'unit-contact.apply',
@@ -139,7 +139,13 @@ function normalizeApplyPayload(payload) {
     unitCode: cleanText(payload && payload.unitCode),
     contactType: cleanText(payload && payload.contactType) || 'primary',
     note: cleanText(payload && payload.note),
-    securityRoles: parseSecurityRoles(payload && payload.securityRoles)
+    securityRoles: parseSecurityRoles(payload && payload.securityRoles),
+    authorizationDocAttachmentId: cleanText(payload && payload.authorizationDocAttachmentId),
+    authorizationDocFileName: cleanText(payload && payload.authorizationDocFileName),
+    authorizationDocContentType: cleanText(payload && payload.authorizationDocContentType),
+    authorizationDocSize: Number(payload && payload.authorizationDocSize || 0),
+    authorizationDocUploadedAt: cleanText(payload && payload.authorizationDocUploadedAt),
+    authorizationDocDriveItemId: cleanText(payload && payload.authorizationDocDriveItemId)
   };
 }
 
@@ -151,6 +157,7 @@ function validateApplyPayload(payload) {
   if (!isValidApplicantEmail(payload.applicantEmail)) throw createError('\u8acb\u8f38\u5165\u53ef\u6536\u4fe1\u7684\u96fb\u5b50\u90f5\u4ef6\u5730\u5740\u3002', 400);
   if (!payload.unitCode) throw createError('\u7f3a\u5c11\u55ae\u4f4d\u4ee3\u78bc\uff0c\u8acb\u91cd\u65b0\u9078\u64c7\u7533\u8acb\u55ae\u4f4d\u3002', 400);
   if (!Array.isArray(payload.securityRoles) || !payload.securityRoles.length) throw createError('\u8acb\u81f3\u5c11\u9078\u64c7\u4e00\u7a2e\u8cc7\u5b89\u89d2\u8272\u8eab\u4efd\u3002', 400);
+  if (!payload.authorizationDocAttachmentId && !payload.authorizationDocDriveItemId) throw createError('請上傳主管授權同意書', 400);
 }
 
 function normalizeLookupEmail(email) {
@@ -286,7 +293,12 @@ function createApplicationRecord(payload, sequence, now) {
     reviewComment: '',
     activationSentAt: null,
     activatedAt: null,
-    externalUserId: ''
+    externalUserId: '',
+    authorizationDocAttachmentId: payload.authorizationDocAttachmentId || '',
+    authorizationDocFileName: payload.authorizationDocFileName || '',
+    authorizationDocContentType: payload.authorizationDocContentType || '',
+    authorizationDocSize: Number(payload.authorizationDocSize || 0),
+    authorizationDocUploadedAt: payload.authorizationDocUploadedAt || ''
   });
 }
 
@@ -324,7 +336,13 @@ function normalizeStoredApplication(application) {
     reviewComment: cleanText(application.reviewComment),
     activationSentAt: cleanText(application.activationSentAt),
     activatedAt: cleanText(application.activatedAt),
-    externalUserId: cleanText(application.externalUserId || noteMeta.meta.externalUserId || noteMeta.meta.requestedUsername)
+    externalUserId: cleanText(application.externalUserId || noteMeta.meta.externalUserId || noteMeta.meta.requestedUsername),
+    authorizationDocAttachmentId: cleanText(application.authorizationDocAttachmentId || noteMeta.meta.authorizationDocAttachmentId),
+    authorizationDocFileName: cleanText(application.authorizationDocFileName || noteMeta.meta.authorizationDocFileName),
+    authorizationDocContentType: cleanText(application.authorizationDocContentType || noteMeta.meta.authorizationDocContentType),
+    authorizationDocSize: Number(application.authorizationDocSize || noteMeta.meta.authorizationDocSize || 0),
+    authorizationDocUploadedAt: cleanText(application.authorizationDocUploadedAt || noteMeta.meta.authorizationDocUploadedAt),
+    authorizationDocDriveItemId: cleanText(application.authorizationDocDriveItemId || noteMeta.meta.authorizationDocDriveItemId),
   });
 }
 
@@ -343,6 +361,13 @@ function mapApplicationForClient(application) {
     contactType: normalized.contactType,
     note: normalized.note,
     securityRoles: normalized.securityRoles,
+    authorizationDocAttachmentId: normalized.authorizationDocAttachmentId || "",
+    authorizationDocFileName: normalized.authorizationDocFileName || "",
+    authorizationDocContentType: normalized.authorizationDocContentType || "",
+    authorizationDocSize: Number(normalized.authorizationDocSize || 0),
+    authorizationDocUploadedAt: normalized.authorizationDocUploadedAt || "",
+    authorizationDocDriveItemId: normalized.authorizationDocDriveItemId || "",
+    hasAuthorizationDoc: !!(normalized.authorizationDocAttachmentId || normalized.authorizationDocDriveItemId),
     status: normalized.status,
     statusLabel: normalized.statusLabel,
     statusDetail: normalized.statusDetail,
@@ -352,11 +377,11 @@ function mapApplicationForClient(application) {
     submittedAt: normalized.submittedAt,
     updatedAt: normalized.updatedAt,
     reviewedAt: normalized.reviewedAt || null,
-    reviewedBy: normalized.reviewedBy || '',
-    reviewComment: normalized.reviewComment || '',
+    reviewedBy: normalized.reviewedBy || "",
+    reviewComment: normalized.reviewComment || "",
     activationSentAt: normalized.activationSentAt || null,
     activatedAt: normalized.activatedAt || null,
-    externalUserId: normalized.externalUserId || ''
+    externalUserId: normalized.externalUserId || ""
   };
 }
 
@@ -374,6 +399,7 @@ function mapApplicationForPublicClient(application) {
     unitCode: normalized.unitCode,
     contactType: normalized.contactType,
     securityRoles: normalized.securityRoles,
+    hasAuthorizationDoc: !!(normalized.authorizationDocAttachmentId || normalized.authorizationDocDriveItemId),
     status: normalized.status,
     statusLabel: normalized.statusLabel,
     statusDetail: normalized.statusDetail,
@@ -392,7 +418,8 @@ function mapApplicationForPublicStatus(application) {
     statusDetail: resolvePublicStatusDetail(normalized.status),
     statusTone: normalized.statusTone,
     submittedAt: normalized.submittedAt,
-    updatedAt: normalized.updatedAt
+    updatedAt: normalized.updatedAt,
+    hasAuthorizationDoc: !!(normalized.authorizationDocAttachmentId || normalized.authorizationDocDriveItemId)
   };
 }
 
@@ -412,7 +439,13 @@ function mapApplicationToGraphFields(application) {
     ContactType: normalized.contactType,
     Note: composeNoteWithMeta(normalized.note, {
       externalUserId: normalized.externalUserId,
-      securityRoles: normalized.securityRoles
+      securityRoles: normalized.securityRoles,
+      authorizationDocAttachmentId: normalized.authorizationDocAttachmentId,
+      authorizationDocFileName: normalized.authorizationDocFileName,
+      authorizationDocContentType: normalized.authorizationDocContentType,
+      authorizationDocSize: String(normalized.authorizationDocSize || 0),
+      authorizationDocUploadedAt: normalized.authorizationDocUploadedAt,
+      authorizationDocDriveItemId: normalized.authorizationDocDriveItemId
     }),
     Status: normalized.status,
     StatusLabel: normalized.statusLabel,
@@ -422,11 +455,11 @@ function mapApplicationToGraphFields(application) {
     SubmittedAt: normalized.submittedAt,
     UpdatedAt: normalized.updatedAt,
     ReviewedAt: normalized.reviewedAt || null,
-    ReviewedBy: normalized.reviewedBy || '',
-    ReviewComment: normalized.reviewComment || '',
+    ReviewedBy: normalized.reviewedBy || "",
+    ReviewComment: normalized.reviewComment || "",
     ActivationSentAt: normalized.activationSentAt || null,
     ActivatedAt: normalized.activatedAt || null,
-    ExternalUserId: normalized.externalUserId || ''
+    ExternalUserId: normalized.externalUserId || ""
   };
 }
 
@@ -443,6 +476,12 @@ function mapGraphFieldsToApplication(fields) {
     unitCode: fields.UnitCode,
     contactType: fields.ContactType,
     note: fields.Note,
+    authorizationDocAttachmentId: fields.AuthorizationDocAttachmentId,
+    authorizationDocFileName: fields.AuthorizationDocFileName,
+    authorizationDocContentType: fields.AuthorizationDocContentType,
+    authorizationDocSize: fields.AuthorizationDocSize,
+    authorizationDocUploadedAt: fields.AuthorizationDocUploadedAt,
+    authorizationDocDriveItemId: fields.AuthorizationDocDriveItemId,
     status: fields.Status,
     statusLabel: fields.StatusLabel,
     statusDetail: fields.StatusDetail || fields.ReviewComment,

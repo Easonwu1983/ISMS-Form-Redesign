@@ -1,4 +1,4 @@
-const http = require('http');
+﻿const http = require('http');
 const crypto = require('crypto');
 const { URL } = require('url');
 
@@ -71,6 +71,7 @@ const state = {
   lists: null,
   listMap: null,
   systemUsersList: null,
+  attachmentsDrive: null,
   listColumnsMap: new Map(),
   actor: null,
   token: null,
@@ -210,6 +211,76 @@ async function getDelegatedToken() {
   state.actor = decoded;
   state.tokenMode = cleanText(token.mode) || 'delegated-cli';
   return { accessToken: token.accessToken, decoded, mode: state.tokenMode };
+}
+
+async function rawGraphResponse(method, pathOrUrl, body, headers) {
+  const { accessToken } = await getDelegatedToken();
+  const targetUrl = /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : GRAPH_ROOT + pathOrUrl;
+  const response = await fetch(targetUrl, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      ...(headers || {})
+    },
+    body
+  });
+  if (!response.ok) {
+    const contentType = cleanText(response.headers.get('content-type'));
+    if (contentType.includes('application/json')) {
+      const json = await response.json();
+      const error = new Error(cleanText(json && json.error && json.error.message) || `Graph request failed with HTTP ${response.status}`);
+      error.statusCode = response.status >= 500 ? 502 : 500;
+      throw error;
+    }
+    const text = await response.text();
+    const error = new Error(cleanText(text) || `Graph request failed with HTTP ${response.status}`);
+    error.statusCode = response.status >= 500 ? 502 : 500;
+    throw error;
+  }
+  return response;
+}
+
+function sanitizePathSegment(value, fallback) {
+  return cleanText(value || fallback || 'item')
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+    .replace(/^\.+/, '')
+    .replace(/\.+$/, '')
+    .slice(0, 120) || cleanText(fallback || 'item');
+}
+
+function sanitizeFileName(filename) {
+  const baseName = cleanText(filename).split(/[\\/]/).pop() || '';
+  return baseName
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim() || 'attachment.bin';
+}
+
+function normalizeAttachmentDisplayName(filename) {
+  const cleanName = cleanText(filename);
+  if (!cleanName) return 'attachment.bin';
+  const normalized = cleanName
+    .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
+    .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
+    .replace(/^([a-z0-9]{3,6}(?:[-_][a-z0-9]{3,}){2,})[-_]+/i, '')
+    .trim();
+  return normalized || cleanName;
+}
+
+function buildContentDisposition(filename, download) {
+  const cleanName = cleanText(filename) || 'attachment.bin';
+  const asciiFallback = cleanName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+  const encoded = encodeURIComponent(cleanName);
+  return `${download ? 'attachment' : 'inline'}; filename="${asciiFallback || 'attachment.bin'}"; filename*=UTF-8''${encoded}`;
+}
+
+async function resolveAttachmentsDrive() {
+  if (state.attachmentsDrive) return state.attachmentsDrive;
+  const siteId = await resolveSiteId();
+  const list = await resolveNamedList(getEnv('ATTACHMENTS_LIBRARY', 'ISMSAttachments'));
+  state.attachmentsDrive = await graphRequest('GET', `/sites/${siteId}/lists/${list.id}/drive?$select=id,name,webUrl,driveType`);
+  return state.attachmentsDrive;
 }
 
 async function resolveSiteId() {
@@ -484,7 +555,13 @@ function buildApplicationSnapshot(application) {
     status: cleanText(application.status),
     reviewedBy: cleanText(application.reviewedBy),
     reviewedAt: cleanText(application.reviewedAt),
-    activatedAt: cleanText(application.activatedAt)
+    activatedAt: cleanText(application.activatedAt),
+    authorizationDocAttachmentId: cleanText(application.authorizationDocAttachmentId),
+    authorizationDocDriveItemId: cleanText(application.authorizationDocDriveItemId),
+    authorizationDocFileName: cleanText(application.authorizationDocFileName),
+    authorizationDocContentType: cleanText(application.authorizationDocContentType),
+    authorizationDocSize: Number(application.authorizationDocSize || 0),
+    authorizationDocUploadedAt: cleanText(application.authorizationDocUploadedAt)
   };
 }
 
@@ -506,11 +583,22 @@ function buildApplicationChanges(beforeItem, afterItem) {
     'reviewComment',
     'activationSentAt',
     'activatedAt',
-    'externalUserId'
+    'externalUserId',
+    'authorizationDocAttachmentId',
+    'authorizationDocDriveItemId',
+    'authorizationDocFileName',
+    'authorizationDocContentType',
+    'authorizationDocSize',
+    'authorizationDocUploadedAt'
   ]);
 }
 
-function summarizeLookupResults(applications) {
+function buildUnitContactAuthorizationDocPath(application) {
+  const ownerId = sanitizePathSegment(application && application.applicantEmail, 'applicant');
+  const attachmentId = sanitizePathSegment(application && application.authorizationDocAttachmentId, 'att');
+  const fileName = sanitizeFileName(application && application.authorizationDocFileName || '銝餌恣??????pdf');
+  return ['unit-contact-authorization-doc', ownerId, attachmentId, fileName].join('/');
+}function summarizeLookupResults(applications) {
   const items = Array.isArray(applications) ? applications : [];
   return {
     total: items.length,
@@ -555,7 +643,7 @@ async function generateUniqueUnitContactUsername() {
     const existing = await getSystemUserEntryByUsername(candidate);
     if (!existing) return candidate;
   }
-  throw new Error('無法產生唯一的單位管理人登入帳號');
+  throw new Error('?⊥??Ｙ??臭??雿恣?犖?餃撣唾?');
 }
 
 async function listAllSystemUsers() {
@@ -622,7 +710,6 @@ function buildUnitContactApplicantMail(application) {
     ])
   };
 }
-
 function buildUnitContactAdminMail(application) {
   return {
     subject: `[ISMS] 新的單位管理人申請：${cleanText(application && application.id)}`,
@@ -637,7 +724,6 @@ function buildUnitContactAdminMail(application) {
     ])
   };
 }
-
 function buildUnitContactStatusMail(application, options) {
   const opts = options || {};
   const loginUsername = cleanText(opts.loginUsername) || cleanText(application && application.externalUserId) || resolveUnitContactLoginUsername(application);
@@ -664,7 +750,6 @@ function buildUnitContactStatusMail(application, options) {
     ].filter(Boolean))
   };
 }
-
 async function provisionUnitContactSystemUser(application) {
   const loginUsername = resolveUnitContactLoginUsername(application);
   if (!loginUsername) {
@@ -1163,6 +1248,78 @@ async function handleActivate(req, res, origin) {
   }
 }
 
+async function handleAuthorizationDocContent(req, res, origin, url, applicationId) {
+  try {
+    const entry = await findApplicationEntryById(applicationId);
+    if (!entry || !entry.application) {
+      const notFound = new Error('Application not found');
+      notFound.statusCode = 404;
+      throw notFound;
+    }
+    const application = entry.application;
+    const applicantEmail = cleanText(application.applicantEmail).toLowerCase();
+    const authorizationHeader = cleanText(req && req.headers && req.headers.authorization);
+    if (authorizationHeader && /^Bearer\s+/i.test(authorizationHeader)) {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      const actorEmail = cleanText(authz && authz.user && authz.user.email).toLowerCase();
+      const actorUsername = cleanText(authz && authz.username).toLowerCase();
+      if (!requestAuthz.isAdmin(authz) && actorEmail !== applicantEmail && actorUsername !== applicantEmail) {
+        const forbidden = new Error('Forbidden');
+        forbidden.statusCode = 403;
+        throw forbidden;
+      }
+    } else {
+      const lookupEmail = normalizeLookupEmail(url.searchParams.get('email'));
+      if (cleanText(lookupEmail).toLowerCase() !== applicantEmail) {
+        const forbidden = new Error('Forbidden');
+        forbidden.statusCode = 403;
+        throw forbidden;
+      }
+    }
+
+    const download = cleanText(url.searchParams.get('download')) === '1';
+    const siteId = await resolveSiteId();
+    const drive = await resolveAttachmentsDrive();
+    const fileName = normalizeAttachmentDisplayName(application.authorizationDocFileName || '銝餌恣??????pdf');
+    const attachmentId = cleanText(application.authorizationDocAttachmentId);
+    const driveItemId = cleanText(application.authorizationDocDriveItemId);
+    const headers = { Accept: '*/*' };
+    let response = null;
+    if (driveItemId) {
+      try {
+        response = await rawGraphResponse('GET', `/sites/${siteId}/drives/${drive.id}/items/${encodeURIComponent(driveItemId)}/content`, undefined, headers);
+      } catch (error) {
+        if (!attachmentId) throw error;
+        response = null;
+      }
+    }
+    if (!response && attachmentId) {
+      const encodedPath = buildUnitContactAuthorizationDocPath(application).split('/').map((segment) => encodeURIComponent(segment)).join('/');
+      response = await rawGraphResponse('GET', `/sites/${siteId}/drives/${drive.id}/root:/${encodedPath}:/content`, undefined, headers);
+    }
+    if (!response) {
+      const missing = new Error('Authorization document not found');
+      missing.statusCode = 404;
+      throw missing;
+    }
+    const payload = Buffer.from(await response.arrayBuffer());
+    const contentType = cleanText(response.headers.get('content-type')) || cleanText(application.authorizationDocContentType) || 'application/octet-stream';
+    await writeBinary(res, {
+      status: 200,
+      path: '/api/unit-contact/applications/authorization-doc/content',
+      body: payload,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': buildContentDisposition(fileName, download)
+      }
+    }, origin);
+  } catch (error) {
+    await writeJson(res, {
+      status: Number(error && error.statusCode) || 500,
+      jsonBody: { ok: false, error: cleanText(error && error.message) || 'Failed to read authorization document.' }
+    }, origin);
+  }
+}
 async function handleLookup(req, res, origin, url) {
   let email = '';
   try {
@@ -1246,6 +1403,11 @@ function createServer() {
         await handleActivate(req, res, origin);
         return;
       }
+      const authDocMatch = url.pathname.match(/^\/api\/unit-contact\/applications\/([^/]+)\/authorization-doc\/content\/?$/);
+      if (authDocMatch && req.method === 'GET') {
+        await handleAuthorizationDocContent(req, res, origin, url, decodeURIComponent(authDocMatch[1]));
+        return;
+      }
       if (await correctiveActionRouter.tryHandle(req, res, origin, url)) {
         return;
       }
@@ -1290,6 +1452,3 @@ module.exports = {
   createServer,
   startServer
 };
-
-
-

@@ -502,6 +502,16 @@
       listUnitContactApplications: function (filters) { return getM365ApiClient().listUnitContactApplications(filters); },
       reviewUnitContactApplication: function (payload) { return getM365ApiClient().reviewUnitContactApplication(payload); },
       activateUnitContactApplication: function (payload) { return getM365ApiClient().activateUnitContactApplication(payload); },
+      requestUnitContactAuthorizationDocument: function (applicationId, options) {
+        const id = encodeURIComponent(String(applicationId || '').trim());
+        const query = [];
+        const email = String(options && options.email || '').trim().toLowerCase();
+        const download = String(options && options.download || '').trim() === '1';
+        if (email) query.push('email=' + encodeURIComponent(email));
+        if (download) query.push('download=1');
+        const suffix = query.length ? ('?' + query.join('&')) : '';
+        return requestSameOriginBlob('/api/unit-contact/applications/' + id + '/authorization-doc/content' + suffix, { method: 'GET' });
+      },
       getSchemaHealth: function () { return getDataModule().getSchemaHealth(); },
       migrateAllStores: function () { return getDataModule().migrateAllStores(); },
       exportManagedStoreSnapshot: function () { return getDataModule().exportManagedStoreSnapshot(); },
@@ -630,6 +640,8 @@
       getChecklist,
       getLatestEditableChecklistDraft,
       canAccessChecklist,
+      splitUnitValue,
+      categorizeTopLevelUnit,
       buildUnitCascadeControl,
       initUnitCascade,
       applyTestIds,
@@ -1261,7 +1273,47 @@
       if (timeoutId) clearTimeout(timeoutId);
     }
   }
-  function readBlobAsDataUrl(blob) {
+  async function requestSameOriginBlob(url, options) {
+    const requestOptions = options || {};
+    const safeUrl = normalizeRequestUrl(url);
+    if (!safeUrl) throw new Error('Invalid request endpoint');
+    const config = getRuntimeM365Config();
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutMs = Number(requestOptions.timeoutMs || config.unitContactRequestTimeoutMs || config.apiReadTimeoutMs || 15000);
+    let timeoutId = null;
+    if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
+    try {
+      const response = await fetch(safeUrl, {
+        method: requestOptions.method || 'GET',
+        headers: {
+          ...getSessionAuthHeaders(),
+          ...(requestOptions.headers || {})
+        },
+        signal: controller ? controller.signal : undefined
+      });
+      if (!response.ok) {
+        const rawText = await response.text();
+        let parsed = null;
+        try {
+          parsed = rawText ? JSON.parse(rawText) : null;
+        } catch (_) {
+          parsed = { ok: false, message: rawText };
+        }
+        const error = new Error(String(parsed && (parsed.message || parsed.error || parsed.detail) || ('HTTP ' + response.status)).trim());
+        error.statusCode = response.status;
+        throw error;
+      }
+      return {
+        response,
+        blob: await response.blob()
+      };
+    } catch (error) {
+      if (error && error.name === 'AbortError') throw new Error('連線逾時，請稍後再試');
+      throw error;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }  function readBlobAsDataUrl(blob) {
     return new Promise(function (resolve, reject) {
       if (!(blob instanceof Blob)) {
         reject(new Error('缺少附件內容'));
@@ -2879,6 +2931,17 @@
       getUnitCode,
       getM365ModeLabel: function () { return getM365ApiClient().getModeLabel(); },
       getM365ModeKey: function () { return getM365ApiClient().getMode(); },
+      submitAttachmentUpload: function (entry, options) { return submitAttachmentUpload(entry, options); },
+      requestUnitContactAuthorizationDocument: function (applicationId, options) {
+        const id = encodeURIComponent(String(applicationId || '').trim());
+        const query = [];
+        const email = String(options && options.email || '').trim().toLowerCase();
+        const download = String(options && options.download || '').trim() === '1';
+        if (email) query.push('email=' + encodeURIComponent(email));
+        if (download) query.push('download=1');
+        const suffix = query.length ? ('?' + query.join('&')) : '';
+        return requestSameOriginBlob('/api/unit-contact/applications/' + id + '/authorization-doc/content' + suffix, { method: 'GET' });
+      },
       submitUnitContactApplication: function (payload) { return getM365ApiClient().submitUnitContactApplication(payload); },
       getUnitContactApplication: function (id) { return getM365ApiClient().getUnitContactApplication(id); },
       lookupUnitContactApplicationsByEmail: function (email) { return getM365ApiClient().lookupUnitContactApplicationsByEmail(email); }
