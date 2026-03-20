@@ -23,7 +23,10 @@ function buildSecurityHeaders(pathname) {
     'x-frame-options': 'DENY',
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'no-referrer',
-    'permissions-policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()'
+    'permissions-policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()',
+    'cross-origin-embedder-policy': 'require-corp',
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-resource-policy': 'same-origin'
   };
   if (isApi || isHtml || path.endsWith('m365-config.override.js')) {
     headers['cache-control'] = 'no-store, no-cache, must-revalidate';

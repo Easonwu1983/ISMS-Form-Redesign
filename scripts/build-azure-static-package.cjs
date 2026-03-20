@@ -102,7 +102,10 @@ function buildStaticWebAppConfig() {
     globalHeaders: {
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'strict-origin-when-cross-origin'
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Resource-Policy': 'same-origin'
     }
   };
   fs.writeFileSync(path.join(outputDir, 'staticwebapp.config.json'), JSON.stringify(config, null, 2), 'utf8');

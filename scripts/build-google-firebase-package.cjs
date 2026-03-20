@@ -91,17 +91,20 @@ function writeFirebaseConfig() {
       rewrites: [
         { source: '**', destination: '/index.html' }
       ],
-      headers: [
-        {
-          source: '**',
-          headers: [
-            { key: 'X-Content-Type-Options', value: 'nosniff' },
-            { key: 'X-Frame-Options', value: 'DENY' },
-            { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' }
-          ]
-        }
-      ]
-    }
+        headers: [
+          {
+            source: '**',
+            headers: [
+              { key: 'X-Content-Type-Options', value: 'nosniff' },
+              { key: 'X-Frame-Options', value: 'DENY' },
+              { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+              { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+              { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+              { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' }
+            ]
+          }
+        ]
+      }
   };
   fs.writeFileSync(path.join(outputDir, 'firebase.json'), JSON.stringify(config, null, 2), 'utf8');
 }

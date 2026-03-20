@@ -88,6 +88,9 @@ function buildHomepageRedirectIndex() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+  <meta http-equiv="Cross-Origin-Resource-Policy" content="same-origin">
   <title>內部稽核管考追蹤系統入口</title>
   <meta http-equiv="refresh" content="1; url=${redirectTarget}">
   <meta name="robots" content="noindex,nofollow">
