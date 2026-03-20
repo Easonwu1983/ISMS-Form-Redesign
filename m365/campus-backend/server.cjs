@@ -612,14 +612,13 @@ function buildUnitContactApplicantMail(application) {
   return {
     subject: `[ISMS] 已收到單位管理人申請：${cleanText(application && application.id)}`,
     html: buildHtmlDocument([
-      `您好，系統已收到您的單位管理人申請。`,
+      `您好，您的單位管理人申請已送出。`,
       `申請編號：${cleanText(application && application.id)}`,
       `申請單位：${cleanText(application && application.unitValue)}`,
-      `申請人：${cleanText(application && application.applicantName)}`,
       `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`,
-      `管理者審核通過後，系統會直接啟用帳號，並寄送登入資訊。`,
-      `登入帳號會直接使用您申請時填寫的電子郵件。`,
-      `後續請使用送件信箱回到系統查詢申請進度。`
+      `審核通過後，系統會直接啟用帳號並寄送登入資訊。`,
+      `登入帳號即為您申請時填寫的電子郵件信箱。`,
+      `如需查詢進度，請使用同一信箱回到系統查詢。`
     ])
   };
 }
