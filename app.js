@@ -3819,6 +3819,7 @@
       run();
     };
     const scheduleLocalWarmup = function () {
+      if (getAuthMode() === 'm365-api') return;
       const run = function () {
         try {
           seedData();
