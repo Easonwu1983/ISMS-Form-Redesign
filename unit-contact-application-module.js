@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createUnitContactApplicationModule = function createUnitContactApplicationModule(deps) {
     const {
       UNIT_CONTACT_APPLICATION_STATUSES,
@@ -95,7 +95,7 @@
         + '<div><span>申請編號</span><strong>' + esc(application.id) + '</strong></div>'
         + '<div><span>申請單位</span><strong>' + esc(application.unitValue) + '</strong></div>'
         + '<div><span>申請人</span><strong>' + esc(application.applicantName) + '</strong></div>'
-        + '<div><span>申請信箱</span><strong>' + esc(application.applicantEmail) + '</strong></div>'
+        + '<div><span>申請電子郵件</span><strong>' + esc(application.applicantEmail) + '</strong></div>'
         + '</div>';
     }
 
@@ -123,7 +123,7 @@
 
     function buildApplicationStatusCard(application) {
       const detail = String(application && application.statusDetail || '').trim()
-        || '申請已送出，請留意後續審核通知並使用申請信箱回到系統查詢進度。';
+        || '申請已送出，請留意後續審核通知並使用申請電子郵件回到系統查詢進度。';
       return ''
         + '<article class="card unit-contact-status-card">'
         + '<div class="unit-contact-status-card-top">'
@@ -183,7 +183,7 @@
         + '<div class="form-group"><label class="form-label form-required">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" required></div>'
         + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入可收信的電子郵件地址（例如 Gmail 或 g.ntu.edu.tw）" required></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入可收信的電子郵件（例如 Gmail 或 g.ntu.edu.tw）" required></div>'
         + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充職稱、代理原因或其他說明"></div></div>'
         + '<div class="form-actions">'
         + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
@@ -194,14 +194,14 @@
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請流程</div>'
         + buildStepCard('1. 填寫並送出申請', '填妥申請單位、申請人與聯絡資訊後送出。')
         + buildStepCard('2. 等待最高管理員審核', '最高管理員會依申請內容進行通過、退回補件或拒絕。')
-        + buildStepCard('3. 直接使用申請信箱登入', '審核通過後，系統會直接啟用帳號，並寄送初始密碼。登入帳號固定為申請時填寫的電子郵件。')
+        + buildStepCard('3. 直接使用申請電子郵件登入', '審核通過後，系統會直接啟用帳號，並寄送初始密碼。登入帳號固定為申請時填寫的電子郵件。')
         + '</div>'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 送出前請確認</div>'
         + '<ul class="unit-contact-checklist">'
         + '<li>申請單位已填寫正式名稱或完整自訂名稱。</li>'
-        + '<li>申請信箱請填可正常收信的電子郵件地址，例如 Gmail 或 g.ntu.edu.tw。</li>'
+        + '<li>申請電子郵件可填 Gmail、g.ntu.edu.tw 或其他可正常收信的信箱。</li>'
         + '<li>審核通過後會直接啟用帳號，登入帳號固定為申請時填寫的電子郵件。</li>'
-        + '<li>送出後請記下申請信箱，後續可用來查詢申請進度。</li>'
+        + '<li>送出後請記下申請電子郵件，後續可用來查詢申請進度。</li>'
         + '</ul></div>'
         + '</aside></div></section>';
 
@@ -244,7 +244,7 @@
           if (!result || !result.application) throw new Error('申請送出後未收到有效回應。');
           saveLastEmail(applicantEmail);
           clearDirty();
-          toast('申請已送出，請記下申請信箱並留意後續通知。');
+          toast('申請已送出，請記下申請電子郵件並留意後續通知。');
           navigate('apply-unit-contact-success/' + encodeURIComponent(result.application.id), { allowDirtyNavigation: true });
         } catch (error) {
           toast(String(error && error.message || error || '申請送出失敗。'), 'error');
@@ -270,10 +270,10 @@
           + buildPublicHero(
             '申請已送出',
             '找不到申請資料',
-            '目前無法載入這筆申請。若剛完成送件，請改由查詢頁輸入申請信箱查看進度。',
+          '目前無法載入這筆申請。若剛完成送件，請改由查詢頁輸入申請電子郵件查看進度。',
             '<a class="btn btn-primary" href="#apply-unit-contact">重新送出申請</a>'
           )
-          + '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">找不到申請資料</div><div class="empty-state-desc">請改用申請信箱到查詢頁查看，或重新送出申請。</div></div>'
+          + '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">找不到申請資料</div><div class="empty-state-desc">請改用申請電子郵件到查詢頁查看，或重新送出申請。</div></div>'
           + '</section>';
         refreshIcons();
         return;
@@ -283,7 +283,7 @@
         + buildPublicHero(
           '申請已送出',
           '申請已成功送出',
-          '請記下申請編號與申請信箱，後續可回到查詢頁查看審核進度與登入資訊寄送結果。',
+          '請記下申請編號與申請電子郵件，後續可回到查詢頁查看審核進度與登入資訊寄送結果。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
@@ -291,7 +291,7 @@
         + '<div class="card unit-contact-success-card">'
         + '<div class="unit-contact-success-mark">' + ic('badge-check', 'icon-xl') + '</div>'
         + buildApplicationSummary(application)
-        + '<div class="unit-contact-success-note">若管理端需要補件或已完成審核，系統會更新申請狀態。登入帳號會固定使用申請信箱。</div>'
+        + '<div class="unit-contact-success-note">若管理端需要補件或已完成審核，系統會更新申請狀態。登入帳號會固定使用申請電子郵件。</div>'
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">立即查詢進度</a><a class="btn btn-ghost" href="#apply-unit-contact">送出另一筆申請</a></div>'
         + '</div></div></div></section>';
       refreshIcons();
@@ -313,10 +313,10 @@
         + '<div class="unit-contact-layout">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-form-card">'
-        + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 依信箱查詢</div>'
+        + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 依電子郵件查詢</div>'
         + '<form id="unit-contact-status-form">'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入送件時使用的電子郵件信箱" required></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入送件時使用的電子郵件信箱" required></div>'
         + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary" style="width:100%">' + ic('search', 'icon-sm') + ' 開始查詢</button></div>'
         + '</div></form>'
         + '<div id="unit-contact-status-results"></div>'
@@ -336,7 +336,7 @@
       async function runLookup() {
         const email = String(document.getElementById('uca-status-email').value || '').trim().toLowerCase();
         if (!email) {
-          toast('請輸入申請信箱。', 'error');
+          toast('請輸入申請電子郵件。', 'error');
           return;
         }
         if (!isApplicantEmail(email)) {
@@ -348,7 +348,7 @@
         try {
           const applications = await lookupUnitContactApplicationsByEmail(email);
           if (!applications.length) {
-            resultsEl.innerHTML = '<div class="empty-state unit-contact-inline-empty"><div class="empty-state-icon">' + ic('inbox', 'icon-lg') + '</div><div class="empty-state-title">找不到申請紀錄</div><div class="empty-state-desc">請確認申請信箱是否正確，或先回到申請頁重新送件。</div></div>';
+            resultsEl.innerHTML = '<div class="empty-state unit-contact-inline-empty"><div class="empty-state-icon">' + ic('inbox', 'icon-lg') + '</div><div class="empty-state-title">找不到申請紀錄</div><div class="empty-state-desc">請確認申請電子郵件是否正確，或先回到申請頁重新送件。</div></div>';
             refreshIcons();
             return;
           }
