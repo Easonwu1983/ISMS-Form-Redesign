@@ -675,6 +675,36 @@
     refreshIcons();
   }
 
+  function handleClearLoginLogs() {
+    if (!canManageUsers()) {
+      toast('僅最高管理員可清除登入紀錄', 'error');
+      return;
+    }
+    if (!confirm('確定要清除所有登入紀錄嗎？')) return;
+    clearLoginLogs();
+    toast('登入紀錄已清除');
+    renderLoginLog();
+  }
+
+  function renderLoginLog() {
+    if (!canManageUsers()) {
+      navigate('dashboard');
+      toast('您沒有檢視登入紀錄的權限', 'error');
+      return;
+    }
+    const logs = (loadLoginLogs() || []).slice().reverse();
+    const rows = logs.length ? logs.map((log) => {
+      const success = !!(log && log.success);
+      const badge = success
+        ? '<span class="review-status-badge approved">成功</span>'
+        : '<span class="review-status-badge danger">失敗</span>';
+      return `<tr><td>${esc(fmtTime(log && log.time) || '—')}</td><td style="font-weight:500">${esc(log && log.username || '—')}</td><td>${esc(log && log.name || '—')}</td><td>${esc(log && log.role || '—')}</td><td>${badge}</td></tr>`;
+    }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-title">目前沒有登入紀錄</div><div class="empty-state-desc">系統會保留最近的登入與失敗紀錄。</div></div></td></tr>';
+    const app = document.getElementById('app');
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">登入紀錄</div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">最近 200 筆帳號登入與失敗事件。</p></div><div class="review-header-actions"><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div></div><div class="card"><div class="table-wrapper"><table><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>角色</th><th>結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    refreshIcons();
+  }
+
   function formatSchemaBytes(size) {
     const value = Number(size || 0);
     if (value >= 1024 * 1024) return (value / (1024 * 1024)).toFixed(2) + ' MB';
