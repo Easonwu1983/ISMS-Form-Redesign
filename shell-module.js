@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createShellModule = function createShellModule(deps) {
     const {
       ROUTE_WHITELIST,
@@ -118,8 +118,8 @@
         '<p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
         '<div id="forgot-panel" style="display:none">' +
         '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h3 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h3><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">新密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
-        '<div class="login-error" id="forgot-error">找不到符合帳號與信箱的使用者</div>' +
-        '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="forgot-username" placeholder="請輸入帳號" required></div><div class="form-group"><label class="form-label">註冊電子信箱</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入帳號綁定的電子信箱" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 寄送重設信</button></form>' +
+        '<div class="login-error" id="forgot-error">找不到符合帳號與電子郵件的使用者</div>' +
+        '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="forgot-username" placeholder="請輸入帳號" required></div><div class="form-group"><label class="form-label">註冊電子郵件</label><input type="email" class="form-input" id="forgot-email" placeholder="請輸入帳號綁定的電子郵件" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 寄送重設信</button></form>' +
         '<div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px">' +
         '<p style="font-size:.88rem;color:#0f172a;font-weight:600" id="reset-result-title">重設信已寄出</p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary)">帳號：<strong id="reset-username"></strong></p>' +

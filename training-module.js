@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createTrainingModule = function createTrainingModule(deps) {
     const {
       TRAINING_STATUSES,
@@ -745,7 +745,7 @@
       + '<div class="form-feedback" id="training-feedback" data-state="idle" aria-live="polite" hidden></div>'
       + '<div class="section-header">' + ic('info', 'icon-sm') + ' 基本資訊</div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計單位（一級）</label><input type="text" class="form-input" id="tr-stats-unit" value="' + esc(existing?.statsUnit || getTrainingStatsUnit(unitValue)) + '" readonly></div><div class="form-group"><label class="form-label form-required">填報單位</label>' + buildUnitCascadeControl('tr-unit', unitValue, isUnitLocked, true) + '</div></div>'
-      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡信箱</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
+      + '<div class="form-row"><div class="form-group"><label class="form-label form-required">經辦人姓名</label><input type="text" class="form-input" value="' + esc(user.name) + '" readonly></div><div class="form-group"><label class="form-label form-required">聯絡電話</label><input type="text" class="form-input" id="tr-phone" value="' + esc(existing?.submitterPhone || '') + '" placeholder="例如 02-3366-0000 分機 12345" required></div><div class="form-group"><label class="form-label form-required">聯絡電子郵件</label><input type="email" class="form-input" id="tr-email" value="' + esc(existing?.submitterEmail || user.email || '') + '" placeholder="name@g.ntu.edu.tw" required></div></div>'
       + '<div class="form-row"><div class="form-group"><label class="form-label form-required">統計年度</label><input type="text" class="form-input" id="tr-year" value="' + esc(existing?.trainingYear || String(new Date().getFullYear() - 1911)) + '" required></div><div class="form-group"><label class="form-label form-required">填表日期</label><input type="date" class="form-input" id="tr-date" value="' + esc(toDateInputValue(existing?.fillDate) || new Date().toISOString().split('T')[0]) + '" required></div><div class="form-group"><label class="form-label">說明</label><input type="text" class="form-input" value="流程一送出後會先鎖定；若尚未列印簽核表，可於短時間內撤回。" readonly></div></div>'
       + '<div class="section-header">' + ic('users', 'icon-sm') + ' 人員清單</div>'
       + '<div class="training-editor-note">可先多選人員，再一次套用相同在職狀態與' + TRAINING_GENERAL_LABEL + '完成情形。' + TRAINING_PROFESSIONAL_LABEL + '僅在' + TRAINING_INFO_STAFF_LABEL + '為「是」時需要填寫。</div>'
@@ -1149,8 +1149,8 @@
       const fillDate = document.getElementById('tr-date').value;
       if (!unit) return { message: '請先選擇填報單位', field: document.getElementById('tr-unit') };
       if (!phone) return { message: '請填寫聯絡電話', field: document.getElementById('tr-phone') };
-      if (!email) return { message: '請填寫聯絡信箱', field: document.getElementById('tr-email') };
-      if (!/^.+@.+\..+$/.test(email)) return { message: '聯絡信箱格式不正確', field: document.getElementById('tr-email') };
+      if (!email) return { message: '請填寫聯絡電子郵件', field: document.getElementById('tr-email') };
+      if (!/^.+@.+\..+$/.test(email)) return { message: '聯絡電子郵件格式不正確', field: document.getElementById('tr-email') };
       if (!year) return { message: '請填寫統計年度', field: document.getElementById('tr-year') };
       if (!fillDate) return { message: '請填寫填表日期', field: document.getElementById('tr-date') };
       if (!records.length) return { message: '至少需要一筆受訓人員資料', field: document.getElementById('training-add-person') };
@@ -1400,7 +1400,7 @@
         { label: '填報單位', value: form.unit },
         { label: '經辦人', value: form.fillerName },
         { label: '聯絡電話', value: form.submitterPhone || '—' },
-        { label: '聯絡信箱', value: form.submitterEmail || '—' },
+        { label: '聯絡電子郵件', value: form.submitterEmail || '—' },
         { label: '整體完成時間', value: form.submittedAt ? fmtTime(form.submittedAt) : '—' }
       ]))
       + buildTrainingCard('簽核掃描檔', buildTrainingFileSlot('training-signed-files-readonly', 'training-signoff-files'))
