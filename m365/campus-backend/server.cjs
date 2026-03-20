@@ -617,8 +617,8 @@ function buildUnitContactApplicantMail(application) {
       `申請單位：${cleanText(application && application.unitValue)}`,
       `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`,
       `審核通過後，系統會直接啟用帳號並寄送登入資訊。`,
-      `登入帳號即為您申請時填寫的電子郵件信箱。`,
-      `如需查詢進度，請使用同一信箱回到系統查詢。`
+      `登入帳號即為您申請時填寫的電子郵件。`,
+      `如需查詢進度，請使用同一電子郵件回到系統查詢。`
     ])
   };
 }
@@ -631,7 +631,7 @@ function buildUnitContactAdminMail(application) {
       `申請編號：${cleanText(application && application.id)}`,
       `申請單位：${cleanText(application && application.unitValue)}`,
       `申請人：${cleanText(application && application.applicantName)}`,
-      `申請信箱：${cleanText(application && application.applicantEmail)}`,
+      `申請電子郵件：${cleanText(application && application.applicantEmail)}`,
       `分機：${cleanText(application && application.extensionNumber)}`,
       `目前狀態：${cleanText(application && application.statusLabel) || cleanText(application && application.status)}`
     ])
@@ -660,7 +660,7 @@ function buildUnitContactStatusMail(application, options) {
                   ? '帳號已啟用，登入帳號固定為申請時使用的電子郵件。若尚未收到新的初始密碼，請先使用忘記密碼流程重設，或聯絡管理端重新寄送登入資訊。'
                   : '帳號已可啟用或已完成啟用，請依管理端通知的帳號資訊登入系統。')
           ].filter(Boolean).join('\n')
-        : '請使用原送件信箱回到系統查詢最新處理進度。'
+        : '請使用原送件電子郵件回到系統查詢最新處理進度。'
     ].filter(Boolean))
   };
 }

@@ -307,7 +307,7 @@
         + buildPublicHero(
           '申請進度查詢',
           '查詢單位管理人申請進度',
-          '請輸入送件時使用的電子郵件信箱，系統會列出該信箱下的申請狀態與後續操作。',
+          '請輸入送件時使用的電子郵件，系統會列出該電子郵件下的申請狀態與後續操作。',
           '<a class="btn btn-secondary" href="#apply-unit-contact">' + ic('arrow-left', 'icon-sm') + ' 返回申請</a>'
         )
         + '<div class="unit-contact-layout">'
@@ -316,7 +316,7 @@
         + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 依電子郵件查詢</div>'
         + '<form id="unit-contact-status-form">'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入送件時使用的電子郵件信箱" required></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入送件時使用的電子郵件" required></div>'
         + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary" style="width:100%">' + ic('search', 'icon-sm') + ' 開始查詢</button></div>'
         + '</div></form>'
         + '<div id="unit-contact-status-results"></div>'
@@ -324,7 +324,7 @@
         + '<aside class="unit-contact-side">'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('info', 'icon-sm') + ' 查詢說明</div>'
         + '<ul class="unit-contact-checklist">'
-        + '<li>請輸入申請時使用的電子郵件信箱。</li>'
+        + '<li>請輸入申請時使用的電子郵件。</li>'
         + '<li>若看到退回補件，可直接回到申請頁補正後重新送出。</li>'
         + '<li>若看到已通過或已啟用，代表系統會直接寄送登入資訊，可查看登入說明與後續通知。</li>'
         + '</ul></div></aside>'
