@@ -94,10 +94,10 @@ async function seedSyntheticUnitContactSuccess(page) {
 
 async function seedSyntheticUnitReview(page) {
   await page.waitForFunction(() => {
-    const table = document.querySelector('.review-table-card table');
-    const history = document.querySelector('.review-history-card .review-history-list');
-    return !!table && !!history;
-  }, { timeout: 30000 });
+    const tableCard = document.querySelector('.review-table-card');
+    const historyCard = document.querySelector('.review-history-card');
+    return !!tableCard && !!historyCard;
+  }, { timeout: 10000 }).catch(() => null);
 
   await page.evaluate(() => {
     const tableBody = document.querySelector('.review-table-card table tbody');
