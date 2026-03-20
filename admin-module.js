@@ -419,6 +419,10 @@
     refreshIcons();
   }
 
+  function renderUnitReview(nextFilters) {
+    return renderUnitContactReview(nextFilters);
+  }
+
   function promptReviewComment(title, placeholder, submitLabel, onSubmit) {
     const mr = document.getElementById('modal-root');
     mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${esc(title)}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="unit-contact-review-form"><div class="form-group"><label class="form-label">處理說明</label><textarea class="form-textarea" id="unit-contact-review-comment" rows="5" placeholder="${esc(placeholder || '')}"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">${esc(submitLabel)}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;

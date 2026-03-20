@@ -383,6 +383,7 @@ async function loginViaPage(page, username, password) {
       await gotoHash(page, 'apply-unit-contact', { handleUnsaved: false });
       await page.waitForSelector('[data-testid="unit-contact-apply-form"]', { timeout: 20000 });
       await chooseUnitByLabel(page, 'uca-unit', targetUnit);
+      await page.check('input[name="uca-security-role"][value="二級單位資安窗口"]');
       await page.fill('[data-testid="unit-contact-name"]', applicantName);
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', testEmail);

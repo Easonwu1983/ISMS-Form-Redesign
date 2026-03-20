@@ -65,6 +65,8 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
         if (targetChild) await page.selectOption('#uca-unit-child', targetChild.value);
       }
 
+      await page.check('input[name="uca-security-role"][value="二級單位資安窗口"]');
+
       await page.fill('[data-testid="unit-contact-name"]', '公開申請測試');
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', uniqueEmail);

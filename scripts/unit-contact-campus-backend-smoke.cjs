@@ -143,6 +143,8 @@ async function cleanupApplicationById(applicationId) {
         if (targetChild) await page.selectOption('#uca-unit-child', targetChild.value);
       }
 
+      await page.check('input[name="uca-security-role"][value="二級單位資安窗口"]');
+
       await page.fill('[data-testid="unit-contact-name"]', 'Campus Backend 測試');
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', uniqueEmail);

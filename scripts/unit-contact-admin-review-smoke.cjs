@@ -115,7 +115,8 @@ function buildApplyPayload(meta, stamp) {
     unitValue: cleanText(meta && meta.value),
     unitCode: cleanText(meta && meta.normalizedCode),
     contactType: 'primary',
-    note: 'unit-contact admin review smoke'
+    note: 'unit-contact admin review smoke',
+    securityRoles: ['二級單位資安窗口']
   };
 }
 
