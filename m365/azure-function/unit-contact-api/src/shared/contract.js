@@ -66,8 +66,8 @@ function cleanEmail(value) {
   return cleanText(value).toLowerCase();
 }
 
-function isValidNtuEmail(value) {
-  return /^[^@\s]+@ntu\.edu\.tw$/i.test(cleanEmail(value));
+function isValidApplicantEmail(value) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/i.test(cleanEmail(value));
 }
 
 function isStrongPassword(value) {
@@ -128,7 +128,7 @@ function validateApplyPayload(payload) {
   if (!payload.applicantName) throw createError('\u7f3a\u5c11\u7533\u8acb\u4eba\u59d3\u540d\u3002', 400);
   if (!payload.extensionNumber) throw createError('\u7f3a\u5c11\u5206\u6a5f\u3002', 400);
   if (!payload.applicantEmail) throw createError('\u7f3a\u5c11\u7533\u8acb\u4fe1\u7bb1\u3002', 400);
-  if (!isValidNtuEmail(payload.applicantEmail)) throw createError('\u7533\u8acb\u4fe1\u7bb1\u5fc5\u9808\u70ba @ntu.edu.tw\u3002', 400);
+  if (!isValidApplicantEmail(payload.applicantEmail)) throw createError('\u8acb\u8f38\u5165\u53ef\u6536\u4fe1\u7684\u96fb\u5b50\u90f5\u4ef6\u5730\u5740\u3002', 400);
   if (!payload.unitCode) throw createError('\u7f3a\u5c11\u55ae\u4f4d\u4ee3\u78bc\uff0c\u8acb\u91cd\u65b0\u9078\u64c7\u7533\u8acb\u55ae\u4f4d\u3002', 400);
 }
 
@@ -470,7 +470,7 @@ module.exports = {
   mapApplicationToGraphFields,
   mapGraphFieldsToApplication,
   isStrongPassword,
-  isValidNtuEmail,
+  isValidApplicantEmail,
   normalizeApplyPayload,
   normalizeLookupEmail,
   normalizeReviewPayload,

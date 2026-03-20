@@ -23,7 +23,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
   try {
     await resetApp(page);
 
-    const uniqueEmail = `unit-contact-${Date.now()}@ntu.edu.tw`;
+    const uniqueEmail = `unit-contact-${Date.now()}@gmail.com`;
     let createdId = '';
 
     await runStep(results, 'UNIT-CONTACT-PUBLIC-1', 'public', '顯示公開申請頁', async () => {

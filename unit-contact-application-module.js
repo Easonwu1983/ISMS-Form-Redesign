@@ -48,8 +48,8 @@
       }
     }
 
-    function isNtuEmail(email) {
-      return /@ntu\.edu\.tw$/i.test(String(email || '').trim());
+    function isApplicantEmail(email) {
+      return /^[^@\s]+@[^@\s]+\.[^@\s]+$/i.test(String(email || '').trim());
     }
 
     function buildPublicHero(eyebrow, title, subtitle, actions) {
@@ -183,7 +183,7 @@
         + '<div class="form-group"><label class="form-label form-required">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" required></div>'
         + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入 @ntu.edu.tw 信箱" required></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入可收信的電子郵件地址（例如 Gmail 或 g.ntu.edu.tw）" required></div>'
         + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充職稱、代理原因或其他說明"></div></div>'
         + '<div class="form-actions">'
         + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
@@ -199,7 +199,7 @@
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 送出前請確認</div>'
         + '<ul class="unit-contact-checklist">'
         + '<li>申請單位已填寫正式名稱或完整自訂名稱。</li>'
-        + '<li>申請信箱必須為 @ntu.edu.tw。</li>'
+        + '<li>申請信箱請填可正常收信的電子郵件地址，例如 Gmail 或 g.ntu.edu.tw。</li>'
         + '<li>審核通過後會直接啟用帳號，登入帳號固定為申請時填寫的電子郵件。</li>'
         + '<li>送出後請記下申請信箱，後續可用來查詢申請進度。</li>'
         + '</ul></div>'
@@ -222,8 +222,8 @@
           toast('請先選擇申請單位。', 'error');
           return;
         }
-        if (!isNtuEmail(applicantEmail)) {
-          toast('申請信箱必須為 @ntu.edu.tw。', 'error');
+        if (!isApplicantEmail(applicantEmail)) {
+          toast('請輸入可收信的電子郵件地址。', 'error');
           return;
         }
 
@@ -307,7 +307,7 @@
         + buildPublicHero(
           '申請進度查詢',
           '查詢單位管理人申請進度',
-          '請輸入送件時使用的 @ntu.edu.tw 信箱，系統會列出該信箱下的申請狀態與後續操作。',
+          '請輸入送件時使用的電子郵件信箱，系統會列出該信箱下的申請狀態與後續操作。',
           '<a class="btn btn-secondary" href="#apply-unit-contact">' + ic('arrow-left', 'icon-sm') + ' 返回申請</a>'
         )
         + '<div class="unit-contact-layout">'
@@ -316,7 +316,7 @@
         + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 依信箱查詢</div>'
         + '<form id="unit-contact-status-form">'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入送件時使用的 @ntu.edu.tw 信箱" required></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請信箱</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入送件時使用的電子郵件信箱" required></div>'
         + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary" style="width:100%">' + ic('search', 'icon-sm') + ' 開始查詢</button></div>'
         + '</div></form>'
         + '<div id="unit-contact-status-results"></div>'
@@ -324,7 +324,7 @@
         + '<aside class="unit-contact-side">'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('info', 'icon-sm') + ' 查詢說明</div>'
         + '<ul class="unit-contact-checklist">'
-        + '<li>請輸入申請時使用的 @ntu.edu.tw 信箱。</li>'
+        + '<li>請輸入申請時使用的電子郵件信箱。</li>'
         + '<li>若看到退回補件，可直接回到申請頁補正後重新送出。</li>'
         + '<li>若看到已通過或已啟用，代表系統會直接寄送登入資訊，可查看登入說明與後續通知。</li>'
         + '</ul></div></aside>'
@@ -339,8 +339,8 @@
           toast('請輸入申請信箱。', 'error');
           return;
         }
-        if (!isNtuEmail(email)) {
-          toast('查詢信箱必須為 @ntu.edu.tw。', 'error');
+        if (!isApplicantEmail(email)) {
+          toast('請輸入可收信的電子郵件地址。', 'error');
           return;
         }
         saveLastEmail(email);

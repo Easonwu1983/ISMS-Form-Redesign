@@ -104,7 +104,7 @@ async function cleanupApplicationById(applicationId) {
     attachDiagnostics(page, results);
     await resetApp(page);
 
-    const uniqueEmail = `unit-contact-campus-${Date.now()}@ntu.edu.tw`;
+    const uniqueEmail = `unit-contact-campus-${Date.now()}@gmail.com`;
 
     await runStep(results, 'UNIT-CONTACT-CAMPUS-1', 'public', 'backend health endpoint reachable', async () => {
       const response = await fetch(`${BASE_BACKEND}/api/unit-contact/health`);

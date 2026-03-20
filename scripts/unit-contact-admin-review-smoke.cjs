@@ -107,7 +107,7 @@ function loadUnitMeta() {
 function buildApplyPayload(meta, stamp) {
   return {
     applicantName: `Admin Review 測試${stamp}`,
-    applicantEmail: `unit-contact-admin-review-${stamp}@ntu.edu.tw`,
+    applicantEmail: `unit-contact-admin-review-${stamp}@g.ntu.edu.tw`,
     extensionNumber: `6${String(stamp).slice(-4)}`,
     unitCategory: cleanText(meta && meta.topName),
     primaryUnit: cleanText(meta && meta.topName),

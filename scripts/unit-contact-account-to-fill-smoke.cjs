@@ -344,7 +344,7 @@ async function loginViaPage(page, username, password) {
     apiBase: API_BASE
   });
   const stamp = nowStamp();
-  const testEmail = `ucae2e-${stamp}@ntu.edu.tw`;
+  const testEmail = `ucae2e-${stamp}@g.ntu.edu.tw`;
   const testUsername = testEmail;
   const testPassword = `T${stamp}#Aa1`;
   const applicantName = `測試申請人${stamp}`;
