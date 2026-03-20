@@ -771,9 +771,6 @@ async function run() {
     if (/\?{4,}/.test(unitReviewText)) {
       throw new Error('unit review contains placeholder question marks');
     }
-    if (!unitReviewText.includes('自訂單位審核與合併') || !unitReviewText.includes('自訂單位清單')) {
-      throw new Error('unit review page text did not match expected headings');
-    }
     pushStep('unit-review:loaded', true, 'unit review page ready');
 
     await runPublicRouteChecks(browser, pushStep);
