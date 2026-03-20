@@ -671,6 +671,24 @@
       return [];
     }
 
+    function parseSecurityRoles(value) {
+      if (Array.isArray(value)) {
+        return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
+      }
+      if (typeof value === 'string') {
+        const raw = String(value || '').trim();
+        if (!raw) return [];
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            return Array.from(new Set(parsed.map((entry) => String(entry || '').trim()).filter(Boolean)));
+          }
+        } catch (_) {}
+        return Array.from(new Set(raw.split(/\r?\n|,|;|\|/).map((entry) => String(entry || '').trim()).filter(Boolean)));
+      }
+      return [];
+    }
+
     function normalizeUserRole(role) {
       if (role === ROLES.ADMIN) return ROLES.ADMIN;
       if (role === ROLES.VIEWER || String(role || '').trim().toLowerCase() === 'super_viewer') return ROLES.VIEWER;
@@ -705,6 +723,7 @@
         role,
         units,
         reviewUnits,
+        securityRoles: parseSecurityRoles(user?.securityRoles),
         unit: units[0] || '',
         activeUnit: role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units })
       };

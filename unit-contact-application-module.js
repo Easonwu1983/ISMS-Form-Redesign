@@ -21,6 +21,10 @@
     } = deps;
 
     const LAST_EMAIL_KEY = 'unit-contact-last-email';
+    const SECURITY_ROLE_OPTIONS = [
+      '二級單位資安窗口',
+      '一級單位資安窗口'
+    ];
 
     function getMount() {
       return document.getElementById('app');
@@ -50,6 +54,36 @@
 
     function isApplicantEmail(email) {
       return /^[^@\s]+@[^@\s]+\.[^@\s]+$/i.test(String(email || '').trim());
+    }
+
+    function normalizeSecurityRoles(value) {
+      if (Array.isArray(value)) {
+        return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
+      }
+      if (typeof value === 'string') {
+        return Array.from(new Set(value.split(/\r?\n|,|;|\|/).map((entry) => String(entry || '').trim()).filter(Boolean)));
+      }
+      return [];
+    }
+
+    function buildSecurityRoleCheckboxes(selectedRoles) {
+      const selected = new Set(normalizeSecurityRoles(selectedRoles));
+      return '<div class="unit-contact-security-roles">'
+        + SECURITY_ROLE_OPTIONS.map((role) => {
+          const checked = selected.has(role) ? 'checked' : '';
+          const testId = 'unit-contact-security-role-' + role.replace(/[^\w\u4e00-\u9fff]+/g, '-');
+          return '<label class="unit-contact-security-role-option">'
+            + '<input type="checkbox" name="uca-security-role" value="' + esc(role) + '" data-testid="' + esc(testId) + '" ' + checked + '>'
+            + '<span>' + esc(role) + '</span>'
+            + '</label>';
+        }).join('')
+        + '</div>';
+    }
+
+    function readSelectedSecurityRoles() {
+      return Array.from(document.querySelectorAll('input[name="uca-security-role"]:checked'))
+        .map((input) => String(input && input.value || '').trim())
+        .filter(Boolean);
     }
 
     function buildPublicHero(eyebrow, title, subtitle, actions) {
@@ -90,12 +124,14 @@
     }
 
     function buildApplicationSummary(application) {
+      const roles = normalizeSecurityRoles(application && application.securityRoles);
       return ''
         + '<div class="unit-contact-summary-grid">'
         + '<div><span>申請編號</span><strong>' + esc(application.id) + '</strong></div>'
         + '<div><span>申請單位</span><strong>' + esc(application.unitValue) + '</strong></div>'
         + '<div><span>申請人</span><strong>' + esc(application.applicantName) + '</strong></div>'
         + '<div><span>申請電子郵件</span><strong>' + esc(application.applicantEmail) + '</strong></div>'
+        + (roles.length ? '<div><span>資安角色</span><strong>' + esc(roles.join('、')) + '</strong></div>' : '')
         + '</div>';
     }
 
@@ -124,6 +160,7 @@
     function buildApplicationStatusCard(application) {
       const detail = String(application && application.statusDetail || '').trim()
         || '申請已送出，請留意後續審核通知並使用申請電子郵件回到系統查詢進度。';
+      const roles = normalizeSecurityRoles(application && application.securityRoles);
       return ''
         + '<article class="card unit-contact-status-card">'
         + '<div class="unit-contact-status-card-top">'
@@ -135,6 +172,7 @@
         + '<span>申請編號：' + esc(application.id) + '</span>'
         + '<span>送出時間：' + esc(fmtTime(application.submittedAt)) + '</span>'
         + '<span>最後更新：' + esc(fmtTime(application.updatedAt || application.submittedAt)) + '</span>'
+        + (roles.length ? '<span>資安角色：' + esc(roles.join('、')) + '</span>' : '')
         + '</div>'
         + buildStatusActions(application)
         + '</article>';
@@ -161,12 +199,13 @@
       const mount = getMount();
       if (!mount) return;
       clearDirty();
+
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          '公開申請單位管理人',
-          '申請單位管理人帳號',
-          '若需新增或異動各單位管理窗口，請先送出申請。最高管理員審核通過後，系統會直接啟用帳號並寄送登入資訊。',
+          '單位管理人申請',
+          '填寫單位、聯絡方式與資安角色後送出',
+          '送出前請先確認申請單位與申請電子郵件都正確。審核通過後，系統會直接啟用帳號並寄送登入資訊。',
           '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
         )
         + buildModeNotice()
@@ -177,14 +216,17 @@
         + '<form id="unit-contact-apply-form" data-testid="unit-contact-apply-form">'
         + '<div class="form-row"><div class="form-group"><label class="form-label form-required">申請單位</label>'
         + buildUnitCascadeControl('uca-unit', '', false, true)
-        + '<div class="form-hint">請選擇正式單位名稱。若選單中沒有對應單位，可先選其他後輸入完整名稱。</div></div></div>'
+        + '<div class="form-hint">請填正式名稱或完整自訂名稱，避免後續審核與啟用混淆。</div></div></div>'
         + '<div class="form-row unit-contact-compact-row">'
         + '<div class="form-group"><label class="form-label form-required">申請人姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入申請人姓名" required></div>'
         + '<div class="form-group"><label class="form-label form-required">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" required></div>'
         + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
-+ '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入可收信的電子郵件（例如 ntu.edu.tw 或 Gmail）" required></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入可收信的電子郵件（例如 ntu.edu.tw 或 Gmail）" required></div>'
         + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充職稱、代理原因或其他說明"></div></div>'
+        + '<div class="form-group unit-contact-security-role-group"><label class="form-label form-required">資安角色</label>'
+        + buildSecurityRoleCheckboxes([])
+        + '<div class="form-hint">請至少勾選一項資安角色身分。</div></div>'
         + '<div class="form-actions">'
         + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
         + '<a class="btn btn-ghost" href="#apply-unit-contact-status">改為查詢進度</a>'
@@ -199,15 +241,17 @@
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 送出前請確認</div>'
         + '<ul class="unit-contact-checklist">'
         + '<li>申請單位已填寫正式名稱或完整自訂名稱。</li>'
-+ '<li>申請電子郵件可填 ntu.edu.tw 或 Gmail，只要可正常收信即可。</li>'
+        + '<li>申請電子郵件可填 ntu.edu.tw 或 Gmail，只要可正常收信即可。</li>'
         + '<li>審核通過後會直接啟用帳號，登入帳號固定為申請時填寫的電子郵件。</li>'
         + '<li>送出後請記下申請電子郵件，後續可用來查詢申請進度。</li>'
         + '</ul></div>'
         + '</aside></div></section>';
 
       initUnitCascade('uca-unit', '', { disabled: false });
+
       const form = document.getElementById('unit-contact-apply-form');
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
+
       form.addEventListener('input', markDirty);
       form.addEventListener('change', markDirty);
       form.addEventListener('submit', async function (event) {
@@ -217,6 +261,7 @@
         const extensionNumber = String(document.getElementById('uca-extension').value || '').trim();
         const applicantEmail = String(document.getElementById('uca-email').value || '').trim().toLowerCase();
         const note = String(document.getElementById('uca-note').value || '').trim();
+        const securityRoles = readSelectedSecurityRoles();
 
         if (!unitState.unitValue) {
           toast('請先選擇申請單位。', 'error');
@@ -226,6 +271,10 @@
           toast('請輸入可收信的電子郵件地址。', 'error');
           return;
         }
+        if (!securityRoles.length) {
+          toast('請至少選擇一種資安角色身分。', 'error');
+          return;
+        }
 
         try {
           if (submitButton) {
@@ -233,14 +282,17 @@
             submitButton.dataset.originalText = submitButton.innerHTML;
             submitButton.innerHTML = '送出中...';
           }
+
           const result = await submitUnitContactApplication({
             ...unitState,
             unitCode: getUnitCode(unitState.unitValue),
             applicantName,
             extensionNumber,
             applicantEmail,
-            note
+            note,
+            securityRoles
           });
+
           if (!result || !result.application) throw new Error('申請送出後未收到有效回應。');
           saveLastEmail(applicantEmail);
           clearDirty();
@@ -255,6 +307,7 @@
           }
         }
       });
+
       refreshIcons();
     }
 

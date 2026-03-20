@@ -308,6 +308,7 @@ function createSystemUserRouter(deps) {
       name: cleanText(item.name),
       email: cleanText(item.email),
       role: cleanText(item.role),
+      securityRoles: Array.isArray(item.securityRoles) ? item.securityRoles.slice() : [],
       unit: cleanText(item.unit),
       units: Array.isArray(item.units) ? item.units.slice() : [],
       activeUnit: cleanText(item.activeUnit),
@@ -324,6 +325,7 @@ function createSystemUserRouter(deps) {
       'name',
       'email',
       'role',
+      { key: 'securityRoles', kind: 'array' },
       'unit',
       { key: 'units', kind: 'array' },
       'activeUnit',
@@ -798,6 +800,9 @@ function createSystemUserRouter(deps) {
         name: cleanText(incoming.name) || cleanText(source.name),
         email: cleanText(incoming.email) || cleanText(source.email),
         role: cleanText(incoming.role) || cleanText(source.role),
+        securityRoles: Array.isArray(incoming.securityRoles) && incoming.securityRoles.length
+          ? incoming.securityRoles
+          : (Array.isArray(source.securityRoles) ? source.securityRoles : []),
         unit: cleanText(incoming.unit) || cleanText(source.unit),
         units: Array.isArray(incoming.units) && incoming.units.length ? incoming.units : source.units,
         activeUnit: cleanText(incoming.activeUnit) || cleanText(source.activeUnit),

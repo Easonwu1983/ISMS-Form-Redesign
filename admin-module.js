@@ -10,6 +10,9 @@
       getAuthorizedUnits,
       getReviewUnits,
       parseUserUnits,
+      getUnitSearchEntries,
+      splitUnitValue,
+      composeUnitValue,
       findUser,
       submitUserUpsert,
       submitUserDelete,
@@ -86,6 +89,159 @@
       return units.length ? units.join('、') : '沿用既有審核邏輯';
     }
 
+
+    const SECURITY_ROLE_OPTIONS = ['二級單位資安窗口', '一級單位資安窗口'];
+    const UNIT_SEARCH_ENTRIES = typeof getUnitSearchEntries === 'function'
+      ? getUnitSearchEntries([], { excludeUnits: ['學校分部總辦事處'] })
+      : [];
+
+    function normalizeSecurityRoles(value) {
+      const rawValues = Array.isArray(value)
+        ? value
+        : String(value || '').split(/[\n,，]+/);
+      return Array.from(new Set(rawValues.map((item) => String(item || '').trim()).filter((item) => SECURITY_ROLE_OPTIONS.includes(item))));
+    }
+
+    function formatSecurityRolesSummary(value) {
+      const roles = normalizeSecurityRoles(value);
+      return roles.length ? roles.join('、') : '未指定';
+    }
+
+    function buildSecurityRoleCheckboxes(selectedRoles) {
+      const selected = new Set(normalizeSecurityRoles(selectedRoles));
+      return '<div class="unit-contact-security-roles">' + SECURITY_ROLE_OPTIONS.map((role) => {
+        const checked = selected.has(role) ? 'checked' : '';
+        const testId = 'user-security-role-' + role.replace(/[^\w\u4e00-\u9fff]+/g, '-');
+        return '<label class="unit-contact-security-role-option">'
+          + '<input type="checkbox" name="u-security-roles" value="' + esc(role) + '" data-testid="' + esc(testId) + '" ' + checked + '>'
+          + '<span>' + esc(role) + '</span></label>';
+      }).join('') + '</div>';
+    }
+
+    function readSelectedSecurityRoles() {
+      return Array.from(document.querySelectorAll('input[name="u-security-roles"]:checked'))
+        .map((input) => String(input && input.value || '').trim())
+        .filter(Boolean);
+    }
+
+    function getDirectChildUnits(unitValue) {
+      const parent = String(unitValue || '').trim();
+      if (!parent) return [];
+      return UNIT_SEARCH_ENTRIES.filter((entry) => entry && entry.parent === parent && entry.child)
+        .map((entry) => entry.value);
+    }
+
+    function buildUnitMultiSelectControl(baseId, values, placeholder, hint) {
+      const selected = Array.from(new Set(parseUserUnits(values).map((value) => String(value || '').trim()).filter(Boolean)));
+      const chips = selected.map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '">×</button></span>').join('');
+      return '<div class="unit-chip-picker" data-unit-chip-picker="' + esc(baseId) + '">'
+        + '<div class="unit-chip-picker-search">'
+        + '<input type="search" class="form-input unit-chip-picker-search-input" id="' + esc(baseId) + '-search" placeholder="' + esc(placeholder || '請輸入單位名稱') + '" autocomplete="off">'
+        + '<div class="unit-chip-picker-results" id="' + esc(baseId) + '-results" role="listbox" hidden></div>'
+        + '</div>'
+        + '<div class="unit-chip-picker-chips" id="' + esc(baseId) + '-chips">' + (chips || '<span class="unit-chip-picker-empty">尚未選取</span>') + '</div>'
+        + '<textarea class="unit-chip-picker-hidden" id="' + esc(baseId) + '" hidden>' + esc(selected.join('\n')) + '</textarea>'
+        + '</div>'
+        + (hint ? '<div class="form-hint">' + esc(hint) + '</div>' : '');
+    }
+
+    function initUnitMultiSelectControl(baseId) {
+      const hiddenEl = document.getElementById(baseId);
+      const searchEl = document.getElementById(baseId + '-search');
+      const resultsEl = document.getElementById(baseId + '-results');
+      const chipsEl = document.getElementById(baseId + '-chips');
+      if (!hiddenEl || !searchEl || !resultsEl || !chipsEl) return null;
+      const state = new Set(parseUserUnits(hiddenEl.value));
+      const syncHidden = () => {
+        hiddenEl.value = Array.from(state).join('\n');
+        hiddenEl.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const renderChips = () => {
+        const chips = Array.from(state).map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '">×</button></span>').join('');
+        chipsEl.innerHTML = chips || '<span class="unit-chip-picker-empty">尚未選取</span>';
+      };
+      const renderResults = (query) => {
+        const text = String(query || '').trim();
+        if (!text) {
+          resultsEl.hidden = true;
+          resultsEl.innerHTML = '';
+          return;
+        }
+        const tokens = text.split(/\s+/).map((part) => String(part || '').trim().toLowerCase()).filter(Boolean);
+        const matches = UNIT_SEARCH_ENTRIES.filter((entry) => !state.has(entry.value) && tokens.every((token) => entry.searchText.toLowerCase().includes(token))).slice(0, 8);
+        resultsEl.hidden = false;
+        if (!matches.length) {
+          resultsEl.innerHTML = '<div class="unit-chip-picker-empty">找不到符合條件的單位</div>';
+          return;
+        }
+        resultsEl.innerHTML = matches.map((entry) => '<button type="button" class="unit-cascade-search-option unit-chip-picker-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(entry.category || '') + (entry.code ? ' · ' + entry.code : '') + '</span></button>').join('');
+      };
+      const addValue = (value) => {
+        const next = String(value || '').trim();
+        if (!next || state.has(next)) return;
+        state.add(next);
+        renderChips();
+        syncHidden();
+      };
+      const removeValue = (value) => {
+        const next = String(value || '').trim();
+        if (!state.has(next)) return;
+        state.delete(next);
+        renderChips();
+        syncHidden();
+      };
+      chipsEl.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-unit]');
+        if (!button) return;
+        event.preventDefault();
+        removeValue(button.dataset.removeUnit);
+      });
+      resultsEl.addEventListener('mousedown', (event) => {
+        const button = event.target.closest('[data-unit-value]');
+        if (!button) return;
+        event.preventDefault();
+        addValue(button.dataset.unitValue);
+        searchEl.value = '';
+        resultsEl.hidden = true;
+        resultsEl.innerHTML = '';
+      });
+      searchEl.addEventListener('input', () => renderResults(searchEl.value));
+      searchEl.addEventListener('focus', () => renderResults(searchEl.value));
+      searchEl.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        const button = resultsEl.querySelector('[data-unit-value]');
+        if (!button) return;
+        event.preventDefault();
+        addValue(button.dataset.unitValue);
+        searchEl.value = '';
+        resultsEl.hidden = true;
+        resultsEl.innerHTML = '';
+      });
+      document.addEventListener('click', (event) => {
+        if (!resultsEl.contains(event.target) && event.target !== searchEl) {
+          resultsEl.hidden = true;
+        }
+      });
+      renderChips();
+      syncHidden();
+      return {
+        setValues(values) {
+          state.clear();
+          parseUserUnits(values).forEach((value) => state.add(value));
+          renderChips();
+          syncHidden();
+        },
+        getValues() { return Array.from(state); },
+        addValue,
+        removeValue,
+        clear() {
+          state.clear();
+          renderChips();
+          syncHidden();
+        }
+      };
+    }
+
     function getRoleBadgeClass(role) {
       return ROLE_BADGE[role] || 'badge-viewer';
     }
@@ -102,37 +258,97 @@
       <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>主要單位</th><th>授權單位</th><th>可審核單位</th><th>電子郵件</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
+
   function showUserModal(eu) {
-    const isE = !!eu; const title = isE ? '編輯使用者' : '新增使用者'; const mr = document.getElementById('modal-root'); const units = getAuthorizedUnits(eu); const reviewUnits = getReviewUnits(eu); const initUnit = units[0] || '';
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${title}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="user-form">
+    const isE = !!eu;
+    const title = isE ? '編輯使用者' : '新增使用者';
+    const mr = document.getElementById('modal-root');
+    const units = getAuthorizedUnits(eu);
+    const reviewUnits = getReviewUnits(eu);
+    const initUnit = units[0] || '';
+    const selectedSecurityRoles = normalizeSecurityRoles(eu && eu.securityRoles);
+
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${esc(title)}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="user-form">
       <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>
       <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
       <div class="form-group"><label class="form-label form-required">電子郵件</label><input type="email" class="form-input" id="u-email" value="${isE ? esc(eu.email || '') : ''}" required></div>
       <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.REPORTER}" ${isE && eu.role === ROLES.REPORTER ? 'selected' : ''}>填報人</option><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.VIEWER}" ${isE && eu.role === ROLES.VIEWER ? 'selected' : ''}>跨單位檢視者</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option></select></div>
       <div class="form-group"><label class="form-label" id="u-unit-label">主要單位</label>${buildUnitCascadeControl('u-unit', initUnit, false, false)}</div></div>
-      <div class="form-group"><label class="form-label">額外授權單位</label><textarea class="form-textarea" id="u-units" rows="4" placeholder="每行一個單位，可用於跨單位代理">${esc(units.slice(1).join('\n'))}</textarea><div class="form-hint">系統不另外做代理模組，直接以授權單位陣列決定可切換單位。</div></div>
-      <div class="form-group"><label class="form-label">可審核單位</label><textarea class="form-textarea" id="u-review-units" rows="4" placeholder="每行一個單位。留空代表沿用既有審核邏輯。">${esc(reviewUnits.join('\n'))}</textarea><div class="form-hint">僅當角色為單位管理員時生效。啟用後，該帳號只能審核列出的單位。</div></div>
+      <div class="form-group" id="u-security-role-group"><label class="form-label form-required">資安角色</label>${buildSecurityRoleCheckboxes(selectedSecurityRoles)}<div class="form-hint">請至少選擇一種資安角色身分。</div></div>
+      <div class="form-group"><label class="form-label">額外授權單位</label>${buildUnitMultiSelectControl('u-units', units.slice(1), '請輸入單位名稱', '可搜尋並加入多個授權單位。')}</div>
+      <div class="form-group"><label class="form-label">可審核單位</label>${buildUnitMultiSelectControl('u-review-units', reviewUnits, '請輸入單位名稱', '僅單位管理員可設定，留空表示不限制。')}</div>
       <div class="form-group"><label class="form-label ${isE ? '' : 'form-required'}">${isE ? '密碼（留空不修改）' : '密碼'}</label><input type="text" class="form-input" id="u-pass" ${isE ? '' : 'required'}></div>
       <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div>
     </form></div></div>`;
+
     initUnitCascade('u-unit', initUnit, { disabled: false });
+
     const roleEl = document.getElementById('u-role');
     const unitLabel = document.getElementById('u-unit-label');
     const parentEl = document.getElementById('u-unit-parent');
+    const securityRoleGroup = document.getElementById('u-security-role-group');
+    const extraUnitsPicker = initUnitMultiSelectControl('u-units');
+    const reviewUnitsPicker = initUnitMultiSelectControl('u-review-units');
+    const unitEl = document.getElementById('u-unit');
+
+    function setSecurityRoles(values) {
+      const selected = new Set(normalizeSecurityRoles(values));
+      document.querySelectorAll('input[name="u-security-roles"]').forEach((input) => {
+        input.checked = selected.has(String(input.value || '').trim());
+      });
+    }
+
+    function syncScopedUnits() {
+      if (roleEl.value !== ROLES.UNIT_ADMIN) return;
+      const roles = readSelectedSecurityRoles();
+      const mainUnit = String(unitEl.value || '').trim();
+      const childUnits = getDirectChildUnits(mainUnit);
+      if (roles.includes('一級單位資安窗口') && childUnits.length) {
+        extraUnitsPicker.setValues(childUnits);
+        reviewUnitsPicker.setValues(childUnits);
+      } else if (roles.length === 1 && roles[0] === '二級單位資安窗口') {
+        reviewUnitsPicker.clear();
+      }
+    }
+
     function syncRoleFields() {
       const viewerMode = roleEl.value === ROLES.VIEWER;
+      const unitAdminMode = roleEl.value === ROLES.UNIT_ADMIN;
       unitLabel.textContent = viewerMode ? '主要單位（留空代表全校唯讀）' : '主要單位';
       parentEl.required = !viewerMode;
+      if (securityRoleGroup) {
+        securityRoleGroup.style.display = unitAdminMode ? '' : 'none';
+      }
+      if (!unitAdminMode) {
+        setSecurityRoles([]);
+      }
+      syncScopedUnits();
     }
+
     syncRoleFields();
+    unitEl.addEventListener('change', syncScopedUnits);
     roleEl.addEventListener('change', syncRoleFields);
-    document.getElementById('modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) closeModalRoot(); });
-    document.getElementById('user-form').addEventListener('submit', async e => {
+    document.querySelectorAll('input[name="u-security-roles"]').forEach((input) => {
+      input.addEventListener('change', syncScopedUnits);
+    });
+    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalRoot(); });
+    document.getElementById('user-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const un = document.getElementById('u-username').value.trim(), nm = document.getElementById('u-name').value.trim(), em = document.getElementById('u-email').value.trim(), rl = document.getElementById('u-role').value, ut = document.getElementById('u-unit').value.trim(), extraUnits = parseUserUnits(document.getElementById('u-units').value), reviewScopeUnits = parseUserUnits(document.getElementById('u-review-units').value), pw = document.getElementById('u-pass').value;
-      const finalUnits = rl === ROLES.VIEWER ? Array.from(new Set([ut, ...extraUnits].filter(Boolean))) : Array.from(new Set([ut, ...extraUnits].filter(Boolean)));
+      const un = document.getElementById('u-username').value.trim();
+      const nm = document.getElementById('u-name').value.trim();
+      const em = document.getElementById('u-email').value.trim();
+      const rl = document.getElementById('u-role').value;
+      const ut = document.getElementById('u-unit').value.trim();
+      const extraUnits = parseUserUnits(document.getElementById('u-units').value);
+      const reviewScopeUnits = parseUserUnits(document.getElementById('u-review-units').value);
+      const securityRoles = rl === ROLES.UNIT_ADMIN ? readSelectedSecurityRoles() : [];
+      const pw = document.getElementById('u-pass').value;
+      const finalUnits = Array.from(new Set([ut, ...extraUnits].filter(Boolean)));
+
       if (rl !== ROLES.VIEWER && !finalUnits.length) { toast('請至少指定一個授權單位', 'error'); return; }
-      const payload = { name: nm, email: em, role: rl, unit: finalUnits[0] || '', units: finalUnits, activeUnit: finalUnits[0] || '' };
+      if (rl === ROLES.UNIT_ADMIN && !securityRoles.length) { toast('請至少選擇一種資安角色身分', 'error'); return; }
+
+      const payload = { name: nm, email: em, role: rl, unit: finalUnits[0] || '', units: finalUnits, activeUnit: finalUnits[0] || '', securityRoles };
       if (pw) payload.password = pw;
       try {
         if (!isE && findUser(un)) { toast('帳號已存在', 'error'); return; }
@@ -151,150 +367,6 @@
         toast(String(error && error.message || error || '使用者儲存失敗'), 'error');
       }
     });
-  }
-  async function handleDeleteUser(un) {
-    if (!confirm(`確定刪除使用者「${un}」？`)) return;
-    try {
-      await submitUserDelete(un, { actorName: currentUser() && currentUser().name, actorEmail: currentUser() && currentUser().email });
-      await syncUsersFromM365({ silent: true });
-      await submitReviewScopeReplace({
-        username: un,
-        units: [],
-        actorName: currentUser() && currentUser().name,
-        actorEmail: currentUser() && currentUser().email
-      });
-      await syncReviewScopesFromM365({ silent: true });
-      toast('使用者已刪除');
-      renderUsers();
-    } catch (error) {
-      toast(String(error && error.message || error || '使用者刪除失敗'), 'error');
-    }
-  }
-  function unitReviewStatusBadge(entry) {
-    const approved = entry.status === 'approved';
-    return `<span class="review-status-badge ${approved ? 'approved' : 'pending'}">${approved ? '已核准保留' : '待審核'}</span>`;
-  }
-
-  function formatUnitReviewHistory(entry) {
-    if (entry.type === 'merged') {
-      return {
-        badgeClass: 'merged',
-        badgeText: '合併單位',
-        title: `${entry.unit} → ${entry.targetUnit}`,
-        meta: entry.summary ? formatUnitScopeSummary(entry.summary) : '已完成資料同步'
-      };
-    }
-    return {
-      badgeClass: 'approved',
-      badgeText: '核准保留',
-      title: entry.unit,
-      meta: '保留為可接受的自訂單位'
-    };
-  }
-
-  function showUnitReferenceModal(unit) {
-    const entry = getCustomUnitRegistry().find((item) => item.unit === unit);
-    if (!entry) { toast('找不到此自訂單位引用資料', 'error'); return; }
-
-    const refs = entry.references.length
-      ? entry.references.map((ref) => `<li class="review-ref-item">${esc(ref)}</li>`).join('')
-      : '<li class="review-ref-item">目前沒有可顯示的引用明細</li>';
-
-    const mr = document.getElementById('modal-root');
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal"><div class="modal-header"><span class="modal-title">自訂單位引用明細</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><div class="review-modal-head"><div class="review-unit-name">${esc(entry.unit)}</div><div class="review-modal-subtitle">共 ${entry.count} 筆引用，涵蓋 ${esc(formatUnitScopeSummary(entry.scopes))}</div></div><ul class="review-ref-list">${refs}</ul></div></div>`;
-    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalRoot(); });
-  }
-
-  function showUnitMergeModal(unit) {
-    const entry = getCustomUnitRegistry().find((item) => item.unit === unit);
-    if (!entry) { toast('找不到此自訂單位', 'error'); return; }
-
-    const mr = document.getElementById('modal-root');
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal unit-review-modal"><div class="modal-header"><span class="modal-title">合併自訂單位</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><div class="review-callout compact"><span class="review-callout-icon">${ic('git-merge', 'icon-sm')}</span><div><strong>${esc(entry.unit)}</strong> 目前共有 ${entry.count} 筆引用，合併後會同步更新帳號、矯正單、檢核表與教育訓練資料。</div></div><form id="unit-merge-form"><div class="form-group"><label class="form-label">來源單位</label><input type="text" class="form-input" value="${esc(entry.unit)}" readonly></div><div class="form-group"><label class="form-label form-required">合併目標</label>${buildUnitCascadeControl('unit-merge-target', '', false, true)}<div class="form-hint">可選正式單位，或使用「其他」輸入新的標準名稱。</div></div><div class="form-actions"><button type="submit" class="btn btn-primary">${ic('git-merge', 'icon-sm')} 立即合併</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div></form></div></div>`;
-    initUnitCascade('unit-merge-target', '', { disabled: false });
-    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalRoot(); });
-    document.getElementById('unit-merge-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const target = document.getElementById('unit-merge-target').value.trim();
-      if (!target) { toast('請選擇或輸入合併目標', 'error'); return; }
-      if (target === entry.unit) { toast('來源與目標單位不能相同', 'error'); return; }
-      const summary = mergeCustomUnit(entry.unit, target, currentUser().name);
-      if (!summary) { toast('單位合併失敗', 'error'); return; }
-      closeModalRoot();
-      toast(`已完成單位合併，共更新 ${summary.total} 筆資料`);
-      renderUnitReview();
-      refreshIcons();
-    });
-  }
-
-  function renderUnitReview() {
-    if (!isAdmin()) { navigate('dashboard'); toast('您沒有管理單位治理的權限', 'error'); return; }
-
-    const registry = getCustomUnitRegistry();
-    const reviewStore = loadUnitReviewStore();
-    const pendingCount = registry.filter((entry) => entry.status === 'pending').length;
-    const approvedCount = registry.filter((entry) => entry.status === 'approved').length;
-    const recentMerged = reviewStore.history.filter((entry) => entry.type === 'merged').slice(0, 10);
-    const history = reviewStore.history.slice(0, 8);
-
-    const rows = registry.length ? registry.map((entry) => {
-      const encoded = encodeURIComponent(entry.unit);
-      const sampleRefs = entry.references.slice(0, 2).map((ref) => `<span class="review-source-pill">${esc(ref)}</span>`).join('');
-      const approveBtn = entry.status === 'approved'
-        ? `<button type="button" class="btn btn-sm btn-secondary" disabled>${ic('shield-check', 'icon-sm')} 已核准</button>`
-        : `<button type="button" class="btn btn-sm btn-secondary" data-action="admin.approveUnit" data-unit="${encoded}">${ic('shield-check', 'icon-sm')} 核准保留</button>`;
-      return `<tr><td><div class="review-unit-name">${esc(entry.unit)}</div></td><td>${unitReviewStatusBadge(entry)}</td><td><div class="review-count-chip">${entry.count} 筆</div></td><td><div class="review-scope-text">${esc(formatUnitScopeSummary(entry.scopes))}</div><div class="review-source-list">${sampleRefs}</div></td><td><div class="review-actions"><button type="button" class="btn btn-sm btn-ghost" data-action="admin.viewUnitRefs" data-unit="${encoded}">${ic('list', 'icon-sm')} 檢視引用</button>${approveBtn}<button type="button" class="btn btn-sm btn-primary" data-action="admin.mergeUnit" data-unit="${encoded}">${ic('git-merge', 'icon-sm')} 合併</button></div></td></tr>`;
-    }).join('') : `<tr><td colspan="5"><div class="empty-state review-empty"><div class="empty-state-icon">${ic('badge-check')}</div><div class="empty-state-title">目前沒有待治理的自訂單位</div><div class="empty-state-desc">所有單位都已符合正式名錄，或已由最高管理員審核完成。</div></div></td></tr>`;
-
-    const historyHtml = history.length ? history.map((entry) => {
-      const detail = formatUnitReviewHistory(entry);
-      return `<div class="review-history-item"><div class="review-history-top"><span class="review-history-badge ${detail.badgeClass}">${detail.badgeText}</span><span class="review-history-time">${fmtTime(entry.time)}</span></div><div class="review-history-title">${esc(detail.title)}</div><div class="review-history-meta">${esc(detail.meta)}${entry.actor ? ` · ${esc(entry.actor)}` : ''}</div></div>`;
-    }).join('') : `<div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">尚無治理紀錄</div></div>`;
-
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">自訂單位審核與合併</h1><p class="page-subtitle">集中處理最高管理員手動建立的自訂單位，已核准保留的名稱會回流到最高管理員的單位選單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('sparkles', 'icon-sm')}</span><div>建議優先處理<strong>待審核</strong>且引用次數高的自訂單位；若名稱合理但暫時不納入正式名錄，可先使用「核准保留」，系統會讓最高管理員之後可直接選用。</div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${registry.length}</div><div class="stat-label">自訂單位總數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${pendingCount}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('shield-check')}</div><div class="stat-value">${approvedCount}</div><div class="stat-label">已核准保留</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('git-merge')}</div><div class="stat-value">${recentMerged.length}</div><div class="stat-label">最近合併筆數</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">自訂單位清單</span><span class="review-card-subtitle">依待審核優先、引用次數排序</span></div><div class="table-wrapper"><table><thead><tr><th>單位名稱</th><th>狀態</th><th>引用數</th><th>使用位置</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="card review-history-card"><div class="card-header"><span class="card-title">最近治理紀錄</span><span class="review-card-subtitle">保留最近 8 筆操作</span></div><div class="review-history-list">${historyHtml}</div></div></div></div>`;
-    refreshIcons();
-  }
-
-  function handleApproveUnit(encodedUnit) {
-    if (!isAdmin()) return;
-    const unit = decodeURIComponent(encodedUnit);
-    if (!confirm(`確定將「${unit}」核准保留為自訂單位？`)) return;
-    approveCustomUnit(unit, currentUser().name);
-    toast('自訂單位已核准保留，之後可於最高管理員單位選單直接選用');
-    renderUnitReview();
-  }
-  function handleClearLoginLogs() {
-    if (!canManageUsers()) return;
-    if (!confirm('確定清除所有登入紀錄？')) return;
-    clearLoginLogs();
-    toast('登入紀錄已清除', 'info');
-    renderLoginLog();
-  }
-
-  // ─── Render: Login Log ─────────────────────
-  function renderLoginLog() {
-    if (!canManageUsers()) { navigate('dashboard'); return; }
-    const logs = loadLoginLogs().slice().reverse();
-    const rows = logs.length ? logs.map(log => {
-      const status = log.success ? '<span style="color:#16a34a;font-weight:600">成功</span>' : '<span style="color:#dc2626;font-weight:600">失敗</span>';
-      return `<tr><td>${fmtTime(log.time)}</td><td>${esc(log.username)}</td><td>${esc(log.name || '—')}</td><td>${esc(log.role || '—')}</td><td>${status}</td></tr>`;
-    }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:36px"><div class="empty-state-title">尚無登入紀錄</div></div></td></tr>';
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">系統保存最近 500 筆登入成功與失敗事件</p></div><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div><div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>角色</th><th>結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
-    refreshIcons();
-  }
-
-  function getUnitContactReviewFiltersFromDom() {
-    return {
-      status: document.getElementById('unit-contact-review-status') ? document.getElementById('unit-contact-review-status').value.trim() : '',
-      keyword: document.getElementById('unit-contact-review-keyword') ? document.getElementById('unit-contact-review-keyword').value.trim() : '',
-      email: document.getElementById('unit-contact-review-email') ? document.getElementById('unit-contact-review-email').value.trim() : '',
-      limit: document.getElementById('unit-contact-review-limit') ? document.getElementById('unit-contact-review-limit').value.trim() : '50'
-    };
-  }
-
-  function unitContactStatusBadge(item) {
-    const tone = String(item && item.statusTone || 'pending').trim() || 'pending';
-    return `<span class="unit-contact-status-badge unit-contact-status-badge--${esc(tone)}">${esc(item && item.statusLabel || item && item.status || '—')}</span>`;
   }
 
   function renderUnitContactReviewRows(items) {
@@ -316,7 +388,7 @@
           actionButtons.push(`<button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
         }
       }
-      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.applicantEmail || '—')}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions review-actions--unit-contact">${actionButtons.join('')}</div></td></tr>`;
+      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.applicantEmail || '—')}</div><div class="review-card-subtitle" style="margin-top:4px">資安角色：${esc(formatSecurityRolesSummary(item && item.securityRoles))}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions review-actions--unit-contact">${actionButtons.join('')}</div></td></tr>`;
     }).join('');
   }
 

@@ -682,6 +682,7 @@ async function provisionUnitContactSystemUser(application) {
     name: cleanText(application && application.applicantName),
     email: cleanText(application && application.applicantEmail),
     role: USER_ROLES.UNIT_ADMIN,
+    securityRoles: Array.isArray(application && application.securityRoles) ? application.securityRoles : [],
     unit: cleanText(application && application.unitValue),
     units: cleanText(application && application.unitValue) ? [cleanText(application.unitValue)] : [],
     activeUnit: cleanText(application && application.unitValue),

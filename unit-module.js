@@ -329,15 +329,43 @@
         .filter(Boolean);
     }
 
-    function getSelectableUnitStructure() {
+    function normalizeExcludedUnitValues(values) {
+      const excluded = new Set();
+      (Array.isArray(values) ? values : []).forEach((value) => {
+        const text = String(value || '').trim();
+        if (text) excluded.add(text);
+      });
+      return excluded;
+    }
+
+    function isExcludedUnitValue(unitValue, excludedUnits) {
+      const excluded = excludedUnits instanceof Set ? excludedUnits : normalizeExcludedUnitValues(excludedUnits);
+      if (!excluded.size) return false;
+      const raw = String(unitValue || '').trim();
+      if (!raw) return false;
+      if (excluded.has(raw)) return true;
+      const parsed = splitUnitValue(raw);
+      const parent = String(parsed.parent || '').trim();
+      const child = String(parsed.child || '').trim();
+      if (parent && excluded.has(parent)) return true;
+      if (child && excluded.has(child)) return true;
+      if (parent && child && excluded.has(composeUnitValue(parent, child))) return true;
+      return false;
+    }
+
+    function getSelectableUnitStructure(options) {
+      const opts = options || {};
+      const excludedUnits = normalizeExcludedUnitValues(opts.excludeUnits);
       const base = getUnitStructureSafe();
       const merged = {};
 
       Object.keys(base).forEach((parent) => {
+        if (isExcludedUnitValue(parent, excludedUnits)) return;
         merged[parent] = Array.isArray(base[parent]) ? [...base[parent]] : [];
       });
 
       getApprovedCustomUnits().forEach((unit) => {
+        if (isExcludedUnitValue(unit, excludedUnits)) return;
         const parsed = splitUnitValue(unit);
         if (!parsed.parent) return;
         if (!merged[parsed.parent]) merged[parsed.parent] = [];
@@ -349,6 +377,7 @@
       Object.keys(merged).forEach((parent) => {
         merged[parent] = merged[parent]
           .filter(Boolean)
+          .filter((child) => !isExcludedUnitValue(composeUnitValue(parent, child), excludedUnits))
           .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
       });
 
@@ -463,7 +492,9 @@
       };
     }
 
-    function getUnitSearchEntries(extraValues) {
+    function getUnitSearchEntries(extraValues, options) {
+      const opts = options || {};
+      const excludedUnits = normalizeExcludedUnitValues(opts.excludeUnits);
       const catalog = getOfficialUnitCatalog();
       const seen = new Set();
       const values = [];
@@ -476,12 +507,14 @@
       getApprovedCustomUnits().forEach((value) => {
         const safeValue = String(value || '').trim();
         if (!safeValue || seen.has(safeValue)) return;
+        if (isExcludedUnitValue(safeValue, excludedUnits)) return;
         seen.add(safeValue);
         values.push(safeValue);
       });
       (Array.isArray(extraValues) ? extraValues : []).forEach((value) => {
         const safeValue = String(value || '').trim();
         if (!safeValue || seen.has(safeValue)) return;
+        if (isExcludedUnitValue(safeValue, excludedUnits)) return;
         seen.add(safeValue);
         values.push(safeValue);
       });
@@ -532,9 +565,9 @@
       if (!categoryEl || !parentEl || !childEl || !hiddenEl) return;
 
       const allowCustom = isAdmin() && !opts.disabled && !!customWrap && !!customEl;
-      const structure = getSelectableUnitStructure();
+      const structure = getSelectableUnitStructure({ excludeUnits: opts.excludeUnits });
       const rawInitial = String(initialValue || hiddenEl.value || '').trim();
-      const searchEntries = getUnitSearchEntries(rawInitial ? [rawInitial] : []);
+      const searchEntries = getUnitSearchEntries(rawInitial ? [rawInitial] : [], { excludeUnits: opts.excludeUnits });
       const parsed = splitUnitValue(rawInitial);
       const knownParents = new Set(Object.keys(structure || {}));
       const isInitialCustom = allowCustom && !!rawInitial && !!parsed.parent && !knownParents.has(parsed.parent);

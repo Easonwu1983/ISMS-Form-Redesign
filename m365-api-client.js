@@ -116,6 +116,24 @@
       return cleanText(value).toLowerCase();
     }
 
+    function parseSecurityRoles(value) {
+      if (Array.isArray(value)) {
+        return Array.from(new Set(value.map((entry) => cleanText(entry)).filter(Boolean)));
+      }
+      if (typeof value === 'string') {
+        const raw = cleanText(value);
+        if (!raw) return [];
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            return Array.from(new Set(parsed.map((entry) => cleanText(entry)).filter(Boolean)));
+          }
+        } catch (_) {}
+        return Array.from(new Set(raw.split(/\r?\n|,|;|\|/).map((entry) => cleanText(entry)).filter(Boolean)));
+      }
+      return [];
+    }
+
     function sanitizeSharedHeaders(value) {
       if (!value || typeof value !== 'object') return {};
       return Object.entries(value).reduce((result, [key, headerValue]) => {
@@ -330,7 +348,8 @@
         unitValue,
         unitCode: cleanText(payload && payload.unitCode) || cleanText(officialMeta && officialMeta.code),
         contactType: cleanText(payload && payload.contactType) || 'primary',
-        note: cleanText(payload && payload.note)
+        note: cleanText(payload && payload.note),
+        securityRoles: parseSecurityRoles(payload && payload.securityRoles)
       };
     }
 
@@ -340,6 +359,7 @@
       if (!payload.extensionNumber) throw new Error('請填寫分機');
       if (!payload.applicantEmail) throw new Error('請填寫電子郵件');
       if (!payload.unitCode) throw new Error('找不到對應的正式單位代碼，請先確認單位資料');
+      if (!Array.isArray(payload.securityRoles) || !payload.securityRoles.length) throw new Error('請至少選擇一種資安角色身分');
     }
 
     function assertNoDuplicateActiveApplication(payload) {
@@ -515,6 +535,7 @@
         unitCode: cleanText(source.UnitCode || source.unitCode || source.PrimaryUnitCode),
         contactType: cleanText(source.ContactType || source.contactType) || 'primary',
         note: cleanText(source.Note || source.note),
+        securityRoles: parseSecurityRoles(source.securityRoles || source.SecurityRolesJson),
         status: cleanText(source.Status || source.status) || UNIT_CONTACT_APPLICATION_STATUSES.PENDING_REVIEW,
         statusLabel: cleanText(source.StatusLabel || source.statusLabel),
         statusDetail: cleanText(source.StatusDetail || source.statusDetail || source.ReviewComment || source.reviewComment),
@@ -563,6 +584,7 @@
         unitCode: cleanText(payload && payload.unitCode),
         contactType: cleanText(payload && payload.contactType) || 'primary',
         note: cleanText(payload && payload.note),
+        securityRoles: parseSecurityRoles(payload && payload.securityRoles),
         status: cleanText(source.status || source.Status) || UNIT_CONTACT_APPLICATION_STATUSES.PENDING_REVIEW,
         statusLabel: cleanText(source.statusLabel || source.StatusLabel),
         statusDetail: cleanText(source.statusDetail || source.StatusDetail),

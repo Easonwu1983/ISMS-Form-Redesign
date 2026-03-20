@@ -17,6 +17,7 @@ const USER_ROLES = {
   REPORTER: '填報人',
   VIEWER: '跨單位檢視者'
 };
+const SECURITY_ROLES = new Set(['二級單位資安窗口', '一級單位資安窗口']);
 const DEFAULT_DISPLAY_NAME_BY_USERNAME = {
   admin: '計算機及資訊網路中心',
   unit1: '王經理',
@@ -79,6 +80,24 @@ function parseUserUnits(value) {
   return [];
 }
 
+function parseSecurityRoles(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((entry) => cleanText(entry)).filter((entry) => SECURITY_ROLES.has(entry))));
+  }
+  if (typeof value === 'string') {
+    const raw = cleanText(value);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set(parsed.map((entry) => cleanText(entry)).filter((entry) => SECURITY_ROLES.has(entry))));
+      }
+    } catch (_) {}
+    return Array.from(new Set(raw.split(/\r?\n|,|;|\|/).map((entry) => cleanText(entry)).filter((entry) => SECURITY_ROLES.has(entry))));
+  }
+  return [];
+}
+
 function normalizeUserRole(role) {
   const cleanRole = cleanText(role);
   if (cleanRole === USER_ROLES.ADMIN) return USER_ROLES.ADMIN;
@@ -91,6 +110,7 @@ function normalizeSystemUserPayload(payload) {
   const base = payload && typeof payload === 'object' ? payload : {};
   const role = normalizeUserRole(base.role);
   const units = parseUserUnits(base.units || base.authorizedUnits || base.AuthorizedUnitsJson);
+  const securityRoles = parseSecurityRoles(base.securityRoles || base.SecurityRolesJson || base.securityRolesJson);
   const primaryUnit = cleanText(base.unit || base.primaryUnit || base.PrimaryUnit);
   if (primaryUnit && !units.includes(primaryUnit)) {
     units.unshift(primaryUnit);
@@ -102,6 +122,7 @@ function normalizeSystemUserPayload(payload) {
     name: cleanText(base.name || base.displayName || base.DisplayName),
     email: cleanEmail(base.email || base.Email),
     role,
+    securityRoles,
     unit: units[0] || '',
     units,
     activeUnit,
@@ -233,6 +254,7 @@ function mapSystemUserToGraphFields(entry) {
     DisplayName: item.name,
     Email: item.email,
     Role: item.role,
+    SecurityRolesJson: JSON.stringify(item.securityRoles || []),
     PrimaryUnit: item.unit,
     AuthorizedUnitsJson: JSON.stringify(item.units || []),
     ActiveUnit: item.activeUnit,
@@ -250,6 +272,7 @@ function mapSystemUserToGraphFields(entry) {
 
 function mapGraphFieldsToSystemUser(fields) {
   const units = parseJsonField(fields.AuthorizedUnitsJson, function () { return []; });
+  const securityRoles = parseJsonField(fields.SecurityRolesJson, function () { return []; });
   const username = cleanText(fields.UserName || fields.Title);
   const rawTitle = cleanText(fields.Title);
   const displayName = cleanText(fields.DisplayName) || (rawTitle && rawTitle !== username ? rawTitle : '');
@@ -259,6 +282,7 @@ function mapGraphFieldsToSystemUser(fields) {
     name: displayName,
     email: fields.Email,
     role: fields.Role,
+    securityRoles,
     unit: fields.PrimaryUnit,
     units,
     activeUnit: fields.ActiveUnit,
@@ -304,6 +328,12 @@ function validateSystemUserPayload(payload, options) {
   if (cleanText(payload.password)) validatePasswordComplexity(payload.password, 'password');
   if (payload.role !== USER_ROLES.ADMIN && payload.role !== USER_ROLES.VIEWER && !payload.units.length) {
     throw createError('At least one authorized unit is required', 400);
+  }
+  if (payload.role === USER_ROLES.UNIT_ADMIN && !Array.isArray(payload.securityRoles) && !parseSecurityRoles(payload.securityRoles).length) {
+    throw createError('At least one security role is required', 400);
+  }
+  if (payload.role === USER_ROLES.UNIT_ADMIN && Array.isArray(payload.securityRoles) && !payload.securityRoles.length) {
+    throw createError('At least one security role is required', 400);
   }
 }
 
@@ -354,6 +384,7 @@ module.exports = {
   normalizeStoredSystemUser,
   normalizeSystemUserPayload,
   parseUserUnits,
+  parseSecurityRoles,
   readStoredPasswordState,
   validatePasswordComplexity,
   validateActionEnvelope,

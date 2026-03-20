@@ -1926,7 +1926,7 @@
       });
     });
 
-    initUnitCascade('training-import-unit', '', { disabled: false });
+    initUnitCascade('training-import-unit', '', { disabled: false, excludeUnits: ['學校分部總辦事處'] });
     const fileInput = document.getElementById('training-import-file');
     const fileCopy = document.getElementById('training-import-file-copy');
     fileInput?.addEventListener('change', () => {

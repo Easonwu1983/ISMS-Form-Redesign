@@ -17,6 +17,7 @@
         { "name": "DisplayName", "type": "singleLineText", "required": true },
         { "name": "Email", "type": "singleLineText", "required": true },
         { "name": "Role", "type": "choice", "required": true, "choices": ["最高管理員", "單位管理員", "填報人", "跨單位檢視者"] },
+        { "name": "SecurityRolesJson", "type": "multipleLinesText", "required": false },
         { "name": "PrimaryUnit", "type": "singleLineText", "required": false },
         { "name": "AuthorizedUnitsJson", "type": "multipleLinesText", "required": true },
         { "name": "ActiveUnit", "type": "singleLineText", "required": false },

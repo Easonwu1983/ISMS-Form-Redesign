@@ -481,6 +481,9 @@
       getAuthorizedUnits,
       getReviewUnits,
       parseUserUnits,
+      getUnitSearchEntries,
+      splitUnitValue,
+      composeUnitValue,
       findUser,
       submitUserUpsert,
       submitUserDelete,
@@ -1065,15 +1068,16 @@
     const role = normalizeUserRole(source.role || source.Role);
     const unit = String(source.unit || source.primaryUnit || source.PrimaryUnit || units[0] || '').trim();
     if (unit && units.indexOf(unit) < 0) units.unshift(unit);
-    return normalizeUserRecord({
-      username: username,
-      password: String(source.password || source.Password || '').trim(),
-      name: String(source.name || source.displayName || source.DisplayName || '').trim(),
-      email: String(source.email || source.Email || '').trim().toLowerCase(),
-      role: role,
-      unit: unit,
-      units: units,
-      activeUnit: role === ROLES.ADMIN ? '' : String(source.activeUnit || source.ActiveUnit || unit).trim(),
+      return normalizeUserRecord({
+        username: username,
+        password: String(source.password || source.Password || '').trim(),
+        name: String(source.name || source.displayName || source.DisplayName || '').trim(),
+        email: String(source.email || source.Email || '').trim().toLowerCase(),
+        role: role,
+        securityRoles: source.securityRoles || source.SecurityRolesJson || source.SecurityRoles,
+        unit: unit,
+        units: units,
+        activeUnit: role === ROLES.ADMIN ? '' : String(source.activeUnit || source.ActiveUnit || unit).trim(),
       createdAt: String(source.createdAt || source.CreatedAt || '').trim(),
       updatedAt: String(source.updatedAt || source.UpdatedAt || '').trim(),
       passwordChangedAt: String(source.passwordChangedAt || source.PasswordChangedAt || '').trim(),

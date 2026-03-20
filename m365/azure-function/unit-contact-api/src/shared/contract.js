@@ -57,6 +57,7 @@ const ACTIVE_DUPLICATE_STATUSES = new Set([
   STATUSES.ACTIVE
 ]);
 const NOTE_META_MARKER = '\n[ISMS_META]';
+const SECURITY_ROLES = new Set(['二級單位資安窗口', '一級單位資安窗口']);
 
 function cleanText(value) {
   return String(value || '').trim();
@@ -97,6 +98,24 @@ async function parseJsonBody(request) {
   }
 }
 
+function parseSecurityRoles(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((entry) => cleanText(entry)).filter((entry) => SECURITY_ROLES.has(entry))));
+  }
+  if (typeof value === 'string') {
+    const raw = cleanText(value);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set(parsed.map((entry) => cleanText(entry)).filter((entry) => SECURITY_ROLES.has(entry))));
+      }
+    } catch (_) {}
+    return Array.from(new Set(raw.split(/\r?\n|,|;|\|/).map((entry) => cleanText(entry)).filter((entry) => SECURITY_ROLES.has(entry))));
+  }
+  return [];
+}
+
 function validateActionEnvelope(envelope, expectedAction) {
   if (!envelope || typeof envelope !== 'object') {
     throw createError('\u7f3a\u5c11 request envelope\u3002', 400);
@@ -119,7 +138,8 @@ function normalizeApplyPayload(payload) {
     unitValue: cleanText(payload && payload.unitValue),
     unitCode: cleanText(payload && payload.unitCode),
     contactType: cleanText(payload && payload.contactType) || 'primary',
-    note: cleanText(payload && payload.note)
+    note: cleanText(payload && payload.note),
+    securityRoles: parseSecurityRoles(payload && payload.securityRoles)
   };
 }
 
@@ -130,6 +150,7 @@ function validateApplyPayload(payload) {
   if (!payload.applicantEmail) throw createError('\u7f3a\u5c11\u7533\u8acb\u4fe1\u7bb1\u3002', 400);
   if (!isValidApplicantEmail(payload.applicantEmail)) throw createError('\u8acb\u8f38\u5165\u53ef\u6536\u4fe1\u7684\u96fb\u5b50\u90f5\u4ef6\u5730\u5740\u3002', 400);
   if (!payload.unitCode) throw createError('\u7f3a\u5c11\u55ae\u4f4d\u4ee3\u78bc\uff0c\u8acb\u91cd\u65b0\u9078\u64c7\u7533\u8acb\u55ae\u4f4d\u3002', 400);
+  if (!Array.isArray(payload.securityRoles) || !payload.securityRoles.length) throw createError('\u8acb\u81f3\u5c11\u9078\u64c7\u4e00\u7a2e\u8cc7\u5b89\u89d2\u8272\u8eab\u4efd\u3002', 400);
 }
 
 function normalizeLookupEmail(email) {
@@ -254,6 +275,7 @@ function createApplicationRecord(payload, sequence, now) {
     unitCode: payload.unitCode,
     contactType: payload.contactType || 'primary',
     note: payload.note || '',
+    securityRoles: Array.isArray(payload.securityRoles) ? payload.securityRoles.slice() : [],
     status: STATUSES.PENDING_REVIEW,
     source: 'm365-api',
     backendMode: 'm365-api',
@@ -288,6 +310,7 @@ function normalizeStoredApplication(application) {
     unitCode: cleanText(application.unitCode),
     contactType: cleanText(application.contactType) || 'primary',
     note: noteMeta.note,
+    securityRoles: parseSecurityRoles(noteMeta.meta.securityRoles || application.securityRoles || application.SecurityRolesJson),
     status: cleanText(application.status) || STATUSES.PENDING_REVIEW,
     statusLabel: cleanText(application.statusLabel),
     statusDetail: cleanText(application.statusDetail),
@@ -319,6 +342,7 @@ function mapApplicationForClient(application) {
     unitCode: normalized.unitCode,
     contactType: normalized.contactType,
     note: normalized.note,
+    securityRoles: normalized.securityRoles,
     status: normalized.status,
     statusLabel: normalized.statusLabel,
     statusDetail: normalized.statusDetail,
@@ -349,6 +373,7 @@ function mapApplicationForPublicClient(application) {
     unitValue: normalized.unitValue,
     unitCode: normalized.unitCode,
     contactType: normalized.contactType,
+    securityRoles: normalized.securityRoles,
     status: normalized.status,
     statusLabel: normalized.statusLabel,
     statusDetail: normalized.statusDetail,
@@ -386,7 +411,8 @@ function mapApplicationToGraphFields(application) {
     UnitCode: normalized.unitCode,
     ContactType: normalized.contactType,
     Note: composeNoteWithMeta(normalized.note, {
-      externalUserId: normalized.externalUserId
+      externalUserId: normalized.externalUserId,
+      securityRoles: normalized.securityRoles
     }),
     Status: normalized.status,
     StatusLabel: normalized.statusLabel,

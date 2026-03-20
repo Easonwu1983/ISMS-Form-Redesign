@@ -66,23 +66,47 @@
       return chars.join('');
     }
 
-    function readAuthSession() {
+    function readAuthStorage(storage) {
       try {
-        const raw = sessionStorage.getItem(AUTH_KEY);
+        if (!storage) return null;
+        const raw = storage.getItem(AUTH_KEY);
         return raw ? JSON.parse(raw) : null;
       } catch (_) {
         return null;
       }
     }
 
+    function writeAuthStorage(storage, user) {
+      if (!storage) return;
+      try {
+        if (!user) {
+          storage.removeItem(AUTH_KEY);
+        } else {
+          storage.setItem(AUTH_KEY, JSON.stringify(user));
+        }
+      } catch (_) {
+        // Ignore storage failures on this tab.
+      }
+    }
+
+    function clearAuthSessionStorage() {
+      writeAuthStorage(sessionStorage, null);
+      writeAuthStorage(localStorage, null);
+    }
+
     function writeAuthSession(user) {
       const normalized = user ? normalizeUserRecord(user) : null;
       if (!normalized) {
-        sessionStorage.removeItem(AUTH_KEY);
+        clearAuthSessionStorage();
         return null;
       }
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify(normalized));
+      writeAuthStorage(sessionStorage, normalized);
+      writeAuthStorage(localStorage, normalized);
       return normalized;
+    }
+
+    function readAuthSession() {
+      return readAuthStorage(localStorage) || readAuthStorage(sessionStorage);
     }
 
     async function verifyLocalPassword(user, password) {
@@ -120,7 +144,7 @@
       if (expiresAt) {
         const expiresAtMs = Date.parse(expiresAt);
         if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
-          sessionStorage.removeItem(AUTH_KEY);
+          clearAuthSessionStorage();
           return null;
         }
       }
@@ -183,7 +207,7 @@
           // Ignore remote logout failures and still clear local session.
         }
       }
-      sessionStorage.removeItem(AUTH_KEY);
+      clearAuthSessionStorage();
     }
 
     function canSwitchAuthorizedUnit(user = currentUser()) {
