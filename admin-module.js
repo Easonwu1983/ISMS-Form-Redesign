@@ -705,6 +705,21 @@
     refreshIcons();
   }
 
+  function unitContactStatusBadge(item) {
+    const status = String(item && item.status || '').trim();
+    const meta = {
+      pending_review: { tone: 'pending', label: '待審核' },
+      returned: { tone: 'attention', label: '退回補件' },
+      approved: { tone: 'approved', label: '已通過' },
+      rejected: { tone: 'danger', label: '未核准' },
+      activation_pending: { tone: 'approved', label: '待啟用' },
+      active: { tone: 'live', label: '已啟用' }
+    }[status] || { tone: 'pending', label: status || '未知' };
+    const tone = String(item && item.statusTone || meta.tone || 'pending').trim() || 'pending';
+    const label = String(item && item.statusLabel || meta.label || '未知').trim() || '未知';
+    return `<span class="unit-contact-status-badge unit-contact-status-badge--${esc(tone)}">${esc(label)}</span>`;
+  }
+
   function formatSchemaBytes(size) {
     const value = Number(size || 0);
     if (value >= 1024 * 1024) return (value / (1024 * 1024)).toFixed(2) + ' MB';
