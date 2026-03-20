@@ -241,3 +241,16 @@ It currently runs:
 - backend public HTTPS relies on Cloudflare Quick Tunnel, not Named Tunnel or fixed backend hostname
 - local fallback code still exists in the SPA codebase
 - production correctness still depends on deployment override selecting the live profile
+
+## 12. Fast Recovery Runbook
+
+If you switch accounts or come back after a pause, use the shortest known-good recovery path in:
+
+- [docs/fast-redeploy-runbook.md](C:\Users\User\Playground\ISMS-Form-Redesign\docs\fast-redeploy-runbook.md)
+
+That runbook records the last successful startup and deployment sequence for:
+
+- `18080` local backend
+- `8088` campus gateway
+- Cloudflare Pages recovery
+- live smoke verification
