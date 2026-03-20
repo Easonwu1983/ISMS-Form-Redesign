@@ -131,7 +131,7 @@ Fields:
 3. `二級單位` when applicable
 4. `姓名`
 5. `分機`
-6. `信箱`
+6. `電子郵件`
 7. `備註 / 申請原因` optional
 
 Frontend should reuse the current unit selector logic from:

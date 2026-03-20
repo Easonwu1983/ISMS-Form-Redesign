@@ -191,7 +191,7 @@ Recommended:
 ```json
 {
   "ok": false,
-  "message": "此信箱已存在同單位的進行中申請"
+  "message": "此電子郵件已存在同單位的進行中申請"
 }
 ```
 
