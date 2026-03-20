@@ -241,7 +241,7 @@
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 送出前請確認</div>'
         + '<ul class="unit-contact-checklist">'
         + '<li>申請單位已填寫正式名稱或完整自訂名稱。</li>'
-        + '<li>申請電子郵件可填 ntu.edu.tw 或 Gmail，只要可正常收信即可。</li>'
+        + '<li>申請電子郵件可用 ntu.edu.tw 或 Gmail，只要可正常收信即可。</li>'
         + '<li>審核通過後會直接啟用帳號，登入帳號固定為申請時填寫的電子郵件。</li>'
         + '<li>送出後請記下申請電子郵件，後續可用來查詢申請進度。</li>'
         + '</ul></div>'

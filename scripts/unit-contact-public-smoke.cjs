@@ -30,7 +30,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
       await gotoHash(page, 'apply-unit-contact', { handleUnsaved: false });
       await page.waitForSelector('[data-testid="unit-contact-apply-form"]', { timeout: 15000 });
       const title = await page.locator('.page-title').first().textContent();
-      if (!String(title || '').includes('申請單位管理人帳號')) {
+      if (!String(title || '').includes('填寫單位、聯絡方式與資安角色後送出')) {
         throw new Error('apply title mismatch: ' + title);
       }
       return 'public application form visible';

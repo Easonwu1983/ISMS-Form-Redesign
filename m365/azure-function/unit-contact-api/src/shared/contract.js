@@ -147,7 +147,7 @@ function validateApplyPayload(payload) {
   if (!payload.unitValue) throw createError('\u7f3a\u5c11\u7533\u8acb\u55ae\u4f4d\u3002', 400);
   if (!payload.applicantName) throw createError('\u7f3a\u5c11\u7533\u8acb\u4eba\u59d3\u540d\u3002', 400);
   if (!payload.extensionNumber) throw createError('\u7f3a\u5c11\u5206\u6a5f\u3002', 400);
-  if (!payload.applicantEmail) throw createError('\u7f3a\u5c11\u7533\u8acb\u4fe1\u7bb1\u3002', 400);
+  if (!payload.applicantEmail) throw createError('\u7f3a\u5c11\u7533\u8acb\u96fb\u5b50\u90f5\u4ef6\u3002', 400);
   if (!isValidApplicantEmail(payload.applicantEmail)) throw createError('\u8acb\u8f38\u5165\u53ef\u6536\u4fe1\u7684\u96fb\u5b50\u90f5\u4ef6\u5730\u5740\u3002', 400);
   if (!payload.unitCode) throw createError('\u7f3a\u5c11\u55ae\u4f4d\u4ee3\u78bc\uff0c\u8acb\u91cd\u65b0\u9078\u64c7\u7533\u8acb\u55ae\u4f4d\u3002', 400);
   if (!Array.isArray(payload.securityRoles) || !payload.securityRoles.length) throw createError('\u8acb\u81f3\u5c11\u9078\u64c7\u4e00\u7a2e\u8cc7\u5b89\u89d2\u8272\u8eab\u4efd\u3002', 400);
@@ -155,7 +155,7 @@ function validateApplyPayload(payload) {
 
 function normalizeLookupEmail(email) {
   const value = cleanEmail(email);
-  if (!value) throw createError('\u8acb\u8f38\u5165\u7533\u8acb\u4fe1\u7bb1\u3002', 400);
+  if (!value) throw createError('\u8acb\u8f38\u5165\u7533\u8acb\u96fb\u5b50\u90f5\u4ef6\u3002', 400);
   return value;
 }
 

@@ -116,9 +116,9 @@ async function runPublicRouteChecks(browser, pushStep) {
     await openPublicRoute('#apply-unit-contact');
     await page.waitForFunction(() => {
       const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('申請單位管理人帳號');
+      return title && String(title.textContent || '').includes('填寫單位、聯絡方式與資安角色後送出');
     }, undefined, { timeout: 20000 });
-    pushStep('unit-contact-public:apply-loaded', true, '申請單位管理人帳號');
+    pushStep('unit-contact-public:apply-loaded', true, '填寫單位、聯絡方式與資安角色後送出');
 
     await openPublicRoute('#apply-unit-contact-status');
     await page.waitForFunction(() => {
