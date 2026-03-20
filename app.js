@@ -2373,6 +2373,10 @@
     error: ''
   };
   const TRAINING_SYNC_FRESHNESS_MS = 15000;
+  const TRAINING_HEALTH_CACHE_MS = 15000;
+  let trainingHealthCacheValue = null;
+  let trainingHealthCacheAt = 0;
+  let trainingHealthCachePromise = null;
   function setTrainingRepositoryState(patch) {
     Object.assign(trainingRepositoryState, patch || {});
     return { ...trainingRepositoryState };
@@ -2383,6 +2387,26 @@
     const parsedAt = Date.parse(String(lastSyncAt || '').trim());
     if (!Number.isFinite(parsedAt)) return false;
     return (Date.now() - parsedAt) < TRAINING_SYNC_FRESHNESS_MS;
+  }
+  function isTrainingHealthCacheFresh() {
+    if (!trainingHealthCacheValue) return false;
+    if (!trainingHealthCacheAt) return false;
+    return (Date.now() - trainingHealthCacheAt) < TRAINING_HEALTH_CACHE_MS;
+  }
+  async function getTrainingHealthCached(client, force) {
+    if (!force) {
+      if (trainingHealthCachePromise) return trainingHealthCachePromise;
+      if (isTrainingHealthCacheFresh()) return trainingHealthCacheValue;
+    }
+    const request = Promise.resolve().then(() => client.getTrainingHealth()).then((health) => {
+      trainingHealthCacheValue = health || null;
+      trainingHealthCacheAt = Date.now();
+      return health;
+    }).finally(() => {
+      trainingHealthCachePromise = null;
+    });
+    trainingHealthCachePromise = request;
+    return request;
   }
   function mergeRemoteTrainingFormsIntoStore(items, options) {
     const strict = !!(options && options.strict);
@@ -2486,7 +2510,7 @@
       return setTrainingRepositoryState({ ready: false, source: 'auth-pending', message: '登入後才會同步教育訓練資料', error: '' });
     }
     try {
-      const health = await client.getTrainingHealth();
+      const health = await getTrainingHealthCached(client, !!opts.force);
       if (health && health.ready === false) {
         return setTrainingRepositoryState({
           ready: false,
@@ -2536,7 +2560,7 @@
       return setTrainingRepositoryState({ ready: false, source: 'auth-pending', message: '登入後才會同步教育訓練名單', error: '' });
     }
     try {
-      const health = await client.getTrainingHealth();
+      const health = await getTrainingHealthCached(client, !!opts.force);
       if (health && health.ready === false) {
         return setTrainingRepositoryState({
           ready: false,
