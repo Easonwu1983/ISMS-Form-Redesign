@@ -8,13 +8,13 @@ if (-not (Test-Path $pidPath)) {
   exit 0
 }
 
-$pid = Get-Content $pidPath | Select-Object -First 1
-if ($pid -match '^\d+$') {
+$currentPid = Get-Content $pidPath | Select-Object -First 1
+if ($currentPid -match '^\d+$') {
   try {
-    Stop-Process -Id ([int]$pid) -Force -ErrorAction Stop
-    Write-Output ("HTTPS proxy stopped. PID={0}" -f $pid)
+    Stop-Process -Id ([int]$currentPid) -Force -ErrorAction Stop
+    Write-Output ("HTTPS proxy stopped. PID={0}" -f $currentPid)
   } catch {
-    Write-Output ("HTTPS proxy stop failed. PID={0}" -f $pid)
+    Write-Output ("HTTPS proxy stop failed. PID={0}" -f $currentPid)
   }
 }
 Remove-Item $pidPath -Force -ErrorAction SilentlyContinue

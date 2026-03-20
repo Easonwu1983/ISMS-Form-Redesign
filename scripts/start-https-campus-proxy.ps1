@@ -12,7 +12,7 @@ $caddyExe = Join-Path $runtimeDir 'caddy.exe'
 $zipPath = Join-Path $runtimeDir 'caddy_windows_amd64.zip'
 $extractDir = Join-Path $runtimeDir 'caddy-extract'
 $config = Join-Path $projectRoot $ConfigPath
-$pid = Join-Path $projectRoot $PidFile
+$pidFilePath = Join-Path $projectRoot $PidFile
 $outLog = Join-Path $projectRoot $StdOutLog
 $errLog = Join-Path $projectRoot $StdErrLog
 
@@ -30,19 +30,19 @@ if (-not (Test-Path $caddyExe)) {
   Copy-Item (Join-Path $extractDir 'caddy.exe') $caddyExe -Force
 }
 
-if (Test-Path $pid) {
-  $oldPid = Get-Content $pid | Select-Object -First 1
+if (Test-Path $pidFilePath) {
+  $oldPid = Get-Content $pidFilePath | Select-Object -First 1
   if ($oldPid -match '^\d+$') {
     try {
       Stop-Process -Id ([int]$oldPid) -Force -ErrorAction Stop
     } catch {
     }
   }
-  Remove-Item $pid -Force -ErrorAction SilentlyContinue
+  Remove-Item $pidFilePath -Force -ErrorAction SilentlyContinue
 }
 
 $proc = Start-Process -FilePath $caddyExe -ArgumentList @('run', '--config', $config, '--adapter', 'caddyfile') -PassThru -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
-Set-Content $pid $proc.Id
+Set-Content $pidFilePath $proc.Id
 Start-Sleep -Seconds 5
 if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) {
   throw 'HTTPS proxy exited during startup. Check .runtime\https-proxy.err.log'
