@@ -120,6 +120,42 @@ function buildApplyPayload(meta, stamp) {
   };
 }
 
+function buildAuthorizationDocBase64(stamp) {
+  const text = [
+    '%PDF-1.4',
+    '1 0 obj',
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    'endobj',
+    '2 0 obj',
+    '<< /Type /Pages /Count 0 >>',
+    'endobj',
+    `%% unit-contact admin review smoke ${stamp}`,
+    '%%EOF'
+  ].join('\n');
+  return Buffer.from(text, 'utf8').toString('base64');
+}
+
+async function uploadAuthorizationDocument(token, applicantEmail, stamp) {
+  const response = await apiJson('POST', '/api/attachments/upload', {
+    action: 'attachment.upload',
+    payload: {
+      fileName: `單位資安窗口授權同意書-${stamp}.pdf`,
+      contentType: 'application/pdf',
+      contentBase64: buildAuthorizationDocBase64(stamp),
+      scope: 'unit-contact-authorization-doc',
+      ownerId: applicantEmail,
+      recordType: 'unit-contact-application'
+    }
+  }, authHeaders(token));
+  const item = response && response.item;
+  const attachmentId = cleanText(item && item.attachmentId);
+  const driveItemId = cleanText(item && item.driveItemId);
+  if (!attachmentId && !driveItemId) {
+    throw new Error('upload authorization document did not return an attachment id');
+  }
+  return item;
+}
+
 async function lookupApplicationByEmail(email) {
   const body = await apiJson('POST', '/api/unit-contact/status', {
     action: 'unit-contact.lookup',
@@ -169,6 +205,20 @@ async function deleteApplicationListItem(context, applicationId) {
   }
 }
 
+async function deleteAttachment(token, attachmentId) {
+  const cleanAttachmentId = cleanText(attachmentId);
+  if (!cleanAttachmentId) return;
+  try {
+    await apiJson('POST', `/api/attachments/${encodeURIComponent(cleanAttachmentId)}/delete`, {
+      action: 'attachment.delete',
+      payload: { attachmentId: cleanAttachmentId }
+    }, authHeaders(token));
+  } catch (error) {
+    if (error && error.status === 404) return;
+    throw error;
+  }
+}
+
 async function deleteSystemUser(token, username) {
   if (!cleanText(username)) return;
   try {
@@ -195,6 +245,8 @@ async function run() {
   let sessionToken = '';
   let applicationId = '';
   let generatedUsername = '';
+  let uploadedAttachmentId = '';
+  let uploadedDriveItemId = '';
 
   async function step(name, fn) {
     try {
@@ -214,10 +266,31 @@ async function run() {
       return 'status=200';
     });
 
+    await step('authdoc:upload', async () => {
+      const item = await uploadAuthorizationDocument(sessionToken, payload.applicantEmail, stamp);
+      uploadedAttachmentId = cleanText(item && item.attachmentId);
+      uploadedDriveItemId = cleanText(item && item.driveItemId);
+      if (!uploadedAttachmentId && !uploadedDriveItemId) {
+        throw new Error('missing uploaded authorization document id');
+      }
+      return {
+        attachmentId: uploadedAttachmentId,
+        driveItemId: uploadedDriveItemId
+      };
+    });
+
     await step('apply:create', async () => {
       const body = await apiJson('POST', '/api/unit-contact/apply', {
         action: 'unit-contact.apply',
-        payload
+        payload: {
+          ...payload,
+          authorizationDocAttachmentId: uploadedAttachmentId,
+          authorizationDocDriveItemId: uploadedDriveItemId,
+          authorizationDocFileName: `單位資安窗口授權同意書-${stamp}.pdf`,
+          authorizationDocContentType: 'application/pdf',
+          authorizationDocSize: Buffer.byteLength(buildAuthorizationDocBase64(stamp), 'base64'),
+          authorizationDocUploadedAt: new Date().toISOString()
+        }
       });
       applicationId = cleanText(body && body.application && body.application.id);
       if (!applicationId) throw new Error('missing application id');
@@ -230,6 +303,9 @@ async function run() {
       const match = items.find((entry) => cleanText(entry && entry.id) === applicationId);
       if (!match) throw new Error('application not found in admin list');
       if (cleanText(match.status) !== 'pending_review') throw new Error(`unexpected status ${match.status}`);
+      if (!cleanText(match.authorizationDocAttachmentId) && !cleanText(match.authorizationDocDriveItemId)) {
+        throw new Error('authorization document metadata missing from admin list');
+      }
       return cleanText(match.status);
     });
 
@@ -289,6 +365,13 @@ async function run() {
       }
     } catch (error) {
       report.steps.push({ name: 'cleanup:application', ok: false, detail: String(error && error.message || error) });
+    }
+    try {
+      if (uploadedDriveItemId && sessionToken) {
+        await deleteAttachment(sessionToken, uploadedDriveItemId);
+      }
+    } catch (error) {
+      report.steps.push({ name: 'cleanup:attachment', ok: false, detail: String(error && error.message || error) });
     }
     report.finishedAt = new Date().toISOString();
     writeJson(RESULT_PATH, report);
