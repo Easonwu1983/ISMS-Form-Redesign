@@ -21,6 +21,9 @@
       syncReviewScopesFromM365,
       getCustomUnitRegistry,
       loadUnitReviewStore,
+      getUnitGovernanceMode,
+      setUnitGovernanceMode,
+      getUnitGovernanceModes,
       formatUnitScopeSummary,
       approveCustomUnit,
       mergeCustomUnit,
@@ -79,6 +82,14 @@
       loading: false,
       lastLoadedAt: ''
     };
+    const unitGovernanceState = {
+      filters: {
+        keyword: ''
+      },
+      items: [],
+      loading: false,
+      lastLoadedAt: ''
+    };
 
     function formatUserUnitSummary(user) {
       const units = getAuthorizedUnits(user);
@@ -88,6 +99,104 @@
     function formatUserReviewUnitSummary(user) {
       const units = getReviewUnits(user);
       return units.length ? units.join('、') : '沿用既有審核邏輯';
+    }
+
+    function getGovernanceReviewScopeUnits(user) {
+      const units = getReviewUnits(user);
+      return Array.isArray(units) ? units.map((unit) => String(unit || '').trim()).filter(Boolean) : [];
+    }
+
+    function getGovernanceTopLevelUnits() {
+      const entries = Array.isArray(UNIT_SEARCH_ENTRIES) ? UNIT_SEARCH_ENTRIES : [];
+      const groups = new Map();
+      entries.forEach((entry) => {
+        const value = String(entry && entry.value || '').trim();
+        if (!value) return;
+        const parsed = splitUnitValue(value);
+        const parent = String(parsed && parsed.parent || value).trim();
+        const child = String(parsed && parsed.child || '').trim();
+        if (!parent) return;
+        if (!groups.has(parent)) {
+          groups.set(parent, {
+            unit: parent,
+            category: String(entry && entry.category || '').trim(),
+            children: new Set()
+          });
+        }
+        if (child) groups.get(parent).children.add(child);
+      });
+      const approvedModeMap = new Map(getUnitGovernanceModes().map((entry) => [String(entry && entry.unit || '').trim(), entry]));
+      return Array.from(groups.values())
+        .map((group) => {
+          const modeEntry = approvedModeMap.get(group.unit) || null;
+          return {
+            unit: group.unit,
+            category: group.category || '',
+            mode: modeEntry && modeEntry.mode === 'consolidated' ? 'consolidated' : 'independent',
+            note: modeEntry && modeEntry.note ? modeEntry.note : '',
+            updatedAt: modeEntry && modeEntry.updatedAt ? modeEntry.updatedAt : '',
+            updatedBy: modeEntry && modeEntry.updatedBy ? modeEntry.updatedBy : '',
+            children: Array.from(group.children).sort((a, b) => a.localeCompare(b, 'zh-Hant'))
+          };
+        })
+        .filter((group) => {
+          const scopeUnits = getGovernanceReviewScopeUnits(currentUser());
+          if (isAdmin()) return true;
+          return scopeUnits.includes(group.unit);
+        })
+        .sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
+    }
+
+    function buildGovernanceModeBadge(mode) {
+      const normalized = String(mode || '').trim() === 'consolidated' ? 'consolidated' : 'independent';
+      const label = normalized === 'consolidated' ? '合併填報' : '獨立填報';
+      const cls = normalized === 'consolidated' ? 'badge-closed' : 'badge-pending';
+      return `<span class="badge ${cls}"><span class="badge-dot"></span>${esc(label)}</span>`;
+    }
+
+    function buildGovernanceUnitCard(unit) {
+      const childrenHtml = Array.isArray(unit.children) && unit.children.length
+        ? unit.children.map((child) => `<span class="cl-governance-child-chip">${esc(child)}</span>`).join('')
+        : '<span class="cl-governance-child-chip cl-governance-child-chip--muted">無下轄二級單位</span>';
+      const modeLabel = unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報';
+      const modeHint = unit.mode === 'consolidated'
+        ? '轄下二級單位將視為已整併至一級單位，儀表板不再顯示為缺交。'
+        : '轄下二級單位需各自填報，儀表板會分別追蹤進度。';
+      return `<div class="card governance-card" data-governance-unit="${esc(unit.unit)}">
+        <div class="card-header governance-card-header">
+          <div>
+            <div class="review-unit-name">${esc(unit.unit)}</div>
+            <div class="review-card-subtitle" style="margin-top:4px">${esc(unit.category || '正式單位')}</div>
+          </div>
+          <div class="governance-card-status">${buildGovernanceModeBadge(unit.mode)}</div>
+        </div>
+        <div class="governance-card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">填報模式</label>
+              <select class="form-select governance-mode-select" data-governance-unit-mode="${esc(unit.unit)}">
+                <option value="independent" ${unit.mode !== 'consolidated' ? 'selected' : ''}>獨立填報</option>
+                <option value="consolidated" ${unit.mode === 'consolidated' ? 'selected' : ''}>合併 / 統一填報</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">說明</label>
+              <textarea class="form-textarea governance-note-input" data-governance-unit-note="${esc(unit.unit)}" rows="3" placeholder="例如：主計室由一級單位統一代填；學院各系獨立填報。">${esc(unit.note || '')}</textarea>
+            </div>
+          </div>
+          <div class="review-callout compact" style="margin-top:14px">
+            <span class="review-callout-icon">${ic('building-2', 'icon-sm')}</span>
+            <div>${esc(modeHint)}</div>
+          </div>
+          <div class="cl-governance-child-wrap">
+            <div class="cl-governance-child-title">轄下二級單位</div>
+            <div class="cl-governance-child-list">${childrenHtml}</div>
+          </div>
+          <div class="form-actions" style="justify-content:flex-end">
+            <button type="button" class="btn btn-primary" data-action="admin.saveGovernanceMode" data-unit="${esc(unit.unit)}">${ic('save', 'icon-sm')} 儲存設定</button>
+          </div>
+        </div>
+      </div>`;
     }
 
 
@@ -438,8 +547,80 @@
     refreshIcons();
   }
 
-  function renderUnitReview(nextFilters) {
-    return renderUnitContactReview(nextFilters);
+  async function renderUnitReview(nextFilters) {
+    if (!isAdmin() && !isUnitAdmin()) { navigate('dashboard'); toast('您沒有管理單位治理的權限', 'error'); return; }
+    unitGovernanceState.filters = { ...unitGovernanceState.filters, ...(nextFilters || {}) };
+    unitGovernanceState.loading = true;
+    const app = document.getElementById('app');
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">可為一級單位設定獨立或合併填報模式，並快速檢視轄下二級單位的填報關聯。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在整理單位治理資料...</div></div>`;
+    refreshIcons();
+    try {
+      const items = getGovernanceTopLevelUnits();
+      unitGovernanceState.items = Array.isArray(items) ? items : [];
+      unitGovernanceState.lastLoadedAt = new Date().toISOString();
+    } catch (error) {
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">無法讀取單位治理資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">單位治理資料尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
+      refreshIcons();
+      return;
+    }
+
+    const keyword = String(unitGovernanceState.filters.keyword || '').trim().toLowerCase();
+    const items = unitGovernanceState.items.filter((unit) => {
+      if (!keyword) return true;
+      const haystack = [unit.unit, unit.category, unit.mode, unit.note, (unit.children || []).join(' ')].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(keyword);
+    });
+    const counts = items.reduce((result, unit) => {
+      if (unit.mode === 'consolidated') result.consolidated += 1; else result.independent += 1;
+      result.children += Array.isArray(unit.children) ? unit.children.length : 0;
+      return result;
+    }, { total: items.length, consolidated: 0, independent: 0, children: 0 });
+    const cardsHtml = items.length ? items.map((unit) => buildGovernanceUnitCard(unit)).join('') : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
+    app.innerHTML = `<div class="animate-in">
+      <div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">設定一級單位的獨立 / 合併填報模式，並同步反映在儀表板與管考清單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div>
+      <div class="stats-grid review-stats-grid">
+        <div class="stat-card total"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${counts.total}</div><div class="stat-label">可設定單位</div></div>
+        <div class="stat-card closed"><div class="stat-icon">${ic('layers-3')}</div><div class="stat-value">${counts.consolidated}</div><div class="stat-label">合併填報</div></div>
+        <div class="stat-card pending"><div class="stat-icon">${ic('split')}</div><div class="stat-value">${counts.independent}</div><div class="stat-label">獨立填報</div></div>
+        <div class="stat-card overdue"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${counts.children}</div><div class="stat-label">轄下二級單位</div></div>
+      </div>
+      <div class="card review-table-card governance-table-card">
+        <div class="card-header"><span class="card-title">治理設定清單</span><span class="review-card-subtitle">最高管理員可管理全部單位；單位管理員僅可管理自己被授權的單位</span></div>
+        <div class="review-toolbar">
+          <div class="review-toolbar-main">
+            <div class="form-group" style="min-width:280px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="unit-governance-keyword" value="${esc(unitGovernanceState.filters.keyword || '')}" placeholder="單位名稱、子單位、模式、備註"></div>
+          </div>
+          <div class="review-toolbar-actions">
+            <button type="button" class="btn btn-primary" data-action="admin.applyGovernanceFilters">${ic('filter', 'icon-sm')} 套用篩選</button>
+            <button type="button" class="btn btn-secondary" data-action="admin.resetGovernanceFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button>
+          </div>
+        </div>
+        <div class="governance-grid">${cardsHtml}</div>
+      </div>
+    </div>`;
+    refreshIcons();
+    bindCopyButtons();
+    registerActionHandlers(app, {
+      applyGovernanceFilters: function () {
+        unitGovernanceState.filters.keyword = document.getElementById('unit-governance-keyword') ? document.getElementById('unit-governance-keyword').value : '';
+        renderUnitReview(unitGovernanceState.filters);
+      },
+      resetGovernanceFilters: function () {
+        unitGovernanceState.filters.keyword = '';
+        renderUnitReview(unitGovernanceState.filters);
+      },
+      saveGovernanceMode: function ({ dataset }) {
+        const unit = String(dataset && dataset.unit || '').trim();
+        if (!unit) return;
+        const modeEl = document.querySelector(`[data-governance-unit-mode="${CSS.escape(unit)}"]`);
+        const noteEl = document.querySelector(`[data-governance-unit-note="${CSS.escape(unit)}"]`);
+        const mode = modeEl ? modeEl.value : 'independent';
+        const note = noteEl ? noteEl.value.trim() : '';
+        const result = setUnitGovernanceMode(unit, mode, currentUser()?.name || '', note);
+        toast(result && result.mode === 'consolidated' ? `${unit} 已設定為合併填報` : `${unit} 已設定為獨立填報`);
+        renderUnitReview(unitGovernanceState.filters);
+      }
+    });
   }
 
   function promptReviewComment(title, placeholder, submitLabel, onSubmit) {

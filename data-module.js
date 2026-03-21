@@ -824,7 +824,65 @@
     }
 
     function emptyUnitReviewStore() {
-      return { approvedUnits: [], history: [] };
+      return { approvedUnits: [], history: [], governance: { unitModes: {} } };
+    }
+
+    function normalizeGovernanceModeEntry(unit, entry) {
+      const key = String(unit || '').trim();
+      const base = entry && typeof entry === 'object' ? entry : {};
+      const rawMode = String(base.mode || '').trim().toLowerCase();
+      return {
+        unit: key,
+        mode: rawMode === 'consolidated' ? 'consolidated' : 'independent',
+        note: String(base.note || '').trim(),
+        updatedAt: String(base.updatedAt || '').trim(),
+        updatedBy: String(base.updatedBy || '').trim()
+      };
+    }
+
+    function normalizeUnitReviewStore(store) {
+      const base = store && typeof store === 'object' ? store : {};
+      const approvedUnits = Array.isArray(base.approvedUnits) ? base.approvedUnits.slice() : [];
+      const history = Array.isArray(base.history) ? base.history.slice() : [];
+      const governanceBase = base.governance && typeof base.governance === 'object' ? base.governance : {};
+      const unitModes = {};
+      const rawModes = governanceBase.unitModes && typeof governanceBase.unitModes === 'object' ? governanceBase.unitModes : {};
+      Object.keys(rawModes).forEach((unit) => {
+        const cleanUnit = String(unit || '').trim();
+        if (!cleanUnit) return;
+        unitModes[cleanUnit] = normalizeGovernanceModeEntry(cleanUnit, rawModes[cleanUnit]);
+      });
+      return {
+        approvedUnits,
+        history,
+        governance: { unitModes }
+      };
+    }
+
+    function splitGovernanceUnitValue(unitValue) {
+      const raw = String(unitValue || '').trim();
+      if (!raw) return { parent: '', child: '' };
+      const separator = raw.includes('／') ? '／' : (raw.includes('/') ? '/' : '');
+      if (!separator) return { parent: raw, child: '' };
+      const parts = raw.split(separator);
+      const parent = String(parts.shift() || '').trim();
+      const child = String(parts.join(separator) || '').trim();
+      return { parent, child };
+    }
+
+    function resolveGovernanceMode(unit, governanceModes) {
+      const cleanUnit = String(unit || '').trim();
+      if (!cleanUnit) return 'independent';
+      const store = governanceModes && typeof governanceModes === 'object' ? governanceModes : {};
+      const direct = store[cleanUnit];
+      if (direct && direct.mode === 'consolidated') return 'consolidated';
+      const parsed = splitGovernanceUnitValue(cleanUnit);
+      const parent = String(parsed && parsed.parent || '').trim();
+      if (parent && parent !== cleanUnit) {
+        const parentEntry = store[parent];
+        if (parentEntry && parentEntry.mode === 'consolidated') return 'consolidated';
+      }
+      return 'independent';
     }
 
     function emptyUnitContactApplicationStore() {
@@ -872,14 +930,57 @@
 
     function loadUnitReviewStore() {
       const raw = readVersionedStore(UNIT_REVIEW_KEY, emptyUnitReviewStore);
-      if (!raw || typeof raw !== 'object') return emptyUnitReviewStore();
-      if (!Array.isArray(raw.approvedUnits)) raw.approvedUnits = [];
-      if (!Array.isArray(raw.history)) raw.history = [];
-      return raw;
+      return normalizeUnitReviewStore(raw);
     }
 
     function saveUnitReviewStore(store) {
-      writeVersionedStore(UNIT_REVIEW_KEY, store);
+      writeVersionedStore(UNIT_REVIEW_KEY, normalizeUnitReviewStore(store));
+    }
+
+    function getUnitGovernanceMode(unit) {
+      const cleanUnit = String(unit || '').trim();
+      if (!cleanUnit) return 'independent';
+      const store = loadUnitReviewStore();
+      return resolveGovernanceMode(cleanUnit, store.governance && store.governance.unitModes);
+    }
+
+    function setUnitGovernanceMode(unit, mode, actor, note) {
+      const cleanUnit = String(unit || '').trim();
+      if (!cleanUnit) return null;
+      const nextMode = String(mode || '').trim().toLowerCase() === 'consolidated' ? 'consolidated' : 'independent';
+      const now = new Date().toISOString();
+      const store = loadUnitReviewStore();
+      if (!store.governance || typeof store.governance !== 'object') store.governance = { unitModes: {} };
+      if (!store.governance.unitModes || typeof store.governance.unitModes !== 'object') store.governance.unitModes = {};
+      const nextEntry = normalizeGovernanceModeEntry(cleanUnit, {
+        mode: nextMode,
+        note: String(note || '').trim(),
+        updatedAt: now,
+        updatedBy: String(actor || '').trim()
+      });
+      store.governance.unitModes[cleanUnit] = nextEntry;
+      store.history.unshift({
+        type: 'governance',
+        unit: cleanUnit,
+        mode: nextMode,
+        note: nextEntry.note,
+        actor: nextEntry.updatedBy,
+        time: now
+      });
+      store.history = store.history.slice(0, 40);
+      saveUnitReviewStore(store);
+      return nextEntry;
+    }
+
+    function getUnitGovernanceModes() {
+      const store = loadUnitReviewStore();
+      const unitModes = store.governance && store.governance.unitModes && typeof store.governance.unitModes === 'object'
+        ? store.governance.unitModes
+        : {};
+      return Object.values(unitModes)
+        .map((entry) => normalizeGovernanceModeEntry(entry.unit, entry))
+        .filter((entry) => entry.unit)
+        .sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
     }
 
     function cloneDefaultChecklistSections() {
@@ -1023,6 +1124,12 @@
       const unit = String((row && row.unit) || fallbackUnit || '').trim();
       const statsUnit = String((row && (row.statsUnit || row.l1Unit)) || getTrainingStatsUnit(unit)).trim();
       const unitName = String((row && row.unitName) || getTrainingJobUnit(unit)).trim() || statsUnit;
+      const rawSource = String((row && row.source) || '').trim().toLowerCase();
+      const creatorUsername = String((row && row.createdByUsername) || '').trim();
+      const creatorName = String((row && row.createdBy) || '').trim();
+      const inferredManual = rawSource === 'manual'
+        || (!!creatorUsername && rawSource !== 'import')
+        || (!!creatorName && creatorName !== '系統' && creatorName !== '系統管理' && rawSource !== 'import');
       return {
         id: String((row && row.id) || '').trim(),
         unit,
@@ -1032,9 +1139,9 @@
         unitName,
         identity: String((row && row.identity) || '').trim(),
         jobTitle: String((row && row.jobTitle) || '').trim(),
-        source: ((row && row.source) === 'manual') ? 'manual' : 'import',
-        createdBy: String((row && row.createdBy) || '系統').trim() || '系統',
-        createdByUsername: String((row && row.createdByUsername) || '').trim(),
+        source: inferredManual ? 'manual' : 'import',
+        createdBy: creatorName || '系統',
+        createdByUsername: creatorUsername,
         createdAt: (row && row.createdAt) || new Date().toISOString()
       };
     }
@@ -1395,6 +1502,9 @@
       clearLoginLogs,
       loadUnitReviewStore,
       saveUnitReviewStore,
+      getUnitGovernanceMode,
+      setUnitGovernanceMode,
+      getUnitGovernanceModes,
       getChecklistSections,
       saveChecklistSections,
       normalizeChecklistStatus,

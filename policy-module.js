@@ -8,6 +8,8 @@
       currentUser,
       getAuthorizedUnits,
       getReviewUnits,
+      getUnitGovernanceMode,
+      splitUnitValue,
       getAllItems,
       getAllChecklists,
       getAllTrainingForms,
@@ -120,6 +122,18 @@
       return hasUnitAccess(item.unit, user) || isChecklistOwner(item, user);
     }
 
+    function isGovernanceConsolidatedChildUnit(unit) {
+      const cleanUnit = String(unit || '').trim();
+      if (!cleanUnit) return false;
+      const split = typeof splitUnitValue === 'function' ? splitUnitValue(cleanUnit) : null;
+      const parent = String(split && split.parent || '').trim();
+      const child = String(split && split.child || '').trim();
+      if (!parent || !child) return false;
+      return typeof getUnitGovernanceMode === 'function'
+        ? getUnitGovernanceMode(cleanUnit) === 'consolidated'
+        : false;
+    }
+
     function getVisibleChecklists(user = currentUser()) {
       if (!user) return [];
       const all = getAllChecklists();
@@ -130,6 +144,7 @@
     function canEditChecklist(item, user = currentUser()) {
       if (!user || !item || !isChecklistDraftStatus(item.status) || !canFillChecklist(user)) return false;
       if (user.role === ROLES.ADMIN) return true;
+      if (isGovernanceConsolidatedChildUnit(item.unit)) return false;
       return hasUnitAccess(item.unit, user) || isChecklistOwner(item, user);
     }
 
@@ -153,17 +168,22 @@
     }
 
     function isTrainingManualRowOwner(row, user = currentUser()) {
-      if (!row || !user || row.source !== 'manual') return false;
+      if (!row || !user) return false;
+      const source = String(row.source || '').trim().toLowerCase();
       const ownerUsername = String(row.createdByUsername || '').trim();
       const ownerName = String(row.createdBy || '').trim();
-      return (!!ownerUsername && ownerUsername === user.username) || (!!ownerName && ownerName === user.name);
+      if ((!!ownerUsername && ownerUsername === user.username) || (!!ownerName && ownerName === user.name)) return true;
+      return source === 'manual';
     }
 
     function canDeleteTrainingEditableRow(row, form, user = currentUser()) {
       if (!row || !user) return false;
       if (user.role === ROLES.ADMIN) return true;
       const editable = !form || canEditTrainingForm(form, user);
-      return editable && isTrainingManualRowOwner(row, user);
+      if (!editable) return false;
+      const source = String(row.source || '').trim().toLowerCase();
+      if (isTrainingManualRowOwner(row, user)) return true;
+      return source === 'manual' && !!form && form.fillerUsername === user.username;
     }
 
     function getTrainingUndoRemainingMs(form, now = Date.now()) {
@@ -212,6 +232,7 @@
       canSubmitTracking,
       isChecklistOwner,
       canAccessChecklist,
+      isGovernanceConsolidatedChildUnit,
       getVisibleChecklists,
       canEditChecklist,
       getVisibleTrainingForms,

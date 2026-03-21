@@ -16,10 +16,12 @@
       getAuthorizedUnits,
       getVisibleChecklists,
       canEditChecklist,
+      getUnitGovernanceMode,
       findExistingChecklistForUnitYear,
       getChecklist,
       getLatestEditableChecklistDraft,
       canAccessChecklist,
+      splitUnitValue,
       buildUnitCascadeControl,
       initUnitCascade,
       applyTestIds,
@@ -74,8 +76,11 @@
       return `<div class="file-preview-list checklist-evidence-preview checklist-evidence-preview--readonly" id="cl-detail-files-${itemId}"></div>`;
     }
 
-    function buildChecklistEvidenceUpload(item, saved) {
+    function buildChecklistEvidenceUpload(item, saved, editable = true) {
       const existingCount = getChecklistEvidenceFiles(saved).length;
+      if (!editable) {
+        return `<div class="form-group cl-evidence-upload-group"><label class="form-label">上傳佐證附件</label>${buildChecklistEvidenceReadonlySlot(item.id)}</div>`;
+      }
       return `<div class="form-group cl-evidence-upload-group"><label class="form-label">上傳佐證附件</label><label class="training-file-input checklist-file-input"><input type="file" id="cl-file-${item.id}" data-item-id="${item.id}" multiple accept="image/*,.pdf"><span class="training-file-input-copy"><strong>選擇佐證附件</strong><small>${existingCount ? `目前已附 ${existingCount} 個檔案` : '支援 JPG / PNG / PDF，單檔上限 5MB。'}</small></span></label>${buildChecklistEvidencePreviewSlot(item.id, 'checklist-evidence-files')}</div>`;
     }
 
@@ -90,45 +95,303 @@
       return year + '-' + month + '-' + day;
     }
 
+    const checklistBrowseState = {
+      year: '',
+      status: 'all',
+      keyword: ''
+    };
+
+    const CHECKLIST_LIST_STATUS_OPTIONS = [
+      { value: 'all', label: '全部' },
+      { value: 'editing', label: '編輯中' },
+      { value: 'pending_export', label: '待匯出' },
+      { value: 'closed', label: '已結案' }
+    ];
+
+    function getChecklistAuditYear(item) {
+      const raw = String(item && item.auditYear || '').trim();
+      if (raw) return raw;
+      const fillDate = String(item && item.fillDate || '').trim();
+      if (!fillDate) return '';
+      const parsed = new Date(fillDate);
+      if (Number.isNaN(parsed.getTime())) return '';
+      return String(parsed.getFullYear() - 1911);
+    }
+
+    function getChecklistTier1Unit(item) {
+      const parsed = splitUnitValue(String(item && item.unit || '').trim());
+      return String(parsed && parsed.parent || item && item.unit || '').trim();
+    }
+
+    function getChecklistStatusBucket(item) {
+      const normalized = normalizeChecklistStatus(item && item.status);
+      if (normalized === CHECKLIST_STATUS_SUBMITTED) {
+        return { key: 'closed', label: '已結案', badgeClass: 'badge-closed' };
+      }
+      const summary = item && item.summary && typeof item.summary === 'object' ? item.summary : {};
+      const total = Number(summary.total || 0);
+      const answered = Number(summary.conform || 0) + Number(summary.partial || 0) + Number(summary.nonConform || 0) + Number(summary.na || 0);
+      const key = answered > 0 || total > 0 || item && (item.updatedAt || item.fillDate)
+        ? 'pending_export'
+        : 'editing';
+      return {
+        key,
+        label: key === 'editing' ? '編輯中' : '待匯出',
+        badgeClass: key === 'editing' ? 'badge-pending' : 'badge-reviewing'
+      };
+    }
+
+    function getChecklistGovernanceState(unit) {
+      const cleanUnit = String(unit || '').trim();
+      const split = typeof splitUnitValue === 'function' ? splitUnitValue(cleanUnit) : null;
+      const parent = String(split && split.parent || '').trim();
+      const child = String(split && split.child || '').trim();
+      const mode = typeof getUnitGovernanceMode === 'function' ? getUnitGovernanceMode(cleanUnit) : 'independent';
+      return {
+        unit: cleanUnit,
+        parent,
+        child,
+        mode,
+        consolidatedChild: !!(parent && child && mode === 'consolidated')
+      };
+    }
+
+    function buildChecklistGovernanceNote(item) {
+      const state = getChecklistGovernanceState(item && item.unit);
+      return state.consolidatedChild ? '由一級單位統一填報' : '';
+    }
+
+    function buildChecklistListQueryYearOptions(items) {
+      const years = new Set();
+      (Array.isArray(items) ? items : []).forEach((item) => {
+        const year = getChecklistAuditYear(item);
+        if (year) years.add(year);
+      });
+      const currentYear = String(new Date().getFullYear() - 1911);
+      years.add(currentYear);
+      return Array.from(years).sort((a, b) => Number(b) - Number(a));
+    }
+
+    function filterChecklistListItems(items) {
+      const keyword = String(checklistBrowseState.keyword || '').trim().toLowerCase();
+      const year = String(checklistBrowseState.year || '').trim();
+      const status = String(checklistBrowseState.status || 'all').trim();
+      return (Array.isArray(items) ? items : []).filter((item) => {
+        const itemYear = getChecklistAuditYear(item);
+        if (year && year !== 'all' && itemYear !== year) return false;
+        const bucket = getChecklistStatusBucket(item);
+        if (status !== 'all' && bucket.key !== status) return false;
+        if (!keyword) return true;
+        const haystack = [
+          item && item.id,
+          item && item.unit,
+          getChecklistTier1Unit(item),
+          item && item.fillerName,
+          item && item.fillerUsername,
+          item && item.auditYear,
+          item && item.status
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(keyword);
+      });
+    }
+
+    function groupChecklistListItems(items) {
+      const groups = new Map();
+      (Array.isArray(items) ? items : []).forEach((item) => {
+        const year = getChecklistAuditYear(item) || '未知';
+        const unit = getChecklistTier1Unit(item) || String(item && item.unit || '未命名單位').trim();
+        const yearKey = year;
+        if (!groups.has(yearKey)) groups.set(yearKey, new Map());
+        const yearGroups = groups.get(yearKey);
+        if (!yearGroups.has(unit)) {
+          yearGroups.set(unit, { year, unit, items: [] });
+        }
+        yearGroups.get(unit).items.push(item);
+      });
+      return Array.from(groups.entries())
+        .sort((a, b) => Number(b[0]) - Number(a[0]))
+        .map(([year, unitGroups]) => ({
+          year,
+          units: Array.from(unitGroups.values())
+            .map((group) => ({
+              ...group,
+              items: group.items.slice().sort((a, b) => {
+                const aTime = new Date(a && (a.updatedAt || a.fillDate || a.createdAt || 0)).getTime();
+                const bTime = new Date(b && (b.updatedAt || b.fillDate || b.createdAt || 0)).getTime();
+                return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+              })
+            }))
+            .sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'))
+        }));
+    }
+
+    function buildChecklistListStatusPill(item) {
+      const bucket = getChecklistStatusBucket(item);
+      return '<span class="badge ' + bucket.badgeClass + '"><span class="badge-dot"></span>' + esc(bucket.label) + '</span>';
+    }
+
+    function renderChecklistListRow(item) {
+      const status = normalizeChecklistStatus(item && item.status);
+      const statusCls = status === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
+      const target = isChecklistDraftStatus(status) && canEditChecklist(item) ? `checklist-fill/${item.id}` : `checklist-detail/${item.id}`;
+      const summary = item && item.summary && typeof item.summary === 'object' ? item.summary : { total: 0, conform: 0 };
+      const total = Number(summary.total || 0);
+      const conform = Number(summary.conform || 0);
+      const rate = total > 0 ? Math.round((conform / total) * 100) : 0;
+      const governanceNote = buildChecklistGovernanceNote(item);
+      return '<tr data-route="' + esc(target) + '" class="cl-list-row">'
+        + '<td class="record-id-col">' + renderCopyIdCell(item.id, '檢核表編號', true) + '</td>'
+        + '<td><div class="cl-list-unit">' + esc(item.unit) + '<small>' + esc(getChecklistTier1Unit(item) || '—') + '</small>' + (governanceNote ? '<div class="cl-list-unit-note">' + esc(governanceNote) + '</div>' : '') + '</div></td>'
+        + '<td>' + esc(item.fillerName || '—') + '<div class="review-card-subtitle" style="margin-top:4px">' + esc(item.fillerUsername || '—') + '</div></td>'
+        + '<td>' + esc(getChecklistAuditYear(item)) + ' 年</td>'
+        + '<td>' + buildChecklistListStatusPill(item) + '</td>'
+        + '<td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:' + rate + '%"></div></div><span class="cl-rate-text">' + rate + '%</span></td>'
+        + '<td>' + fmt(item && item.fillDate) + '</td>'
+        + '</tr>';
+    }
+
+    function buildChecklistListYearTabs(years) {
+      const activeYear = String(checklistBrowseState.year || '').trim() || 'all';
+      const tabButtons = ['all'].concat(Array.isArray(years) ? years : []).map((year) => {
+        const isActive = activeYear === year;
+        const label = year === 'all' ? '全部' : (year === String(new Date().getFullYear() - 1911) ? `今年度（${year}）` : `${year} 年`);
+        return '<button type="button" class="cl-year-tab ' + (isActive ? 'is-active' : '') + '" data-checklist-year="' + esc(year) + '">' + esc(label) + '</button>';
+      }).join('');
+      return '<div class="cl-year-tabs" role="tablist">' + tabButtons + '</div>';
+    }
+
+    function buildChecklistListFilters() {
+      const statusOptions = CHECKLIST_LIST_STATUS_OPTIONS.map((opt) => '<option value="' + esc(opt.value) + '" ' + (String(checklistBrowseState.status || 'all') === opt.value ? 'selected' : '') + '>' + esc(opt.label) + '</option>').join('');
+      return '<div class="cl-list-toolbar">'
+        + '<div class="cl-list-toolbar-main">'
+        + '<div class="form-group"><label class="form-label">關鍵字搜尋</label><input type="search" class="form-input" id="cl-list-keyword" placeholder="單位名稱、填報者姓名、編號" value="' + esc(checklistBrowseState.keyword || '') + '"></div>'
+        + '<div class="form-group"><label class="form-label">狀態篩選</label><select class="form-select" id="cl-list-status">' + statusOptions + '</select></div>'
+        + '</div>'
+        + '<div class="cl-list-toolbar-actions">'
+        + '<button type="button" class="btn btn-secondary" data-action="checklist.resetListFilters">' + ic('rotate-ccw', 'icon-sm') + ' 重設</button>'
+        + '</div>'
+        + '</div>';
+    }
+
+    function buildChecklistYearAccordion(yearGroup) {
+      const unitCards = Array.isArray(yearGroup && yearGroup.units) ? yearGroup.units : [];
+      const totalCount = unitCards.reduce((sum, group) => sum + group.items.length, 0);
+      const closedCount = unitCards.reduce((sum, group) => sum + group.items.filter((item) => normalizeChecklistStatus(item.status) === CHECKLIST_STATUS_SUBMITTED).length, 0);
+      const body = unitCards.length
+        ? unitCards.map((group) => {
+            const groupId = 'cl-year-' + yearGroup.year + '-unit-' + group.unit.replace(/[^\w\u4e00-\u9fff]+/g, '-');
+            const rows = group.items.map((item) => renderChecklistListRow(item)).join('');
+            const groupClosed = group.items.filter((item) => normalizeChecklistStatus(item.status) === CHECKLIST_STATUS_SUBMITTED).length;
+            const groupTotal = group.items.length;
+            return '<details class="cl-unit-accordion" id="' + esc(groupId) + '"><summary class="cl-unit-summary"><div><div class="cl-unit-title">' + esc(group.unit) + '</div><div class="cl-unit-meta">已結案 ' + groupClosed + ' / ' + groupTotal + ' 份</div></div><div class="cl-unit-summary-right"><span class="badge ' + (groupClosed === groupTotal && groupTotal > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + groupClosed + ' / ' + groupTotal + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-unit-body"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>受稽單位</th><th>填報人員</th><th>稽核年度</th><th>狀態</th><th>完成率</th><th>填報日期</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></details>';
+          }).join('')
+        : '<div class="empty-state checklist-empty-state"><div class="empty-state-icon">' + ic('clipboard-list') + '</div><div class="empty-state-title">此年度沒有資料</div><div class="empty-state-desc">可切換到其他年份，或使用上方關鍵字搜尋。</div></div>';
+      return '<details class="cl-year-accordion" open><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';
+    }
+
   function renderChecklistList() {
     Promise.resolve(syncChecklistsFromM365({ silent: true })).catch(function () { });
-    const checklists = getVisibleChecklists();
-    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} \u586b\u5831\u6aa2\u6838\u8868</a>` : '';
-    const rows = checklists.length ? checklists.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(c => {
-      const rate = c.summary.total > 0 ? Math.round(c.summary.conform / c.summary.total * 100) : 0;
-      const statusCls = normalizeChecklistStatus(c.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
-      const target = isChecklistDraftStatus(c.status) && canEditChecklist(c) ? `checklist-fill/${c.id}` : `checklist-detail/${c.id}`;
-      return `<tr data-route="${target}"><td class="record-id-col">${renderCopyIdCell(c.id, '\u6aa2\u6838\u8868\u7de8\u865f', true)}</td><td>${esc(c.unit)}</td><td>${esc(c.fillerName)}</td><td>${esc(c.auditYear)} \u5e74</td><td><span class="badge ${statusCls}"><span class="badge-dot"></span>${c.status}</span></td><td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:${rate}%"></div></div><span class="cl-rate-text">${rate}%</span></td><td>${fmt(c.fillDate)}</td></tr>`;
-    }).join('') : '';
-    const bodyHtml = checklists.length
-      ? `<div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">\u7de8\u865f</th><th>\u53d7\u7a3d\u55ae\u4f4d</th><th>\u586b\u5831\u4eba\u54e1</th><th>\u7a3d\u6838\u5e74\u5ea6</th><th>\u72c0\u614b</th><th>\u5b8c\u6210\u7387</th><th>\u586b\u5831\u65e5\u671f</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
-      : `<div class="card checklist-empty-card"><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">\u76ee\u524d\u6c92\u6709\u6aa2\u6838\u8868</div><div class="empty-state-desc">\u53ef\u4ee5\u5148\u5efa\u7acb\u65b0\u7684\u6aa2\u6838\u8868\u8349\u7a3f\uff0c\u6216\u7b49\u5f85\u5176\u4ed6\u586b\u5831\u8005\u9001\u51fa\u5f8c\u518d\u67e5\u770b\u3002</div></div></div>`;
-    document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">\u5167\u7a3d\u6aa2\u6838\u8868</h1><p class="page-subtitle">\u67e5\u770b\u5404\u55ae\u4f4d\u6aa2\u6838\u8868\u586b\u5831\u72c0\u6cc1\uff0c\u4e26\u53ef\u76f4\u63a5\u9032\u5165\u8349\u7a3f\u7de8\u4fee\u6216\u6aa2\u8996\u660e\u7d30\u3002</p></div>${fillBtn}</div>
-      ${bodyHtml}</div>`;
+    const checklists = getVisibleChecklists().slice().sort((a, b) => {
+      const yearDiff = Number(getChecklistAuditYear(b) || 0) - Number(getChecklistAuditYear(a) || 0);
+      if (yearDiff) return yearDiff;
+      return new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0);
+    });
+    const years = buildChecklistListQueryYearOptions(checklists);
+    if (!checklistBrowseState.year || !years.includes(checklistBrowseState.year) && checklistBrowseState.year !== 'all') {
+      checklistBrowseState.year = years.includes(String(new Date().getFullYear() - 1911)) ? String(new Date().getFullYear() - 1911) : (years[0] || 'all');
+    }
+    const filtered = filterChecklistListItems(checklists);
+    const grouped = groupChecklistListItems(filtered);
+    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
+    const cardsHtml = grouped.length
+      ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('')
+      : `<div class="card checklist-empty-card"><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有符合條件的檢核表</div><div class="empty-state-desc">可切換年份、狀態或關鍵字重新搜尋。</div></div></div>`;
+    document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page">
+      <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報內容，可快速搜尋填報人員與單位狀態。</p></div><div class="page-header-actions">${fillBtn}</div></div>
+      <div class="card cl-list-shell">
+        <div class="cl-list-toolbar-wrap">
+          ${buildChecklistListFilters()}
+          <div class="cl-year-tabs-shell">
+            <div class="cl-year-tabs-label">年份頁籤</div>
+            ${buildChecklistListYearTabs(years)}
+          </div>
+        </div>
+        <div class="cl-list-content">${cardsHtml}</div>
+      </div>
+    </div>`;
     refreshIcons();
     bindCopyButtons();
+
+    const keywordEl = document.getElementById('cl-list-keyword');
+    const statusEl = document.getElementById('cl-list-status');
+    const yearTabs = document.querySelectorAll('[data-checklist-year]');
+    let browseTimer = null;
+    const rerender = () => renderChecklistList();
+    const scheduleRerender = () => {
+      if (browseTimer) window.clearTimeout(browseTimer);
+      browseTimer = window.setTimeout(() => {
+        browseTimer = null;
+        rerender();
+      }, 120);
+    };
+    keywordEl?.addEventListener('input', () => {
+      checklistBrowseState.keyword = keywordEl.value;
+      scheduleRerender();
+    });
+    statusEl?.addEventListener('change', () => {
+      checklistBrowseState.status = statusEl.value;
+      rerender();
+    });
+    yearTabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        checklistBrowseState.year = String(tab.dataset.checklistYear || 'all');
+        rerender();
+      });
+    });
+    registerActionHandlers(document.getElementById('app'), {
+      resetListFilters: function () {
+        checklistBrowseState.keyword = '';
+        checklistBrowseState.status = 'all';
+        checklistBrowseState.year = String(new Date().getFullYear() - 1911);
+        renderChecklistList();
+      }
+    });
   }
 
   // Render: Checklist Fill
-  function buildChecklistItemBlock(item, saved) {
-    const radios = COMPLIANCE_OPTS.map((opt) => `<label class="cl-radio-label cl-radio-${COMPLIANCE_CLASSES[opt]}"><input type="radio" name="cl-${item.id}" value="${opt}" ${saved.compliance === opt ? 'checked' : ''}><span class="cl-radio-indicator"></span>${opt}</label>`).join('');
-    return `<div class="cl-item" id="cl-item-${item.id}">
+  function buildChecklistItemBlock(item, saved, sectionIndex, editable = true) {
+    const lockedAttr = editable ? '' : ' disabled';
+    const radios = COMPLIANCE_OPTS.map((opt) => `<label class="cl-radio-label cl-radio-${COMPLIANCE_CLASSES[opt]}"><input type="radio" name="cl-${item.id}" value="${opt}" ${saved.compliance === opt ? 'checked' : ''}${lockedAttr}><span class="cl-radio-indicator"></span>${opt}</label>`).join('');
+    return `<div class="cl-item${editable ? '' : ' cl-item--locked'}" id="cl-item-${item.id}" data-cl-item-id="${item.id}" data-cl-section-index="${sectionIndex}" tabindex="-1">
       <div class="cl-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span></div>
       <div class="cl-item-body">
         <div class="cl-compliance"><label class="form-label form-required">\u7b26\u5408\u7a0b\u5ea6</label><div class="cl-radio-group">${radios}</div></div>
         <div class="cl-fields">
-          <div class="form-group"><label class="form-label">\u57f7\u884c\u60c5\u5f62\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2">${esc(saved.execution || '')}</textarea></div>
-          <div class="form-group"><label class="form-label">\u4f50\u8b49\u8cc7\u6599\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="\u4f8b\u5982\u6587\u4ef6\u540d\u7a31\u3001\u756b\u9762\u622a\u5716\u3001\u8def\u5f91\u6216\u88dc\u5145\u8aaa\u660e" rows="2">${esc(saved.evidence || '')}</textarea></div>
-          ${buildChecklistEvidenceUpload(item, saved)}
+          <div class="form-group"><label class="form-label">\u57f7\u884c\u60c5\u5f62\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2"${editable ? '' : ' readonly'}>${esc(saved.execution || '')}</textarea></div>
+          <div class="form-group"><label class="form-label">\u4f50\u8b49\u8cc7\u6599\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="\u4f8b\u5982\u6587\u4ef6\u540d\u7a31\u3001\u756b\u9762\u622a\u5716\u3001\u8def\u5f91\u6216\u88dc\u5145\u8aaa\u660e" rows="2"${editable ? '' : ' readonly'}>${esc(saved.evidence || '')}</textarea></div>
+          ${buildChecklistEvidenceUpload(item, saved, editable)}
         </div>
       </div>
     </div>`;
   }
-  function buildChecklistSectionsHtml(existing) {
-    return getChecklistSectionsState().map((sec, si) => {
-      const itemsHtml = sec.items.map((item) => buildChecklistItemBlock(item, existing?.results?.[item.id] || {})).join('');
-      return `<div class="cl-section"><div class="cl-section-header"><span class="cl-section-num">${si + 1}</span>${esc(sec.section)}</div><div class="cl-section-body">${itemsHtml}</div></div>`;
+  function buildChecklistSectionsHtml(existing, sectionState, editable = true) {
+    const sections = Array.isArray(sectionState) ? sectionState : getChecklistSectionsState();
+    return sections.map((sec, si) => {
+      const itemsHtml = sec.items.map((item) => buildChecklistItemBlock(item, existing?.results?.[item.id] || {}, si, editable)).join('');
+      const total = sec.items.length;
+      const filled = sec.items.filter((item) => !!(existing?.results?.[item.id] && existing.results[item.id].compliance)).length;
+      const done = total > 0 && filled === total;
+      const badgeClass = done ? 'badge-closed' : 'badge-pending';
+      const label = done ? '✅ 已完成' : `已填 ${filled}/${total} 題`;
+      const open = si === 0 ? 'open' : '';
+      return `<details class="cl-section cl-section-accordion" id="cl-section-${si}" data-cl-section-index="${si}" ${open}>
+        <summary class="cl-section-header">
+          <span class="cl-section-num">${si + 1}</span>
+          <span class="cl-section-title">${esc(sec.section)}</span>
+          <span class="cl-section-progress"><span class="badge ${badgeClass}" data-cl-section-progress="${si}"><span class="badge-dot"></span>${esc(label)}</span></span>
+        </summary>
+        <div class="cl-section-body">${itemsHtml}</div>
+      </details>`;
     }).join('');
   }
 
@@ -150,45 +413,63 @@
     }
     let existing = id ? getChecklist(id) : getLatestEditableChecklistDraft();
     if (id && !existing) { navigate('checklist'); toast('\u627e\u4e0d\u5230\u8981\u7de8\u4fee\u7684\u6aa2\u6838\u8868', 'error'); return; }
-    if (existing && !canEditChecklist(existing)) { navigate('checklist'); toast('\u9019\u4efd\u6aa2\u6838\u8868\u76ee\u524d\u4e0d\u53ef\u4fee\u6539', 'error'); return; }
 
-    const sectionsHtml = buildChecklistSectionsHtml(existing);
+    const sectionState = getChecklistSectionsState();
+    const sectionLookup = new Map();
+    sectionState.forEach((sec, si) => {
+      sec.items.forEach((item) => sectionLookup.set(item.id, si));
+    });
+    const selectedUnitCandidate = existing ? existing.unit : (getScopedUnit(u) || u.unit || '');
+    const selectedUnitParts = typeof splitUnitValue === 'function' ? splitUnitValue(selectedUnitCandidate) : { parent: '', child: '' };
+    const selectedUnitGovernanceMode = getChecklistGovernanceState(selectedUnitCandidate).mode;
 
     const checklistUnitLocked = !isAdmin(u) && getAuthorizedUnits(u).length <= 1;
+    const checklistGovernanceLocked = !isAdmin(u) && selectedUnitGovernanceMode === 'consolidated' && !!(selectedUnitParts && selectedUnitParts.child);
+    const checklistEditable = !checklistGovernanceLocked && (!existing || canEditChecklist(existing));
+    if (existing && !canEditChecklist(existing) && !checklistGovernanceLocked) { navigate('checklist'); toast('\u9019\u4efd\u6aa2\u6838\u8868\u76ee\u524d\u4e0d\u53ef\u4fee\u6539', 'error'); return; }
     const selectedUnit = checklistUnitLocked ? (getScopedUnit(u) || existing?.unit || '') : (existing ? existing.unit : (getScopedUnit(u) || u.unit || ''));
+    const sectionsHtml = buildChecklistSectionsHtml(existing, sectionState, checklistEditable);
     const today = new Date().toISOString().split('T')[0];
-    const totalItems = getChecklistSectionsState().reduce((sum, sec) => sum + sec.items.length, 0);
+    const totalItems = sectionState.reduce((sum, sec) => sum + sec.items.length, 0);
     const supervisorName = existing?.supervisorName || existing?.supervisor || '';
     const supervisorTitle = existing?.supervisorTitle || '';
     const signStatus = existing?.signStatus || '待簽核';
     const signDate = existing?.signDate || '';
     const supervisorNote = existing?.supervisorNote || '';
+    const sectionAnchorHtml = sectionState.map((sec, si) => `<button type="button" class="cl-anchor-link" data-cl-anchor-index="${si}"><span class="cl-anchor-index">${si + 1}</span><span class="cl-anchor-text">${esc(sec.section)}</span></button>`).join('');
+    const checklistLockBanner = checklistGovernanceLocked
+      ? `<div class="cl-checklist-lock-banner"><strong>本單位由一級單位統一填報。</strong><span>目前子單位僅供檢視，請由一級單位窗口完成填報。</span></div>`
+      : '';
+    const formActionsHtml = checklistEditable
+      ? `<div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 正式送出檢核表</button><button type="button" class="btn btn-secondary" id="cl-save-draft" data-testid="checklist-save-draft">${ic('save', 'icon-sm')} 暫存草稿</button><a href="#checklist" class="btn btn-ghost">取消返回</a></div>`
+      : `<div class="cl-checklist-lock-banner cl-checklist-lock-banner--inline"><strong>本單位由一級單位統一填報。</strong><span>您目前可檢視內容，但無法在此單位填寫或送出。</span></div><div class="form-actions"><a href="#checklist" class="btn btn-secondary">返回列表</a>${existing ? `<a href="#checklist-detail/${esc(existing.id)}" class="btn btn-primary">查看明細</a>` : ''}</div>`;
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="page-header"><div><h1 class="page-title">${existing ? '\u7de8\u4fee\u6aa2\u6838\u8868' : '\u586b\u5831\u6aa2\u6838\u8868'}</h1><p class="page-subtitle">\u53d7\u7a3d\u55ae\u4f4d\u9810\u8a2d\u5e36\u5165\u76ee\u524d\u767b\u5165\u55ae\u4f4d\uff0c\u4f46\u53ef\u4f9d\u5be6\u969b\u586b\u5831\u9700\u6c42\u5207\u63db\u5230\u5176\u4ed6\u55ae\u4f4d\u3002\u8349\u7a3f\u53ef\u96a8\u6642\u66ab\u5b58\uff0c\u6b63\u5f0f\u9001\u51fa\u5f8c\u9396\u5b9a\u3002</p></div><a href="#checklist" class="btn btn-secondary">\u8fd4\u56de\u5217\u8868</a></div>
       <div class="editor-shell editor-shell--checklist">
         <section class="editor-main">
           <div class="card editor-card"><form id="checklist-form" data-testid="checklist-form">
+            ${checklistLockBanner}
             <div class="section-header">${ic('info', 'icon-sm')} \u57fa\u672c\u8cc7\u6599</div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">\u53d7\u7a3d\u55ae\u4f4d</label>${buildUnitCascadeControl('cl-unit', selectedUnit, checklistUnitLocked, true)}</div>
+              <div class="form-group"><label class="form-label form-required">\u53d7\u7a3d\u55ae\u4f4d</label>${buildUnitCascadeControl('cl-unit', selectedUnit, checklistUnitLocked || checklistGovernanceLocked, true)}</div>
               <div class="form-group"><label class="form-label form-required">\u586b\u5831\u4eba\u54e1</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
-              <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="cl-date" value="${esc(toDateInputValue(existing?.fillDate) || today)}" required></div>
+              <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="cl-date" value="${esc(toDateInputValue(existing?.fillDate) || today)}" ${checklistEditable ? 'required' : 'disabled'}></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">\u7a3d\u6838\u5e74\u5ea6</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}" required></div>
-              <div class="form-group"><label class="form-label form-required">\u6b0a\u8cac\u4e3b\u7ba1\u59d3\u540d</label><input type="text" class="form-input" id="cl-supervisor-name" value="${esc(supervisorName)}" placeholder="\u4f8b\u5982 \u8cc7\u8a0a\u7db2\u8def\u7d44\u7d44\u9577" required></div>
-              <div class="form-group"><label class="form-label form-required">\u4e3b\u7ba1\u8077\u7a31</label><input type="text" class="form-input" id="cl-supervisor-title" value="${esc(supervisorTitle)}" placeholder="\u4f8b\u5982 \u7d44\u9577 / \u4e3b\u4efb" required></div>
+              <div class="form-group"><label class="form-label form-required">\u7a3d\u6838\u5e74\u5ea6</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}" ${checklistEditable ? 'required' : 'disabled'}></div>
+              <div class="form-group"><label class="form-label form-required">\u6b0a\u8cac\u4e3b\u7ba1\u59d3\u540d</label><input type="text" class="form-input" id="cl-supervisor-name" value="${esc(supervisorName)}" placeholder="\u4f8b\u5982 \u8cc7\u8a0a\u7db2\u8def\u7d44\u7d44\u9577" ${checklistEditable ? 'required' : 'disabled'}></div>
+              <div class="form-group"><label class="form-label form-required">\u4e3b\u7ba1\u8077\u7a31</label><input type="text" class="form-input" id="cl-supervisor-title" value="${esc(supervisorTitle)}" placeholder="\u4f8b\u5982 \u7d44\u9577 / \u4e3b\u4efb" ${checklistEditable ? 'required' : 'disabled'}></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u72c0\u614b</label><select class="form-select" id="cl-sign-status" required><option value="\u5f85\u7c3d\u6838" ${signStatus === '\u5f85\u7c3d\u6838' ? 'selected' : ''}>\u5f85\u7c3d\u6838</option><option value="\u5df2\u7c3d\u6838" ${signStatus === '\u5df2\u7c3d\u6838' ? 'selected' : ''}>\u5df2\u7c3d\u6838</option></select></div>
-              <div class="form-group"><label class="form-label form-required">簽核日期</label><input type="date" class="form-input" id="cl-sign-date" required value="${esc(toDateInputValue(signDate))}"></div>
+              <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u72c0\u614b</label><select class="form-select" id="cl-sign-status" ${checklistEditable ? 'required' : 'disabled'}><option value="\u5f85\u7c3d\u6838" ${signStatus === '\u5f85\u7c3d\u6838' ? 'selected' : ''}>\u5f85\u7c3d\u6838</option><option value="\u5df2\u7c3d\u6838" ${signStatus === '\u5df2\u7c3d\u6838' ? 'selected' : ''}>\u5df2\u7c3d\u6838</option></select></div>
+              <div class="form-group"><label class="form-label form-required">簽核日期</label><input type="date" class="form-input" id="cl-sign-date" ${checklistEditable ? 'required' : 'disabled'} value="${esc(toDateInputValue(signDate))}"></div>
               <div class="form-group"><label class="form-label">\u7c3d\u6838\u5099\u8a3b</label><input type="text" class="form-input" id="cl-supervisor-note" value="${esc(supervisorNote)}" placeholder="\u53ef\u88dc\u5145\u4e3b\u7ba1\u610f\u898b\u6216\u8ffd\u8e64\u8aaa\u660e"></div>
             </div>
             <div class="cl-progress-bar-wrap"><div class="cl-progress-label">\u586b\u5831\u9032\u5ea6</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${totalItems}</span></div>
             <div class="cl-draft-status" id="cl-draft-status">${existing && isChecklistDraftStatus(existing.status) ? `\u8349\u7a3f\u4e0a\u6b21\u5132\u5b58\uff1a${fmtTime(existing.updatedAt || existing.createdAt)}` : '\u5c1a\u672a\u5efa\u7acb\u8349\u7a3f'}</div>
             ${sectionsHtml}
-            <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} \u6b63\u5f0f\u9001\u51fa\u6aa2\u6838\u8868</button><button type="button" class="btn btn-secondary" id="cl-save-draft" data-testid="checklist-save-draft">${ic('save', 'icon-sm')} \u66ab\u5b58\u8349\u7a3f</button><a href="#checklist" class="btn btn-ghost">\u53d6\u6d88\u8fd4\u56de</a></div>
+            ${formActionsHtml}
           </form></div>
         </section>
         <aside class="editor-aside">
@@ -196,6 +477,10 @@
             <summary class="editor-mobile-summary-toggle">${ic('layout-dashboard', 'icon-sm')} \u586b\u5831\u6458\u8981</summary>
             <div class="editor-mobile-summary-body">
               <div class="editor-sticky">
+                <div class="editor-side-card checklist-nav-card">
+                  <div class="editor-side-title">九大類目錄</div>
+                  <div class="cl-anchor-list">${sectionAnchorHtml}</div>
+                </div>
                 <div class="editor-side-card editor-progress-card">
                   <div class="editor-side-kicker">\u5167\u7a3d\u6aa2\u6838</div>
                   <div class="editor-side-title">\u5373\u6642\u9032\u5ea6</div>
@@ -300,9 +585,10 @@
       refreshIcons();
     }
 
-    function initializeChecklistEvidenceInputs() {
+    function initializeChecklistEvidenceInputs(editable = true) {
       getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
-        renderChecklistEvidenceFiles(item.id, true);
+        renderChecklistEvidenceFiles(item.id, !!editable);
+        if (!editable) return;
         const input = document.getElementById(`cl-file-${item.id}`);
         if (!input) return;
         input.addEventListener('change', function (event) {
@@ -346,15 +632,44 @@
       }
     }
 
+    function revealChecklistItem(itemId) {
+      const itemEl = document.getElementById(`cl-item-${itemId}`);
+      if (!itemEl) return;
+      const sectionIndex = sectionLookup.get(itemId);
+      if (Number.isInteger(sectionIndex)) {
+        const sectionEl = document.getElementById(`cl-section-${sectionIndex}`);
+        if (sectionEl && !sectionEl.open) sectionEl.open = true;
+      }
+      itemEl.classList.add('is-highlighted');
+      itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const focusTarget = itemEl.querySelector('input[type="radio"], textarea, input:not([type="hidden"]), select');
+      if (focusTarget && typeof focusTarget.focus === 'function') {
+        focusTarget.focus({ preventScroll: true });
+      }
+      window.setTimeout(() => itemEl.classList.remove('is-highlighted'), 2200);
+    }
+
     function updateProgress() {
       let filled = 0;
       const counts = { [COMPLIANCE_OPTS[0]]: 0, [COMPLIANCE_OPTS[1]]: 0, [COMPLIANCE_OPTS[2]]: 0, [COMPLIANCE_OPTS[3]]: 0 };
-      getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
-        const selected = document.querySelector(`input[name="cl-${item.id}"]:checked`);
-        if (!selected) return;
-        filled += 1;
-        if (counts[selected.value] !== undefined) counts[selected.value] += 1;
-      }));
+      sectionState.forEach((sec, sectionIndex) => {
+        let sectionFilled = 0;
+        sec.items.forEach((item) => {
+          const selected = document.querySelector(`input[name="cl-${item.id}"]:checked`);
+          if (!selected) return;
+          filled += 1;
+          sectionFilled += 1;
+          if (counts[selected.value] !== undefined) counts[selected.value] += 1;
+        });
+        const sectionProgress = document.querySelector(`[data-cl-section-progress="${sectionIndex}"]`);
+        if (sectionProgress) {
+          const total = sec.items.length;
+          const done = total > 0 && sectionFilled === total;
+          sectionProgress.classList.toggle('badge-closed', done);
+          sectionProgress.classList.toggle('badge-pending', !done);
+          sectionProgress.innerHTML = '<span class="badge-dot"></span>' + (done ? '✅ 已完成' : `已填 ${sectionFilled}/${total} 題`);
+        }
+      });
       const pct = totalItems > 0 ? Math.round((filled / totalItems) * 100) : 0;
       document.getElementById('cl-progress-fill').style.width = pct + '%';
       document.getElementById('cl-progress-text').textContent = filled + ' / ' + totalItems;
@@ -472,6 +787,15 @@
     }
 
     document.querySelectorAll('.cl-radio-group input').forEach((radio) => radio.addEventListener('change', updateProgress));
+    document.querySelectorAll('[data-cl-anchor-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const index = Number(button.dataset.clAnchorIndex);
+        const sectionEl = document.getElementById(`cl-section-${index}`);
+        if (!sectionEl) return;
+        sectionEl.open = true;
+        sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
     document.getElementById('cl-unit').addEventListener('change', syncChecklistMeta);
     document.getElementById('cl-date').addEventListener('change', syncChecklistMeta);
     document.getElementById('cl-year').addEventListener('input', syncChecklistMeta);
@@ -491,21 +815,24 @@
     syncChecklistMeta();
     updateProgress();
     updateChecklistDraftStatus(existing);
-    initializeChecklistEvidenceInputs();
+    initializeChecklistEvidenceInputs(checklistEditable);
 
     checklistForm.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (!checklistEditable) {
+        toast('本單位由一級單位統一填報，請由一級單位窗口處理。', 'info');
+        return;
+      }
       await runWithBusyState('\u6b63\u5728\u9001\u51fa\u6aa2\u6838\u8868\u2026', async function () {
         debugFlow('checklist', 'submit start', { id: existing?.id || null, unit: document.getElementById('cl-unit').value });
         const missing = [];
-        getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
+        sectionState.forEach((sec) => sec.items.forEach((item) => {
           if (!document.querySelector(`input[name="cl-${item.id}"]:checked`)) missing.push(item.id);
         }));
         if (missing.length > 0) {
           debugFlow('checklist', 'submit blocked by unanswered items', { count: missing.length, first: missing[0] });
           toast(`\u4ecd\u6709 ${missing.length} \u500b\u67e5\u6aa2\u9805\u76ee\u5c1a\u672a\u586b\u7b54`, 'error');
-          const el = document.getElementById(`cl-item-${missing[0]}`);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          revealChecklistItem(missing[0]);
           return;
         }
         const missingMeta = validateChecklistMeta();
@@ -535,9 +862,11 @@
     checklistForm.addEventListener('input', markChecklistDirty);
     checklistForm.addEventListener('change', markChecklistDirty);
 
-    document.getElementById('cl-save-draft')?.addEventListener('click', saveChecklistDraft);
-    document.getElementById('cl-save-draft-inline').addEventListener('click', saveChecklistDraft);
-    document.getElementById('cl-save-draft-floating').addEventListener('click', saveChecklistDraft);
+    if (checklistEditable) {
+      document.getElementById('cl-save-draft')?.addEventListener('click', saveChecklistDraft);
+      document.getElementById('cl-save-draft-inline')?.addEventListener('click', saveChecklistDraft);
+      document.getElementById('cl-save-draft-floating')?.addEventListener('click', saveChecklistDraft);
+    }
   }
 
   function renderChecklistDetail(id) {

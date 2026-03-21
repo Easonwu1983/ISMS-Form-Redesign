@@ -26,6 +26,7 @@
                     "test:unit-contact:public:visual":  "node scripts/unit-contact-public-visual-smoke.cjs",
                     "test:unit-contact:public:visual:campus":  "node scripts/campus-unit-contact-public-visual-smoke.cjs",
                     "test:unit-contact:account-flow":  "node scripts/unit-contact-account-to-fill-smoke.cjs",
+                    "test:checklist:governance":  "node scripts/checklist-governance-smoke.cjs",
                     "test:security":  "node scripts/run-with-local-server.cjs \"node scripts/security-regression.cjs\"",
                     "test:uat:daily":  "node scripts/uat-daily-flow.cjs",
                     "test:zoom:browsers":  "node scripts/browser-zoom-regression.cjs",

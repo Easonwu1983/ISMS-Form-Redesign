@@ -2996,6 +2996,384 @@ body.modal-open {
   white-space: nowrap;
 }
 
+.cl-list-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.cl-list-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+}
+
+.cl-list-toolbar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cl-list-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+  border: 1px solid rgba(219, 231, 244, 0.92);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(245, 248, 255, 0.95), rgba(255, 255, 255, 0.98));
+}
+
+.cl-list-toolbar-main {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.35fr) minmax(180px, 0.65fr);
+  gap: 14px;
+  flex: 1;
+}
+
+.cl-list-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cl-year-tabs-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cl-year-tabs-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.cl-year-tabs {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.cl-year-tabs::-webkit-scrollbar {
+  height: 8px;
+}
+
+.cl-year-tab {
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: #fff;
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cl-year-tab:hover {
+  border-color: rgba(99, 123, 255, 0.35);
+  color: var(--accent-primary);
+}
+
+.cl-year-tab.is-active {
+  background: var(--accent-gradient);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 12px 24px -18px rgba(37, 99, 235, 0.6);
+}
+
+.cl-list-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cl-year-accordion,
+.cl-unit-accordion {
+  border: 1px solid rgba(219, 231, 244, 0.95);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.cl-year-summary,
+.cl-unit-summary,
+.cl-section-header {
+  list-style: none;
+  cursor: pointer;
+}
+
+.cl-year-summary::-webkit-details-marker,
+.cl-unit-summary::-webkit-details-marker,
+.cl-section-header::-webkit-details-marker {
+  display: none;
+}
+
+.cl-year-summary,
+.cl-unit-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+.cl-year-title,
+.cl-unit-title,
+.cl-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+}
+
+.cl-year-meta,
+.cl-unit-meta {
+  margin-top: 4px;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.cl-year-summary-right,
+.cl-unit-summary-right,
+.cl-section-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.cl-year-body,
+.cl-unit-body {
+  background: #fff;
+}
+
+.cl-unit-body .table-wrapper {
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.cl-list-unit small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.cl-list-unit-note {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+
+.cl-list-row:hover {
+  background: rgba(248, 251, 255, 0.96);
+}
+
+.cl-section-accordion {
+  margin-top: 24px;
+  border: 1px solid rgba(219, 231, 244, 0.95);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 14px 28px -28px rgba(15, 23, 42, 0.34);
+}
+
+.cl-section-accordion[open] {
+  box-shadow: 0 18px 34px -30px rgba(15, 23, 42, 0.4);
+}
+
+.cl-section-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+}
+
+.cl-section-title {
+  flex: 1;
+}
+
+.cl-section-body {
+  padding: 0 0 4px;
+}
+
+.cl-item {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.cl-item:last-child {
+  border-bottom: none;
+}
+
+.cl-item:hover {
+  background: #fafcff;
+}
+
+.cl-item.is-highlighted {
+  background: rgba(239, 246, 255, 0.95);
+  box-shadow: inset 3px 0 0 rgba(59, 130, 246, 0.6);
+}
+
+.cl-item--locked {
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.cl-item--locked .cl-radio-label,
+.cl-item--locked .form-input,
+.cl-item--locked .form-textarea,
+.cl-item--locked .training-file-input,
+.cl-item--locked .checklist-file-input {
+  opacity: 0.85;
+}
+
+.cl-item--locked .cl-radio-group input,
+.cl-item--locked .form-input[disabled],
+.cl-item--locked .form-select[disabled],
+.cl-item--locked textarea[readonly] {
+  cursor: not-allowed;
+}
+
+.cl-checklist-lock-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #dbe4f0;
+  color: var(--text-secondary);
+}
+
+.cl-checklist-lock-banner strong {
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.cl-checklist-lock-banner--inline {
+  margin: 8px 0 0;
+}
+
+.cl-anchor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.cl-anchor-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(219, 231, 244, 0.95);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(248, 251, 255, 0.96);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.cl-anchor-link:hover {
+  border-color: rgba(99, 123, 255, 0.35);
+  color: var(--accent-primary);
+}
+
+.cl-anchor-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--accent-primary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.cl-anchor-text {
+  font-size: 0.84rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.governance-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  margin-top: 16px;
+}
+
+.governance-card {
+  padding: 20px;
+}
+
+.governance-card-header {
+  align-items: flex-start;
+}
+
+.governance-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cl-governance-child-wrap {
+  margin-top: 6px;
+}
+
+.cl-governance-child-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.cl-governance-child-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cl-governance-child-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.cl-governance-child-chip--muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
 .cl-draft-status {
   margin: -2px 0 14px;
   padding: 10px 12px;

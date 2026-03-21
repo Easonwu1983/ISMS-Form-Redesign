@@ -12,6 +12,7 @@ const SUITE = [
   { label: 'campus-unit-contact-public-visual-smoke', script: 'scripts/campus-unit-contact-public-visual-smoke.cjs' },
   { label: 'unit-contact-admin-review-smoke', script: 'scripts/unit-contact-admin-review-smoke.cjs' },
   { label: 'unit-contact-account-to-fill-smoke', script: 'scripts/unit-contact-account-to-fill-smoke.cjs' },
+  { label: 'checklist-governance-smoke', script: 'scripts/checklist-governance-smoke.cjs' },
   { label: 'training-roster-focus-smoke', script: 'scripts/training-roster-focus-smoke.cjs' },
   { label: 'training-roster-batch-delete-smoke', script: 'scripts/training-roster-batch-delete-smoke.cjs' },
   { label: 'audit-followup-smoke', script: 'scripts/audit-followup-smoke.cjs' }
