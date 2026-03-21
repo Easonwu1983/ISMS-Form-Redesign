@@ -453,6 +453,43 @@
     return groups.map((group, index) => buildTrainingRosterGroupTable(group, selectedSet, index)).join('');
   }
 
+  function buildTrainingRosterPreviewRows(options) {
+    const opts = options || {};
+    const ids = Array.isArray(opts.rosterIds) ? opts.rosterIds.map((value) => String(value || '').trim()).filter(Boolean) : [];
+    const names = Array.isArray(opts.rosterNames) ? opts.rosterNames.map((value) => String(value || '').trim()).filter(Boolean) : [];
+    const units = Array.isArray(opts.rosterUnits) ? opts.rosterUnits.map((value) => String(value || '').trim()) : [];
+    const total = Math.max(ids.length, names.length, units.length);
+    const rows = [];
+    const seen = new Set();
+    for (let index = 0; index < total; index += 1) {
+      const name = String(names[index] || '').trim();
+      if (!name) continue;
+      const unit = String(units[index] || '').trim();
+      const id = String(ids[index] || '').trim() || ('import-preview-' + index);
+      const key = id + '::' + name + '::' + unit;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        id,
+        name,
+        unit: unit || String(opts.importUnit || '').trim() || '未指定單位',
+        unitName: unit || String(opts.importUnit || '').trim() || '未指定單位',
+        statsUnit: unit || String(opts.importUnit || '').trim() || '未指定單位',
+        identity: '—',
+        jobTitle: '—',
+        source: 'import'
+      });
+    }
+    return rows;
+  }
+
+  function buildTrainingRosterImportPreview(options, selectedRosterIds) {
+    const rows = buildTrainingRosterPreviewRows(options);
+    if (!rows.length) return '';
+    const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
+    return '<div class="training-roster-import-preview"><div class="training-editor-note">本次匯入名單先行顯示，完整名單將在背景載入。</div>' + buildTrainingRosterRows(rows, selectedSet) + '</div>';
+  }
+
   function buildTrainingRosterFileCopy(fileName) {
     return fileName
       ? '<strong>' + esc(fileName) + '</strong><small>已選取檔案，送出後將直接匯入</small>'
@@ -1881,8 +1918,11 @@
       manual: rosters.filter((row) => row.source === 'manual').length
     };
     const deferRosterGroups = rosters.length > 500 && !opts.deferFullRender;
+    const importedPreviewHtml = (opts.rosterNames || opts.rosterIds) && deferRosterGroups
+      ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
+      : '';
     const groupsHtml = deferRosterGroups
-      ? '<div class="empty-state" style="padding:28px"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
+      ? importedPreviewHtml + '<div class="empty-state" style="padding:28px"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
       : buildTrainingRosterRows(rosters, selectedRosterIds);
     document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size);
 
@@ -1974,6 +2014,7 @@
         selectedRosterIds.clear();
         await renderTrainingRoster({
           skipSync: true,
+          deferFullRender: true,
           restoreFocusState: focusState,
           selectedRosterIds: []
         });
@@ -2196,7 +2237,7 @@
           } catch (error) {
             return { index: chunkPayload.index, error: String(error && error.message || error || '匯入失敗') };
           }
-        }, 1);
+        }, 2);
         chunkResults
           .slice()
           .sort((left, right) => Number(left && left.index || 0) - Number(right && right.index || 0))
@@ -2227,13 +2268,9 @@
             }
           });
       }
-      try {
-        await syncTrainingRostersFromM365({ silent: true });
-      } catch (error) {
-        console.warn('training roster import post-sync failed', error);
-      }
       await renderTrainingRoster({
         skipSync: true,
+        deferFullRender: true,
         rosterIds: importedRosterIds,
         rosterNames: importedRosterNames,
         rosterUnits: importedRosterUnits

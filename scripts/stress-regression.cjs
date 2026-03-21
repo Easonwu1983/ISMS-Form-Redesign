@@ -307,7 +307,7 @@ async function seedLongCase(page) {
               failed: Number(item && item.summary && item.summary.failed || 0),
               items: Array.isArray(item && item.items) ? item.items.length : 0
             }));
-      }, { items: dataRows, actorName: 'admin', actorUsername: 'admin', chunkSize: TRAINING_IMPORT_CHUNK_SIZE, concurrency: 1 });
+      }, { items: dataRows, actorName: 'admin', actorUsername: 'admin', chunkSize: TRAINING_IMPORT_CHUNK_SIZE, concurrency: 2 });
       if (!Array.isArray(batchResults) || !batchResults.length) {
         throw new Error('training roster batch import returned no results');
       }
@@ -343,8 +343,10 @@ async function seedLongCase(page) {
       }
       await page.fill('#tr-phone', '02-3366-9999');
       await page.fill('#tr-email', 'stress@g.ntu.edu.tw');
+      await page.fill('#training-search', ROSTER_PREFIX);
       await page.waitForFunction((prefix) => {
-        return Array.from(document.querySelectorAll('#training-rows-body tr')).filter((row) => String(row.textContent || '').includes(prefix)).length >= 320;
+        const rows = Array.from(document.querySelectorAll('#training-rows-body tr'));
+        return rows.filter((row) => String(row.textContent || '').includes(prefix)).length >= 320;
       }, ROSTER_PREFIX, { timeout: 180000 });
       const rowCount = await page.locator('#training-rows-body tr').count();
       if (rowCount < 320) throw new Error(`expected at least 320 rows, got ${rowCount}`);

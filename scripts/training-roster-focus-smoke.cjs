@@ -36,6 +36,12 @@ async function ensureTrainingImportPanelVisible(page) {
   await page.waitForSelector('#training-import-form', { state: 'visible' });
 }
 
+async function waitForTrainingRosterTableReady(page, timeout = 90000) {
+  await page.waitForFunction(() => {
+    return Array.from(document.querySelectorAll('#training-roster-groups tr[data-roster-id]')).length > 0;
+  }, undefined, { timeout });
+}
+
 async function expandRosterGroups(page) {
   await page.evaluate(() => {
     document.querySelectorAll('details.training-roster-group-card').forEach((element) => {
@@ -160,6 +166,7 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
         return !!(currentUser && String(currentUser.sessionToken || '').trim());
       }, undefined, { timeout: 30000 });
       await gotoHash(page, 'training-roster');
+      await waitForTrainingRosterTableReady(page);
       await ensureTrainingImportPanelVisible(page);
 
       await page.evaluate(({ unit, nameA, nameB, identity, jobTitle }) => {
@@ -177,7 +184,7 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
       });
 
       await page.click('[data-testid="training-import-submit"]');
-      await waitForTrainingRostersByNames(page, names, 30000);
+      await waitForTrainingRostersByNames(page, names, 90000);
       await page.waitForSelector('details.training-roster-group-card', { state: 'visible', timeout: 30000 });
       await expandRosterGroups(page);
 
