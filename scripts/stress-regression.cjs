@@ -37,7 +37,7 @@ function buildLargeCsv(rowCount) {
 
 async function saveScreenshot(results, page, fileName, options) {
   const filePath = path.join(SHOT_DIR, fileName);
-  const shotOptions = Object.assign({ path: filePath, fullPage: true }, options || {});
+  const shotOptions = Object.assign({ path: filePath, fullPage: false }, options || {});
   await page.screenshot(shotOptions);
   results.artifacts.push({ type: 'screenshot', path: filePath });
 }
