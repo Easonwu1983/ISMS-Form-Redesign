@@ -740,9 +740,15 @@
           resolve([]);
           return;
         }
+        const extension = getFileExtension(file.name || '');
+        const useDelimitedTextParser = extension === 'csv' || extension === 'tsv';
         const reader = new FileReader();
         reader.onload = (event) => {
           try {
+            if (useDelimitedTextParser) {
+              resolve(parseTrainingRosterImport(String(event.target.result || ''), unit));
+              return;
+            }
             if (typeof window === 'undefined' || !window.XLSX) throw new Error('\u0045\u0078\u0063\u0065\u006c\u0020\u6a21\u7d44\u5c1a\u672a\u8f09\u5165');
             const workbook = window.XLSX.read(event.target.result, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
@@ -758,7 +764,11 @@
           }
         };
         reader.onerror = () => reject(new Error('\u7121\u6cd5\u8b80\u53d6\u6a94\u6848\u5167\u5bb9'));
-        reader.readAsArrayBuffer(file);
+        if (useDelimitedTextParser) {
+          reader.readAsText(file, 'UTF-8');
+        } else {
+          reader.readAsArrayBuffer(file);
+        }
       });
     }
 
