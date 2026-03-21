@@ -450,10 +450,12 @@
     }
     authModuleApi = window.createAuthModule({
       AUTH_KEY,
+      DATA_KEY,
       ROLES,
       DEFAULT_USERS,
       loadData: function () { return getDataModule().loadData(); },
       saveData: function (data) { return getDataModule().saveData(data); },
+      getStoreTouchToken: function (key) { return getDataModule().getStoreTouchToken(key); },
       getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
       getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
       normalizeUserRecord: function (user) { return getDataModule().normalizeUserRecord(user); },
@@ -3959,6 +3961,3 @@
   });
 
 })();
-
-
-

@@ -47,3 +47,13 @@ Cloudflare reference points:
 If the SHA-1 finding must be removed from the security report, migrate the public entry from `pages.dev` to a custom domain that you control, then set the zone's TLS policy there.
 
 Until then, treat the SHA-1 item as accepted residual risk from the hosting platform, not a code defect.
+
+## Re-review 2026-03-21
+
+The latest re-review of the security report still leaves only the Cloudflare Pages TLS / SHA-1 platform limitation as unresolved. The repository and live headers remain aligned for:
+
+- `Cross-Origin-Embedder-Policy: require-corp`
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Resource-Policy: same-origin`
+
+No additional repository-level fixes are pending for this report.

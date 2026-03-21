@@ -2,9 +2,11 @@
   window.createAuthModule = function createAuthModule(deps) {
     const {
       AUTH_KEY,
+      DATA_KEY,
       ROLES,
       loadData,
       saveData,
+      getStoreTouchToken,
       getAuthorizedUnits,
       getActiveUnit,
       normalizeUserRecord,
@@ -20,6 +22,12 @@
     } = deps;
 
     const PRIMARY_ADMIN_NAME = '計算機及資訊網路中心';
+
+    let authSessionCacheKey = '';
+    let authSessionCacheValue = null;
+    let currentUserCacheKey = '';
+    let currentUserCacheValue = null;
+    let authCacheListenerInstalled = false;
 
     function validateLocalPasswordComplexity(password) {
       const value = String(password || '');
@@ -66,10 +74,18 @@
       return chars.join('');
     }
 
+    function readAuthStorageRaw(storage) {
+      try {
+        if (!storage) return '';
+        return String(storage.getItem(AUTH_KEY) || '');
+      } catch (_) {
+        return '';
+      }
+    }
+
     function readAuthStorage(storage) {
       try {
-        if (!storage) return null;
-        const raw = storage.getItem(AUTH_KEY);
+        const raw = readAuthStorageRaw(storage);
         return raw ? JSON.parse(raw) : null;
       } catch (_) {
         return null;
@@ -92,6 +108,10 @@
     function clearAuthSessionStorage() {
       writeAuthStorage(sessionStorage, null);
       writeAuthStorage(localStorage, null);
+      authSessionCacheKey = '';
+      authSessionCacheValue = null;
+      currentUserCacheKey = '';
+      currentUserCacheValue = null;
     }
 
     function writeAuthSession(user) {
@@ -102,11 +122,25 @@
       }
       writeAuthStorage(sessionStorage, normalized);
       writeAuthStorage(localStorage, normalized);
+      authSessionCacheKey = '';
+      authSessionCacheValue = null;
+      currentUserCacheKey = '';
+      currentUserCacheValue = null;
       return normalized;
     }
 
     function readAuthSession() {
-      return readAuthStorage(localStorage) || readAuthStorage(sessionStorage);
+      const localRaw = readAuthStorageRaw(localStorage);
+      const sessionRaw = readAuthStorageRaw(sessionStorage);
+      const cacheKey = localRaw + '||' + sessionRaw;
+      if (cacheKey === authSessionCacheKey) {
+        return authSessionCacheValue ? { ...authSessionCacheValue } : null;
+      }
+      const parsed = localRaw ? (() => { try { return JSON.parse(localRaw); } catch (_) { return null; } })() : null;
+      const fallback = parsed || (sessionRaw ? (() => { try { return JSON.parse(sessionRaw); } catch (_) { return null; } })() : null);
+      authSessionCacheKey = cacheKey;
+      authSessionCacheValue = fallback ? { ...fallback } : null;
+      return fallback ? { ...fallback } : null;
     }
 
     async function verifyLocalPassword(user, password) {
@@ -126,6 +160,30 @@
       return ok;
     }
 
+    function getUserStoreTouchToken() {
+      if (typeof getStoreTouchToken === 'function') {
+        try {
+          return String(getStoreTouchToken(AUTH_KEY) || '0');
+        } catch (_) {
+          return '0';
+        }
+      }
+      return '0';
+    }
+
+    function installAuthCacheInvalidation() {
+      if (authCacheListenerInstalled || typeof window === 'undefined' || !window.addEventListener) return;
+      window.addEventListener('storage', function (event) {
+        if (!event || event.key === AUTH_KEY || event.key === null) {
+          authSessionCacheKey = '';
+          authSessionCacheValue = null;
+          currentUserCacheKey = '';
+          currentUserCacheValue = null;
+        }
+      });
+      authCacheListenerInstalled = true;
+    }
+
     function syncSessionUnit(sourceUnit, targetUnit) {
       const auth = readAuthSession();
       if (!auth || auth.unit !== sourceUnit) return;
@@ -138,8 +196,13 @@
     }
 
     function currentUser() {
+      installAuthCacheInvalidation();
       const user = readAuthSession();
       if (!user) return null;
+      const cacheKey = authSessionCacheKey + '::' + getUserStoreTouchToken(DATA_KEY);
+      if (cacheKey === currentUserCacheKey) {
+        return currentUserCacheValue ? { ...currentUserCacheValue } : null;
+      }
       const expiresAt = String(user.sessionExpiresAt || '').trim();
       if (expiresAt) {
         const expiresAtMs = Date.parse(expiresAt);
@@ -150,6 +213,7 @@
       }
       const normalized = normalizeUserRecord(user);
       const canonical = normalized.username ? findUser(normalized.username) : null;
+      let resolved = normalized;
       if (canonical) {
         const merged = normalizeUserRecord({
           ...canonical,
@@ -157,15 +221,27 @@
           ...(normalized.username === 'admin' ? { name: PRIMARY_ADMIN_NAME, role: ROLES.ADMIN } : {}),
           activeUnit: normalized.activeUnit || canonical.activeUnit || ''
         });
-        if (JSON.stringify(merged) !== JSON.stringify(normalized)) writeAuthSession(merged);
-        return merged;
+        if (
+          merged.username !== normalized.username ||
+          merged.name !== normalized.name ||
+          merged.role !== normalized.role ||
+          merged.activeUnit !== normalized.activeUnit ||
+          String(merged.sessionToken || '') !== String(normalized.sessionToken || '') ||
+          String(merged.sessionExpiresAt || '') !== String(normalized.sessionExpiresAt || '') ||
+          Boolean(merged.mustChangePassword) !== Boolean(normalized.mustChangePassword)
+        ) {
+          writeAuthSession(merged);
+          resolved = merged;
+        }
       }
       if (normalized.username === 'admin' && normalized.name !== PRIMARY_ADMIN_NAME) {
         const repaired = normalizeUserRecord({ ...normalized, name: PRIMARY_ADMIN_NAME, role: ROLES.ADMIN, activeUnit: '' });
         writeAuthSession(repaired);
-        return repaired;
+        resolved = repaired;
       }
-      return normalized;
+      currentUserCacheKey = cacheKey;
+      currentUserCacheValue = resolved ? { ...resolved } : null;
+      return resolved ? { ...resolved } : null;
     }
 
     function generatePassword() {
