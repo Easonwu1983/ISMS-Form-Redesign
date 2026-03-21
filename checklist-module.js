@@ -289,8 +289,12 @@
       return '<details class="cl-year-accordion" open><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';
     }
 
-  function renderChecklistList() {
-    Promise.resolve(syncChecklistsFromM365({ silent: true })).catch(function () { });
+  async function renderChecklistList() {
+    try {
+      await syncChecklistsFromM365({ silent: true });
+    } catch (error) {
+      console.warn('checklist list sync failed', error);
+    }
     const checklists = getVisibleChecklists().slice().sort((a, b) => {
       const yearDiff = Number(getChecklistAuditYear(b) || 0) - Number(getChecklistAuditYear(a) || 0);
       if (yearDiff) return yearDiff;

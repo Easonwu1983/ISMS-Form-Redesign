@@ -2259,12 +2259,20 @@
     message: '',
     error: ''
   };
+  const CHECKLIST_SYNC_FRESHNESS_MS = 15000;
+  let checklistSyncCachePromise = null;
   function setChecklistRepositoryState(patch) {
     Object.assign(checklistRepositoryState, patch || {});
     return { ...checklistRepositoryState };
   }
   function getChecklistRepositoryState() {
     return { ...checklistRepositoryState };
+  }
+  function isChecklistSyncFresh() {
+    if (!checklistRepositoryState.ready) return false;
+    const parsedAt = Date.parse(String(checklistRepositoryState.lastSyncAt || '').trim());
+    if (!Number.isFinite(parsedAt)) return false;
+    return (Date.now() - parsedAt) < CHECKLIST_SYNC_FRESHNESS_MS;
   }
   function mergeRemoteChecklistsIntoStore(items, options) {
     const strict = !!(options && options.strict);
@@ -2318,6 +2326,17 @@
     const client = getM365ApiClient();
     const mode = client.getChecklistMode();
     const strict = isStrictRemoteDataMode();
+    if (!opts.force && checklistSyncCachePromise) return checklistSyncCachePromise;
+    if (!opts.force && isChecklistSyncFresh()) {
+      return setChecklistRepositoryState({
+        mode: 'm365-api',
+        source: 'remote',
+        ready: true,
+        message: 'checklists synced from M365',
+        error: ''
+      });
+    }
+    const request = (async function () {
     setChecklistRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
     if (mode !== 'm365-api') {
       return setChecklistRepositoryState({
@@ -2361,6 +2380,15 @@
         error: String(error && error.message || error || '')
       });
     }
+    })();
+    if (!opts.force) {
+      const tracked = request.finally(function () {
+        if (checklistSyncCachePromise === tracked) checklistSyncCachePromise = null;
+      });
+      checklistSyncCachePromise = tracked;
+      return tracked;
+    }
+    return request;
   }
   async function submitChecklistDraft(payload) {
     const client = getM365ApiClient();
