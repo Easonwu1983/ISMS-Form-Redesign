@@ -130,7 +130,7 @@ async function readChecklistLockState(page) {
     const appText = String(document.getElementById('app')?.innerText || '');
     const submitButton = document.querySelector('button[type="submit"]');
     const saveDraft = document.getElementById('cl-save-draft');
-    const topInputs = ['#cl-unit', '#cl-date', '#cl-year', '#cl-sign-status', '#cl-sign-date']
+    const topInputs = ['#cl-unit-search', '#cl-unit-category', '#cl-unit-parent', '#cl-unit-child', '#cl-unit-custom', '#cl-date', '#cl-year', '#cl-sign-status', '#cl-sign-date']
       .map((selector) => {
         const node = document.querySelector(selector);
         return {
@@ -140,6 +140,7 @@ async function readChecklistLockState(page) {
           value: node && 'value' in node ? String(node.value || '') : ''
         };
       });
+    const hiddenUnit = document.querySelector('#cl-unit');
     const lockedBlocks = Array.from(document.querySelectorAll('.cl-item--locked')).length;
     const editableInsideLocked = Array.from(document.querySelectorAll('.cl-item--locked')).some((item) => {
       return !!item.querySelector('input:not([disabled]), textarea:not([readonly]), select:not([disabled])');
@@ -148,6 +149,7 @@ async function readChecklistLockState(page) {
       appText,
       submitVisible: !!submitButton,
       saveDraftVisible: !!saveDraft,
+      hiddenUnitValue: hiddenUnit && 'value' in hiddenUnit ? String(hiddenUnit.value || '') : '',
       topInputs,
       lockedBlocks,
       editableInsideLocked
@@ -265,9 +267,8 @@ async function readChecklistLockState(page) {
       }
       if (!state.lockedBlocks) throw new Error('Expected locked checklist sections');
       if (state.editableInsideLocked) throw new Error('Locked checklist sections still contain editable controls');
-      const unitValue = await page.locator('#cl-unit').inputValue();
-      if (cleanText(unitValue) !== chosenChildUnit) {
-        throw new Error(`Checklist unit mismatch: ${unitValue} vs ${chosenChildUnit}`);
+      if (cleanText(state.hiddenUnitValue) !== chosenChildUnit) {
+        throw new Error(`Checklist unit mismatch: ${state.hiddenUnitValue} vs ${chosenChildUnit}`);
       }
       return {
         username: tempUsername,
