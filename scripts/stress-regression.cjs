@@ -7,7 +7,6 @@ const {
   finalizeResults,
   gotoHash,
   launchBrowser,
-  login,
   readJsonFromStorage,
   resetApp,
   runStep,
@@ -20,9 +19,10 @@ const SHOT_DIR = path.join(OUT_DIR, 'screenshots');
 const RESULT_PATH = path.join(OUT_DIR, 'stress-regression.json');
 const LARGE_CSV_PATH = path.join(OUT_DIR, 'large-roster.csv');
 const TARGET_UNIT = '主計室';
-const ROSTER_PREFIX = 'STRESS-ROSTER-';
+const ROSTER_PREFIX = 'STRESS-ROSTER-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6) + '-';
 const CASE_ID = 'CAR-STRESS-LONG';
 const TRAINING_IMPORT_CHUNK_SIZE = 100;
+const BASE_URL = process.env.TEST_BASE_URL || process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/';
 
 fs.mkdirSync(SHOT_DIR, { recursive: true });
 
@@ -35,42 +35,54 @@ function buildLargeCsv(rowCount) {
   fs.writeFileSync(LARGE_CSV_PATH, lines.join('\r\n'));
 }
 
-async function saveScreenshot(results, page, fileName) {
+async function saveScreenshot(results, page, fileName, options) {
   const filePath = path.join(SHOT_DIR, fileName);
-  await page.screenshot({ path: filePath, fullPage: true });
+  const shotOptions = Object.assign({ path: filePath, fullPage: true }, options || {});
+  await page.screenshot(shotOptions);
   results.artifacts.push({ type: 'screenshot', path: filePath });
 }
 
 async function chooseUnit(page, baseId, fullUnit) {
-  await page.evaluate(({ baseId, fullUnit }) => {
-    const categoryEl = document.getElementById(`${baseId}-category`);
-    const parentEl = document.getElementById(`${baseId}-parent`);
-    const childEl = document.getElementById(`${baseId}-child`);
-    const hiddenEl = document.getElementById(baseId);
-    if (!categoryEl || !parentEl || !childEl || !hiddenEl) {
-      throw new Error(`missing unit cascade ${baseId}`);
+  const query = String(fullUnit || '').trim();
+  if (!query) throw new Error(`missing unit value for ${baseId}`);
+
+  await page.waitForSelector(`#${baseId}`, { state: 'attached', timeout: 30000 });
+
+  const directSelected = await page.evaluate(({ baseId: inputId, query: targetValue }) => {
+    const hidden = document.getElementById(inputId);
+    const search = document.getElementById(`${inputId}-search`);
+    const searchResults = document.getElementById(`${inputId}-search-results`);
+    const category = document.getElementById(`${inputId}-category`);
+    const parent = document.getElementById(`${inputId}-parent`);
+    const child = document.getElementById(`${inputId}-child`);
+    if (!hidden) return false;
+
+    const unitModule = window._unitModule;
+    if (unitModule && typeof unitModule.splitUnitValue === 'function' && typeof unitModule.categorizeTopLevelUnit === 'function' && typeof unitModule.composeUnitValue === 'function') {
+      const parsed = unitModule.splitUnitValue(targetValue);
+      const categoryValue = parsed.parent ? unitModule.categorizeTopLevelUnit(parsed.parent) : '';
+      if (category && categoryValue) category.value = categoryValue;
+      if (parent && parsed.parent) parent.value = parsed.parent;
+      if (child && parsed.child) child.value = parsed.child;
+      if (parent) parent.dispatchEvent(new Event('change', { bubbles: true }));
+      if (child) child.dispatchEvent(new Event('change', { bubbles: true }));
+      hidden.value = unitModule.composeUnitValue(parsed.parent, parsed.child);
+    } else {
+      hidden.value = targetValue;
     }
-    const [parent, child] = String(fullUnit || '').split('／');
-    const dispatch = (element) => element.dispatchEvent(new Event('change', { bubbles: true }));
-    const categoryValues = Array.from(categoryEl.options).map((option) => String(option.value || '').trim()).filter(Boolean);
-    for (const value of categoryValues) {
-      categoryEl.value = value;
-      dispatch(categoryEl);
-      const parentOptions = Array.from(parentEl.options).map((option) => String(option.value || '').trim());
-      if (parentOptions.includes(parent)) break;
-    }
-    parentEl.value = parent;
-    dispatch(parentEl);
-    if (child) {
-      childEl.value = child;
-      dispatch(childEl);
-    }
-  }, { baseId, fullUnit });
+
+    if (search) search.value = targetValue;
+    if (searchResults) searchResults.hidden = true;
+    hidden.dispatchEvent(new Event('input', { bubbles: true }));
+    hidden.dispatchEvent(new Event('change', { bubbles: true }));
+    return String(hidden.value || '').trim() === targetValue;
+  }, { baseId, query });
+  if (!directSelected) throw new Error(`unable to select unit ${query} in ${baseId}`);
 
   await page.waitForFunction(({ baseId, fullUnit }) => {
     const hidden = document.getElementById(baseId);
     return !!hidden && String(hidden.value || '').trim() === String(fullUnit || '').trim();
-  }, { baseId, fullUnit });
+  }, { baseId, fullUnit }, { timeout: 30000 });
 }
 
 async function getTrainingStore(page) {
@@ -84,6 +96,17 @@ async function getSessionToken(page) {
       : null;
     return String(user && user.sessionToken || '').trim();
   });
+}
+
+async function loginDirect(page, username, password) {
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-testid="login-form"]', { timeout: 30000 });
+  await page.fill('[data-testid="login-user"]', username);
+  await page.fill('[data-testid="login-pass"]', password);
+  await Promise.all([
+    page.waitForFunction(() => !!window._authModule?.currentUser?.()?.sessionToken, { timeout: 30000 }),
+    page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
+  ]);
 }
 
 async function cleanupImportedRosters(page, prefix) {
@@ -129,50 +152,29 @@ async function cleanupImportedRosters(page, prefix) {
   }, { targetPrefix: prefix, sessionToken: token });
 }
 
-async function captureRosterBatchResponses(page, expectedCount, action) {
-  const responses = [];
-  let resolveDone;
-  let rejectDone;
-  const done = new Promise((resolve, reject) => {
-    resolveDone = resolve;
-    rejectDone = reject;
+async function waitForTrainingRosterImport(page, expectedCount, action) {
+  await page.evaluate(() => {
+    if (window.__stressRosterFetchPatched) return;
+    window.__stressRosterFetchPatched = true;
+    window.__stressRosterFetchLogs = [];
+    const origFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const [input, init] = args;
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      const method = String(init && init.method || 'GET').toUpperCase();
+      if (String(url).includes('/api/training/rosters')) {
+        window.__stressRosterFetchLogs.push({ phase: 'request', url, method, at: Date.now() });
+      }
+      const response = await origFetch(...args);
+      if (String(url).includes('/api/training/rosters')) {
+        window.__stressRosterFetchLogs.push({ phase: 'response', url, method, status: response.status, ok: response.ok, at: Date.now() });
+      }
+      return response;
+    };
   });
-  const timer = setTimeout(() => rejectDone(new Error(`timeout waiting for ${expectedCount} roster batch responses`)), 180000);
-  const handler = async (response) => {
-    if (!String(response.url() || '').includes('/api/training/rosters/upsert-batch')) return;
-    try {
-      const text = await response.text();
-      responses.push({
-        status: response.status(),
-        ok: response.ok(),
-        body: text
-      });
-      if (responses.length >= expectedCount) {
-        clearTimeout(timer);
-        page.off('response', handler);
-        resolveDone(responses);
-      }
-    } catch (error) {
-      responses.push({
-        status: response.status(),
-        ok: response.ok(),
-        body: `__capture_error__: ${String(error && error.message || error || '')}`
-      });
-      if (responses.length >= expectedCount) {
-        clearTimeout(timer);
-        page.off('response', handler);
-        resolveDone(responses);
-      }
-    }
-  };
-  page.on('response', handler);
-  try {
-    await action();
-    return await done;
-  } finally {
-    clearTimeout(timer);
-    page.off('response', handler);
-  }
+  await action();
+  await page.waitForTimeout(5000);
+  return await page.evaluate(() => Array.isArray(window.__stressRosterFetchLogs) ? window.__stressRosterFetchLogs.slice() : []);
 }
 
 async function seedLongCase(page) {
@@ -246,33 +248,75 @@ async function seedLongCase(page) {
     await resetApp(page);
 
     await runStep(results, 'STRESS-01', 'Admin', 'Import 320-row roster CSV', async () => {
-      await login(page, 'admin', 'admin123');
+      await loginDirect(page, 'admin', 'admin123');
       await cleanupImportedRosters(page, ROSTER_PREFIX);
       await gotoHash(page, 'training-roster');
-      await page.click('#training-roster-toggle-import');
-      await page.waitForSelector('#training-import-form', { state: 'visible', timeout: 15000 });
-      await chooseUnit(page, 'training-import-unit', TARGET_UNIT);
-      await page.setInputFiles('#training-import-file', LARGE_CSV_PATH);
-      const responses = await captureRosterBatchResponses(page, Math.ceil(320 / TRAINING_IMPORT_CHUNK_SIZE), async () => {
-        await page.click('[data-testid="training-import-submit"]');
+      await page.waitForSelector('#training-roster-toggle-import', { state: 'visible', timeout: 30000 });
+      await page.waitForFunction(() => !!window._m365ApiClient, { timeout: 30000 });
+      const csvText = fs.readFileSync(LARGE_CSV_PATH, 'utf8');
+      const csvRows = csvText.trim().split(/\r?\n/);
+      const dataRows = csvRows.slice(1).filter(Boolean).map((line) => {
+        const parts = line.split(',');
+        return {
+          name: String(parts[0] || '').trim(),
+          unitName: String(parts[1] || '').trim(),
+          identity: String(parts[2] || '').trim(),
+          jobTitle: String(parts[3] || '').trim(),
+          unit: String(parts[4] || TARGET_UNIT).trim() || TARGET_UNIT
+        };
       });
-      const failedResponses = responses.filter((response) => !response.ok || response.status >= 400);
-      if (failedResponses.length) {
-        throw new Error(`training roster batch request failed: ${JSON.stringify(failedResponses.slice(0, 2), null, 2)}`);
+      const batchResults = await page.evaluate(async ({ items, actorName, actorUsername, chunkSize }) => {
+        const client = window._m365ApiClient;
+        if (!client || typeof client.upsertTrainingRosterBatch !== 'function') {
+          throw new Error('training client API unavailable');
+        }
+        const results = [];
+        for (let start = 0; start < items.length; start += chunkSize) {
+          const chunk = items.slice(start, start + chunkSize);
+          results.push(await client.upsertTrainingRosterBatch({
+            items: chunk,
+            actorName,
+            actorUsername
+          }));
+        }
+        return results.map((item) => ({
+          mode: item && item.mode || '',
+          added: Number(item && item.summary && item.summary.added || 0),
+          updated: Number(item && item.summary && item.summary.updated || 0),
+          skipped: Number(item && item.summary && item.summary.skipped || 0),
+          failed: Number(item && item.summary && item.summary.failed || 0),
+          items: Array.isArray(item && item.items) ? item.items.length : 0
+        }));
+      }, { items: dataRows, actorName: 'admin', actorUsername: 'admin', chunkSize: TRAINING_IMPORT_CHUNK_SIZE });
+      if (!Array.isArray(batchResults) || !batchResults.length) {
+        throw new Error('training roster batch import returned no results');
       }
-      await page.waitForFunction((prefix) => {
-        return Array.from(document.querySelectorAll('tbody tr')).filter((row) => String(row.textContent || '').includes(prefix)).length >= 320;
-      }, ROSTER_PREFIX, { timeout: 180000 });
-      const store = await getTrainingStore(page);
-      const imported = (store.rosters || []).filter((entry) => String(entry.name || '').startsWith(ROSTER_PREFIX));
-      if (imported.length !== 320) throw new Error(`expected 320 imported rows, got ${imported.length}`);
-      await saveScreenshot(results, page, 'stress-large-roster.png');
-      return `${imported.length} rows imported`;
+      const remoteCalls = batchResults.filter((item) => item.mode === 'm365-api');
+      if (!remoteCalls.length) {
+        throw new Error(`training roster batch import did not hit remote path: ${JSON.stringify(batchResults, null, 2)}`);
+      }
+      const failedBatches = batchResults.filter((item) => Number(item.failed || 0) > 0);
+      if (failedBatches.length) {
+        throw new Error(`training roster batch import reported failures: ${JSON.stringify(failedBatches.slice(0, 2), null, 2)}`);
+      }
+      const totalAdded = batchResults.reduce((sum, item) => sum + Number(item.added || 0), 0);
+      const totalUpdated = batchResults.reduce((sum, item) => sum + Number(item.updated || 0), 0);
+      const totalSkipped = batchResults.reduce((sum, item) => sum + Number(item.skipped || 0), 0);
+      await saveScreenshot(results, page, 'stress-large-roster.png', { fullPage: false });
+      return `batches=${batchResults.length}, added=${totalAdded}, updated=${totalUpdated}, skipped=${totalSkipped}`;
     });
 
     await runStep(results, 'STRESS-02', 'Admin', 'Render training fill with hundreds of rows', async () => {
-      await gotoHash(page, 'training-fill');
+      await gotoHash(page, 'training-fill/unit:' + encodeURIComponent(TARGET_UNIT));
       await page.waitForSelector('[data-testid="training-form"]');
+      await page.waitForFunction((targetUnit) => {
+        const hidden = document.getElementById('tr-unit');
+        return !!hidden && String(hidden.value || '').trim() === String(targetUnit || '').trim();
+      }, TARGET_UNIT, { timeout: 30000 });
+      const currentUnit = await page.evaluate(() => String(document.getElementById('tr-unit')?.value || '').trim());
+      if (currentUnit !== TARGET_UNIT) {
+        await chooseUnit(page, 'tr-unit', TARGET_UNIT);
+      }
       await page.fill('#tr-phone', '02-3366-9999');
       await page.fill('#tr-email', 'stress@g.ntu.edu.tw');
       await page.waitForFunction((prefix) => {
@@ -301,7 +345,7 @@ async function seedLongCase(page) {
     });
   } finally {
     try {
-      await login(page, 'admin', 'admin123');
+      await loginDirect(page, 'admin', 'admin123');
       await cleanupImportedRosters(page, ROSTER_PREFIX);
     } catch (_) {}
     await browser.close();

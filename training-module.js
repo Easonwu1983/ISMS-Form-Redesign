@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createTrainingModule = function createTrainingModule(deps) {
     const {
       TRAINING_STATUSES,
@@ -1717,31 +1717,6 @@
     }
   }
 
-  function mergeTrainingRosterItemsIntoLocalStore(items) {
-    const incoming = (Array.isArray(items) ? items : [])
-      .map((item) => normalizeTrainingRosterRow(item, item && item.unit))
-      .filter((item) => item && String(item.id || '').trim());
-    if (!incoming.length) return;
-    const store = loadTrainingStore();
-    let changed = false;
-    incoming.forEach((item) => {
-      const index = (store.rosters || []).findIndex((entry) => String(entry && entry.id || '').trim() === String(item.id || '').trim());
-      if (index >= 0) {
-        const merged = normalizeTrainingRosterRow({ ...store.rosters[index], ...item }, item.unit);
-        const before = JSON.stringify(store.rosters[index]);
-        const after = JSON.stringify(merged);
-        if (before !== after) {
-          store.rosters[index] = merged;
-          changed = true;
-        }
-        return;
-      }
-      store.rosters.push(item);
-      changed = true;
-    });
-    if (changed) saveTrainingStore(store);
-  }
-
   function buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedCount) {
     const hiddenNote = hiddenCount
       ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
@@ -1992,7 +1967,6 @@
       const importedRosterIds = [];
       const importedRosterNames = [];
       const importedRosterUnits = [];
-      const importedRosterItems = [];
       try {
         await syncTrainingRostersFromM365({ silent: true });
       } catch (error) {
@@ -2066,7 +2040,6 @@
                 importedRosterIds.push(String(item.id || '').trim());
                 importedRosterNames.push(String(item.name || '').trim());
                 importedRosterUnits.push(String(item.unit || targetUnit).trim());
-                importedRosterItems.push(item);
               });
             }
             if (Array.isArray(result && result.errors) && result.errors.length) {
@@ -2082,7 +2055,6 @@
       } catch (error) {
         console.warn('training roster import post-sync failed', error);
       }
-      mergeTrainingRosterItemsIntoLocalStore(importedRosterItems);
       await renderTrainingRoster({
         skipSync: true,
         rosterIds: importedRosterIds,

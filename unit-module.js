@@ -27,7 +27,7 @@
       '研究誠信辦公室'
     ]);
     const TRAINING_DASHBOARD_EXCLUDED_UNITS = new Set([
-      '????????????'
+      '學校分部總辦事處'
     ]);
     let officialUnitsCache = null;
     let officialUnitCatalogCache = null;
