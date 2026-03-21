@@ -402,7 +402,15 @@ async function graphRequest(method, pathOrUrl, body) {
       ? parsed.error.message
       : `Graph request failed with HTTP ${response.status}`;
     const error = new Error(message);
-    error.statusCode = response.status >= 500 ? 502 : 500;
+    error.statusCode = response.status === 429
+      ? 429
+      : (response.status >= 500 ? 502 : 500);
+    if (response.status === 429) {
+      const retryAfter = Number.parseInt(response.headers.get('Retry-After') || '', 10);
+      if (Number.isFinite(retryAfter) && retryAfter > 0) {
+        error.retryAfterMs = retryAfter * 1000;
+      }
+    }
     throw error;
   }
   return parsed;

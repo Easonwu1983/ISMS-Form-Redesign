@@ -419,15 +419,72 @@ function createTrainingRouter(deps) {
     const list = await resolveTrainingRostersList();
     const normalized = createTrainingRosterRecord(nextItem, nextItem.updatedAt || new Date().toISOString());
     if (existingEntry) {
-      await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapTrainingRosterToGraphFields(normalized));
+      await withRetryableRosterWrite(() => graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapTrainingRosterToGraphFields(normalized)), `patch:${existingEntry.listItemId}`);
       invalidateTrainingListCaches();
       return { created: false, item: normalized };
     }
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
+    await withRetryableRosterWrite(() => graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
       fields: mapTrainingRosterToGraphFields(normalized)
-    });
+    }), `post:${normalized.id}`);
     invalidateTrainingListCaches();
     return { created: true, item: normalized };
+  }
+
+  function isRetryableRosterWriteError(error) {
+    const statusCode = Number(error && error.statusCode || 0);
+    const message = String(error && error.message || '').toLowerCase();
+    return statusCode === 429
+      || statusCode === 502
+      || statusCode === 503
+      || statusCode === 504
+      || message.includes('too many requests')
+      || message.includes('throttle')
+      || message.includes('temporarily unavailable')
+      || message.includes('service unavailable')
+      || message.includes('gateway')
+      || message.includes('timeout');
+  }
+
+  async function withRetryableRosterWrite(task, label) {
+    const delays = [0, 300, 900];
+    let lastError = null;
+    for (let attempt = 0; attempt < delays.length; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+      }
+      try {
+        return await task(attempt);
+      } catch (error) {
+        lastError = error;
+        if (!isRetryableRosterWriteError(error) || attempt === delays.length - 1) {
+          throw error;
+        }
+        console.warn('[training-backend] retrying roster write' + (label ? ` for ${label}` : ''), {
+          attempt: attempt + 1,
+          message: cleanText(error && error.message) || String(error)
+        });
+      }
+    }
+    throw lastError;
+  }
+
+  async function runLimitedConcurrency(items, concurrency, worker) {
+    const list = Array.isArray(items) ? items : [];
+    const limit = Math.max(1, Math.min(Number(concurrency) || 1, list.length || 1));
+    const results = new Array(list.length);
+    let index = 0;
+    const runners = Array.from({ length: limit }, async () => {
+      while (index < list.length) {
+        const currentIndex = index++;
+        try {
+          results[currentIndex] = await worker(list[currentIndex], currentIndex);
+        } catch (error) {
+          results[currentIndex] = { error };
+        }
+      }
+    });
+    await Promise.all(runners);
+    return results;
   }
 
   async function deleteFormEntry(existingEntry) {
@@ -440,7 +497,7 @@ function createTrainingRouter(deps) {
   async function deleteRosterEntry(existingEntry) {
     const siteId = await resolveSiteId();
     const list = await resolveTrainingRostersList();
-    await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`);
+    await withRetryableRosterWrite(() => graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`), `delete:${existingEntry.listItemId}`);
     invalidateTrainingListCaches();
   }
 
@@ -886,12 +943,19 @@ function createTrainingRouter(deps) {
 
       const newIds = await allocateNextRosterIds(plans.filter((plan) => !plan.existing).length);
       let newIndex = 0;
+      plans.forEach((plan) => {
+        if (!plan.existing) {
+          plan.nextRosterId = newIds[newIndex++];
+        } else {
+          plan.nextRosterId = plan.existing.item.id;
+        }
+      });
       const items = [];
-
-      for (const plan of plans) {
+      const concurrency = Math.max(1, Math.min(3, plans.length || 1));
+      const results = await runLimitedConcurrency(plans, concurrency, async (plan) => {
         try {
           const existing = plan.existing;
-          const nextRosterId = existing ? existing.item.id : newIds[newIndex++];
+          const nextRosterId = plan.nextRosterId || (existing ? existing.item.id : '');
           reserveKnownRosterSequence(nextRosterId);
           const nextItem = createTrainingRosterRecord({
             ...(existing ? existing.item : {}),
@@ -903,7 +967,7 @@ function createTrainingRouter(deps) {
             updatedAt: now
           }, now);
           const saved = await upsertRoster(existing, nextItem);
-          items.push(mapTrainingRosterForClient(saved.item));
+          const mapped = mapTrainingRosterForClient(saved.item);
           if (saved.created) {
             summary.added += 1;
           } else {
@@ -924,11 +988,20 @@ function createTrainingRouter(deps) {
               changes: buildTrainingRosterChanges(existing && existing.item, nextItem)
             })
           });
+          return { ok: true, item: mapped };
         } catch (error) {
           summary.failed += 1;
-          errors.push(cleanText(error && error.message) || `?臬 ${cleanText(plan && plan.item && plan.item.name) || '鈭箏'} 憭望?`);
+          return { ok: false, error: cleanText(error && error.message) || `?臬 ${cleanText(plan && plan.item && plan.item.name) || '鈭箏'} 憭望?` };
         }
-      }
+      });
+      results.forEach((result) => {
+        if (!result) return;
+        if (result.ok && result.item) {
+          items.push(result.item);
+          return;
+        }
+        if (result.error) errors.push(result.error);
+      });
 
       await writeJson(res, buildJsonResponse(200, {
         ok: true,

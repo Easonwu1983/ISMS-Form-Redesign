@@ -24,7 +24,8 @@
     };
     const CHECKLIST_ACTIONS = {
       SAVE_DRAFT: 'checklist.save-draft',
-      SUBMIT: 'checklist.submit'
+      SUBMIT: 'checklist.submit',
+      DELETE_YEAR: 'checklist.delete-year'
     };
     const TRAINING_FORM_ACTIONS = {
       SAVE_DRAFT: 'training.form.save-draft',
@@ -1312,6 +1313,7 @@
       return requestJson(endpoint + path, {
         method: options && options.method || 'GET',
         body: options && options.body,
+        timeoutMs: options && options.timeoutMs,
         contractVersion: CHECKLISTS_CONTRACT_VERSION,
         sharedHeaders: getChecklistSharedHeaders()
       });
@@ -1387,6 +1389,24 @@
         ok: !!(body && body.ok !== false),
         mode: getChecklistMode(),
         item: items[0] || null,
+        raw: body
+      };
+    }
+
+    async function deleteChecklistsByYear(auditYear) {
+      const cleanYear = cleanText(auditYear);
+      const config = getConfig();
+      const body = await requestChecklist('/year/' + encodeURIComponent(cleanYear), {
+        method: 'DELETE',
+        timeoutMs: Number(config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 45000),
+        body: buildChecklistEnvelope(CHECKLIST_ACTIONS.DELETE_YEAR, { auditYear: cleanYear })
+      });
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: getChecklistMode(),
+        deletedCount: Number(body && body.deletedCount || 0),
+        deletedIds: Array.isArray(body && body.deletedIds) ? body.deletedIds.map(cleanText).filter(Boolean) : [],
+        year: cleanYear,
         raw: body
       };
     }
@@ -1620,7 +1640,7 @@
       const config = getConfig();
       const body = await requestTrainingRosters('/upsert-batch', {
         method: 'POST',
-        timeoutMs: Number(config.trainingBatchTimeoutMs || config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 45000),
+        timeoutMs: Math.max(120000, Number(config.trainingBatchTimeoutMs || config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 45000)),
         body: buildTrainingEnvelope(TRAINING_ROSTER_ACTIONS.UPSERT_BATCH, payload)
       });
       const items = normalizeRemoteTrainingRosters(body);
@@ -1653,7 +1673,7 @@
       const config = getConfig();
       const body = await requestTrainingRosters('/delete-batch', {
         method: 'POST',
-        timeoutMs: Number(config.trainingBatchTimeoutMs || config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 45000),
+        timeoutMs: Math.max(120000, Number(config.trainingBatchTimeoutMs || config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 45000)),
         body: buildTrainingEnvelope(TRAINING_ROSTER_ACTIONS.DELETE_BATCH, payload)
       });
       const items = normalizeRemoteTrainingRosters(body);
@@ -1787,6 +1807,7 @@
       getChecklistRecord,
       saveChecklistDraft,
       submitChecklist,
+      deleteChecklistsByYear,
       getTrainingHealth,
       listTrainingForms,
       getTrainingFormRecord,

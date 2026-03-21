@@ -42,6 +42,7 @@
       getChecklistSections,
       saveChecklistSections,
       resetChecklistSections,
+      deleteChecklistsByYear,
       registerActionHandlers,
       closeModalRoot,
       navigate,
@@ -344,6 +345,11 @@
       const unitCards = Array.isArray(yearGroup && yearGroup.units) ? yearGroup.units : [];
       const totalCount = unitCards.reduce((sum, group) => sum + group.items.length, 0);
       const closedCount = unitCards.reduce((sum, group) => sum + group.items.filter((item) => normalizeChecklistStatus(item.status) === CHECKLIST_STATUS_SUBMITTED).length, 0);
+      const yearValue = String(yearGroup && yearGroup.year || '').trim();
+      const showDelete = isAdmin() && yearValue && yearValue !== '未知';
+      const deleteButton = showDelete
+        ? '<button type="button" class="btn btn-sm btn-danger cl-year-delete" data-action="checklist.deleteYear" data-year="' + esc(yearValue) + '" title="刪除年度資料">' + ic('trash-2', 'btn-icon-svg') + ' 刪除年度</button>'
+        : '';
       const body = unitCards.length
         ? unitCards.map((group) => {
             const groupId = 'cl-year-' + yearGroup.year + '-unit-' + group.unit.replace(/[^\w\u4e00-\u9fff]+/g, '-');
@@ -353,7 +359,7 @@
             return '<details class="cl-unit-accordion" id="' + esc(groupId) + '"><summary class="cl-unit-summary"><div><div class="cl-unit-title">' + esc(group.unit) + '</div><div class="cl-unit-meta">已結案 ' + groupClosed + ' / ' + groupTotal + ' 份</div></div><div class="cl-unit-summary-right"><span class="badge ' + (groupClosed === groupTotal && groupTotal > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + groupClosed + ' / ' + groupTotal + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-unit-body"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>受稽單位</th><th>填報人員</th><th>稽核年度</th><th>狀態</th><th>完成率</th><th>填報日期</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></details>';
           }).join('')
         : '<div class="empty-state checklist-empty-state"><div class="empty-state-icon">' + ic('clipboard-list') + '</div><div class="empty-state-title">此年度沒有資料</div><div class="empty-state-desc">可切換到其他年份，或使用上方關鍵字搜尋。</div></div>';
-      return '<details class="cl-year-accordion" open><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';
+      return '<details class="cl-year-accordion" open><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span>' + deleteButton + '<span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';
     }
 
   async function renderChecklistList() {
@@ -1287,6 +1293,27 @@
     toast('已還原成預設題庫', 'info');
     _cmRefreshSections();
   };
+
+  async function handleDeleteChecklistYear(year) {
+    const targetYear = String(year || '').trim();
+    if (!targetYear) {
+      toast('請先指定年度', 'error');
+      return;
+    }
+    const label = targetYear + ' 年';
+    const confirmed = await openConfirmDialog('確認要刪除 ' + label + ' 的所有檢核表資料嗎？此操作無法復原。', {
+      title: '確認刪除年度資料',
+      confirmText: '確認刪除',
+      cancelText: '取消'
+    });
+    if (!confirmed) return;
+    await runWithBusyState('正在刪除 ' + label + ' 資料…', async () => {
+      const result = await deleteChecklistsByYear(targetYear);
+      const deletedCount = Number(result && result.deletedCount || 0);
+      toast(deletedCount ? ('已刪除 ' + label + ' 資料，共 ' + deletedCount + ' 筆') : (label + ' 沒有可刪除的資料'), deletedCount ? 'success' : 'info');
+      await renderChecklistList();
+    });
+  }
   registerActionHandlers('checklist', {
     addSection: function () {
       cmAddSection();
@@ -1305,6 +1332,10 @@
     },
     deleteItem: function ({ dataset }) {
       cmDelItem(Number(dataset.si), Number(dataset.ii));
+    },
+    deleteYear: function ({ event, dataset }) {
+      if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+      return handleDeleteChecklistYear(dataset.year);
     },
     resetDefault: function () {
       cmResetDefault();

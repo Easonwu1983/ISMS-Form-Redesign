@@ -174,6 +174,21 @@ function createChecklistRouter(deps) {
     return { created: true, item: normalized };
   }
 
+  async function deleteChecklistEntriesByYear(auditYear) {
+    const targetYear = cleanText(auditYear);
+    if (!targetYear) {
+      throw createError('缺少年度。', 400);
+    }
+    const siteId = await resolveSiteId();
+    const list = await resolveChecklistsList();
+    const rows = await listAllEntries();
+    const matches = rows.filter((entry) => cleanText(entry && entry.item && entry.item.auditYear) === targetYear);
+    for (const entry of matches) {
+      await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${entry.listItemId}`);
+    }
+    return matches;
+  }
+
   async function createAuditRow(input) {
     const siteId = await resolveSiteId();
     const list = await resolveAuditList();
@@ -358,6 +373,43 @@ function createChecklistRouter(deps) {
     }
   }
 
+  async function deleteChecklistYear(req, res, origin, auditYear) {
+    try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only highest admin can delete checklist years.');
+      const envelope = await parseJsonBody(req);
+      validateActionEnvelope(envelope, ACTIONS.DELETE_YEAR);
+      const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
+      const targetYear = cleanText(auditYear || payload.auditYear);
+      if (!targetYear) throw createError('缺少年度。', 400);
+      const deletedEntries = await deleteChecklistEntriesByYear(targetYear);
+      const now = new Date().toISOString();
+      const actor = requestAuthz.buildActorDetails(authz);
+      await createAuditRow({
+        eventType: 'checklist.year_deleted',
+        actorEmail: actor.actorEmail,
+        unitCode: '',
+        recordId: 'CHECKLIST-YEAR-' + targetYear,
+        occurredAt: now,
+        payloadJson: JSON.stringify({
+          actorName: actor.actorName,
+          actorUsername: actor.actorUsername,
+          year: targetYear,
+          deletedCount: deletedEntries.length,
+          deletedItems: deletedEntries.map((entry) => buildChecklistSnapshot(entry.item))
+        })
+      });
+      await writeJson(res, buildJsonResponse(200, {
+        ok: true,
+        deletedCount: deletedEntries.length,
+        deletedIds: deletedEntries.map((entry) => cleanText(entry.item && entry.item.id)).filter(Boolean),
+        contractVersion: CONTRACT_VERSION
+      }), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to delete checklist year.', 500), origin);
+    }
+  }
+
   async function tryHandle(req, res, origin, url) {
     const pathname = cleanText(url && url.pathname);
     if (pathname === '/api/checklists/health') {
@@ -384,6 +436,12 @@ function createChecklistRouter(deps) {
     const submitMatch = pathname.match(/^\/api\/checklists\/([^/]+)\/submit$/);
     if (submitMatch && req.method === 'POST') {
       await writeChecklist(req, res, origin, routeChecklistId(submitMatch[1]), ACTIONS.SUBMIT, STATUSES.SUBMITTED);
+      return true;
+    }
+
+    const deleteYearMatch = pathname.match(/^\/api\/checklists\/year\/([^/]+)$/);
+    if (deleteYearMatch && req.method === 'DELETE') {
+      await deleteChecklistYear(req, res, origin, routeChecklistId(deleteYearMatch[1]));
       return true;
     }
 

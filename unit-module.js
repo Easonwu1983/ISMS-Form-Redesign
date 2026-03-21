@@ -22,12 +22,16 @@
     const TRAINING_UNIT_CATEGORY_ACADEMIC = '\u5b78\u8853\u55ae\u4f4d';
     const TRAINING_UNIT_CATEGORY_CENTER = '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d';
     const TRAINING_CENTER_OVERRIDE_UNITS = new Set([
-      '校長室',
-      '副校長室',
-      '研究誠信辦公室'
+      '學校分部總辦事處',
+      '學校分部總辦事處竹北分部籌備小組',
+      '學校分部總辦事處雲林分部籌備小組'
+    ]);
+    const HIDDEN_OFFICIAL_UNIT_VALUES = new Set([
+      '國立臺灣大學系統'
     ]);
     const TRAINING_DASHBOARD_EXCLUDED_UNITS = new Set([
-      '學校分部總辦事處'
+      '學校分部總辦事處',
+      '國立臺灣大學系統'
     ]);
     let officialUnitsCache = null;
     let officialUnitCatalogCache = null;
@@ -40,7 +44,7 @@
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitList_ === 'function') {
           const units = window.getOfficialUnitList_();
           if (Array.isArray(units)) {
-            officialUnitsCache = units.map((entry) => String(entry || '').trim()).filter(Boolean);
+            officialUnitsCache = units.map((entry) => String(entry || '').trim()).filter((entry) => entry && !HIDDEN_OFFICIAL_UNIT_VALUES.has(entry) && !entry.includes('?'));
             return officialUnitsCache.slice();
           }
         }
@@ -55,7 +59,7 @@
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitCatalog_ === 'function') {
           const catalog = window.getOfficialUnitCatalog_();
           if (Array.isArray(catalog)) {
-            officialUnitCatalogCache = catalog.map((entry) => (entry && typeof entry === 'object' ? { ...entry } : entry)).filter(Boolean);
+            officialUnitCatalogCache = catalog.map((entry) => (entry && typeof entry === 'object' ? { ...entry } : entry)).filter((entry) => { if (!entry || typeof entry !== 'object') return false; const value = String(entry.value || '').trim(); const name = String(entry.name || '').trim(); const fullName = String(entry.fullName || '').trim(); return !!value && !HIDDEN_OFFICIAL_UNIT_VALUES.has(value) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(name) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(fullName) && !value.includes('?') && !name.includes('?') && !fullName.includes('?'); });
             officialUnitMetaCache = null;
             return officialUnitCatalogCache.slice();
           }
@@ -382,12 +386,12 @@
       const merged = {};
 
       Object.keys(base).forEach((parent) => {
-        if (isExcludedUnitValue(parent, excludedUnits)) return;
+        if (isExcludedUnitValue(parent, excludedUnits) || HIDDEN_OFFICIAL_UNIT_VALUES.has(String(parent || '').trim())) return;
         merged[parent] = Array.isArray(base[parent]) ? [...base[parent]] : [];
       });
 
       getApprovedCustomUnits().forEach((unit) => {
-        if (isExcludedUnitValue(unit, excludedUnits)) return;
+        if (isExcludedUnitValue(unit, excludedUnits) || HIDDEN_OFFICIAL_UNIT_VALUES.has(String(unit || '').trim())) return;
         const parsed = splitUnitValue(unit);
         if (!parsed.parent) return;
         if (!merged[parsed.parent]) merged[parsed.parent] = [];
@@ -478,7 +482,7 @@
 
     function buildUnitSearchEntry(unitValue) {
       const value = String(unitValue || '').trim();
-      if (!value || isCorruptedUnitValue(value)) return null;
+      if (!value || isCorruptedUnitValue(value) || HIDDEN_OFFICIAL_UNIT_VALUES.has(value)) return null;
       const meta = getOfficialUnitMeta(value) || {};
       const parsed = splitUnitValue(value);
       const parent = parsed.parent || value;

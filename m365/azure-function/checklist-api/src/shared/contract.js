@@ -4,7 +4,8 @@ const ACTIONS = {
   LIST: 'checklist.list',
   DETAIL: 'checklist.detail',
   SAVE_DRAFT: 'checklist.save-draft',
-  SUBMIT: 'checklist.submit'
+  SUBMIT: 'checklist.submit',
+  DELETE_YEAR: 'checklist.delete-year'
 };
 
 const STATUSES = {

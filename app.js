@@ -648,6 +648,7 @@
       canEditChecklist,
       findExistingChecklistForUnitYear,
       getChecklist,
+      deleteChecklistsByYear,
       getLatestEditableChecklistDraft,
       canAccessChecklist,
       splitUnitValue,
@@ -2458,6 +2459,61 @@
       return { ok: true, item: stored, source: 'local-fallback', warning: buildChecklistFallbackWarning(error) };
     }
   }
+  async function deleteChecklistsByYear(auditYear) {
+    const targetYear = String(auditYear || '').trim();
+    if (!targetYear) throw new Error('請指定年度。');
+    const client = getM365ApiClient();
+    if (client.getChecklistMode() !== 'm365-api') {
+      const localResult = getDataModule().deleteChecklistsByYear(targetYear);
+      return { ok: true, source: 'local', year: targetYear, deletedCount: Number(localResult && localResult.deletedCount || 0), deletedIds: Array.isArray(localResult && localResult.deletedIds) ? localResult.deletedIds : [] };
+    }
+    try {
+      const response = await client.deleteChecklistsByYear(targetYear);
+      const localResult = getDataModule().deleteChecklistsByYear(targetYear);
+      setChecklistRepositoryState({
+        mode: 'm365-api',
+        source: 'remote',
+        ready: true,
+        lastSyncAt: new Date().toISOString(),
+        message: 'checklists synced from M365',
+        error: ''
+      });
+      return {
+        ok: true,
+        source: 'remote',
+        year: targetYear,
+        deletedCount: Number((response && response.deletedCount) || (localResult && localResult.deletedCount) || 0),
+        deletedIds: Array.isArray(response && response.deletedIds) ? response.deletedIds : (localResult && localResult.deletedIds) || []
+      };
+    } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        setChecklistRepositoryState({
+          mode: 'm365-api',
+          source: 'remote-error',
+          ready: false,
+          message: 'Failed to delete checklist year.',
+          error: String(error && error.message || error || '')
+        });
+        throw new Error(buildStrictRemoteError('刪除檢核表年度', error));
+      }
+      const localResult = getDataModule().deleteChecklistsByYear(targetYear);
+      setChecklistRepositoryState({
+        mode: 'm365-api',
+        source: 'local-fallback',
+        ready: false,
+        message: 'checklists deleted locally',
+        error: String(error && error.message || error || '')
+      });
+      return {
+        ok: true,
+        source: 'local-fallback',
+        year: targetYear,
+        deletedCount: Number(localResult && localResult.deletedCount || 0),
+        deletedIds: Array.isArray(localResult && localResult.deletedIds) ? localResult.deletedIds : [],
+        warning: buildChecklistFallbackWarning(error)
+      };
+    }
+  }
   const trainingRepositoryState = {
     mode: 'local-emulator',
     ready: false,
@@ -3488,7 +3544,24 @@
   function normalizeChecklistItem(item) { return getDataModule().normalizeChecklistItem(item); }
   function loadChecklists() { return getDataModule().loadChecklists(); }
   function saveChecklists(store) { return getDataModule().saveChecklists(store); }
-  function getAllChecklists() { return getDataModule().getAllChecklists(); }
+  function getStoreTouchToken(key) { return getDataModule().getStoreTouchToken(key); }
+  const checklistCollectionCache = { token: '', items: null };
+  const trainingFormsCollectionCache = { token: '', items: null };
+  const trainingRosterCollectionCache = { token: '', items: null };
+  function getCachedStoreCollection(storeKey, cache, loader) {
+    const token = String(getStoreTouchToken(storeKey) || '0');
+    if (cache.token !== token || !Array.isArray(cache.items)) {
+      const items = typeof loader === 'function' ? loader() : [];
+      cache.token = token;
+      cache.items = Array.isArray(items) ? items.slice() : [];
+    }
+    return cache.items.slice();
+  }
+  function getAllChecklists() {
+    return getCachedStoreCollection(CHECKLIST_KEY, checklistCollectionCache, function () {
+      return getDataModule().getAllChecklists();
+    });
+  }
   function getChecklist(id) { return getDataModule().getChecklist(id); }
   function addChecklist(item) { return getDataModule().addChecklist(item); }
   function updateChecklist(id, updates) { return getDataModule().updateChecklist(id, updates); }
@@ -3554,7 +3627,11 @@
   function normalizeTrainingForm(form) { return getDataModule().normalizeTrainingForm(form); }
   function loadTrainingStore() { return getDataModule().loadTrainingStore(); }
   function saveTrainingStore(store) { return getDataModule().saveTrainingStore(store); }
-  function getAllTrainingForms() { return getDataModule().getAllTrainingForms(); }
+  function getAllTrainingForms() {
+    return getCachedStoreCollection(TRAINING_KEY, trainingFormsCollectionCache, function () {
+      return getDataModule().getAllTrainingForms();
+    });
+  }
   function getTrainingForm(id) { return getDataModule().getTrainingForm(id); }
   function upsertTrainingForm(form) { return getDataModule().upsertTrainingForm(form); }
   function updateTrainingForm(id, updates) { return getDataModule().updateTrainingForm(id, updates); }
@@ -3571,7 +3648,11 @@
     return buildTrainingFormIdByDocument(documentNo, getNextTrainingFormSequence(documentNo, store.forms));
   }
 
-  function getAllTrainingRosters() { return getDataModule().getAllTrainingRosters(); }
+  function getAllTrainingRosters() {
+    return getCachedStoreCollection(TRAINING_KEY, trainingRosterCollectionCache, function () {
+      return getDataModule().getAllTrainingRosters();
+    });
+  }
   function getTrainingRosterByUnit(unit) { return getDataModule().getTrainingRosterByUnit(unit); }
   function addTrainingRosterPerson(unit, payload, source, actor, actorUsername) { return getDataModule().addTrainingRosterPerson(unit, payload, source, actor, actorUsername); }
   function deleteTrainingRosterPerson(id) { return getDataModule().deleteTrainingRosterPerson(id); }

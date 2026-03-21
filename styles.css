@@ -3151,6 +3151,11 @@ body.modal-open {
   flex-shrink: 0;
 }
 
+.cl-year-summary-right .cl-year-delete {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .cl-year-body,
 .cl-unit-body {
   background: #fff;

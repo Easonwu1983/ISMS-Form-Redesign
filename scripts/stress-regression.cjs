@@ -21,7 +21,7 @@ const LARGE_CSV_PATH = path.join(OUT_DIR, 'large-roster.csv');
 const TARGET_UNIT = '主計室';
 const ROSTER_PREFIX = 'STRESS-ROSTER-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6) + '-';
 const CASE_ID = 'CAR-STRESS-LONG';
-const TRAINING_IMPORT_CHUNK_SIZE = 100;
+const TRAINING_IMPORT_CHUNK_SIZE = 40;
 const BASE_URL = process.env.TEST_BASE_URL || process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/';
 
 fs.mkdirSync(SHOT_DIR, { recursive: true });
@@ -265,29 +265,49 @@ async function seedLongCase(page) {
           unit: String(parts[4] || TARGET_UNIT).trim() || TARGET_UNIT
         };
       });
-      const batchResults = await page.evaluate(async ({ items, actorName, actorUsername, chunkSize }) => {
+      const batchResults = await page.evaluate(async ({ items, actorName, actorUsername, chunkSize, concurrency }) => {
         const client = window._m365ApiClient;
         if (!client || typeof client.upsertTrainingRosterBatch !== 'function') {
           throw new Error('training client API unavailable');
         }
-        const results = [];
+        const chunks = [];
         for (let start = 0; start < items.length; start += chunkSize) {
-          const chunk = items.slice(start, start + chunkSize);
-          results.push(await client.upsertTrainingRosterBatch({
-            items: chunk,
-            actorName,
-            actorUsername
-          }));
+          chunks.push({
+            index: chunks.length,
+            items: items.slice(start, start + chunkSize)
+          });
         }
-        return results.map((item) => ({
-          mode: item && item.mode || '',
-          added: Number(item && item.summary && item.summary.added || 0),
-          updated: Number(item && item.summary && item.summary.updated || 0),
-          skipped: Number(item && item.summary && item.summary.skipped || 0),
-          failed: Number(item && item.summary && item.summary.failed || 0),
-          items: Array.isArray(item && item.items) ? item.items.length : 0
-        }));
-      }, { items: dataRows, actorName: 'admin', actorUsername: 'admin', chunkSize: TRAINING_IMPORT_CHUNK_SIZE });
+        const results = new Array(chunks.length);
+        let nextIndex = 0;
+        const limit = Math.max(1, Number(concurrency) || 1);
+        async function next() {
+          while (nextIndex < chunks.length) {
+            const currentIndex = nextIndex++;
+            const chunk = chunks[currentIndex];
+            try {
+              const response = await client.upsertTrainingRosterBatch({
+                items: chunk.items,
+                actorName,
+                actorUsername
+              });
+              results[currentIndex] = response;
+            } catch (error) {
+              results[currentIndex] = { error: String(error && error.message || error || '匯入失敗') };
+            }
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(limit, chunks.length) }, next));
+        return results.map((item) => item && item.error
+          ? { error: item.error }
+          : ({
+              mode: item && item.mode || '',
+              added: Number(item && item.summary && item.summary.added || 0),
+              updated: Number(item && item.summary && item.summary.updated || 0),
+              skipped: Number(item && item.summary && item.summary.skipped || 0),
+              failed: Number(item && item.summary && item.summary.failed || 0),
+              items: Array.isArray(item && item.items) ? item.items.length : 0
+            }));
+      }, { items: dataRows, actorName: 'admin', actorUsername: 'admin', chunkSize: TRAINING_IMPORT_CHUNK_SIZE, concurrency: 1 });
       if (!Array.isArray(batchResults) || !batchResults.length) {
         throw new Error('training roster batch import returned no results');
       }
@@ -295,7 +315,7 @@ async function seedLongCase(page) {
       if (!remoteCalls.length) {
         throw new Error(`training roster batch import did not hit remote path: ${JSON.stringify(batchResults, null, 2)}`);
       }
-      const failedBatches = batchResults.filter((item) => Number(item.failed || 0) > 0);
+      const failedBatches = batchResults.filter((item) => item.error || Number(item.failed || 0) > 0);
       if (failedBatches.length) {
         throw new Error(`training roster batch import reported failures: ${JSON.stringify(failedBatches.slice(0, 2), null, 2)}`);
       }
@@ -308,11 +328,15 @@ async function seedLongCase(page) {
 
     await runStep(results, 'STRESS-02', 'Admin', 'Render training fill with hundreds of rows', async () => {
       await gotoHash(page, 'training-fill/unit:' + encodeURIComponent(TARGET_UNIT));
-      await page.waitForSelector('[data-testid="training-form"]');
+      await page.waitForFunction(() => {
+        const form = document.querySelector('[data-testid="training-form"]');
+        const title = String(document.querySelector('.page-title')?.textContent || '');
+        return !!form && title.includes('填報資安教育訓練統計');
+      }, { timeout: 120000 });
       await page.waitForFunction((targetUnit) => {
         const hidden = document.getElementById('tr-unit');
         return !!hidden && String(hidden.value || '').trim() === String(targetUnit || '').trim();
-      }, TARGET_UNIT, { timeout: 30000 });
+      }, TARGET_UNIT, { timeout: 60000 });
       const currentUnit = await page.evaluate(() => String(document.getElementById('tr-unit')?.value || '').trim());
       if (currentUnit !== TARGET_UNIT) {
         await chooseUnit(page, 'tr-unit', TARGET_UNIT);
@@ -331,8 +355,8 @@ async function seedLongCase(page) {
     await runStep(results, 'STRESS-03', 'Admin', 'Open long-history case detail with many attachments', async () => {
       await seedLongCase(page);
       await gotoHash(page, 'detail/' + CASE_ID);
-      await page.waitForSelector('.timeline-item');
-      await page.waitForSelector('.file-preview-item');
+      await page.waitForSelector('.timeline-item', { state: 'visible', timeout: 120000 });
+      await page.waitForSelector('.file-preview-item', { state: 'visible', timeout: 120000 });
       const metrics = await page.evaluate(() => ({
         historyCount: document.querySelectorAll('.timeline-item').length,
         evidenceCount: document.querySelectorAll('.file-preview-item').length,

@@ -1069,6 +1069,26 @@
         store.items.push(normalizeChecklistItem(item));
       });
     }
+    function deleteChecklistsByYear(auditYear) {
+      const targetYear = String(auditYear || '').trim();
+      if (!targetYear) {
+        return { deletedCount: 0, deletedItems: [] };
+      }
+      const deletedItems = [];
+      mutateVersionedStore(CHECKLIST_KEY, emptyChecklistStore, function (store) {
+        if (!Array.isArray(store.items)) store.items = [];
+        store.items = store.items.filter((item) => {
+          const matches = String(item && item.auditYear || '').trim() === targetYear;
+          if (matches) deletedItems.push(normalizeChecklistItem(item));
+          return !matches;
+        });
+      });
+      return {
+        deletedCount: deletedItems.length,
+        deletedItems,
+        deletedIds: deletedItems.map((item) => String(item && item.id || '').trim()).filter(Boolean)
+      };
+    }
     function updateChecklist(id, updates) {
       let updated = false;
       mutateVersionedStore(CHECKLIST_KEY, emptyChecklistStore, function (store) {
@@ -1514,6 +1534,7 @@
       saveChecklists,
       getAllChecklists,
       getChecklist,
+      deleteChecklistsByYear,
       addChecklist,
       updateChecklist,
       normalizeTrainingRosterRow,
