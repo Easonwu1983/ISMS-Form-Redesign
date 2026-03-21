@@ -599,7 +599,8 @@
       </div>
     </div>`;
     refreshIcons();
-    bindCopyButtons();
+    if (typeof bindCopyButtons === 'function') bindCopyButtons();
+    else if (window && typeof window.bindCopyButtons === 'function') window.bindCopyButtons();
     registerActionHandlers(app, {
       applyGovernanceFilters: function () {
         unitGovernanceState.filters.keyword = document.getElementById('unit-governance-keyword') ? document.getElementById('unit-governance-keyword').value : '';
