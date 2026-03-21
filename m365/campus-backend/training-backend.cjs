@@ -461,6 +461,12 @@ function createTrainingRouter(deps) {
     });
   }
 
+  function queueAuditRow(input, label) {
+    void createAuditRow(input).catch((error) => {
+      console.warn('[training-backend] audit row write failed' + (label ? ` for ${label}` : ''), error && error.message ? error.message : error);
+    });
+  }
+
   function filterForms(items, url) {
     const status = cleanText(url.searchParams.get('status'));
     const unit = cleanText(url.searchParams.get('unit'));
@@ -678,7 +684,7 @@ function createTrainingRouter(deps) {
       }
       const nextItem = createTrainingFormRecord(nextItemInput, nextStatus, now);
       const saved = await upsertForm(existing, nextItem);
-      await createAuditRow({
+      queueAuditRow({
         eventType: options.eventType,
         actorEmail: actorMeta.actorEmail,
         targetEmail: nextItem.submitterEmail,
@@ -719,7 +725,7 @@ function createTrainingRouter(deps) {
       const now = new Date().toISOString();
       await deleteFormEntry(existing);
       const actor = requestAuthz.buildActorDetails(authz);
-      await createAuditRow({
+      queueAuditRow({
         eventType: 'training.form_deleted',
         actorEmail: actor.actorEmail,
         targetEmail: cleanText(existing.item.submitterEmail),
@@ -791,7 +797,7 @@ function createTrainingRouter(deps) {
         updatedAt: now
       }, now);
       const saved = await upsertRoster(existing, nextItem);
-      await createAuditRow({
+      queueAuditRow({
         eventType: 'training.roster_upserted',
         actorEmail: actorMeta.actorEmail,
         targetEmail: '',
@@ -903,7 +909,7 @@ function createTrainingRouter(deps) {
           } else {
             summary.updated += 1;
           }
-          await createAuditRow({
+          queueAuditRow({
             eventType: 'training.roster_upserted',
             actorEmail: actorMeta.actorEmail,
             targetEmail: '',
@@ -955,7 +961,7 @@ function createTrainingRouter(deps) {
         await deleteRosterEntry(entry);
       }
       const actor = requestAuthz.buildActorDetails(authz);
-      await createAuditRow({
+      queueAuditRow({
         eventType: 'training.roster_deleted',
         actorEmail: actor.actorEmail,
         targetEmail: '',
@@ -1025,7 +1031,7 @@ function createTrainingRouter(deps) {
       await Promise.all(uniqueEntries.map((entry) => deleteRosterEntry(entry)));
 
       const actor = requestAuthz.buildActorDetails(authz);
-      await createAuditRow({
+      queueAuditRow({
         eventType: 'training.roster_deleted',
         actorEmail: actor.actorEmail,
         targetEmail: '',

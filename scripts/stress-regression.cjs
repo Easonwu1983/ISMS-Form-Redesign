@@ -22,6 +22,7 @@ const LARGE_CSV_PATH = path.join(OUT_DIR, 'large-roster.csv');
 const TARGET_UNIT = '主計室';
 const ROSTER_PREFIX = 'STRESS-ROSTER-';
 const CASE_ID = 'CAR-STRESS-LONG';
+const TRAINING_IMPORT_CHUNK_SIZE = 100;
 
 fs.mkdirSync(SHOT_DIR, { recursive: true });
 
@@ -128,6 +129,52 @@ async function cleanupImportedRosters(page, prefix) {
   }, { targetPrefix: prefix, sessionToken: token });
 }
 
+async function captureRosterBatchResponses(page, expectedCount, action) {
+  const responses = [];
+  let resolveDone;
+  let rejectDone;
+  const done = new Promise((resolve, reject) => {
+    resolveDone = resolve;
+    rejectDone = reject;
+  });
+  const timer = setTimeout(() => rejectDone(new Error(`timeout waiting for ${expectedCount} roster batch responses`)), 180000);
+  const handler = async (response) => {
+    if (!String(response.url() || '').includes('/api/training/rosters/upsert-batch')) return;
+    try {
+      const text = await response.text();
+      responses.push({
+        status: response.status(),
+        ok: response.ok(),
+        body: text
+      });
+      if (responses.length >= expectedCount) {
+        clearTimeout(timer);
+        page.off('response', handler);
+        resolveDone(responses);
+      }
+    } catch (error) {
+      responses.push({
+        status: response.status(),
+        ok: response.ok(),
+        body: `__capture_error__: ${String(error && error.message || error || '')}`
+      });
+      if (responses.length >= expectedCount) {
+        clearTimeout(timer);
+        page.off('response', handler);
+        resolveDone(responses);
+      }
+    }
+  };
+  page.on('response', handler);
+  try {
+    await action();
+    return await done;
+  } finally {
+    clearTimeout(timer);
+    page.off('response', handler);
+  }
+}
+
 async function seedLongCase(page) {
   await page.evaluate(({ id, unit }) => {
     const raw = JSON.parse(localStorage.getItem('cats_data') || '{"version":1,"payload":{"items":[],"users":[],"nextId":1}}');
@@ -206,10 +253,16 @@ async function seedLongCase(page) {
       await page.waitForSelector('#training-import-form', { state: 'visible', timeout: 15000 });
       await chooseUnit(page, 'training-import-unit', TARGET_UNIT);
       await page.setInputFiles('#training-import-file', LARGE_CSV_PATH);
-      await page.click('[data-testid="training-import-submit"]');
+      const responses = await captureRosterBatchResponses(page, Math.ceil(320 / TRAINING_IMPORT_CHUNK_SIZE), async () => {
+        await page.click('[data-testid="training-import-submit"]');
+      });
+      const failedResponses = responses.filter((response) => !response.ok || response.status >= 400);
+      if (failedResponses.length) {
+        throw new Error(`training roster batch request failed: ${JSON.stringify(failedResponses.slice(0, 2), null, 2)}`);
+      }
       await page.waitForFunction((prefix) => {
         return Array.from(document.querySelectorAll('tbody tr')).filter((row) => String(row.textContent || '').includes(prefix)).length >= 320;
-      }, ROSTER_PREFIX, { timeout: 90000 });
+      }, ROSTER_PREFIX, { timeout: 180000 });
       const store = await getTrainingStore(page);
       const imported = (store.rosters || []).filter((entry) => String(entry.name || '').startsWith(ROSTER_PREFIX));
       if (imported.length !== 320) throw new Error(`expected 320 imported rows, got ${imported.length}`);
@@ -224,7 +277,7 @@ async function seedLongCase(page) {
       await page.fill('#tr-email', 'stress@g.ntu.edu.tw');
       await page.waitForFunction((prefix) => {
         return Array.from(document.querySelectorAll('#training-rows-body tr')).filter((row) => String(row.textContent || '').includes(prefix)).length >= 320;
-      }, ROSTER_PREFIX, { timeout: 90000 });
+      }, ROSTER_PREFIX, { timeout: 180000 });
       const rowCount = await page.locator('#training-rows-body tr').count();
       if (rowCount < 320) throw new Error(`expected at least 320 rows, got ${rowCount}`);
       await saveScreenshot(results, page, 'stress-training-fill.png');

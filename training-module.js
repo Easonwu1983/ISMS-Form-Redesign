@@ -2042,7 +2042,9 @@
       });
       const batchPayload = Array.from(pendingUpserts.values());
       if (batchPayload.length) {
-        const chunkSize = 200;
+        // Keep roster import batches smaller so large imports finish within the
+        // live smoke window and do not monopolize the backend request slot.
+        const chunkSize = 100;
         for (let startIndex = 0; startIndex < batchPayload.length; startIndex += chunkSize) {
           const chunk = batchPayload.slice(startIndex, startIndex + chunkSize);
           try {
