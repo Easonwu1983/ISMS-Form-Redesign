@@ -84,7 +84,8 @@
     };
     const unitGovernanceState = {
       filters: {
-        keyword: ''
+        keyword: '',
+        mode: 'all'
       },
       items: [],
       loading: false,
@@ -547,10 +548,10 @@
     refreshIcons();
   }
 
-  async function renderUnitReview(nextFilters) {
-    if (!isAdmin() && !isUnitAdmin()) { navigate('dashboard'); toast('您沒有管理單位治理的權限', 'error'); return; }
-    unitGovernanceState.filters = { ...unitGovernanceState.filters, ...(nextFilters || {}) };
-    unitGovernanceState.loading = true;
+    async function renderUnitReview(nextFilters) {
+      if (!isAdmin() && !isUnitAdmin()) { navigate('dashboard'); toast('您沒有管理單位治理的權限', 'error'); return; }
+      unitGovernanceState.filters = { ...unitGovernanceState.filters, ...(nextFilters || {}) };
+      unitGovernanceState.loading = true;
     const app = document.getElementById('app');
     app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">可為一級單位設定獨立或合併填報模式，並快速檢視轄下二級單位的填報關聯。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在整理單位治理資料...</div></div>`;
     refreshIcons();
@@ -565,7 +566,9 @@
     }
 
     const keyword = String(unitGovernanceState.filters.keyword || '').trim().toLowerCase();
+    const modeFilter = String(unitGovernanceState.filters.mode || 'all').trim();
     const items = unitGovernanceState.items.filter((unit) => {
+      if (modeFilter !== 'all' && String(unit.mode || 'independent').trim() !== modeFilter) return false;
       if (!keyword) return true;
       const haystack = [unit.unit, unit.category, unit.mode, unit.note, (unit.children || []).join(' ')].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(keyword);
@@ -588,7 +591,8 @@
         <div class="card-header"><span class="card-title">治理設定清單</span><span class="review-card-subtitle">最高管理員可管理全部單位；單位管理員僅可管理自己被授權的單位</span></div>
         <div class="review-toolbar">
           <div class="review-toolbar-main">
-            <div class="form-group" style="min-width:280px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="unit-governance-keyword" value="${esc(unitGovernanceState.filters.keyword || '')}" placeholder="單位名稱、子單位、模式、備註"></div>
+            <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="unit-governance-keyword" value="${esc(unitGovernanceState.filters.keyword || '')}" placeholder="單位名稱、子單位、模式、備註"></div>
+            <div class="form-group" style="min-width:180px"><label class="form-label">填報模式</label><select class="form-select" id="unit-governance-mode"><option value="all" ${modeFilter === 'all' ? 'selected' : ''}>全部</option><option value="independent" ${modeFilter === 'independent' ? 'selected' : ''}>獨立填報</option><option value="consolidated" ${modeFilter === 'consolidated' ? 'selected' : ''}>合併 / 統一填報</option></select></div>
           </div>
           <div class="review-toolbar-actions">
             <button type="button" class="btn btn-primary" data-action="admin.applyGovernanceFilters">${ic('filter', 'icon-sm')} 套用篩選</button>
@@ -604,10 +608,12 @@
     registerActionHandlers('admin', {
       applyGovernanceFilters: function () {
         unitGovernanceState.filters.keyword = document.getElementById('unit-governance-keyword') ? document.getElementById('unit-governance-keyword').value : '';
+        unitGovernanceState.filters.mode = document.getElementById('unit-governance-mode') ? document.getElementById('unit-governance-mode').value : 'all';
         renderUnitReview(unitGovernanceState.filters);
       },
       resetGovernanceFilters: function () {
         unitGovernanceState.filters.keyword = '';
+        unitGovernanceState.filters.mode = 'all';
         renderUnitReview(unitGovernanceState.filters);
       },
       saveGovernanceMode: function ({ dataset }) {

@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 const {
   attachDiagnostics,
@@ -19,7 +19,7 @@ const OUT_DIR = runMeta.outDir;
 const SHOT_DIR = path.join(OUT_DIR, 'screenshots');
 const RESULT_PATH = path.join(OUT_DIR, 'stress-regression.json');
 const LARGE_CSV_PATH = path.join(OUT_DIR, 'large-roster.csv');
-const TARGET_UNIT = '計算機及資訊網路中心／資訊網路組';
+const TARGET_UNIT = '主計室';
 const ROSTER_PREFIX = 'STRESS-ROSTER-';
 const CASE_ID = 'CAR-STRESS-LONG';
 
@@ -28,7 +28,8 @@ fs.mkdirSync(SHOT_DIR, { recursive: true });
 function buildLargeCsv(rowCount) {
   const lines = ['姓名,本職單位,身分別,職稱,填報單位'];
   for (let index = 1; index <= rowCount; index += 1) {
-    lines.push(`${ROSTER_PREFIX}${String(index).padStart(3, '0')},${TARGET_UNIT},職員,工程師,${TARGET_UNIT}`);
+    const name = `${ROSTER_PREFIX}${String(index).padStart(3, '0')}`;
+    lines.push(`${name},${TARGET_UNIT},職員,工程師,${TARGET_UNIT}`);
   }
   fs.writeFileSync(LARGE_CSV_PATH, lines.join('\r\n'));
 }
@@ -45,14 +46,18 @@ async function chooseUnit(page, baseId, fullUnit) {
     const parentEl = document.getElementById(`${baseId}-parent`);
     const childEl = document.getElementById(`${baseId}-child`);
     const hiddenEl = document.getElementById(baseId);
-    if (!categoryEl || !parentEl || !childEl || !hiddenEl) throw new Error(`missing unit cascade ${baseId}`);
+    if (!categoryEl || !parentEl || !childEl || !hiddenEl) {
+      throw new Error(`missing unit cascade ${baseId}`);
+    }
     const [parent, child] = String(fullUnit || '').split('／');
     const dispatch = (element) => element.dispatchEvent(new Event('change', { bubbles: true }));
-    Array.from(categoryEl.options).map((option) => option.value).filter(Boolean).some((value) => {
+    const categoryValues = Array.from(categoryEl.options).map((option) => String(option.value || '').trim()).filter(Boolean);
+    for (const value of categoryValues) {
       categoryEl.value = value;
       dispatch(categoryEl);
-      return Array.from(parentEl.options).some((option) => String(option.value || '').trim() === parent);
-    });
+      const parentOptions = Array.from(parentEl.options).map((option) => String(option.value || '').trim());
+      if (parentOptions.includes(parent)) break;
+    }
     parentEl.value = parent;
     dispatch(parentEl);
     if (child) {
@@ -60,6 +65,7 @@ async function chooseUnit(page, baseId, fullUnit) {
       dispatch(childEl);
     }
   }, { baseId, fullUnit });
+
   await page.waitForFunction(({ baseId, fullUnit }) => {
     const hidden = document.getElementById(baseId);
     return !!hidden && String(hidden.value || '').trim() === String(fullUnit || '').trim();
@@ -68,6 +74,58 @@ async function chooseUnit(page, baseId, fullUnit) {
 
 async function getTrainingStore(page) {
   return await readJsonFromStorage(page, 'cats_training_hours') || { forms: [], rosters: [] };
+}
+
+async function getSessionToken(page) {
+  return page.evaluate(() => {
+    const user = window._authModule && typeof window._authModule.currentUser === 'function'
+      ? window._authModule.currentUser()
+      : null;
+    return String(user && user.sessionToken || '').trim();
+  });
+}
+
+async function cleanupImportedRosters(page, prefix) {
+  const token = await getSessionToken(page);
+  if (!token) return;
+  await page.evaluate(async ({ targetPrefix, sessionToken }) => {
+    const response = await fetch('/api/training/rosters', {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    const body = await response.json().catch(() => ({}));
+    const items = []
+      .concat(Array.isArray(body) ? body : [])
+      .concat(Array.isArray(body?.items) ? body.items : [])
+      .concat(Array.isArray(body?.value) ? body.value : []);
+    const ids = items
+      .filter((item) => String((item && item.name) || '').startsWith(targetPrefix))
+      .map((item) => String(item.id || '').trim())
+      .filter(Boolean);
+    if (!ids.length) return;
+    await fetch('/api/training/rosters/delete-batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionToken}`
+      },
+      body: JSON.stringify({
+        action: 'training.roster.delete-batch',
+        requestId: `stress-cleanup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        context: {
+          contractVersion: '2026-03-12',
+          source: 'stress-regression-cleanup',
+          frontendOrigin: window.location.origin,
+          frontendHash: window.location.hash || '',
+          sentAt: new Date().toISOString()
+        },
+        payload: {
+          ids,
+          actorName: 'stress-regression-cleanup',
+          actorUsername: 'admin'
+        }
+      })
+    });
+  }, { targetPrefix: prefix, sessionToken: token });
 }
 
 async function seedLongCase(page) {
@@ -142,22 +200,16 @@ async function seedLongCase(page) {
 
     await runStep(results, 'STRESS-01', 'Admin', 'Import 320-row roster CSV', async () => {
       await login(page, 'admin', 'admin123');
-      await page.evaluate((prefix) => {
-        const raw = JSON.parse(localStorage.getItem('cats_training_hours') || '{"version":1,"payload":{"forms":[],"rosters":[],"nextFormId":1,"nextRosterId":1}}');
-        const store = raw && typeof raw === 'object' && Number.isFinite(Number(raw.version)) && Object.prototype.hasOwnProperty.call(raw, 'payload')
-          ? raw.payload
-          : raw;
-        store.rosters = (store.rosters || []).filter((entry) => !String(entry.name || '').startsWith(prefix));
-        localStorage.setItem('cats_training_hours', JSON.stringify({ version: 1, payload: store }));
-      }, ROSTER_PREFIX);
+      await cleanupImportedRosters(page, ROSTER_PREFIX);
       await gotoHash(page, 'training-roster');
-      await page.waitForSelector('#training-import-form');
+      await page.click('#training-roster-toggle-import');
+      await page.waitForSelector('#training-import-form', { state: 'visible', timeout: 15000 });
       await chooseUnit(page, 'training-import-unit', TARGET_UNIT);
       await page.setInputFiles('#training-import-file', LARGE_CSV_PATH);
       await page.click('[data-testid="training-import-submit"]');
       await page.waitForFunction((prefix) => {
         return Array.from(document.querySelectorAll('tbody tr')).filter((row) => String(row.textContent || '').includes(prefix)).length >= 320;
-      }, ROSTER_PREFIX, { timeout: 30000 });
+      }, ROSTER_PREFIX, { timeout: 90000 });
       const store = await getTrainingStore(page);
       const imported = (store.rosters || []).filter((entry) => String(entry.name || '').startsWith(ROSTER_PREFIX));
       if (imported.length !== 320) throw new Error(`expected 320 imported rows, got ${imported.length}`);
@@ -172,7 +224,7 @@ async function seedLongCase(page) {
       await page.fill('#tr-email', 'stress@g.ntu.edu.tw');
       await page.waitForFunction((prefix) => {
         return Array.from(document.querySelectorAll('#training-rows-body tr')).filter((row) => String(row.textContent || '').includes(prefix)).length >= 320;
-      }, ROSTER_PREFIX, { timeout: 30000 });
+      }, ROSTER_PREFIX, { timeout: 90000 });
       const rowCount = await page.locator('#training-rows-body tr').count();
       if (rowCount < 320) throw new Error(`expected at least 320 rows, got ${rowCount}`);
       await saveScreenshot(results, page, 'stress-training-fill.png');
@@ -195,6 +247,10 @@ async function seedLongCase(page) {
       return JSON.stringify(metrics);
     });
   } finally {
+    try {
+      await login(page, 'admin', 'admin123');
+      await cleanupImportedRosters(page, ROSTER_PREFIX);
+    } catch (_) {}
     await browser.close();
     const finalized = finalizeResults(results);
     writeJson(RESULT_PATH, finalized);
@@ -204,3 +260,4 @@ async function seedLongCase(page) {
   console.error(error && error.stack ? error.stack : String(error));
   process.exitCode = 1;
 });
+

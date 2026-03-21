@@ -323,13 +323,13 @@
       unitEls.forEach((unitEl) => {
         const hasVisibleRow = Array.from(unitEl.querySelectorAll('.cl-list-row')).some((row) => !row.hidden);
         unitEl.hidden = !hasVisibleRow;
-        if (hasVisibleRow && hasKeyword) unitEl.open = true;
+        unitEl.open = hasKeyword ? hasVisibleRow : false;
       });
       const yearEls = Array.from(contentEl.querySelectorAll('.cl-year-accordion'));
       yearEls.forEach((yearEl) => {
         const hasVisibleUnit = Array.from(yearEl.querySelectorAll('.cl-unit-accordion')).some((unitEl) => !unitEl.hidden);
         yearEl.hidden = !hasVisibleUnit;
-        if (hasVisibleUnit && hasKeyword) yearEl.open = true;
+        yearEl.open = hasVisibleUnit ? true : false;
       });
       const emptyState = contentEl.querySelector('.cl-list-empty-state');
       const hasVisibleRows = rowEls.some((row) => !row.hidden);

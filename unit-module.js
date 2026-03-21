@@ -27,39 +27,59 @@
       '研究誠信辦公室'
     ]);
     const TRAINING_DASHBOARD_EXCLUDED_UNITS = new Set([
-      '學校分部總辦事處'
+      '????????????'
     ]);
+    let officialUnitsCache = null;
+    let officialUnitCatalogCache = null;
+    let officialUnitSetCache = null;
+    let officialUnitMetaCache = null;
 
     function getOfficialUnits() {
+      if (Array.isArray(officialUnitsCache)) return officialUnitsCache.slice();
       try {
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitList_ === 'function') {
           const units = window.getOfficialUnitList_();
-          if (Array.isArray(units)) return units;
+          if (Array.isArray(units)) {
+            officialUnitsCache = units.map((entry) => String(entry || '').trim()).filter(Boolean);
+            return officialUnitsCache.slice();
+          }
         }
       } catch (_) { }
+      officialUnitsCache = [];
       return [];
     }
 
     function getOfficialUnitCatalog() {
+      if (Array.isArray(officialUnitCatalogCache)) return officialUnitCatalogCache.slice();
       try {
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitCatalog_ === 'function') {
           const catalog = window.getOfficialUnitCatalog_();
-          if (Array.isArray(catalog)) return catalog;
+          if (Array.isArray(catalog)) {
+            officialUnitCatalogCache = catalog.map((entry) => (entry && typeof entry === 'object' ? { ...entry } : entry)).filter(Boolean);
+            officialUnitMetaCache = null;
+            return officialUnitCatalogCache.slice();
+          }
         }
       } catch (_) { }
+      officialUnitCatalogCache = [];
+      officialUnitMetaCache = null;
       return [];
     }
 
     function getOfficialUnitMeta(unitValue) {
       const value = String(unitValue || '').trim();
       if (!value) return null;
+      if (!officialUnitMetaCache) {
+        officialUnitMetaCache = new Map(getOfficialUnitCatalog().map((entry) => [String(entry && entry.value || '').trim(), entry]));
+      }
+      if (officialUnitMetaCache.has(value)) return officialUnitMetaCache.get(value) || null;
       try {
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitMeta_ === 'function') {
           const meta = window.getOfficialUnitMeta_(value);
           if (meta && typeof meta === 'object') return meta;
         }
       } catch (_) { }
-      return getOfficialUnitCatalog().find((entry) => entry && entry.value === value) || null;
+      return null;
     }
 
     function getUnitCode(unitValue) {
@@ -97,9 +117,11 @@
       } catch (_) { }
       return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
     }
-
     function getOfficialUnitSet() {
-      return new Set(getOfficialUnits());
+      if (!officialUnitSetCache) {
+        officialUnitSetCache = new Set(getOfficialUnits());
+      }
+      return new Set(officialUnitSetCache);
     }
 
     function isOfficialUnit(unit) {

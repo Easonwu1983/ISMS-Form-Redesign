@@ -2042,33 +2042,37 @@
       });
       const batchPayload = Array.from(pendingUpserts.values());
       if (batchPayload.length) {
-        try {
-          const result = await submitTrainingRosterBatchUpsert({
-            items: batchPayload,
-            actorName: actor.name || '',
-            actorUsername: actor.username || ''
-          });
-          const summary = result && result.summary && typeof result.summary === 'object' ? result.summary : {};
-          added += Number(summary.added || 0);
-          updated += Number(summary.updated || 0);
-          skipped += Number(summary.skipped || 0);
-          if (!fallbackWarning && result && result.warning) fallbackWarning = result.warning;
-          if (Array.isArray(result && result.items)) {
-            result.items.forEach((item) => {
-              const targetUnit = String(item.unit || '').trim();
-              const rosterKey = targetUnit + '::' + String(item.name || '').trim().toLowerCase();
-              rosterIndex.set(rosterKey, item);
-              importedRosterIds.push(String(item.id || '').trim());
-              importedRosterNames.push(String(item.name || '').trim());
-              importedRosterUnits.push(String(item.unit || targetUnit).trim());
-              importedRosterItems.push(item);
+        const chunkSize = 200;
+        for (let startIndex = 0; startIndex < batchPayload.length; startIndex += chunkSize) {
+          const chunk = batchPayload.slice(startIndex, startIndex + chunkSize);
+          try {
+            const result = await submitTrainingRosterBatchUpsert({
+              items: chunk,
+              actorName: actor.name || '',
+              actorUsername: actor.username || ''
             });
+            const summary = result && result.summary && typeof result.summary === 'object' ? result.summary : {};
+            added += Number(summary.added || 0);
+            updated += Number(summary.updated || 0);
+            skipped += Number(summary.skipped || 0);
+            if (!fallbackWarning && result && result.warning) fallbackWarning = result.warning;
+            if (Array.isArray(result && result.items)) {
+              result.items.forEach((item) => {
+                const targetUnit = String(item.unit || '').trim();
+                const rosterKey = targetUnit + '::' + String(item.name || '').trim().toLowerCase();
+                rosterIndex.set(rosterKey, item);
+                importedRosterIds.push(String(item.id || '').trim());
+                importedRosterNames.push(String(item.name || '').trim());
+                importedRosterUnits.push(String(item.unit || targetUnit).trim());
+                importedRosterItems.push(item);
+              });
+            }
+            if (Array.isArray(result && result.errors) && result.errors.length) {
+              importErrors.push(...result.errors);
+            }
+          } catch (error) {
+            importErrors.push(String(error && error.message || error || '匯入失敗'));
           }
-          if (Array.isArray(result && result.errors) && result.errors.length) {
-            importErrors.push(...result.errors);
-          }
-        } catch (error) {
-          importErrors.push(String(error && error.message || error || '匯入失敗'));
         }
       }
       try {
