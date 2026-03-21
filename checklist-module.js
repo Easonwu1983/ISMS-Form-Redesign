@@ -239,7 +239,16 @@
       const conform = Number(summary.conform || 0);
       const rate = total > 0 ? Math.round((conform / total) * 100) : 0;
       const governanceNote = buildChecklistGovernanceNote(item);
-      return '<tr data-route="' + esc(target) + '" class="cl-list-row">'
+      const searchText = [
+        item && item.id,
+        item && item.unit,
+        getChecklistTier1Unit(item),
+        item && item.fillerName,
+        item && item.fillerUsername,
+        item && item.auditYear,
+        item && item.status
+      ].filter(Boolean).join(' ');
+      return '<tr data-route="' + esc(target) + '" data-cl-search-text="' + esc(searchText) + '" class="cl-list-row">'
         + '<td class="record-id-col">' + renderCopyIdCell(item.id, '檢核表編號', true) + '</td>'
         + '<td><div class="cl-list-unit">' + esc(item.unit) + '<small>' + esc(getChecklistTier1Unit(item) || '—') + '</small>' + (governanceNote ? '<div class="cl-list-unit-note">' + esc(governanceNote) + '</div>' : '') + '</div></td>'
         + '<td>' + esc(item.fillerName || '—') + '<div class="review-card-subtitle" style="margin-top:4px">' + esc(item.fillerUsername || '—') + '</div></td>'
@@ -273,6 +282,57 @@
         + '</div>';
     }
 
+    function renderChecklistListContent(items) {
+      const filtered = filterChecklistListItems(items);
+      const grouped = groupChecklistListItems(filtered);
+      const contentEl = document.querySelector('.cl-list-content');
+      if (!contentEl) return;
+      contentEl.innerHTML = `<div class="card checklist-empty-card cl-list-empty-state" hidden><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有符合條件的檢核表</div><div class="empty-state-desc">可切換年份、狀態或關鍵字重新搜尋。</div></div></div>`
+        + (grouped.length ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('') : '');
+      refreshIcons();
+      bindCopyButtons();
+      applyChecklistKeywordFilter();
+    }
+
+    function syncChecklistListToolbarState() {
+      const keywordEl = document.getElementById('cl-list-keyword');
+      const statusEl = document.getElementById('cl-list-status');
+      if (keywordEl && keywordEl.value !== String(checklistBrowseState.keyword || '')) {
+        keywordEl.value = String(checklistBrowseState.keyword || '');
+      }
+      if (statusEl && statusEl.value !== String(checklistBrowseState.status || 'all')) {
+        statusEl.value = String(checklistBrowseState.status || 'all');
+      }
+      document.querySelectorAll('[data-checklist-year]').forEach((tab) => {
+        const isActive = String(tab.dataset.checklistYear || 'all') === String(checklistBrowseState.year || 'all');
+        tab.classList.toggle('is-active', isActive);
+      });
+    }
+
+    function applyChecklistKeywordFilter() {
+      const contentEl = document.querySelector('.cl-list-content');
+      if (!contentEl) return;
+      const keyword = String(checklistBrowseState.keyword || '').trim().toLowerCase();
+      const rowEls = Array.from(contentEl.querySelectorAll('.cl-list-row'));
+      rowEls.forEach((row) => {
+        const haystack = String(row.getAttribute('data-cl-search-text') || '').toLowerCase();
+        row.hidden = !!keyword && !haystack.includes(keyword);
+      });
+      const unitEls = Array.from(contentEl.querySelectorAll('.cl-unit-accordion'));
+      unitEls.forEach((unitEl) => {
+        const hasVisibleRow = Array.from(unitEl.querySelectorAll('.cl-list-row')).some((row) => !row.hidden);
+        unitEl.hidden = !hasVisibleRow;
+      });
+      const yearEls = Array.from(contentEl.querySelectorAll('.cl-year-accordion'));
+      yearEls.forEach((yearEl) => {
+        const hasVisibleUnit = Array.from(yearEl.querySelectorAll('.cl-unit-accordion')).some((unitEl) => !unitEl.hidden);
+        yearEl.hidden = !hasVisibleUnit;
+      });
+      const emptyState = contentEl.querySelector('.cl-list-empty-state');
+      const hasVisibleRows = rowEls.some((row) => !row.hidden);
+      if (emptyState) emptyState.hidden = hasVisibleRows;
+    }
+
     function buildChecklistYearAccordion(yearGroup) {
       const unitCards = Array.isArray(yearGroup && yearGroup.units) ? yearGroup.units : [];
       const totalCount = unitCards.reduce((sum, group) => sum + group.items.length, 0);
@@ -304,25 +364,22 @@
     if (!checklistBrowseState.year || !years.includes(checklistBrowseState.year) && checklistBrowseState.year !== 'all') {
       checklistBrowseState.year = years.includes(String(new Date().getFullYear() - 1911)) ? String(new Date().getFullYear() - 1911) : (years[0] || 'all');
     }
-    const filtered = filterChecklistListItems(checklists);
-    const grouped = groupChecklistListItems(filtered);
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
-    const cardsHtml = grouped.length
-      ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('')
-      : `<div class="card checklist-empty-card"><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有符合條件的檢核表</div><div class="empty-state-desc">可切換年份、狀態或關鍵字重新搜尋。</div></div></div>`;
     document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page">
       <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報內容，可快速搜尋填報人員與單位狀態。</p></div><div class="page-header-actions">${fillBtn}</div></div>
       <div class="card cl-list-shell">
         <div class="cl-list-toolbar-wrap">
           ${buildChecklistListFilters()}
           <div class="cl-year-tabs-shell">
-            <div class="cl-year-tabs-label">年份頁籤</div>
-            ${buildChecklistListYearTabs(years)}
-          </div>
+          <div class="cl-year-tabs-label">年份頁籤</div>
+          ${buildChecklistListYearTabs(years)}
         </div>
-        <div class="cl-list-content">${cardsHtml}</div>
+        </div>
+        <div class="cl-list-content"></div>
       </div>
     </div>`;
+    renderChecklistListContent(checklists);
+    syncChecklistListToolbarState();
     refreshIcons();
     bindCopyButtons();
 
@@ -330,12 +387,11 @@
     const statusEl = document.getElementById('cl-list-status');
     const yearTabs = document.querySelectorAll('[data-checklist-year]');
     let browseTimer = null;
-    const rerender = () => renderChecklistList();
     const scheduleRerender = () => {
       if (browseTimer) window.clearTimeout(browseTimer);
       browseTimer = window.setTimeout(() => {
         browseTimer = null;
-        rerender();
+        applyChecklistKeywordFilter();
       }, 120);
     };
     keywordEl?.addEventListener('input', () => {
@@ -344,12 +400,14 @@
     });
     statusEl?.addEventListener('change', () => {
       checklistBrowseState.status = statusEl.value;
-      rerender();
+      renderChecklistListContent(checklists);
+      syncChecklistListToolbarState();
     });
     yearTabs.forEach((tab) => {
       tab.addEventListener('click', () => {
         checklistBrowseState.year = String(tab.dataset.checklistYear || 'all');
-        rerender();
+        renderChecklistListContent(checklists);
+        syncChecklistListToolbarState();
       });
     });
     registerActionHandlers(document.getElementById('app'), {
@@ -357,7 +415,11 @@
         checklistBrowseState.keyword = '';
         checklistBrowseState.status = 'all';
         checklistBrowseState.year = String(new Date().getFullYear() - 1911);
-        renderChecklistList();
+        renderChecklistListContent(checklists);
+        syncChecklistListToolbarState();
+        applyChecklistKeywordFilter();
+        const keywordEl = document.getElementById('cl-list-keyword');
+        if (keywordEl && typeof keywordEl.focus === 'function') keywordEl.focus({ preventScroll: true });
       }
     });
   }
