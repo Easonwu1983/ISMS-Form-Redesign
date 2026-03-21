@@ -6831,6 +6831,39 @@ tbody tr:hover {
   color: var(--text-primary);
 }
 
+.unit-contact-auth-doc-card {
+  display: grid;
+  gap: 14px;
+}
+
+.unit-contact-auth-doc-card .form-actions {
+  gap: 12px;
+}
+
+.unit-contact-auth-doc-preview {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px dashed rgba(96, 165, 250, 0.35);
+  border-radius: 14px;
+  background: rgba(248, 250, 255, 0.96);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.unit-contact-file-empty {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.unit-contact-file-name {
+  font-weight: 700;
+  color: var(--text-heading);
+  word-break: break-word;
+}
+
 .unit-chip-picker {
   display: grid;
   gap: 10px;

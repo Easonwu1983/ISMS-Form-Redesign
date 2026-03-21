@@ -3021,6 +3021,36 @@
     setAuthenticatedBootstrapState('ready');
     return authenticatedBootstrapPromise;
   }
+
+  function scheduleAuthenticatedBootstrapWarmup(taskFactory, labels) {
+    const run = function () {
+      let tasks = [];
+      try {
+        tasks = typeof taskFactory === 'function' ? (taskFactory() || []) : [];
+      } catch (error) {
+        console.warn('authenticated bootstrap warmup setup failed', error);
+        return;
+      }
+      Promise.allSettled(tasks).then((results) => {
+        const fallbackLabels = Array.isArray(labels) ? labels : [];
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            console.warn(fallbackLabels[index] || 'authenticated bootstrap warmup failed', result.reason);
+          }
+        });
+      });
+    };
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(run, { timeout: 2500 });
+      return;
+    }
+    if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+      window.setTimeout(run, 120);
+      return;
+    }
+    run();
+  }
+
   async function ensureAuthenticatedRemoteBootstrap() {
     const user = currentUser();
     if (!user) {
@@ -3047,24 +3077,19 @@
       authenticatedBootstrapKey = nextKey;
       authenticatedBootstrapPromise = Promise.resolve(nextKey);
       setAuthenticatedBootstrapState('ready');
-      void Promise.allSettled([
-        syncTrainingFormsFromM365({ silent: true }),
-        syncTrainingRostersFromM365({ silent: true }),
-        syncChecklistsFromM365({ silent: true }),
-        syncCorrectiveActionsFromM365({ silent: true })
-      ]).then((results) => {
-        const labels = [
-          'training bootstrap warmup failed',
-          'training roster bootstrap warmup failed',
-          'checklist bootstrap warmup failed',
-          'corrective action bootstrap warmup failed'
+      scheduleAuthenticatedBootstrapWarmup(function () {
+        return [
+          syncTrainingFormsFromM365({ silent: true }),
+          syncTrainingRostersFromM365({ silent: true }),
+          syncChecklistsFromM365({ silent: true }),
+          syncCorrectiveActionsFromM365({ silent: true })
         ];
-        results.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            console.warn(labels[index] || 'authenticated bootstrap warmup failed', result.reason);
-          }
-        });
-      });
+      }, [
+        'training bootstrap warmup failed',
+        'training roster bootstrap warmup failed',
+        'checklist bootstrap warmup failed',
+        'corrective action bootstrap warmup failed'
+      ]);
       return authenticatedBootstrapPromise;
     }
     authenticatedBootstrapKey = nextKey;
@@ -3104,21 +3129,16 @@
         syncTasks.push(syncReviewScopesFromM365({ silent: true }));
       }
       setAuthenticatedBootstrapState('ready');
-      void Promise.allSettled(syncTasks).then((results) => {
-        const labels = [
-          'training bootstrap warmup failed',
-          'training roster bootstrap warmup failed',
-          'checklist bootstrap warmup failed',
-          'corrective action bootstrap warmup failed',
-          'user bootstrap warmup failed',
-          'review scope bootstrap warmup failed'
-        ];
-        results.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            console.warn(labels[index] || 'authenticated bootstrap warmup failed', result.reason);
-          }
-        });
-      });
+      scheduleAuthenticatedBootstrapWarmup(function () {
+        return syncTasks;
+      }, [
+        'training bootstrap warmup failed',
+        'training roster bootstrap warmup failed',
+        'checklist bootstrap warmup failed',
+        'corrective action bootstrap warmup failed',
+        'user bootstrap warmup failed',
+        'review scope bootstrap warmup failed'
+      ]);
       return nextKey;
     })();
     return authenticatedBootstrapPromise;
