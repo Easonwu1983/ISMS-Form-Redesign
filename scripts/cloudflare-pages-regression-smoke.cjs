@@ -513,6 +513,29 @@ async function run() {
       throw new Error('checklist list contains placeholder question marks');
     }
     pushStep('checklist:list-loaded', true, checklistListText.includes('目前沒有檢核表') ? 'empty-state' : 'table');
+    const checklistRows = await page.locator('.cl-list-row').evaluateAll((rows) => rows.map((row) => String(row.getAttribute('data-cl-search-text') || '').trim()).filter(Boolean));
+    const checklistQuery = checklistRows.length ? String(checklistRows[0]).slice(0, 12) : '';
+    if (checklistQuery) {
+      await page.fill('#cl-list-keyword', checklistQuery);
+      await page.waitForTimeout(350);
+      const checklistSearchState = await page.evaluate(() => ({
+        activeTag: document.activeElement && document.activeElement.tagName,
+        activeId: document.activeElement && document.activeElement.id,
+        visibleRows: Array.from(document.querySelectorAll('.cl-list-row')).filter((row) => !row.hidden && row.offsetParent !== null).length,
+        openUnits: Array.from(document.querySelectorAll('.cl-unit-accordion')).filter((el) => el.open).length,
+        openYears: Array.from(document.querySelectorAll('.cl-year-accordion')).filter((el) => el.open).length
+      }));
+      if (checklistSearchState.activeId !== 'cl-list-keyword') {
+        throw new Error(`checklist keyword input lost focus: ${checklistSearchState.activeTag || ''}#${checklistSearchState.activeId || ''}`);
+      }
+      if (checklistSearchState.visibleRows < 1) {
+        throw new Error('checklist search should keep at least one visible row');
+      }
+      if (checklistSearchState.openUnits < 1) {
+        throw new Error('checklist search should open the matching unit accordion');
+      }
+      pushStep('checklist:list-search-open', true, checklistQuery);
+    }
 
     await page.goto(`${BASE_URL}/#checklist-fill`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);

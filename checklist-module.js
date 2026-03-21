@@ -313,6 +313,7 @@
       const contentEl = document.querySelector('.cl-list-content');
       if (!contentEl) return;
       const keyword = String(checklistBrowseState.keyword || '').trim().toLowerCase();
+      const hasKeyword = !!keyword;
       const rowEls = Array.from(contentEl.querySelectorAll('.cl-list-row'));
       rowEls.forEach((row) => {
         const haystack = String(row.getAttribute('data-cl-search-text') || '').toLowerCase();
@@ -322,15 +323,21 @@
       unitEls.forEach((unitEl) => {
         const hasVisibleRow = Array.from(unitEl.querySelectorAll('.cl-list-row')).some((row) => !row.hidden);
         unitEl.hidden = !hasVisibleRow;
+        if (hasVisibleRow && hasKeyword) unitEl.open = true;
       });
       const yearEls = Array.from(contentEl.querySelectorAll('.cl-year-accordion'));
       yearEls.forEach((yearEl) => {
         const hasVisibleUnit = Array.from(yearEl.querySelectorAll('.cl-unit-accordion')).some((unitEl) => !unitEl.hidden);
         yearEl.hidden = !hasVisibleUnit;
+        if (hasVisibleUnit && hasKeyword) yearEl.open = true;
       });
       const emptyState = contentEl.querySelector('.cl-list-empty-state');
       const hasVisibleRows = rowEls.some((row) => !row.hidden);
       if (emptyState) emptyState.hidden = hasVisibleRows;
+      const keywordEl = document.getElementById('cl-list-keyword');
+      if (hasKeyword && keywordEl && document.activeElement === keywordEl && typeof keywordEl.focus === 'function') {
+        keywordEl.focus({ preventScroll: true });
+      }
     }
 
     function buildChecklistYearAccordion(yearGroup) {
