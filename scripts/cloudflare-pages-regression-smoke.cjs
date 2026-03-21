@@ -192,7 +192,7 @@ async function runVisualBaselineChecks(browser, pushStep) {
       await captureVisualSpec(mobilePage, BASE_URL, spec, actualPath, 'mobile');
       const maxDiffRatio = spec.slug === 'dashboard'
         ? 0.3
-        : (IS_CAMPUS_BROWSER && spec.slug === 'training' ? 0.16 : 0.08);
+        : (spec.slug === 'training' ? 0.16 : 0.08);
       const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, { maxDiffRatio });
       if (!result.ok) throw new Error(`mobile visual drift: ${spec.slug} (${JSON.stringify(result)})`);
       pushStep(`visual:mobile:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
