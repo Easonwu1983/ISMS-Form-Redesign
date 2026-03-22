@@ -960,7 +960,7 @@
   }
 
   function filterSecurityWindowInventory(inventory, filters) {
-    const source = inventory && typeof inventory === 'object' ? inventory : { units: [], people: [], summary: {} };
+    const source = inventory && typeof inventory === 'object' ? inventory : { units: [], people: [], summary: {}, generatedAt: '' };
     const keyword = String(filters && filters.keyword || '').trim().toLowerCase();
     const status = String(filters && filters.status || 'all').trim() || 'all';
     const matchesKeyword = (parts) => {
@@ -1012,7 +1012,7 @@
       pendingApplications: units.reduce((count, unit) => count + (Array.isArray(unit.pending) ? unit.pending.length : 0), 0),
       exemptedUnits: units.reduce((count, unit) => count + (unit.exemptedRows || 0), 0)
     };
-    return { units, people, summary, generatedAt: source.generatedAt || '' };
+    return { units, people, summary, generatedAt: source && source.generatedAt ? source.generatedAt : '' };
   }
 
   async function loadSecurityWindowInventory(force) {
@@ -1078,10 +1078,13 @@
       }
     }
 
-    securityWindowState.inventory = inventory;
-    securityWindowState.lastLoadedAt = inventory.generatedAt || new Date().toISOString();
+    const safeInventory = inventory && typeof inventory === 'object'
+      ? inventory
+      : { generatedAt: new Date().toISOString(), units: [], people: [], summary: { totalUnits: 0, unitsWithWindows: 0, unitsWithoutWindows: 0, peopleWithoutWindow: 0 } };
+    securityWindowState.inventory = safeInventory;
+    securityWindowState.lastLoadedAt = safeInventory && safeInventory.generatedAt ? safeInventory.generatedAt : new Date().toISOString();
     securityWindowState.filterSignature = filterSignature;
-    const filtered = filterSecurityWindowInventory(inventory, resolvedFilters);
+    const filtered = filterSecurityWindowInventory(safeInventory, resolvedFilters);
     const summary = filtered.summary;
     const unitCardsHtml = renderSecurityWindowUnitCards(filtered.units);
     const peopleRowsHtml = renderSecurityWindowPersonRows(filtered.people);
