@@ -105,6 +105,7 @@
     let checklistListRenderCache = { signature: '', html: '' };
     let checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
     let checklistListViewCache = { signature: '', filtered: [], grouped: [] };
+    let checklistListDomCache = { signature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null };
 
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
@@ -232,9 +233,14 @@
         if (!groups.has(yearKey)) groups.set(yearKey, new Map());
         const yearGroups = groups.get(yearKey);
         if (!yearGroups.has(unit)) {
-          yearGroups.set(unit, { year, unit, items: [] });
+          yearGroups.set(unit, { year, unit, items: [], totalCount: 0, closedCount: 0 });
         }
-        yearGroups.get(unit).items.push(item);
+        const group = yearGroups.get(unit);
+        group.items.push(item);
+        group.totalCount += 1;
+        if (normalizeChecklistStatus(item && item.status) === CHECKLIST_STATUS_SUBMITTED) {
+          group.closedCount += 1;
+        }
       });
       return Array.from(groups.entries())
         .sort((a, b) => Number(b[0]) - Number(a[0]))
@@ -267,6 +273,8 @@
       const conform = Number(summary.conform || 0);
       const rate = total > 0 ? Math.round((conform / total) * 100) : 0;
       const governanceNote = buildChecklistGovernanceNote(item);
+      const yearKey = String(getChecklistAuditYear(item) || '').trim() || '未知';
+      const unitKey = String(getChecklistTier1Unit(item) || String(item && item.unit || '未命名單位').trim()).trim();
       const searchText = [
         item && item.id,
         item && item.unit,
@@ -276,7 +284,7 @@
         item && item.auditYear,
         item && item.status
       ].filter(Boolean).join(' ');
-      return '<tr data-route="' + esc(target) + '" data-cl-search-text="' + esc(searchText) + '" class="cl-list-row">'
+      return '<tr data-route="' + esc(target) + '" data-cl-search-text="' + esc(searchText) + '" data-cl-year-key="' + esc(yearKey) + '" data-cl-unit-key="' + esc(unitKey) + '" class="cl-list-row">'
         + '<td class="record-id-col">' + renderCopyIdCell(item.id, '檢核表編號', true) + '</td>'
         + '<td><div class="cl-list-unit">' + esc(item.unit) + '<small>' + esc(getChecklistTier1Unit(item) || '—') + '</small>' + (governanceNote ? '<div class="cl-list-unit-note">' + esc(governanceNote) + '</div>' : '') + '</div></td>'
         + '<td>' + esc(item.fillerName || '—') + '<div class="review-card-subtitle" style="margin-top:4px">' + esc(item.fillerUsername || '—') + '</div></td>'
@@ -343,6 +351,18 @@
       return checklistListViewCache;
     }
 
+    function refreshChecklistListDomCache(contentEl, signature) {
+      if (!contentEl) return;
+      checklistListDomCache = {
+        signature,
+        rows: Array.from(contentEl.querySelectorAll('.cl-list-row')),
+        units: Array.from(contentEl.querySelectorAll('.cl-unit-accordion')),
+        years: Array.from(contentEl.querySelectorAll('.cl-year-accordion')),
+        emptyState: contentEl.querySelector('.cl-list-empty-state'),
+        contentEl
+      };
+    }
+
     function renderChecklistListContent(items) {
       const signature = [
         typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
@@ -363,6 +383,7 @@
       contentEl.dataset.checklistRenderSignature = signature;
       contentEl.innerHTML = `<div class="card checklist-empty-card cl-list-empty-state" hidden><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有符合條件的檢核表</div><div class="empty-state-desc">可切換年份、狀態或關鍵字重新搜尋。</div></div></div>`
         + html;
+      refreshChecklistListDomCache(contentEl, signature);
       refreshIcons();
       bindCopyButtons();
       applyChecklistKeywordFilter();
@@ -388,24 +409,44 @@
       if (!contentEl) return;
       const keyword = String(checklistBrowseState.keyword || '').trim().toLowerCase();
       const hasKeyword = !!keyword;
-      const rowEls = Array.from(contentEl.querySelectorAll('.cl-list-row'));
+      const signature = [
+        typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
+        String(checklistBrowseState.year || 'all'),
+        String(checklistBrowseState.status || 'all'),
+        String(checklistBrowseState.keyword || '')
+      ].join('::');
+      if (checklistListDomCache.signature !== signature || checklistListDomCache.contentEl !== contentEl) {
+        refreshChecklistListDomCache(contentEl, signature);
+      }
+      const rowEls = Array.isArray(checklistListDomCache.rows) ? checklistListDomCache.rows : Array.from(contentEl.querySelectorAll('.cl-list-row'));
+      const visibleUnitKeys = new Set();
+      const visibleYearKeys = new Set();
       rowEls.forEach((row) => {
         const haystack = String(row.getAttribute('data-cl-search-text') || '').toLowerCase();
-        row.hidden = !!keyword && !haystack.includes(keyword);
+        const visible = !keyword || haystack.includes(keyword);
+        row.hidden = !visible;
+        if (visible) {
+          const rowUnitKey = String(row.dataset.clUnitKey || '').trim();
+          const rowYearKey = String(row.dataset.clYearKey || '').trim();
+          if (rowUnitKey) visibleUnitKeys.add(rowUnitKey);
+          if (rowYearKey) visibleYearKeys.add(rowYearKey);
+        }
       });
-      const unitEls = Array.from(contentEl.querySelectorAll('.cl-unit-accordion'));
+      const unitEls = Array.isArray(checklistListDomCache.units) ? checklistListDomCache.units : Array.from(contentEl.querySelectorAll('.cl-unit-accordion'));
       unitEls.forEach((unitEl) => {
-        const hasVisibleRow = Array.from(unitEl.querySelectorAll('.cl-list-row')).some((row) => !row.hidden);
+        const unitKey = String(unitEl.dataset.clUnitKey || '').trim();
+        const hasVisibleRow = visibleUnitKeys.has(unitKey);
         unitEl.hidden = !hasVisibleRow;
         unitEl.open = hasKeyword ? hasVisibleRow : false;
       });
-      const yearEls = Array.from(contentEl.querySelectorAll('.cl-year-accordion'));
+      const yearEls = Array.isArray(checklistListDomCache.years) ? checklistListDomCache.years : Array.from(contentEl.querySelectorAll('.cl-year-accordion'));
       yearEls.forEach((yearEl) => {
-        const hasVisibleUnit = Array.from(yearEl.querySelectorAll('.cl-unit-accordion')).some((unitEl) => !unitEl.hidden);
+        const yearKey = String(yearEl.dataset.clYearKey || '').trim();
+        const hasVisibleUnit = visibleYearKeys.has(yearKey);
         yearEl.hidden = !hasVisibleUnit;
         yearEl.open = hasVisibleUnit ? true : false;
       });
-      const emptyState = contentEl.querySelector('.cl-list-empty-state');
+      const emptyState = checklistListDomCache.emptyState || contentEl.querySelector('.cl-list-empty-state');
       const hasVisibleRows = rowEls.some((row) => !row.hidden);
       if (emptyState) emptyState.hidden = hasVisibleRows;
       const keywordEl = document.getElementById('cl-list-keyword');
@@ -416,8 +457,8 @@
 
     function buildChecklistYearAccordion(yearGroup) {
       const unitCards = Array.isArray(yearGroup && yearGroup.units) ? yearGroup.units : [];
-      const totalCount = unitCards.reduce((sum, group) => sum + group.items.length, 0);
-      const closedCount = unitCards.reduce((sum, group) => sum + group.items.filter((item) => normalizeChecklistStatus(item.status) === CHECKLIST_STATUS_SUBMITTED).length, 0);
+      const totalCount = unitCards.reduce((sum, group) => sum + Number(group.totalCount || group.items.length || 0), 0);
+      const closedCount = unitCards.reduce((sum, group) => sum + Number(group.closedCount || 0), 0);
       const yearValue = String(yearGroup && yearGroup.year || '').trim();
       const showDelete = isAdmin() && yearValue && yearValue !== '未知';
       const deleteButton = showDelete
@@ -427,12 +468,12 @@
         ? unitCards.map((group) => {
             const groupId = 'cl-year-' + yearGroup.year + '-unit-' + group.unit.replace(/[^\w\u4e00-\u9fff]+/g, '-');
             const rows = group.items.map((item) => renderChecklistListRow(item)).join('');
-            const groupClosed = group.items.filter((item) => normalizeChecklistStatus(item.status) === CHECKLIST_STATUS_SUBMITTED).length;
-            const groupTotal = group.items.length;
-            return '<details class="cl-unit-accordion" id="' + esc(groupId) + '"><summary class="cl-unit-summary"><div><div class="cl-unit-title">' + esc(group.unit) + '</div><div class="cl-unit-meta">已結案 ' + groupClosed + ' / ' + groupTotal + ' 份</div></div><div class="cl-unit-summary-right"><span class="badge ' + (groupClosed === groupTotal && groupTotal > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + groupClosed + ' / ' + groupTotal + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-unit-body"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>受稽單位</th><th>填報人員</th><th>稽核年度</th><th>狀態</th><th>完成率</th><th>填報日期</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></details>';
+            const groupClosed = Number(group.closedCount || 0);
+            const groupTotal = Number(group.totalCount || group.items.length || 0);
+            return '<details class="cl-unit-accordion" id="' + esc(groupId) + '" data-cl-year-key="' + esc(String(yearGroup.year || '').trim() || '未知') + '" data-cl-unit-key="' + esc(String(group.unit || '').trim()) + '"><summary class="cl-unit-summary"><div><div class="cl-unit-title">' + esc(group.unit) + '</div><div class="cl-unit-meta">已結案 ' + groupClosed + ' / ' + groupTotal + ' 份</div></div><div class="cl-unit-summary-right"><span class="badge ' + (groupClosed === groupTotal && groupTotal > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + groupClosed + ' / ' + groupTotal + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-unit-body"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>受稽單位</th><th>填報人員</th><th>稽核年度</th><th>狀態</th><th>完成率</th><th>填報日期</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></details>';
           }).join('')
         : '<div class="empty-state checklist-empty-state"><div class="empty-state-icon">' + ic('clipboard-list') + '</div><div class="empty-state-title">此年度沒有資料</div><div class="empty-state-desc">可切換到其他年份，或使用上方關鍵字搜尋。</div></div>';
-      return '<details class="cl-year-accordion" open><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span>' + deleteButton + '<span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';
+      return '<details class="cl-year-accordion" open data-cl-year-key="' + esc(yearValue || '未知') + '"><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span>' + deleteButton + '<span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';
     }
 
     async function renderChecklistList(options) {

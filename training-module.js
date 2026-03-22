@@ -106,6 +106,11 @@
     let trainingRosterFocusTrackerInstalled = false;
     let trainingRosterGroupingCache = { token: '', groups: null };
     let trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
+    let trainingRosterRenderCache = { signature: '', selectedSignature: '', defer: false };
+    let trainingDashboardUnitsCache = { signature: '', units: [] };
+    let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
+    let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
+    let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
       return new Promise((resolve) => {
@@ -127,6 +132,139 @@
         }
         run();
       });
+    }
+
+    function getTrainingUserSignature(user) {
+      const input = user || currentUser() || {};
+      return [
+        String(input.username || '').trim().toLowerCase(),
+        String(input.role || '').trim(),
+        String(input.activeUnit || '').trim(),
+        String(input.unit || '').trim(),
+        String(input.sessionToken || '').trim()
+      ].join('::');
+    }
+
+    function getTrainingListSnapshot(user) {
+      const input = user || currentUser();
+      const signature = [
+        String(typeof getStoreTouchToken === 'function' ? getStoreTouchToken('cats_training_hours') : ''),
+        getTrainingUserSignature(input)
+      ].join('::');
+      if (trainingListViewCache.signature === signature && Array.isArray(trainingListViewCache.visibleForms) && trainingListViewCache.summary) {
+        return trainingListViewCache;
+      }
+      const source = getVisibleTrainingForms(input);
+      const visibleForms = Array.isArray(source)
+        ? source.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        : [];
+      const summary = {
+        total: 0,
+        draft: 0,
+        pending: 0,
+        submitted: 0,
+        returned: 0
+      };
+      for (const form of visibleForms) {
+        summary.total += 1;
+        if (form.status === TRAINING_STATUSES.DRAFT) summary.draft += 1;
+        if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF) summary.pending += 1;
+        if (form.status === TRAINING_STATUSES.SUBMITTED) summary.submitted += 1;
+        if (form.status === TRAINING_STATUSES.RETURNED) summary.returned += 1;
+      }
+      trainingListViewCache = { signature, visibleForms, summary };
+      return trainingListViewCache;
+    }
+
+    function getTrainingAdminDashboardSnapshot() {
+      const allForms = getAllTrainingForms();
+      const statsUnits = getTrainingDashboardUnits();
+      const unitSignature = statsUnits.join('|');
+      const signature = [
+        String(typeof getStoreTouchToken === 'function' ? getStoreTouchToken('cats_training_hours') : ''),
+        String(allForms.length || 0),
+        unitSignature
+      ].join('::');
+      if (trainingAdminDashboardCache.signature === signature && Array.isArray(trainingAdminDashboardCache.latestByUnit)) {
+        return trainingAdminDashboardCache;
+      }
+      const formsByStatsUnit = new Map();
+      allForms.forEach((form) => {
+        const statsUnit = String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim();
+        if (!statsUnit || !isValidTrainingDashboardUnit(statsUnit)) return;
+        if (!formsByStatsUnit.has(statsUnit)) formsByStatsUnit.set(statsUnit, []);
+        formsByStatsUnit.get(statsUnit).push(form);
+      });
+      const latestByUnit = statsUnits.map((statsUnit) => {
+        const unitForms = formsByStatsUnit.get(statsUnit) || [];
+        let latest = null;
+        let latestSubmitted = null;
+        let latestTime = -Infinity;
+        let latestSubmittedTime = -Infinity;
+        let totalActive = 0;
+        let totalCompleted = 0;
+        let totalIncomplete = 0;
+        for (const form of unitForms) {
+          const time = new Date(form && (form.updatedAt || form.createdAt || 0)).getTime();
+          const safeTime = Number.isFinite(time) ? time : 0;
+          if (safeTime >= latestTime) {
+            latest = form;
+            latestTime = safeTime;
+          }
+          if (form && form.status === TRAINING_STATUSES.SUBMITTED && safeTime >= latestSubmittedTime) {
+            latestSubmitted = form;
+            latestSubmittedTime = safeTime;
+          }
+          const summary = form.summary || computeTrainingSummary(form.records || []);
+          totalActive += Number(summary.activeCount || 0);
+          totalCompleted += Number(summary.completedCount || 0);
+          totalIncomplete += Number(summary.incompleteCount || 0);
+        }
+        const effectiveLatest = latestSubmitted || latest;
+        return {
+          statsUnit,
+          displayUnit: getTrainingDashboardDisplayUnit(effectiveLatest, statsUnit),
+          latest: effectiveLatest,
+          summary: effectiveLatest ? (effectiveLatest.summary || computeTrainingSummary(effectiveLatest.records || [])) : computeTrainingSummary([]),
+          aggregate: {
+            activeCount: totalActive,
+            completedCount: totalCompleted,
+            incompleteCount: totalIncomplete
+          }
+        };
+      });
+      const completedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED);
+      const incompleteUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED);
+      trainingAdminDashboardCache = {
+        signature,
+        statsUnits,
+        latestByUnit,
+        completedUnits,
+        incompleteUnits
+      };
+      return trainingAdminDashboardCache;
+    }
+
+    function refreshTrainingRosterDomCache(contentEl, signature) {
+      if (!contentEl) return;
+      const rows = Array.from(contentEl.querySelectorAll('tr[data-roster-id]'));
+      const groupSelectAll = Array.from(contentEl.querySelectorAll('.training-roster-group-select-all'));
+      const rowsByGroup = new Map();
+      rows.forEach((row) => {
+        const groupKey = String(row.dataset.rosterGroup || '').trim();
+        if (!groupKey) return;
+        if (!rowsByGroup.has(groupKey)) rowsByGroup.set(groupKey, []);
+        rowsByGroup.get(groupKey).push(row);
+      });
+      trainingRosterDomCache = {
+        signature,
+        contentEl,
+        rows,
+        groupSelectAll,
+        rowsByGroup,
+        selectedCountLabel: contentEl.querySelector('#training-roster-selected-count'),
+        deleteSelectedButton: contentEl.querySelector('#training-roster-delete-selected')
+      };
     }
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
@@ -230,23 +368,32 @@
     return fields.every((field) => !hasDisplayCorruption(field));
   }
 
-  function isValidTrainingDashboardUnit(unitValue) {
-    const statsUnit = String(getTrainingStatsUnit(unitValue) || '').trim();
-    return !!statsUnit && isOfficialUnit(statsUnit) && !isTrainingDashboardExcludedUnit(statsUnit);
-  }
+    function isValidTrainingDashboardUnit(unitValue) {
+      const statsUnit = String(getTrainingStatsUnit(unitValue) || '').trim();
+      return !!statsUnit && isOfficialUnit(statsUnit) && !isTrainingDashboardExcludedUnit(statsUnit);
+    }
 
-  function getTrainingDashboardUnits() {
-    const unitSet = new Set();
-    getTrainingUnits().forEach((unit) => {
-      const statsUnit = String(getTrainingStatsUnit(unit) || '').trim();
-      if (statsUnit && isValidTrainingDashboardUnit(statsUnit)) unitSet.add(statsUnit);
-    });
-    getAllTrainingForms().forEach((form) => {
-      const statsUnit = String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim();
-      if (statsUnit && isValidTrainingDashboardUnit(statsUnit)) unitSet.add(statsUnit);
-    });
-    return Array.from(unitSet).sort(compareZhStroke);
-  }
+    function getTrainingDashboardUnits() {
+      const cacheSignature = [
+        String(typeof getStoreTouchToken === 'function' ? getStoreTouchToken('cats_data') : ''),
+        String(typeof getStoreTouchToken === 'function' ? getStoreTouchToken('cats_training_hours') : '')
+      ].join('::');
+      if (trainingDashboardUnitsCache.signature === cacheSignature && Array.isArray(trainingDashboardUnitsCache.units)) {
+        return trainingDashboardUnitsCache.units.slice();
+      }
+      const unitSet = new Set();
+      getTrainingUnits().forEach((unit) => {
+        const statsUnit = String(getTrainingStatsUnit(unit) || '').trim();
+        if (statsUnit && isValidTrainingDashboardUnit(statsUnit)) unitSet.add(statsUnit);
+      });
+      getAllTrainingForms().forEach((form) => {
+        const statsUnit = String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim();
+        if (statsUnit && isValidTrainingDashboardUnit(statsUnit)) unitSet.add(statsUnit);
+      });
+      const units = Array.from(unitSet).sort(compareZhStroke);
+      trainingDashboardUnitsCache = { signature: cacheSignature, units };
+      return units;
+    }
 
   function getTrainingDashboardDisplayUnit(form, statsUnit) {
     const displayUnit = String(form?.unit || '').trim();
@@ -445,12 +592,23 @@
       if (trainingRosterSnapshotCache.token === cacheKey && Array.isArray(trainingRosterSnapshotCache.rosters)) {
         return trainingRosterSnapshotCache;
       }
-      const rosters = source.filter((row) => isRenderableTrainingRoster(row));
-      const hiddenCount = source.length - rosters.length;
+      const rosters = [];
+      let hiddenCount = 0;
+      let imported = 0;
+      let manual = 0;
+      for (const row of source) {
+        if (!isRenderableTrainingRoster(row)) {
+          hiddenCount += 1;
+          continue;
+        }
+        rosters.push(row);
+        if (row && row.source === 'import') imported += 1;
+        if (row && row.source === 'manual') manual += 1;
+      }
       const summary = {
         total: rosters.length,
-        imported: rosters.filter((row) => row.source === 'import').length,
-        manual: rosters.filter((row) => row.source === 'manual').length
+        imported,
+        manual
       };
       trainingRosterSnapshotCache = {
         token: cacheKey,
@@ -683,26 +841,21 @@
     exportTrainingDetailCsv(form);
   }
 
-  async function renderTraining(options) {
-    const opts = options || {};
-    const syncPromise = opts.skipSync
-      ? Promise.resolve()
-      : scheduleDeferredPromise(() => syncTrainingFormsFromM365({ silent: true }), 250).catch((error) => {
-        console.warn('training list sync failed', error);
-      });
-    const visibleForms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-    const summary = {
-      total: visibleForms.length,
-      draft: visibleForms.filter((form) => form.status === TRAINING_STATUSES.DRAFT).length,
-      pending: visibleForms.filter((form) => form.status === TRAINING_STATUSES.PENDING_SIGNOFF).length,
-      submitted: visibleForms.filter((form) => form.status === TRAINING_STATUSES.SUBMITTED).length,
-      returned: visibleForms.filter((form) => form.status === TRAINING_STATUSES.RETURNED).length
-    };
-    const toolbar = '<div class="training-toolbar-actions">'
-      + (canFillTraining() ? '<a href="#training-fill" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 新增填報</a>' : '')
-      + (visibleForms.length ? '<button class="btn btn-secondary" id="training-export-all">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>' : '')
-      + (isAdmin() ? '<a href="#training-roster" class="btn btn-secondary">' + ic('users', 'icon-sm') + ' 名單管理</a>' : '')
-      + '</div>';
+    async function renderTraining(options) {
+      const opts = options || {};
+      const syncPromise = opts.skipSync
+        ? Promise.resolve()
+        : scheduleDeferredPromise(() => syncTrainingFormsFromM365({ silent: true }), 250).catch((error) => {
+          console.warn('training list sync failed', error);
+        });
+      const listSnapshot = getTrainingListSnapshot();
+      const visibleForms = listSnapshot.visibleForms;
+      const summary = listSnapshot.summary;
+      const toolbar = '<div class="training-toolbar-actions">'
+        + (canFillTraining() ? '<a href="#training-fill" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 新增填報</a>' : '')
+        + (visibleForms.length ? '<button class="btn btn-secondary" id="training-export-all">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>' : '')
+        + (isAdmin() ? '<a href="#training-roster" class="btn btn-secondary">' + ic('users', 'icon-sm') + ' 名單管理</a>' : '')
+        + '</div>';
 
     const buildFormActions = (form, options) => {
       const opts = options || {};
@@ -721,25 +874,11 @@
 
     let contentHtml = '';
     if (isAdmin()) {
-      const allForms = getAllTrainingForms();
-      const latestByUnit = getTrainingDashboardUnits().map((statsUnit) => {
-        const unitForms = allForms
-          .filter((form) => String(form?.statsUnit || getTrainingStatsUnit(form?.unit) || '').trim() === statsUnit)
-          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-        const latestSubmitted = unitForms.find((form) => form.status === TRAINING_STATUSES.SUBMITTED) || null;
-        const latest = unitForms[0] || null;
-        const effectiveLatest = latestSubmitted || latest;
-        return {
-          statsUnit,
-          displayUnit: getTrainingDashboardDisplayUnit(effectiveLatest, statsUnit),
-          latest: effectiveLatest,
-          summary: effectiveLatest ? (effectiveLatest.summary || computeTrainingSummary(effectiveLatest.records || [])) : computeTrainingSummary([])
-        };
-      }).sort((a, b) => compareZhStroke(a.statsUnit, b.statsUnit));
-
-      const completedUnits = latestByUnit.filter((item) => item.latest && item.latest.status === TRAINING_STATUSES.SUBMITTED);
-      const incompleteUnits = latestByUnit.filter((item) => !item.latest || item.latest.status !== TRAINING_STATUSES.SUBMITTED);
-      summary.submitted = completedUnits.length;
+      const dashboardSnapshot = getTrainingAdminDashboardSnapshot();
+      const latestByUnit = dashboardSnapshot.latestByUnit;
+      const completedUnits = dashboardSnapshot.completedUnits;
+      const incompleteUnits = dashboardSnapshot.incompleteUnits;
+      const adminSummary = { ...summary, submitted: completedUnits.length };
       const completedRows = completedUnits.length ? completedUnits.map((item) => '<tr>'
         + '<td>' + esc(item.statsUnit) + '</td>'
         + '<td>' + esc(item.displayUnit || item.statsUnit) + '</td>'
@@ -804,6 +943,11 @@
         + buildTrainingTableCard('已完成填報', '填報清單已併入此區，方便直接查看已完成資料與下載。', completedUnits.length + ' 個單位', '<th>統計單位</th><th>填報單位</th><th>編號</th><th>經辦人</th><th>單位總人數</th><th>已完成</th><th>未完成</th><th>達成比率</th><th>完成時間</th><th>操作</th>', completedRows)
         + buildTrainingGroupedSection('未完成填報', '依行政單位、學術單位、中心 / 研究單位分類展開，方便內測與催辦。', incompleteGroups)
         + '</div>';
+      summary.total = adminSummary.total;
+      summary.draft = adminSummary.draft;
+      summary.pending = adminSummary.pending;
+      summary.submitted = adminSummary.submitted;
+      summary.returned = adminSummary.returned;
     } else {
       const rows = visibleForms.length ? visibleForms.map((form) => {
         const formSummary = form.summary || computeTrainingSummary(form.records || []);
@@ -1993,13 +2137,38 @@
     const hiddenCount = snapshot.hiddenCount;
     const summary = snapshot.summary;
     const deferRosterGroups = rosters.length > 500 && !opts.deferFullRender;
+    const selectedSignature = Array.from(selectedRosterIds.values()).sort().join(',');
+    const rosterRenderSignature = [
+      snapshot.token || '',
+      String(snapshot.rawLength || 0),
+      String(hiddenCount || 0),
+      deferRosterGroups ? '1' : '0',
+      opts.deferFullRender ? '1' : '0',
+      selectedSignature
+    ].join('::');
+    const currentApp = document.getElementById('app');
+    if (opts.skipSync && currentApp && currentApp.dataset.trainingRosterRenderSignature === rosterRenderSignature && trainingRosterRenderCache.signature === rosterRenderSignature && String(window.location.hash || '').startsWith('#training-roster')) {
+      syncRosterSelectionDom();
+      if (focusState) restoreTrainingRosterFocusState(focusState);
+      return;
+    }
     const importedPreviewHtml = (opts.rosterNames || opts.rosterIds) && deferRosterGroups
       ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
       : '';
     const groupsHtml = deferRosterGroups
       ? importedPreviewHtml + '<div class="empty-state" style="padding:28px"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
       : buildTrainingRosterRows(rosters, selectedRosterIds);
-    document.getElementById('app').innerHTML = buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size);
+    const pageHtml = buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size);
+    if (currentApp) {
+      currentApp.innerHTML = pageHtml;
+      currentApp.dataset.trainingRosterRenderSignature = rosterRenderSignature;
+      refreshTrainingRosterDomCache(currentApp, rosterRenderSignature);
+    }
+    trainingRosterRenderCache = {
+      signature: rosterRenderSignature,
+      selectedSignature,
+      defer: !!deferRosterGroups
+    };
 
     if (deferRosterGroups) {
       const rerender = function () {
@@ -2039,13 +2208,16 @@
       });
     }
 
-    const selectedCountLabel = document.getElementById('training-roster-selected-count');
-    const deleteSelectedButton = document.getElementById('training-roster-delete-selected');
+    const selectedCountLabel = trainingRosterDomCache.selectedCountLabel || document.getElementById('training-roster-selected-count');
+    const deleteSelectedButton = trainingRosterDomCache.deleteSelectedButton || document.getElementById('training-roster-delete-selected');
     const selectAllButton = document.getElementById('training-roster-select-all');
     const clearSelectionButton = document.getElementById('training-roster-clear-selection');
     const groupsContainer = document.getElementById('training-roster-groups');
 
     function getRosterRowsInDom() {
+      if (trainingRosterDomCache.signature === rosterRenderSignature && Array.isArray(trainingRosterDomCache.rows)) {
+        return trainingRosterDomCache.rows;
+      }
       return Array.from(document.querySelectorAll('tr[data-roster-id]'));
     }
 
@@ -2058,9 +2230,14 @@
         const checkbox = row.querySelector('.training-roster-check');
         if (checkbox) checkbox.checked = checked;
       });
-      document.querySelectorAll('.training-roster-group-select-all').forEach((checkbox) => {
+      const groupCheckboxes = trainingRosterDomCache.signature === rosterRenderSignature && Array.isArray(trainingRosterDomCache.groupSelectAll)
+        ? trainingRosterDomCache.groupSelectAll
+        : Array.from(document.querySelectorAll('.training-roster-group-select-all'));
+      groupCheckboxes.forEach((checkbox) => {
         const groupKey = String(checkbox.dataset.rosterGroup || '').trim();
-        const groupRows = rows.filter((row) => String(row.dataset.rosterGroup || '').trim() === groupKey);
+        const groupRows = trainingRosterDomCache.signature === rosterRenderSignature && trainingRosterDomCache.rowsByGroup instanceof Map
+          ? (trainingRosterDomCache.rowsByGroup.get(groupKey) || [])
+          : rows.filter((row) => String(row.dataset.rosterGroup || '').trim() === groupKey);
         const checkedCount = groupRows.filter((row) => selectedRosterIds.has(String(row.dataset.rosterId || '').trim())).length;
         checkbox.checked = !!groupRows.length && checkedCount === groupRows.length;
         checkbox.indeterminate = checkedCount > 0 && checkedCount < groupRows.length;

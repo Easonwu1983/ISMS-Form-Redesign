@@ -1953,15 +1953,46 @@
     if (getAuthMode() !== 'm365-api') return currentUser();
     const user = currentUser();
     if (!user || !String(user.sessionToken || '').trim()) return null;
+    const cacheKey = [
+      String(user.username || '').trim().toLowerCase(),
+      String(user.sessionToken || '').trim()
+    ].join('::');
+    const cachedVerifyRaw = (() => {
+      try {
+        return String(sessionStorage.getItem('__AUTH_VERIFY_CACHE__') || '');
+      } catch (_) {
+        return '';
+      }
+    })();
+    if (cachedVerifyRaw) {
+      try {
+        const cachedVerify = JSON.parse(cachedVerifyRaw);
+        if (cachedVerify
+          && String(cachedVerify.key || '') === cacheKey
+          && Number(cachedVerify.expiresAt || 0) > Date.now()
+          && cachedVerify.user
+        ) {
+          return normalizeUserRecord(cachedVerify.user);
+        }
+      } catch (_) { }
+    }
     const body = await requestAuthJson('/verify', { method: 'GET' });
     const item = normalizeRemoteSystemUsers(body)[0];
     if (!item) return null;
-    return normalizeUserRecord({
+    const normalized = normalizeUserRecord({
       ...item,
       sessionToken: String(body && body.session && body.session.token || user.sessionToken || '').trim(),
       sessionExpiresAt: String(body && body.session && body.session.expiresAt || user.sessionExpiresAt || '').trim(),
       mustChangePassword: body && body.mustChangePassword === true
     });
+    try {
+      sessionStorage.setItem('__AUTH_VERIFY_CACHE__', JSON.stringify({
+        key: cacheKey,
+        expiresAt: Date.now() + (30 * 1000),
+        user: normalized
+      }));
+    } catch (_) { }
+    return normalized;
   }
   async function submitAuthLogout(payload) {
     const input = payload && typeof payload === 'object' ? payload : {};

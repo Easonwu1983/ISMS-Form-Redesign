@@ -108,6 +108,9 @@
     function clearAuthSessionStorage() {
       writeAuthStorage(sessionStorage, null);
       writeAuthStorage(localStorage, null);
+      try {
+        sessionStorage.removeItem('__AUTH_VERIFY_CACHE__');
+      } catch (_) { }
       authSessionCacheKey = '';
       authSessionCacheValue = null;
       currentUserCacheKey = '';
