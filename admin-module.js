@@ -106,6 +106,22 @@
       loading: false,
       lastLoadedAt: ''
     };
+    const securityWindowState = {
+      filters: {
+        keyword: '',
+        status: 'all'
+      },
+      inventory: null,
+      loading: false,
+      lastLoadedAt: '',
+      filterSignature: ''
+    };
+    const SECURITY_WINDOW_SYNC_FRESHNESS_MS = 30000;
+    let securityWindowLoadPromise = null;
+    let securityWindowInventoryCache = {
+      loadedAt: 0,
+      value: null
+    };
 
     function formatUserUnitSummary(user) {
       const units = getAuthorizedUnits(user);
@@ -278,6 +294,241 @@
       </div>`;
     }
 
+    function getSecurityWindowFilterSignature(filters) {
+      const next = {
+        keyword: '',
+        status: 'all',
+        ...(filters || {})
+      };
+      return [next.keyword, next.status]
+        .map((value) => String(value || '').trim())
+        .join('|');
+    }
+
+    function isSecurityWindowInventoryFresh() {
+      if (!securityWindowInventoryCache || !securityWindowInventoryCache.value) return false;
+      return (Date.now() - Number(securityWindowInventoryCache.loadedAt || 0)) < SECURITY_WINDOW_SYNC_FRESHNESS_MS;
+    }
+
+    function normalizeSecurityWindowPerson(user) {
+      const units = Array.from(new Set(getAuthorizedUnits(user).map((unit) => String(unit || '').trim()).filter(Boolean)));
+      const securityRoles = normalizeSecurityRoles(user && user.securityRoles);
+      return {
+        username: String(user && user.username || '').trim(),
+        name: String(user && user.name || '').trim(),
+        email: String(user && user.email || '').trim(),
+        role: String(user && user.role || '').trim(),
+        units,
+        securityRoles,
+        hasWindow: securityRoles.length > 0,
+        activeUnit: String(user && user.activeUnit || user && user.unit || units[0] || '').trim()
+      };
+    }
+
+    function resolveSecurityWindowApplicationUnit(application) {
+      const direct = String(application && application.unitValue || '').trim();
+      if (direct) return direct;
+      const primary = String(application && application.primaryUnit || '').trim();
+      const secondary = String(application && application.secondaryUnit || '').trim();
+      if (!primary) return '';
+      return secondary ? composeUnitValue(primary, secondary) : primary;
+    }
+
+    function getSecurityWindowUnitStatusMeta(status) {
+      const key = String(status || '').trim();
+      if (key === 'assigned') return { label: '已設定', tone: 'approved' };
+      if (key === 'pending') return { label: '待審核', tone: 'pending' };
+      if (key === 'missing') return { label: '未設定', tone: 'danger' };
+      if (key === 'exempted') return { label: '由一級單位統一', tone: 'closed' };
+      return { label: key || '未知', tone: 'pending' };
+    }
+
+    function renderSecurityWindowPersonBadge(person) {
+      const roles = Array.isArray(person && person.securityRoles) ? person.securityRoles : [];
+      if (!roles.length) return '<span class="badge-role badge-pending">未設定</span>';
+      return roles.map((role) => `<span class="badge-role badge-unit-admin" style="margin-right:6px">${esc(role)}</span>`).join('');
+    }
+
+    function buildSecurityWindowInventory(users, applications) {
+      const people = Array.isArray(users)
+        ? users
+          .filter((user) => String(user && user.role || '').trim() === ROLES.UNIT_ADMIN)
+          .map(normalizeSecurityWindowPerson)
+        : [];
+      const holderMap = new Map();
+      people.forEach((person) => {
+        if (!person.hasWindow) return;
+        person.units.forEach((unit) => {
+          const key = String(unit || '').trim();
+          if (!key) return;
+          if (!holderMap.has(key)) holderMap.set(key, []);
+          holderMap.get(key).push(person);
+        });
+      });
+
+      const pendingMap = new Map();
+      const pendingStatuses = new Set(['pending_review', 'returned', 'approved', 'activation_pending']);
+      (Array.isArray(applications) ? applications : []).forEach((application) => {
+        const status = String(application && application.status || '').trim();
+        if (!pendingStatuses.has(status)) return;
+        const unit = resolveSecurityWindowApplicationUnit(application);
+        if (!unit) return;
+        if (!pendingMap.has(unit)) pendingMap.set(unit, []);
+        pendingMap.get(unit).push({
+          id: String(application && application.id || '').trim(),
+          applicantName: String(application && application.applicantName || '').trim(),
+          applicantEmail: String(application && application.applicantEmail || '').trim(),
+          status,
+          securityRoles: normalizeSecurityRoles(application && application.securityRoles)
+        });
+      });
+
+      const topUnits = getGovernanceTopLevelUnits();
+      const uniquePersons = Array.from(new Map(people.map((person) => [person.username, person])).values())
+        .sort((left, right) => String(left.name || left.username || '').localeCompare(String(right.name || right.username || ''), 'zh-Hant'));
+
+      const units = topUnits.map((unit) => {
+        const topUnit = String(unit && unit.unit || '').trim();
+        const children = Array.isArray(unit && unit.children) ? unit.children.map((child) => String(child || '').trim()).filter(Boolean) : [];
+        const scopeRows = [];
+
+        const pushScopeRow = (unitValue, label, exempted) => {
+          const holders = Array.from(new Map((holderMap.get(unitValue) || []).map((person) => [person.username, person])).values())
+            .sort((left, right) => String(left.name || left.username || '').localeCompare(String(right.name || right.username || ''), 'zh-Hant'));
+          const pending = Array.from(new Map((pendingMap.get(unitValue) || []).map((item) => [item.id || `${item.applicantEmail}:${item.status}`, item])).values())
+            .sort((left, right) => String(right.id || '').localeCompare(String(left.id || '')));
+          const hasWindow = holders.length > 0;
+          const status = exempted ? 'exempted' : (hasWindow ? 'assigned' : (pending.length ? 'pending' : 'missing'));
+          scopeRows.push({
+            unit: unitValue,
+            label,
+            status,
+            exempted,
+            holders,
+            pending,
+            hasWindow,
+            isTop: unitValue === topUnit
+          });
+        };
+
+        pushScopeRow(topUnit, topUnit, false);
+        children.forEach((child) => {
+          const childUnit = composeUnitValue(topUnit, child);
+          pushScopeRow(childUnit, child, String(unit && unit.mode || 'independent').trim() === 'consolidated');
+        });
+
+        const holders = Array.from(new Map(scopeRows.flatMap((row) => row.holders || []).map((person) => [person.username, person])).values())
+          .sort((left, right) => String(left.name || left.username || '').localeCompare(String(right.name || right.username || ''), 'zh-Hant'));
+        const pending = Array.from(new Map(scopeRows.flatMap((row) => row.pending || []).map((item) => [item.id || `${item.applicantEmail}:${item.status}`, item])).values())
+          .sort((left, right) => String(right.id || '').localeCompare(String(left.id || '')));
+        const hasWindow = holders.length > 0;
+        const assignedRows = scopeRows.filter((row) => row.status === 'assigned').length;
+        const missingRows = scopeRows.filter((row) => row.status === 'missing').length;
+        const exemptedRows = scopeRows.filter((row) => row.status === 'exempted').length;
+        const pendingRows = scopeRows.filter((row) => row.status === 'pending').length;
+
+        return {
+          unit: topUnit,
+          category: String(unit && unit.category || '').trim(),
+          mode: String(unit && unit.mode || 'independent').trim() === 'consolidated' ? 'consolidated' : 'independent',
+          note: String(unit && unit.note || '').trim(),
+          updatedAt: String(unit && unit.updatedAt || '').trim(),
+          updatedBy: String(unit && unit.updatedBy || '').trim(),
+          children,
+          scopeRows,
+          holders,
+          pending,
+          hasWindow,
+          status: hasWindow ? 'assigned' : (pending.length ? 'pending' : 'missing'),
+          assignedRows,
+          missingRows,
+          exemptedRows,
+          pendingRows
+        };
+      });
+
+      const summary = units.reduce((acc, unit) => {
+        acc.totalUnits += 1;
+        if (unit.hasWindow) acc.unitsWithWindows += 1; else acc.unitsWithoutWindows += 1;
+        acc.peopleWithWindows += Array.isArray(unit.holders) ? unit.holders.length : 0;
+        acc.pendingApplications += Array.isArray(unit.pending) ? unit.pending.length : 0;
+        acc.exemptedUnits += unit.exemptedRows || 0;
+        return acc;
+      }, {
+        totalUnits: 0,
+        unitsWithWindows: 0,
+        unitsWithoutWindows: 0,
+        peopleWithWindows: 0,
+        pendingApplications: 0,
+        exemptedUnits: 0
+      });
+
+      const peopleWithoutWindow = uniquePersons.filter((person) => !person.hasWindow).length;
+      return {
+        units,
+        people: uniquePersons,
+        summary: {
+          ...summary,
+          peopleWithoutWindow
+        },
+        generatedAt: new Date().toISOString()
+      };
+    }
+
+    function renderSecurityWindowPersonRows(items) {
+      const rows = Array.isArray(items) ? items : [];
+      if (!rows.length) {
+        return `<tr><td colspan="6"><div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">沒有符合條件的資安窗口人員</div><div class="empty-state-desc">請調整關鍵字或狀態篩選。</div></div></td></tr>`;
+      }
+      return rows.map((person) => {
+        const units = Array.isArray(person.units) ? person.units : [];
+        const unitSummary = units.length ? units.join('、') : '未指定';
+        const statusMeta = getSecurityWindowUnitStatusMeta(person.hasWindow ? 'assigned' : 'missing');
+        return `<tr><td style="font-weight:600;color:var(--text-primary)">${esc(person.name || person.username || '—')}</td><td>${esc(person.username || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(person.email || '—')}</div></td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(unitSummary)}</td><td>${renderSecurityWindowPersonBadge(person)}</td><td><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span></td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(person.activeUnit || '—')}</td></tr>`;
+      }).join('');
+    }
+
+    function renderSecurityWindowScopeRows(unit) {
+      const rows = Array.isArray(unit && unit.scopeRows) ? unit.scopeRows : [];
+      if (!rows.length) {
+        return `<tr><td colspan="4"><div class="empty-state" style="padding:24px 18px"><div class="empty-state-title">沒有可顯示的單位範圍</div><div class="empty-state-desc">請確認單位資料與治理設定是否已就緒。</div></div></td></tr>`;
+      }
+      return rows.map((row) => {
+        const meta = getSecurityWindowUnitStatusMeta(row.status);
+        const holders = Array.isArray(row.holders) ? row.holders : [];
+        const pending = Array.isArray(row.pending) ? row.pending : [];
+        const holderHtml = holders.length
+          ? holders.map((person) => `<span class="cl-governance-child-chip">${esc(person.name || person.username || '—')} · ${esc(formatSecurityRolesSummary(person.securityRoles))}</span>`).join('')
+          : '<span class="cl-governance-child-chip cl-governance-child-chip--muted">尚未指定</span>';
+        const pendingHtml = pending.length
+          ? pending.map((item) => `<span class="cl-governance-child-chip">${esc(item.applicantName || item.applicantEmail || '—')} · ${esc(formatSecurityRolesSummary(item.securityRoles))}</span>`).join('')
+          : '<span class="cl-governance-child-chip cl-governance-child-chip--muted">無待審核申請</span>';
+        return `<tr><td style="font-weight:600;color:var(--text-primary)">${esc(row.label || row.unit || '—')}</td><td><span class="review-status-badge ${meta.tone}">${esc(meta.label)}</span></td><td>${holderHtml}${pending.length ? `<div class="review-card-subtitle" style="margin-top:8px">待審核：${pendingHtml}</div>` : ''}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(row.exempted ? '已整併至一級單位' : (row.isTop ? '一級單位' : '二級單位'))}</td></tr>`;
+      }).join('');
+    }
+
+    function renderSecurityWindowUnitCards(units) {
+      const rows = Array.isArray(units) ? units : [];
+      if (!rows.length) {
+        return `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">目前沒有符合條件的資安窗口單位</div><div class="empty-state-desc">請調整關鍵字、狀態或先確認單位治理設定。</div></div>`;
+      }
+      return rows.map((unit) => {
+        const statusMeta = getSecurityWindowUnitStatusMeta(unit.status);
+        const holderCount = Array.isArray(unit.holders) ? unit.holders.length : 0;
+        const pendingCount = Array.isArray(unit.pending) ? unit.pending.length : 0;
+        const childCount = Array.isArray(unit.children) ? unit.children.length : 0;
+        const childSummary = `${holderCount} 位資安窗口 · ${pendingCount} 筆待審核 · ${childCount} 個二級單位`;
+        return `<details class="card governance-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="security-window-summary"><div><div class="review-unit-name">${esc(unit.unit)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div></div><div class="security-window-summary-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><div class="review-card-subtitle" style="margin-top:6px">${esc(childSummary)}</div></div></summary><div class="governance-card-body" style="padding-top:12px"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div><div class="table-wrapper" style="margin-top:14px"><table class="review-data-table"><thead><tr><th>單位</th><th>狀態</th><th>資安窗口</th><th>備註</th></tr></thead><tbody>${renderSecurityWindowScopeRows(unit)}</tbody></table></div></div></details>`;
+      }).join('');
+    }
+
+    function getSecurityWindowFiltersFromDom() {
+      return {
+        keyword: document.getElementById('security-window-keyword') ? document.getElementById('security-window-keyword').value.trim() : '',
+        status: document.getElementById('security-window-status') ? document.getElementById('security-window-status').value.trim() : 'all'
+      };
+    }
+
 
     const SECURITY_ROLE_OPTIONS = ['二級單位資安窗口', '一級單位資安窗口'];
     const UNIT_SEARCH_ENTRIES = typeof getUnitSearchEntries === 'function'
@@ -442,9 +693,9 @@
   function renderUsers() {
     if (!canManageUsers()) { navigate('dashboard'); return; }
     const users = getUsers();
-    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${getRoleBadgeClass(u.role)}">${getRoleLabel(u.role)}</span></td><td>${esc(u.unit || '未指定')}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
+    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${getRoleBadgeClass(u.role)}">${getRoleLabel(u.role)}</span></td><td>${esc(formatSecurityRolesSummary(u.securityRoles))}</td><td>${esc(u.unit || '未指定')}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
     document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
-      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>主要單位</th><th>授權單位</th><th>可審核單位</th><th>電子郵件</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要單位</th><th>授權單位</th><th>可審核單位</th><th>電子郵件</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
 
@@ -706,6 +957,186 @@
         renderUnitReview(unitGovernanceState.filters);
       }
     });
+  }
+
+  function filterSecurityWindowInventory(inventory, filters) {
+    const source = inventory && typeof inventory === 'object' ? inventory : { units: [], people: [], summary: {} };
+    const keyword = String(filters && filters.keyword || '').trim().toLowerCase();
+    const status = String(filters && filters.status || 'all').trim() || 'all';
+    const matchesKeyword = (parts) => {
+      if (!keyword) return true;
+      const haystack = (Array.isArray(parts) ? parts : [parts])
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(keyword);
+    };
+    const units = Array.isArray(source.units) ? source.units.filter((unit) => {
+      if (status !== 'all') {
+        if (status === 'assigned' && unit.status !== 'assigned') return false;
+        if (status === 'missing' && unit.status !== 'missing') return false;
+        if (status === 'pending' && unit.status !== 'pending') return false;
+        if (status === 'exempted' && unit.mode !== 'consolidated') return false;
+      }
+      return matchesKeyword([
+        unit.unit,
+        unit.category,
+        unit.mode,
+        unit.note,
+        (unit.children || []).join(' '),
+        (unit.holders || []).map((person) => [person.name, person.username, person.email].filter(Boolean).join(' ')).join(' '),
+        (unit.pending || []).map((item) => [item.applicantName, item.applicantEmail, item.status].filter(Boolean).join(' ')).join(' ')
+      ]);
+    }) : [];
+    const people = Array.isArray(source.people) ? source.people.filter((person) => {
+      if (status !== 'all') {
+        if (status === 'assigned' && !person.hasWindow) return false;
+        if (status === 'missing' && person.hasWindow) return false;
+        if (status === 'pending' || status === 'exempted') return true;
+      }
+      return matchesKeyword([
+        person.name,
+        person.username,
+        person.email,
+        person.activeUnit,
+        (person.units || []).join(' '),
+        (person.securityRoles || []).join(' ')
+      ]);
+    }) : [];
+    const summary = {
+      totalUnits: units.length,
+      unitsWithWindows: units.filter((unit) => unit.hasWindow).length,
+      unitsWithoutWindows: units.filter((unit) => !unit.hasWindow).length,
+      peopleWithWindows: people.filter((person) => person.hasWindow).length,
+      peopleWithoutWindow: people.filter((person) => !person.hasWindow).length,
+      pendingApplications: units.reduce((count, unit) => count + (Array.isArray(unit.pending) ? unit.pending.length : 0), 0),
+      exemptedUnits: units.reduce((count, unit) => count + (unit.exemptedRows || 0), 0)
+    };
+    return { units, people, summary, generatedAt: source.generatedAt || '' };
+  }
+
+  async function loadSecurityWindowInventory(force) {
+    if (!force && isSecurityWindowInventoryFresh() && securityWindowInventoryCache.value) {
+      return securityWindowInventoryCache.value;
+    }
+    if (!force && securityWindowLoadPromise) {
+      return securityWindowLoadPromise;
+    }
+    const pending = (async () => {
+      const applications = await listUnitContactApplications({ limit: '200' });
+      const inventory = buildSecurityWindowInventory(getUsers(), Array.isArray(applications) ? applications : []);
+      securityWindowInventoryCache = {
+        loadedAt: Date.now(),
+        value: inventory
+      };
+      return inventory;
+    })().catch((error) => {
+      console.warn('security window inventory load failed', error);
+      if (securityWindowInventoryCache.value) {
+        return securityWindowInventoryCache.value;
+      }
+      throw error;
+    }).finally(() => {
+      if (securityWindowLoadPromise === pending) {
+        securityWindowLoadPromise = null;
+      }
+    });
+    securityWindowLoadPromise = pending;
+    return pending;
+  }
+
+  async function renderSecurityWindow(nextFilters, options) {
+    if (!isAdmin()) { navigate('dashboard'); toast('?????????????', 'error'); return; }
+    const opts = options || {};
+    securityWindowState.filters = { ...securityWindowState.filters, ...(nextFilters || {}) };
+    const app = document.getElementById('app');
+    const resolvedFilters = { keyword: '', status: 'all', ...securityWindowState.filters };
+    const filterSignature = getSecurityWindowFilterSignature(resolvedFilters);
+    const canRenderFromCache = securityWindowState.filterSignature === filterSignature && securityWindowState.inventory;
+    let inventory;
+    try {
+      if (!opts.force && canRenderFromCache) {
+        inventory = securityWindowState.inventory;
+        if (!isSecurityWindowInventoryFresh() && !securityWindowLoadPromise) {
+          loadSecurityWindowInventory(false).then(() => {
+            if (document.getElementById('security-window-filter-form')) {
+              renderSecurityWindow(resolvedFilters);
+            }
+          }).catch((error) => {
+            console.warn('security window background refresh failed', error);
+          });
+        }
+      } else {
+        app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">????</div><h1 class="page-title">????</h1><p class="page-subtitle">?????????????????????????????????????</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} ???</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">??????????...</div></div>`;
+        refreshIcons();
+        inventory = await loadSecurityWindowInventory(!!opts.force);
+      }
+    } catch (error) {
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">????</div><h1 class="page-title">????</h1><p class="page-subtitle">???????????</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshSecurityWindow">${ic('refresh-cw', 'icon-sm')} ??</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">??????????</div><div class="empty-state-desc">${esc(String(error && error.message || error || '????'))}</div></div></div></div>`;
+      refreshIcons();
+      return;
+    }
+
+    securityWindowState.inventory = inventory;
+    securityWindowState.lastLoadedAt = inventory.generatedAt || new Date().toISOString();
+    securityWindowState.filterSignature = filterSignature;
+    const filtered = filterSecurityWindowInventory(inventory, resolvedFilters);
+    const summary = filtered.summary;
+    const unitCardsHtml = renderSecurityWindowUnitCards(filtered.units);
+    const peopleRowsHtml = renderSecurityWindowPersonRows(filtered.people);
+    app.innerHTML = `<div class="animate-in">
+      <div class="page-header review-page-header">
+        <div>
+          <div class="page-eyebrow">系統管理</div>
+          <h1 class="page-title">資安窗口</h1>
+          <p class="page-subtitle">盤點全校各單位的資安窗口配置、待審核申請與未設定單位，僅最高管理者可檢視。</p>
+        </div>
+        <div class="review-header-actions">
+          <button type="button" class="btn btn-secondary" data-action="admin.refreshSecurityWindow">${ic('refresh-cw', 'icon-sm')} 重新整理</button>
+          <button type="button" class="btn btn-secondary" data-action="admin.exportSecurityWindow">${ic('download', 'icon-sm')} ?? JSON</button>
+        </div>
+      </div>
+      <div class="review-callout">
+        <span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span>
+        <div>
+          <strong>資料來源：</strong>單位管理者申請、系統帳號與單位治理設定。
+          <div class="review-card-subtitle" style="margin-top:6px">最後更新：${esc(fmtTime(securityWindowState.lastLoadedAt))}</div>
+        </div>
+      </div>
+      <div class="stats-grid review-stats-grid">
+        <div class="stat-card total"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${summary.totalUnits}</div><div class="stat-label">可盤點單位</div></div>
+        <div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${summary.unitsWithWindows}</div><div class="stat-label">已設定資安窗口</div></div>
+        <div class="stat-card pending"><div class="stat-icon">${ic('alert-triangle')}</div><div class="stat-value">${summary.unitsWithoutWindows}</div><div class="stat-label">尚未設定</div></div>
+        <div class="stat-card overdue"><div class="stat-icon">${ic('users-round')}</div><div class="stat-value">${summary.peopleWithoutWindow}</div><div class="stat-label">尚未設定人員</div></div>
+      </div>
+      <div class="card review-table-card">
+        <div class="card-header"><span class="card-title">單位盤點</span><span class="review-card-subtitle">依一級單位展開，顯示各單位與二級單位的資安窗口狀態</span></div>
+        <form id="security-window-filter-form" class="review-toolbar">
+          <div class="review-toolbar-main">
+            <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="security-window-keyword" value="${esc(resolvedFilters.keyword)}" placeholder="單位、姓名、帳號、電子郵件、角色"></div>
+            <div class="form-group" style="min-width:180px"><label class="form-label">狀態</label><select class="form-select" id="security-window-status"><option value="all" ${resolvedFilters.status === 'all' ? 'selected' : ''}>全部</option><option value="assigned" ${resolvedFilters.status === 'assigned' ? 'selected' : ''}>已設定</option><option value="missing" ${resolvedFilters.status === 'missing' ? 'selected' : ''}>未設定</option><option value="pending" ${resolvedFilters.status === 'pending' ? 'selected' : ''}>待審核</option><option value="exempted" ${resolvedFilters.status === 'exempted' ? 'selected' : ''}>由一級單位統一</option></select></div>
+          </div>
+          <div class="review-toolbar-actions">
+            <button type="button" class="btn btn-primary" data-action="admin.applySecurityWindowFilters">${ic('filter', 'icon-sm')} 套用篩選</button>
+            <button type="button" class="btn btn-secondary" data-action="admin.resetSecurityWindowFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button>
+          </div>
+        </form>
+        <div class="governance-grid">${unitCardsHtml}</div>
+      </div>
+      <div class="card review-table-card" style="margin-top:18px">
+        <div class="card-header"><span class="card-title">????</span><span class="review-card-subtitle">??????????????????????????</span></div>
+        ${buildReviewTableShell('security-window-people-table', '<th>??</th><th>?? / ????</th><th>??</th><th>????</th><th>??</th><th>????</th>', peopleRowsHtml, { toolbarSubtitle: '?????????????????????????????????' })}
+      </div>
+    </div>`;
+    const form = document.getElementById('security-window-filter-form');
+    if (form) {
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        renderSecurityWindow(getSecurityWindowFiltersFromDom());
+      });
+    }
+    wireReviewTableScrollers(app);
+    refreshIcons();
   }
 
   function promptReviewComment(title, placeholder, submitLabel, onSubmit) {
@@ -1122,6 +1553,32 @@
     renderSchemaHealth();
   }
 
+  async function handleRefreshSecurityWindow() {
+    await renderSecurityWindow(securityWindowState.filters, { force: true });
+  }
+
+  async function handleApplySecurityWindowFilters() {
+    await renderSecurityWindow(getSecurityWindowFiltersFromDom());
+  }
+
+  async function handleResetSecurityWindowFilters() {
+    await renderSecurityWindow({
+      keyword: '',
+      status: 'all'
+    });
+  }
+
+  async function handleExportSecurityWindow() {
+    const inventory = await loadSecurityWindowInventory(false);
+    const filters = { ...securityWindowState.filters };
+    downloadJson('isms-security-window-' + new Date().toISOString().slice(0, 10) + '.json', {
+      exportedAt: new Date().toISOString(),
+      filters,
+      inventory
+    });
+    toast('已匯出資安窗口盤點 JSON');
+  }
+
   async function handleExportSupportBundle() {
     if (!isAdmin()) return;
     const bundle = await exportSupportBundle();
@@ -1169,6 +1626,18 @@
     },
     refreshAuditTrail: function () {
       renderAuditTrail(auditTrailState.filters);
+    },
+    refreshSecurityWindow: function () {
+      handleRefreshSecurityWindow();
+    },
+    applySecurityWindowFilters: function () {
+      handleApplySecurityWindowFilters();
+    },
+    resetSecurityWindowFilters: function () {
+      handleResetSecurityWindowFilters();
+    },
+    exportSecurityWindow: function () {
+      handleExportSecurityWindow();
     },
     refreshUnitContactReview: function () {
       renderUnitContactReview(unitContactReviewState.filters);
@@ -1274,6 +1743,7 @@
       renderUsers,
       renderUnitContactReview,
       renderUnitReview,
+      renderSecurityWindow,
       renderLoginLog,
       renderAuditTrail,
       renderSchemaHealth

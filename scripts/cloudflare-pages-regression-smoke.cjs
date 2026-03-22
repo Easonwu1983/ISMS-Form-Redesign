@@ -757,6 +757,18 @@ async function run() {
     }
     pushStep('users:loaded', true, 'account table ready');
 
+    await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
+    await page.waitForFunction(() => {
+      const app = document.getElementById('app');
+      return !!(app && app.innerText && app.innerText.includes('資安窗口') && app.innerText.includes('單位盤點'));
+    }, undefined, { timeout: 20000 });
+    const securityWindowText = await page.locator('#app').innerText();
+    if (/\?{4,}/.test(securityWindowText)) {
+      throw new Error('security window page contains placeholder question marks');
+    }
+    pushStep('security-window:loaded', true, 'security window page ready');
+
     await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {

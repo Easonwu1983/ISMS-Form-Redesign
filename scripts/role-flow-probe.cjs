@@ -199,6 +199,8 @@ async function deleteTempUnitManager(page, username) {
       await gotoHash(page, 'detail/' + carId);
       const openedHash = await currentHash(page);
       if (openedHash === '#detail/' + carId) throw new Error('cross-unit manager unexpectedly opened same-unit case');
+      await gotoHash(page, 'security-window');
+      if ((await currentHash(page)) === '#security-window') throw new Error('unit manager unexpectedly opened security-window');
       await logout(page);
       return carId;
     });
@@ -212,6 +214,8 @@ async function deleteTempUnitManager(page, username) {
       if (detailHash !== '#detail/' + carId) throw new Error('admin cannot open detail hash: ' + detailHash);
       await gotoHash(page, 'users');
       if ((await currentHash(page)) !== '#users') throw new Error('admin cannot open users route');
+      await gotoHash(page, 'security-window');
+      if ((await currentHash(page)) !== '#security-window') throw new Error('admin cannot open security-window route');
       await gotoHash(page, 'training-roster');
       if ((await currentHash(page)) !== '#training-roster') throw new Error('admin cannot open training-roster route');
       await logout(page);

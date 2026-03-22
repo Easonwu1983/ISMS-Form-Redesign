@@ -15,6 +15,7 @@ const SUITE = [
   { label: 'checklist-governance-smoke', script: 'scripts/checklist-governance-smoke.cjs' },
   { label: 'training-roster-focus-smoke', script: 'scripts/training-roster-focus-smoke.cjs' },
   { label: 'training-roster-batch-delete-smoke', script: 'scripts/training-roster-batch-delete-smoke.cjs' },
+  { label: 'role-flow-probe', script: 'scripts/role-flow-probe.cjs' },
   { label: 'audit-followup-smoke', script: 'scripts/audit-followup-smoke.cjs' }
 ];
 
