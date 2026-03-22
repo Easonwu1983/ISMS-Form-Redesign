@@ -2151,7 +2151,8 @@
     const hiddenCount = snapshot.hiddenCount;
     const summary = snapshot.summary;
     const groups = groupTrainingRosterEntries(rosters);
-    const useChunkedRosterRender = groups.length > 500;
+    const rosterCount = Array.isArray(rosters) ? rosters.length : 0;
+    const useChunkedRosterRender = rosterCount > 120 || groups.length > 24;
     const deferRosterGroups = useChunkedRosterRender && !opts.deferFullRender;
     const selectedSignature = Array.from(selectedRosterIds.values()).sort().join(',');
     const rosterRenderSignature = [
@@ -2174,7 +2175,7 @@
       ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
       : '';
     const initialGroupCount = useChunkedRosterRender && opts.deferFullRender
-      ? Math.min(4, groups.length)
+      ? Math.min(3, groups.length)
       : 0;
     const chunkedGroupsHtml = useChunkedRosterRender
       ? buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, 0, initialGroupCount)

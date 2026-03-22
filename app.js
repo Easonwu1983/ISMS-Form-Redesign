@@ -3136,6 +3136,7 @@
   let authenticatedBootstrapPromise = null;
   let authenticatedBootstrapState = 'idle';
   let sessionHeartbeatTimer = null;
+  let sessionHeartbeatKey = '';
   let sessionExpiryReminderKey = '';
   const SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
   const SESSION_EXPIRY_WARNING_MS = 10 * 60 * 1000;
@@ -3297,6 +3298,7 @@
       window.clearInterval(sessionHeartbeatTimer);
     }
     sessionHeartbeatTimer = null;
+    sessionHeartbeatKey = '';
   }
   function getSessionExpiresAtMs(user) {
     const value = Date.parse(String(user && user.sessionExpiresAt || '').trim());
@@ -3349,13 +3351,27 @@
     }
   }
   function ensureSessionHeartbeat() {
-    clearSessionHeartbeat();
-    sessionExpiryReminderKey = '';
     if (typeof window === 'undefined') return;
     if (getAuthMode() !== 'm365-api') return;
     const user = currentUser();
-    if (!user || !String(user.sessionToken || '').trim()) return;
+    const heartbeatKey = user
+      ? [
+        String(user.username || '').trim().toLowerCase(),
+        String(user.activeUnit || '').trim(),
+        String(user.sessionToken || '').trim(),
+        String(user.sessionExpiresAt || '').trim()
+      ].join('|')
+      : '';
+    if (!user || !String(user.sessionToken || '').trim()) {
+      clearSessionHeartbeat();
+      sessionExpiryReminderKey = '';
+      return;
+    }
+    if (sessionHeartbeatTimer && sessionHeartbeatKey === heartbeatKey) return;
+    clearSessionHeartbeat();
+    sessionExpiryReminderKey = '';
     maybeWarnSessionExpiry(user);
+    sessionHeartbeatKey = heartbeatKey;
     sessionHeartbeatTimer = window.setInterval(function () {
       runSessionHeartbeat().catch(function (error) {
         console.warn('session heartbeat failed', error);

@@ -105,7 +105,7 @@
     let checklistListRenderCache = { signature: '', html: '' };
     let checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
     let checklistListViewCache = { signature: '', filtered: [], grouped: [] };
-    let checklistListDomCache = { signature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null };
+    let checklistListDomCache = { signature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
 
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
@@ -353,13 +353,17 @@
 
     function refreshChecklistListDomCache(contentEl, signature) {
       if (!contentEl) return;
+      const rows = Array.from(contentEl.querySelectorAll('.cl-list-row'));
       checklistListDomCache = {
         signature,
-        rows: Array.from(contentEl.querySelectorAll('.cl-list-row')),
+        rows,
         units: Array.from(contentEl.querySelectorAll('.cl-unit-accordion')),
         years: Array.from(contentEl.querySelectorAll('.cl-year-accordion')),
         emptyState: contentEl.querySelector('.cl-list-empty-state'),
-        contentEl
+        contentEl,
+        searchTexts: rows.map((row) => String(row.getAttribute('data-cl-search-text') || '').toLowerCase()),
+        rowUnitKeys: rows.map((row) => String(row.dataset.clUnitKey || '').trim()),
+        rowYearKeys: rows.map((row) => String(row.dataset.clYearKey || '').trim())
       };
     }
 
@@ -419,15 +423,18 @@
         refreshChecklistListDomCache(contentEl, signature);
       }
       const rowEls = Array.isArray(checklistListDomCache.rows) ? checklistListDomCache.rows : Array.from(contentEl.querySelectorAll('.cl-list-row'));
+      const searchTexts = Array.isArray(checklistListDomCache.searchTexts) ? checklistListDomCache.searchTexts : [];
+      const rowUnitKeys = Array.isArray(checklistListDomCache.rowUnitKeys) ? checklistListDomCache.rowUnitKeys : [];
+      const rowYearKeys = Array.isArray(checklistListDomCache.rowYearKeys) ? checklistListDomCache.rowYearKeys : [];
       const visibleUnitKeys = new Set();
       const visibleYearKeys = new Set();
-      rowEls.forEach((row) => {
-        const haystack = String(row.getAttribute('data-cl-search-text') || '').toLowerCase();
+      rowEls.forEach((row, index) => {
+        const haystack = String(searchTexts[index] || row.getAttribute('data-cl-search-text') || '').toLowerCase();
         const visible = !keyword || haystack.includes(keyword);
         row.hidden = !visible;
         if (visible) {
-          const rowUnitKey = String(row.dataset.clUnitKey || '').trim();
-          const rowYearKey = String(row.dataset.clYearKey || '').trim();
+          const rowUnitKey = String(rowUnitKeys[index] || row.dataset.clUnitKey || '').trim();
+          const rowYearKey = String(rowYearKeys[index] || row.dataset.clYearKey || '').trim();
           if (rowUnitKey) visibleUnitKeys.add(rowUnitKey);
           if (rowYearKey) visibleYearKeys.add(rowYearKey);
         }

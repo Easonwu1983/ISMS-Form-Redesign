@@ -74,11 +74,17 @@
     };
     const AUDIT_TRAIL_SYNC_FRESHNESS_MS = 30000;
     const AUDIT_TRAIL_HEALTH_CACHE_MS = 30000;
+    const AUDIT_TRAIL_QUERY_CACHE_MS = 30000;
     let auditTrailLoadPromise = null;
     let auditTrailHealthLoadPromise = null;
     let auditTrailHealthCache = {
       value: null,
       loadedAt: 0
+    };
+    let auditTrailQueryCache = {
+      signature: '',
+      loadedAt: 0,
+      value: null
     };
     const unitContactReviewState = {
       filters: {
@@ -139,6 +145,12 @@
     function isAuditTrailHealthFresh() {
       if (!auditTrailHealthCache || !auditTrailHealthCache.value) return false;
       return (Date.now() - Number(auditTrailHealthCache.loadedAt || 0)) < AUDIT_TRAIL_HEALTH_CACHE_MS;
+    }
+
+    function isAuditTrailQueryFresh(signature) {
+      if (!signature || auditTrailQueryCache.signature !== signature) return false;
+      if (!auditTrailQueryCache || !auditTrailQueryCache.value) return false;
+      return (Date.now() - Number(auditTrailQueryCache.loadedAt || 0)) < AUDIT_TRAIL_QUERY_CACHE_MS;
     }
 
     async function getAuditTrailHealthSnapshot(force) {
@@ -899,6 +911,17 @@
       auditTrailState.filters = nextFilters;
       return auditTrailState;
     }
+    if (!force && isAuditTrailQueryFresh(signature)) {
+      const cached = auditTrailQueryCache.value;
+      auditTrailState.loading = false;
+      auditTrailState.filters = nextFilters;
+      auditTrailState.health = cached.health;
+      auditTrailState.items = Array.isArray(cached.items) ? cached.items : [];
+      auditTrailState.summary = cached.summary || { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] };
+      auditTrailState.lastLoadedAt = cached.lastLoadedAt || new Date().toISOString();
+      auditTrailState.filterSignature = signature;
+      return auditTrailState;
+    }
     if (!force && auditTrailLoadPromise && auditTrailState.filterSignature === signature) {
       return auditTrailLoadPromise;
     }
@@ -914,6 +937,16 @@
       auditTrailState.summary = payload && payload.summary ? payload.summary : { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] };
       auditTrailState.lastLoadedAt = new Date().toISOString();
       auditTrailState.filterSignature = signature;
+      auditTrailQueryCache = {
+        signature,
+        loadedAt: Date.now(),
+        value: {
+          health: auditTrailState.health,
+          items: auditTrailState.items,
+          summary: auditTrailState.summary,
+          lastLoadedAt: auditTrailState.lastLoadedAt
+        }
+      };
       return auditTrailState;
     })();
     auditTrailLoadPromise = pending;
@@ -940,7 +973,7 @@
         auditTrailState.filters = resolvedFilters;
         state = auditTrailState;
         if (!isAuditTrailDataFresh(filterSignature) && !auditTrailLoadPromise) {
-          loadAuditTrailData(resolvedFilters, { force: true }).then(function () {
+          loadAuditTrailData(resolvedFilters).then(function () {
             if (document.getElementById('audit-filter-form')) {
               renderAuditTrail(resolvedFilters);
             }
