@@ -3230,18 +3230,18 @@
         setAuthenticatedBootstrapState('error');
         throw error;
       }
-      const syncTasks = [
-        syncTrainingFormsFromM365({ silent: true }),
-        syncTrainingRostersFromM365({ silent: true }),
-        syncChecklistsFromM365({ silent: true }),
-        syncCorrectiveActionsFromM365({ silent: true })
-      ];
-      if (canManageUsers(activeUser)) syncTasks.push(syncUsersFromM365({ silent: true }));
-      if (activeUser.role === ROLES.ADMIN || activeUser.role === ROLES.UNIT_ADMIN) {
-        syncTasks.push(syncReviewScopesFromM365({ silent: true }));
-      }
       setAuthenticatedBootstrapState('ready');
       scheduleAuthenticatedBootstrapWarmup(function () {
+        const syncTasks = [
+          syncTrainingFormsFromM365({ silent: true }),
+          syncTrainingRostersFromM365({ silent: true }),
+          syncChecklistsFromM365({ silent: true }),
+          syncCorrectiveActionsFromM365({ silent: true })
+        ];
+        if (canManageUsers(activeUser)) syncTasks.push(syncUsersFromM365({ silent: true }));
+        if (activeUser.role === ROLES.ADMIN || activeUser.role === ROLES.UNIT_ADMIN) {
+          syncTasks.push(syncReviewScopesFromM365({ silent: true }));
+        }
         return syncTasks;
       }, [
         'training bootstrap warmup failed',

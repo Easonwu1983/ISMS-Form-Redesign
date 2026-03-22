@@ -104,6 +104,30 @@
     };
     let checklistListRenderCache = { signature: '', html: '' };
     let checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
+    let checklistListViewCache = { signature: '', filtered: [], grouped: [] };
+
+    function scheduleDeferredPromise(taskFactory, timeoutMs) {
+      const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
+      return new Promise((resolve) => {
+        const run = function () {
+          try {
+            resolve(Promise.resolve(typeof taskFactory === 'function' ? taskFactory() : null));
+          } catch (error) {
+            console.warn('deferred task failed to start', error);
+            resolve(Promise.resolve());
+          }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(run, { timeout: delay });
+          return;
+        }
+        if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+          window.setTimeout(run, delay);
+          return;
+        }
+        run();
+      });
+    }
 
     const CHECKLIST_LIST_STATUS_OPTIONS = [
       { value: 'all', label: '全部' },
@@ -303,6 +327,22 @@
       return checklistListSnapshotCache;
     }
 
+    function getChecklistListViewSnapshot(items) {
+      const snapshot = getChecklistListSnapshot(items);
+      const signature = [
+        snapshot.token || '',
+        String(checklistBrowseState.year || 'all'),
+        String(checklistBrowseState.status || 'all')
+      ].join('::');
+      if (checklistListViewCache.signature === signature && Array.isArray(checklistListViewCache.grouped)) {
+        return checklistListViewCache;
+      }
+      const filtered = filterChecklistListItems(snapshot.items);
+      const grouped = groupChecklistListItems(filtered);
+      checklistListViewCache = { signature, filtered, grouped };
+      return checklistListViewCache;
+    }
+
     function renderChecklistListContent(items) {
       const signature = [
         typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
@@ -316,8 +356,8 @@
         applyChecklistKeywordFilter();
         return;
       }
-      const filtered = filterChecklistListItems(items);
-      const grouped = groupChecklistListItems(filtered);
+      const viewSnapshot = getChecklistListViewSnapshot(items);
+      const grouped = viewSnapshot.grouped;
       const html = grouped.length ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('') : '';
       checklistListRenderCache = { signature, html };
       contentEl.dataset.checklistRenderSignature = signature;
@@ -399,7 +439,7 @@
     const opts = options || {};
     const syncPromise = opts.skipSync
       ? Promise.resolve()
-      : syncChecklistsFromM365({ silent: true }).catch((error) => {
+      : scheduleDeferredPromise(() => syncChecklistsFromM365({ silent: true }), 250).catch((error) => {
         console.warn('checklist list sync failed', error);
       });
     const snapshot = getChecklistListSnapshot(getVisibleChecklists());

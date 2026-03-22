@@ -106,6 +106,28 @@
     let trainingRosterFocusTrackerInstalled = false;
     let trainingRosterGroupingCache = { token: '', groups: null };
     let trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
+    function scheduleDeferredPromise(taskFactory, timeoutMs) {
+      const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
+      return new Promise((resolve) => {
+        const run = function () {
+          try {
+            resolve(Promise.resolve(typeof taskFactory === 'function' ? taskFactory() : null));
+          } catch (error) {
+            console.warn('deferred task failed to start', error);
+            resolve(Promise.resolve());
+          }
+        };
+        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(run, { timeout: delay });
+          return;
+        }
+        if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+          window.setTimeout(run, delay);
+          return;
+        }
+        run();
+      });
+    }
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
     return cards.map(([label, value, tone]) => '<div class="training-mini-card training-mini-card--' + tone + '"><div class="training-mini-label">' + label + '</div><div class="training-mini-value">' + value + '</div></div>').join('');
@@ -392,10 +414,17 @@
           key,
           unit: String(row && row.unit || '').trim() || key,
           statsUnit: String(row && row.statsUnit || getTrainingStatsUnit(row && row.unit) || '').trim() || getTrainingStatsUnit(row && row.unit) || key,
-          rows: []
+          rows: [],
+          totalCount: 0,
+          importedCount: 0,
+          manualCount: 0
         });
       }
-      groups.get(key).rows.push(row);
+      const group = groups.get(key);
+      group.rows.push(row);
+      group.totalCount += 1;
+      if (row && row.source === 'import') group.importedCount += 1;
+      if (row && row.source === 'manual') group.manualCount += 1;
     });
     const grouped = Array.from(groups.values())
       .map((group) => ({
@@ -435,10 +464,10 @@
 
   function buildTrainingRosterGroupSummary(group) {
     const rows = Array.isArray(group && group.rows) ? group.rows : [];
-    const imported = rows.filter((row) => row.source === 'import').length;
-    const manual = rows.filter((row) => row.source === 'manual').length;
+    const imported = Number(group && group.importedCount || rows.filter((row) => row.source === 'import').length);
+    const manual = Number(group && group.manualCount || rows.filter((row) => row.source === 'manual').length);
     const stats = [
-      ['總筆數', rows.length],
+      ['總筆數', Number(group && group.totalCount || rows.length)],
       ['管理者匯入', imported],
       ['填報新增', manual]
     ];
@@ -472,11 +501,12 @@
     const bodyRows = rows.length
       ? rows.map((row, rowIndex) => buildTrainingRosterRow(row, rowIndex + 1, selectedRosterIds.has(row.id))).join('')
       : buildTrainingEmptyTableRow(9, '尚無名單資料', '', 24);
-    const subtitle = '統計單位：' + esc(group.statsUnit || '—') + '｜填報單位：' + esc(group.unit || '—') + '｜可展開 ' + rows.length + ' 位人員';
+    const totalCount = Number(group && group.totalCount || rows.length);
+    const subtitle = '統計單位：' + esc(group.statsUnit || '—') + '｜填報單位：' + esc(group.unit || '—') + '｜可展開 ' + totalCount + ' 位人員';
     return '<details class="training-group-card training-roster-group-card" ' + (index === 0 ? 'open' : '') + '>'
       + '<summary class="training-group-summary">'
       + '<div><span class="training-group-title">' + esc(group.unit || '未指定單位') + '</span><div class="training-group-subtitle">' + subtitle + '</div>' + buildTrainingRosterGroupSummary(group) + '</div>'
-      + '<div class="training-group-meta"><span class="training-inline-status">' + esc(String(rows.length || 0)) + ' 人</span><span class="training-group-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div>'
+      + '<div class="training-group-meta"><span class="training-inline-status">' + esc(String(totalCount || 0)) + ' 人</span><span class="training-group-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div>'
       + '</summary>'
       + buildTrainingTableMarkup('<th style="width:56px"><input type="checkbox" class="training-roster-group-select-all" data-roster-group="' + esc(group.key || '') + '"></th><th style="width:68px">編號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:160px">建立者</th><th style="width:160px">建立時間</th><th style="width:120px">操作</th>', bodyRows)
       + '</details>';
@@ -653,12 +683,13 @@
     exportTrainingDetailCsv(form);
   }
 
-  async function renderTraining() {
-    try {
-      await syncTrainingFormsFromM365({ silent: true });
-    } catch (error) {
-      console.warn('training list sync failed', error);
-    }
+  async function renderTraining(options) {
+    const opts = options || {};
+    const syncPromise = opts.skipSync
+      ? Promise.resolve()
+      : scheduleDeferredPromise(() => syncTrainingFormsFromM365({ silent: true }), 250).catch((error) => {
+        console.warn('training list sync failed', error);
+      });
     const visibleForms = getVisibleTrainingForms().slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const summary = {
       total: visibleForms.length,
@@ -797,6 +828,15 @@
       + '</div>'
       + contentHtml
       + '</div>';
+
+    if (!opts.skipSync) {
+      syncPromise.then(() => {
+        if (!String(window.location.hash || '').startsWith('#training')) return;
+        renderTraining({ skipSync: true });
+      }).catch((error) => {
+        console.warn('training list background sync failed', error);
+      });
+    }
 
     document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(visibleForms));
     document.getElementById('training-expand-groups')?.addEventListener('click', () => {
@@ -1943,11 +1983,11 @@
     );
     const syncPromise = opts.skipSync
       ? Promise.resolve()
-      : syncTrainingRostersFromM365({ silent: true }).catch((error) => {
+      : scheduleDeferredPromise(() => syncTrainingRostersFromM365({ silent: true }), 250).catch((error) => {
         console.warn('training roster page sync failed', error);
       });
 
-    const rawRosters = getAllTrainingRosters().slice();
+    const rawRosters = getAllTrainingRosters();
     const snapshot = getTrainingRosterSnapshot(rawRosters);
     const rosters = snapshot.rosters;
     const hiddenCount = snapshot.hiddenCount;
