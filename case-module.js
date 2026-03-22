@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createCaseModule = function createCaseModule(deps) {
     const {
       STATUSES,
@@ -204,6 +204,47 @@
     return snapshot;
   }
 
+  var dashboardSnapshotCache = { items: null, snapshot: null };
+  var caseListRenderCache = { items: null, filter: '', search: '', snapshot: null };
+
+  function getCachedDashboardSnapshot(items) {
+    if (dashboardSnapshotCache.items === items && dashboardSnapshotCache.snapshot) return dashboardSnapshotCache.snapshot;
+    var snapshot = buildDashboardSnapshot(items);
+    dashboardSnapshotCache = { items: items, snapshot: snapshot };
+    return snapshot;
+  }
+
+  function getCachedCaseListSnapshot(items) {
+    var list = Array.isArray(items) ? items : [];
+    var filter = curFilter || '全部';
+    var search = String(curSearch || '').trim().toLowerCase();
+    if (caseListRenderCache.items === list && caseListRenderCache.filter === filter && caseListRenderCache.search === search && caseListRenderCache.snapshot) {
+      return caseListRenderCache.snapshot;
+    }
+    var filtered = [];
+    for (var index = 0; index < list.length; index += 1) {
+      var item = list[index];
+      if (!item) continue;
+      if (filter === '已逾期') {
+        if (!isOverdue(item)) continue;
+      } else if (filter !== '全部' && item.status !== filter) {
+        continue;
+      }
+      if (search) {
+        var haystack = String(item.searchText || [item.id, item.problemDesc, item.handlerName, item.proposerName, item.source, item.status, item.deficiencyType].filter(Boolean).join(' ').toLowerCase());
+        if (haystack.indexOf(search) < 0) continue;
+      }
+      filtered.push(item);
+    }
+    filtered.sort(function (a, b) {
+      return (Number(b && b.createdAtTs) || Date.parse(b && b.createdAt || '') || 0) - (Number(a && a.createdAtTs) || Date.parse(a && a.createdAt || '') || 0);
+    });
+    var rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : buildCaseEmptyTableRow(8, 'search', '沒有符合條件的矯正單');
+    var snapshot = { total: list.length, filtered: filtered, filteredCount: filtered.length, rows: rows };
+    caseListRenderCache = { items: list, filter: filter, search: search, snapshot: snapshot };
+    return snapshot;
+  }
+
   function buildCaseEmptyTableRow(colspan, iconName, title, padding) {
     return '<tr><td colspan="' + colspan + '"><div class="empty-state" style="padding:' + (padding || 32) + 'px"><div class="empty-state-icon">' + ic(iconName || 'inbox') + '</div><div class="empty-state-title">' + esc(title) + '</div></div></td></tr>';
   }
@@ -373,7 +414,7 @@
     scheduleDashboardHydration(function () {
       if (renderToken !== dashboardRenderToken) return;
       var items = getVisibleItems();
-      var snapshot = buildDashboardSnapshot(items);
+      var snapshot = getCachedDashboardSnapshot(items);
       var total = snapshot.total;
       var pending = snapshot.pendingCount;
       var overdue = snapshot.overdueCount;
@@ -443,17 +484,13 @@
 
   var curFilter = '全部', curSearch = '';
   function renderList() {
-    var items = getVisibleItems(); var filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); var filtered = items.slice();
-    if (curFilter === '已逾期') filtered = items.filter(function (i) { return isOverdue(i); }); else if (curFilter !== '全部') filtered = items.filter(function (i) { return i.status === curFilter; });
-    if (curSearch) { var q = curSearch.toLowerCase(); filtered = filtered.filter(function (i) { return i.id.toLowerCase().indexOf(q) >= 0 || (i.problemDesc || '').toLowerCase().indexOf(q) >= 0 || i.handlerName.toLowerCase().indexOf(q) >= 0 || i.proposerName.toLowerCase().indexOf(q) >= 0; }); }
-    filtered.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-    var rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : buildCaseEmptyTableRow(8, 'search', '沒有符合條件的矯正單');
+    var items = getVisibleItems(); var filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); var listSnapshot = getCachedCaseListSnapshot(items); var filtered = listSnapshot.filtered;
     var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
-      '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + items.length + ' 筆，顯示 ' + filtered.length + ' 筆</p></div>' + createBtn + '</div>' +
+      '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + listSnapshot.total + ' 筆，顯示 ' + listSnapshot.filteredCount + ' 筆</p></div>' + createBtn + '</div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
-      buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', rows), { style: 'padding:0;overflow:hidden;' }) + '</div>';
+      buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', listSnapshot.rows), { style: 'padding:0;overflow:hidden;' }) + '</div>';
     refreshIcons();
     bindCopyButtons();
     let searchRenderTimer = null;

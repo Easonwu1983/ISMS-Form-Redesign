@@ -1370,11 +1370,16 @@
     function getFilteredRows() {
       const keyword = String(document.getElementById('training-search')?.value || '').trim().toLowerCase();
       const focusOnly = !!document.getElementById('training-only-focus')?.checked;
-      return rowsState.map((row, index) => ({ row, index })).filter(({ row }) => {
-        const haystack = [row.name, row.unitName, row.identity, row.jobTitle].join(' ').toLowerCase();
-        return (!keyword || haystack.includes(keyword))
-          && (!focusOnly || !isTrainingRecordComplete(row) || !isTrainingRecordReadyForSubmit(row));
-      });
+      const result = [];
+      for (let index = 0; index < rowsState.length; index += 1) {
+        const row = rowsState[index];
+        if (!row) continue;
+        const haystack = String(row.searchText || [row.name, row.unitName, row.identity, row.jobTitle].join(' ').toLowerCase());
+        if (keyword && !haystack.includes(keyword)) continue;
+        if (focusOnly && isTrainingRecordComplete(row) && isTrainingRecordReadyForSubmit(row)) continue;
+        result.push({ row, index });
+      }
+      return result;
     }
 
     function renderRows() {

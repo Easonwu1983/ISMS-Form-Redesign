@@ -3475,10 +3475,10 @@
       String(current && current.activeUnit || ''),
       Array.isArray(current && current.units) ? current.units.join('|') : ''
     ].join('::');
-    if (visibleItemsCacheKey === cacheKey) return visibleItemsCacheValue.slice();
+    if (visibleItemsCacheKey === cacheKey) return visibleItemsCacheValue;
     visibleItemsCacheValue = getPolicyModule().getVisibleItems(user);
     visibleItemsCacheKey = cacheKey;
-    return visibleItemsCacheValue.slice();
+    return visibleItemsCacheValue;
   }
   function canAccessItem(item, user = currentUser()) { return getPolicyModule().canAccessItem(item, user); }
   function isItemHandler(item, user = currentUser()) { return getPolicyModule().isItemHandler(item, user); }

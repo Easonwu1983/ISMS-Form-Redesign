@@ -631,9 +631,30 @@
         next.documentNo = documentNo;
         changed = true;
       }
+        next.searchText = [
+          next.id,
+          next.deficiencyType,
+          next.source,
+        next.status,
+        next.proposerUnit,
+        next.proposerUnitCode,
+        next.proposerName,
+        next.proposerUsername,
+        next.handlerUnit,
+        next.handlerUnitCode,
+        next.handlerName,
+        next.handlerUsername,
+        next.problemDesc,
+        next.handlerSuggestion,
+        next.correctiveResult,
+        next.correctiveReason,
+          next.correctiveDueDate,
+          next.nextTrackDate
+        ].filter(Boolean).join(' ').toLowerCase();
+        next.createdAtTs = Date.parse(next.createdAt || next.updatedAt || next.proposerDate || '') || 0;
 
-      const parsedAutoId = parseCorrectionAutoId(next.id);
-      if (parsedAutoId) {
+        const parsedAutoId = parseCorrectionAutoId(next.id);
+        if (parsedAutoId) {
         if (next.documentNo !== parsedAutoId.documentNo) {
           next.documentNo = parsedAutoId.documentNo;
           changed = true;
@@ -1031,6 +1052,15 @@
       if (parsedId) {
         base.id = buildChecklistIdByDocument(parsedId.documentNo, parsedId.sequence);
       }
+      base.searchText = [
+        base.id,
+        base.unit,
+        getChecklistTier1Unit(base),
+        base.fillerName,
+        base.fillerUsername,
+        base.auditYear,
+        base.status
+      ].filter(Boolean).join(' ').toLowerCase();
       return base;
     }
 
@@ -1159,6 +1189,14 @@
         unitName,
         identity: String((row && row.identity) || '').trim(),
         jobTitle: String((row && row.jobTitle) || '').trim(),
+        searchText: [
+          String((row && row.name) || '').trim(),
+          unitName,
+          String((row && row.identity) || '').trim(),
+          String((row && row.jobTitle) || '').trim(),
+          statsUnit,
+          unit
+        ].filter(Boolean).join(' ').toLowerCase(),
         source: inferredManual ? 'manual' : 'import',
         createdBy: creatorName || '系統',
         createdByUsername: creatorUsername,
