@@ -159,7 +159,17 @@ async function logout(page) {
 }
 
 async function resetApp(page) {
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  const freshBaseUrl = (() => {
+    try {
+      const url = new URL(BASE_URL);
+      url.searchParams.set('cb', String(Date.now()));
+      url.hash = '';
+      return url.toString();
+    } catch (_) {
+      return BASE_URL + (BASE_URL.includes('?') ? '&' : '?') + 'cb=' + Date.now();
+    }
+  })();
+  await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
   await page.evaluate(async () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -183,7 +193,7 @@ async function resetApp(page) {
     }
     window.location.hash = '';
   });
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
   await page.waitForSelector('[data-testid="login-form"]', { timeout: 45000 });
 }

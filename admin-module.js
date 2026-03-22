@@ -343,6 +343,47 @@
       return { label: key || '未知', tone: 'pending' };
     }
 
+    function buildEmptySecurityWindowInventory() {
+      return {
+        generatedAt: new Date().toISOString(),
+        units: [],
+        people: [],
+        summary: {
+          totalUnits: 0,
+          unitsWithWindows: 0,
+          unitsWithoutWindows: 0,
+          peopleWithWindows: 0,
+          peopleWithoutWindow: 0,
+          pendingApplications: 0,
+          exemptedUnits: 0
+        }
+      };
+    }
+
+    function normalizeSecurityWindowInventory(inventory) {
+      const fallback = buildEmptySecurityWindowInventory();
+      if (!inventory || typeof inventory !== 'object') return fallback;
+      const units = Array.isArray(inventory.units) ? inventory.units : [];
+      const people = Array.isArray(inventory.people) ? inventory.people : [];
+      const summary = inventory.summary && typeof inventory.summary === 'object'
+        ? inventory.summary
+        : fallback.summary;
+      return {
+        generatedAt: String(inventory.generatedAt || fallback.generatedAt || ''),
+        units,
+        people,
+        summary: {
+          totalUnits: Number(summary.totalUnits || 0),
+          unitsWithWindows: Number(summary.unitsWithWindows || 0),
+          unitsWithoutWindows: Number(summary.unitsWithoutWindows || 0),
+          peopleWithWindows: Number(summary.peopleWithWindows || 0),
+          peopleWithoutWindow: Number(summary.peopleWithoutWindow || 0),
+          pendingApplications: Number(summary.pendingApplications || 0),
+          exemptedUnits: Number(summary.exemptedUnits || 0)
+        }
+      };
+    }
+
     function renderSecurityWindowPersonBadge(person) {
       const roles = Array.isArray(person && person.securityRoles) ? person.securityRoles : [];
       if (!roles.length) return '<span class="badge-role badge-pending">未設定</span>';
@@ -1078,13 +1119,17 @@
       }
     }
 
-    const safeInventory = inventory && typeof inventory === 'object'
-      ? inventory
-      : { generatedAt: new Date().toISOString(), units: [], people: [], summary: { totalUnits: 0, unitsWithWindows: 0, unitsWithoutWindows: 0, peopleWithoutWindow: 0 } };
+    const safeInventory = normalizeSecurityWindowInventory(inventory);
     securityWindowState.inventory = safeInventory;
-    securityWindowState.lastLoadedAt = safeInventory && safeInventory.generatedAt ? safeInventory.generatedAt : new Date().toISOString();
+    securityWindowState.lastLoadedAt = safeInventory.generatedAt || new Date().toISOString();
     securityWindowState.filterSignature = filterSignature;
-    const filtered = filterSecurityWindowInventory(safeInventory, resolvedFilters);
+    let filtered;
+    try {
+      filtered = filterSecurityWindowInventory(safeInventory, resolvedFilters);
+    } catch (error) {
+      console.warn('security window inventory filter failed', error);
+      filtered = filterSecurityWindowInventory(buildEmptySecurityWindowInventory(), resolvedFilters);
+    }
     const summary = filtered.summary;
     const unitCardsHtml = renderSecurityWindowUnitCards(filtered.units);
     const peopleRowsHtml = renderSecurityWindowPersonRows(filtered.people);
