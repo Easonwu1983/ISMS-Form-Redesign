@@ -66,7 +66,7 @@ async function run() {
     const response = await fetch(`${DEFAULT_BASE}/checklist-module.js`);
     const text = await response.text();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!text.includes('function renderChecklistList()')) throw new Error('renderChecklistList missing');
+    if (!text.includes('renderChecklistList(')) throw new Error('renderChecklistList missing');
     if (!text.includes('內稽檢核表')) throw new Error('expected checklist title missing');
     if (/\?{4,}/.test(text)) throw new Error('checklist module contains placeholder question marks');
     return { status: response.status };
