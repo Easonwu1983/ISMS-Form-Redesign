@@ -15,6 +15,7 @@
       getScopedUnit,
       getAuthorizedUnits,
       getVisibleChecklists,
+      getStoreTouchToken,
       canEditChecklist,
       getUnitGovernanceMode,
       findExistingChecklistForUnitYear,
@@ -101,6 +102,8 @@
       status: 'all',
       keyword: ''
     };
+    let checklistListRenderCache = { signature: '', html: '' };
+    let checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
 
     const CHECKLIST_LIST_STATUS_OPTIONS = [
       { value: 'all', label: '全部' },
@@ -283,13 +286,43 @@
         + '</div>';
     }
 
+    function getChecklistListSnapshot(items) {
+      const source = Array.isArray(items) ? items.slice() : [];
+      const token = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '';
+      const cacheKey = token + '::' + String(source.length);
+      if (checklistListSnapshotCache.token === cacheKey && Array.isArray(checklistListSnapshotCache.items)) {
+        return checklistListSnapshotCache;
+      }
+      source.sort((a, b) => {
+        const yearDiff = Number(getChecklistAuditYear(b) || 0) - Number(getChecklistAuditYear(a) || 0);
+        if (yearDiff) return yearDiff;
+        return new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0);
+      });
+      const years = buildChecklistListQueryYearOptions(source);
+      checklistListSnapshotCache = { token: cacheKey, length: source.length, items: source, years };
+      return checklistListSnapshotCache;
+    }
+
     function renderChecklistListContent(items) {
-      const filtered = filterChecklistListItems(items);
-      const grouped = groupChecklistListItems(filtered);
+      const signature = [
+        typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
+        String(checklistBrowseState.year || 'all'),
+        String(checklistBrowseState.status || 'all'),
+        String(checklistBrowseState.keyword || '')
+      ].join('::');
       const contentEl = document.querySelector('.cl-list-content');
       if (!contentEl) return;
+      if (checklistListRenderCache.signature === signature && contentEl.dataset.checklistRenderSignature === signature) {
+        applyChecklistKeywordFilter();
+        return;
+      }
+      const filtered = filterChecklistListItems(items);
+      const grouped = groupChecklistListItems(filtered);
+      const html = grouped.length ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('') : '';
+      checklistListRenderCache = { signature, html };
+      contentEl.dataset.checklistRenderSignature = signature;
       contentEl.innerHTML = `<div class="card checklist-empty-card cl-list-empty-state" hidden><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有符合條件的檢核表</div><div class="empty-state-desc">可切換年份、狀態或關鍵字重新搜尋。</div></div></div>`
-        + (grouped.length ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('') : '');
+        + html;
       refreshIcons();
       bindCopyButtons();
       applyChecklistKeywordFilter();
@@ -362,18 +395,16 @@
       return '<details class="cl-year-accordion" open><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span>' + deleteButton + '<span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';
     }
 
-  async function renderChecklistList() {
-    try {
-      await syncChecklistsFromM365({ silent: true });
-    } catch (error) {
-      console.warn('checklist list sync failed', error);
-    }
-    const checklists = getVisibleChecklists().slice().sort((a, b) => {
-      const yearDiff = Number(getChecklistAuditYear(b) || 0) - Number(getChecklistAuditYear(a) || 0);
-      if (yearDiff) return yearDiff;
-      return new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0);
-    });
-    const years = buildChecklistListQueryYearOptions(checklists);
+    async function renderChecklistList(options) {
+    const opts = options || {};
+    const syncPromise = opts.skipSync
+      ? Promise.resolve()
+      : syncChecklistsFromM365({ silent: true }).catch((error) => {
+        console.warn('checklist list sync failed', error);
+      });
+    const snapshot = getChecklistListSnapshot(getVisibleChecklists());
+    const checklists = snapshot.items;
+    const years = snapshot.years;
     if (!checklistBrowseState.year || !years.includes(checklistBrowseState.year) && checklistBrowseState.year !== 'all') {
       checklistBrowseState.year = years.includes(String(new Date().getFullYear() - 1911)) ? String(new Date().getFullYear() - 1911) : (years[0] || 'all');
     }
@@ -395,6 +426,14 @@
     syncChecklistListToolbarState();
     refreshIcons();
     bindCopyButtons();
+    if (!opts.skipSync && syncPromise && typeof syncPromise.then === 'function') {
+      syncPromise.then(() => {
+        if (!String(window.location.hash || '').startsWith('#checklist')) return;
+        renderChecklistList({ skipSync: true });
+      }).catch((error) => {
+        console.warn('checklist list background rerender failed', error);
+      });
+    }
 
     const keywordEl = document.getElementById('cl-list-keyword');
     const statusEl = document.getElementById('cl-list-status');
@@ -1311,7 +1350,7 @@
       const result = await deleteChecklistsByYear(targetYear);
       const deletedCount = Number(result && result.deletedCount || 0);
       toast(deletedCount ? ('已刪除 ' + label + ' 資料，共 ' + deletedCount + ' 筆') : (label + ' 沒有可刪除的資料'), deletedCount ? 'success' : 'info');
-      await renderChecklistList();
+      await renderChecklistList({ skipSync: true });
     });
   }
   registerActionHandlers('checklist', {

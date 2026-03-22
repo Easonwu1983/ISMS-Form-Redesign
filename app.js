@@ -645,6 +645,7 @@
       getScopedUnit,
       getAuthorizedUnits,
       getVisibleChecklists,
+      getStoreTouchToken,
       canEditChecklist,
       findExistingChecklistForUnitYear,
       getChecklist,
@@ -738,6 +739,7 @@
       getTrainingForm,
       getAllTrainingForms,
       getAllTrainingRosters,
+      getStoreTouchToken,
       upsertTrainingForm,
       updateTrainingForm,
       addTrainingRosterPerson,
@@ -855,9 +857,18 @@
     message: '',
     error: ''
   };
+  const SYSTEM_USERS_SYNC_FRESHNESS_MS = 30000;
+  let systemUsersSyncCachePromise = null;
   function setSystemUserRepositoryState(patch) {
     Object.assign(systemUserRepositoryState, patch || {});
     return { ...systemUserRepositoryState };
+  }
+  function isSystemUsersSyncFresh() {
+    if (!systemUserRepositoryState.ready) return false;
+    if (systemUserRepositoryState.mode !== 'm365-api') return false;
+    const parsedAt = Date.parse(String(systemUserRepositoryState.lastSyncAt || '').trim());
+    if (!Number.isFinite(parsedAt)) return false;
+    return (Date.now() - parsedAt) < SYSTEM_USERS_SYNC_FRESHNESS_MS;
   }
   function getRuntimeM365Config() {
     const raw = (typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__) || {};
@@ -1553,6 +1564,8 @@
     message: '',
     error: ''
   };
+  const REVIEW_SCOPE_SYNC_FRESHNESS_MS = 30000;
+  let reviewScopeSyncCachePromise = null;
   function setReviewScopeRepositoryState(patch) {
     Object.assign(reviewScopeRepositoryState, patch || {});
     return { ...reviewScopeRepositoryState };
@@ -1560,12 +1573,28 @@
   function getReviewScopeRepositoryState() {
     return { ...reviewScopeRepositoryState };
   }
+  function isReviewScopesSyncFresh() {
+    if (!reviewScopeRepositoryState.ready) return false;
+    if (reviewScopeRepositoryState.mode !== 'm365-api') return false;
+    const parsedAt = Date.parse(String(reviewScopeRepositoryState.lastSyncAt || '').trim());
+    if (!Number.isFinite(parsedAt)) return false;
+    return (Date.now() - parsedAt) < REVIEW_SCOPE_SYNC_FRESHNESS_MS;
+  }
   async function syncUsersFromM365(options) {
     const opts = options || {};
     const user = currentUser();
     const mode = getSystemUsersMode();
     const strict = isStrictRemoteDataMode();
     setSystemUserRepositoryState({ mode: mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (!opts.force && isSystemUsersSyncFresh()) {
+      return setSystemUserRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastSyncAt: systemUserRepositoryState.lastSyncAt,
+        message: 'system users loaded from fresh cache',
+        error: ''
+      });
+    }
     if (mode !== 'm365-api') {
       return setSystemUserRepositoryState({ ready: false, message: '目前使用本機帳號模式', error: '' });
     }
@@ -1621,6 +1650,15 @@
     const user = currentUser();
     const mode = getReviewScopesMode();
     setReviewScopeRepositoryState({ mode: mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (!opts.force && isReviewScopesSyncFresh()) {
+      return setReviewScopeRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastSyncAt: reviewScopeRepositoryState.lastSyncAt,
+        message: 'review scopes loaded from fresh cache',
+        error: ''
+      });
+    }
     if (mode !== 'm365-api') {
       return setReviewScopeRepositoryState({ ready: false, message: '目前未啟用審核權限矩陣後端', error: '' });
     }
@@ -2039,9 +2077,18 @@
     message: '',
     error: ''
   };
+  const CORRECTIVE_ACTION_SYNC_FRESHNESS_MS = 30000;
+  let correctiveActionSyncCachePromise = null;
   function setCorrectiveActionRepositoryState(patch) {
     Object.assign(correctiveActionRepositoryState, patch || {});
     return { ...correctiveActionRepositoryState };
+  }
+  function isCorrectiveActionSyncFresh() {
+    if (!correctiveActionRepositoryState.ready) return false;
+    if (correctiveActionRepositoryState.mode !== 'm365-api') return false;
+    const parsedAt = Date.parse(String(correctiveActionRepositoryState.lastSyncAt || '').trim());
+    if (!Number.isFinite(parsedAt)) return false;
+    return (Date.now() - parsedAt) < CORRECTIVE_ACTION_SYNC_FRESHNESS_MS;
   }
   function getCorrectiveActionRepositoryState() {
     return { ...correctiveActionRepositoryState };
@@ -2094,6 +2141,15 @@
     const mode = client.getCorrectiveActionMode();
     const strict = isStrictRemoteDataMode();
     setCorrectiveActionRepositoryState({ mode, source: mode === 'm365-api' ? 'remote' : 'local' });
+    if (!opts.force && isCorrectiveActionSyncFresh()) {
+      return setCorrectiveActionRepositoryState({
+        ready: true,
+        source: 'remote',
+        lastSyncAt: correctiveActionRepositoryState.lastSyncAt,
+        message: 'corrective actions loaded from fresh cache',
+        error: ''
+      });
+    }
     if (mode !== 'm365-api') {
       return setCorrectiveActionRepositoryState({
         ready: false,

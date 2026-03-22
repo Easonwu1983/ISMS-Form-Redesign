@@ -38,6 +38,7 @@
       getTrainingForm,
       getAllTrainingForms,
       getAllTrainingRosters,
+      getStoreTouchToken,
       upsertTrainingForm,
       updateTrainingForm,
       addTrainingRosterPerson,
@@ -103,6 +104,8 @@
 
     let lastTrainingRosterFocusState = null;
     let trainingRosterFocusTrackerInstalled = false;
+    let trainingRosterGroupingCache = { token: '', groups: null };
+    let trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
     return cards.map(([label, value, tone]) => '<div class="training-mini-card training-mini-card--' + tone + '"><div class="training-mini-label">' + label + '</div><div class="training-mini-value">' + value + '</div></div>').join('');
@@ -374,6 +377,13 @@
   }
 
   function groupTrainingRosterEntries(rows) {
+      const rosterToken = typeof getStoreTouchToken === 'function'
+        ? String(getStoreTouchToken('training-rosters') || '')
+        : '';
+    const cacheKey = rosterToken + '::' + String(Array.isArray(rows) ? rows.length : 0);
+    if (trainingRosterGroupingCache.token === cacheKey && Array.isArray(trainingRosterGroupingCache.groups)) {
+      return trainingRosterGroupingCache.groups;
+    }
     const groups = new Map();
     (Array.isArray(rows) ? rows : []).forEach((row) => {
       const key = getTrainingRosterGroupKey(row);
@@ -387,13 +397,41 @@
       }
       groups.get(key).rows.push(row);
     });
-    return Array.from(groups.values())
+    const grouped = Array.from(groups.values())
       .map((group) => ({
         ...group,
         rows: sortTrainingRosterEntries(group.rows || [])
       }))
       .sort((a, b) => compareZhStroke(a.unit, b.unit) || compareZhStroke(a.statsUnit, b.statsUnit));
-  }
+      trainingRosterGroupingCache = { token: cacheKey, groups: grouped };
+      return grouped;
+    }
+
+    function getTrainingRosterSnapshot(rawRosters) {
+      const source = Array.isArray(rawRosters) ? rawRosters : [];
+      const rosterToken = typeof getStoreTouchToken === 'function'
+        ? String(getStoreTouchToken('training-rosters') || '')
+        : '';
+      const cacheKey = rosterToken + '::' + String(source.length);
+      if (trainingRosterSnapshotCache.token === cacheKey && Array.isArray(trainingRosterSnapshotCache.rosters)) {
+        return trainingRosterSnapshotCache;
+      }
+      const rosters = source.filter((row) => isRenderableTrainingRoster(row));
+      const hiddenCount = source.length - rosters.length;
+      const summary = {
+        total: rosters.length,
+        imported: rosters.filter((row) => row.source === 'import').length,
+        manual: rosters.filter((row) => row.source === 'manual').length
+      };
+      trainingRosterSnapshotCache = {
+        token: cacheKey,
+        rawLength: source.length,
+        rosters,
+        hiddenCount,
+        summary
+      };
+      return trainingRosterSnapshotCache;
+    }
 
   function buildTrainingRosterGroupSummary(group) {
     const rows = Array.isArray(group && group.rows) ? group.rows : [];
@@ -1910,13 +1948,10 @@
       });
 
     const rawRosters = getAllTrainingRosters().slice();
-    const rosters = rawRosters.filter((row) => isRenderableTrainingRoster(row));
-    const hiddenCount = rawRosters.length - rosters.length;
-    const summary = {
-      total: rosters.length,
-      imported: rosters.filter((row) => row.source === 'import').length,
-      manual: rosters.filter((row) => row.source === 'manual').length
-    };
+    const snapshot = getTrainingRosterSnapshot(rawRosters);
+    const rosters = snapshot.rosters;
+    const hiddenCount = snapshot.hiddenCount;
+    const summary = snapshot.summary;
     const deferRosterGroups = rosters.length > 500 && !opts.deferFullRender;
     const importedPreviewHtml = (opts.rosterNames || opts.rosterIds) && deferRosterGroups
       ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
@@ -1939,8 +1974,12 @@
       };
       if (syncPromise && typeof syncPromise.then === 'function') {
         syncPromise.then(() => {
+          if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(rerender, { timeout: 250 });
+            return;
+          }
           if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-            window.setTimeout(rerender, 2000);
+            window.setTimeout(rerender, 250);
             return;
           }
           rerender();
