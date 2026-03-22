@@ -1097,15 +1097,7 @@
     let inventory = canRenderFromCache ? securityWindowState.inventory : null;
     if (!inventory) {
       try {
-        if (!isSecurityWindowInventoryFresh() && !securityWindowLoadPromise) {
-          loadSecurityWindowInventory(false).then(() => {
-            if (document.getElementById('security-window-filter-form')) {
-              renderSecurityWindow(resolvedFilters);
-            }
-          }).catch((error) => {
-            console.warn('security window background refresh failed', error);
-          });
-        } else if (securityWindowLoadPromise) {
+        if (securityWindowLoadPromise) {
           inventory = await securityWindowLoadPromise;
         } else {
           app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">盤點全校各單位資安窗口、待審核申請與尚未設定狀態，僅最高管理者可檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在載入資安窗口盤點資料...</div></div>`;
