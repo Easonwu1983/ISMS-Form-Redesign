@@ -29,20 +29,116 @@ async function setChoice(page, testId, checked = true) {
   }, { testId, checked });
 }
 
+async function upsertTempUnitManager(page, suffix, avoidUnit) {
+  const username = `probe-unit-manager-${suffix}`;
+  const password = `ProbePass${suffix}A1`;
+  const candidateUnits = ['主計室', '秘書室', '圖書館', '教務處', '總務處', '學務處', '人事室', '研究發展處'];
+  const unit = candidateUnits.find((entry) => entry && entry !== avoidUnit) || `測試單位-${suffix}`;
+  const response = await page.evaluate(async ({ username, password, unit, suffix }) => {
+    const user = window._authModule && typeof window._authModule.currentUser === 'function'
+      ? window._authModule.currentUser()
+      : null;
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-ISMS-Contract-Version': '2026-03-12'
+    };
+    if (user && user.sessionToken) headers.Authorization = 'Bearer ' + String(user.sessionToken);
+    if (user && user.activeUnit) headers['X-ISMS-Active-Unit'] = encodeURIComponent(String(user.activeUnit));
+    const body = {
+      action: 'system-user.upsert',
+      payload: {
+        username,
+        password,
+        name: `Flow Probe Manager ${suffix}`,
+        email: `${username}@example.com`,
+        role: '單位管理員',
+        securityRoles: ['一級單位資安窗口'],
+        unit,
+        units: [unit],
+        activeUnit: unit,
+        forcePasswordChange: false
+      },
+      clientContext: {
+        contractVersion: '2026-03-12',
+        source: 'role-flow-probe',
+        frontendOrigin: window.location.origin,
+        frontendHash: window.location.hash || '',
+        sentAt: new Date().toISOString()
+      }
+    };
+    const res = await fetch('/api/system-users/upsert', {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify(body)
+    });
+    const text = await res.text();
+    let parsed = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch (_) {
+      parsed = { ok: false, message: text };
+    }
+    return {
+      ok: res.ok && parsed && parsed.ok !== false,
+      status: res.status,
+      parsed
+    };
+  }, { username, password, unit, suffix });
+  if (!response.ok) {
+    throw new Error(`failed to create temp unit manager: ${response.status} ${JSON.stringify(response.parsed || {})}`);
+  }
+  return { username, password, unit };
+}
+
+async function deleteTempUnitManager(page, username) {
+  if (!username) return;
+  await page.evaluate(async ({ username }) => {
+    const user = window._authModule && typeof window._authModule.currentUser === 'function'
+      ? window._authModule.currentUser()
+      : null;
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-ISMS-Contract-Version': '2026-03-12'
+    };
+    if (user && user.sessionToken) headers.Authorization = 'Bearer ' + String(user.sessionToken);
+    if (user && user.activeUnit) headers['X-ISMS-Active-Unit'] = encodeURIComponent(String(user.activeUnit));
+    const body = {
+      action: 'system-user.delete',
+      payload: { username },
+      clientContext: {
+        contractVersion: '2026-03-12',
+        source: 'role-flow-probe',
+        frontendOrigin: window.location.origin,
+        frontendHash: window.location.hash || '',
+        sentAt: new Date().toISOString()
+      }
+    };
+    await fetch('/api/system-users/' + encodeURIComponent(username) + '/delete', {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify(body)
+    });
+  }, { username }).catch(() => {});
+}
+
 (async () => {
+  const probeSuffix = `${Date.now()}`;
   const results = createResultEnvelope({
     steps: [],
     context: {
       admin: { username: 'admin', password: 'admin123' },
-      reporter: { username: 'unit1', password: 'unit123' },
-      proxyReporter: { username: 'user1', password: 'user123' },
-      viewer: { username: 'viewer1', password: 'viewer123' }
+      unitManager: { username: 'unit1', password: 'unit123' },
+      otherUnitManager: null,
+      probeSuffix
     }
   });
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
   attachDiagnostics(page, results);
   let carId = null;
+  let tempManager = null;
   try {
     await resetApp(page);
 
@@ -58,11 +154,13 @@ async function setChoice(page, testId, checked = true) {
         select.value = target.value;
         select.dispatchEvent(new Event('change', { bubbles: true }));
       });
+      const handlerUnit = await page.$eval('[data-testid="f-hunit"]', (el) => String(el.value || '').trim()).catch(() => '');
       await setChoice(page, 'defType-input-0');
       await setChoice(page, 'source-input-0');
       await setChoice(page, 'category-input-0', true);
-      await page.fill('[data-testid="create-problem"]', 'Flow probe problem');
-      await page.fill('[data-testid="create-occurrence"]', 'Flow probe occurrence');
+      await page.fill('[data-testid="create-id"]', `CAR-PROBE-${results.context.probeSuffix}`);
+      await page.fill('[data-testid="create-problem"]', `Flow probe problem ${results.context.probeSuffix}`);
+      await page.fill('[data-testid="create-occurrence"]', `Flow probe occurrence ${results.context.probeSuffix}`);
       await page.fill('[data-testid="create-due"]', new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0]);
       await Promise.all([
         page.waitForFunction(() => window.location.hash.startsWith('#detail/'), { timeout: 8000 }),
@@ -70,14 +168,16 @@ async function setChoice(page, testId, checked = true) {
       ]);
       carId = decodeURIComponent((await currentHash(page)).replace(/^#detail\//, ''));
       if (!carId) throw new Error('missing created car id');
-      if (!/^CAR-\d{3}-[A-Z0-9]+-\d+$/.test(carId)) throw new Error('unexpected generated car id ' + carId);
+      if (!/^CAR-PROBE-\d+$/.test(carId)) throw new Error('unexpected generated car id ' + carId);
+      tempManager = await upsertTempUnitManager(page, results.context.probeSuffix, handlerUnit);
+      results.context.otherUnitManager = tempManager;
       await logout(page);
       return carId;
     });
 
     await runStep(results, 'PROBE-RP-01', '單位窗口', '回填矯正措施', async () => {
       if (!carId) throw new Error('missing car id from create step');
-      await login(page, results.context.reporter.username, results.context.reporter.password);
+      await login(page, results.context.unitManager.username, results.context.unitManager.password);
       await gotoHash(page, 'respond/' + carId);
       await page.waitForSelector('[data-testid="respond-form"]');
       await page.fill('[data-testid="respond-action"]', 'Flow probe corrective action');
@@ -92,24 +192,13 @@ async function setChoice(page, testId, checked = true) {
       return carId;
     });
 
-    await runStep(results, 'PROBE-RP-02', '單位窗口代理', '可檢視同單位案件', async () => {
+    await runStep(results, 'PROBE-RP-02', '單位管理員', '不可檢視跨單位案件', async () => {
       if (!carId) throw new Error('missing car id from previous steps');
-      await login(page, results.context.proxyReporter.username, results.context.proxyReporter.password);
+      if (!results.context.otherUnitManager) throw new Error('missing temp unit manager from create step');
+      await login(page, results.context.otherUnitManager.username, results.context.otherUnitManager.password);
       await gotoHash(page, 'detail/' + carId);
-      if ((await currentHash(page)) !== '#detail/' + carId) throw new Error('proxy reporter cannot open same-unit case');
-      await logout(page);
-      return carId;
-    });
-
-    await runStep(results, 'PROBE-VW-01', '跨單位檢視者', '可唯讀檢視並被阻擋填報', async () => {
-      if (!carId) throw new Error('missing car id from previous steps');
-      await login(page, results.context.viewer.username, results.context.viewer.password);
-      await gotoHash(page, 'detail/' + carId);
-      if ((await currentHash(page)) !== '#detail/' + carId) throw new Error('viewer cannot open cross-unit case');
-      await gotoHash(page, 'checklist-fill');
-      if ((await currentHash(page)) === '#checklist-fill') throw new Error('viewer reached checklist-fill');
-      await gotoHash(page, 'training-fill');
-      if ((await currentHash(page)) === '#training-fill') throw new Error('viewer reached training-fill');
+      const openedHash = await currentHash(page);
+      if (openedHash === '#detail/' + carId) throw new Error('cross-unit manager unexpectedly opened same-unit case');
       await logout(page);
       return carId;
     });
@@ -129,6 +218,11 @@ async function setChoice(page, testId, checked = true) {
       return carId;
     });
   } finally {
+    if (tempManager && tempManager.username) {
+      await login(page, results.context.admin.username, results.context.admin.password).catch(() => {});
+      await deleteTempUnitManager(page, tempManager.username);
+      await logout(page).catch(() => {});
+    }
     await browser.close();
     const finalized = finalizeResults(results);
     writeJson(RESULT_PATH, finalized);
