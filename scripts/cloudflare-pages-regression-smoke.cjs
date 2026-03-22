@@ -761,7 +761,9 @@ async function run() {
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('資安窗口') && app.innerText.includes('單位盤點'));
+      if (!app || !app.innerText) return false;
+      const text = app.innerText;
+      return text.includes('資安窗口') && (text.includes('可盤點單位') || text.includes('資安窗口人員'));
     }, undefined, { timeout: 20000 });
     const securityWindowText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(securityWindowText)) {
