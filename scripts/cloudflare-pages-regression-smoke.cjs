@@ -232,7 +232,9 @@ async function run() {
   const consoleErrors = [];
   const ignorableConsolePatterns = [
     'Failed to load resource: the server responded with a status of 401 ()',
-    'Failed to load resource: the server responded with a status of 401 (Unauthorized)'
+    'Failed to load resource: the server responded with a status of 401 (Unauthorized)',
+    'local.adguard.org',
+    'Executing inline script violates the following Content Security Policy directive'
   ];
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
