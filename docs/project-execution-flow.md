@@ -254,3 +254,20 @@ That runbook records the last successful startup and deployment sequence for:
 - `8088` campus gateway
 - Cloudflare Pages recovery
 - live smoke verification
+
+## 13. 切帳號接手重點
+
+如果你是換帳號後重新接手，先不要重新摸索整套流程，直接照這四步：
+
+1. 先看 [docs/fast-redeploy-runbook.md](C:\Users\User\Playground\ISMS-Form-Redesign\docs\fast-redeploy-runbook.md)
+2. 先確認 `AUTH_SESSION_SECRET` 與 `.runtime/runtime.local.host.json`
+3. 先拉起 `18080`，再確認 `8088`
+4. 最後才跑 Pages 與煙燻測試
+
+常見堵塞點只有幾個：
+- 環境變數沒設
+- `.runtime/runtime.local.host.json` 被寫成有 BOM
+- `18080` 沒起來
+- `8088` 沒起來
+- Pages 還沒對齊目前 origin
+- 煙燻測試互搶 session
