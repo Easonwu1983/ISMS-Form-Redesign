@@ -1033,6 +1033,22 @@
       return normalizeChecklistStatus(status) === CHECKLIST_STATUS_DRAFT;
     }
 
+    function splitChecklistUnitValue(unitValue) {
+      const raw = String(unitValue || '').trim();
+      if (!raw) return { parent: '', child: '' };
+      const sep = raw.includes('\uFF0F') ? '\uFF0F' : (raw.includes('/') ? '/' : '');
+      if (!sep) return { parent: raw, child: '' };
+      const parts = raw.split(sep);
+      const parent = String(parts.shift() || '').trim();
+      const child = String(parts.join(sep) || '').trim();
+      return { parent, child };
+    }
+
+    function getChecklistTier1UnitValue(unitValue) {
+      const parsed = splitChecklistUnitValue(unitValue);
+      return String(parsed && parsed.parent || unitValue || '').trim();
+    }
+
     function normalizeChecklistItem(item) {
       const base = item && typeof item === 'object' ? { ...item } : {};
       base.status = normalizeChecklistStatus(base.status);
@@ -1055,7 +1071,7 @@
       base.searchText = [
         base.id,
         base.unit,
-        getChecklistTier1Unit(base),
+        getChecklistTier1UnitValue(base.unit),
         base.fillerName,
         base.fillerUsername,
         base.auditYear,

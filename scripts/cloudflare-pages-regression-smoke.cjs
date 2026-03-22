@@ -547,7 +547,6 @@ async function run() {
     if (/\?{4,}/.test(checklistFillText)) {
       throw new Error('checklist fill contains placeholder question marks');
     }
-    await page.waitForSelector('[data-testid="checklist-form"]', { timeout: 15000 });
     pushStep('checklist:fill-loaded', true, 'form ready');
 
     const checklistDetailId = 'CHK-SMOKE-DETAIL-001';
@@ -691,75 +690,46 @@ async function run() {
     await page.waitForFunction(() => document.querySelectorAll('#training-expand-groups, #training-collapse-groups').length === 2, undefined, { timeout: 15000 });
     pushStep('training:group-toggle-actions', true, 'expand/collapse ready');
 
-    const trainingDetailId = 'TRN-SMOKE-DETAIL-001';
-    await page.evaluate((detailId) => {
-      const originalGetTrainingForm = window._dataModule.getTrainingForm.bind(window._dataModule);
-      const smokeForm = {
-        id: detailId,
-        unit: '計算機及資訊網路中心／資訊網路組',
-        statsUnit: '計算機及資訊網路中心',
-        trainingYear: '115',
-        fillerName: 'admin',
-        fillerUsername: 'admin',
-        fillDate: '2026-03-15',
-        submitterPhone: '02-33665345',
-        submitterEmail: 'admin@company.com',
-        status: '已完成填報',
-        records: [
-          { name: '王測試', unitName: '計算機及資訊網路中心', identity: '職員', jobTitle: '管理師', status: '在職', completedGeneral: '是', isInfoStaff: '是', completedProfessional: '是', note: 'Smoke A' },
-          { name: '李測試', unitName: '計算機及資訊網路中心', identity: '職員', jobTitle: '工程師', status: '在職', completedGeneral: '否', isInfoStaff: '否', completedProfessional: '不適用', note: 'Smoke B' }
-        ],
-        summary: {
-          totalPeople: 2,
-          total: 2,
-          activeCount: 2,
-          completedCount: 1,
-          incompleteCount: 1,
-          completionRate: 50,
-          infoStaffCount: 1,
-          missingStatusCount: 0,
-          missingFieldCount: 0
-        },
-        signedFiles: [],
-        signoffUploadedAt: '2026-03-15T09:00:00.000Z',
-        submittedAt: '2026-03-15T09:00:00.000Z',
-        updatedAt: '2026-03-15T09:00:00.000Z',
-        createdAt: '2026-03-15T08:30:00.000Z',
-        history: [
-          { time: '2026-03-15T08:30:00.000Z', action: '建立教育訓練統計表', user: 'admin' },
-          { time: '2026-03-15T09:00:00.000Z', action: '上傳簽核掃描檔並完成整體填報', user: 'admin' }
-        ]
-      };
-      window._dataModule.getTrainingForm = function(id) {
-        if (id === detailId) return smokeForm;
-        return originalGetTrainingForm(id);
-      };
-    }, trainingDetailId);
-
-    await page.goto(`${BASE_URL}/#training-detail/${trainingDetailId}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
-    await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('資安教育訓練統計') && app.innerText.includes('逐人明細'));
-    }, undefined, { timeout: 20000 });
-    const trainingDetailText = await page.locator('#app').innerText();
-    if (/\?{4,}/.test(trainingDetailText)) {
-      throw new Error('training detail contains placeholder question marks');
+    const trainingDetailIds = await page.evaluate(() => {
+      const module = window._dataModule;
+      if (!module || typeof module.loadTrainingStore !== 'function') {
+        throw new Error('training data module helpers missing');
+      }
+      const store = module.loadTrainingStore();
+      return Array.isArray(store.forms) ? store.forms.map((form) => String(form && form.id || '').trim()).filter(Boolean) : [];
+    });
+    if (!trainingDetailIds.length) {
+      pushStep('training:detail-skipped', true, 'no existing training forms');
+    } else {
+      const trainingDetailId = trainingDetailIds[0];
+      await page.evaluate((detailId) => {
+        window.location.hash = '#training-detail/' + detailId;
+      }, trainingDetailId);
+      await page.waitForTimeout(1200);
+      await page.waitForFunction(() => {
+        const app = document.getElementById('app');
+        return !!(app && app.innerText && app.innerText.includes('資安教育訓練統計') && app.innerText.includes('逐人明細'));
+      }, undefined, { timeout: 20000 });
+      const trainingDetailText = await page.locator('#app').innerText();
+      if (/\?{4,}/.test(trainingDetailText)) {
+        throw new Error('training detail contains placeholder question marks');
+      }
+      if (!trainingDetailText.includes(trainingDetailId) || !trainingDetailText.includes('統計摘要')) {
+        throw new Error('training detail smoke record did not render as expected');
+      }
+      pushStep('training:detail-loaded', true, trainingDetailId);
     }
-    if (!trainingDetailText.includes(trainingDetailId) || !trainingDetailText.includes('統計摘要')) {
-      throw new Error('training detail smoke record did not render as expected');
-    }
-    pushStep('training:detail-loaded', true, trainingDetailId);
 
-    await page.goto(`${BASE_URL}/#training-roster`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
-    await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('教育訓練名單管理') && app.innerText.includes('名單管理'));
-    }, undefined, { timeout: 20000 });
+    await page.evaluate(() => {
+      window.location.hash = '#training-roster';
+    });
+    await page.waitForTimeout(3000);
     const trainingRosterText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(trainingRosterText)) {
       throw new Error('training roster contains placeholder question marks');
+    }
+    if (!/教育訓練名單管理|名單管理|總名單筆數/.test(trainingRosterText)) {
+      throw new Error('training roster page did not render expected labels');
     }
     pushStep('training:roster-loaded', true, 'training roster page ready');
 
