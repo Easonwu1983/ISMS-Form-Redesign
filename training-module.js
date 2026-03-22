@@ -670,13 +670,22 @@
       + '</details>';
   }
 
+  function buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, startIndex, endIndex) {
+    const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
+    const sourceGroups = Array.isArray(groups) ? groups : [];
+    const from = Math.max(0, Number(startIndex) || 0);
+    const to = Math.min(sourceGroups.length, Number(endIndex) || sourceGroups.length);
+    if (to <= from) return '';
+    return sourceGroups.slice(from, to).map((group, offset) => buildTrainingRosterGroupTable(group, selectedSet, from + offset)).join('');
+  }
+
   function buildTrainingRosterRows(rosters, selectedRosterIds) {
     const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
     const groups = groupTrainingRosterEntries(rosters);
     if (!groups.length) {
       return '<div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無名單資料</div><div class="empty-state-desc">請先由管理者匯入名單，或由單位管理員新增名單外人員。</div></div>';
     }
-    return groups.map((group, index) => buildTrainingRosterGroupTable(group, selectedSet, index)).join('');
+    return buildTrainingRosterGroupChunkHtml(groups, selectedSet, 0, groups.length);
   }
 
   function buildTrainingRosterPreviewRows(options) {
@@ -2141,17 +2150,21 @@
     const rosters = snapshot.rosters;
     const hiddenCount = snapshot.hiddenCount;
     const summary = snapshot.summary;
-    const deferRosterGroups = rosters.length > 500 && !opts.deferFullRender;
+    const groups = groupTrainingRosterEntries(rosters);
+    const useChunkedRosterRender = groups.length > 500;
+    const deferRosterGroups = useChunkedRosterRender && !opts.deferFullRender;
     const selectedSignature = Array.from(selectedRosterIds.values()).sort().join(',');
     const rosterRenderSignature = [
       snapshot.token || '',
       String(snapshot.rawLength || 0),
       String(hiddenCount || 0),
-      deferRosterGroups ? '1' : '0',
+      useChunkedRosterRender ? '1' : '0',
       opts.deferFullRender ? '1' : '0',
       selectedSignature
     ].join('::');
     const currentApp = document.getElementById('app');
+    const selectedCountLabel = trainingRosterDomCache.selectedCountLabel || document.getElementById('training-roster-selected-count');
+    const deleteSelectedButton = trainingRosterDomCache.deleteSelectedButton || document.getElementById('training-roster-delete-selected');
     if (opts.skipSync && currentApp && currentApp.dataset.trainingRosterRenderSignature === rosterRenderSignature && trainingRosterRenderCache.signature === rosterRenderSignature && String(window.location.hash || '').startsWith('#training-roster')) {
       syncRosterSelectionDom();
       if (focusState) restoreTrainingRosterFocusState(focusState);
@@ -2160,9 +2173,18 @@
     const importedPreviewHtml = (opts.rosterNames || opts.rosterIds) && deferRosterGroups
       ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
       : '';
-    const groupsHtml = deferRosterGroups
-      ? importedPreviewHtml + '<div class="empty-state" style="padding:28px"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
+    const initialGroupCount = useChunkedRosterRender && opts.deferFullRender
+      ? Math.min(4, groups.length)
+      : 0;
+    const chunkedGroupsHtml = useChunkedRosterRender
+      ? buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, 0, initialGroupCount)
       : buildTrainingRosterRows(rosters, selectedRosterIds);
+    const loadingChunkHtml = useChunkedRosterRender && initialGroupCount < groups.length
+      ? '<div class="empty-state training-roster-chunk-loading" style="padding:28px"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
+      : '';
+    const groupsHtml = deferRosterGroups
+      ? importedPreviewHtml + loadingChunkHtml
+      : importedPreviewHtml + chunkedGroupsHtml + loadingChunkHtml;
     const pageHtml = buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size);
     if (currentApp) {
       currentApp.innerHTML = pageHtml;
@@ -2174,6 +2196,43 @@
       selectedSignature,
       defer: !!deferRosterGroups
     };
+
+    if (useChunkedRosterRender && opts.deferFullRender && initialGroupCount < groups.length) {
+      const chunkSize = Math.max(4, Math.min(12, Math.ceil(groups.length / 8)));
+      const appendRosterChunk = function (startIndex) {
+        if (String(window.location.hash || '').indexOf('#training-roster') !== 0) return;
+        const groupsContainer = document.getElementById('training-roster-groups');
+        if (!groupsContainer) return;
+        const endIndex = Math.min(startIndex + chunkSize, groups.length);
+        const chunkHtml = buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, startIndex, endIndex);
+        if (!chunkHtml) return;
+        const loadingNode = groupsContainer.querySelector('.training-roster-chunk-loading');
+        if (loadingNode) loadingNode.remove();
+        groupsContainer.insertAdjacentHTML('beforeend', chunkHtml);
+        refreshTrainingRosterDomCache(currentApp, rosterRenderSignature);
+        syncRosterSelectionDom();
+        if (endIndex < groups.length) {
+          const next = function () {
+            appendRosterChunk(endIndex);
+          };
+          if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(next, { timeout: 250 });
+            return;
+          }
+          if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+            window.setTimeout(next, 60);
+            return;
+          }
+          next();
+          return;
+        }
+        const finalLoadingNode = groupsContainer.querySelector('.training-roster-chunk-loading');
+        if (finalLoadingNode) finalLoadingNode.remove();
+        refreshTrainingRosterDomCache(currentApp, rosterRenderSignature);
+        syncRosterSelectionDom();
+      };
+      appendRosterChunk(initialGroupCount);
+    }
 
     if (deferRosterGroups) {
       const rerender = function () {
@@ -2213,8 +2272,6 @@
       });
     }
 
-    const selectedCountLabel = trainingRosterDomCache.selectedCountLabel || document.getElementById('training-roster-selected-count');
-    const deleteSelectedButton = trainingRosterDomCache.deleteSelectedButton || document.getElementById('training-roster-delete-selected');
     const selectAllButton = document.getElementById('training-roster-select-all');
     const clearSelectionButton = document.getElementById('training-roster-clear-selection');
     const groupsContainer = document.getElementById('training-roster-groups');

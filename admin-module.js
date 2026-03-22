@@ -73,7 +73,13 @@
       loading: false
     };
     const AUDIT_TRAIL_SYNC_FRESHNESS_MS = 30000;
+    const AUDIT_TRAIL_HEALTH_CACHE_MS = 30000;
     let auditTrailLoadPromise = null;
+    let auditTrailHealthLoadPromise = null;
+    let auditTrailHealthCache = {
+      value: null,
+      loadedAt: 0
+    };
     const unitContactReviewState = {
       filters: {
         status: 'pending_review',
@@ -128,6 +134,43 @@
       const parsedAt = Date.parse(String(auditTrailState.lastLoadedAt || '').trim());
       if (!Number.isFinite(parsedAt)) return false;
       return (Date.now() - parsedAt) < AUDIT_TRAIL_SYNC_FRESHNESS_MS;
+    }
+
+    function isAuditTrailHealthFresh() {
+      if (!auditTrailHealthCache || !auditTrailHealthCache.value) return false;
+      return (Date.now() - Number(auditTrailHealthCache.loadedAt || 0)) < AUDIT_TRAIL_HEALTH_CACHE_MS;
+    }
+
+    async function getAuditTrailHealthSnapshot(force) {
+      if (!force && isAuditTrailHealthFresh()) {
+        return auditTrailHealthCache.value;
+      }
+      if (!force && auditTrailHealthLoadPromise) {
+        return auditTrailHealthLoadPromise;
+      }
+      const pending = Promise.resolve()
+        .then(() => fetchAuditTrailHealth())
+        .then((health) => {
+          auditTrailHealthCache = {
+            value: health,
+            loadedAt: Date.now()
+          };
+          return health;
+        })
+        .catch((error) => {
+          console.warn('audit trail health fetch failed', error);
+          if (auditTrailHealthCache && auditTrailHealthCache.value) {
+            return auditTrailHealthCache.value;
+          }
+          throw error;
+        })
+        .finally(() => {
+          if (auditTrailHealthLoadPromise === pending) {
+            auditTrailHealthLoadPromise = null;
+          }
+        });
+      auditTrailHealthLoadPromise = pending;
+      return pending;
     }
 
     function getGovernanceTopLevelUnits() {
@@ -863,7 +906,7 @@
     auditTrailState.filters = nextFilters;
     const pending = (async () => {
       const [health, payload] = await Promise.all([
-        fetchAuditTrailHealth(),
+        getAuditTrailHealthSnapshot(force),
         fetchAuditTrailEntries(nextFilters)
       ]);
       auditTrailState.health = health;
