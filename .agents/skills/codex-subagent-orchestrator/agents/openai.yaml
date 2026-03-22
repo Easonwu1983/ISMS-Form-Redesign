@@ -1,0 +1,7 @@
+interface:
+  display_name: "Codex Subagent Orchestrator"
+  short_description: "Orchestrate specialized Codex subagents"
+  default_prompt: "Use $codex-subagent-orchestrator to split this task into the right specialized Codex subagents and run independent work in parallel."
+
+policy:
+  allow_implicit_invocation: true
