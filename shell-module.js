@@ -66,6 +66,43 @@
     function closeSidebar() { setSidebarOpen(false); }
     function toggleSidebar() { setSidebarOpen(!isSidebarOpen); }
 
+    function getBuildInfo() {
+      var manifest = window.__APP_ASSET_MANIFEST__ && typeof window.__APP_ASSET_MANIFEST__ === 'object'
+        ? window.__APP_ASSET_MANIFEST__
+        : {};
+      var buildInfo = window.__APP_BUILD_INFO__ && typeof window.__APP_BUILD_INFO__ === 'object'
+        ? window.__APP_BUILD_INFO__
+        : {};
+      if ((!buildInfo || !buildInfo.versionKey) && manifest.buildInfo && typeof manifest.buildInfo === 'object') {
+        buildInfo = manifest.buildInfo;
+      }
+      return buildInfo && typeof buildInfo === 'object' ? buildInfo : {};
+    }
+
+    function getBuildVersionText() {
+      var buildInfo = getBuildInfo();
+      var versionKey = String(buildInfo.versionKey || buildInfo.shortCommit || buildInfo.describe || '').trim();
+      return versionKey ? ('v' + versionKey) : 'vlocal';
+    }
+
+    function getBuildVersionTitle() {
+      var buildInfo = getBuildInfo();
+      var parts = [];
+      if (buildInfo.platform) parts.push('平台：' + buildInfo.platform);
+      if (buildInfo.versionKey) parts.push('版本：' + buildInfo.versionKey);
+      if (buildInfo.commit) parts.push('提交：' + buildInfo.commit);
+      if (buildInfo.branch) parts.push('分支：' + buildInfo.branch);
+      if (buildInfo.builtAt) parts.push('建置：' + buildInfo.builtAt);
+      if (buildInfo.describe) parts.push('描述：' + buildInfo.describe);
+      return parts.length ? parts.join(' / ') : '版本資訊未提供';
+    }
+
+    function renderVersionChip(extraClass) {
+      var classes = ['app-version-chip'];
+      if (extraClass) classes.push(extraClass);
+      return '<span class="' + classes.join(' ') + '" data-testid="app-version-chip" title="' + esc(getBuildVersionTitle()) + '">' + esc(getBuildVersionText()) + '</span>';
+    }
+
     function validatePasswordComplexity(password) {
       var value = String(password || '');
       if (value.length < 8) return '密碼長度至少需 8 碼';
@@ -103,6 +140,7 @@
       document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="login-page"><div class="login-card" id="app" tabindex="-1">' +
         '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div>' +
         '<div class="login-error" id="login-error" data-testid="login-error">帳號或密碼錯誤</div>' +
+        '<div class="login-version-row">' + renderVersionChip('login-version-chip') + '</div>' +
         '<div id="bootstrap-panel" style="display:' + (needsLocalBootstrap ? 'block' : 'none') + '"><div class="login-entry-card login-entry-card--setup"><div class="login-entry-eyebrow">Setup</div><h3 class="login-entry-title">建立本機管理員帳號</h3><p class="login-entry-text">目前沒有任何本機帳號。請先建立一組本機管理員帳號，之後再登入系統。</p><form class="login-form" id="bootstrap-form"><div class="form-group"><label class="form-label">管理員姓名</label><input type="text" class="form-input" id="bootstrap-name" placeholder="請輸入管理員姓名" value="本機管理員" required></div><div class="form-group"><label class="form-label">管理員帳號</label><input type="text" class="form-input" id="bootstrap-user" placeholder="請輸入登入帳號" required></div><div class="form-group"><label class="form-label">電子郵件</label><input type="email" class="form-input" id="bootstrap-email" placeholder="請輸入電子郵件" required></div><div class="form-group"><label class="form-label">初始密碼</label><input type="password" class="form-input" id="bootstrap-pass" placeholder="至少 8 碼，含大小寫與數字" required></div><button type="submit" class="login-btn">建立本機管理員</button></form></div></div>' +
         '<div id="login-panel" style="display:' + (needsLocalBootstrap ? 'none' : 'block') + '"><form class="login-form" id="login-form" data-testid="login-form">' +
         '<div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="login-user" data-testid="login-user" placeholder="請輸入帳號" required autofocus></div>' +
@@ -355,7 +393,7 @@
 
       var sidebarEl = document.getElementById('sidebar');
       if (!sidebarEl) return;
-      sidebarEl.innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div>';
+      sidebarEl.innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span>' + renderVersionChip('sidebar-version-chip') + '</div>';
       sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
         link.addEventListener('click', function () {
           if (isMobileViewport()) closeSidebar();
@@ -432,7 +470,7 @@
     }
 
     function renderPublicPage(page, param) {
-      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>內部稽核管考追蹤系統</strong><span>ISMS 管考與追蹤平台</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">進入系統</a>' : '<a class="btn btn-secondary" href="#">登入系統</a>') + '</div></header><main class="public-main" id="app" tabindex="-1"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div></div>';
+      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>內部稽核管考追蹤系統</strong><span>ISMS 管考與追蹤平台</span></span></a><div class="public-header-actions">' + renderVersionChip('app-version-chip--public') + '<a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">進入系統</a>' : '<a class="btn btn-secondary" href="#">登入系統</a>') + '</div></header><main class="public-main" id="app" tabindex="-1"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div></div>';
       getRouteMeta(page).render(param);
       refreshIcons();
       focusRouteContent();

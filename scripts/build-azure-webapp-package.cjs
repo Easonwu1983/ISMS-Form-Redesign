@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const { getBuildInfo } = require('./build-version-info.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'azure-webapp-backend');
+const buildInfo = getBuildInfo('azure-app-service', ROOT);
 
 const copyTargets = [
   'm365/campus-backend',
@@ -50,7 +52,9 @@ function writeReadme() {
 
 function writeManifest() {
   fs.writeFileSync(path.join(DIST, 'deploy-manifest.json'), JSON.stringify({
-    builtAt: new Date().toISOString(),
+    builtAt: buildInfo.builtAt,
+    versionKey: buildInfo.versionKey,
+    buildInfo,
     platform: 'azure-app-service',
     copied: copyTargets
   }, null, 2), 'utf8');

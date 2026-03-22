@@ -1,10 +1,12 @@
 ﻿const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { getBuildInfo } = require('./scripts/build-version-info.cjs');
 
 const root = process.cwd();
 const port = 8080;
 const host = '127.0.0.1';
+const buildInfo = getBuildInfo('codex-local-server', root);
 const mime = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -26,6 +28,22 @@ function safePath(urlPath) {
   return resolved;
 }
 
+function writeManifest(res) {
+  const payload = JSON.stringify({
+    builtAt: buildInfo.builtAt,
+    versionKey: buildInfo.versionKey,
+    buildInfo,
+    platform: 'codex-local-server',
+    source: 'repo-root',
+    assetIntegrity: {}
+  }, null, 2);
+  res.writeHead(200, {
+    'Content-Type': mime['.json'],
+    'Cache-Control': 'no-store, no-cache, must-revalidate'
+  });
+  res.end(payload);
+}
+
 const server = http.createServer((req, res) => {
   const filePath = safePath(req.url);
   const requestPath = decodeURIComponent((req.url || '/').split('?')[0]);
@@ -38,6 +56,11 @@ const server = http.createServer((req, res) => {
   if (requestPath === '/m365-config.override.js') {
     res.writeHead(200, { 'Content-Type': mime['.js'] });
     res.end('(function(){ window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__ = window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__ || {}; })();');
+    return;
+  }
+
+  if (requestPath === '/deploy-manifest.json') {
+    writeManifest(res);
     return;
   }
 

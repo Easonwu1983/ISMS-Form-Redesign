@@ -1,6 +1,7 @@
 const http = require('http');
 const { URL } = require('url');
 const net = require('net');
+const { getBuildInfo } = require('./scripts/build-version-info.cjs');
 
 const LISTEN_PORT = Number(process.env.ISMS_GATEWAY_PORT || 8088);
 const UPSTREAM_HOST = process.env.ISMS_UPSTREAM_HOST || '127.0.0.1';
@@ -13,6 +14,7 @@ const ALLOWED_IPV6_PREFIXES = [
   '::1',
   '2001:288:'
 ];
+const buildInfo = getBuildInfo('campus-gateway', process.cwd());
 
 function buildSecurityHeaders(pathname) {
   const path = String(pathname || '');
@@ -27,7 +29,7 @@ function buildSecurityHeaders(pathname) {
     'cross-origin-opener-policy': 'same-origin',
     'cross-origin-resource-policy': 'same-origin'
   };
-  if (isApi || isHtml || path.endsWith('m365-config.override.js')) {
+  if (isApi || isHtml || path.endsWith('m365-config.override.js') || path === '/deploy-manifest.json') {
     headers['cache-control'] = 'no-store, no-cache, must-revalidate';
     headers['pragma'] = 'no-cache';
   }
@@ -159,6 +161,23 @@ function writeForbiddenHtml(res, ip) {
   res.end(payload);
 }
 
+function writeDeployManifest(res) {
+  const payload = JSON.stringify({
+    builtAt: buildInfo.builtAt,
+    versionKey: buildInfo.versionKey,
+    buildInfo,
+    platform: 'campus-gateway',
+    backendBase: `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`,
+    assetIntegrity: {}
+  }, null, 2);
+  res.writeHead(200, {
+    ...buildSecurityHeaders('/deploy-manifest.json'),
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(payload)
+  });
+  res.end(payload);
+}
+
 function writeForbiddenJson(res, ip) {
   const payload = JSON.stringify({
     ok: false,
@@ -225,6 +244,11 @@ function proxyRequest(req, res, remoteAddress) {
 
 const server = http.createServer((req, res) => {
   const remoteAddress = normalizeRemoteAddress(req.socket.remoteAddress);
+  const targetUrl = new URL(req.url || '/', `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
+  if (targetUrl.pathname === '/deploy-manifest.json') {
+    writeDeployManifest(res);
+    return;
+  }
   if (!isAllowedRemoteAddress(remoteAddress)) {
     console.warn(`[gateway] blocked ${remoteAddress} ${req.method} ${req.url}`);
     writeForbidden(req, res, remoteAddress);

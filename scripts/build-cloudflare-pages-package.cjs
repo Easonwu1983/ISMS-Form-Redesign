@@ -1,6 +1,7 @@
 ﻿const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { getBuildInfo } = require('./build-version-info.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'cloudflare-pages');
@@ -16,6 +17,7 @@ const backendBase = getArg('backend-base', 'https://YOUR-TUNNEL-HOSTNAME');
 const outputDir = path.resolve(getArg('output-dir', DIST));
 const mode = getArg('mode', 'full');
 const redirectTarget = getArg('redirect-target', backendBase.endsWith('/') ? backendBase : `${backendBase}/`);
+const buildInfo = getBuildInfo('cloudflare-pages', ROOT);
 
 const filesToCopy = [
   'index.html',
@@ -109,12 +111,14 @@ function rewriteIndex(assetIntegrity) {
     `  <meta http-equiv="Content-Security-Policy"\n    content="${csp}">`
   );
   const loaderIntegrity = assetIntegrity && assetIntegrity['asset-loader.js'];
-  if (loaderIntegrity) {
-    html = html.replace(
-      '<script src="asset-loader.js"></script>',
-      `<script src="asset-loader.js" integrity="${loaderIntegrity}" crossorigin="anonymous"></script>`
-    );
-  }
+  const buildInfoScript = `<script>window.__APP_BUILD_INFO__ = ${JSON.stringify(buildInfo).replace(/</g, '\u003c')};</script>`;
+  const loaderTag = loaderIntegrity
+    ? `<script src="asset-loader.js?v=${buildInfo.versionKey}" integrity="${loaderIntegrity}" crossorigin="anonymous"></script>`
+    : `<script src="asset-loader.js?v=${buildInfo.versionKey}"></script>`;
+  html = html.replace(
+    '<script src="asset-loader.js"></script>',
+    `${buildInfoScript}\n  ${loaderTag}`
+  );
   fs.writeFileSync(indexPath, html, 'utf8');
 }
 
@@ -348,7 +352,9 @@ function writeReadme() {
 
 function writeManifest(assetIntegrity) {
   fs.writeFileSync(path.join(outputDir, 'deploy-manifest.json'), JSON.stringify({
-    builtAt: new Date().toISOString(),
+    builtAt: buildInfo.builtAt,
+    versionKey: buildInfo.versionKey,
+    buildInfo,
     mode,
     backendBase,
     redirectTarget,

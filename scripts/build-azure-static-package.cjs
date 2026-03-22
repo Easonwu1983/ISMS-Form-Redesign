@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { getBuildInfo } = require('./build-version-info.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'azure-staticwebapp');
@@ -13,6 +14,7 @@ function getArg(name, fallback) {
 
 const backendBase = getArg('backend-base', 'https://YOUR-BACKEND.azurewebsites.net');
 const outputDir = path.resolve(getArg('output-dir', DIST));
+const buildInfo = getBuildInfo('azure-static-web-apps', ROOT);
 
 const filesToCopy = [
   'index.html',
@@ -72,8 +74,13 @@ function rewriteIndex() {
     "child-src 'none'"
   ].join('; ');
   html = html.replace(
-    /<meta http-equiv="Content-Security-Policy"[\s\S]*?content="[^"]*">/,
-    `  <meta http-equiv="Content-Security-Policy"\n    content="${csp}">`
+    /<meta http-equiv=\"Content-Security-Policy\"[\s\S]*?content=\"[^\"]*\">/,
+    `  <meta http-equiv=\"Content-Security-Policy\"\n    content=\"${csp}\">`
+  );
+  const buildInfoScript = `<script>window.__APP_BUILD_INFO__ = ${JSON.stringify(buildInfo).replace(/</g, '\u003c')};</script>`;
+  html = html.replace(
+    '<script src="asset-loader.js"></script>',
+    `${buildInfoScript}\n  <script src="asset-loader.js?v=${buildInfo.versionKey}"></script>`
   );
   fs.writeFileSync(indexPath, html, 'utf8');
 }
@@ -118,7 +125,9 @@ function buildReadme() {
 
 function buildManifest() {
   const manifest = {
-    builtAt: new Date().toISOString(),
+    builtAt: buildInfo.builtAt,
+    versionKey: buildInfo.versionKey,
+    buildInfo,
     backendBase,
     files: filesToCopy,
     platform: 'azure-static-web-apps'

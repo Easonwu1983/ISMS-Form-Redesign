@@ -1,5 +1,6 @@
 ﻿const fs = require('fs');
 const path = require('path');
+const { getBuildInfo } = require('./build-version-info.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'homepage-ntu');
@@ -17,6 +18,7 @@ const publicUser = getArg('public-user', 'easonwu');
 const publicBase = getArg('public-base', `http://homepage.ntu.edu.tw/~${publicUser}/${publicSubdir}/`);
 const mode = getArg('mode', 'full');
 const redirectTarget = getArg('redirect-target', backendBase.endsWith('/') ? backendBase : `${backendBase}/`);
+const buildInfo = getBuildInfo('homepage-ntu', ROOT);
 
 const filesToCopy = [
   'index.html',
@@ -76,8 +78,13 @@ function buildHomepageIndex() {
     "child-src 'none'"
   ].join('; ');
   html = html.replace(
-    /<meta http-equiv="Content-Security-Policy"[\s\S]*?content="[^"]*">/,
-    `  <meta http-equiv="Content-Security-Policy"\n    content="${homepageCsp}">`
+    /<meta http-equiv=\"Content-Security-Policy\"[\s\S]*?content=\"[^\"]*\">/,
+    `  <meta http-equiv=\"Content-Security-Policy\"\n    content=\"${homepageCsp}\">`
+  );
+  const buildInfoScript = `<script>window.__APP_BUILD_INFO__ = ${JSON.stringify(buildInfo).replace(/</g, '\u003c')};</script>`;
+  html = html.replace(
+    '<script src="asset-loader.js"></script>',
+    `${buildInfoScript}\n  <script src="asset-loader.js?v=${buildInfo.versionKey}"></script>`
   );
   fs.writeFileSync(indexPath, html, 'utf8');
 }
@@ -256,7 +263,9 @@ function buildReadme() {
 
 function buildManifest() {
   const manifest = {
-    builtAt: new Date().toISOString(),
+    builtAt: buildInfo.builtAt,
+    versionKey: buildInfo.versionKey,
+    buildInfo,
     mode,
     backendBase,
     redirectTarget,

@@ -50,6 +50,16 @@ async function run() {
     return { status: response.status };
   }, { critical: true });
 
+  await step('deploy manifest version info', async () => {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/deploy-manifest.json`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const buildInfo = json && json.buildInfo && typeof json.buildInfo === 'object' ? json.buildInfo : {};
+    const versionKey = String(json && json.versionKey || buildInfo.versionKey || '').trim();
+    if (!versionKey) throw new Error('deploy manifest versionKey missing');
+    if (!buildInfo.commit && !buildInfo.shortCommit) throw new Error('deploy manifest commit missing');
+    return { status: response.status, versionKey };
+  }, { critical: true });
+
   await step('asset:unit-contact-application-module copy', async () => {
     const response = await fetch(`${DEFAULT_BASE}/unit-contact-application-module.js`);
     const text = await response.text();

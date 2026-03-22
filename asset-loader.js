@@ -1,5 +1,8 @@
 ﻿(function () {
-  var cacheKey = String(Date.now());
+  var initialBuildInfo = window.__APP_BUILD_INFO__ && typeof window.__APP_BUILD_INFO__ === 'object'
+    ? window.__APP_BUILD_INFO__
+    : {};
+  var cacheKey = String(initialBuildInfo.versionKey || initialBuildInfo.shortCommit || Date.now());
   var head = document.head;
   var body = document.body;
   var assets = [
@@ -28,6 +31,7 @@
   var integrityMap = {};
   var manifestPromise = null;
 
+  window.__APP_BUILD_INFO__ = initialBuildInfo;
   window.__APP_ASSET_VERSION__ = cacheKey;
 
   function normalizeAssetPath(assetPath) {
@@ -47,8 +51,7 @@
   }
 
   function shouldLoadManifest() {
-    var hostname = String((window.location && window.location.hostname) || '').toLowerCase();
-    return /(^|\.)pages\.dev$/.test(hostname);
+    return true;
   }
 
   function appendLink(rel, href, type) {
@@ -63,17 +66,18 @@
   function loadManifest() {
     if (manifestPromise) return manifestPromise;
     if (window.__APP_ASSET_MANIFEST__ && typeof window.__APP_ASSET_MANIFEST__ === 'object') {
+      var cachedBuildInfo = window.__APP_ASSET_MANIFEST__.buildInfo && typeof window.__APP_ASSET_MANIFEST__.buildInfo === 'object'
+        ? window.__APP_ASSET_MANIFEST__.buildInfo
+        : initialBuildInfo;
+      if (cachedBuildInfo && typeof cachedBuildInfo === 'object') {
+        cacheKey = String(cachedBuildInfo.versionKey || cacheKey);
+        window.__APP_BUILD_INFO__ = cachedBuildInfo;
+      }
       integrityMap = (window.__APP_ASSET_MANIFEST__.assetIntegrity && typeof window.__APP_ASSET_MANIFEST__.assetIntegrity === 'object')
         ? window.__APP_ASSET_MANIFEST__.assetIntegrity
         : {};
       window.__APP_ASSET_INTEGRITY__ = integrityMap;
       manifestPromise = Promise.resolve(window.__APP_ASSET_MANIFEST__);
-      return manifestPromise;
-    }
-    if (!shouldLoadManifest()) {
-      window.__APP_ASSET_MANIFEST__ = window.__APP_ASSET_MANIFEST__ || {};
-      window.__APP_ASSET_INTEGRITY__ = integrityMap;
-      manifestPromise = Promise.resolve(null);
       return manifestPromise;
     }
     manifestPromise = fetch('deploy-manifest.json?v=' + cacheKey, { cache: 'no-store', credentials: 'same-origin' })
@@ -83,8 +87,13 @@
       })
       .then(function (manifest) {
         integrityMap = (manifest && manifest.assetIntegrity && typeof manifest.assetIntegrity === 'object') ? manifest.assetIntegrity : {};
+        if (manifest && manifest.buildInfo && typeof manifest.buildInfo === 'object') {
+          cacheKey = String(manifest.buildInfo.versionKey || cacheKey);
+          window.__APP_BUILD_INFO__ = manifest.buildInfo;
+        }
         window.__APP_ASSET_MANIFEST__ = manifest || {};
         window.__APP_ASSET_INTEGRITY__ = integrityMap;
+        window.__APP_ASSET_VERSION__ = cacheKey;
         return manifest;
       })
       .catch(function (error) {
@@ -92,6 +101,8 @@
         integrityMap = {};
         window.__APP_ASSET_MANIFEST__ = window.__APP_ASSET_MANIFEST__ || {};
         window.__APP_ASSET_INTEGRITY__ = integrityMap;
+        window.__APP_BUILD_INFO__ = window.__APP_BUILD_INFO__ && typeof window.__APP_BUILD_INFO__ === 'object' ? window.__APP_BUILD_INFO__ : initialBuildInfo;
+        window.__APP_ASSET_VERSION__ = cacheKey;
         return null;
       });
     return manifestPromise;

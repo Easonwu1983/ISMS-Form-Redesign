@@ -31,6 +31,11 @@ function pickExecutablePath() {
 async function login(page) {
   await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
   await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
+  await page.waitForSelector('[data-testid="app-version-chip"]', { timeout: 20000 });
+  const landingVersion = await page.locator('[data-testid="app-version-chip"]').first().textContent();
+  if (!String(landingVersion || '').trim()) {
+    throw new Error('landing version chip missing');
+  }
   await page.fill('[data-testid="login-user"]', 'admin');
   await page.fill('[data-testid="login-pass"]', 'admin123');
   await Promise.all([
@@ -38,6 +43,11 @@ async function login(page) {
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
   ]);
   await waitForRemoteBootstrap(page);
+  await page.waitForSelector('.sidebar-footer [data-testid="app-version-chip"]', { timeout: 30000 });
+  const sidebarVersion = await page.locator('.sidebar-footer [data-testid="app-version-chip"]').first().textContent();
+  if (!String(sidebarVersion || '').trim()) {
+    throw new Error('sidebar version chip missing');
+  }
 }
 
 async function waitForRemoteBootstrap(page) {
