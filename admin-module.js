@@ -69,8 +69,11 @@
       summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
       health: null,
       lastLoadedAt: '',
+      filterSignature: '',
       loading: false
     };
+    const AUDIT_TRAIL_SYNC_FRESHNESS_MS = 30000;
+    let auditTrailLoadPromise = null;
     const unitContactReviewState = {
       filters: {
         status: 'pending_review',
@@ -105,6 +108,26 @@
     function getGovernanceReviewScopeUnits(user) {
       const units = getReviewUnits(user);
       return Array.isArray(units) ? units.map((unit) => String(unit || '').trim()).filter(Boolean) : [];
+    }
+
+    function getAuditTrailFilterSignature(filters) {
+      const next = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
+      return [
+        next.keyword,
+        next.eventType,
+        next.actorEmail,
+        next.unitCode,
+        next.recordId,
+        next.limit
+      ].map((value) => String(value || '').trim()).join('|');
+    }
+
+    function isAuditTrailDataFresh(signature) {
+      if (!signature || auditTrailState.filterSignature !== signature) return false;
+      if (!Array.isArray(auditTrailState.items) || !auditTrailState.items.length) return false;
+      const parsedAt = Date.parse(String(auditTrailState.lastLoadedAt || '').trim());
+      if (!Number.isFinite(parsedAt)) return false;
+      return (Date.now() - parsedAt) < AUDIT_TRAIL_SYNC_FRESHNESS_MS;
     }
 
     function getGovernanceTopLevelUnits() {
@@ -824,11 +847,21 @@
     });
   }
 
-  async function loadAuditTrailData(filters) {
+  async function loadAuditTrailData(filters, options) {
     const nextFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
+    const force = !!(options && options.force);
+    const signature = getAuditTrailFilterSignature(nextFilters);
+    if (!force && isAuditTrailDataFresh(signature)) {
+      auditTrailState.loading = false;
+      auditTrailState.filters = nextFilters;
+      return auditTrailState;
+    }
+    if (!force && auditTrailLoadPromise && auditTrailState.filterSignature === signature) {
+      return auditTrailLoadPromise;
+    }
     auditTrailState.loading = true;
     auditTrailState.filters = nextFilters;
-    try {
+    const pending = (async () => {
       const [health, payload] = await Promise.all([
         fetchAuditTrailHealth(),
         fetchAuditTrailEntries(nextFilters)
@@ -837,8 +870,16 @@
       auditTrailState.items = Array.isArray(payload && payload.items) ? payload.items : [];
       auditTrailState.summary = payload && payload.summary ? payload.summary : { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] };
       auditTrailState.lastLoadedAt = new Date().toISOString();
+      auditTrailState.filterSignature = signature;
       return auditTrailState;
+    })();
+    auditTrailLoadPromise = pending;
+    try {
+      return await pending;
     } finally {
+      if (auditTrailLoadPromise === pending) {
+        auditTrailLoadPromise = null;
+      }
       auditTrailState.loading = false;
     }
   }
@@ -846,12 +887,29 @@
   async function renderAuditTrail(nextFilters) {
     if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可檢視操作稽核軌跡', 'error'); return; }
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">集中查詢系統登入、帳號異動、權限調整、表單送出與附件操作的後端稽核紀錄。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在從正式稽核後端讀取資料...</div></div>`;
-    refreshIcons();
+    const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(nextFilters || auditTrailState.filters) };
+    const filterSignature = getAuditTrailFilterSignature(resolvedFilters);
+    const canRenderFromCache = auditTrailState.filterSignature === filterSignature && Array.isArray(auditTrailState.items) && auditTrailState.items.length > 0;
 
     let state;
     try {
-      state = await loadAuditTrailData(nextFilters || auditTrailState.filters);
+      if (canRenderFromCache) {
+        auditTrailState.filters = resolvedFilters;
+        state = auditTrailState;
+        if (!isAuditTrailDataFresh(filterSignature) && !auditTrailLoadPromise) {
+          loadAuditTrailData(resolvedFilters, { force: true }).then(function () {
+            if (document.getElementById('audit-filter-form')) {
+              renderAuditTrail(resolvedFilters);
+            }
+          }).catch(function (error) {
+            console.warn('audit trail background refresh failed', error);
+          });
+        }
+      } else {
+        app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">集中查詢系統登入、帳號異動、權限調整、表單送出與附件操作的後端稽核紀錄。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在從正式稽核後端讀取資料...</div></div>`;
+        refreshIcons();
+        state = await loadAuditTrailData(resolvedFilters);
+      }
     } catch (error) {
       app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">無法讀取後端稽核資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">稽核軌跡後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();

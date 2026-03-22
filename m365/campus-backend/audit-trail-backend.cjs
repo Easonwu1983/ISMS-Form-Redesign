@@ -18,8 +18,11 @@ function createAuditTrailRouter(deps) {
   } = deps;
 
   const state = {
-    listMap: null
+    listMap: null,
+    entriesCache: null,
+    entriesPromise: null
   };
+  const AUDIT_TRAIL_CACHE_MS = 30000;
 
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
@@ -51,23 +54,43 @@ function createAuditTrailRouter(deps) {
   }
 
   async function listAllEntries() {
-    const siteId = await resolveSiteId();
-    const list = await resolveAuditList();
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      rows.push(...batch.map((entry) => ({
-        listItemId: cleanText(entry && entry.id),
-        item: {
-          listItemId: cleanText(entry && entry.id),
-          ...mapGraphFieldsToAuditEntry(entry && entry.fields ? entry.fields : {})
-        }
-      })));
-      nextUrl = cleanText(body && body['@odata.nextLink']);
+    const now = Date.now();
+    const cached = state.entriesCache;
+    if (cached && Array.isArray(cached.rows) && Number.isFinite(cached.loadedAt) && (now - cached.loadedAt) < AUDIT_TRAIL_CACHE_MS) {
+      return cached.rows;
     }
-    return rows;
+    if (state.entriesPromise) {
+      return state.entriesPromise;
+    }
+    state.entriesPromise = (async () => {
+      const siteId = await resolveSiteId();
+      const list = await resolveAuditList();
+      const rows = [];
+      let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
+      while (nextUrl) {
+        const body = await graphRequest('GET', nextUrl);
+        const batch = Array.isArray(body && body.value) ? body.value : [];
+        rows.push(...batch.map((entry) => ({
+          listItemId: cleanText(entry && entry.id),
+          item: {
+            listItemId: cleanText(entry && entry.id),
+            ...mapGraphFieldsToAuditEntry(entry && entry.fields ? entry.fields : {})
+          }
+        })));
+        nextUrl = cleanText(body && body['@odata.nextLink']);
+      }
+      rows.sort((left, right) => cleanText(right.item && right.item.occurredAt).localeCompare(cleanText(left.item && left.item.occurredAt), 'zh-Hant'));
+      state.entriesCache = {
+        loadedAt: Date.now(),
+        rows
+      };
+      return rows;
+    })();
+    try {
+      return await state.entriesPromise;
+    } finally {
+      state.entriesPromise = null;
+    }
   }
 
   function matchesKeyword(entry, keyword) {
@@ -93,18 +116,18 @@ function createAuditTrailRouter(deps) {
     const recordId = cleanText(url.searchParams.get('recordId'));
     const rawLimit = Number(url.searchParams.get('limit') || 100);
     const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 100;
-    return items
-      .filter((entry) => {
-        if (eventType && cleanText(entry.eventType) !== eventType) return false;
-        if (actorEmail && cleanText(entry.actorEmail).toLowerCase() !== actorEmail) return false;
-        if (targetEmail && cleanText(entry.targetEmail).toLowerCase() !== targetEmail) return false;
-        if (unitCode && cleanText(entry.unitCode) !== unitCode) return false;
-        if (recordId && cleanText(entry.recordId) !== recordId) return false;
-        if (!matchesKeyword(entry, keyword)) return false;
-        return true;
-      })
-      .sort((left, right) => cleanText(right.occurredAt).localeCompare(cleanText(left.occurredAt), 'zh-Hant'))
-      .slice(0, limit);
+    const results = [];
+    for (const entry of Array.isArray(items) ? items : []) {
+      if (eventType && cleanText(entry.eventType) !== eventType) continue;
+      if (actorEmail && cleanText(entry.actorEmail).toLowerCase() !== actorEmail) continue;
+      if (targetEmail && cleanText(entry.targetEmail).toLowerCase() !== targetEmail) continue;
+      if (unitCode && cleanText(entry.unitCode) !== unitCode) continue;
+      if (recordId && cleanText(entry.recordId) !== recordId) continue;
+      if (!matchesKeyword(entry, keyword)) continue;
+      results.push(entry);
+      if (results.length >= limit) break;
+    }
+    return results;
   }
 
   async function buildHealth() {
