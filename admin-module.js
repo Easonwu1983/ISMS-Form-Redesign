@@ -559,14 +559,83 @@
         const pendingCount = Array.isArray(unit.pending) ? unit.pending.length : 0;
         const childCount = Array.isArray(unit.children) ? unit.children.length : 0;
         const childSummary = `${holderCount} 位資安窗口 · ${pendingCount} 筆待審核 · ${childCount} 個二級單位`;
-        return `<details class="card governance-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="security-window-summary"><div><div class="review-unit-name">${esc(unit.unit)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div></div><div class="security-window-summary-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><div class="review-card-subtitle" style="margin-top:6px">${esc(childSummary)}</div></div></summary><div class="governance-card-body" style="padding-top:12px"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div><div class="table-wrapper" style="margin-top:14px"><table class="review-data-table"><thead><tr><th>單位</th><th>狀態</th><th>資安窗口</th><th>備註</th></tr></thead><tbody>${renderSecurityWindowScopeRows(unit)}</tbody></table></div></div></details>`;
-      }).join('');
+          return `<details class="card governance-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="security-window-summary"><div><div class="review-unit-name">${esc(unit.unit)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div></div><div class="security-window-summary-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><div class="review-card-subtitle" style="margin-top:6px">${esc(childSummary)}</div></div></summary><div class="governance-card-body" style="padding-top:12px"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div><div class="table-wrapper" style="margin-top:14px"><table class="review-data-table"><thead><tr><th>單位</th><th>狀態</th><th>資安窗口</th><th>備註</th></tr></thead><tbody>${renderSecurityWindowScopeRows(unit)}</tbody></table></div></div></details>`;
+        }).join('');
+      }
+
+    function buildReviewTableShell(key, headersHtml, rowsHtml, options) {
+      const config = options || {};
+      const toolbarSubtitle = config.toolbarSubtitle
+        ? `<span class="review-card-subtitle">${esc(config.toolbarSubtitle)}</span>`
+        : '<span class="review-card-subtitle">可拖曳表格左右移動，也可使用右側按鈕快速查看其他欄位。</span>';
+      return `<div class="review-table-shell"><div class="review-table-toolbar">${toolbarSubtitle}<div class="review-table-scroll-actions"><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-left="${esc(key)}" aria-label="向左移動">${ic('chevron-left', 'icon-sm')}</button><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-right="${esc(key)}" aria-label="向右移動">${ic('chevron-right', 'icon-sm')}</button></div></div><div class="table-wrapper review-table-wrapper" data-review-scroll-root="${esc(key)}"><table><thead><tr>${headersHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+    }
+
+    function wireReviewTableScrollers(scope) {
+      const host = scope || document;
+      host.querySelectorAll('[data-review-scroll-root]').forEach((wrapper) => {
+        if (wrapper.dataset.reviewScrollReady === 'true') return;
+        wrapper.dataset.reviewScrollReady = 'true';
+        const key = wrapper.dataset.reviewScrollRoot;
+        const leftButton = host.querySelector(`[data-review-scroll-left="${key}"]`);
+        const rightButton = host.querySelector(`[data-review-scroll-right="${key}"]`);
+        const maxScrollLeft = () => Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
+        const isScrollable = () => maxScrollLeft() > 6;
+        const syncButtonState = () => {
+          const maxLeft = maxScrollLeft();
+          wrapper.classList.toggle('is-scrollable', maxLeft > 6);
+          if (leftButton) leftButton.disabled = wrapper.scrollLeft <= 4 || maxLeft <= 6;
+          if (rightButton) rightButton.disabled = wrapper.scrollLeft >= maxLeft - 4 || maxLeft <= 6;
+        };
+        const scrollByDistance = (distance) => {
+          wrapper.scrollBy({ left: distance, behavior: 'smooth' });
+        };
+
+        let dragState = null;
+        wrapper.addEventListener('pointerdown', (event) => {
+          if (!isScrollable()) return;
+          if (event.pointerType === 'mouse' && event.button !== 0) return;
+          dragState = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startScrollLeft: wrapper.scrollLeft
+          };
+          wrapper.classList.add('is-dragging');
+          if (wrapper.setPointerCapture) wrapper.setPointerCapture(event.pointerId);
+        });
+        wrapper.addEventListener('pointermove', (event) => {
+          if (!dragState || event.pointerId !== dragState.pointerId) return;
+          const delta = event.clientX - dragState.startX;
+          wrapper.scrollLeft = dragState.startScrollLeft - delta;
+        });
+        const endDrag = (event) => {
+          if (!dragState) return;
+          if (event && dragState.pointerId !== event.pointerId) return;
+          wrapper.classList.remove('is-dragging');
+          dragState = null;
+        };
+        wrapper.addEventListener('pointerup', endDrag);
+        wrapper.addEventListener('pointercancel', endDrag);
+        wrapper.addEventListener('pointerleave', (event) => {
+          if (dragState && event.pointerType !== 'mouse') endDrag(event);
+        });
+        wrapper.addEventListener('wheel', (event) => {
+          if (!isScrollable()) return;
+          if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) && !event.shiftKey) return;
+          event.preventDefault();
+          wrapper.scrollLeft += event.shiftKey ? event.deltaY + event.deltaX : event.deltaY;
+        }, { passive: false });
+        wrapper.addEventListener('scroll', syncButtonState, { passive: true });
+        if (leftButton) leftButton.addEventListener('click', () => scrollByDistance(-Math.max(260, wrapper.clientWidth * 0.72)));
+        if (rightButton) rightButton.addEventListener('click', () => scrollByDistance(Math.max(260, wrapper.clientWidth * 0.72)));
+        syncButtonState();
+      });
     }
 
     function getSecurityWindowFiltersFromDom() {
-      return {
-        keyword: document.getElementById('security-window-keyword') ? document.getElementById('security-window-keyword').value.trim() : '',
-        status: document.getElementById('security-window-status') ? document.getElementById('security-window-status').value.trim() : 'all'
+        return {
+          keyword: document.getElementById('security-window-keyword') ? document.getElementById('security-window-keyword').value.trim() : '',
+          status: document.getElementById('security-window-status') ? document.getElementById('security-window-status').value.trim() : 'all'
       };
     }
 
