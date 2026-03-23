@@ -4,17 +4,31 @@ const path = require('path');
 const DEFAULT_BASE = process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088';
 const OUT_PATH = path.join(process.cwd(), 'logs', 'campus-live-regression-smoke.json');
 
-async function requestJson(url, options) {
-  const response = await fetch(url, options);
-  const text = await response.text();
+  async function requestJson(url, options) {
+    const response = await fetch(url, options);
+    const text = await response.text();
   let json = null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch (_) {
     json = null;
   }
-  return { response, text, json };
-}
+    return { response, text, json };
+  }
+
+  async function loginAdminSession() {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'auth.login', payload: { username: 'admin', password: 'admin123' } })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('login response invalid');
+    if (Object.prototype.hasOwnProperty.call(json.item || {}, 'password')) throw new Error('password field leaked in auth response');
+    const token = String(json && json.session && json.session.token || '').trim();
+    if (!token) throw new Error('missing session token');
+    return { username: json.item.username, role: json.item.role, token };
+  }
 
 async function run() {
   const report = {
@@ -145,17 +159,9 @@ async function run() {
   });
 
   await step('auth login success', async () => {
-    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'auth.login', payload: { username: 'admin', password: 'admin123' } })
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('login response invalid');
-    if (Object.prototype.hasOwnProperty.call(json.item || {}, 'password')) throw new Error('password field leaked in auth response');
-    adminSessionToken = String(json && json.session && json.session.token || '').trim();
-    if (!adminSessionToken) throw new Error('missing session token');
-    return { username: json.item.username, role: json.item.role };
+    const session = await loginAdminSession();
+    adminSessionToken = session.token;
+    return { username: session.username, role: session.role };
   }, { critical: true });
 
   await step('auth login failure', async () => {
@@ -226,11 +232,21 @@ async function run() {
   }, { critical: true });
 
   await step('auth verify authorized', async () => {
-    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/verify`, {
+    let verification = await requestJson(`${DEFAULT_BASE}/api/auth/verify`, {
       headers: {
         Authorization: `Bearer ${adminSessionToken}`
       }
     });
+    if (verification.response.status === 401) {
+      const session = await loginAdminSession();
+      adminSessionToken = session.token;
+      verification = await requestJson(`${DEFAULT_BASE}/api/auth/verify`, {
+        headers: {
+          Authorization: `Bearer ${adminSessionToken}`
+        }
+      });
+    }
+    const { response, json } = verification;
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('verify response invalid');
     return { username: json.item.username };

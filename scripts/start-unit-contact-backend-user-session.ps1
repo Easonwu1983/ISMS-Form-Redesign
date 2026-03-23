@@ -8,13 +8,36 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
-if ([string]::IsNullOrWhiteSpace($RuntimeConfigPath)) {
-  $RuntimeConfigPath = Join-Path $RepoRoot 'm365\campus-backend\runtime.local.json'
+function Resolve-RuntimeConfigPath {
+  param(
+    [string]$Root,
+    [string]$ExplicitPath = ''
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace($ExplicitPath) -and (Test-Path $ExplicitPath -PathType Leaf)) {
+    return (Resolve-Path $ExplicitPath).Path
+  }
+
+  $candidates = @(
+    (Join-Path $Root '.runtime\runtime.local.host.json'),
+    (Join-Path $Root 'm365\campus-backend\runtime.local.json')
+  )
+
+  foreach ($candidate in $candidates) {
+    if (Test-Path $candidate -PathType Leaf) {
+      return (Resolve-Path $candidate).Path
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
+    throw "Runtime config not found: $ExplicitPath"
+  }
+
+  throw "Runtime config not found. Looked for: $($candidates -join ', ')"
 }
 
-if (-not (Test-Path $RuntimeConfigPath -PathType Leaf)) {
-  throw "Runtime config not found: $RuntimeConfigPath"
-}
+$RuntimeConfigPath = Resolve-RuntimeConfigPath -Root $RepoRoot -ExplicitPath $RuntimeConfigPath
+$env:PORT = [string]$Port
 
 $listening = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
 if ($listening) {

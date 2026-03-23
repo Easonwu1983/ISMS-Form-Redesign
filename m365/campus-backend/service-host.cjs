@@ -2,14 +2,34 @@
 const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
-const defaultRuntimeConfigPath = path.join(__dirname, 'runtime.local.json');
 const runtimeConfigArg = process.argv[2] ? path.resolve(process.argv[2]) : '';
-const runtimeConfigPath = runtimeConfigArg
-  || (process.env.UNIT_CONTACT_BACKEND_RUNTIME_CONFIG ? path.resolve(process.env.UNIT_CONTACT_BACKEND_RUNTIME_CONFIG) : defaultRuntimeConfigPath);
 
-function loadRuntimeConfig() {
-  if (!fs.existsSync(runtimeConfigPath)) return {};
-  return JSON.parse(fs.readFileSync(runtimeConfigPath, 'utf8'));
+function resolveRuntimeConfigPath() {
+  const candidates = [];
+  const explicitArg = String(runtimeConfigArg || '').trim();
+  const envPath = String(process.env.UNIT_CONTACT_BACKEND_RUNTIME_CONFIG || '').trim();
+  if (explicitArg) candidates.push(explicitArg);
+  if (envPath) candidates.push(path.resolve(envPath));
+  candidates.push(
+    path.join(projectRoot, '.runtime', 'runtime.local.host.json'),
+    path.join(__dirname, 'runtime.local.json'),
+    path.join(projectRoot, 'm365', 'campus-backend', 'runtime.local.json')
+  );
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) return candidate;
+  }
+  return candidates[0] || '';
+}
+
+function loadRuntimeConfig(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return {};
+  const raw = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Invalid runtime config JSON at ${filePath}: ${error.message}`);
+  }
 }
 
 function ensureDir(dirPath) {
@@ -118,7 +138,8 @@ function installFileLogger(logDir) {
 
 process.chdir(projectRoot);
 
-const runtimeConfig = loadRuntimeConfig();
+const runtimeConfigPath = resolveRuntimeConfigPath();
+const runtimeConfig = loadRuntimeConfig(runtimeConfigPath);
 applyEnvFromConfig(runtimeConfig);
 const { startServer } = require('./server.cjs');
 
@@ -127,8 +148,11 @@ const disposeLogger = installFileLogger(logDir);
 
 console.log('service-host starting', {
   runtimeConfigPath,
+  runtimeConfigExists: !!runtimeConfigPath && fs.existsSync(runtimeConfigPath),
   projectRoot,
-  port: process.env.PORT || '8787'
+  port: process.env.PORT || '8787',
+  tokenMode: String(process.env.M365_A3_TOKEN_MODE || '').trim() || 'unset',
+  mailSenderUpn: String(process.env.GRAPH_MAIL_SENDER_UPN || process.env.AUTH_MAIL_SENDER_UPN || '').trim() || 'unset'
 });
 
 const server = startServer(Number(process.env.PORT || 8787));

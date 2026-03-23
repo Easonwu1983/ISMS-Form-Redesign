@@ -195,6 +195,47 @@ function writeDeployManifest(res) {
   res.end(payload);
 }
 
+function writeM365Override(res) {
+  const payload = `(function () {
+  window.__M365_UNIT_CONTACT_CONFIG_OVERRIDE__ = {
+    activeProfile: 'a3CampusBackend',
+    strictRemoteData: true,
+    unitContactMode: 'm365-api',
+    unitContactSubmitEndpoint: '/api/unit-contact/apply',
+    unitContactStatusEndpoint: '/api/unit-contact/status',
+    unitContactStatusLookupMethod: 'POST',
+    correctiveActionsMode: 'm365-api',
+    correctiveActionsEndpoint: '/api/corrective-actions',
+    correctiveActionsHealthEndpoint: '/api/corrective-actions/health',
+    checklistMode: 'm365-api',
+    checklistEndpoint: '/api/checklists',
+    checklistHealthEndpoint: '/api/checklists/health',
+    trainingMode: 'm365-api',
+    trainingFormsEndpoint: '/api/training/forms',
+    trainingRostersEndpoint: '/api/training/rosters',
+    trainingHealthEndpoint: '/api/training/health',
+    authMode: 'm365-api',
+    authEndpoint: '/api/auth',
+    authHealthEndpoint: '/api/auth/health',
+    systemUsersMode: 'm365-api',
+    systemUsersEndpoint: '/api/system-users',
+    systemUsersHealthEndpoint: '/api/system-users/health',
+    reviewScopesMode: 'm365-api',
+    reviewScopesEndpoint: '/api/review-scopes',
+    reviewScopesHealthEndpoint: '/api/review-scopes/health',
+    attachmentsMode: 'm365-api',
+    attachmentsEndpoint: '/api/attachments',
+    attachmentsHealthEndpoint: '/api/attachments/health'
+  };
+})();`;
+  res.writeHead(200, {
+    ...buildSecurityHeaders('/m365-config.override.js'),
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Content-Length': Buffer.byteLength(payload)
+  });
+  res.end(payload);
+}
+
 function writeForbiddenJson(res, ip) {
   const payload = JSON.stringify({
     ok: false,
@@ -268,6 +309,10 @@ const server = http.createServer((req, res) => {
   const targetUrl = new URL(normalizeRequestPath(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
   if (targetUrl.pathname === '/deploy-manifest.json') {
     writeDeployManifest(res);
+    return;
+  }
+  if (targetUrl.pathname === '/m365-config.override.js') {
+    writeM365Override(res);
     return;
   }
   if (!isAllowedRemoteAddress(remoteAddress)) {

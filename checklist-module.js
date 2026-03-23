@@ -105,7 +105,7 @@
     let checklistListRenderCache = { signature: '', html: '' };
     let checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
     let checklistListViewCache = { signature: '', filtered: [], grouped: [] };
-    let checklistListDomCache = { signature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
+    let checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
 
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
@@ -356,6 +356,7 @@
       const rows = Array.from(contentEl.querySelectorAll('.cl-list-row'));
       checklistListDomCache = {
         signature,
+        appliedSignature: '',
         rows,
         units: Array.from(contentEl.querySelectorAll('.cl-unit-accordion')),
         years: Array.from(contentEl.querySelectorAll('.cl-year-accordion')),
@@ -422,6 +423,9 @@
       if (checklistListDomCache.signature !== signature || checklistListDomCache.contentEl !== contentEl) {
         refreshChecklistListDomCache(contentEl, signature);
       }
+      if (checklistListDomCache.appliedSignature === signature) {
+        return;
+      }
       const rowEls = Array.isArray(checklistListDomCache.rows) ? checklistListDomCache.rows : Array.from(contentEl.querySelectorAll('.cl-list-row'));
       const searchTexts = Array.isArray(checklistListDomCache.searchTexts) ? checklistListDomCache.searchTexts : [];
       const rowUnitKeys = Array.isArray(checklistListDomCache.rowUnitKeys) ? checklistListDomCache.rowUnitKeys : [];
@@ -460,6 +464,7 @@
       if (hasKeyword && keywordEl && document.activeElement === keywordEl && typeof keywordEl.focus === 'function') {
         keywordEl.focus({ preventScroll: true });
       }
+      checklistListDomCache.appliedSignature = signature;
     }
 
     function buildChecklistYearAccordion(yearGroup) {

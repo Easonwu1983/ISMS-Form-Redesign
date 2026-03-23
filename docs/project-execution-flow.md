@@ -347,3 +347,13 @@ git config --global http.version HTTP/1.1
 - ????? release gate
 
 ????????????????? deploy-manifest ????????????
+
+## 啟動契約補充
+- 本機與 guest 的 backend 啟動流程已統一由 `service-host.cjs` 接手。
+- runtime config 若有 BOM，service-host 會自動清除。
+- 預設搜尋順序：
+  1. 明確傳入的 runtime config
+  2. `UNIT_CONTACT_BACKEND_RUNTIME_CONFIG`
+  3. `.runtime/runtime.local.host.json`
+  4. `m365/campus-backend/runtime.local.json`
+- 版本治理仍以 `deploy-manifest.json` + `version-governance-smoke` 作為 release gate。

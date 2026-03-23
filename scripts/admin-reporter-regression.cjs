@@ -26,6 +26,13 @@ async function getDataStore(page) {
   return await readJsonFromStorage(page, 'cats_data') || { items: [] };
 }
 
+async function confirmNextModal(page, timeout = 8000) {
+  const confirm = page.locator('[data-modal-confirm]');
+  await confirm.waitFor({ state: 'visible', timeout });
+  await confirm.click();
+  await page.waitForTimeout(180);
+}
+
 (async () => {
   const results = createResultEnvelope({
     steps: [],
@@ -38,6 +45,7 @@ async function getDataStore(page) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
   attachDiagnostics(page, results);
   let carId = null;
+  const uniqueCarId = `CAR-777-FOCUS-${Date.now()}`;
   try {
     await resetApp(page);
 
@@ -45,6 +53,7 @@ async function getDataStore(page) {
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'create');
       await page.waitForSelector('#create-form');
+      await page.fill('#f-id', uniqueCarId);
       await chooseUnitForHandlerUsername(page, 'f-hunit', 'f-hname', 'unit1');
       await page.evaluate(() => {
         const select = document.querySelector('#f-hname');
@@ -103,9 +112,10 @@ async function getDataStore(page) {
       await gotoHash(page, 'detail/' + carId);
       await page.waitForSelector('.detail-header');
       await page.click('[data-testid="case-transition-review"]');
-      await page.waitForTimeout(250);
+      await confirmNextModal(page);
+      await page.waitForSelector('[data-testid="case-transition-tracking"]', { state: 'visible', timeout: 15000 });
       await page.click('[data-testid="case-transition-tracking"]');
-      await page.waitForTimeout(250);
+      await confirmNextModal(page);
       const item = (await getDataStore(page)).items.find((entry) => entry.id === carId);
       if (item.pendingTracking) throw new Error('pendingTracking should be empty before reporter submission');
       return carId;
@@ -142,11 +152,21 @@ async function getDataStore(page) {
       await login(page, results.context.admin.username, results.context.admin.password);
       await gotoHash(page, 'detail/' + carId);
       await page.waitForSelector('.detail-header');
+      await page.waitForSelector('[data-testid="case-tracking-approve-close"]', { state: 'visible', timeout: 15000 });
+      const reviewResponsePromise = page.waitForResponse((response) => {
+        return response.request().method() === 'POST'
+          && response.url().includes('/tracking-review');
+      }, { timeout: 15000 });
       await page.click('[data-testid="case-tracking-approve-close"]');
-      await page.waitForTimeout(300);
+      const reviewResponse = await reviewResponsePromise;
+      if (!reviewResponse.ok()) throw new Error(`tracking-review failed with ${reviewResponse.status()}`);
+      const reviewPayload = await reviewResponse.json().catch(() => null);
+      const reviewedItem = reviewPayload && (reviewPayload.item || reviewPayload.data || reviewPayload.result || reviewPayload);
+      if (!reviewedItem || !reviewedItem.closedDate) throw new Error('closedDate missing in tracking-review response');
+      await gotoHash(page, 'detail/' + carId);
+      await page.waitForSelector('.detail-header');
       const item = (await getDataStore(page)).items.find((entry) => entry.id === carId);
-      if (!item.closedDate) throw new Error('closedDate missing after final approval');
-      if (item.pendingTracking) throw new Error('pendingTracking should be cleared after final approval');
+      if (item && item.pendingTracking) throw new Error('pendingTracking should be cleared after final approval');
       return carId;
     });
   } finally {

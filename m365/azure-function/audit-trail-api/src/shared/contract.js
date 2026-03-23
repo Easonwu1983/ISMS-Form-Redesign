@@ -46,17 +46,39 @@ function buildPayloadPreview(value) {
 function mapGraphFieldsToAuditEntry(fields) {
   const payloadJson = cleanText(fields && fields.PayloadJson);
   const payload = tryParseJson(payloadJson);
+  const title = cleanText(fields && fields.Title);
+  const eventType = cleanText(fields && fields.EventType);
+  const actorEmail = cleanText(fields && fields.ActorEmail);
+  const targetEmail = cleanText(fields && fields.TargetEmail);
+  const unitCode = cleanText(fields && fields.UnitCode);
+  const recordId = cleanText(fields && fields.RecordId);
+  const occurredAt = cleanText(fields && fields.OccurredAt);
+  const searchText = [
+    title,
+    eventType,
+    actorEmail,
+    targetEmail,
+    unitCode,
+    recordId,
+    payloadJson
+  ].map((value) => cleanText(value).toLowerCase()).join('\n');
   return {
-    title: cleanText(fields && fields.Title),
-    eventType: cleanText(fields && fields.EventType),
-    actorEmail: cleanText(fields && fields.ActorEmail),
-    targetEmail: cleanText(fields && fields.TargetEmail),
-    unitCode: cleanText(fields && fields.UnitCode),
-    recordId: cleanText(fields && fields.RecordId),
-    occurredAt: cleanText(fields && fields.OccurredAt),
+    title,
+    eventType,
+    actorEmail,
+    targetEmail,
+    unitCode,
+    recordId,
+    occurredAt,
     payloadJson,
     payload,
-    payloadPreview: buildPayloadPreview(payloadJson)
+    payloadPreview: buildPayloadPreview(payloadJson),
+    searchText,
+    eventTypeKey: eventType,
+    actorEmailKey: actorEmail.toLowerCase(),
+    targetEmailKey: targetEmail.toLowerCase(),
+    unitCodeKey: unitCode,
+    recordIdKey: recordId
   };
 }
 

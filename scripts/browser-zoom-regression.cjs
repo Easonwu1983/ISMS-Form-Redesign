@@ -85,19 +85,23 @@ async function inspectLayout(page) {
   });
 
   try {
+    const browserTargets = BROWSERS.length ? BROWSERS : [{ name: 'chromium', executablePath: '' }];
     if (!BROWSERS.length) {
       results.steps.push({
-        id: 'browser-zoom-skip',
+        id: 'browser-zoom-fallback',
         role: 'system',
         title: 'Browser zoom regression',
         status: 'passed',
-        detail: 'No local Chrome or Edge executable found; skipped browser-specific zoom sweep.'
+        detail: 'No local Chrome or Edge executable found; falling back to Playwright bundled Chromium.'
       });
-      return;
     }
-    for (const browserMeta of BROWSERS) {
+    for (const browserMeta of browserTargets) {
       try {
-        const browser = await chromium.launch({ headless: true, executablePath: browserMeta.executablePath });
+        const launchOptions = { headless: true };
+        if (browserMeta.executablePath) {
+          launchOptions.executablePath = browserMeta.executablePath;
+        }
+        const browser = await chromium.launch(launchOptions);
         const page = await browser.newPage({ viewport: BASE_VIEWPORT });
         attachDiagnostics(page, results);
         try {

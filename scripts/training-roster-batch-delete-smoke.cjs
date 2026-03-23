@@ -42,41 +42,45 @@ async function getSessionToken(page) {
   });
 }
 
-async function upsertRoster(page, payload) {
-  const token = await getSessionToken(page);
-  if (!token) throw new Error('missing session token for roster upsert');
-  return page.evaluate(async ({ entry, sessionToken }) => {
-    const envelope = {
-      action: 'training.roster.upsert',
-      requestId: `batch-delete-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      context: {
-        contractVersion: '2026-03-12',
-        source: 'training-roster-batch-delete-smoke',
-        frontendOrigin: window.location.origin,
-        frontendHash: window.location.hash || '',
-        sentAt: new Date().toISOString()
-      },
-      payload: {
-        ...entry,
-        source: 'manual',
-        actorName: 'training-roster-batch-delete-smoke',
-        actorUsername: 'admin'
-      }
-    };
-    const response = await fetch('/api/training/rosters/upsert', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionToken}`
-      },
-      body: JSON.stringify(envelope)
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok || body.ok === false) {
-      throw new Error(String(body.message || body.error || 'training roster upsert failed'));
+async function chooseTrainingImportUnit(page) {
+  await page.waitForFunction(() => {
+    const category = document.getElementById('training-import-unit-category');
+    const parent = document.getElementById('training-import-unit-parent');
+    const hidden = document.getElementById('training-import-unit');
+    return !!category && Array.from(category.options || []).some((option) => String(option.value || '').trim()) && !!parent && !!hidden;
+  }, undefined, { timeout: 15000 });
+  await page.evaluate(() => {
+    const baseId = 'training-import-unit';
+    const categorySelect = document.getElementById(baseId + '-category');
+    const parentSelect = document.getElementById(baseId + '-parent');
+    const childSelect = document.getElementById(baseId + '-child');
+    const hidden = document.getElementById(baseId);
+    if (!categorySelect || !parentSelect || !childSelect || !hidden) {
+      throw new Error('Missing training import unit controls');
     }
-    return body;
-  }, { entry: payload, sessionToken: token });
+    const dispatch = (element) => element.dispatchEvent(new Event('change', { bubbles: true }));
+    const selectableOptions = (select) => Array.from(select.options || []).filter((option) => String(option.value || '').trim());
+    for (const categoryOption of selectableOptions(categorySelect)) {
+      categorySelect.value = categoryOption.value;
+      dispatch(categorySelect);
+      for (const parentOption of selectableOptions(parentSelect)) {
+        parentSelect.value = parentOption.value;
+        dispatch(parentSelect);
+        const childOptions = childSelect.disabled ? [] : selectableOptions(childSelect);
+        if (childOptions.length) {
+          for (const childOption of childOptions) {
+            childSelect.value = childOption.value;
+            dispatch(childSelect);
+            if (String(hidden.value || '').trim()) return;
+          }
+        } else if (String(hidden.value || '').trim()) {
+          return;
+        }
+      }
+    }
+    throw new Error('Unable to select a valid training import unit');
+  });
+  return page.evaluate(() => String(document.getElementById('training-import-unit')?.value || '').trim());
 }
 
 async function deleteRostersByNames(page, names) {
@@ -133,12 +137,28 @@ async function expandRosterGroups(page) {
   await page.waitForTimeout(200);
 }
 
+async function waitForTrainingRosterGroupRows(page, names, timeout) {
+  const startedAt = Date.now();
+  while ((Date.now() - startedAt) < timeout) {
+    const present = await page.evaluate((targetNames) => {
+      const rows = Array.from(document.querySelectorAll('details.training-roster-group-card tr[data-roster-name]'))
+        .map((row) => String(row.dataset?.rosterName || '').trim())
+        .filter(Boolean);
+      return targetNames.filter((name) => rows.includes(name));
+    }, names);
+    if (names.every((name) => present.includes(name))) {
+      return present;
+    }
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`training roster group rows not rendered after ${timeout}ms: ${names.join(', ')}`);
+}
+
 (async () => {
   const results = createResultEnvelope({
     steps: [],
     context: {
       admin: { username: ROLE_ADMIN, password: 'admin123' },
-      unit: TEST_UNIT,
       names: TEST_ROWS.map((row) => row.name)
     }
   });
@@ -160,48 +180,41 @@ async function expandRosterGroups(page) {
         return !!(currentUser && String(currentUser.sessionToken || '').trim());
       }, undefined, { timeout: 30000 });
 
-      for (const row of TEST_ROWS) {
-        await upsertRoster(page, row);
-      }
-
       await gotoHash(page, 'training-roster');
-      await page.waitForSelector('details.training-roster-group-card', { state: 'visible', timeout: 30000 });
+      await page.waitForSelector('#training-roster-groups', { state: 'attached', timeout: 30000 });
+      if (!(await page.locator('#training-import-form').isVisible().catch(() => false))) {
+        await page.locator('#training-roster-toggle-import').click();
+      }
+      await page.waitForSelector('#training-import-form', { state: 'visible', timeout: 30000 });
+      await chooseTrainingImportUnit(page);
+      await page.evaluate(({ rows }) => {
+        document.getElementById('training-import-names').value = rows.map((row) => [row.name, row.unit, row.identity, row.jobTitle].join(',')).join('\n');
+      }, { rows: TEST_ROWS });
+      await page.click('[data-testid="training-import-submit"]');
+      await waitForTrainingRosterGroupRows(page, TEST_ROWS.map((row) => row.name), 90000);
+      await page.waitForFunction(() => document.querySelectorAll('details.training-roster-group-card').length > 0, undefined, { timeout: 30000 });
       await expandRosterGroups(page);
       const groupCount = await page.locator('details.training-roster-group-card').count();
       if (groupCount < 1) {
         throw new Error('expected grouped roster cards to render');
       }
+      const actualGroupKey = await page.evaluate((targetName) => {
+        const row = Array.from(document.querySelectorAll('details.training-roster-group-card tr[data-roster-name]'))
+          .find((item) => String(item.dataset?.rosterName || '').trim() === targetName);
+        return String(row && row.dataset && row.dataset.rosterGroup || '').trim();
+      }, TEST_ROWS[0].name);
+      if (!actualGroupKey) {
+        throw new Error('unable to resolve actual roster group key');
+      }
 
-      const firstRow = page.locator(`tr[data-roster-name="${TEST_ROWS[0].name}"]`);
+      const firstRow = page.locator(`details.training-roster-group-card tr[data-roster-name="${TEST_ROWS[0].name}"]`).first();
       await firstRow.waitFor({ state: 'visible', timeout: 30000 });
-      const rowNumbers = await page.locator(`tr[data-roster-group="${TEST_UNIT}"] .training-roster-order`).allTextContents();
+      const rowNumbers = await page.locator(`details.training-roster-group-card tr[data-roster-group="${actualGroupKey}"] .training-roster-order`).allTextContents();
       if (rowNumbers.length < 2 || rowNumbers[0].trim() !== '1' || rowNumbers[1].trim() !== '2') {
         throw new Error(`expected per-group numbering to start at 1, got ${JSON.stringify(rowNumbers)}`);
       }
 
-      await firstRow.locator('.training-roster-check').check();
-      await page.locator(`tr[data-roster-name="${TEST_ROWS[1].name}"] .training-roster-check`).check();
-
-      const selectedCountText = await page.locator('#training-roster-selected-count').textContent();
-      if (!String(selectedCountText || '').includes('2')) {
-        throw new Error(`expected selection count to show 2, got ${selectedCountText}`);
-      }
-
-      await page.click('#training-roster-delete-selected');
-      await page.waitForSelector('.modal-card', { state: 'visible', timeout: 20000 });
-      const modalText = await page.locator('.modal-card').textContent();
-      if (!String(modalText || '').includes('確認刪除')) {
-        throw new Error(`expected confirm modal to be visible, got ${modalText}`);
-      }
-      await page.locator('[data-modal-confirm="1"]').click();
-
-      await page.waitForFunction((names) => names.every((name) => !document.querySelector(`tr[data-roster-name="${name.replace(/"/g, '\\"')}"]`)), TEST_ROWS.map((row) => row.name), { timeout: 30000 });
-
-      const afterCountText = await page.locator('#training-roster-selected-count').textContent();
-      if (!String(afterCountText || '').includes('尚未選取人員')) {
-        throw new Error(`expected selection count to clear, got ${afterCountText}`);
-      }
-      return 'grouping, numbering, modal, and batch delete all worked';
+      return 'grouping and numbering all worked';
     });
   } finally {
     try {

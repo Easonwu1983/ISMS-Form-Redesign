@@ -285,3 +285,13 @@ git config --global http.version HTTP/1.1
 - ????? release gate
 
 ????????????????? deploy-manifest ????????????
+
+## 啟動統一補充
+- `node m365/campus-backend/service-host.cjs` 會自動依序尋找 runtime config：
+  1. 命令列傳入的檔案
+  2. `UNIT_CONTACT_BACKEND_RUNTIME_CONFIG`
+  3. `.runtime/runtime.local.host.json`
+  4. `m365/campus-backend/runtime.local.json`
+- `service-host` 會自動移除 BOM，避免 runtime JSON 因編碼出錯。
+- `scripts/start-unit-contact-backend-user-session.ps1` 會優先找 `.runtime/runtime.local.host.json`，再找 guest runtime config。
+- `package.json` 的 `m365:a3:campus-backend:start` 已改成走 `service-host.cjs`，不再直接啟動 `server.cjs`。

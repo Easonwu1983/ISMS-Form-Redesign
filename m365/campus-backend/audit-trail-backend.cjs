@@ -23,6 +23,16 @@ function createAuditTrailRouter(deps) {
     entriesPromise: null
   };
   const AUDIT_TRAIL_CACHE_MS = 30000;
+  const AUDIT_TRAIL_FIELDS = [
+    'Title',
+    'EventType',
+    'ActorEmail',
+    'TargetEmail',
+    'UnitCode',
+    'RecordId',
+    'OccurredAt',
+    'PayloadJson'
+  ].join(',');
 
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
@@ -31,6 +41,15 @@ function createAuditTrailRouter(deps) {
 
   function getAuditListName() {
     return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
+  }
+
+  function logAuditTrail(message, details) {
+    const suffix = details && typeof details === 'object'
+      ? Object.entries(details)
+        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
+        .join(' ')
+      : '';
+    console.log(`[audit-trail] ${message}${suffix ? ` ${suffix}` : ''}`);
   }
 
   async function fetchListMap() {
@@ -57,16 +76,21 @@ function createAuditTrailRouter(deps) {
     const now = Date.now();
     const cached = state.entriesCache;
     if (cached && Array.isArray(cached.rows) && Number.isFinite(cached.loadedAt) && (now - cached.loadedAt) < AUDIT_TRAIL_CACHE_MS) {
+      logAuditTrail('list cache hit', {
+        rows: cached.rows.length,
+        ageMs: now - cached.loadedAt
+      });
       return cached.rows;
     }
     if (state.entriesPromise) {
       return state.entriesPromise;
     }
     state.entriesPromise = (async () => {
+      const startedAt = Date.now();
       const siteId = await resolveSiteId();
       const list = await resolveAuditList();
       const rows = [];
-      let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
+      let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields($select=${AUDIT_TRAIL_FIELDS})&$top=200`;
       while (nextUrl) {
         const body = await graphRequest('GET', nextUrl);
         const batch = Array.isArray(body && body.value) ? body.value : [];
@@ -84,6 +108,10 @@ function createAuditTrailRouter(deps) {
         loadedAt: Date.now(),
         rows
       };
+      logAuditTrail('list cache miss', {
+        rows: rows.length,
+        durationMs: Date.now() - startedAt
+      });
       return rows;
     })();
     try {
@@ -95,15 +123,7 @@ function createAuditTrailRouter(deps) {
 
   function matchesKeyword(entry, keyword) {
     if (!keyword) return true;
-    const haystack = [
-      entry.title,
-      entry.eventType,
-      entry.actorEmail,
-      entry.targetEmail,
-      entry.unitCode,
-      entry.recordId,
-      entry.payloadJson
-    ].map((value) => cleanText(value).toLowerCase()).join('\n');
+    const haystack = cleanText(entry && entry.searchText).toLowerCase();
     return haystack.includes(keyword);
   }
 
@@ -116,18 +136,44 @@ function createAuditTrailRouter(deps) {
     const recordId = cleanText(url.searchParams.get('recordId'));
     const rawLimit = Number(url.searchParams.get('limit') || 100);
     const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 100;
-    const results = [];
+    const rawOffset = Number(url.searchParams.get('offset') || 0);
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
+    const matches = [];
     for (const entry of Array.isArray(items) ? items : []) {
-      if (eventType && cleanText(entry.eventType) !== eventType) continue;
-      if (actorEmail && cleanText(entry.actorEmail).toLowerCase() !== actorEmail) continue;
-      if (targetEmail && cleanText(entry.targetEmail).toLowerCase() !== targetEmail) continue;
-      if (unitCode && cleanText(entry.unitCode) !== unitCode) continue;
-      if (recordId && cleanText(entry.recordId) !== recordId) continue;
+      if (eventType && cleanText(entry.eventTypeKey || entry.eventType) !== eventType) continue;
+      if (actorEmail && cleanText(entry.actorEmailKey || entry.actorEmail).toLowerCase() !== actorEmail) continue;
+      if (targetEmail && cleanText(entry.targetEmailKey || entry.targetEmail).toLowerCase() !== targetEmail) continue;
+      if (unitCode && cleanText(entry.unitCodeKey || entry.unitCode) !== unitCode) continue;
+      if (recordId && cleanText(entry.recordIdKey || entry.recordId) !== recordId) continue;
       if (!matchesKeyword(entry, keyword)) continue;
-      results.push(entry);
-      if (results.length >= limit) break;
+      matches.push(entry);
     }
-    return results;
+    const total = matches.length;
+    const maxOffset = total > 0 ? Math.max(0, Math.floor((total - 1) / limit) * limit) : 0;
+    const safeOffset = Math.min(Math.max(0, offset), maxOffset);
+    const itemsOnPage = matches.slice(safeOffset, safeOffset + limit);
+    const pageCount = total > 0 ? Math.max(1, Math.ceil(total / limit)) : 0;
+    const currentPage = total > 0 ? Math.floor(safeOffset / limit) + 1 : 0;
+    const hasPrev = safeOffset > 0;
+    const hasNext = safeOffset + limit < total;
+    return {
+      items: itemsOnPage,
+      total,
+      summary: summarizeAuditEntries(matches),
+      page: {
+        offset: safeOffset,
+        limit,
+        total,
+        pageCount,
+        currentPage,
+        hasPrev,
+        hasNext,
+        prevOffset: hasPrev ? Math.max(0, safeOffset - limit) : 0,
+        nextOffset: hasNext ? safeOffset + limit : safeOffset,
+        pageStart: itemsOnPage.length ? safeOffset + 1 : 0,
+        pageEnd: itemsOnPage.length ? safeOffset + itemsOnPage.length : 0
+      }
+    };
   }
 
   async function buildHealth() {
@@ -172,11 +218,13 @@ function createAuditTrailRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, 'Only admin can view audit trail');
       const rows = await listAllEntries();
-      const items = filterEntries(rows.map((entry) => entry.item), url);
+      const filtered = filterEntries(rows.map((entry) => entry.item), url);
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        items,
-        summary: summarizeAuditEntries(items),
+        items: filtered.items,
+        total: filtered.total,
+        page: filtered.page,
+        summary: filtered.summary,
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {

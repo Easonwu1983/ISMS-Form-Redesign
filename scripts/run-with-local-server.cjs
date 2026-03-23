@@ -89,7 +89,11 @@ async function main() {
     const child = spawn(rawCommand, {
       cwd: root,
       stdio: 'inherit',
-      shell: true
+      shell: true,
+      env: {
+        ...process.env,
+        TEST_BASE_URL: url
+      }
     });
 
     const watchdog = setInterval(async () => {

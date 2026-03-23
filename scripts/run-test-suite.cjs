@@ -11,6 +11,9 @@ const suites = {
     'scripts/unit-admin-reporter-security-regression.cjs',
     'scripts/role-flow-smoke.cjs'
   ],
+  version: [
+    'scripts/version-governance-smoke.cjs'
+  ],
   training: [
     'scripts/training-optimization-regression.cjs',
     'scripts/training-flow-acceptance.cjs'
@@ -37,12 +40,12 @@ function runScript(scriptPath) {
 
 async function main() {
   const suite = String(process.argv[2] || '').trim();
-  if (!suite || !['role', 'training', 'bonus', 'all'].includes(suite)) {
-    console.error('Usage: node scripts/run-test-suite.cjs <role|training|bonus|all>');
+  if (!suite || !['role', 'version', 'training', 'bonus', 'all'].includes(suite)) {
+    console.error('Usage: node scripts/run-test-suite.cjs <role|version|training|bonus|all>');
     process.exit(1);
   }
   const queue = suite === 'all'
-    ? suites.role.concat(suites.training, suites.bonus)
+    ? suites.role.concat(suites.version, suites.training, suites.bonus)
     : suites[suite];
 
   for (const script of queue) {

@@ -12,7 +12,7 @@ permissions:
 jobs:
   regression-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -30,24 +30,8 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Start local preview server
-        run: |
-          node .codex-local-server.cjs > server.log 2>&1 &
-          echo $! > server.pid
-
-      - name: Wait for local preview server
-        run: |
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8080/ > /dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat server.log
-          exit 1
-
-      - name: Run full regression suite
-        run: npm run test:all
+      - name: Run CI gate
+        run: npm run test:ci
 
       - name: Upload regression artifacts
         if: always()
@@ -55,12 +39,4 @@ jobs:
         with:
           name: regression-artifacts
           path: |
-            server.log
             test-artifacts/
-
-      - name: Stop local preview server
-        if: always()
-        run: |
-          if [ -f server.pid ]; then
-            kill "$(cat server.pid)" || true
-          fi
