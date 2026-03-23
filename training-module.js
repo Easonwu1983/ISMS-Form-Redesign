@@ -1467,9 +1467,7 @@
       installTrainingRowDelegates();
       if (!rowsState.length) {
         trainingRowsRenderToken += 1;
-        body.innerHTML = trainingRosterHydrating
-          ? buildTrainingEmptyTableRow(13, '正在同步名單', '系統正在載入教育訓練名單與既有填報內容，請稍候。', 28)
-          : buildTrainingEmptyTableRow(13, '此單位尚未建立名單', '請由管理者匯入名單，或由單位管理員新增名單外人員。', 28);
+        body.innerHTML = buildTrainingEmptyTableRow(13, '此單位尚未建立名單', '請由管理者匯入名單，或由單位管理員新增名單外人員。', 28);
         renderSummary();
         updateBulkSelectionText();
         document.getElementById('training-select-all').checked = false;
