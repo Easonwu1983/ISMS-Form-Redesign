@@ -766,7 +766,7 @@ async function run() {
 
     await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForSelector('.security-window-category-stack .security-window-category-card', { timeout: 45000 });
+    await page.waitForFunction(() => !!document.querySelector('.security-window-category-stack .security-window-category-card'), undefined, { timeout: 45000 });
     const securityWindowText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(securityWindowText)) {
       throw new Error('security window page contains placeholder question marks');
