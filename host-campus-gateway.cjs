@@ -78,6 +78,17 @@ function shouldReturnHtml(req) {
   return accept.includes('text/html') || accept.includes('*/*');
 }
 
+function normalizeRequestPath(reqUrl) {
+  const raw = String(reqUrl || '').trim();
+  if (!raw) return '/';
+  if (raw === '//' || raw.startsWith('//')) return '/';
+  try {
+    return new URL(raw, 'http://localhost').pathname || '/';
+  } catch (_) {
+    return '/';
+  }
+}
+
 function writeForbiddenHtml(res, ip) {
   const payload = `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -202,7 +213,7 @@ function writeForbidden(req, res, ip) {
 }
 
 function proxyRequest(req, res, remoteAddress) {
-  const targetUrl = new URL(req.url || '/', `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
+  const targetUrl = new URL(normalizeRequestPath(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
   const upstream = http.request({
     protocol: targetUrl.protocol,
     hostname: targetUrl.hostname,
@@ -244,7 +255,7 @@ function proxyRequest(req, res, remoteAddress) {
 
 const server = http.createServer((req, res) => {
   const remoteAddress = normalizeRemoteAddress(req.socket.remoteAddress);
-  const targetUrl = new URL(req.url || '/', `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
+  const targetUrl = new URL(normalizeRequestPath(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
   if (targetUrl.pathname === '/deploy-manifest.json') {
     writeDeployManifest(res);
     return;
