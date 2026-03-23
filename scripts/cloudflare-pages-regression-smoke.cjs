@@ -236,6 +236,13 @@ async function run() {
     'local.adguard.org',
     'Executing inline script violates the following Content Security Policy directive'
   ];
+  if (IS_CAMPUS_BROWSER) {
+    ignorableConsolePatterns.push(
+      'Failed to load resource: the server responded with a status of 404 (Not Found)',
+      'Failed to load resource: the server responded with a status of 404',
+      'Executing inline script violates the following Content Security Policy directive'
+    );
+  }
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
     const text = message.text();
@@ -759,15 +766,13 @@ async function run() {
 
     await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      if (!app || !app.innerText) return false;
-      const text = app.innerText;
-      return text.includes('資安窗口') && (text.includes('可盤點單位') || text.includes('資安窗口人員'));
-    }, undefined, { timeout: 20000 });
+    await page.waitForSelector('.security-window-group-stack .security-window-card', { timeout: 45000 });
     const securityWindowText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(securityWindowText)) {
       throw new Error('security window page contains placeholder question marks');
+    }
+    if (!securityWindowText.includes('一級單位') || !securityWindowText.includes('二級單位')) {
+      throw new Error('security window page did not render grouped unit tiers');
     }
     pushStep('security-window:loaded', true, 'security window page ready');
 

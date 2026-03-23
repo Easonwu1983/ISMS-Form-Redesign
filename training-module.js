@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createTrainingModule = function createTrainingModule(deps) {
     const {
       TRAINING_STATUSES,
@@ -2171,7 +2171,7 @@
       if (focusState) restoreTrainingRosterFocusState(focusState);
       return;
     }
-    const importedPreviewHtml = (opts.rosterNames || opts.rosterIds) && deferRosterGroups
+    const importedPreviewHtml = (opts.rosterNames || opts.rosterIds)
       ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
       : '';
     const initialGroupCount = useChunkedRosterRender && opts.deferFullRender
@@ -2321,6 +2321,13 @@
       }
       const focusState = captureTrainingRosterFocusState() || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null);
       const previewRows = rosters.filter((row) => ids.includes(String(row.id || '').trim()));
+      const remainingRows = rosters.filter((row) => !ids.includes(String(row.id || '').trim()));
+      const preferredFocusRow = remainingRows.length
+        ? remainingRows[Math.min(
+          Number.isInteger(focusState && focusState.rowIndex) ? Math.max(0, focusState.rowIndex) : 0,
+          remainingRows.length - 1
+        )]
+        : null;
       const previewText = previewRows.slice(0, 3).map((row) => row.name).filter(Boolean).join('、');
       const confirmed = await openConfirmDialog('確定刪除已選取的 ' + ids.length + ' 位人員嗎？' + (previewText ? ('（' + previewText + (previewRows.length > 3 ? '…' : '') + '）') : '') + ' 已填報的歷史資料不會被刪除。', { title: '確認刪除所選', confirmText: '確認刪除', cancelText: '取消' });
       if (!confirmed) return;
@@ -2330,13 +2337,32 @@
           actorName: currentUser()?.name || '',
           actorUsername: currentUser()?.username || ''
         });
+        try {
+          await syncTrainingRostersFromM365({ silent: true, force: true });
+        } catch (error) {
+          console.warn('training roster delete post-sync failed', error);
+        }
         selectedRosterIds.clear();
         await renderTrainingRoster({
           skipSync: true,
           deferFullRender: true,
-          restoreFocusState: focusState,
+          restoreFocusState: preferredFocusRow ? {
+            kind: 'delete',
+            rowId: String(preferredFocusRow.id || '').trim(),
+            rowIndex: remainingRows.indexOf(preferredFocusRow)
+          } : focusState,
           selectedRosterIds: []
         });
+        if (preferredFocusRow) {
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, 350);
+          });
+          focusTrainingRosterRows({
+            rosterIds: [preferredFocusRow.id],
+            rosterNames: [preferredFocusRow.name],
+            rosterUnits: [preferredFocusRow.unit]
+          });
+        }
         const deletedCount = Number(result && result.deletedCount || ids.length);
         toast(deletedCount > 1 ? ('名單已刪除，並同步清理重複資料 ' + deletedCount + ' 筆') : '名單已刪除', 'success');
         if (result && result.warning) {
@@ -2587,6 +2613,11 @@
             }
           });
       }
+      try {
+        await syncTrainingRostersFromM365({ silent: true, force: true });
+      } catch (error) {
+        console.warn('training roster import post-sync failed', error);
+      }
       await renderTrainingRoster({
         skipSync: true,
         deferFullRender: true,
@@ -2681,4 +2712,3 @@
     };
   };
 })();
-
