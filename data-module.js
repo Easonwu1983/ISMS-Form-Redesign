@@ -1193,6 +1193,8 @@
       const rawSource = String((row && row.source) || '').trim().toLowerCase();
       const creatorUsername = String((row && row.createdByUsername) || '').trim();
       const creatorName = String((row && row.createdBy) || '').trim();
+      const createdAt = String((row && row.createdAt) || '').trim() || new Date().toISOString();
+      const updatedAt = String((row && row.updatedAt) || (row && row.modifiedAt) || '').trim() || createdAt;
       const inferredManual = rawSource === 'manual'
         || (!!creatorUsername && rawSource !== 'import')
         || (!!creatorName && creatorName !== '系統' && creatorName !== '系統管理' && rawSource !== 'import');
@@ -1216,7 +1218,8 @@
         source: inferredManual ? 'manual' : 'import',
         createdBy: creatorName || '系統',
         createdByUsername: creatorUsername,
-        createdAt: (row && row.createdAt) || new Date().toISOString()
+        createdAt,
+        updatedAt
       };
     }
 
@@ -1450,7 +1453,8 @@
           source: source || base.source || 'manual',
           createdBy: index >= 0 ? store.rosters[index].createdBy : (actorName || '???'),
           createdByUsername: index >= 0 ? store.rosters[index].createdByUsername : actorUser,
-          createdAt: index >= 0 ? store.rosters[index].createdAt : new Date().toISOString()
+          createdAt: index >= 0 ? store.rosters[index].createdAt : new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         }, cleanUnit);
 
         if (index >= 0) {
@@ -1491,7 +1495,11 @@
         if (!Array.isArray(store.rosters)) store.rosters = [];
         const index = store.rosters.findIndex((row) => row.id === cleanId);
         if (index < 0) return;
-        store.rosters[index] = normalizeTrainingRosterRow({ ...store.rosters[index], ...(updates || {}) }, store.rosters[index].unit);
+        store.rosters[index] = normalizeTrainingRosterRow({
+          ...store.rosters[index],
+          ...(updates || {}),
+          updatedAt: new Date().toISOString()
+        }, store.rosters[index].unit);
         updatedRow = store.rosters[index];
       });
       return updatedRow;

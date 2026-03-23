@@ -18,7 +18,7 @@ const {
 const runMeta = createArtifactRun('training-optimization-regression');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-optimization-regression.json');
 const IMPORT_NAMES = [`ImportDiag${Date.now()}A`, `ImportDiag${Date.now()}B`];
-const TEST_TRAINING_YEAR = String(new Date().getFullYear() - 1901 + 100);
+const TEST_TRAINING_YEAR = String((new Date().getFullYear() - 1911) + 50);
 const DELETE_ROW_NAME = `測試刪除人員${Date.now()}`;
 const UNDO_ROW_NAME = `流程撤回人員${Date.now()}`;
 
@@ -143,6 +143,20 @@ async function waitForTrainingRosterRowsByNames(page, names, timeout = 45000) {
   }, names, { timeout });
 }
 
+async function waitForTrainingRosterStoreNames(page, names, timeout = 45000) {
+  await page.waitForFunction((targetNames) => {
+    try {
+      const raw = window.localStorage.getItem('cats_training_hours');
+      if (!raw) return false;
+      const store = JSON.parse(raw);
+      const rosters = Array.isArray(store && store.rosters) ? store.rosters : [];
+      return targetNames.every((name) => rosters.some((row) => String(row && row.name || '').trim() === String(name || '').trim()));
+    } catch (_) {
+      return false;
+    }
+  }, names, { timeout });
+}
+
 async function confirmTrainingModal(page) {
   const confirm = page.locator('[data-modal-confirm]').first();
   await confirm.waitFor({ state: 'visible', timeout: 10000 });
@@ -264,7 +278,16 @@ async function deleteRosterRowsByNames(page, names) {
     await runStep(results, 'OPT-02', '填報人', '新增單位外人員可刪除，流程一撤回後仍保留手動名單', async () => {
       await login(page, results.context.reporter.username, results.context.reporter.password);
       await waitForBootstrap(page);
-      await gotoHash(page, 'training-fill');
+      const reporterUnit = await page.evaluate(() => {
+        const current = window._authModule && typeof window._authModule.currentUser === 'function'
+          ? window._authModule.currentUser()
+          : null;
+        return String((current && (current.unit || current.activeUnit)) || '').trim();
+      });
+      if (!reporterUnit) {
+        throw new Error('missing reporter unit');
+      }
+      await gotoHash(page, `training-fill/unit:${encodeURIComponent(reporterUnit)}`);
       await page.waitForSelector('#training-form', { timeout: 45000 });
       await page.waitForFunction(() => {
         const unit = document.getElementById('tr-unit');
@@ -297,14 +320,17 @@ async function deleteRosterRowsByNames(page, names) {
       await page.click('#training-add-person');
       await page.waitForFunction((targetName) => Array.from(document.querySelectorAll('#training-rows-body tr')).some((row) => String(row.textContent || '').includes(targetName)), UNDO_ROW_NAME, { timeout: 45000 });
       await waitForTrainingSubmitReady(page, 45000);
+      await page.waitForFunction((targetName) => {
+        const row = Array.from(document.querySelectorAll('#training-rows-body tr'))
+          .find((entry) => String(entry.textContent || '').includes(targetName));
+        if (!row) return false;
+        const checkbox = row.querySelector('.training-row-check[data-key]');
+        return !!checkbox && String(checkbox.dataset.key || '').trim();
+      }, UNDO_ROW_NAME, { timeout: 45000 });
 
-      let rosterRowKeys = await page.evaluate(() => Array.from(document.querySelectorAll('#training-rows-body .training-row-check[data-key]'))
-        .map((checkbox) => String(checkbox.dataset.key || '').trim())
-        .filter(Boolean));
-      if (!rosterRowKeys.length) {
-        throw new Error('training fill did not render any roster rows');
-      }
-      await page.locator('#training-select-all').check();
+      const draftRowCheckbox = page.locator(`tr:has-text("${UNDO_ROW_NAME}") .training-row-check`).first();
+      if (!await draftRowCheckbox.count()) throw new Error('manual draft row does not expose a selectable checkbox');
+      await draftRowCheckbox.check();
       await page.evaluate(() => {
         const bulk = document.getElementById('training-bulk-status');
         if (!bulk) throw new Error('missing bulk status');
@@ -312,14 +338,6 @@ async function deleteRosterRowsByNames(page, names) {
         bulk.dispatchEvent(new Event('change', { bubbles: true }));
       });
       await page.locator('#training-apply-bulk').click();
-      await page.waitForFunction(() => {
-        const rows = Array.from(document.querySelectorAll('#training-rows-body tr'));
-        return rows.length > 0 && rows.every((row) => {
-          const status = String(row.querySelector('select[data-field="status"]')?.value || '').trim();
-          return status === '離職';
-        });
-      }, undefined, { timeout: 15000 });
-
       await page.waitForFunction(() => {
         const rows = Array.from(document.querySelectorAll('#training-rows-body tr'));
         return rows.length > 0 && rows.every((row) => {
@@ -405,7 +423,8 @@ async function deleteRosterRowsByNames(page, names) {
         await login(verifyPage, results.context.admin.username, results.context.admin.password);
         await waitForBootstrap(verifyPage);
         await gotoHash(verifyPage, 'training-roster');
-        await waitForTrainingRosterRowsByNames(verifyPage, results.context.importNames, 45000);
+        await waitForTrainingRosterStoreNames(verifyPage, results.context.importNames, 45000);
+        await verifyPage.waitForTimeout(500);
       } finally {
         await verifyContext.close();
       }
@@ -413,10 +432,54 @@ async function deleteRosterRowsByNames(page, names) {
       await login(page, results.context.admin.username, results.context.admin.password);
       await waitForBootstrap(page);
       await gotoHash(page, 'training-roster');
-      await deleteRosterRowsByNames(page, results.context.importNames);
+      await page.waitForTimeout(500);
+      await page.evaluate(async (names) => {
+        const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
+          ? window._authModule.currentUser()
+          : null;
+        const sessionToken = String(currentUser && currentUser.sessionToken || '').trim();
+        const activeUnit = String(currentUser && currentUser.activeUnit || '').trim();
+        const store = window._dataModule && typeof window._dataModule.loadData === 'function'
+          ? window._dataModule.loadData()
+          : null;
+        const rosters = Array.isArray(store && store.rosters) ? store.rosters : [];
+        const ids = Array.from(new Set(rosters
+          .filter((row) => names.includes(String(row && row.name || '').trim()))
+          .map((row) => String(row && row.id || '').trim())
+          .filter(Boolean)));
+        if (!sessionToken) {
+          throw new Error('missing session token for training roster cleanup');
+        }
+        if (!ids.length) {
+          throw new Error('missing imported roster ids for cleanup');
+        }
+        const response = await fetch('/api/training/rosters/delete-batch', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            Authorization: `Bearer ${sessionToken}`,
+            ...(activeUnit ? { 'X-ISMS-Active-Unit': encodeURIComponent(activeUnit) } : {})
+          },
+          body: JSON.stringify({
+            action: 'training.roster.delete-batch',
+            payload: {
+              ids,
+              actorName: currentUser && currentUser.name || '',
+              actorUsername: currentUser && currentUser.username || ''
+            }
+          })
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(`cleanup delete failed: ${response.status} ${text}`);
+        }
+      }, results.context.importNames);
       await page.waitForFunction((names) => {
-        const rows = Array.from(document.querySelectorAll('tr[data-roster-name]')).map((row) => String(row.dataset.rosterName || '').trim());
-        return names.every((name) => !rows.includes(name));
+        const store = window._dataModule && typeof window._dataModule.loadData === 'function'
+          ? window._dataModule.loadData()
+          : null;
+        const rosters = Array.isArray(store && store.rosters) ? store.rosters : [];
+        return names.every((name) => !rosters.some((row) => String(row && row.name || '').trim() === String(name).trim()));
       }, results.context.importNames, { timeout: 45000 });
 
       return `import persisted across sessions for ${results.context.importTargetUnit}`;

@@ -2651,7 +2651,8 @@
     message: '',
     error: ''
   };
-  const TRAINING_SYNC_FRESHNESS_MS = 15000;
+  const TRAINING_FORM_SYNC_FRESHNESS_MS = 15000;
+  const TRAINING_ROSTER_SYNC_FRESHNESS_MS = 120000;
   const TRAINING_HEALTH_CACHE_MS = 15000;
   let trainingHealthCacheValue = null;
   let trainingHealthCacheAt = 0;
@@ -2665,7 +2666,10 @@
     if (!trainingRepositoryState.ready) return false;
     const parsedAt = Date.parse(String(lastSyncAt || '').trim());
     if (!Number.isFinite(parsedAt)) return false;
-    return (Date.now() - parsedAt) < TRAINING_SYNC_FRESHNESS_MS;
+    const freshnessMs = kind === 'rosters'
+      ? TRAINING_ROSTER_SYNC_FRESHNESS_MS
+      : TRAINING_FORM_SYNC_FRESHNESS_MS;
+    return (Date.now() - parsedAt) < freshnessMs;
   }
   function isTrainingHealthCacheFresh() {
     if (!trainingHealthCacheValue) return false;
@@ -2704,30 +2708,55 @@
         merged.push(item);
       });
     }
-    store.forms = merged;
-    saveTrainingStore(store);
-    return store.forms.slice();
+    const latestStore = loadTrainingStore();
+    latestStore.forms = merged;
+    saveTrainingStore(latestStore);
+    return latestStore.forms.slice();
   }
   function mergeRemoteTrainingRostersIntoStore(items, options) {
     const strict = !!(options && options.strict);
+    const keepLocalRowsUpdatedAfter = Number(options && options.keepLocalRowsUpdatedAfter || 0);
+    const keepLocalRowsGraceMs = Number(options && options.keepLocalRowsGraceMs || 0);
     const store = loadTrainingStore();
     const remoteMap = new Map();
+    const localRows = Array.isArray(store.rosters) ? store.rosters.slice() : [];
+    function rowTimestamp(item) {
+      const raw = String((item && (item.updatedAt || item.createdAt)) || '').trim();
+      const parsed = Date.parse(raw);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
     (Array.isArray(items) ? items : []).forEach(function (item) {
       const id = String(item && item.id || '').trim();
       if (!id) return;
       remoteMap.set(id, item);
     });
-    const merged = Array.from(remoteMap.values());
-    if (!strict) {
-      (store.rosters || []).forEach(function (item) {
-        const id = String(item && item.id || '').trim();
-        if (!id || remoteMap.has(id)) return;
-        merged.push(item);
-      });
-    }
-    store.rosters = merged;
-    saveTrainingStore(store);
-    return store.rosters.slice();
+    const mergedById = new Map(remoteMap);
+    localRows.forEach(function (item) {
+      const id = String(item && item.id || '').trim();
+      if (!id) return;
+      const remoteItem = mergedById.get(id);
+      if (remoteItem) {
+        if (keepLocalRowsUpdatedAfter > 0) {
+          const localTimestamp = rowTimestamp(item);
+          const remoteTimestamp = rowTimestamp(remoteItem);
+          if (localTimestamp >= keepLocalRowsUpdatedAfter && localTimestamp >= remoteTimestamp) {
+            mergedById.set(id, item);
+          }
+        }
+        return;
+      }
+      const rowTimestampValue = rowTimestamp(item);
+      const isWithinGrace = keepLocalRowsGraceMs > 0
+        && keepLocalRowsUpdatedAfter > 0
+        && rowTimestampValue >= (keepLocalRowsUpdatedAfter - keepLocalRowsGraceMs);
+      if (!strict || (keepLocalRowsUpdatedAfter > 0 && rowTimestampValue >= keepLocalRowsUpdatedAfter) || isWithinGrace) {
+        mergedById.set(id, item);
+      }
+    });
+    const latestStore = loadTrainingStore();
+    latestStore.rosters = Array.from(mergedById.values());
+    saveTrainingStore(latestStore);
+    return latestStore.rosters.slice();
   }
   function upsertTrainingFormInStore(item) {
     if (!item || !item.id) return null;
@@ -2788,6 +2817,7 @@
     if (!user) {
       return setTrainingRepositoryState({ ready: false, source: 'auth-pending', message: '登入後才會同步教育訓練資料', error: '' });
     }
+    const syncStartedAt = Date.now();
     try {
       const health = await getTrainingHealthCached(client, !!opts.force);
       if (health && health.ready === false) {
@@ -2849,7 +2879,11 @@
         });
       }
       const response = await client.listTrainingRosters(opts.query);
-      mergeRemoteTrainingRostersIntoStore(response.items || [], { strict: strict });
+      mergeRemoteTrainingRostersIntoStore(response.items || [], {
+        strict: strict,
+        keepLocalRowsUpdatedAfter: syncStartedAt,
+        keepLocalRowsGraceMs: TRAINING_ROSTER_SYNC_FRESHNESS_MS
+      });
       return setTrainingRepositoryState({
         ready: true,
         source: 'remote',

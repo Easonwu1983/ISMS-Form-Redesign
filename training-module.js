@@ -1057,6 +1057,14 @@
     function hasTemporaryTrainingRows() {
       return Array.isArray(rowsState) && rowsState.some((row) => String(row && row.rosterId || row && row.id || "").trim().toUpperCase().startsWith("TMP-"));
     }
+    function getPreservedTrainingRosterRows() {
+      if (!Array.isArray(rowsState) || !rowsState.length) return [];
+      return rowsState.filter((row) => {
+        const rosterId = String(row && (row.rosterId || row.id) || '').trim().toUpperCase();
+        const source = String(row && row.source || '').trim().toLowerCase();
+        return rosterId.startsWith('TMP-') || source === 'manual';
+      });
+    }
 
     document.getElementById('app').innerHTML = buildTrainingFillPage({ existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user });
 
@@ -1757,7 +1765,10 @@
     updateTrainingDraftStatus(existing);
     clearTrainingFeedback();
       const immediateUnit = document.getElementById('tr-unit') ? document.getElementById('tr-unit').value : unitValue;
-      rowsState = mergeTrainingRows(immediateUnit, existing ? (existing.records || []) : []);
+      rowsState = mergeTrainingRows(immediateUnit, [
+        ...(existing ? (existing.records || []) : []),
+        ...getPreservedTrainingRosterRows()
+      ]);
       const forceRosterSync = !rowsState.length;
       trainingRowsStateVersion += 1;
       trainingRowsFilterCache = { signature: '', rows: [] };
@@ -1803,7 +1814,10 @@
         scheduleTrainingRowsRender();
         return;
       }
-        rowsState = mergeTrainingRows(activeUnit, existing ? (existing.records || []) : []);
+        rowsState = mergeTrainingRows(activeUnit, [
+          ...(existing ? (existing.records || []) : []),
+          ...getPreservedTrainingRosterRows()
+        ]);
         trainingRowsStateVersion += 1;
         trainingRowsFilterCache = { signature: '', rows: [] };
         trainingRosterHydrating = false;
