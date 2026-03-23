@@ -33,6 +33,22 @@ async function confirmNextModal(page, timeout = 8000) {
   await page.waitForTimeout(180);
 }
 
+async function waitForCaseStatus(page, caseId, expectedStatus, timeout = 15000) {
+  await page.waitForFunction(({ storageKey, targetId, status }) => {
+    try {
+      const dataModule = window._dataModule;
+      const parsed = dataModule && typeof dataModule.loadData === 'function'
+        ? dataModule.loadData()
+        : null;
+      const items = Array.isArray(parsed && parsed.items) ? parsed.items : [];
+      const item = items.find((entry) => entry && entry.id === targetId);
+      return !!item && String(item.status || '').trim() === status;
+    } catch (error) {
+      return false;
+    }
+  }, { storageKey: 'cats_data', targetId: caseId, status: expectedStatus }, { timeout });
+}
+
 (async () => {
   const results = createResultEnvelope({
     steps: [],
@@ -116,6 +132,7 @@ async function confirmNextModal(page, timeout = 8000) {
       await page.waitForSelector('[data-testid="case-transition-tracking"]', { state: 'visible', timeout: 15000 });
       await page.click('[data-testid="case-transition-tracking"]');
       await confirmNextModal(page);
+      await waitForCaseStatus(page, carId, '追蹤中', 15000);
       const item = (await getDataStore(page)).items.find((entry) => entry.id === carId);
       if (item.pendingTracking) throw new Error('pendingTracking should be empty before reporter submission');
       return carId;
@@ -125,6 +142,7 @@ async function confirmNextModal(page, timeout = 8000) {
     await runStep(results, 'FOCUS-RP-02', '單位窗口', '送出追蹤提報', async () => {
       if (!carId) throw new Error('missing car id');
       await login(page, results.context.reporter.username, results.context.reporter.password);
+      await waitForCaseStatus(page, carId, '追蹤中', 15000);
       await gotoHash(page, 'tracking/' + carId);
       await page.waitForSelector('#track-form');
       await page.fill('#tk-exec', '追蹤執行情形測試資料');
@@ -141,6 +159,20 @@ async function confirmNextModal(page, timeout = 8000) {
         waitForHash(page, '#detail/' + carId),
         page.click('[data-testid="tracking-submit"]')
       ]);
+      await waitForCaseStatus(page, carId, '追蹤中', 15000);
+      await page.waitForFunction(({ targetId }) => {
+        try {
+          const dataModule = window._dataModule;
+          const parsed = dataModule && typeof dataModule.loadData === 'function'
+            ? dataModule.loadData()
+            : null;
+          const items = Array.isArray(parsed && parsed.items) ? parsed.items : [];
+          const item = items.find((entry) => entry && entry.id === targetId);
+          return !!item && !!item.pendingTracking;
+        } catch (error) {
+          return false;
+        }
+      }, { targetId: carId }, { timeout: 15000 });
       const item = (await getDataStore(page)).items.find((entry) => entry.id === carId);
       if (!item.pendingTracking) throw new Error('pendingTracking missing after tracking submit');
       return carId;
