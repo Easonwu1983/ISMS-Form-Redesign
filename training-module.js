@@ -110,10 +110,51 @@
     let trainingDashboardUnitsCache = { signature: '', units: [] };
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
-    let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
-    let trainingRowsStateVersion = 0;
-    let trainingRowsFilterCache = { signature: '', rows: [] };
-    function scheduleDeferredPromise(taskFactory, timeoutMs) {
+      let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
+      let trainingRowsStateVersion = 0;
+      let trainingRowsFilterCache = { signature: '', rows: [] };
+      const trainingManualRosterDraftCache = new Map();
+      function getTrainingManualRosterDraftKey(row) {
+        const unit = String(row && row.unit || '').trim().toLowerCase();
+        const rosterId = String(row && (row.rosterId || row.id) || '').trim().toUpperCase();
+        const name = String(row && row.name || '').trim().toLowerCase();
+        const identity = String(row && row.identity || '').trim().toLowerCase();
+        const jobTitle = String(row && row.jobTitle || '').trim().toLowerCase();
+        return [unit, rosterId || name, identity, jobTitle].filter(Boolean).join('::');
+      }
+      function rememberTrainingManualRosterRow(row) {
+        if (!row || typeof row !== 'object') return null;
+        const normalized = normalizeTrainingRecordRow(row, row.unit || document.getElementById('tr-unit')?.value || '');
+        if (!normalized.name) return null;
+        const primaryKey = getTrainingManualRosterDraftKey(normalized);
+        if (!primaryKey) return normalized;
+        trainingManualRosterDraftCache.set(primaryKey, normalized);
+        const rosterId = String(normalized.rosterId || normalized.id || '').trim().toUpperCase();
+        if (rosterId) trainingManualRosterDraftCache.set(`id:${rosterId}`, normalized);
+        const aliasKey = `${String(normalized.unit || '').trim().toLowerCase()}::${String(normalized.name || '').trim().toLowerCase()}`;
+        if (aliasKey.trim() !== '::') trainingManualRosterDraftCache.set(`name:${aliasKey}`, normalized);
+        return normalized;
+      }
+      function forgetTrainingManualRosterRow(rowOrId) {
+        const raw = typeof rowOrId === 'object' && rowOrId ? rowOrId : { id: rowOrId };
+        const rosterId = String(raw && (raw.rosterId || raw.id) || '').trim().toUpperCase();
+        const name = String(raw && raw.name || '').trim().toLowerCase();
+        const unit = String(raw && raw.unit || '').trim().toLowerCase();
+        Array.from(trainingManualRosterDraftCache.keys()).forEach((key) => {
+          const entry = trainingManualRosterDraftCache.get(key);
+          const entryId = String(entry && (entry.rosterId || entry.id) || '').trim().toUpperCase();
+          const entryName = String(entry && entry.name || '').trim().toLowerCase();
+          const entryUnit = String(entry && entry.unit || '').trim().toLowerCase();
+          if ((rosterId && (key === `id:${rosterId}` || entryId === rosterId))
+            || (name && entryName === name && (!unit || entryUnit === unit))) {
+            trainingManualRosterDraftCache.delete(key);
+          }
+        });
+      }
+      function getRememberedTrainingRosterRows() {
+        return Array.from(new Set(Array.from(trainingManualRosterDraftCache.values()))).map((row) => normalizeTrainingRecordRow(row, row && row.unit));
+      }
+      function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
       return new Promise((resolve) => {
         const run = function () {
@@ -1057,14 +1098,14 @@
     function hasTemporaryTrainingRows() {
       return Array.isArray(rowsState) && rowsState.some((row) => String(row && row.rosterId || row && row.id || "").trim().toUpperCase().startsWith("TMP-"));
     }
-    function getPreservedTrainingRosterRows() {
-      if (!Array.isArray(rowsState) || !rowsState.length) return [];
-      return rowsState.filter((row) => {
-        const rosterId = String(row && (row.rosterId || row.id) || '').trim().toUpperCase();
-        const source = String(row && row.source || '').trim().toLowerCase();
-        return rosterId.startsWith('TMP-') || source === 'manual';
-      });
-    }
+      function getPreservedTrainingRosterRows() {
+        const preserved = Array.isArray(rowsState) && rowsState.length ? rowsState.filter((row) => {
+          const rosterId = String(row && (row.rosterId || row.id) || '').trim().toUpperCase();
+          const source = String(row && row.source || '').trim().toLowerCase();
+          return rosterId.startsWith('TMP-') || source === 'manual';
+        }) : [];
+        return preserved.concat(getRememberedTrainingRosterRows());
+      }
 
     document.getElementById('app').innerHTML = buildTrainingFillPage({ existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user });
 
@@ -1226,6 +1267,7 @@
           }
           const confirmed = await openConfirmDialog('確定刪除「' + row.name + '」嗎？這會一併從此單位名單移除。', { title: '確認刪除列', confirmText: '確認刪除', cancelText: '取消' });
           if (!confirmed) return;
+          forgetTrainingManualRosterRow(row);
           if (row.rosterId) deleteTrainingRosterPerson(row.rosterId);
           rowsState = rowsState.filter((_, rowIndex) => rowIndex !== idx);
           selectedKeys.clear();
@@ -1355,6 +1397,7 @@
             actorUsername: user.username
           });
         } catch (error) {
+          forgetTrainingManualRosterRow(tempRosterId);
           rowsState = rowsState.filter((row) => String(row && row.rosterId || row && row.id || '').trim() !== tempRosterId);
           selectedKeys.clear();
           markTrainingDirty();
@@ -1391,7 +1434,8 @@
           completedProfessional: '',
           note: ''
         }, payload.currentUnit);
-        rowsState = replaceTrainingRosterRowsByKey(rowsState, nextManualRow);
+          rememberTrainingManualRosterRow(nextManualRow);
+          rowsState = replaceTrainingRosterRowsByKey(rowsState, nextManualRow);
         renderRows();
         if (!opts.silentSuccess) {
           showTrainingRepositoryFallback(result, '已新增「' + payload.name + '」到名單');
@@ -1730,8 +1774,10 @@
         } else if (bulkGeneralValue) {
           nextRow.completedGeneral = bulkGeneralValue;
         }
-        return normalizeTrainingRecordRow(nextRow, document.getElementById('tr-unit').value);
-      });
+          const normalized = normalizeTrainingRecordRow(nextRow, document.getElementById('tr-unit').value);
+          if (normalized.source === 'manual') rememberTrainingManualRosterRow(normalized);
+          return normalized;
+        });
       markTrainingDirty();
       toast('已套用批次設定');
       renderRows();
