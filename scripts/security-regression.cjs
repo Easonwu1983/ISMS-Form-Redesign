@@ -227,17 +227,21 @@ async function assertNoXssExecution(page, label) {
     await runStep(results, 'SEC-03', 'Admin', 'Security window inventory is grouped by tier', async () => {
       await login(page, 'admin', 'admin123');
       await gotoHash(page, 'security-window');
-      await page.waitForSelector('.security-window-group-stack .security-window-card');
+      await page.waitForSelector('.security-window-category-stack .security-window-category-card');
       const structure = await page.evaluate(() => {
         const root = document.querySelector('#app') || document.body;
         return {
-          stack: Boolean(document.querySelector('.security-window-group-stack')),
-          cardCount: document.querySelectorAll('.security-window-card').length,
+          stack: Boolean(document.querySelector('.security-window-category-stack')),
+          cardCount: document.querySelectorAll('.security-window-category-card').length,
+          categories: Array.from(new Set(Array.from(document.querySelectorAll('.security-window-category-card[data-security-window-category]')).map((node) => String(node.getAttribute('data-security-window-category') || '').trim()).filter(Boolean))),
           text: String(root.textContent || '')
         };
       });
       if (!structure.stack) throw new Error('security window stack missing');
       if (structure.cardCount < 1) throw new Error('security window cards missing');
+      const expectedCategories = ['行政單位', '學術單位', '中心', '研究單位'];
+      const missingCategories = expectedCategories.filter((label) => !structure.categories.includes(label));
+      if (missingCategories.length) throw new Error(`security window missing categories: ${missingCategories.join(', ')}`);
       if (!String(structure.text || '').includes('一級單位')) throw new Error('tier 1 label missing');
       if (!String(structure.text || '').includes('二級單位')) throw new Error('tier 2 label missing');
       return `security window grouped cards visible (${structure.cardCount} cards)`;

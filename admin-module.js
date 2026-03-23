@@ -802,25 +802,71 @@
         </div>`;
     }
 
+    const SECURITY_WINDOW_CATEGORY_ORDER = ['行政單位', '學術單位', '中心', '研究單位', '其他單位'];
+
+    function normalizeSecurityWindowCategory(category) {
+      const raw = String(category || '').trim();
+      if (!raw) return '其他單位';
+      if (SECURITY_WINDOW_CATEGORY_ORDER.includes(raw)) return raw;
+      if (raw.includes('行政')) return '行政單位';
+      if (raw.includes('學術')) return '學術單位';
+      if (raw.includes('中心')) return '中心';
+      if (raw.includes('研究')) return '研究單位';
+      return '其他單位';
+    }
+
+    function groupSecurityWindowUnitsByCategory(units) {
+      const groups = new Map();
+      (Array.isArray(units) ? units : []).forEach((unit) => {
+        const category = normalizeSecurityWindowCategory(unit && unit.category);
+        if (!groups.has(category)) groups.set(category, []);
+        groups.get(category).push(unit);
+      });
+      return SECURITY_WINDOW_CATEGORY_ORDER
+        .map((category) => ({ category, items: groups.get(category) || [] }))
+        .filter((group) => group.items.length > 0);
+    }
+
+    function renderSecurityWindowUnitCard(unit) {
+      const statusMeta = getSecurityWindowUnitStatusMeta(unit.status);
+      const holderCount = Array.isArray(unit.holders) ? unit.holders.length : 0;
+      const pendingCount = Array.isArray(unit.pending) ? unit.pending.length : 0;
+      const childCount = Array.isArray(unit.children) ? unit.children.length : 0;
+      const summaryChips = [
+        ['一級單位', 1],
+        ['二級單位', childCount],
+        ['已設定', holderCount],
+        ['待審核', pendingCount]
+      ];
+      return `<details class="training-group-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="training-group-summary security-window-summary"><div><span class="training-group-title">${esc(unit.unit)}</span><div class="training-group-subtitle">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div><div class="training-group-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="governance-card-body" style="padding-top:14px"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div>${renderSecurityWindowScopeRows(unit)}</div></details>`;
+    }
+
+    function renderSecurityWindowCategoryCard(group, index) {
+      const items = Array.isArray(group && group.items) ? group.items : [];
+      const category = String(group && group.category || '').trim() || '其他單位';
+      const unitCount = items.length;
+      const assignedCount = items.filter((unit) => unit && unit.hasWindow).length;
+      const pendingCount = items.reduce((sum, unit) => sum + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0);
+      const childCount = items.reduce((sum, unit) => sum + (Array.isArray(unit && unit.children) ? unit.children.length : 0), 0);
+      const missingCount = items.filter((unit) => unit && !unit.hasWindow && !(Array.isArray(unit.pending) && unit.pending.length)).length;
+      const summaryChips = [
+        ['單位數', unitCount],
+        ['已設定', assignedCount],
+        ['待審核', pendingCount],
+        ['未設定', missingCount]
+      ];
+      const openAttr = index === 0 ? ' open' : '';
+      const subtitle = `${category} · ${childCount} 個二級單位`;
+      return `<details class="training-group-card security-window-category-card"${openAttr} data-security-window-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body"><div class="security-window-group-stack security-window-group-stack--nested">${items.map((unit) => renderSecurityWindowUnitCard(unit)).join('')}</div></div></details>`;
+    }
+
     function renderSecurityWindowUnitCards(units) {
       const rows = Array.isArray(units) ? units : [];
       if (!rows.length) {
         return `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">目前沒有符合條件的資安窗口單位</div><div class="empty-state-desc">請調整關鍵字、狀態或先確認單位治理設定。</div></div>`;
       }
-      return `<div class="training-group-stack security-window-group-stack">${rows.map((unit) => {
-        const statusMeta = getSecurityWindowUnitStatusMeta(unit.status);
-        const holderCount = Array.isArray(unit.holders) ? unit.holders.length : 0;
-        const pendingCount = Array.isArray(unit.pending) ? unit.pending.length : 0;
-        const childCount = Array.isArray(unit.children) ? unit.children.length : 0;
-        const childSummary = `${holderCount} 位資安窗口 · ${pendingCount} 筆待審核 · ${childCount} 個二級單位`;
-        const summaryChips = [
-          ['一級單位', 1],
-          ['二級單位', childCount],
-          ['已設定', holderCount],
-          ['待審核', pendingCount]
-        ];
-        return `<details class="training-group-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="training-group-summary security-window-summary"><div><span class="training-group-title">${esc(unit.unit)}</span><div class="training-group-subtitle">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div><div class="training-group-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="governance-card-body" style="padding-top:14px"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div>${renderSecurityWindowScopeRows(unit)}</div></details>`;
-      }).join('')}</div>`;
+      const groups = groupSecurityWindowUnitsByCategory(rows);
+      return `<div class="security-window-category-stack">${groups.map((group, index) => renderSecurityWindowCategoryCard(group, index)).join('')}</div>`;
     }
 
     function buildReviewTableShell(key, headersHtml, rowsHtml, options) {

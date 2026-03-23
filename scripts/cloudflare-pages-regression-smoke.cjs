@@ -766,10 +766,21 @@ async function run() {
 
     await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForSelector('.security-window-group-stack .security-window-card', { timeout: 45000 });
+    await page.waitForSelector('.security-window-category-stack .security-window-category-card', { timeout: 45000 });
     const securityWindowText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(securityWindowText)) {
       throw new Error('security window page contains placeholder question marks');
+    }
+    const securityWindowCategories = await page.$$eval('.security-window-category-card[data-security-window-category]', (nodes) => {
+      const labels = nodes
+        .map((node) => String(node.getAttribute('data-security-window-category') || '').trim())
+        .filter(Boolean);
+      return Array.from(new Set(labels));
+    });
+    const expectedCategories = ['行政單位', '學術單位', '中心', '研究單位'];
+    const missingCategories = expectedCategories.filter((label) => !securityWindowCategories.includes(label));
+    if (missingCategories.length) {
+      throw new Error(`security window missing categories: ${missingCategories.join(', ')}`);
     }
     if (!securityWindowText.includes('一級單位') || !securityWindowText.includes('二級單位')) {
       throw new Error('security window page did not render grouped unit tiers');

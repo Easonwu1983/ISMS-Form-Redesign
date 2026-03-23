@@ -3387,6 +3387,66 @@ body.modal-open {
   gap: 16px;
 }
 
+.security-window-category-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.security-window-category-card {
+  padding: 0;
+  border-color: rgba(148, 163, 184, 0.20);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 250, 252, 0.97) 100%);
+}
+
+.security-window-category-card[open] {
+  border-color: rgba(30, 64, 175, 0.24);
+  box-shadow: 0 18px 36px -30px rgba(15, 23, 42, 0.2);
+}
+
+.security-window-category-summary {
+  padding: 18px 22px;
+}
+
+.security-window-category-summary .training-group-title {
+  font-size: 1.04rem;
+}
+
+.security-window-category-summary-grid {
+  margin-top: 12px;
+}
+
+.security-window-category-summary-chip {
+  min-width: 94px;
+}
+
+.security-window-category-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(29, 78, 216, 0.14);
+  background: rgba(239, 246, 255, 0.95);
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.security-window-category-body {
+  padding: 16px 18px 20px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.security-window-group-stack--nested {
+  gap: 12px;
+}
+
+.security-window-group-stack--nested .security-window-card {
+  margin-top: 0;
+}
+
 .security-window-card .governance-card-body {
   padding: 14px 20px 20px;
 }
