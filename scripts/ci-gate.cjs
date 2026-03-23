@@ -4,6 +4,7 @@ const path = require('path');
 const ROOT = process.cwd();
 
 const STEPS = [
+  { label: 'release-gate', command: ['node', path.join(ROOT, 'scripts/release-gate.cjs')] },
   { label: 'test:all', command: ['node', path.join(ROOT, 'scripts/run-test-suite.cjs'), 'all'] }
 ];
 
@@ -18,13 +19,6 @@ if (includeBrowserZoom) {
   STEPS.push({
     label: 'browser-zoom-regression',
     command: ['node', path.join(ROOT, 'scripts/browser-zoom-regression.cjs')]
-  });
-}
-
-if (!includeLiveSuite) {
-  STEPS.push({
-    label: 'version-governance-smoke',
-    command: ['node', path.join(ROOT, 'scripts/version-governance-smoke.cjs')]
   });
 }
 

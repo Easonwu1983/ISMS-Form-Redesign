@@ -336,6 +336,42 @@ git config --global http.version HTTP/1.1
 - `docs/fast-redeploy-runbook.md`
 - `docs/project-execution-flow.md`
 
+## 14. 發佈與回滾
+
+### Release gate
+
+正式發佈前，先跑：
+
+```powershell
+npm run release:gate
+```
+
+它會先擋：
+
+- tracked working tree 不乾淨
+- 本機 manifest 與 git HEAD 不一致
+- 版本資訊不一致
+
+### 正式驗證
+
+```powershell
+npm run release:verify
+```
+
+### 回滾
+
+如果正式版出問題，先找最後一個確定正常的 commit，然後：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/rollback-release.ps1 -TargetRef <good-commit> -Push
+```
+
+回滾後補跑：
+
+1. `npm run release:gate`
+2. `npm run release:verify`
+3. 校內與 Pages smoke
+
 ## ????????
 
 ???????????? [`docs/data-layer-governance.md`](data-layer-governance.md)?

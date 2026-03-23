@@ -50,6 +50,8 @@
                     "test:all:plus":  "node scripts/run-with-local-server.cjs \"node scripts/run-test-suite.cjs all \u0026\u0026 node scripts/browser-zoom-regression.cjs\"",
                     "test:ci":  "node scripts/run-with-campus-stack.cjs \"node scripts/ci-gate.cjs\"",
                     "release:verify":  "node scripts/run-with-campus-stack.cjs \"node scripts/ci-gate.cjs\"",
+                    "release:gate":  "node scripts/release-gate.cjs",
+                    "release:rollback":  "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/rollback-release.ps1",
                     "test:role:all:local":  "test-role-all-local.cmd",
                     "test:training:all:local":  "test-training-all-local.cmd",
                     "test:all:local":  "test-all-local.cmd",
