@@ -114,6 +114,40 @@
       let trainingRowsStateVersion = 0;
       let trainingRowsFilterCache = { signature: '', rows: [] };
       const trainingManualRosterDraftCache = new Map();
+      const TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY = '__TRAINING_MANUAL_ROSTER_DRAFTS__';
+      function readTrainingManualRosterDraftStorage() {
+        try {
+          if (typeof window === 'undefined' || !window.sessionStorage) return [];
+          const raw = window.sessionStorage.getItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+          return [];
+        }
+      }
+      function writeTrainingManualRosterDraftStorage(rows) {
+        try {
+          if (typeof window === 'undefined' || !window.sessionStorage) return;
+          window.sessionStorage.setItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY, JSON.stringify(rows || []));
+        } catch (_) { }
+      }
+      function syncTrainingManualRosterDraftStorage(nextRows) {
+        const map = new Map();
+        const merged = [].concat(
+          Array.isArray(nextRows) ? nextRows : [],
+          readTrainingManualRosterDraftStorage()
+        ).filter((row) => row && typeof row === 'object');
+        merged.forEach((row) => {
+          const normalized = normalizeTrainingRecordRow(row, row && row.unit);
+          const key = getTrainingManualRosterDraftKey(normalized);
+          if (!key) return;
+          map.set(key, normalized);
+        });
+        const rows = Array.from(map.values());
+        writeTrainingManualRosterDraftStorage(rows);
+        return rows;
+      }
       function getTrainingManualRosterDraftKey(row) {
         const unit = String(row && row.unit || '').trim().toLowerCase();
         const rosterId = String(row && (row.rosterId || row.id) || '').trim().toUpperCase();
@@ -133,6 +167,7 @@
         if (rosterId) trainingManualRosterDraftCache.set(`id:${rosterId}`, normalized);
         const aliasKey = `${String(normalized.unit || '').trim().toLowerCase()}::${String(normalized.name || '').trim().toLowerCase()}`;
         if (aliasKey.trim() !== '::') trainingManualRosterDraftCache.set(`name:${aliasKey}`, normalized);
+        syncTrainingManualRosterDraftStorage([normalized]);
         return normalized;
       }
       function forgetTrainingManualRosterRow(rowOrId) {
@@ -150,9 +185,27 @@
             trainingManualRosterDraftCache.delete(key);
           }
         });
+        const remaining = readTrainingManualRosterDraftStorage().filter((row) => {
+          const normalized = normalizeTrainingRecordRow(row, row && row.unit);
+          const entryId = String(normalized && (normalized.rosterId || normalized.id) || '').trim().toUpperCase();
+          const entryName = String(normalized && normalized.name || '').trim().toLowerCase();
+          const entryUnit = String(normalized && normalized.unit || '').trim().toLowerCase();
+          return !((rosterId && entryId === rosterId) || (name && entryName === name && (!unit || entryUnit === unit)));
+        });
+        writeTrainingManualRosterDraftStorage(remaining);
       }
       function getRememberedTrainingRosterRows() {
-        return Array.from(new Set(Array.from(trainingManualRosterDraftCache.values()))).map((row) => normalizeTrainingRecordRow(row, row && row.unit));
+        const rows = [];
+        const seen = new Set();
+        [].concat(readTrainingManualRosterDraftStorage(), Array.from(trainingManualRosterDraftCache.values())).forEach((row) => {
+          if (!row || typeof row !== 'object') return;
+          const normalized = normalizeTrainingRecordRow(row, row && row.unit);
+          const key = getTrainingManualRosterDraftKey(normalized);
+          if (!key || seen.has(key)) return;
+          seen.add(key);
+          rows.push(normalized);
+        });
+        return rows;
       }
       function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
