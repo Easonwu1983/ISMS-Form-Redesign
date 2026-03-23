@@ -21,7 +21,7 @@ const LARGE_CSV_PATH = path.join(OUT_DIR, 'large-roster.csv');
 const TARGET_UNIT = '主計室';
 const ROSTER_PREFIX = 'STRESS-ROSTER-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6) + '-';
 const CASE_ID = 'CAR-STRESS-LONG';
-const TRAINING_IMPORT_CHUNK_SIZE = 40;
+const TRAINING_IMPORT_CHUNK_SIZE = 200;
 const BASE_URL = process.env.TEST_BASE_URL || process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/';
 
 fs.mkdirSync(SHOT_DIR, { recursive: true });
@@ -266,9 +266,15 @@ async function seedLongCase(page) {
         };
       });
       const batchResults = await page.evaluate(async ({ items, actorName, actorUsername, chunkSize, concurrency }) => {
+        const moduleApi = window._trainingModule || null;
         const client = window._m365ApiClient;
-        if (!client || typeof client.upsertTrainingRosterBatch !== 'function') {
-          throw new Error('training client API unavailable');
+        const batchUpsert = moduleApi && typeof moduleApi.submitTrainingRosterBatchUpsert === 'function'
+          ? moduleApi.submitTrainingRosterBatchUpsert.bind(moduleApi)
+          : (client && typeof client.upsertTrainingRosterBatch === 'function'
+            ? async (payload) => client.upsertTrainingRosterBatch(payload)
+            : null);
+        if (!batchUpsert) {
+          throw new Error('training batch upsert API unavailable');
         }
         const chunks = [];
         for (let start = 0; start < items.length; start += chunkSize) {
@@ -285,7 +291,7 @@ async function seedLongCase(page) {
             const currentIndex = nextIndex++;
             const chunk = chunks[currentIndex];
             try {
-              const response = await client.upsertTrainingRosterBatch({
+              const response = await batchUpsert({
                 items: chunk.items,
                 actorName,
                 actorUsername

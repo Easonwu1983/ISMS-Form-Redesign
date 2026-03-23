@@ -1390,9 +1390,32 @@
       return loadTrainingStore().rosters.slice();
     }
 
+    function normalizeTrainingRosterUnitValue(value) {
+      return String(value || '').trim();
+    }
+
+    function matchesTrainingRosterUnitValue(candidate, target) {
+      const cleanTarget = normalizeTrainingRosterUnitValue(target);
+      const cleanCandidate = normalizeTrainingRosterUnitValue(candidate);
+      if (!cleanTarget || !cleanCandidate) return false;
+      if (cleanCandidate === cleanTarget) return true;
+      const parts = cleanCandidate.split(/[\/／]/).map((part) => normalizeTrainingRosterUnitValue(part)).filter(Boolean);
+      return parts.includes(cleanTarget);
+    }
+
     function getTrainingRosterByUnit(unit) {
+      const cleanUnit = normalizeTrainingRosterUnitValue(unit);
+      if (!cleanUnit) {
+        return getAllTrainingRosters()
+          .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+      }
       return getAllTrainingRosters()
-        .filter((row) => row.unit === unit)
+        .filter((row) => (
+          matchesTrainingRosterUnitValue(row && row.unit, cleanUnit)
+          || matchesTrainingRosterUnitValue(row && row.statsUnit, cleanUnit)
+          || matchesTrainingRosterUnitValue(row && row.l1Unit, cleanUnit)
+          || matchesTrainingRosterUnitValue(row && row.unitName, cleanUnit)
+        ))
         .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
     }
 

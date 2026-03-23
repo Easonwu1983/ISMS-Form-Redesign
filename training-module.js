@@ -111,6 +111,8 @@
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
     let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
+    let trainingRowsStateVersion = 0;
+    let trainingRowsFilterCache = { signature: '', rows: [] };
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
       return new Promise((resolve) => {
@@ -1093,6 +1095,8 @@
     clearUnsavedChangesGuard();
 
     function markTrainingDirty() {
+      trainingRowsStateVersion += 1;
+      trainingRowsFilterCache = { signature: '', rows: [] };
       setUnsavedChangesGuard(true, '教育訓練填報內容尚未儲存，確定要離開此頁嗎？');
     }
 
@@ -1379,6 +1383,15 @@
     function getFilteredRows() {
       const keyword = String(document.getElementById('training-search')?.value || '').trim().toLowerCase();
       const focusOnly = !!document.getElementById('training-only-focus')?.checked;
+      const signature = [
+        String(trainingRowsStateVersion || 0),
+        String(rowsState.length || 0),
+        keyword,
+        focusOnly ? '1' : '0'
+      ].join('::');
+      if (trainingRowsFilterCache.signature === signature && Array.isArray(trainingRowsFilterCache.rows)) {
+        return trainingRowsFilterCache.rows;
+      }
       const result = [];
       for (let index = 0; index < rowsState.length; index += 1) {
         const row = rowsState[index];
@@ -1388,6 +1401,7 @@
         if (focusOnly && isTrainingRecordComplete(row) && isTrainingRecordReadyForSubmit(row)) continue;
         result.push({ row, index });
       }
+      trainingRowsFilterCache = { signature, rows: result };
       return result;
     }
 
@@ -1420,7 +1434,9 @@
       renderSummary();
       updateBulkSelectionText();
       const token = ++trainingRowsRenderToken;
-      const chunkSize = visibleRows.length > 1500 ? 80 : (visibleRows.length > 600 ? 120 : 180);
+      const chunkSize = visibleRows.length <= 400
+        ? Math.max(1, visibleRows.length)
+        : (visibleRows.length > 1500 ? 80 : (visibleRows.length > 600 ? 120 : 180));
       const renderChunk = (rowsSlice) => rowsSlice.map(({ row, index }, visibleIndex) => buildTrainingFillRow({
         row,
         index,
@@ -1686,13 +1702,19 @@
     syncStatsUnitField(unitValue);
     updateTrainingDraftStatus(existing);
     clearTrainingFeedback();
-    scheduleTrainingRowsRender();
-    refreshIcons();
+      const immediateUnit = document.getElementById('tr-unit') ? document.getElementById('tr-unit').value : unitValue;
+      rowsState = mergeTrainingRows(immediateUnit, existing ? (existing.records || []) : []);
+      const forceRosterSync = !rowsState.length;
+      trainingRowsStateVersion += 1;
+      trainingRowsFilterCache = { signature: '', rows: [] };
+      trainingRosterHydrating = forceRosterSync;
+      scheduleTrainingRowsRender();
+      refreshIcons();
 
-    const syncPromise = Promise.allSettled([
-      syncTrainingRostersFromM365({ silent: true }),
-      syncTrainingFormsFromM365({ silent: true })
-    ]);
+      const syncPromise = Promise.allSettled([
+        syncTrainingRostersFromM365({ silent: true, force: forceRosterSync }),
+        syncTrainingFormsFromM365({ silent: true })
+      ]);
     syncPromise.then((syncResults) => {
       syncResults.forEach((result, index) => {
         if (result.status === 'rejected') {
@@ -1722,10 +1744,12 @@
         navigate('training-detail/' + existing.id);
         return;
       }
-      rowsState = mergeTrainingRows(activeUnit, existing ? (existing.records || []) : []);
-      trainingRosterHydrating = false;
-      updateTrainingDraftStatus(existing);
-      syncStatsUnitField(activeUnit);
+        rowsState = mergeTrainingRows(activeUnit, existing ? (existing.records || []) : []);
+        trainingRowsStateVersion += 1;
+        trainingRowsFilterCache = { signature: '', rows: [] };
+        trainingRosterHydrating = false;
+        updateTrainingDraftStatus(existing);
+        syncStatsUnitField(activeUnit);
       scheduleTrainingRowsRender();
     }).catch((error) => {
       trainingRosterHydrating = false;
@@ -2561,9 +2585,9 @@
       });
       const batchPayload = Array.from(pendingUpserts.values());
       if (batchPayload.length) {
-        // Keep roster import batches smaller so large imports finish within the
-        // live smoke window and do not monopolize the backend request slot.
-        const chunkSize = 40;
+        // Use the largest backend-supported batch size to minimize round-trips
+        // and reduce session-expiry risk on large imports.
+        const chunkSize = 200;
         const chunks = [];
         for (let startIndex = 0; startIndex < batchPayload.length; startIndex += chunkSize) {
           chunks.push({
@@ -2708,6 +2732,10 @@
       renderTrainingFill,
       renderTrainingDetail,
       renderTrainingRoster,
+      submitTrainingRosterUpsert,
+      submitTrainingRosterBatchUpsert,
+      submitTrainingRosterDelete,
+      submitTrainingRosterBatchDelete,
       seedTrainingData
     };
   };
