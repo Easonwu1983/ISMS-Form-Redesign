@@ -72,6 +72,20 @@
       });
     }
 
+    function formatAuditEventTypeSummary(summary) {
+      const items = Array.isArray(summary && summary.eventTypes) ? summary.eventTypes : [];
+      if (!items.length) {
+        return '<div class="review-history-item"><div class="review-history-title">尚無事件分布</div><div class="review-history-meta">目前查詢範圍內沒有可用的事件類型統計。</div></div>';
+      }
+      const total = Math.max(0, Number(summary && summary.total) || 0);
+      return items.map((entry) => {
+        const label = String(entry && entry.eventType || 'unknown').trim() || 'unknown';
+        const count = Math.max(0, Number(entry && entry.count) || 0);
+        const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+        return `<div class="review-history-item"><div class="review-history-top"><span class="review-history-title">${esc(label)}</span><span class="review-history-time">${count} 筆${total > 0 ? ` · ${percent}%` : ''}</span></div><div class="review-history-meta">事件類型 ${esc(label)} 共 ${count} 筆${total > 0 ? `，佔 ${percent}%` : ''}。</div></div>`;
+      }).join('');
+    }
+
     const DEFAULT_AUDIT_FILTERS = Object.freeze({
       keyword: '',
       eventType: '',
