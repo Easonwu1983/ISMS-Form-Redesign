@@ -57,6 +57,53 @@ function readJsonFile(filePath) {
   return text ? JSON.parse(text) : null;
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchTextWithRetry(url, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: { 'cache-control': 'no-cache' }
+      });
+      const text = await response.text();
+      if (!response.ok && response.status >= 500 && attempt < attempts - 1) {
+        await wait(750 * (attempt + 1));
+        continue;
+      }
+      return { response, text };
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts - 1) break;
+      await wait(750 * (attempt + 1));
+    }
+  }
+  throw lastError || new Error('fetch failed');
+}
+
+async function loadManifestViaBrowser(browser, baseUrl) {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    ignoreHTTPSErrors: true
+  });
+  const page = await context.newPage();
+  try {
+    const response = await page.goto(`${baseUrl}/deploy-manifest.json`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 45000
+    });
+    const text = await page.evaluate(() => document.body && (document.body.innerText || document.body.textContent) || '');
+    return {
+      response,
+      text
+    };
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
+
 function assertVersionConsistency(label, manifest, expectedHead) {
   const buildInfo = manifest && manifest.buildInfo && typeof manifest.buildInfo === 'object' ? manifest.buildInfo : {};
   const versionKey = cleanVersion(manifest && manifest.versionKey || buildInfo.versionKey || buildInfo.shortCommit || buildInfo.commit);
@@ -79,19 +126,27 @@ async function waitForAppReady(page) {
   await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 45000 });
 }
 
-async function loadManifest(baseUrl) {
-  const response = await fetch(`${baseUrl}/deploy-manifest.json`, {
-    headers: { 'cache-control': 'no-cache' }
-  });
-  const text = await response.text();
+async function loadManifest(baseUrl, browser) {
+  const manifestUrl = `${baseUrl}/deploy-manifest.json`;
+  let response = null;
+  let text = '';
+  try {
+    ({ response, text } = await fetchTextWithRetry(manifestUrl));
+  } catch (error) {
+    if (!browser) {
+      throw error;
+    }
+    console.warn(`[version-governance] node fetch failed for ${manifestUrl}; retrying via browser: ${error && error.message ? error.message : error}`);
+    ({ response, text } = await loadManifestViaBrowser(browser, baseUrl));
+  }
   let json = null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch (_) {
     json = null;
   }
-  if (!response.ok) {
-    throw new Error(`manifest HTTP ${response.status}`);
+  if (!response || !response.ok) {
+    throw new Error(`manifest HTTP ${response ? response.status : 'unknown'}`);
   }
   const buildInfo = json && json.buildInfo && typeof json.buildInfo === 'object' ? json.buildInfo : {};
   const versionKey = cleanVersion(json && json.versionKey || buildInfo.versionKey || buildInfo.shortCommit || buildInfo.commit);
@@ -141,7 +196,7 @@ async function verifyBase(browser, baseUrl, label, results) {
   let manifest = null;
 
   try {
-    manifest = await loadManifest(baseUrl);
+    manifest = await loadManifest(baseUrl, browser);
 
     await runStep(results, `${label}:landing`, label, 'landing version chip matches deploy manifest', async () => {
       await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });

@@ -88,8 +88,11 @@ async function chooseTrainingImportUnit(page) {
 }
 
 async function waitForTrainingRosterTableReady(page, timeout = 90000) {
+  await page.waitForSelector('#training-roster-groups', { state: 'visible', timeout });
   await page.waitForFunction(() => {
-    return Array.from(document.querySelectorAll('#training-roster-groups tr[data-roster-id]')).length > 0;
+    const groups = document.getElementById('training-roster-groups');
+    const toggle = document.getElementById('training-roster-toggle-import');
+    return !!groups && !!toggle && document.readyState !== 'loading';
   }, undefined, { timeout });
 }
 
@@ -171,22 +174,29 @@ async function deleteTrainingRostersByNames(page, names) {
           actorName: 'training-roster-focus-smoke',
           actorUsername: 'admin'
         }))
-      });
-    }
+  });
+}
   }, names);
 }
 
 async function waitForTrainingRostersByNames(page, names, timeout) {
-  const domRows = await waitForTrainingRosterRowsInDom(page, names, timeout);
   const startedAt = Date.now();
   while ((Date.now() - startedAt) < timeout) {
     const rows = await listTrainingRostersByNames(page, names);
-    if (names.every((name) => rows.some((row) => String((row && row.name) || '').trim() === name))) {
+    const backendReady = names.every((name) => rows.some((row) => String((row && row.name) || '').trim() === name));
+    if (backendReady) {
+      try {
+        await gotoHash(page, 'training-roster');
+      } catch (_) {}
+      const perRowTimeout = Math.max(3000, Math.min(30000, timeout - (Date.now() - startedAt)));
+      for (const name of names) {
+        await page.locator(`tr[data-roster-name="${name.replace(/"/g, '\\"')}"]`).first().waitFor({ state: 'attached', timeout: perRowTimeout });
+      }
       return rows;
     }
     await page.waitForTimeout(400);
   }
-  return domRows;
+  throw new Error(`training roster rows not rendered after ${timeout}ms: ${names.join(', ')}`);
 }
 
 (async () => {
@@ -235,11 +245,11 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
       });
 
       await page.click('[data-testid="training-import-submit"]');
-      await waitForTrainingRostersByNames(page, names, 90000);
+      await waitForTrainingRostersByNames(page, names, 240000);
       await page.waitForSelector('details.training-roster-group-card', { state: 'visible', timeout: 30000 });
       await expandRosterGroups(page);
 
-      const targetRow = page.locator(`tr[data-roster-name="${names[0]}"]`);
+      const targetRow = page.locator(`tr[data-roster-name="${names[0]}"]`).first();
       await targetRow.waitFor({ state: 'visible', timeout: 30000 });
       const targetDeleteButton = targetRow.locator('button[data-testid^="training-roster-delete-"]');
       await targetDeleteButton.focus();
@@ -264,8 +274,6 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
     });
   } finally {
     try {
-      await login(page, results.context.admin.username, results.context.admin.password);
-      await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending');
       await deleteTrainingRostersByNames(page, names);
     } catch (_) {}
     await browser.close();

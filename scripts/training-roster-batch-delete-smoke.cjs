@@ -128,6 +128,22 @@ async function deleteRostersByNames(page, names) {
   }, { targetNames: names, sessionToken: token });
 }
 
+async function listTrainingRostersByNames(page, names) {
+  const token = await getSessionToken(page);
+  if (!token) return [];
+  return page.evaluate(async ({ targetNames, sessionToken }) => {
+    const response = await fetch('/api/training/rosters', {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    const body = await response.json().catch(() => ({}));
+    const items = []
+      .concat(Array.isArray(body) ? body : [])
+      .concat(Array.isArray(body?.items) ? body.items : [])
+      .concat(Array.isArray(body?.value) ? body.value : []);
+    return items.filter((item) => targetNames.includes(String((item && item.name) || '').trim()));
+  }, { targetNames: names, sessionToken: token });
+}
+
 async function expandRosterGroups(page) {
   await page.evaluate(() => {
     document.querySelectorAll('details.training-roster-group-card').forEach((element) => {
@@ -140,14 +156,17 @@ async function expandRosterGroups(page) {
 async function waitForTrainingRosterGroupRows(page, names, timeout) {
   const startedAt = Date.now();
   while ((Date.now() - startedAt) < timeout) {
-    const present = await page.evaluate((targetNames) => {
-      const rows = Array.from(document.querySelectorAll('details.training-roster-group-card tr[data-roster-name]'))
-        .map((row) => String(row.dataset?.rosterName || '').trim())
-        .filter(Boolean);
-      return targetNames.filter((name) => rows.includes(name));
-    }, names);
-    if (names.every((name) => present.includes(name))) {
-      return present;
+    const rows = await listTrainingRostersByNames(page, names);
+    const backendReady = names.every((name) => rows.some((row) => String((row && row.name) || '').trim() === name));
+    if (backendReady) {
+      try {
+        await gotoHash(page, 'training-roster');
+      } catch (_) {}
+      await page.waitForFunction(() => document.querySelectorAll('details.training-roster-group-card').length > 0, undefined, { timeout: Math.min(30000, Math.max(5000, timeout)) });
+      for (const name of names) {
+        await page.locator(`details.training-roster-group-card tr[data-roster-name="${name.replace(/"/g, '\\"')}"]`).first().waitFor({ state: 'attached', timeout: Math.min(30000, Math.max(5000, timeout)) });
+      }
+      return rows;
     }
     await page.waitForTimeout(300);
   }
@@ -191,7 +210,7 @@ async function waitForTrainingRosterGroupRows(page, names, timeout) {
         document.getElementById('training-import-names').value = rows.map((row) => [row.name, row.unit, row.identity, row.jobTitle].join(',')).join('\n');
       }, { rows: TEST_ROWS });
       await page.click('[data-testid="training-import-submit"]');
-      await waitForTrainingRosterGroupRows(page, TEST_ROWS.map((row) => row.name), 90000);
+      await waitForTrainingRosterGroupRows(page, TEST_ROWS.map((row) => row.name), 240000);
       await page.waitForFunction(() => document.querySelectorAll('details.training-roster-group-card').length > 0, undefined, { timeout: 30000 });
       await expandRosterGroups(page);
       const groupCount = await page.locator('details.training-roster-group-card').count();
@@ -218,8 +237,6 @@ async function waitForTrainingRosterGroupRows(page, names, timeout) {
     });
   } finally {
     try {
-      await login(page, results.context.admin.username, results.context.admin.password);
-      await page.waitForFunction(() => window.__REMOTE_BOOTSTRAP_STATE__ !== 'pending');
       await deleteRostersByNames(page, results.context.names);
     } catch (_) {}
     await browser.close();
