@@ -342,20 +342,21 @@
     if (typeof window === 'undefined' || typeof window.createPolicyModule !== 'function') {
       throw new Error('policy-module.js not loaded');
     }
-    policyModuleApi = window.createPolicyModule({
-      ROLES,
-      STATUSES,
-      TRAINING_STATUSES,
-      TRAINING_UNDO_WINDOW_MINUTES,
-      currentUser: function () { return getAuthModule().currentUser(); },
-      getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
-      getReviewUnits: function (user) { return getDataModule().getReviewUnits(user); },
-      getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
-      getUnitGovernanceMode: function (unit) { return getDataModule().getUnitGovernanceMode(unit); },
-      splitUnitValue: function (value) { return getUnitModule().splitUnitValue(value); },
-      getAllItems: function () { return getDataModule().getAllItems(); },
-      getAllChecklists: function () { return getDataModule().getAllChecklists(); },
-      getAllTrainingForms: function () { return getDataModule().getAllTrainingForms(); },
+      policyModuleApi = window.createPolicyModule({
+        ROLES,
+        STATUSES,
+        TRAINING_STATUSES,
+        TRAINING_UNDO_WINDOW_MINUTES,
+        currentUser: function () { return getAuthModule().currentUser(); },
+        getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
+        getReviewUnits: function (user) { return getDataModule().getReviewUnits(user); },
+        getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
+        getStoreTouchToken: function (key) { return getDataModule().getStoreTouchToken(key); },
+        getUnitGovernanceMode: function (unit) { return getDataModule().getUnitGovernanceMode(unit); },
+        splitUnitValue: function (value) { return getUnitModule().splitUnitValue(value); },
+        getAllItems: function () { return getDataModule().getAllItems(); },
+        getAllChecklists: function () { return getDataModule().getAllChecklists(); },
+        getAllTrainingForms: function () { return getDataModule().getAllTrainingForms(); },
       isChecklistDraftStatus: function (status) { return getDataModule().isChecklistDraftStatus(status); },
       isReviewScopeEnforced: function () { return getReviewScopeRepositoryState().ready === true && getReviewScopesMode() === 'm365-api'; }
     });
@@ -483,6 +484,7 @@
       ROLE_BADGE,
       currentUser,
       isAdmin,
+      isUnitAdmin,
       canManageUsers,
       getUsers,
       getAuthorizedUnits,
@@ -3449,7 +3451,7 @@
     'checklist-fill': { title: '\u586b\u5831\u6aa2\u6838\u8868', allow: () => canFillChecklist(), fallback: 'checklist', deniedMessage: '\u60a8\u6c92\u6709\u586b\u5831\u6aa2\u6838\u8868\u6b0a\u9650', render: (param) => getChecklistModule().renderChecklistFill(param) },
     'checklist-detail': { title: '\u6aa2\u6838\u8868\u8a73\u60c5', allow: () => !!currentUser(), requiresParam: true, render: (param) => getChecklistModule().renderChecklistDetail(param) },
     'checklist-manage': { title: '\u6aa2\u6838\u8868\u7ba1\u7406', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u7ba1\u7406\u6aa2\u6838\u8868', render: () => getChecklistModule().renderChecklistManage() },
-    'unit-review': { title: '\u55ae\u4f4d\u6cbb\u7406', allow: () => isAdmin() || isUnitAdmin(), fallback: 'dashboard', deniedMessage: '\u60a8\u6c92\u6709\u7ba1\u7406\u55ae\u4f4d\u6cbb\u7406\u7684\u6b0a\u9650', render: () => getAdminModule().renderUnitReview() },
+    'unit-review': { title: '\u55ae\u4f4d\u6cbb\u7406', allow: () => isAdmin(), fallback: 'dashboard', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u7ba1\u7406\u55ae\u4f4d\u6cbb\u7406', render: () => getAdminModule().renderUnitReview() },
     training: { title: '\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08', allow: () => !!currentUser(), render: () => getTrainingModule().renderTraining() },
     'training-fill': { title: '\u586b\u5831\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08', allow: () => canFillTraining(), fallback: 'training', deniedMessage: '\u60a8\u6c92\u6709\u586b\u5831\u6559\u80b2\u8a13\u7df4\u7684\u6b0a\u9650', render: (param) => getTrainingModule().renderTrainingFill(param) },
     'training-detail': { title: '\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08\u8a73\u60c5', allow: () => !!currentUser(), requiresParam: true, render: (param) => getTrainingModule().renderTrainingDetail(param) },

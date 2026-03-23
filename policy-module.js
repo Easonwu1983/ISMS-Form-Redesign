@@ -8,6 +8,7 @@
       currentUser,
       getAuthorizedUnits,
       getReviewUnits,
+      getStoreTouchToken,
       getUnitGovernanceMode,
       splitUnitValue,
       getAllItems,
@@ -16,6 +17,11 @@
       isChecklistDraftStatus,
       isReviewScopeEnforced
     } = deps;
+
+    const permissionSnapshotCache = {
+      key: '',
+      value: null
+    };
 
     function isAdmin(user = currentUser()) {
       return user?.role === ROLES.ADMIN;
@@ -33,12 +39,66 @@
       return !!user && user.role === ROLES.ADMIN;
     }
 
+    function getPermissionSnapshotKey(user = currentUser()) {
+      if (!user) return 'anonymous';
+      const authToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('cats_auth') || '') : '';
+      const dataToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('cats_data') || '') : '';
+      const reviewToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('cats_unit_review') || '') : '';
+      return [
+        String(user.username || '').trim().toLowerCase(),
+        String(user.role || '').trim(),
+        String(user.activeUnit || '').trim(),
+        String(user.unit || '').trim(),
+        String(user.name || '').trim(),
+        authToken,
+        dataToken,
+        reviewToken
+      ].join('|');
+    }
+
+    function normalizeUnitList(value) {
+      return Array.isArray(value)
+        ? Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)))
+        : [];
+    }
+
+    function getPermissionSnapshot(user = currentUser()) {
+      if (!user) {
+        permissionSnapshotCache.key = 'anonymous';
+        permissionSnapshotCache.value = {
+          user: null,
+          isAdmin: false,
+          isUnitAdmin: false,
+          globalReadScope: false,
+          authorizedUnits: [],
+          reviewUnits: []
+        };
+        return permissionSnapshotCache.value;
+      }
+      const cacheKey = getPermissionSnapshotKey(user);
+      if (permissionSnapshotCache.key === cacheKey && permissionSnapshotCache.value) {
+        return permissionSnapshotCache.value;
+      }
+      const snapshot = {
+        user,
+        isAdmin: user.role === ROLES.ADMIN,
+        isUnitAdmin: user.role === ROLES.UNIT_ADMIN,
+        globalReadScope: user.role === ROLES.ADMIN,
+        authorizedUnits: normalizeUnitList(getAuthorizedUnits(user)),
+        reviewUnits: normalizeUnitList(getReviewUnits(user))
+      };
+      permissionSnapshotCache.key = cacheKey;
+      permissionSnapshotCache.value = snapshot;
+      return snapshot;
+    }
+
     function hasUnitAccess(unit, user = currentUser()) {
       if (!user) return false;
+      const snapshot = getPermissionSnapshot(user);
       const target = String(unit || '').trim();
-      if (!target) return isAdmin(user);
-      if (isAdmin(user)) return true;
-      return getAuthorizedUnits(user).includes(target);
+      if (!target) return snapshot.isAdmin;
+      if (snapshot.isAdmin) return true;
+      return snapshot.authorizedUnits.includes(target);
     }
 
     function canCreateCAR(user = currentUser()) {
@@ -46,27 +106,29 @@
     }
 
     function canReview(user = currentUser()) {
-      if (isAdmin(user)) return true;
-      if (!isUnitAdmin(user)) return false;
+      const snapshot = getPermissionSnapshot(user);
+      if (snapshot.isAdmin) return true;
+      if (!snapshot.isUnitAdmin) return false;
       if (!isReviewScopeEnforced()) return true;
-      return getReviewUnits(user).length > 0;
+      return snapshot.reviewUnits.length > 0;
     }
 
     function hasReviewScope(unit, user = currentUser()) {
       if (!user) return false;
-      if (isAdmin(user)) return true;
-      if (!isUnitAdmin(user)) return false;
+      const snapshot = getPermissionSnapshot(user);
+      if (snapshot.isAdmin) return true;
+      if (!snapshot.isUnitAdmin) return false;
       if (!isReviewScopeEnforced()) return true;
       const target = String(unit || '').trim();
-      const reviewUnits = getReviewUnits(user);
-      if (!target) return reviewUnits.length > 0;
-      return reviewUnits.includes(target);
+      if (!target) return snapshot.reviewUnits.length > 0;
+      return snapshot.reviewUnits.includes(target);
     }
 
     function canReviewItem(item, user = currentUser()) {
       if (!item || !user) return false;
-      if (isAdmin(user)) return true;
-      if (!isUnitAdmin(user)) return false;
+      const snapshot = getPermissionSnapshot(user);
+      if (snapshot.isAdmin) return true;
+      if (!snapshot.isUnitAdmin) return false;
       if (!isReviewScopeEnforced()) return true;
       return hasReviewScope(item.handlerUnit || item.proposerUnit || '', user);
     }
@@ -90,15 +152,17 @@
 
     function getVisibleItems(user = currentUser()) {
       if (!user) return [];
+      const snapshot = getPermissionSnapshot(user);
       const all = getAllItems();
-      if (hasGlobalReadScope(user)) return all;
-      return all.filter((item) => hasUnitAccess(item.handlerUnit, user) || isItemHandler(item, user));
+      if (snapshot.globalReadScope) return all;
+      return all.filter((item) => snapshot.authorizedUnits.includes(String(item && item.handlerUnit || '').trim()) || isItemHandler(item, user));
     }
 
     function canAccessItem(item, user = currentUser()) {
       if (!item || !user) return false;
-      if (hasGlobalReadScope(user)) return true;
-      return hasUnitAccess(item.handlerUnit, user) || isItemHandler(item, user);
+      const snapshot = getPermissionSnapshot(user);
+      if (snapshot.globalReadScope) return true;
+      return snapshot.authorizedUnits.includes(String(item.handlerUnit || '').trim()) || isItemHandler(item, user);
     }
 
     function canRespondItem(item, user = currentUser()) {
@@ -136,35 +200,40 @@
 
     function getVisibleChecklists(user = currentUser()) {
       if (!user) return [];
+      const snapshot = getPermissionSnapshot(user);
       const all = getAllChecklists();
-      if (hasGlobalReadScope(user)) return all;
+      if (snapshot.globalReadScope) return all;
       return all.filter((item) => canAccessChecklist(item, user));
     }
 
     function canEditChecklist(item, user = currentUser()) {
       if (!user || !item || !isChecklistDraftStatus(item.status) || !canFillChecklist(user)) return false;
-      if (user.role === ROLES.ADMIN) return true;
+      const snapshot = getPermissionSnapshot(user);
+      if (snapshot.isAdmin) return true;
       if (isGovernanceConsolidatedChildUnit(item.unit)) return false;
       return hasUnitAccess(item.unit, user) || isChecklistOwner(item, user);
     }
 
     function getVisibleTrainingForms(user = currentUser()) {
       if (!user) return [];
+      const snapshot = getPermissionSnapshot(user);
       const forms = getAllTrainingForms();
-      if (hasGlobalReadScope(user)) return forms;
+      if (snapshot.globalReadScope) return forms;
       return forms.filter((form) => hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
     }
 
     function canEditTrainingForm(form, user = currentUser()) {
       if (!user || !form) return false;
       if (!(form.status === TRAINING_STATUSES.DRAFT || form.status === TRAINING_STATUSES.RETURNED)) return false;
-      const inScope = user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
+      const snapshot = getPermissionSnapshot(user);
+      const inScope = snapshot.isAdmin || snapshot.authorizedUnits.includes(String(form.unit || '').trim()) || form.fillerUsername === user.username;
       return inScope;
     }
 
     function canManageTrainingForm(form, user = currentUser()) {
       if (!user || !form) return false;
-      return user.role === ROLES.ADMIN || form.fillerUsername === user.username;
+      const snapshot = getPermissionSnapshot(user);
+      return snapshot.isAdmin || form.fillerUsername === user.username;
     }
 
     function isTrainingManualRowOwner(row, user = currentUser()) {
@@ -173,12 +242,13 @@
       const ownerUsername = String(row.createdByUsername || '').trim();
       const ownerName = String(row.createdBy || '').trim();
       if ((!!ownerUsername && ownerUsername === user.username) || (!!ownerName && ownerName === user.name)) return true;
-      return source === 'manual';
+      return false;
     }
 
     function canDeleteTrainingEditableRow(row, form, user = currentUser()) {
       if (!row || !user) return false;
-      if (user.role === ROLES.ADMIN) return true;
+      const snapshot = getPermissionSnapshot(user);
+      if (snapshot.isAdmin) return true;
       const editable = !form || canEditTrainingForm(form, user);
       if (!editable) return false;
       const source = String(row.source || '').trim().toLowerCase();
@@ -209,7 +279,8 @@
 
     function isTrainingVisible(form, user = currentUser()) {
       if (!form || !user) return false;
-      if (hasGlobalReadScope(user)) return true;
+      const snapshot = getPermissionSnapshot(user);
+      if (snapshot.globalReadScope) return true;
       return hasUnitAccess(form.unit, user) || form.fillerUsername === user.username;
     }
 

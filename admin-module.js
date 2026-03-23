@@ -5,6 +5,7 @@
       ROLE_BADGE,
       currentUser,
       isAdmin,
+      isUnitAdmin,
       canManageUsers,
       getUsers,
       getAuthorizedUnits,
@@ -61,12 +62,14 @@
       actorEmail: '',
       unitCode: '',
       recordId: '',
-      limit: '100'
+      limit: '100',
+      offset: '0'
     });
     const auditTrailState = {
       filters: { ...DEFAULT_AUDIT_FILTERS },
       items: [],
       summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
+      page: { offset: 0, limit: 100, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       health: null,
       lastLoadedAt: '',
       filterSignature: '',
@@ -138,6 +141,16 @@
       return Array.isArray(units) ? units.map((unit) => String(unit || '').trim()).filter(Boolean) : [];
     }
 
+    function getAuditTrailEventTypeOptions(summary, items) {
+      const summaryOptions = Array.isArray(summary && summary.eventTypes) ? summary.eventTypes : [];
+      const itemOptions = Array.isArray(items)
+        ? items.map((entry) => entry && entry.eventType)
+        : [];
+      const source = summaryOptions.length ? summaryOptions : itemOptions;
+      return Array.from(new Set(source.map((value) => String(value || '').trim()).filter(Boolean)))
+        .sort((left, right) => String(left).localeCompare(String(right), 'zh-Hant'));
+    }
+
     function getAuditTrailFilterSignature(filters) {
       const next = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
       return [
@@ -146,7 +159,8 @@
         next.actorEmail,
         next.unitCode,
         next.recordId,
-        next.limit
+        next.limit,
+        next.offset
       ].map((value) => String(value || '').trim()).join('|');
     }
 
@@ -167,6 +181,202 @@
       if (!signature || auditTrailQueryCache.signature !== signature) return false;
       if (!auditTrailQueryCache || !auditTrailQueryCache.value) return false;
       return (Date.now() - Number(auditTrailQueryCache.loadedAt || 0)) < AUDIT_TRAIL_QUERY_CACHE_MS;
+    }
+
+    function getAuditTrailFiltersFromDom() {
+      const next = {
+        ...auditTrailState.filters,
+        keyword: String(document.getElementById('audit-keyword')?.value || '').trim(),
+        eventType: String(document.getElementById('audit-event-type')?.value || '').trim(),
+        actorEmail: String(document.getElementById('audit-actor-email')?.value || '').trim(),
+        unitCode: String(document.getElementById('audit-unit-code')?.value || '').trim(),
+        recordId: String(document.getElementById('audit-record-id')?.value || '').trim(),
+        limit: String(document.getElementById('audit-limit')?.value || '100').trim(),
+        offset: '0'
+      };
+      return next;
+    }
+
+    function normalizeAuditTrailPage(page, filters, items) {
+      const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
+      const limit = Math.max(1, Math.min(Number(resolvedFilters.limit || 100) || 100, 200));
+      const currentItems = Array.isArray(items) ? items : [];
+      const total = Number(page && page.total);
+      const safeTotal = Number.isFinite(total) && total >= 0 ? total : currentItems.length;
+      const offset = Math.max(0, Math.min(Number(page && page.offset) || 0, safeTotal > 0 ? Math.max(0, Math.floor((safeTotal - 1) / limit) * limit) : 0));
+      const pageCount = Number(page && page.pageCount);
+      const safePageCount = Number.isFinite(pageCount) && pageCount >= 0 ? pageCount : (safeTotal > 0 ? Math.max(1, Math.ceil(safeTotal / limit)) : 0);
+      const currentPage = Number(page && page.currentPage);
+      const safeCurrentPage = Number.isFinite(currentPage) && currentPage >= 0 ? currentPage : (safeTotal > 0 ? Math.floor(offset / limit) + 1 : 0);
+      const hasPrev = !!(page && page.hasPrev);
+      const hasNext = !!(page && page.hasNext);
+      return {
+        offset,
+        limit,
+        total: safeTotal,
+        pageCount: safePageCount,
+        currentPage: safeCurrentPage,
+        hasPrev,
+        hasNext,
+        prevOffset: Number.isFinite(Number(page && page.prevOffset)) ? Math.max(0, Number(page.prevOffset)) : Math.max(0, offset - limit),
+        nextOffset: Number.isFinite(Number(page && page.nextOffset)) ? Math.max(0, Number(page.nextOffset)) : (hasNext ? offset + limit : offset),
+        pageStart: Number.isFinite(Number(page && page.pageStart)) ? Number(page.pageStart) : (currentItems.length ? offset + 1 : 0),
+        pageEnd: Number.isFinite(Number(page && page.pageEnd)) ? Number(page.pageEnd) : (currentItems.length ? offset + currentItems.length : 0)
+      };
+    }
+
+    function getAuditTrailPageSummary(page) {
+      const total = Math.max(0, Number(page && page.total) || 0);
+      const currentPage = Math.max(0, Number(page && page.currentPage) || 0);
+      const pageCount = Math.max(0, Number(page && page.pageCount) || 0);
+      const pageStart = Math.max(0, Number(page && page.pageStart) || 0);
+      const pageEnd = Math.max(0, Number(page && page.pageEnd) || 0);
+      if (!total) return '目前沒有符合條件的稽核紀錄';
+      return `第 ${currentPage || 1} / ${pageCount || 1} 頁 · 顯示 ${pageStart}-${pageEnd} / 共 ${total} 筆`;
+    }
+
+    function getAuditTrailPageActionMeta(page) {
+      const currentPage = Math.max(0, Number(page && page.currentPage) || 0);
+      const pageCount = Math.max(0, Number(page && page.pageCount) || 0);
+      return {
+        currentPage,
+        pageCount,
+        summary: getAuditTrailPageSummary(page),
+        hasPrev: !!(page && page.hasPrev),
+        hasNext: !!(page && page.hasNext)
+      };
+    }
+
+    function renderAuditTrailPager(page) {
+      const meta = getAuditTrailPageActionMeta(page);
+      return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(meta.summary)}</span></div><div class="review-toolbar-actions"><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailPrevPage" ${meta.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailNextPage" ${meta.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><span class="review-card-subtitle" style="margin-left:8px">頁次 ${meta.currentPage || 0} / ${meta.pageCount || 0}</span></div></div>`;
+    }
+
+    async function loadAuditTrailData(nextFilters, options) {
+      const force = !!(options && options.force);
+      const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(nextFilters || {}) };
+      resolvedFilters.limit = String(Math.max(1, Math.min(Number(resolvedFilters.limit || 100) || 100, 200)));
+      resolvedFilters.offset = String(Math.max(0, Number(resolvedFilters.offset || 0) || 0));
+      const filterSignature = getAuditTrailFilterSignature(resolvedFilters);
+      if (!force && isAuditTrailQueryFresh(filterSignature)) {
+        return auditTrailQueryCache.value;
+      }
+      if (!force && auditTrailLoadPromise) {
+        return auditTrailLoadPromise;
+      }
+      const pending = Promise.resolve()
+        .then(async () => {
+          const [health, response] = await Promise.all([
+            getAuditTrailHealthSnapshot(force),
+            fetchAuditTrailEntries(resolvedFilters)
+          ]);
+          const items = Array.isArray(response && response.items) ? response.items : [];
+          const summary = response && response.summary && typeof response.summary === 'object'
+            ? response.summary
+            : { total: items.length, actorCount: 0, latestOccurredAt: '', eventTypes: [] };
+          const page = normalizeAuditTrailPage(response && response.page, resolvedFilters, items);
+          const state = {
+            filters: resolvedFilters,
+            items,
+            summary,
+            page,
+            health,
+            lastLoadedAt: new Date().toISOString(),
+            filterSignature,
+            loading: false
+          };
+          auditTrailState.filters = state.filters;
+          auditTrailState.items = state.items;
+          auditTrailState.summary = state.summary;
+          auditTrailState.page = state.page;
+          auditTrailState.health = state.health;
+          auditTrailState.lastLoadedAt = state.lastLoadedAt;
+          auditTrailState.filterSignature = state.filterSignature;
+          auditTrailState.loading = false;
+          auditTrailQueryCache = {
+            signature: filterSignature,
+            loadedAt: Date.now(),
+            value: state
+          };
+          return state;
+        })
+        .catch((error) => {
+          console.warn('audit trail fetch failed', error);
+          if (auditTrailQueryCache && auditTrailQueryCache.value) {
+            return auditTrailQueryCache.value;
+          }
+          throw error;
+        })
+        .finally(() => {
+          if (auditTrailLoadPromise === pending) {
+            auditTrailLoadPromise = null;
+          }
+        });
+      auditTrailLoadPromise = pending;
+      return pending;
+    }
+
+    async function loadAllAuditTrailEntriesForExport(filters) {
+      const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
+      resolvedFilters.limit = '200';
+      resolvedFilters.offset = '0';
+      const collected = [];
+      const seen = new Set();
+      let offset = 0;
+      while (true) {
+        const response = await fetchAuditTrailEntries({ ...resolvedFilters, offset: String(offset) });
+        const pageItems = Array.isArray(response && response.items) ? response.items : [];
+        pageItems.forEach((entry) => {
+          const key = String(entry && entry.listItemId || entry && entry.recordId || entry && entry.occurredAt || '').trim();
+          if (key && seen.has(key)) return;
+          if (key) seen.add(key);
+          collected.push(entry);
+        });
+        const page = response && response.page ? response.page : null;
+        if (!page || !page.hasNext) break;
+        const nextOffset = Number(page.nextOffset);
+        if (!Number.isFinite(nextOffset) || nextOffset <= offset) break;
+        offset = nextOffset;
+      }
+      return collected;
+    }
+
+    async function loadAuditTrailExportPayload(filters) {
+      const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || auditTrailState.filters) };
+      const items = await loadAllAuditTrailEntriesForExport(resolvedFilters);
+      const health = auditTrailState.health || await getAuditTrailHealthSnapshot(false).catch(() => auditTrailState.health || null);
+      const total = items.length;
+      const summary = {
+        total,
+        actorCount: new Set(items.map((entry) => String(entry && entry.actorEmail || '').trim()).filter(Boolean)).size,
+        latestOccurredAt: items.reduce((latest, entry) => {
+          const occurredAt = String(entry && entry.occurredAt || '').trim();
+          if (!occurredAt) return latest;
+          if (!latest) return occurredAt;
+          return occurredAt > latest ? occurredAt : latest;
+        }, ''),
+        eventTypes: getAuditTrailEventTypeOptions({ eventTypes: items.map((entry) => entry && entry.eventType) }, items)
+      };
+      return {
+        exportedAt: new Date().toISOString(),
+        filters: resolvedFilters,
+        health,
+        summary,
+        page: {
+          offset: 0,
+          limit: total,
+          total,
+          pageCount: total ? 1 : 0,
+          currentPage: total ? 1 : 0,
+          hasPrev: false,
+          hasNext: false,
+          prevOffset: 0,
+          nextOffset: 0,
+          pageStart: total ? 1 : 0,
+          pageEnd: total
+        },
+        items
+      };
     }
 
     async function getAuditTrailHealthSnapshot(force) {
@@ -988,7 +1198,7 @@
   }
 
     async function renderUnitReview(nextFilters) {
-      if (!isAdmin() && !isUnitAdmin()) { navigate('dashboard'); toast('您沒有管理單位治理的權限', 'error'); return; }
+      if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可管理單位治理', 'error'); return; }
       unitGovernanceState.filters = { ...unitGovernanceState.filters, ...(nextFilters || {}) };
       unitGovernanceState.loading = true;
     const app = document.getElementById('app');
@@ -1286,11 +1496,11 @@
     renderSchemaHealth();
   }
 
-  async function renderAuditTrail(nextFilters) {
-    if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可檢視操作稽核軌跡', 'error'); return; }
-    const app = document.getElementById('app');
-    const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(nextFilters || auditTrailState.filters) };
-    const filterSignature = getAuditTrailFilterSignature(resolvedFilters);
+    async function renderAuditTrail(nextFilters) {
+      if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可檢視操作稽核軌跡', 'error'); return; }
+      const app = document.getElementById('app');
+      const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(nextFilters || auditTrailState.filters) };
+      const filterSignature = getAuditTrailFilterSignature(resolvedFilters);
     const canRenderFromCache = auditTrailState.filterSignature === filterSignature && Array.isArray(auditTrailState.items) && auditTrailState.items.length > 0;
 
     let state;
@@ -1316,11 +1526,11 @@
       app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">無法讀取後端稽核資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">稽核軌跡後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
       return;
-    }
+      }
 
     const health = state.health || { ready: false, message: '未取得後端健康資訊' };
     const items = Array.isArray(state.items) ? state.items : [];
-    const eventTypeOptions = Array.from(new Set(items.map((entry) => entry.eventType).filter(Boolean))).sort((left, right) => String(left).localeCompare(String(right), 'zh-Hant'));
+    const eventTypeOptions = getAuditTrailEventTypeOptions(state.summary, items);
     const eventTypeSelect = [`<option value="">全部事件</option>`]
       .concat(eventTypeOptions.map((value) => `<option value="${esc(value)}" ${state.filters.eventType === value ? 'selected' : ''}>${esc(value)}</option>`))
       .join('');
@@ -1329,8 +1539,9 @@
     const healthBadge = health.ready === false
       ? `<span class="review-status-badge pending">後端未就緒</span>`
       : `<span class="review-status-badge approved">後端正常</span>`;
+    const pager = renderAuditTrailPager(state.page);
 
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">查詢後端權限控管與稽核寫入結果，協助管理者追查異動來源。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重新整理</button><button type="button" class="btn btn-secondary" data-action="admin.exportAuditTrail">${ic('download', 'icon-sm')} 匯出 JSON</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>${healthBadge} <strong style="margin-left:8px">${esc(filterSummary)}</strong><div class="review-card-subtitle" style="margin-top:6px">${esc(health.repository || '')}${health.actor && health.actor.tokenMode ? ` · token=${esc(health.actor.tokenMode)}` : ''}${health.message ? ` · ${esc(health.message)}` : ''}</div></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('scroll-text')}</div><div class="stat-value">${state.summary.total || 0}</div><div class="stat-label">符合條件事件</div></div><div class="stat-card closed"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${state.summary.actorCount || 0}</div><div class="stat-label">操作人數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('activity')}</div><div class="stat-value">${eventTypeOptions.length}</div><div class="stat-label">事件類型</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('clock-3')}</div><div class="stat-value">${state.summary.latestOccurredAt ? esc(formatAuditOccurredAt(state.summary.latestOccurredAt).slice(5, 16)) : '—'}</div><div class="stat-label">最近事件</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">稽核紀錄查詢</span><span class="review-card-subtitle">${esc(filterSummary)}</span></div><form id="audit-filter-form"><div class="panel-grid-two" style="margin-bottom:18px"><div class="form-group"><label class="form-label">關鍵字</label><input type="text" class="form-input" id="audit-keyword" value="${esc(state.filters.keyword)}" placeholder="事件類型、email、recordId、payload 關鍵字"></div><div class="form-group"><label class="form-label">事件類型</label><select class="form-select" id="audit-event-type">${eventTypeSelect}</select></div><div class="form-group"><label class="form-label">操作人 email</label><input type="text" class="form-input" id="audit-actor-email" value="${esc(state.filters.actorEmail)}" placeholder="actorEmail"></div><div class="form-group"><label class="form-label">單位代碼</label><input type="text" class="form-input" id="audit-unit-code" value="${esc(state.filters.unitCode)}" placeholder="unitCode"></div><div class="form-group"><label class="form-label">紀錄編號</label><input type="text" class="form-input" id="audit-record-id" value="${esc(state.filters.recordId)}" placeholder="recordId"></div><div class="form-group"><label class="form-label">筆數上限</label><select class="form-select" id="audit-limit"><option value="50" ${state.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${state.filters.limit === '100' ? 'selected' : ''}>100</option><option value="200" ${state.filters.limit === '200' ? 'selected' : ''}>200</option></select></div></div><div class="form-actions" style="justify-content:flex-start;margin-bottom:8px"><button type="submit" class="btn btn-primary">${ic('search', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetAuditTrailFilters">${ic('rotate-ccw', 'icon-sm')} 清空條件</button></div></form>${buildReviewTableShell('audit-trail-table', '<th>時間</th><th>事件</th><th>操作人</th><th>目標</th><th>單位</th><th>內容摘要</th><th>差異</th>', rows, { toolbarSubtitle: '套用篩選後可直接拖曳表格左右移動，也可用右側按鈕快速平移。' })}</div><div class="card review-history-card"><div class="card-header"><span class="card-title">事件分布</span><span class="review-card-subtitle">最近查詢摘要</span></div><div class="review-history-list">${formatAuditEventTypeSummary(state.summary)}</div></div></div></div>`;
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">查詢後端權限控管與稽核寫入結果，協助管理者追查異動來源。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重新整理</button><button type="button" class="btn btn-secondary" data-action="admin.exportAuditTrail">${ic('download', 'icon-sm')} 匯出 JSON</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>${healthBadge} <strong style="margin-left:8px">${esc(filterSummary)}</strong><div class="review-card-subtitle" style="margin-top:6px">${esc(health.repository || '')}${health.actor && health.actor.tokenMode ? ` · token=${esc(health.actor.tokenMode)}` : ''}${health.message ? ` · ${esc(health.message)}` : ''}</div></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('scroll-text')}</div><div class="stat-value">${state.summary.total || 0}</div><div class="stat-label">符合條件事件</div></div><div class="stat-card closed"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${state.summary.actorCount || 0}</div><div class="stat-label">操作人數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('activity')}</div><div class="stat-value">${eventTypeOptions.length}</div><div class="stat-label">事件類型</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('clock-3')}</div><div class="stat-value">${state.summary.latestOccurredAt ? esc(formatAuditOccurredAt(state.summary.latestOccurredAt).slice(5, 16)) : '—'}</div><div class="stat-label">最近事件</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">稽核紀錄查詢</span><span class="review-card-subtitle">${esc(filterSummary)}</span></div><form id="audit-filter-form"><div class="panel-grid-two" style="margin-bottom:18px"><div class="form-group"><label class="form-label">關鍵字</label><input type="text" class="form-input" id="audit-keyword" value="${esc(state.filters.keyword)}" placeholder="事件類型、email、recordId、payload 關鍵字"></div><div class="form-group"><label class="form-label">事件類型</label><select class="form-select" id="audit-event-type">${eventTypeSelect}</select></div><div class="form-group"><label class="form-label">操作人 email</label><input type="text" class="form-input" id="audit-actor-email" value="${esc(state.filters.actorEmail)}" placeholder="actorEmail"></div><div class="form-group"><label class="form-label">單位代碼</label><input type="text" class="form-input" id="audit-unit-code" value="${esc(state.filters.unitCode)}" placeholder="unitCode"></div><div class="form-group"><label class="form-label">紀錄編號</label><input type="text" class="form-input" id="audit-record-id" value="${esc(state.filters.recordId)}" placeholder="recordId"></div><div class="form-group"><label class="form-label">筆數上限</label><select class="form-select" id="audit-limit"><option value="50" ${state.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${state.filters.limit === '100' ? 'selected' : ''}>100</option><option value="200" ${state.filters.limit === '200' ? 'selected' : ''}>200</option></select></div></div><div class="form-actions" style="justify-content:flex-start;margin-bottom:8px"><button type="submit" class="btn btn-primary">${ic('search', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetAuditTrailFilters">${ic('rotate-ccw', 'icon-sm')} 清空條件</button></div></form>${pager}${buildReviewTableShell('audit-trail-table', '<th>時間</th><th>事件</th><th>操作人</th><th>目標</th><th>單位</th><th>內容摘要</th><th>差異</th>', rows, { toolbarSubtitle: '套用篩選後可直接拖曳表格左右移動，也可用右側按鈕快速平移。' })}</div><div class="card review-history-card"><div class="card-header"><span class="card-title">事件分布</span><span class="review-card-subtitle">最近查詢摘要</span></div><div class="review-history-list">${formatAuditEventTypeSummary(state.summary)}</div></div></div></div>`;
     const form = document.getElementById('audit-filter-form');
     if (form) {
       form.addEventListener('submit', function (event) {
@@ -1561,14 +1772,25 @@
       renderAuditTrail({ ...DEFAULT_AUDIT_FILTERS });
     },
     exportAuditTrail: function () {
-      downloadJson('isms-audit-trail-' + new Date().toISOString().slice(0, 10) + '.json', {
-        exportedAt: new Date().toISOString(),
-        filters: auditTrailState.filters,
-        health: auditTrailState.health,
-        summary: auditTrailState.summary,
-        items: auditTrailState.items
-      });
-      toast('已匯出操作稽核軌跡 JSON');
+      Promise.resolve()
+        .then(() => loadAuditTrailExportPayload(auditTrailState.filters))
+        .then((payload) => {
+          downloadJson('isms-audit-trail-' + new Date().toISOString().slice(0, 10) + '.json', payload);
+          toast('已匯出操作稽核軌跡 JSON');
+        })
+        .catch((error) => {
+          toast(String(error && error.message || error || '匯出失敗'), 'error');
+        });
+    },
+    auditTrailPrevPage: function () {
+      const page = auditTrailState.page || {};
+      const nextOffset = Math.max(0, Number(page.prevOffset || 0) || 0);
+      return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
+    },
+    auditTrailNextPage: function () {
+      const page = auditTrailState.page || {};
+      const nextOffset = Math.max(0, Number(page.nextOffset || 0) || 0);
+      return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
     },
     refreshSchemaHealth: function () {
       renderSchemaHealth();
