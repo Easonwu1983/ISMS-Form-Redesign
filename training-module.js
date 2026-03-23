@@ -149,6 +149,13 @@
         writeTrainingManualRosterDraftStorage(rows);
         return rows;
       }
+      function traceTrainingManualRoster(action, detail) {
+        try {
+          if (typeof window === 'undefined') return;
+          const trace = window.__TRAINING_MANUAL_ROSTER_TRACE__ || (window.__TRAINING_MANUAL_ROSTER_TRACE__ = []);
+          trace.push({ time: new Date().toISOString(), action, detail: detail || null });
+        } catch (_) { }
+      }
       function getTrainingManualRosterDraftKey(row) {
         const unit = String(row && row.unit || '').trim().toLowerCase();
         const rosterId = String(row && (row.rosterId || row.id) || '').trim().toUpperCase();
@@ -170,6 +177,7 @@
         const aliasKey = `${String(normalized.unit || '').trim().toLowerCase()}::${String(normalized.name || '').trim().toLowerCase()}`;
         if (aliasKey.trim() !== '::') trainingManualRosterDraftCache.set(`name:${aliasKey}`, normalized);
         syncTrainingManualRosterDraftStorage([normalized]);
+        traceTrainingManualRoster('remember', { key: primaryKey, rosterId, source: normalized.source, manualDraft: normalized.manualDraft === true });
         return normalized;
       }
       function forgetTrainingManualRosterRow(rowOrId) {
@@ -189,12 +197,14 @@
         });
         const remaining = readTrainingManualRosterDraftStorage().filter((row) => {
           const normalized = normalizeTrainingRecordRow(row, row && row.unit);
+          if (row && row.manualDraft) normalized.manualDraft = true;
           const entryId = String(normalized && (normalized.rosterId || normalized.id) || '').trim().toUpperCase();
           const entryName = String(normalized && normalized.name || '').trim().toLowerCase();
           const entryUnit = String(normalized && normalized.unit || '').trim().toLowerCase();
           return !((rosterId && entryId === rosterId) || (name && entryName === name && (!unit || entryUnit === unit)));
         });
         writeTrainingManualRosterDraftStorage(remaining);
+        traceTrainingManualRoster('forget', { rosterId, name, unit, remaining: remaining.length });
       }
       function getRememberedTrainingRosterRows() {
         const rows = [];
@@ -217,6 +227,31 @@
           const rosterId = String(row.rosterId || row.id || '').trim().toUpperCase();
           if (source !== 'manual' && !rosterId.startsWith('TMP-') && row.manualDraft !== true) return;
           rememberTrainingManualRosterRow(row);
+        });
+      }
+      function getTrainingManualRosterMatchKey(row) {
+        if (!row || typeof row !== 'object') return '';
+        const unit = String(row.unit || '').trim().toLowerCase();
+        const name = String(row.name || '').trim().toLowerCase();
+        const identity = String(row.identity || '').trim().toLowerCase();
+        const jobTitle = String(row.jobTitle || '').trim().toLowerCase();
+        return [unit, name, identity, jobTitle].filter(Boolean).join('::');
+      }
+      function pruneTrainingManualRosterDraftsAgainstRows(rows) {
+        const currentRows = Array.isArray(rows) ? rows : [];
+        getRememberedTrainingRosterRows().forEach((draftRow) => {
+          const draftKey = getTrainingManualRosterMatchKey(draftRow);
+          if (!draftKey) return;
+          const hasCommittedMatch = currentRows.some((row) => {
+            if (!row || typeof row !== 'object') return false;
+            if (row.manualDraft === true) return false;
+            const rosterId = String(row.rosterId || row.id || '').trim().toUpperCase();
+            if (rosterId.startsWith('TMP-')) return false;
+            return getTrainingManualRosterMatchKey(row) === draftKey;
+          });
+          if (hasCommittedMatch) {
+            forgetTrainingManualRosterRow(draftRow);
+          }
         });
       }
       function scheduleDeferredPromise(taskFactory, timeoutMs) {
@@ -1450,29 +1485,30 @@
         renderRows();
         let result;
         try {
-          result = await submitTrainingRosterUpsert({
-            name: payload.name,
-            unit: payload.currentUnit,
-            statsUnit: getTrainingStatsUnit(payload.currentUnit),
-            unitName: payload.unitName,
-            identity: payload.identity,
-            jobTitle: payload.jobTitle,
-            source: 'manual',
-            createdBy: user.name,
-            createdByUsername: user.username,
+          result = await submitTrainingRosterBatchUpsert({
+            items: [{
+              name: payload.name,
+              unit: payload.currentUnit,
+              statsUnit: getTrainingStatsUnit(payload.currentUnit),
+              unitName: payload.unitName,
+              identity: payload.identity,
+              jobTitle: payload.jobTitle,
+              source: 'manual',
+              createdBy: user.name,
+              createdByUsername: user.username,
+              actorName: user.name,
+              actorUsername: user.username
+            }],
             actorName: user.name,
             actorUsername: user.username
           });
         } catch (error) {
-          forgetTrainingManualRosterRow(tempRosterId);
-          rowsState = rowsState.filter((row) => String(row && row.rosterId || row && row.id || '').trim() !== tempRosterId);
-          selectedKeys.clear();
           markTrainingDirty();
           renderRows();
           throw error;
         }
-        const roster = result && result.item && String(result.item.id || '').trim()
-          ? result.item
+        const roster = result && Array.isArray(result.items) && result.items[0] && String(result.items[0].id || '').trim()
+          ? result.items[0]
           : null;
         const syncedRoster = roster || (await (async () => {
           try {
@@ -1583,6 +1619,7 @@
 
     function renderRows() {
       const body = document.getElementById('training-rows-body');
+      pruneTrainingManualRosterDraftsAgainstRows(rowsState);
       const preservedRows = getPreservedTrainingRosterRows();
       if (preservedRows.length) {
         let nextRows = Array.isArray(rowsState) ? rowsState.slice() : [];
