@@ -78,17 +78,14 @@
     const AUDIT_TRAIL_SYNC_FRESHNESS_MS = 30000;
     const AUDIT_TRAIL_HEALTH_CACHE_MS = 30000;
     const AUDIT_TRAIL_QUERY_CACHE_MS = 30000;
-    let auditTrailLoadPromise = null;
     let auditTrailHealthLoadPromise = null;
     let auditTrailHealthCache = {
       value: null,
       loadedAt: 0
     };
-    let auditTrailQueryCache = {
-      signature: '',
-      loadedAt: 0,
-      value: null
-    };
+    const AUDIT_TRAIL_QUERY_CACHE_MAX = 12;
+    const auditTrailQueryCache = new Map();
+    const auditTrailLoadPromiseMap = new Map();
     const unitContactReviewState = {
       filters: {
         status: 'pending_review',
@@ -166,7 +163,7 @@
 
     function isAuditTrailDataFresh(signature) {
       if (!signature || auditTrailState.filterSignature !== signature) return false;
-      if (!Array.isArray(auditTrailState.items) || !auditTrailState.items.length) return false;
+      if (!Array.isArray(auditTrailState.items)) return false;
       const parsedAt = Date.parse(String(auditTrailState.lastLoadedAt || '').trim());
       if (!Number.isFinite(parsedAt)) return false;
       return (Date.now() - parsedAt) < AUDIT_TRAIL_SYNC_FRESHNESS_MS;
@@ -177,10 +174,48 @@
       return (Date.now() - Number(auditTrailHealthCache.loadedAt || 0)) < AUDIT_TRAIL_HEALTH_CACHE_MS;
     }
 
+    function getAuditTrailQueryCacheRecord(signature) {
+      if (!signature) return null;
+      const cached = auditTrailQueryCache.get(signature);
+      if (!cached || !cached.value) return null;
+      return {
+        loadedAt: Number(cached.loadedAt || 0),
+        value: cached.value,
+        fresh: (Date.now() - Number(cached.loadedAt || 0)) < AUDIT_TRAIL_QUERY_CACHE_MS
+      };
+    }
+
+    function getAuditTrailQueryCacheValue(signature) {
+      const record = getAuditTrailQueryCacheRecord(signature);
+      return record ? record.value : null;
+    }
+
+    function getFreshAuditTrailQueryCacheValue(signature) {
+      const record = getAuditTrailQueryCacheRecord(signature);
+      return record && record.fresh ? record.value : null;
+    }
+
+    function setAuditTrailQueryCacheValue(signature, value) {
+      if (!signature || !value) return;
+      auditTrailQueryCache.set(signature, {
+        loadedAt: Date.now(),
+        value
+      });
+      while (auditTrailQueryCache.size > AUDIT_TRAIL_QUERY_CACHE_MAX) {
+        const oldestKey = auditTrailQueryCache.keys().next().value;
+        if (!oldestKey) break;
+        auditTrailQueryCache.delete(oldestKey);
+      }
+    }
+
+    function getAuditTrailLoadPromise(signature) {
+      if (!signature) return null;
+      return auditTrailLoadPromiseMap.get(signature) || null;
+    }
+
     function isAuditTrailQueryFresh(signature) {
-      if (!signature || auditTrailQueryCache.signature !== signature) return false;
-      if (!auditTrailQueryCache || !auditTrailQueryCache.value) return false;
-      return (Date.now() - Number(auditTrailQueryCache.loadedAt || 0)) < AUDIT_TRAIL_QUERY_CACHE_MS;
+      const record = getAuditTrailQueryCacheRecord(signature);
+      return !!(record && record.fresh);
     }
 
     function getAuditTrailFiltersFromDom() {
@@ -254,15 +289,18 @@
 
     async function loadAuditTrailData(nextFilters, options) {
       const force = !!(options && options.force);
+      const prefetch = !!(options && options.prefetch);
       const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(nextFilters || {}) };
       resolvedFilters.limit = String(Math.max(1, Math.min(Number(resolvedFilters.limit || 100) || 100, 200)));
       resolvedFilters.offset = String(Math.max(0, Number(resolvedFilters.offset || 0) || 0));
       const filterSignature = getAuditTrailFilterSignature(resolvedFilters);
-      if (!force && isAuditTrailQueryFresh(filterSignature)) {
-        return auditTrailQueryCache.value;
+      const freshCachedState = !force ? getFreshAuditTrailQueryCacheValue(filterSignature) : null;
+      if (freshCachedState && !prefetch) {
+        return freshCachedState;
       }
-      if (!force && auditTrailLoadPromise) {
-        return auditTrailLoadPromise;
+      const pendingState = !force ? getAuditTrailLoadPromise(filterSignature) : null;
+      if (pendingState) {
+        return pendingState;
       }
       const pending = Promise.resolve()
         .then(async () => {
@@ -285,34 +323,45 @@
             filterSignature,
             loading: false
           };
-          auditTrailState.filters = state.filters;
-          auditTrailState.items = state.items;
-          auditTrailState.summary = state.summary;
-          auditTrailState.page = state.page;
-          auditTrailState.health = state.health;
-          auditTrailState.lastLoadedAt = state.lastLoadedAt;
-          auditTrailState.filterSignature = state.filterSignature;
-          auditTrailState.loading = false;
-          auditTrailQueryCache = {
-            signature: filterSignature,
-            loadedAt: Date.now(),
-            value: state
-          };
+          setAuditTrailQueryCacheValue(filterSignature, state);
+          if (!prefetch) {
+            auditTrailState.filters = state.filters;
+            auditTrailState.items = state.items;
+            auditTrailState.summary = state.summary;
+            auditTrailState.page = state.page;
+            auditTrailState.health = state.health;
+            auditTrailState.lastLoadedAt = state.lastLoadedAt;
+            auditTrailState.filterSignature = state.filterSignature;
+            auditTrailState.loading = false;
+            if (state.page && state.page.hasNext) {
+              const nextOffset = Number(state.page.nextOffset);
+              if (Number.isFinite(nextOffset) && nextOffset >= 0) {
+                const nextFilters = { ...resolvedFilters, offset: String(nextOffset) };
+                const nextSignature = getAuditTrailFilterSignature(nextFilters);
+                if (!getAuditTrailQueryCacheValue(nextSignature) && !getAuditTrailLoadPromise(nextSignature)) {
+                  loadAuditTrailData(nextFilters, { prefetch: true }).catch((error) => {
+                    console.warn('audit trail prefetch failed', error);
+                  });
+                }
+              }
+            }
+          }
           return state;
         })
         .catch((error) => {
           console.warn('audit trail fetch failed', error);
-          if (auditTrailQueryCache && auditTrailQueryCache.value) {
-            return auditTrailQueryCache.value;
+          const cachedState = !force ? getAuditTrailQueryCacheValue(filterSignature) : null;
+          if (cachedState && !prefetch) {
+            return cachedState;
           }
           throw error;
         })
         .finally(() => {
-          if (auditTrailLoadPromise === pending) {
-            auditTrailLoadPromise = null;
+          if (auditTrailLoadPromiseMap.get(filterSignature) === pending) {
+            auditTrailLoadPromiseMap.delete(filterSignature);
           }
         });
-      auditTrailLoadPromise = pending;
+      auditTrailLoadPromiseMap.set(filterSignature, pending);
       return pending;
     }
 
@@ -1150,6 +1199,8 @@
     const unitLabel = document.getElementById('u-unit-label');
     const parentEl = document.getElementById('u-unit-parent');
     const securityRoleGroup = document.getElementById('u-security-role-group');
+    const extraUnitsGroup = document.querySelector('[data-unit-chip-picker="u-units"]')?.closest('.form-group');
+    const reviewUnitsGroup = document.querySelector('[data-unit-chip-picker="u-review-units"]')?.closest('.form-group');
     const extraUnitsPicker = initUnitMultiSelectControl('u-units');
     const reviewUnitsPicker = initUnitMultiSelectControl('u-review-units');
     const unitEl = document.getElementById('u-unit');
@@ -1181,8 +1232,16 @@
       if (securityRoleGroup) {
         securityRoleGroup.style.display = unitAdminMode ? '' : 'none';
       }
+      if (extraUnitsGroup) {
+        extraUnitsGroup.style.display = unitAdminMode ? '' : 'none';
+      }
+      if (reviewUnitsGroup) {
+        reviewUnitsGroup.style.display = unitAdminMode ? '' : 'none';
+      }
       if (!unitAdminMode) {
         setSecurityRoles([]);
+        if (extraUnitsPicker && typeof extraUnitsPicker.clear === 'function') extraUnitsPicker.clear();
+        if (reviewUnitsPicker && typeof reviewUnitsPicker.clear === 'function') reviewUnitsPicker.clear();
       }
       syncScopedUnits();
     }
@@ -1215,13 +1274,15 @@
         if (!isE && findUser(un)) { toast('帳號已存在', 'error'); return; }
         await submitUserUpsert({ username: un, ...payload });
         await syncUsersFromM365({ silent: true });
-        await submitReviewScopeReplace({
-          username: un,
-          units: rl === ROLES.UNIT_ADMIN ? reviewScopeUnits : [],
-          actorName: currentUser() && currentUser().name,
-          actorEmail: currentUser() && currentUser().email
-        });
-        await syncReviewScopesFromM365({ silent: true });
+        if (rl === ROLES.UNIT_ADMIN) {
+          await submitReviewScopeReplace({
+            username: un,
+            units: reviewScopeUnits,
+            actorName: currentUser() && currentUser().name,
+            actorEmail: currentUser() && currentUser().email
+          });
+          await syncReviewScopesFromM365({ silent: true });
+        }
         toast(isE ? '使用者已更新' : '使用者已新增');
         closeModalRoot(); renderUsers(); refreshIcons();
       } catch (error) {
@@ -1604,14 +1665,18 @@
       const app = document.getElementById('app');
       const resolvedFilters = { ...DEFAULT_AUDIT_FILTERS, ...(nextFilters || auditTrailState.filters) };
       const filterSignature = getAuditTrailFilterSignature(resolvedFilters);
-    const canRenderFromCache = auditTrailState.filterSignature === filterSignature && Array.isArray(auditTrailState.items) && auditTrailState.items.length > 0;
+      const cachedState = getAuditTrailQueryCacheValue(filterSignature);
+      const canRenderFromCache = !!cachedState;
 
     let state;
     try {
       if (canRenderFromCache) {
-        auditTrailState.filters = resolvedFilters;
-        state = auditTrailState;
-        if (!isAuditTrailDataFresh(filterSignature) && !auditTrailLoadPromise) {
+        state = {
+          ...cachedState,
+          filters: resolvedFilters
+        };
+        Object.assign(auditTrailState, state);
+        if (!isAuditTrailDataFresh(filterSignature) && !getAuditTrailLoadPromise(filterSignature)) {
           loadAuditTrailData(resolvedFilters).then(function () {
             if (document.getElementById('audit-filter-form')) {
               renderAuditTrail(resolvedFilters);
