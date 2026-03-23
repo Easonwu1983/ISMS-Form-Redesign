@@ -149,13 +149,6 @@
         writeTrainingManualRosterDraftStorage(rows);
         return rows;
       }
-      function traceTrainingManualRoster(action, detail) {
-        try {
-          if (typeof window === 'undefined') return;
-          const trace = window.__TRAINING_MANUAL_ROSTER_TRACE__ || (window.__TRAINING_MANUAL_ROSTER_TRACE__ = []);
-          trace.push({ time: new Date().toISOString(), action, detail: detail || null });
-        } catch (_) { }
-      }
       function getTrainingManualRosterDraftKey(row) {
         const unit = String(row && row.unit || '').trim().toLowerCase();
         const rosterId = String(row && (row.rosterId || row.id) || '').trim().toUpperCase();
@@ -177,7 +170,6 @@
         const aliasKey = `${String(normalized.unit || '').trim().toLowerCase()}::${String(normalized.name || '').trim().toLowerCase()}`;
         if (aliasKey.trim() !== '::') trainingManualRosterDraftCache.set(`name:${aliasKey}`, normalized);
         syncTrainingManualRosterDraftStorage([normalized]);
-        traceTrainingManualRoster('remember', { key: primaryKey, rosterId, source: normalized.source, manualDraft: normalized.manualDraft === true });
         return normalized;
       }
       function forgetTrainingManualRosterRow(rowOrId) {
@@ -204,7 +196,6 @@
           return !((rosterId && entryId === rosterId) || (name && entryName === name && (!unit || entryUnit === unit)));
         });
         writeTrainingManualRosterDraftStorage(remaining);
-        traceTrainingManualRoster('forget', { rosterId, name, unit, remaining: remaining.length });
       }
       function getRememberedTrainingRosterRows() {
         const rows = [];
