@@ -140,6 +140,7 @@
         ).filter((row) => row && typeof row === 'object');
         merged.forEach((row) => {
           const normalized = normalizeTrainingRecordRow(row, row && row.unit);
+          if (row && row.manualDraft) normalized.manualDraft = true;
           const key = getTrainingManualRosterDraftKey(normalized);
           if (!key) return;
           map.set(key, normalized);
@@ -160,6 +161,7 @@
         if (!row || typeof row !== 'object') return null;
         const normalized = normalizeTrainingRecordRow(row, row.unit || document.getElementById('tr-unit')?.value || '');
         if (!normalized.name) return null;
+        normalized.manualDraft = true;
         const primaryKey = getTrainingManualRosterDraftKey(normalized);
         if (!primaryKey) return normalized;
         trainingManualRosterDraftCache.set(primaryKey, normalized);
@@ -200,6 +202,7 @@
         [].concat(readTrainingManualRosterDraftStorage(), Array.from(trainingManualRosterDraftCache.values())).forEach((row) => {
           if (!row || typeof row !== 'object') return;
           const normalized = normalizeTrainingRecordRow(row, row && row.unit);
+          if (row.manualDraft) normalized.manualDraft = true;
           const key = getTrainingManualRosterDraftKey(normalized);
           if (!key || seen.has(key)) return;
           seen.add(key);
@@ -212,7 +215,7 @@
           if (!row || typeof row !== 'object') return;
           const source = String(row.source || '').trim().toLowerCase();
           const rosterId = String(row.rosterId || row.id || '').trim().toUpperCase();
-          if (source !== 'manual' && !rosterId.startsWith('TMP-')) return;
+          if (source !== 'manual' && !rosterId.startsWith('TMP-') && row.manualDraft !== true) return;
           rememberTrainingManualRosterRow(row);
         });
       }
@@ -1164,7 +1167,7 @@
         const preserved = Array.isArray(rowsState) && rowsState.length ? rowsState.filter((row) => {
           const rosterId = String(row && (row.rosterId || row.id) || '').trim().toUpperCase();
           const source = String(row && row.source || '').trim().toLowerCase();
-          return rosterId.startsWith('TMP-') || source === 'manual';
+          return rosterId.startsWith('TMP-') || source === 'manual' || row.manualDraft === true;
         }) : [];
         return preserved.concat(getRememberedTrainingRosterRows());
       }
@@ -1436,6 +1439,7 @@
           completedProfessional: '',
           note: ''
         }, payload.currentUnit);
+        draftRoster.manualDraft = true;
         rememberTrainingManualRosterRow(draftRoster);
         rowsState = replaceTrainingRosterRowsByKey(rowsState, draftRoster);
         selectedKeys.clear();
@@ -1483,20 +1487,20 @@
         }
         const nextManualRow = normalizeTrainingRecordRow({
           ...syncedRoster,
-          source: 'manual',
           rosterId: syncedRoster.id,
           unit: payload.currentUnit,
           statsUnit: syncedRoster.statsUnit || getTrainingStatsUnit(payload.currentUnit),
           unitName: syncedRoster.unitName || payload.unitName,
           identity: syncedRoster.identity || payload.identity,
           jobTitle: syncedRoster.jobTitle || payload.jobTitle,
-          source: syncedRoster.source || 'manual',
+          source: 'manual',
           status: '',
           completedGeneral: '',
           isInfoStaff: '',
           completedProfessional: '',
           note: ''
         }, payload.currentUnit);
+        nextManualRow.manualDraft = true;
         forgetTrainingManualRosterRow(tempRosterId);
           rememberTrainingManualRosterRow(nextManualRow);
           rowsState = replaceTrainingRosterRowsByKey(rowsState, nextManualRow);
@@ -1579,6 +1583,14 @@
 
     function renderRows() {
       const body = document.getElementById('training-rows-body');
+      const preservedRows = getPreservedTrainingRosterRows();
+      if (preservedRows.length) {
+        let nextRows = Array.isArray(rowsState) ? rowsState.slice() : [];
+        preservedRows.forEach((row) => {
+          nextRows = replaceTrainingRosterRowsByKey(nextRows, row);
+        });
+        rowsState = nextRows;
+      }
       const visibleRows = getFilteredRows();
       installTrainingRowDelegates();
       syncTrainingManualRosterDraftCacheFromRows(rowsState);
