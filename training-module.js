@@ -1051,7 +1051,7 @@
     let bulkGeneralValue = '';
     const submitLabel = existing && existing.status === TRAINING_STATUSES.RETURNED ? '完成更正並進入簽核' : '完成流程一並進入簽核';
     let pendingRosterMutation = null;
-    let trainingRosterHydrating = true;
+    let trainingRosterHydrating = false;
     let trainingRowsRenderToken = 0;
     let trainingRowsDelegatesInstalled = false;
     function hasTemporaryTrainingRows() {
