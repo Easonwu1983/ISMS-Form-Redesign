@@ -43,6 +43,9 @@ Get-Content ./runtime/cloudflare-quick-tunnel.url
 node m365/campus-backend/service-host.cjs ./runtime/runtime.local.host.json
 ```
 
+> ??????????????????????`./runtime/runtime.local.host.json` ??? `tokenMode: "app-only"`?  
+> ???? `delegated-cli`?approval mail ???????
+
 正常情況下會看到類似：
 - `service-host starting ...`
 - `unit-contact-campus-backend listening on http://127.0.0.1:18080`
