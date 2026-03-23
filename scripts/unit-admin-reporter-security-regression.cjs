@@ -50,6 +50,35 @@ async function hashPassword(page, password) {
   }, password);
 }
 
+async function forceLocalEmulatorConfig(page) {
+  await page.addInitScript(() => {
+    const forceConfig = {
+      authMode: 'local-emulator',
+      checklistMode: 'local-emulator',
+      trainingMode: 'local-emulator',
+      systemUsersMode: 'local-emulator',
+      reviewScopesMode: 'local-emulator',
+      correctiveActionsMode: 'local-emulator',
+      attachmentsMode: 'local-emulator',
+      auditTrailMode: 'local-emulator'
+    };
+    try {
+      Object.defineProperty(window, '__M365_UNIT_CONTACT_CONFIG__', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return forceConfig;
+        },
+        set() {
+          // Keep the regression deterministic even if the page attempts to write remote config.
+        }
+      });
+    } catch (_) {
+      window.__M365_UNIT_CONTACT_CONFIG__ = forceConfig;
+    }
+  });
+}
+
 async function ensureLocalAdminAccount(page) {
   const state = await page.evaluate(() => {
     const authModule = window._authModule;
@@ -91,20 +120,18 @@ async function ensureLocalAdminAccount(page) {
   return true;
 }
 
-async function upsertTempUnitManager(page, suffix, unit) {
+async function seedTempUnitManager(page, suffix, unit) {
   const username = `probe-unit-manager-${suffix}`;
   const password = `ProbePass${suffix}A1`;
   const passwordHash = await hashPassword(page, password);
-  const response = await page.evaluate(async ({ username, passwordHash, unit, suffix, role, securityRole }) => {
+  const created = await page.evaluate(async ({ username, passwordHash, unit, suffix, role, securityRole }) => {
     const dataModule = window._dataModule;
-    if (!dataModule || typeof dataModule.loadData !== 'function' || typeof dataModule.saveData !== 'function') {
+    if (!dataModule || typeof dataModule.addUser !== 'function' || typeof dataModule.findUser !== 'function') {
       throw new Error('missing data module');
     }
-    const store = dataModule.loadData();
-    const users = Array.isArray(store.users)
-      ? store.users.filter((user) => String(user.username || '').trim() !== username)
-      : [];
-    users.push({
+    const existing = dataModule.findUser(username);
+    if (existing) return existing;
+    dataModule.addUser({
       username,
       password: '',
       passwordHash,
@@ -118,11 +145,10 @@ async function upsertTempUnitManager(page, suffix, unit) {
       forcePasswordChange: false,
       mustChangePassword: false
     });
-    dataModule.saveData({ ...store, users });
-    return { ok: true, status: 200, parsed: { ok: true } };
+    return dataModule.findUser(username);
   }, { username, passwordHash, unit, suffix, role: TEMP_UNIT_ADMIN_ROLE, securityRole: TEMP_SECURITY_ROLE });
-  if (!response.ok) {
-    throw new Error(`failed to create temp unit manager: ${response.status} ${JSON.stringify(response.parsed || {})}`);
+  if (!created) {
+    throw new Error(`failed to create temp unit manager: ${username}`);
   }
   return { username, password, unit };
 }
@@ -165,6 +191,14 @@ async function setLocalAuthSession(page, username) {
       : null;
     return !!currentUser && String(currentUser.username || '').trim() === String(expectedUsername || '').trim();
   }, username, { timeout: 15000 });
+}
+
+async function signIn(page, account) {
+  const username = String(account && account.username || '').trim();
+  const password = String(account && account.password || '').trim();
+  if (!username) throw new Error('missing account username');
+  if (!password) throw new Error(`missing password for ${username}`);
+  await login(page, username, password);
 }
 
 async function createCorrectiveActionViaApi(page, payload) {
@@ -218,9 +252,14 @@ async function resolveTestContext(page) {
   }
 
   const tempSuffix = String(Date.now());
-  const tempUnitAdmin = await upsertTempUnitManager(page, `${tempSuffix}-adm`, sameUnit);
-  const tempReporter = await upsertTempUnitManager(page, `${tempSuffix}-rp`, sameUnit);
-  const tempCrossUnit = await upsertTempUnitManager(page, `${tempSuffix}-cross`, crossUnit);
+  await ensureLocalAdminAccount(page);
+  await seedTempUnitManager(page, `${tempSuffix}-adm`, sameUnit);
+  const tempUnitAdmin = { username: `probe-unit-manager-${tempSuffix}-adm`, password: `ProbePass${tempSuffix}-admA1`, unit: sameUnit };
+  await seedTempUnitManager(page, `${tempSuffix}-rp`, sameUnit);
+  const tempReporter = { username: `probe-unit-manager-${tempSuffix}-rp`, password: `ProbePass${tempSuffix}-rpA1`, unit: sameUnit };
+  await seedTempUnitManager(page, `${tempSuffix}-cross`, crossUnit);
+  const tempCrossUnit = { username: `probe-unit-manager-${tempSuffix}-cross`, password: `ProbePass${tempSuffix}-crossA1`, unit: crossUnit };
+  await logout(page).catch(() => {});
   const today = new Date().toISOString().slice(0, 10);
   const closeDate = new Date(Date.now() + 86400000 * 7).toISOString().slice(0, 10);
   const sameUnitId = `UAR-SEC-SAME-${tempSuffix}`;
@@ -367,6 +406,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
   attachDiagnostics(page, results);
+  await forceLocalEmulatorConfig(page);
 
   let checklistId = null;
   let trainingId = null;
@@ -390,7 +430,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
       trace('admin bootstrap reload wait done');
     }
     trace('resolveTestContext start');
-    ctx = await resolveTestContext(page, { adminPassword: bootstrapped ? 'Admin123A' : 'admin123' });
+    ctx = await resolveTestContext(page);
     trace('resolveTestContext done');
     if (ctx && ctx.unitAdmin && ctx.reporter) {
       results.context.unitAdmin = { username: ctx.unitAdmin.username, password: ctx.unitAdmin.password };
@@ -399,7 +439,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
 
     trace('runStep UAR-SEC-01 start');
     await runStep(results, 'UAR-SEC-01', '單位管理者', '單位管理者不可越權查看跨單位案件與管理頁', async () => {
-      await setLocalAuthSession(page, results.context.unitAdmin.username);
+      await signIn(page, results.context.unitAdmin);
       await assertBlockedRoutes(page, ['create', 'users', 'login-log', 'schema-health', 'checklist-manage', 'unit-review', 'training-roster']);
       await gotoHash(page, 'detail/' + ctx.sameUnitCaseId);
       if ((await currentHash(page)) !== '#detail/' + ctx.sameUnitCaseId) throw new Error('unit admin cannot open same-unit case');
@@ -412,7 +452,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
 
     trace('runStep UAR-SEC-02 start');
     await runStep(results, 'UAR-SEC-02', '填報人', '填報人不可越權查看跨單位案件與管理頁', async () => {
-      await setLocalAuthSession(page, results.context.reporter.username);
+      await signIn(page, results.context.reporter);
       await assertBlockedRoutes(page, ['create', 'users', 'login-log', 'schema-health', 'checklist-manage', 'unit-review', 'training-roster']);
       await gotoHash(page, 'detail/' + ctx.sameUnitCaseId);
       if ((await currentHash(page)) !== '#detail/' + ctx.sameUnitCaseId) throw new Error('reporter cannot open same-unit case');
@@ -425,7 +465,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
 
     trace('runStep UAR-WF-01 start');
     await runStep(results, 'UAR-WF-01', '單位管理者', '單位管理者建立同單位檢核表草稿', async () => {
-      await setLocalAuthSession(page, results.context.unitAdmin.username);
+      await signIn(page, results.context.unitAdmin);
       await gotoHash(page, 'checklist-fill');
       await page.waitForSelector('[data-testid="checklist-form"]');
       await page.fill('#cl-supervisor-name', '王經理');
@@ -455,7 +495,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
     trace('runStep UAR-WF-02 start');
     await runStep(results, 'UAR-WF-02', '填報人', '填報人可接續提交同單位檢核表', async () => {
       if (!checklistId) throw new Error('missing checklist draft id');
-      await setLocalAuthSession(page, results.context.reporter.username);
+      await signIn(page, results.context.reporter);
       await gotoHash(page, 'checklist-fill/' + checklistId);
       if ((await currentHash(page)) !== '#checklist-fill/' + checklistId) throw new Error('reporter cannot open same-unit checklist draft');
       await Promise.all([
@@ -472,7 +512,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
 
     trace('runStep UAR-WF-03 start');
     await runStep(results, 'UAR-WF-03', '填報人', '填報人建立教育訓練草稿並新增手動名單', async () => {
-      await setLocalAuthSession(page, results.context.reporter.username);
+      await signIn(page, results.context.reporter);
       await ensureTrainingSeedRows(page, ctx.sameUnit);
       await gotoHash(page, 'training-fill');
       await page.waitForSelector('[data-testid="training-form"]');
@@ -503,7 +543,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
     await runStep(results, 'UAR-WF-04', '單位管理者', '單位管理者可提交同單位教育訓練且不可刪除他人手動名單', async () => {
       if (!trainingId) throw new Error('missing training draft id');
       trace('UAR-WF-04 set session');
-      await setLocalAuthSession(page, results.context.unitAdmin.username);
+      await signIn(page, results.context.unitAdmin);
       trace('UAR-WF-04 goto training-fill');
       await gotoHash(page, 'training-fill/' + trainingId);
       trace('UAR-WF-04 after goto', await currentHash(page));
