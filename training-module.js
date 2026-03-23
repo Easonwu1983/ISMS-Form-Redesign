@@ -1268,67 +1268,105 @@
       };
     }
 
+    function replaceTrainingRosterRowsByKey(rows, draftRow) {
+      const next = [];
+      let replaced = false;
+      const draftName = String(draftRow && draftRow.name || '').trim().toLowerCase();
+      const draftUnit = String(draftRow && draftRow.unit || '').trim();
+      const draftTempId = String(draftRow && draftRow.rosterId || draftRow && draftRow.id || '').trim();
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        const rowName = String(row && row.name || '').trim().toLowerCase();
+        const rowUnit = String(row && row.unit || '').trim();
+        const rowId = String(row && row.rosterId || row && row.id || '').trim();
+        const shouldReplace = !!draftRow && (
+          (draftTempId && rowId === draftTempId)
+          || (draftName && rowName === draftName && (!draftUnit || rowUnit === draftUnit))
+        );
+        if (shouldReplace) {
+          if (!replaced) {
+            next.push(draftRow);
+            replaced = true;
+          }
+          return;
+        }
+        next.push(row);
+      });
+      if (draftRow && !replaced) next.push(draftRow);
+      return sortTrainingRosterEntries(next);
+    }
+
     async function commitManualRosterInput(options) {
       const opts = options || {};
       const payload = readPendingManualRosterPayload(opts.currentUnit);
       if (!payload.name) return null;
       return registerRosterMutation(async () => {
-        syncTrainingRostersFromM365({ silent: true }).catch((error) => {
-          console.warn('training roster pre-sync failed', error);
-        });
-        const fallbackResult = addTrainingRosterPerson(payload.currentUnit, payload, 'manual', user);
-        if (!fallbackResult.added && !fallbackResult.updated) {
-          throw new Error(fallbackResult.reason || '新增名單失敗');
-        }
-        const roster = fallbackResult.row
-          || (fallbackResult.id ? getAllTrainingRosters().find((row) => row.id === fallbackResult.id) : null)
-          || getAllTrainingRosters().find((row) => row.unit === payload.currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
-        if (!roster) {
-          throw new Error('新增名單暫存失敗，請重新操作');
-        }
-        const optimisticManualRow = normalizeTrainingRecordRow({
-          ...roster,
-          rosterId: roster.id,
+        const createdAt = new Date().toISOString();
+        const tempRosterId = 'TMP-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        const draftRoster = normalizeTrainingRecordRow({
+          id: tempRosterId,
+          rosterId: tempRosterId,
           unit: payload.currentUnit,
-          statsUnit: roster.statsUnit || getTrainingStatsUnit(payload.currentUnit),
-          unitName: roster.unitName || payload.unitName,
-          identity: roster.identity || payload.identity,
-          jobTitle: roster.jobTitle || payload.jobTitle,
-          source: roster.source || 'manual',
+          statsUnit: getTrainingStatsUnit(payload.currentUnit),
+          unitName: payload.unitName,
+          name: payload.name,
+          identity: payload.identity,
+          jobTitle: payload.jobTitle,
+          source: 'manual',
+          createdBy: user.name,
+          createdByUsername: user.username,
+          createdAt,
           status: '',
           completedGeneral: '',
           isInfoStaff: '',
           completedProfessional: '',
           note: ''
         }, payload.currentUnit);
-        rowsState = mergeTrainingRows(payload.currentUnit, rowsState.concat([optimisticManualRow]));
+        rowsState = replaceTrainingRosterRowsByKey(rowsState, draftRoster);
         selectedKeys.clear();
         ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
           document.getElementById(idName).value = '';
         });
         markTrainingDirty();
         renderRows();
-        const result = await submitTrainingRosterUpsert({
-          ...roster,
-          source: 'manual',
-          createdBy: roster.createdBy || user.name,
-          createdByUsername: roster.createdByUsername || user.username,
-          actorName: user.name,
-          actorUsername: user.username
-        });
+        let result;
         try {
-          await syncTrainingRostersFromM365({ silent: true });
+          result = await submitTrainingRosterUpsert({
+            name: payload.name,
+            unit: payload.currentUnit,
+            statsUnit: getTrainingStatsUnit(payload.currentUnit),
+            unitName: payload.unitName,
+            identity: payload.identity,
+            jobTitle: payload.jobTitle,
+            source: 'manual',
+            createdBy: user.name,
+            createdByUsername: user.username,
+            actorName: user.name,
+            actorUsername: user.username
+          });
         } catch (error) {
-          console.warn('training roster post-sync failed', error);
+          rowsState = rowsState.filter((row) => String(row && row.rosterId || row && row.id || '').trim() !== tempRosterId);
+          selectedKeys.clear();
+          markTrainingDirty();
+          renderRows();
+          throw error;
         }
-        const syncedRoster = (result && result.item && result.item.id
-          ? getAllTrainingRosters().find((row) => row.id === result.item.id)
-          : null) || getAllTrainingRosters().find((row) => row.unit === payload.currentUnit && row.name.toLowerCase() === payload.name.toLowerCase());
+        const roster = result && result.item && String(result.item.id || '').trim()
+          ? result.item
+          : null;
+        const syncedRoster = roster || (await (async () => {
+          try {
+            await syncTrainingRostersFromM365({ silent: true });
+          } catch (error) {
+            console.warn('training roster post-sync failed', error);
+          }
+          return getAllTrainingRosters().find((row) => row.unit === payload.currentUnit && row.name.toLowerCase() === payload.name.toLowerCase()) || null;
+        })());
         if (!syncedRoster) {
           throw new Error('教育訓練名單已送出，但後端同步結果未返回，請重新整理後確認。');
         }
         const nextManualRow = normalizeTrainingRecordRow({
           ...syncedRoster,
+          source: 'manual',
           rosterId: syncedRoster.id,
           unit: payload.currentUnit,
           statsUnit: syncedRoster.statsUnit || getTrainingStatsUnit(payload.currentUnit),
@@ -1342,12 +1380,12 @@
           completedProfessional: '',
           note: ''
         }, payload.currentUnit);
-        rowsState = mergeTrainingRows(payload.currentUnit, rowsState.concat([nextManualRow]));
+        rowsState = replaceTrainingRosterRowsByKey(rowsState, nextManualRow);
         renderRows();
         if (!opts.silentSuccess) {
-          showTrainingRepositoryFallback(result, fallbackResult.updated ? fallbackResult.reason : ('已新增「' + payload.name + '」到名單'));
+          showTrainingRepositoryFallback(result, '已新增「' + payload.name + '」到名單');
         }
-        return { payload, fallbackResult, result, syncedRoster };
+        return { payload, result, syncedRoster };
       });
     }
 
