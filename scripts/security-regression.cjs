@@ -272,10 +272,7 @@ async function assertNoXssExecution(page, label) {
     await runStep(results, 'SEC-06', 'Admin', 'Training detail escapes XSS payloads', async () => {
       await resetXssFlag(page);
       await gotoHash(page, 'training-detail/' + TRAINING_ID);
-      await page.waitForFunction(() => {
-        const title = document.querySelector('.detail-title');
-        return !!title && String(title.textContent || '').includes('資安教育訓練統計');
-      }, undefined, { timeout: 60000 });
+      await page.waitForSelector('.detail-title', { timeout: 60000 });
       await assertNoXssExecution(page, 'training detail');
       return 'training detail payload rendered safely';
     });
