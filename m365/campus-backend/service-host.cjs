@@ -1,6 +1,5 @@
 ﻿const fs = require('fs');
 const path = require('path');
-const { startServer } = require('./server.cjs');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 const defaultRuntimeConfigPath = path.join(__dirname, 'runtime.local.json');
@@ -19,6 +18,13 @@ function ensureDir(dirPath) {
 
 function applyEnvFromConfig(config) {
   if (!config || typeof config !== 'object') return;
+  if (config.authSessionSecret && !process.env.AUTH_SESSION_SECRET) {
+    process.env.AUTH_SESSION_SECRET = String(config.authSessionSecret);
+  }
+  const tokenMode = String(config.tokenMode || config.graphTokenMode || '').trim().toLowerCase();
+  if (tokenMode && !process.env.M365_A3_TOKEN_MODE) {
+    process.env.M365_A3_TOKEN_MODE = tokenMode;
+  }
   if (config.port && !process.env.PORT) process.env.PORT = String(config.port);
   if (Array.isArray(config.allowedOrigins) && !process.env.UNIT_CONTACT_ALLOWED_ORIGINS) {
     process.env.UNIT_CONTACT_ALLOWED_ORIGINS = config.allowedOrigins.join(',');
@@ -61,6 +67,20 @@ function applyEnvFromConfig(config) {
   if (config.attachmentsLibrary && !process.env.ATTACHMENTS_LIBRARY) {
     process.env.ATTACHMENTS_LIBRARY = String(config.attachmentsLibrary);
   }
+  const mailSenderUpn = String(
+    config.mailSenderUpn
+      || config.graphMailSenderUpn
+      || config.authMailSenderUpn
+      || ''
+  ).trim();
+  if (mailSenderUpn) {
+    if (!process.env.GRAPH_MAIL_SENDER_UPN) {
+      process.env.GRAPH_MAIL_SENDER_UPN = mailSenderUpn;
+    }
+    if (!process.env.AUTH_MAIL_SENDER_UPN) {
+      process.env.AUTH_MAIL_SENDER_UPN = mailSenderUpn;
+    }
+  }
 }
 
 function installFileLogger(logDir) {
@@ -100,6 +120,7 @@ process.chdir(projectRoot);
 
 const runtimeConfig = loadRuntimeConfig();
 applyEnvFromConfig(runtimeConfig);
+const { startServer } = require('./server.cjs');
 
 const logDir = path.resolve(runtimeConfig.logDir || path.join(projectRoot, 'logs', 'campus-backend'));
 const disposeLogger = installFileLogger(logDir);
@@ -129,5 +150,6 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (error) => {
   console.error('unhandledRejection', error && error.stack ? error.stack : error);
 });
+
 
 
