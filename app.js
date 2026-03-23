@@ -35,6 +35,10 @@
   const CATEGORIES = ['人員', '資訊', '通訊', '軟體', '硬體', '個資', '服務', '虛擬機', '基礎設施', '可攜式設備', '其他'];
   const DEFAULT_USERS = [];
 
+
+
+  const SYSTEM_USER_SECURITY_ROLE_OPTIONS = ['????????', '????????'];
+
   const UNIT_CUSTOM_VALUE = '__unit_custom__';
   const UNIT_CUSTOM_LABEL = '其他（手動輸入）';
   const UNIT_ADMIN_PRIMARY_WHITELIST = new Set([
@@ -112,7 +116,42 @@
   function initUnitCascade(baseId, initialValue, options) { return getUnitModule().initUnitCascade(baseId, initialValue, options); }
 
   function parseUserUnits(value) { return getDataModule().parseUserUnits(value); }
+
   function normalizeUserRole(role) { return getDataModule().normalizeUserRole(role); }
+
+  function parseSecurityRoles(value) {
+    const rawValues = Array.isArray(value)
+      ? value
+      : String(value || '')
+        .replaceAll(String.fromCharCode(13), ',')
+        .replaceAll(String.fromCharCode(10), ',')
+        .replaceAll('?', ',')
+        .split(',');
+    return Array.from(new Set(rawValues.map((item) => String(item || '').trim()).filter((item) => SYSTEM_USER_SECURITY_ROLE_OPTIONS.includes(item))));
+  }
+  function validatePasswordComplexity(password, fieldName) {
+    const label = String(fieldName || '').trim() || 'password';
+    const value = String(password || '').trim();
+    if (!value) throw new Error('??' + label);
+    if (value.length < 8) throw new Error('????? 8 ?');
+    if (!/[a-z]/.test(value)) throw new Error('???????????????');
+    if (!/[A-Z]/.test(value)) throw new Error('???????????????');
+    if (!/[0-9]/.test(value)) throw new Error('???????????');
+  }
+  function validateSystemUserPayload(payload, options) {
+    const opts = options || {};
+    const item = payload && typeof payload === 'object' ? payload : {};
+    if (!String(item.username || '').trim()) throw new Error('????');
+    if (!String(item.name || '').trim()) throw new Error('??????');
+    if (!String(item.email || '').trim()) throw new Error('??????');
+    if (opts.requirePassword && !String(item.password || '').trim()) throw new Error('????');
+    if (String(item.password || '').trim()) validatePasswordComplexity(item.password, '??');
+    const role = normalizeUserRole(item.role);
+    const units = parseUserUnits(item.units || item.authorizedUnits || item.AuthorizedUnitsJson);
+    const securityRoles = parseSecurityRoles(item.securityRoles || item.SecurityRolesJson || item.securityRolesJson);
+    if (role !== ROLES.ADMIN && !units.length) throw new Error('???????????');
+    if (role === ROLES.UNIT_ADMIN && !securityRoles.length) throw new Error('?????????????');
+  }
   function getAuthorizedUnits(user) { return getDataModule().getAuthorizedUnits(user); }
   function getReviewUnits(user) { return getDataModule().getReviewUnits(user); }
   function getActiveUnit(user) { return getDataModule().getActiveUnit(user); }
