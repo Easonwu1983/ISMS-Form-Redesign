@@ -1054,6 +1054,9 @@
     let trainingRosterHydrating = true;
     let trainingRowsRenderToken = 0;
     let trainingRowsDelegatesInstalled = false;
+    function hasTemporaryTrainingRows() {
+      return Array.isArray(rowsState) && rowsState.some((row) => String(row && row.rosterId || row && row.id || "").trim().toUpperCase().startsWith("TMP-"));
+    }
 
     document.getElementById('app').innerHTML = buildTrainingFillPage({ existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user });
 
@@ -1760,7 +1763,7 @@
       const forceRosterSync = !rowsState.length;
       trainingRowsStateVersion += 1;
       trainingRowsFilterCache = { signature: '', rows: [] };
-      trainingRosterHydrating = forceRosterSync;
+      trainingRosterHydrating = false;
       scheduleTrainingRowsRender();
       refreshIcons();
 
@@ -1795,6 +1798,11 @@
       if (existing && !canEditTrainingForm(existing)) {
         toast('流程一已完成並鎖定，請改至詳情頁繼續簽核流程', 'error');
         navigate('training-detail/' + existing.id);
+        return;
+      }
+      if (hasTemporaryTrainingRows() || pendingRosterMutation) {
+        trainingRosterHydrating = false;
+        scheduleTrainingRowsRender();
         return;
       }
         rowsState = mergeTrainingRows(activeUnit, existing ? (existing.records || []) : []);
