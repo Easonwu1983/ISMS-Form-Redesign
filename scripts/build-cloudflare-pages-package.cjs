@@ -111,13 +111,12 @@ function rewriteIndex(assetIntegrity) {
     `  <meta http-equiv="Content-Security-Policy"\n    content="${csp}">`
   );
   const loaderIntegrity = assetIntegrity && assetIntegrity['asset-loader.js'];
-  const buildInfoScript = `<script>window.__APP_BUILD_INFO__ = ${JSON.stringify(buildInfo).replace(/</g, '\u003c')};</script>`;
   const loaderTag = loaderIntegrity
     ? `<script src="asset-loader.js?v=${buildInfo.versionKey}" integrity="${loaderIntegrity}" crossorigin="anonymous"></script>`
     : `<script src="asset-loader.js?v=${buildInfo.versionKey}"></script>`;
   html = html.replace(
     '<script src="asset-loader.js"></script>',
-    `${buildInfoScript}\n  ${loaderTag}`
+    `${loaderTag}`
   );
   fs.writeFileSync(indexPath, html, 'utf8');
 }
@@ -384,4 +383,3 @@ if (mode === 'redirect') {
 console.log(`cloudflare pages package ready: ${outputDir}`);
 console.log(`backend base: ${backendBase}`);
 console.log(`mode: ${mode}`);
-

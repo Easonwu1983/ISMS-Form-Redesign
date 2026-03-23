@@ -81,10 +81,9 @@ function buildHomepageIndex() {
     /<meta http-equiv=\"Content-Security-Policy\"[\s\S]*?content=\"[^\"]*\">/,
     `  <meta http-equiv=\"Content-Security-Policy\"\n    content=\"${homepageCsp}\">`
   );
-  const buildInfoScript = `<script>window.__APP_BUILD_INFO__ = ${JSON.stringify(buildInfo).replace(/</g, '\u003c')};</script>`;
   html = html.replace(
     '<script src="asset-loader.js"></script>',
-    `${buildInfoScript}\n  <script src="asset-loader.js?v=${buildInfo.versionKey}"></script>`
+    `<script src="asset-loader.js?v=${buildInfo.versionKey}"></script>`
   );
   fs.writeFileSync(indexPath, html, 'utf8');
 }
