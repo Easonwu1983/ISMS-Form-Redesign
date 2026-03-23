@@ -823,8 +823,7 @@
         groups.get(category).push(unit);
       });
       return SECURITY_WINDOW_CATEGORY_ORDER
-        .map((category) => ({ category, items: groups.get(category) || [] }))
-        .filter((group) => group.items.length > 0);
+        .map((category) => ({ category, items: groups.get(category) || [] }));
     }
 
     function renderSecurityWindowUnitCard(unit) {
@@ -857,7 +856,10 @@
       ];
       const openAttr = index === 0 ? ' open' : '';
       const subtitle = `${category} · ${childCount} 個二級單位`;
-      return `<details class="training-group-card security-window-category-card"${openAttr} data-security-window-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body"><div class="security-window-group-stack security-window-group-stack--nested">${items.map((unit) => renderSecurityWindowUnitCard(unit)).join('')}</div></div></details>`;
+      const bodyHtml = items.length
+        ? `<div class="security-window-group-stack security-window-group-stack--nested">${items.map((unit) => renderSecurityWindowUnitCard(unit)).join('')}</div>`
+        : `<div class="empty-state security-window-category-empty"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">目前沒有${esc(category)}的資安窗口資料</div><div class="empty-state-desc">若後續有新增或申請，會自動出現在此分類下。</div></div>`;
+      return `<details class="training-group-card security-window-category-card"${openAttr} data-security-window-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body">${bodyHtml}</div></details>`;
     }
 
     function renderSecurityWindowUnitCards(units) {

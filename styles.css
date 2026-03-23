@@ -3439,6 +3439,10 @@ body.modal-open {
   border-top: 1px solid rgba(226, 232, 240, 0.9);
 }
 
+.security-window-category-empty {
+  margin: 4px 0 0;
+}
+
 .security-window-group-stack--nested {
   gap: 12px;
 }
