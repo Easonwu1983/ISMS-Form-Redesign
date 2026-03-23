@@ -1273,11 +1273,9 @@
       const payload = readPendingManualRosterPayload(opts.currentUnit);
       if (!payload.name) return null;
       return registerRosterMutation(async () => {
-        try {
-          await syncTrainingRostersFromM365({ silent: true });
-        } catch (error) {
+        syncTrainingRostersFromM365({ silent: true }).catch((error) => {
           console.warn('training roster pre-sync failed', error);
-        }
+        });
         const fallbackResult = addTrainingRosterPerson(payload.currentUnit, payload, 'manual', user);
         if (!fallbackResult.added && !fallbackResult.updated) {
           throw new Error(fallbackResult.reason || '新增名單失敗');
@@ -1288,6 +1286,28 @@
         if (!roster) {
           throw new Error('新增名單暫存失敗，請重新操作');
         }
+        const optimisticManualRow = normalizeTrainingRecordRow({
+          ...roster,
+          rosterId: roster.id,
+          unit: payload.currentUnit,
+          statsUnit: roster.statsUnit || getTrainingStatsUnit(payload.currentUnit),
+          unitName: roster.unitName || payload.unitName,
+          identity: roster.identity || payload.identity,
+          jobTitle: roster.jobTitle || payload.jobTitle,
+          source: roster.source || 'manual',
+          status: '',
+          completedGeneral: '',
+          isInfoStaff: '',
+          completedProfessional: '',
+          note: ''
+        }, payload.currentUnit);
+        rowsState = mergeTrainingRows(payload.currentUnit, rowsState.concat([optimisticManualRow]));
+        selectedKeys.clear();
+        ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
+          document.getElementById(idName).value = '';
+        });
+        markTrainingDirty();
+        renderRows();
         const result = await submitTrainingRosterUpsert({
           ...roster,
           source: 'manual',
@@ -1323,11 +1343,6 @@
           note: ''
         }, payload.currentUnit);
         rowsState = mergeTrainingRows(payload.currentUnit, rowsState.concat([nextManualRow]));
-        selectedKeys.clear();
-        ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
-          document.getElementById(idName).value = '';
-        });
-        markTrainingDirty();
         renderRows();
         if (!opts.silentSuccess) {
           showTrainingRepositoryFallback(result, fallbackResult.updated ? fallbackResult.reason : ('已新增「' + payload.name + '」到名單'));

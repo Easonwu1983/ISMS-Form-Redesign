@@ -266,6 +266,11 @@ async function deleteRosterRowsByNames(page, names) {
       await waitForBootstrap(page);
       await gotoHash(page, 'training-fill');
       await page.waitForSelector('#training-form', { timeout: 45000 });
+      await page.waitForFunction(() => {
+        const unit = document.getElementById('tr-unit');
+        const add = document.getElementById('training-add-person');
+        return !!unit && String(unit.value || '').trim() && !!add && !add.disabled;
+      }, undefined, { timeout: 45000 });
 
       await page.fill('#tr-phone', '02-3366-8888');
       await page.fill('#tr-email', 'unit1@g.ntu.edu.tw');
