@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const { URL } = require('url');
 const net = require('net');
 const { getBuildInfo } = require('./scripts/build-version-info.cjs');
@@ -6,6 +7,11 @@ const { getBuildInfo } = require('./scripts/build-version-info.cjs');
 const LISTEN_PORT = Number(process.env.ISMS_GATEWAY_PORT || 8088);
 const UPSTREAM_HOST = process.env.ISMS_UPSTREAM_HOST || '127.0.0.1';
 const UPSTREAM_PORT = Number(process.env.ISMS_UPSTREAM_PORT || 18080);
+const FRONTEND_BASE = String(
+  process.env.ISMS_FRONTEND_BASE
+  || process.env.ISMS_CAMPUS_FRONTEND_BASE
+  || 'https://isms-campus-portal.pages.dev'
+).trim().replace(/\/+$/, '');
 const ALLOWED_IPV4_CIDRS = [
   '127.0.0.0/8',
   '140.112.0.0/16'
@@ -214,17 +220,21 @@ function writeForbidden(req, res, ip) {
 
 function proxyRequest(req, res, remoteAddress) {
   const targetUrl = new URL(normalizeRequestPath(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
-  const upstream = http.request({
-    protocol: targetUrl.protocol,
-    hostname: targetUrl.hostname,
-    port: targetUrl.port,
+  const isApiRoute = targetUrl.pathname === '/deploy-manifest.json' || targetUrl.pathname.startsWith('/api/');
+  const upstreamBase = isApiRoute ? `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}` : FRONTEND_BASE;
+  const upstreamUrl = new URL(`${targetUrl.pathname}${targetUrl.search}`, upstreamBase);
+  const transport = upstreamUrl.protocol === 'https:' ? https : http;
+  const upstream = transport.request({
+    protocol: upstreamUrl.protocol,
+    hostname: upstreamUrl.hostname,
+    port: upstreamUrl.port,
     method: req.method,
-    path: `${targetUrl.pathname}${targetUrl.search}`,
+    path: `${upstreamUrl.pathname}${upstreamUrl.search}`,
     headers: {
       ...req.headers,
-      host: req.headers.host || `${UPSTREAM_HOST}:${UPSTREAM_PORT}`,
+      host: upstreamUrl.host,
       'x-forwarded-for': remoteAddress,
-      'x-forwarded-proto': 'http'
+      'x-forwarded-proto': upstreamUrl.protocol === 'https:' ? 'https' : 'http'
     }
   }, (upstreamRes) => {
     res.writeHead(upstreamRes.statusCode || 502, {
