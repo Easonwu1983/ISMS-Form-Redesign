@@ -1022,7 +1022,12 @@
   function showUserModal(eu) {
     const isE = !!eu;
     const title = isE ? '編輯使用者' : '新增使用者';
-    const mr = document.getElementById('modal-root');
+    const mr = document.getElementById('modal-root') || (function () {
+      const fallbackRoot = document.createElement('div');
+      fallbackRoot.id = 'modal-root';
+      document.body.appendChild(fallbackRoot);
+      return fallbackRoot;
+    }());
     const units = getAuthorizedUnits(eu);
     const reviewUnits = getReviewUnits(eu);
     const initUnit = units[0] || '';

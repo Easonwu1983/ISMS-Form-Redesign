@@ -1266,7 +1266,12 @@
   }
 
   function _cmModal(title, bodyHtml, onSave) {
-    const mr = document.getElementById('modal-root');
+    const mr = document.getElementById('modal-root') || (function () {
+      const fallbackRoot = document.createElement('div');
+      fallbackRoot.id = 'modal-root';
+      document.body.appendChild(fallbackRoot);
+      return fallbackRoot;
+    }());
     mr.innerHTML = `<div class="modal-backdrop" id="cm-modal-bg">
       <div class="modal" style="max-width:620px">
         <div class="modal-header">
