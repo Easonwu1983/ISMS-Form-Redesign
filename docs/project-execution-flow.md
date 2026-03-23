@@ -1,14 +1,14 @@
-# Project Execution Flow
+# 專案執行流程
 
-This document records the current production runtime flow for the ISMS project as it exists today.
+這份文件記錄目前 ISMS 專案的實際執行流、資料流、部署流與已驗證的版本治理方式。目標是讓你切帳號後不必重新摸索。
 
-## 1. Runtime Topology
+## 1. 執行拓樸
 
 ```mermaid
 flowchart LR
-  A["User Browser"] --> B["Cloudflare Pages (fixed HTTPS entry)"]
-  A --> C["Campus entry http://140.112.3.65:8088"]
-  B --> D["Cloudflare Quick Tunnel (temporary backend HTTPS)"]
+  A["使用者瀏覽器"] --> B["Cloudflare Pages 正式前端"]
+  A --> C["校內入口 http://140.112.3.65:8088"]
+  B --> D["Cloudflare Quick Tunnel 暫時後端 HTTPS"]
   C --> E["Windows host campus gateway :8088"]
   D --> F["Windows host local backend port :18080"]
   E --> G["Ubuntu guest backend :8787"]
@@ -16,72 +16,81 @@ flowchart LR
   G --> H["Microsoft Graph / SharePoint Lists + Library"]
 ```
 
-Notes:
-- The public HTTPS frontend is `https://isms-campus-portal.pages.dev/`.
-- The current public backend exposure still depends on a Quick Tunnel. This is serviceable for UAT, but not the final infrastructure state.
-- The campus entry remains `http://140.112.3.65:8088/` and is restricted by the Windows host gateway.
+### 目前入口
 
-## 2. Frontend Boot Flow
+- 正式前端：`https://isms-campus-portal.pages.dev/`
+- 校內入口：`http://140.112.3.65:8088/`
+- 本機後端：`http://127.0.0.1:18080`
+- Pages 版本資訊：`https://isms-campus-portal.pages.dev/deploy-manifest.json`
 
-1. `index.html` loads the SPA bundles.
-2. `m365-config.js` loads base profile settings.
-3. `m365-config.override.js` selects the live profile and endpoints.
-4. `app.js` initializes modules, waits for auth/session state, and performs remote bootstrap.
-5. `shell-module.js` gates route rendering until authenticated remote bootstrap is complete.
+### 重要說明
 
-### Key frontend modules
+- 公開 HTTPS 前端固定由 Cloudflare Pages 提供。
+- 公開後端目前仍依賴 Quick Tunnel，不是最終形態，但已可穩定支援 UAT 與回歸檢查。
+- 校內入口仍由 Windows host gateway 提供，且受校內 IP 限制。
+
+## 2. 前端啟動流
+
+1. `index.html` 載入 SPA bundles。
+2. `m365-config.js` 載入基礎設定。
+3. `m365-config.override.js` 選擇 live profile 與 endpoint。
+4. `app.js` 初始化各模組，先完成登入驗證，再把可延後的資料同步丟到閒置時間。
+5. `shell-module.js` 在 authenticated remote bootstrap 完成前不讓主路由過早進入。
+
+### 關鍵前端模組
 
 - `app.js`
-  - orchestration
-  - repository switching
+  - 協調與啟動
+  - profile 切換
   - remote bootstrap
-  - route wiring
+  - 路由繫結
+  - 快取與背景同步節奏
 - `shell-module.js`
-  - login shell
-  - responsive navigation
+  - 登入殼層
+  - 響應式導覽
   - bootstrap gating
 - `auth-module.js`
-  - login
-  - logout
-  - request reset / redeem reset / change password
+  - 登入 / 登出
+  - 重設密碼 / 更改密碼
 - `case-module.js`
-  - corrective action workflow
+  - 矯正單流程
 - `checklist-module.js`
-  - internal audit checklist workflow
+  - 內稽檢核表流程
 - `training-module.js`
-  - training statistics workflow
+  - 教育訓練統計與名單管理
 - `unit-contact-application-module.js`
-  - public account application / status / success / activation instructions
+  - 單位管理人申請 / 狀態查詢 / 啟用說明
 - `admin-module.js`
-  - account management
-  - unit-contact admin review
-  - audit trail
-  - schema health
+  - 帳號管理
+  - 資安窗口
+  - 操作稽核軌跡
+  - 單位治理
+  - 系統健康檢查
 - `attachment-module.js`
-  - remote attachment rendering and upload support
+  - 附件顯示與上傳
 
-## 3. Data Source Strategy
+## 3. 資料來源策略
 
-The production system of record is M365 / SharePoint. The frontend talks to backend APIs; it does not write directly to SharePoint.
+正式資料來源是 M365 / SharePoint。前端不直接寫 SharePoint，而是透過 backend API。
 
-### Production mode
+### Live 模式
 
-- live frontend uses `strictRemoteData: true`
-- core modules run in backend mode (`m365-api`)
-- `app-only` token mode is now active for live backend auth and Graph mail
+- `strictRemoteData: true`
+- 核心模組走 backend mode (`m365-api`)
+- live backend 使用 `app-only` token 與 Graph mail
 
-### Technical debt still present
+### 技術債
 
-- local emulator and local fallback code paths still exist in `app.js`
-- these paths are dormant in live, but remain maintenance risk if an override is missing or stale
+- local fallback / local emulator 的程式碼仍存在
+- 這些路徑在 live 不應該啟動，但如果 override 漏掉，仍可能造成行為不一致
 
-## 4. Backend Routes
+## 4. Backend 路由
 
 ### Guest backend entry
 
 - `m365/campus-backend/server.cjs`
 
-### Current route groups
+### 主要路由群
 
 - `/api/unit-contact/health`
 - `/api/unit-contact/apply`
@@ -98,7 +107,7 @@ The production system of record is M365 / SharePoint. The frontend talks to back
 - `/api/review-scopes/*`
 - `/api/attachments/*`
 
-## 5. SharePoint Data Layout
+## 5. SharePoint 資料布局
 
 ### Lists
 
@@ -120,154 +129,209 @@ The production system of record is M365 / SharePoint. The frontend talks to back
   - `training`
   - `misc`
 
-## 6. Guest Deployment Flow
+## 6. Guest 部署流
 
-### Repo and runtime paths
+### 目前使用的路徑
 
 - repo: `/srv/isms-form-redesign`
 - runtime: `/srv/isms-form-redesign/m365/campus-backend/runtime.local.json`
 - frontend override: `/srv/isms-form-redesign/m365-config.override.js`
 - service: `isms-unit-contact-backend.service`
 
-### Standard deployment steps
+### 標準步驟
 
-1. Commit local changes.
-2. Push to GitHub.
-3. SSH to guest.
-4. Pull repo under `ismsbackend`.
-5. Update runtime/override if needed.
-6. Restart `isms-unit-contact-backend.service` if backend/runtime changed.
-7. Re-run campus live smoke.
+1. 本地完成修改並 commit。
+2. push 到 GitHub。
+3. SSH 到 guest。
+4. 以 `ismsbackend` 身分 pull repo。
+5. 如需，更新 runtime / override。
+6. 若 backend 改動，重啟 `isms-unit-contact-backend.service`。
+7. 跑 campus live smoke。
 
-### Known guest issue
+### 常見 guest 問題
 
-If guest Git fails with `gnutls_handshake() failed`, set:
+若 `git pull` 失敗並出現 `gnutls_handshake() failed`，先執行：
 
 ```bash
 git config --global http.version HTTP/1.1
 ```
 
-and retry the pull.
+再重試。
 
-## 7. Campus Entry Flow
+## 7. 校內 / Pages 流程
 
 ### Windows host gateway
 
-- Windows host exposes `8088`
-- campus IP restriction is enforced in `host-campus-gateway.cjs`
-- current campus entry:
-  - `http://140.112.3.65:8088/`
+- `8088` 由 Windows host 提供
+- 校內 IP 限制在 `host-campus-gateway.cjs`
+- 目前校內入口：`http://140.112.3.65:8088/`
 
-### Cloudflare entry
+### Cloudflare Pages
 
-- Cloudflare Pages provides the fixed public frontend URL
-- Quick Tunnel currently proxies backend API traffic for Pages `full-proxy` mode
-- recovery depends on:
-  - `scripts/bootstrap-cloudflare-pages-live.ps1`
-  - `scripts/refresh-cloudflare-quick-pages-entry.ps1`
+- Pages 提供固定正式前端入口
+- Quick Tunnel 目前負責把 Pages 的 `full-proxy` 連回 backend
+- 一旦 backend base 變動，要重新發佈 Pages
+- 相關腳本：
+  - `scripts/build-cloudflare-pages-package.cjs`
+  - `scripts/deploy-cloudflare-pages.ps1`
   - `scripts/ensure-cloudflare-pages-live.ps1`
+  - `scripts/refresh-cloudflare-quick-pages-entry.ps1`
 
-## 8. Provisioning Flow
+## 8. 版本治理
 
-### Preferred
+現在版本治理的原則很簡單：以 `deploy-manifest.json` 為準。
 
-Run backend provision scripts first for SharePoint lists/libraries.
+### 你要看的欄位
 
-### Browser-session fallback
+- `versionKey`
+- `commit`
+- `shortCommit`
+- `builtAt`
+- `backendBase`
+- `mode`
 
-If Graph create operations return `403 accessDenied`, use browser-session provisioning:
+### 比對順序
 
-- `scripts/sharepoint-browser-provision.js`
-- `scripts/sharepoint-browser-attachment-provision.js`
+1. `git rev-parse --short HEAD`
+2. 本機 `dist/cloudflare-pages/deploy-manifest.json`
+3. 正式站 `https://isms-campus-portal.pages.dev/deploy-manifest.json`
+4. 再看畫面內容
 
-This tenant has repeatedly required that fallback for certain create operations.
+### 版本治理的使用原則
 
-## 9. Mail Flow
+- 任何 UI / smoke / Pages 改動，先確認版本資訊是否同步。
+- 若正式站內容落後，但 manifest 是最新，優先判斷是否是瀏覽器快取或 Pages 部署尚未更新。
+- 若 Pages manifest 落後，優先重新執行 Pages deploy。
 
-### Current mail sender
+## 9. 目前已驗證的功能狀態
 
-- live backend now uses `app-only` Graph mail
-- sender is configured through backend runtime environment
-- flows currently wired to mail:
-  - auth password reset
-  - corrective action notifications
-  - unit-contact application submitted
-  - unit-contact status updated / activation
+### 正常
 
-### Fallback still present
+- 單位管理人申請
+- 單位管理人審核 / 啟用
+- 資安窗口
+- 單位治理
+- 內稽檢核表
+- 教育訓練
+- 矯正單
+- 操作稽核軌跡
+- 附件顯示 / 上傳
+- 版本資訊顯示
 
-- password reset still has a manual token-display fallback if mail delivery fails
+### 最近特別整理的頁面
+
+#### 資安窗口
+
+- `#security-window` 現在是依一級單位分組的折疊卡片。
+- 頁面上應該看到：
+  - `一級單位`
+  - `二級單位`
+- Pages smoke 目前是用這個結構驗證，不是舊 table 文字。
+- 目前 smoke 會等：
+  - `.security-window-group-stack .security-window-card`
+  - `一級單位`
+  - `二級單位`
+
+如果這個頁面再改版，記得同步更新：
+- `admin-module.js`
+- `styles.css`
+- `scripts/security-regression.cjs`
+- `scripts/cloudflare-pages-regression-smoke.cjs`
+
+#### 教育訓練名單
+
+- 名單渲染現在有分段輸出與快取。
+- 大資料匯入後不要期待一次全 DOM 重算；這是故意拆成背景處理。
+
+#### 內稽檢核表
+
+- 列表頁與搜尋有快取。
+- 年份 / 狀態 / 關鍵字切換不再每次重掃整頁。
+
+#### 操作稽核軌跡
+
+- 查詢有短期快取。
+- 同條件重開頁面會先顯示舊資料，再背景更新。
 
 ## 10. Regression Coverage
 
-### Main live suite
+### 主回歸套件
 
 - `scripts/live-regression-suite.cjs`
 
-It currently runs:
+目前包含：
 
 - `campus-live-regression-smoke`
 - `live-security-smoke`
 - `cloudflare-pages-regression-smoke`
+- `version-governance-smoke`
 - `campus-browser-regression-smoke`
 - `unit-contact-public-visual-smoke`
 - `campus-unit-contact-public-visual-smoke`
 - `unit-contact-admin-review-smoke`
 - `unit-contact-account-to-fill-smoke`
 
-### Additional route-level / visual coverage
+### 額外專項
 
-- public `unit-contact` pages have dedicated desktop/mobile visual baseline checks
-- main authenticated routes have route-level browser smoke for both Pages and campus entry
+- `scripts/security-regression.cjs`
+- `scripts/stress-regression.cjs`
+- `scripts/role-flow-probe.cjs`
+- `scripts/audit-followup-smoke.cjs`
+- `scripts/training-roster-focus-smoke.cjs`
+- `scripts/training-roster-batch-delete-smoke.cjs`
 
-## 11. Current Operational State
+## 11. 已知阻塞與處理原則
 
-### Ready
+### 1. `AUTH_SESSION_SECRET` 缺失
 
-- unit contact public flow
-- unit contact admin review / activation flow
-- corrective actions
-- checklists
-- training
-- system users
-- auth
-- audit trail
-- review scopes
-- attachments
-- Graph mail delivery in app-only mode
+處理：先補環境變數，再啟動 backend。
 
-### Still not final-form
+### 2. `./runtime/runtime.local.host.json` 編碼錯誤
 
-- backend public HTTPS relies on Cloudflare Quick Tunnel, not Named Tunnel or fixed backend hostname
-- local fallback code still exists in the SPA codebase
-- production correctness still depends on deployment override selecting the live profile
+處理：改成 UTF-8 無 BOM。
 
-## 12. Fast Recovery Runbook
+### 3. `8088` 不通
 
-If you switch accounts or come back after a pause, use the shortest known-good recovery path in:
+處理：先看 `18080`，再重啟 host gateway。
 
-- [docs/fast-redeploy-runbook.md](C:\Users\User\Playground\ISMS-Form-Redesign\docs\fast-redeploy-runbook.md)
+### 4. Pages 內容看起來過期
 
-That runbook records the last successful startup and deployment sequence for:
+處理：
+1. 檢查 `deploy-manifest.json`
+2. 確認是否真的重發 Pages
+3. 無痕或 `Ctrl + F5`
 
-- `18080` local backend
-- `8088` campus gateway
-- Cloudflare Pages recovery
-- live smoke verification
+### 5. `gnutls_handshake() failed`
 
-## 13. 切帳號接手重點
+處理：
 
-如果你是換帳號後重新接手，先不要重新摸索整套流程，直接照這四步：
+```bash
+git config --global http.version HTTP/1.1
+```
 
-1. 先看 [docs/fast-redeploy-runbook.md](C:\Users\User\Playground\ISMS-Form-Redesign\docs\fast-redeploy-runbook.md)
-2. 先確認 `AUTH_SESSION_SECRET` 與 `.runtime/runtime.local.host.json`
-3. 先拉起 `18080`，再確認 `8088`
-4. 最後才跑 Pages 與煙燻測試
+### 6. `401` / `session` 競態
 
-常見堵塞點只有幾個：
-- 環境變數沒設
-- `.runtime/runtime.local.host.json` 被寫成有 BOM
-- `18080` 沒起來
-- `8088` 沒起來
-- Pages 還沒對齊目前 origin
-- 煙燻測試互搶 session
+處理：單獨重跑該支 smoke，不要把平行競態當成產品錯誤。
+
+### 7. `security-window` 舊版畫面
+
+處理：
+1. 確認 `admin-module.js`、`styles.css` 已發佈
+2. 確認 Pages manifest 已更新
+3. 重新跑 `scripts/security-regression.cjs`
+
+## 12. 切帳號時的最短路徑
+
+1. 先看這份文件。
+2. 先看 `git status --short`。
+3. 確認 `AUTH_SESSION_SECRET`。
+4. 起 `service-host.cjs`。
+5. 起 `8088` gateway。
+6. 確認 `deploy-manifest.json`。
+7. 跑基本 smoke。
+8. 若有 UI 改動，再跑對應專項 smoke。
+
+## 13. 下一次最先要看的檔案
+
+- `docs/fast-redeploy-runbook.md`
+- `docs/project-execution-flow.md`

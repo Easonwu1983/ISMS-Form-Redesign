@@ -1,307 +1,272 @@
 # 切帳號快速接手手冊
 
-這份文件是給你在**切帳號、切工作階段、或重新接手專案**時直接照做的。
+這份文件的目的很單純：讓你切帳號後不用重新學一次啟動、部署、驗證流程，直接照已驗證過的步驟做。
 
-目標很單純：
-- 不重學
-- 不重猜
-- 不重跑沒必要的步驟
-- 先把系統拉回可工作狀態，再做功能或效能調整
+## 先看這個
 
----
-
-## 先看這份文件的順序
-
-1. 先確認你現在是在專案根目錄
-2. 再確認啟動需要的環境變數與設定檔
-3. 先拉起本機後端與校內入口
-4. 再看 Cloudflare Pages 是否需要補發
-5. 最後才跑驗證與煙燻測試
-
-這個順序是目前驗證過最穩的。
-
----
-
-## 目前已驗證的啟動路徑
-
-```mermaid
-flowchart LR
-  A["瀏覽器"] --> B["校內入口 http://140.112.3.65:8088"]
-  B --> C["Windows 主機校內閘道 :8088"]
-  C --> D["Windows 主機本機後端 :18080"]
-  D --> E["service-host.cjs"]
-  E --> F["M365 / SharePoint / Graph"]
-```
-
-固定入口：
-- 校內入口：`http://140.112.3.65:8088/`
+- 正式站：`https://isms-campus-portal.pages.dev/`
+- 校內站：`http://140.112.3.65:8088/`
 - 本機後端：`http://127.0.0.1:18080`
-- Cloudflare Pages：`https://isms-campus-portal.pages.dev/`
+- Pages 版本資訊：`https://isms-campus-portal.pages.dev/deploy-manifest.json`
+- Quick Tunnel 位址檔：`./runtime/cloudflare-quick-tunnel.url`
 
----
+## 開工前先檢查
 
-## 切帳號後先做的事
-
-### 1. 進專案根目錄
-
-```powershell
-cd C:\Users\User\Playground\ISMS-Form-Redesign
-```
-
-### 2. 先看狀態
+1. 先看工作樹
 
 ```powershell
 git status --short
 ```
 
-你通常會看到：
-- 只有一些未追蹤雜項
-- 或者前一輪留下的正常變更
-
-如果你看到明顯不是這次要動的檔案，先不要亂清，先確認它是不是前一輪留下的。
-
-### 3. 先確認必要環境變數
-
-這個專案要先有：
-- `AUTH_SESSION_SECRET`
-
-如果沒有設，後端通常會直接卡住。
-
-### 4. 確認本機後端設定檔沒有 BOM
-
-這個設定檔必須是 **UTF-8 無 BOM**：
+2. 確認 runtime secret 存在
 
 ```powershell
-.runtime\runtime.local.host.json
+$env:AUTH_SESSION_SECRET
 ```
 
-如果這個檔案被 PowerShell 寫成有 BOM，`service-host.cjs` 會 JSON parse 失敗。
+3. 確認本機 runtime 設定檔是 UTF-8 無 BOM
 
-重新產生這個檔案時，請用無 BOM 寫法：
+- 檔案：`./runtime/runtime.local.host.json`
+- 如果你重新寫入這個檔案，務必用 UTF-8 無 BOM。
+
+4. 確認 Quick Tunnel URL 可讀
 
 ```powershell
-[System.IO.File]::WriteAllText(
-  $path,
-  $json,
-  [System.Text.UTF8Encoding]::new($false)
-)
+Get-Content ./runtime/cloudflare-quick-tunnel.url
 ```
 
----
+## 已驗證的啟動流程
 
-## 已驗證過的本機啟動流程
-
-### 啟動後端
+### 1. 啟動本機後端
 
 ```powershell
-$env:AUTH_SESSION_SECRET = '<stable-long-secret>'
-node m365/campus-backend/service-host.cjs .runtime/runtime.local.host.json
+node m365/campus-backend/service-host.cjs ./runtime/runtime.local.host.json
 ```
 
-成功時會看到類似：
+正常情況下會看到類似：
 - `service-host starting ...`
 - `unit-contact-campus-backend listening on http://127.0.0.1:18080`
 
-### 驗證後端健康
+### 2. 確認後端健康狀態
 
 ```powershell
 Invoke-WebRequest http://127.0.0.1:18080/api/unit-contact/health
 Invoke-WebRequest http://127.0.0.1:18080/api/auth/health
 ```
 
-健康回應要看到：
-- `ready: true`
+回傳應該要有 `ready: true`。
 
-### 啟動校內閘道
+### 3. 啟動校內入口 gateway
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-host-campus-gateway.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-host-campus-gateway.ps1
 ```
 
-這支腳本會：
-- 停掉舊的閘道程序
-- 拉起 `host-campus-gateway.cjs`
-- 把日誌寫到 `.runtime`
+這會把 `8088` 轉到 `18080`。
 
-### 驗證校內入口
+### 4. 確認校內入口健康
 
 ```powershell
 Invoke-WebRequest http://127.0.0.1:8088/api/unit-contact/health
 ```
 
-如果 `18080` 正常，`8088` 應該可以順利代理過去。
-
----
-
-## Cloudflare Pages 恢復流程
-
-如果 Pages 入口 stale，或 backend origin 有變動，先用下面方式恢復：
+### 5. 如果 Pages 顯示舊版，直接重發
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\ensure-cloudflare-pages-live.ps1 -OriginUrl http://127.0.0.1:18080
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/deploy-cloudflare-pages.ps1 -BackendBase https://leather-index-monitored-assist.trycloudflare.com -ProjectName isms-campus-portal -Branch main -Mode full-proxy
 ```
 
-如果自動檢查判定 Pages 不健康，它會：
-- 重新建立 quick tunnel
-- 更新 Pages full-proxy 入口
-- 讓正式站重新對齊目前 origin
+如果你是要重新用本機 origin 發佈，先確認 `./runtime/cloudflare-quick-tunnel.url` 的值，再用它當 `-BackendBase`。
 
----
+## 已驗證的部署流程
 
-## 驗證順序
+### Pages 重發的標準方式
 
-切帳號後、改完程式後，驗證順序固定照這個跑：
+1. 先建 Pages package：`./scripts/build-cloudflare-pages-package.cjs`
+2. 再用 `wrangler pages deploy` 發佈 `dist/cloudflare-pages`
+3. 完成後確認 `deploy-manifest.json`
+4. 最後跑 Pages smoke
+
+### 如果要快速恢復 Pages 到目前 backend
 
 ```powershell
-node scripts\campus-live-regression-smoke.cjs
-node scripts\live-security-smoke.cjs
-node scripts\cloudflare-pages-regression-smoke.cjs
-node scripts\campus-browser-regression-smoke.cjs
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/ensure-cloudflare-pages-live.ps1 -OriginUrl http://127.0.0.1:18080
 ```
 
-如果這次有動到特定模組，再加跑：
+### 如果要直接發佈固定 backend base
 
 ```powershell
-node scripts\unit-contact-admin-review-smoke.cjs
-node scripts\unit-contact-account-to-fill-smoke.cjs
-node scripts\unit-contact-public-visual-smoke.cjs
-node scripts\campus-unit-contact-public-visual-smoke.cjs
-node scripts\training-roster-focus-smoke.cjs
-node scripts\audit-followup-smoke.cjs
-node scripts\stress-regression.cjs
-node scripts\role-flow-probe.cjs
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/deploy-cloudflare-pages.ps1 -BackendBase <backend-url> -ProjectName isms-campus-portal -Branch main -Mode full-proxy
 ```
 
----
+## 版本治理
 
-## 目前最容易堵住的點
+現在版本治理的原則很簡單：以 `deploy-manifest.json` 為準。
 
-### 1. `AUTH_SESSION_SECRET` 沒設
+### 你要看的欄位
 
-症狀：
-- 後端起不來
-- 驗證失敗
-- 某些 API 直接報錯
+- `versionKey`
+- `commit`
+- `shortCommit`
+- `builtAt`
+- `backendBase`
+- `mode`
+
+### 比對順序
+
+1. `git rev-parse --short HEAD`
+2. 本機 `dist/cloudflare-pages/deploy-manifest.json`
+3. 正式站 `https://isms-campus-portal.pages.dev/deploy-manifest.json`
+4. 再看畫面內容
+
+### 版本治理的使用原則
+
+- 任何 UI / smoke / Pages 改動，先確認版本資訊是否同步。
+- 若正式站內容落後，但 manifest 是最新，優先判斷是否是瀏覽器快取或 Pages 部署尚未更新。
+- 若 Pages manifest 落後，優先重新執行 Pages deploy。
+
+## 已驗證的 smoke 順序
+
+### 基本回歸
+
+```powershell
+node scripts/campus-live-regression-smoke.cjs
+node scripts/live-security-smoke.cjs
+node scripts/cloudflare-pages-regression-smoke.cjs
+node scripts/version-governance-smoke.cjs
+node scripts/campus-browser-regression-smoke.cjs
+```
+
+### 功能專項
+
+```powershell
+node scripts/unit-contact-admin-review-smoke.cjs
+node scripts/unit-contact-account-to-fill-smoke.cjs
+node scripts/unit-contact-public-visual-smoke.cjs
+node scripts/campus-unit-contact-public-visual-smoke.cjs
+node scripts/training-roster-focus-smoke.cjs
+node scripts/audit-followup-smoke.cjs
+node scripts/stress-regression.cjs
+node scripts/role-flow-probe.cjs
+node scripts/security-regression.cjs
+```
+
+## 最近已驗證的重要行為
+
+### 資安窗口
+
+- `#security-window` 現在是依一級單位分組的折疊卡片。
+- 頁面上應該看到：
+  - `一級單位`
+  - `二級單位`
+- Pages smoke 目前是用這個結構驗證，不是舊 table 文字。
+- 如果你在頁面上看到舊版，先確認是否已出現：
+  - `.security-window-group-stack .security-window-card`
+
+如果這個頁面再改版，記得同步更新：
+- `admin-module.js`
+- `styles.css`
+- `scripts/security-regression.cjs`
+- `scripts/cloudflare-pages-regression-smoke.cjs`
+
+### 教育訓練名單
+
+- 名單渲染現在有分段輸出與快取。
+- 大資料匯入後不要期待一次全 DOM 重算；這是故意拆成背景處理。
+
+### 內稽檢核表
+
+- 列表頁與搜尋有快取。
+- 年份 / 狀態 / 關鍵字切換不再每次重掃整頁。
+
+### 操作稽核軌跡
+
+- 查詢有短期快取。
+- 同條件重開頁面會先顯示舊資料，再背景更新。
+
+## 常見阻塞與處理方式
+
+### 1. `AUTH_SESSION_SECRET` 缺失
+
+現象：
+- backend 起不來
+- auth API 直接失敗
 
 處理：
-- 先把環境變數補上，再啟動 `service-host.cjs`
+- 先補 `AUTH_SESSION_SECRET`
+- 再啟動 `service-host.cjs`
 
-### 2. `.runtime/runtime.local.host.json` 有 BOM
+### 2. `./runtime/runtime.local.host.json` 編碼錯誤
 
-症狀：
+現象：
 - `service-host.cjs` JSON parse error
-- 看起來像是內容正確，但實際就是起不來
 
 處理：
-- 用無 BOM 寫法重寫檔案
+- 重新寫檔，明確指定 UTF-8 無 BOM
 
-### 3. `127.0.0.1:18080` 沒起來
+### 3. `8088` 不通
 
-症狀：
-- `8088` 還活著，但 API health 失敗
-
-處理：
-- 重啟 `service-host.cjs`
-- 確認本機後端真的在跑
-
-### 4. `8088` 有開，但 API health 失敗
-
-症狀：
-- 校內入口能開
-- 但 API 會 502 或 health 失敗
+現象：
+- 校內入口打不開
+- smoke 只剩頁面能開，API 失敗
 
 處理：
-- 先看 `18080`
-- 再看 host gateway
+- 重啟 host gateway
+- 確認 `18080` 有在跑
 
-### 5. Cloudflare Pages 入口和目前 origin 不一致
+### 4. Pages 內容看起來過期
 
-症狀：
-- Pages 頁面看起來舊
-- smoke 報告和實際頁面不一致
-
-處理：
-- 再跑一次 `ensure-cloudflare-pages-live.ps1`
-
-### 6. 煙燻測試互相搶 session
-
-症狀：
-- 同一批測試有時候會出現 `401`
-- 重跑單支就正常
+現象：
+- `pages.dev` 內容沒跟著 commit 更新
 
 處理：
-- 優先單支驗證
-- 不要把所有測試硬塞在同一個 session 同時跑
+- 先看 `deploy-manifest.json`
+- 再檢查是否真的重發 Pages
+- 最後用無痕或 `Ctrl + F5` 排除快取
 
-### 7. 測試腳本的函式簽名過舊
+### 5. `gnutls_handshake() failed`
 
-症狀：
-- 測試腳本顯示失敗
-- 其實是字串檢查或函式名稱改了
+現象：
+- guest `git pull` 失敗
 
 處理：
-- 先看是不是 smoke 腳本過舊，不要先懷疑產品
-
----
-
-## 已驗證能直接用的部署流程
-
-### 本機程式變更後
-
-1. 修改程式
-2. 跑 `node --check`
-3. 跑對應煙燻測試
-4. `git add` / `git commit`
-5. `git push origin main`
-6. 如果有 guest runtime，SSH 到 guest 拉版
-7. 如需，重啟 `isms-unit-contact-backend.service`
-8. 重跑 live smoke
-
-### Guest 端已驗證的拉版命令
-
-```bash
-sudo -u ismsbackend git -C /srv/isms-form-redesign pull --ff-only origin main
-sudo systemctl restart isms-unit-contact-backend.service
-sudo systemctl is-active isms-unit-contact-backend.service
-```
-
-如果 `git pull` 遇到：
-- `gnutls_handshake() failed`
-
-先設：
 
 ```bash
 git config --global http.version HTTP/1.1
 ```
 
-再重試。
+### 6. smoke 因為 session 競態失敗
 
----
+現象：
+- 401
+- login 或 role flow 偶發失敗
 
-## 目前的已知穩定狀態
+處理：
+- 單獨重跑那支 smoke
+- 不要把一次平行競態當成產品壞掉
 
-以下項目最近都已驗過：
-- 登入到儀表板
-- 教育訓練名單
-- 內稽檢核表
-- 單位申請與審核
-- 附件預覽與下載
-- 權限與安全標頭
-- 效能熱路徑
+### 7. `security-window` 舊版畫面
 
----
+現象：
+- `security-window` 看起來還是 table 或舊單列版
 
-## 這份文件的使用方式
+處理：
+1. 確認 `admin-module.js`、`styles.css` 已發佈
+2. 確認 Pages manifest 已更新
+3. 重新跑 `scripts/security-regression.cjs`
 
-你切帳號回來後，不用先問我「現在到哪一步」。
+## 切帳號時的最短路徑
 
-直接照這份文件做：
+1. 先看這份文件。
+2. 先看 `git status --short`。
+3. 確認 `AUTH_SESSION_SECRET`。
+4. 起 `service-host.cjs`。
+5. 起 `8088` gateway。
+6. 確認 `deploy-manifest.json`。
+7. 跑基本 smoke。
+8. 若有 UI 改動，再跑對應專項 smoke。
 
-1. 看 `git status`
-2. 設 `AUTH_SESSION_SECRET`
-3. 起 `service-host.cjs`
-4. 起 `8088` 閘道
-5. 跑 Pages 恢復
-6. 跑煙燻測試
+## 下一次最先要看的檔案
 
-如果有卡住，先對照上面的堵塞點，不要重跑整套流程。
+- `docs/fast-redeploy-runbook.md`
+- `docs/project-execution-flow.md`
