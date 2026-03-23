@@ -3346,7 +3346,7 @@ body.modal-open {
 }
 
 .security-window-card {
-  padding: 18px 20px 20px;
+  padding: 0;
 }
 
 .security-window-card > summary {
@@ -3383,8 +3383,107 @@ body.modal-open {
   box-shadow: 0 18px 36px -30px rgba(15, 23, 42, 0.18);
 }
 
+.security-window-group-stack {
+  gap: 16px;
+}
+
 .security-window-card .governance-card-body {
+  padding: 14px 20px 20px;
+}
+
+.security-window-tier-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.security-window-tier-section {
   padding-top: 14px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.security-window-tier-section:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.security-window-tier-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.security-window-tier-section-title {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.security-window-tier-items {
+  display: grid;
+  gap: 12px;
+}
+
+.security-window-tier-empty {
+  margin-top: 4px;
+}
+
+.security-window-scope-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(214, 223, 233, 0.94);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 24px -28px rgba(15, 23, 42, 0.22);
+}
+
+.security-window-scope-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.security-window-scope-card-title {
+  font-size: 0.94rem;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.security-window-scope-card-subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.security-window-scope-card-body {
+  display: grid;
+  gap: 10px;
+}
+
+.security-window-scope-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.security-window-scope-card.is-exempted {
+  border-color: rgba(148, 163, 184, 0.45);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+.security-window-summary .training-group-summary-grid {
+  margin-top: 12px;
+}
+
+.security-window-summary .training-group-title {
+  line-height: 1.35;
 }
 
 .cl-governance-child-wrap {

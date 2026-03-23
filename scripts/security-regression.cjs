@@ -224,7 +224,26 @@ async function assertNoXssExecution(page, label) {
       return 'schema health remained protected';
     });
 
-    await runStep(results, 'SEC-03', 'Admin', 'Case detail escapes XSS payloads', async () => {
+    await runStep(results, 'SEC-03', 'Admin', 'Security window inventory is grouped by tier', async () => {
+      await login(page, 'admin', 'admin123');
+      await gotoHash(page, 'security-window');
+      await page.waitForSelector('.security-window-group-stack .security-window-card');
+      const structure = await page.evaluate(() => {
+        const root = document.querySelector('#app') || document.body;
+        return {
+          stack: Boolean(document.querySelector('.security-window-group-stack')),
+          cardCount: document.querySelectorAll('.security-window-card').length,
+          text: String(root.textContent || '')
+        };
+      });
+      if (!structure.stack) throw new Error('security window stack missing');
+      if (structure.cardCount < 1) throw new Error('security window cards missing');
+      if (!String(structure.text || '').includes('一級單位')) throw new Error('tier 1 label missing');
+      if (!String(structure.text || '').includes('二級單位')) throw new Error('tier 2 label missing');
+      return `security window grouped cards visible (${structure.cardCount} cards)`;
+    });
+
+    await runStep(results, 'SEC-04', 'Admin', 'Case detail escapes XSS payloads', async () => {
       await login(page, 'admin', 'admin123');
       await seedSecurityFixtures(page);
       await gotoHash(page, 'detail/' + CASE_ID);
@@ -238,7 +257,7 @@ async function assertNoXssExecution(page, label) {
       return 'case detail payload rendered safely';
     });
 
-    await runStep(results, 'SEC-04', 'Admin', 'Checklist detail escapes XSS payloads', async () => {
+    await runStep(results, 'SEC-05', 'Admin', 'Checklist detail escapes XSS payloads', async () => {
       await resetXssFlag(page);
       await gotoHash(page, 'checklist-detail/' + CHECKLIST_ID);
       await page.waitForSelector('.detail-title');
@@ -246,7 +265,7 @@ async function assertNoXssExecution(page, label) {
       return 'checklist detail payload rendered safely';
     });
 
-    await runStep(results, 'SEC-05', 'Admin', 'Training detail escapes XSS payloads', async () => {
+    await runStep(results, 'SEC-06', 'Admin', 'Training detail escapes XSS payloads', async () => {
       await resetXssFlag(page);
       await gotoHash(page, 'training-detail/' + TRAINING_ID);
       await page.waitForSelector('.detail-title');
