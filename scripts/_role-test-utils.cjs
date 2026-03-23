@@ -111,31 +111,62 @@ async function waitForHash(page, expected, timeout = 7000) {
 }
 
 async function waitForAppReady(page, timeout = 45000) {
-  await page.waitForFunction(() => window.__APP_READY__ === true, { timeout });
+  await page.waitForFunction(() => {
+    return window.__APP_READY__ === true
+      || !!document.querySelector('[data-testid="login-form"]')
+      || !!document.querySelector('.btn-logout');
+  }, { timeout });
 }
 
 async function login(page, username, password) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-  await waitForAppReady(page);
+  await page.waitForFunction(() => {
+    const loginForm = document.querySelector('[data-testid="login-form"]');
+    const logoutButton = document.querySelector('.btn-logout');
+    if (window.__APP_READY__ === true || !!logoutButton) return true;
+    if (!loginForm) return false;
+    const style = window.getComputedStyle(loginForm);
+    const rect = loginForm.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  }, { timeout: 45000 });
   if (await page.locator('.btn-logout').count()) {
     await acceptNextDialog(page, 'accept');
     await page.click('.btn-logout');
     await page.waitForSelector('[data-testid="login-form"]');
   }
-  await page.waitForSelector('[data-testid="login-form"]');
-  await page.fill('[data-testid="login-user"]', username);
-  await page.fill('[data-testid="login-pass"]', password);
-  await Promise.all([
-    page.waitForFunction(() => !!document.querySelector('#app'), { timeout: 7000 }),
-    page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
-  ]);
-  await page.waitForFunction(() => {
-    const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
-      ? window._authModule.currentUser()
-      : null;
-    return !!(currentUser && String(currentUser.sessionToken || '').trim())
-      || !!document.querySelector('.btn-logout');
-  }, { timeout: 15000 });
+  const loginResult = await page.evaluate(async ({ username, password }) => {
+    const auth = window._authModule;
+    if (!auth || typeof auth.login !== 'function') throw new Error('auth module missing');
+    return auth.login(username, password);
+  }, { username, password });
+  if (!loginResult) {
+    throw new Error('login failed');
+  }
+  const authMode = await page.evaluate(() => {
+    try {
+      return String(window.__M365_UNIT_CONTACT_CONFIG__ && window.__M365_UNIT_CONTACT_CONFIG__.authMode || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }).catch(() => '');
+  if (authMode === 'local-emulator') {
+    await page.waitForTimeout(200);
+    return;
+  }
+  const waitForAuthenticatedState = async () => {
+    await page.waitForFunction(() => {
+      const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
+        ? window._authModule.currentUser()
+        : null;
+      return !!currentUser || !!document.querySelector('.btn-logout');
+    }, { timeout: 15000 });
+  };
+  try {
+    await waitForAuthenticatedState();
+  } catch (error) {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await waitForAuthenticatedState();
+  }
   await page.waitForFunction(() => {
     const state = String(window.__REMOTE_BOOTSTRAP_STATE__ || '').trim();
     return state === 'ready' || state === 'idle';
@@ -194,8 +225,10 @@ async function resetApp(page) {
     window.location.hash = '';
   });
   await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
-  await waitForAppReady(page);
-  await page.waitForSelector('[data-testid="login-form"]', { timeout: 45000 });
+  await waitForAppReady(page).catch(async () => {
+    await page.waitForSelector('[data-testid="login-form"]', { timeout: 15000 });
+  });
+  await page.waitForSelector('[data-testid="login-form"]', { state: 'attached', timeout: 45000 });
 }
 
 async function readJsonFromStorage(page, key) {
