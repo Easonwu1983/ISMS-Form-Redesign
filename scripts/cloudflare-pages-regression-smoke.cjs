@@ -766,7 +766,17 @@ async function run() {
 
     await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForFunction(() => !!document.querySelector('.security-window-category-stack .security-window-category-card'), undefined, { timeout: 45000 });
+    let securityWindowReady = false;
+    for (let attempt = 0; attempt < 2 && !securityWindowReady; attempt += 1) {
+      try {
+        await page.waitForFunction(() => !!document.querySelector('.security-window-category-stack .security-window-category-card'), undefined, { timeout: 20000 });
+        securityWindowReady = true;
+      } catch (error) {
+        if (attempt >= 1) throw error;
+        await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await page.waitForTimeout(1200);
+      }
+    }
     const securityWindowText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(securityWindowText)) {
       throw new Error('security window page contains placeholder question marks');

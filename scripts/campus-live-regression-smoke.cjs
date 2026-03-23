@@ -38,6 +38,21 @@ async function run() {
   };
   let adminSessionToken = '';
 
+  async function requestAdminJson(url, options = {}, retryOn401 = true) {
+    const headers = { ...(options.headers || {}) };
+    if (!headers.Authorization && adminSessionToken) {
+      headers.Authorization = `Bearer ${adminSessionToken}`;
+    }
+    let response = await requestJson(url, { ...options, headers });
+    if (retryOn401 && response.response.status === 401) {
+      const session = await loginAdminSession();
+      adminSessionToken = session.token;
+      const retryHeaders = { ...(options.headers || {}), Authorization: `Bearer ${adminSessionToken}` };
+      response = await requestJson(url, { ...options, headers: retryHeaders });
+    }
+    return response;
+  }
+
   async function step(name, fn, options) {
     const opts = options || {};
     try {
@@ -181,11 +196,7 @@ async function run() {
   }, { critical: true });
 
   await step('system-users list authorized', async () => {
-    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/system-users`, {
-      headers: {
-        Authorization: `Bearer ${adminSessionToken}`
-      }
-    });
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/system-users`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const items = Array.isArray(json && json.items) ? json.items : [];
     const count = items.length;
@@ -197,11 +208,7 @@ async function run() {
   }, { critical: true });
 
   await step('audit-trail list authorized', async () => {
-    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/audit-trail?limit=20`, {
-      headers: {
-        Authorization: `Bearer ${adminSessionToken}`
-      }
-    });
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/audit-trail?limit=20`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (!json || !Array.isArray(json.items) || !json.summary) throw new Error('audit trail response invalid');
     return {
@@ -211,11 +218,7 @@ async function run() {
   }, { critical: true });
 
   await step('training-rosters ids unique', async () => {
-    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/training/rosters`, {
-      headers: {
-        Authorization: `Bearer ${adminSessionToken}`
-      }
-    });
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/training/rosters`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const items = Array.isArray(json && json.items) ? json.items : [];
     const idCounts = new Map();
@@ -232,20 +235,7 @@ async function run() {
   }, { critical: true });
 
   await step('auth verify authorized', async () => {
-    let verification = await requestJson(`${DEFAULT_BASE}/api/auth/verify`, {
-      headers: {
-        Authorization: `Bearer ${adminSessionToken}`
-      }
-    });
-    if (verification.response.status === 401) {
-      const session = await loginAdminSession();
-      adminSessionToken = session.token;
-      verification = await requestJson(`${DEFAULT_BASE}/api/auth/verify`, {
-        headers: {
-          Authorization: `Bearer ${adminSessionToken}`
-        }
-      });
-    }
+    const verification = await requestAdminJson(`${DEFAULT_BASE}/api/auth/verify`);
     const { response, json } = verification;
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('verify response invalid');
