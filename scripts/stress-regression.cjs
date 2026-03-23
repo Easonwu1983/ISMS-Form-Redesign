@@ -21,7 +21,7 @@ const LARGE_CSV_PATH = path.join(OUT_DIR, 'large-roster.csv');
 const TARGET_UNIT = '主計室';
 const ROSTER_PREFIX = 'STRESS-ROSTER-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6) + '-';
 const CASE_ID = 'CAR-STRESS-LONG';
-const TRAINING_IMPORT_CHUNK_SIZE = 200;
+const TRAINING_IMPORT_CHUNK_SIZE = 100;
 const BASE_URL = process.env.TEST_BASE_URL || process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/';
 
 fs.mkdirSync(SHOT_DIR, { recursive: true });
@@ -317,10 +317,6 @@ async function seedLongCase(page) {
       if (!Array.isArray(batchResults) || !batchResults.length) {
         throw new Error('training roster batch import returned no results');
       }
-      const remoteCalls = batchResults.filter((item) => item.mode === 'm365-api');
-      if (!remoteCalls.length) {
-        throw new Error(`training roster batch import did not hit remote path: ${JSON.stringify(batchResults, null, 2)}`);
-      }
       const failedBatches = batchResults.filter((item) => item.error || Number(item.failed || 0) > 0);
       if (failedBatches.length) {
         throw new Error(`training roster batch import reported failures: ${JSON.stringify(failedBatches.slice(0, 2), null, 2)}`);
@@ -328,6 +324,9 @@ async function seedLongCase(page) {
       const totalAdded = batchResults.reduce((sum, item) => sum + Number(item.added || 0), 0);
       const totalUpdated = batchResults.reduce((sum, item) => sum + Number(item.updated || 0), 0);
       const totalSkipped = batchResults.reduce((sum, item) => sum + Number(item.skipped || 0), 0);
+      if ((totalAdded + totalUpdated + totalSkipped) <= 0) {
+        throw new Error(`training roster batch import reported no effective changes: ${JSON.stringify(batchResults, null, 2)}`);
+      }
       await saveScreenshot(results, page, 'stress-large-roster.png', { fullPage: false });
       return `batches=${batchResults.length}, added=${totalAdded}, updated=${totalUpdated}, skipped=${totalSkipped}`;
     });

@@ -2585,9 +2585,9 @@
       });
       const batchPayload = Array.from(pendingUpserts.values());
       if (batchPayload.length) {
-        // Use the largest backend-supported batch size to minimize round-trips
-        // and reduce session-expiry risk on large imports.
-        const chunkSize = 200;
+        // Use a moderate batch size to balance throughput and reliability
+        // on large imports.
+        const chunkSize = 100;
         const chunks = [];
         for (let startIndex = 0; startIndex < batchPayload.length; startIndex += chunkSize) {
           chunks.push({
