@@ -207,6 +207,15 @@
         });
         return rows;
       }
+      function syncTrainingManualRosterDraftCacheFromRows(rows) {
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          if (!row || typeof row !== 'object') return;
+          const source = String(row.source || '').trim().toLowerCase();
+          const rosterId = String(row.rosterId || row.id || '').trim().toUpperCase();
+          if (source !== 'manual' && !rosterId.startsWith('TMP-')) return;
+          rememberTrainingManualRosterRow(row);
+        });
+      }
       function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
       return new Promise((resolve) => {
@@ -1427,6 +1436,7 @@
           completedProfessional: '',
           note: ''
         }, payload.currentUnit);
+        rememberTrainingManualRosterRow(draftRoster);
         rowsState = replaceTrainingRosterRowsByKey(rowsState, draftRoster);
         selectedKeys.clear();
         ['tr-new-name', 'tr-new-unit-name', 'tr-new-identity', 'tr-new-job-title'].forEach((idName) => {
@@ -1487,6 +1497,7 @@
           completedProfessional: '',
           note: ''
         }, payload.currentUnit);
+        forgetTrainingManualRosterRow(tempRosterId);
           rememberTrainingManualRosterRow(nextManualRow);
           rowsState = replaceTrainingRosterRowsByKey(rowsState, nextManualRow);
         renderRows();
@@ -1570,6 +1581,7 @@
       const body = document.getElementById('training-rows-body');
       const visibleRows = getFilteredRows();
       installTrainingRowDelegates();
+      syncTrainingManualRosterDraftCacheFromRows(rowsState);
       if (!rowsState.length) {
         trainingRowsRenderToken += 1;
         body.innerHTML = buildTrainingEmptyTableRow(13, '此單位尚未建立名單', '請由管理者匯入名單，或由單位管理員新增名單外人員。', 28);
