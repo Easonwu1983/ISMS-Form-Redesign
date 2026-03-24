@@ -1,24 +1,56 @@
-# 校內 VM 維運
+# 校內 VM 維運清單
 
-## 正式入口
+## 固定資訊
 
-- [http://140.112.97.150/](http://140.112.97.150/)
-- [http://140.112.97.150/api/unit-contact/health](http://140.112.97.150/api/unit-contact/health)
-- [http://140.112.97.150/deploy-manifest.json](http://140.112.97.150/deploy-manifest.json)
-- [http://140.112.97.150/unit-contact-authorization-template.pdf](http://140.112.97.150/unit-contact-authorization-template.pdf)
+- host：`140.112.97.150`
+- SSH 使用者：`useradmin`
+- repo：`/srv/isms-form-redesign`
+- service user：`ismsbackend`
+- 入口：[http://140.112.97.150/](http://140.112.97.150/)
+- health：[http://140.112.97.150/api/unit-contact/health](http://140.112.97.150/api/unit-contact/health)
 
-## 更新流程
+## 同步
 
-1. 以 `ismsbackend` 身分進 repo：`cd /srv/isms-form-redesign`
-2. 同步主線：`git pull --ff-only origin main`
-3. 重新寫入版本檔：`node -e "const fs=require('fs'); const { getBuildInfo } = require('./scripts/build-version-info.cjs'); const buildInfo = getBuildInfo('campus-gateway', process.cwd()); const manifest = { builtAt: buildInfo.builtAt, versionKey: buildInfo.versionKey, buildInfo, platform: 'campus-gateway', backendBase: 'http://127.0.0.1:18080', assetIntegrity: {} }; fs.writeFileSync('deploy-manifest.json', JSON.stringify(manifest, null, 2) + '\n');"`
-4. 重啟服務：`systemctl restart isms-unit-contact-backend.service caddy.service`
-5. 驗證健康：`curl http://127.0.0.1:8787/api/unit-contact/health`
-6. 跑 VM 檢查：`node scripts/vm-entry-smoke.cjs`
+1. `sudo -u ismsbackend git -C /srv/isms-form-redesign pull --ff-only origin main`
+2. 如果 `git pull` 被未追蹤檔擋住，先刪掉手動複製進 repo 根目的檔案，例如 `favicon.ico`
+3. 重生 VM 的兩份 manifest：
 
-## 驗收重點
+```bash
+cd /srv/isms-form-redesign
+node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const { getBuildInfo } = require('./scripts/build-version-info.cjs');
+const root = process.cwd();
+const buildInfo = getBuildInfo('cloudflare-pages', root);
+const manifest = {
+  builtAt: buildInfo.builtAt,
+  versionKey: buildInfo.versionKey,
+  buildInfo,
+  mode: 'full-proxy',
+  backendBase: 'http://140.112.97.150',
+  redirectTarget: 'http://140.112.97.150/',
+  platform: 'cloudflare-pages',
+  assetIntegrity: {}
+};
+for (const target of [path.join(root, 'deploy-manifest.json'), path.join(root, 'dist', 'cloudflare-pages', 'deploy-manifest.json')]) {
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, JSON.stringify(manifest, null, 2), 'utf8');
+}
+NODE
+```
 
-- 版本檔要和 repo `HEAD` 一致
-- health 要是 `ready:true`
-- PDF 下載要回 `application/pdf`
-- 服務要維持 `active`
+4. `sudo systemctl restart isms-unit-contact-backend.service caddy.service`
+5. 驗證：
+   - `curl http://140.112.97.150/api/unit-contact/health`
+   - `curl http://140.112.97.150/deploy-manifest.json`
+   - `curl http://140.112.97.150/favicon.ico`
+   - `node scripts/vm-entry-smoke.cjs`
+   - 必要時再跑 `node scripts/campus-live-regression-smoke.cjs`
+
+## 現況
+
+- 唯一最高管理者是 `easonwu`
+- smoke 腳本已改成 `easonwu` 路徑
+- `/favicon.ico` 已納入 repo 和打包流程
+- `unit-contact-authorization-template.pdf` 必須回 `200` 且 `Content-Type` 是 `application/pdf`

@@ -1,17 +1,19 @@
-# 專案執行流程
+# 專案流程
 
-## 1. 接手層
+## 接手
 
-- [`docs/boot-checklist.md`](./boot-checklist.md)
-- [`docs/one-minute-handoff.md`](./one-minute-handoff.md)
+- [handoff-index.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/handoff-index.md)
+- [boot-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/boot-checklist.md)
 
-## 2. 例外層
+## 校內 VM
 
-- [`docs/fast-redeploy-runbook.md`](./fast-redeploy-runbook.md)
-- [`docs/release-and-rollback.md`](./release-and-rollback.md)
+- [vm-migration-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/vm-migration-checklist.md)
+- [release-and-rollback.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/release-and-rollback.md)
 
-## 3. 細節層
+## 例外
 
-- [`docs/data-layer-governance.md`](./data-layer-governance.md)
-- [`docs/module-architecture.md`](./module-architecture.md)
-- [`docs/reusable-m365-cloudflare-project-bootstrap.md`](./reusable-m365-cloudflare-project-bootstrap.md)
+- [fast-redeploy-runbook.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/fast-redeploy-runbook.md)
+
+## 規則
+
+- [data-layer-governance.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/data-layer-governance.md)

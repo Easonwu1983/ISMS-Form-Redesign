@@ -1,15 +1,17 @@
-# 開機檢查
-1. 先看目前狀態：`git status --short`
-2. 若在校內 VM，先同步到最新主線：`git pull --ff-only origin main`
-3. 確認 runtime 設定正確：
+﻿# ??皜
+
+1. `git status --short`
+   - `app.js` ?舀??瑼???閬?閬１??2. 蝣箄??祆? runtime嚗?   - `.runtime/runtime.local.host.json`
    - `tokenMode: "app-only"`
    - `mailSenderUpn: "easonwu@m365.ntu.edu.tw"`
-   - `runtime.local.json` 必須是 UTF-8 無 BOM
-4. 重新啟動服務：
-   - 校內 VM：`isms-unit-contact-backend.service`、`caddy.service`
-   - 本機：`service-host.cjs`、`host-campus-gateway.ps1`
-5. 最後驗證：
-   - `curl http://140.112.97.150/api/unit-contact/health`
-   - `node scripts/vm-entry-smoke.cjs`
+   - 瑼?蝺函Ⅳ??UTF-8 ??BOM
+3. ?璈?stack嚗?   - `node m365/campus-backend/service-host.cjs .runtime/runtime.local.host.json`
+   - `powershell -ExecutionPolicy Bypass -File scripts/start-host-campus-gateway.ps1`
+4. 撽璈?health嚗?   - `curl http://127.0.0.1:18080/api/unit-contact/health`
+   - `curl http://127.0.0.1:8088/api/unit-contact/health`
+5. 頝?撠?smoke嚗?   - `node scripts/version-governance-smoke.cjs`
+   - `node scripts/campus-live-regression-smoke.cjs`
+   - `node scripts/live-security-smoke.cjs`
 
-> 校內 VM `http://140.112.97.150/` 是正式入口，平常先以它為準。
+?暹?嚗?- ?臭??擃恣? `easonwu`
+- 銝??? `admin` ?嗆?擃恣?蝙??

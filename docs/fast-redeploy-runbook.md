@@ -1,13 +1,28 @@
-# 切帳號快速接手手冊
+﻿# 靘???
 
-先看：
+## ?∪ VM `git pull` 鋡急?
 
-- [`docs/boot-checklist.md`](./boot-checklist.md)
-- [`docs/one-minute-handoff.md`](./one-minute-handoff.md)
+- 憒? `/srv/isms-form-redesign` ????鋆賡脣?餈質馱瑼?靘? `favicon.ico`嚗??芣???頝?`git pull --ff-only origin main`
 
-## 只看三個例外
+## ?銝???
+- ?祆??閬????剁?
+  - `deploy-manifest.json`
+  - `dist/cloudflare-pages/deploy-manifest.json`
+- ?∪ VM ?閬????剁?
+  - `/srv/isms-form-redesign/deploy-manifest.json`
+  - `/srv/isms-form-redesign/dist/cloudflare-pages/deploy-manifest.json`
+- ?拚? `versionKey`?buildInfo.commit` ?賢??? `git HEAD` 銝??
+## ?詨?靽∪仃??
+- ??runtime ??`tokenMode`
+- 敹???`app-only`
 
-- `8088` 不通，但 `18080` 正常：重啟 `scripts/start-host-campus-gateway.ps1`
-- 核准信失敗：先看 `tokenMode` 是否還是 `app-only`
-- 頁面版本不對：先看 `deploy-manifest.json`
+## admin 甈? smoke ?箇 `403`
+
+- ?Ⅱ隤?live 鞈?撅文??`easonwu` ??`?擃恣?`
+- ?Ⅱ隤?smoke ?單撌脩?韏?`easonwu`嚗?閬???`admin/admin123`
+
+## Pages ??VM ?箇 `404`
+
+- ?炎??`/favicon.ico` ?臬摮銝血? `200`
+- ?炎??`deploy-manifest.json` ?臬?舀??啁?
 
