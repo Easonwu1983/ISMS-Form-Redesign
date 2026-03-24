@@ -20,9 +20,12 @@ function createAuditTrailRouter(deps) {
   const state = {
     listMap: null,
     entriesCache: null,
-    entriesPromise: null
+    entriesPromise: null,
+    queryCache: new Map()
   };
   const AUDIT_TRAIL_CACHE_MS = 30000;
+  const AUDIT_TRAIL_QUERY_CACHE_MS = 15000;
+  const AUDIT_TRAIL_QUERY_CACHE_MAX = 32;
   const AUDIT_TRAIL_FIELDS = [
     'Title',
     'EventType',
@@ -50,6 +53,60 @@ function createAuditTrailRouter(deps) {
         .join(' ')
       : '';
     console.log(`[audit-trail] ${message}${suffix ? ` ${suffix}` : ''}`);
+  }
+
+  function clearAuditQueryCache() {
+    if (state.queryCache instanceof Map) {
+      state.queryCache.clear();
+    }
+  }
+
+  function getAuditFilterSignature(url) {
+    const keyword = cleanText(url && url.searchParams && url.searchParams.get('keyword')).toLowerCase();
+    const eventType = cleanText(url && url.searchParams && url.searchParams.get('eventType'));
+    const actorEmail = cleanText(url && url.searchParams && url.searchParams.get('actorEmail')).toLowerCase().toLowerCase();
+    const targetEmail = cleanText(url && url.searchParams && url.searchParams.get('targetEmail')).toLowerCase();
+    const unitCode = cleanText(url && url.searchParams && url.searchParams.get('unitCode'));
+    const recordId = cleanText(url && url.searchParams && url.searchParams.get('recordId'));
+    const rawLimit = Number(url && url.searchParams && url.searchParams.get('limit') || 100);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 100;
+    const rawOffset = Number(url && url.searchParams && url.searchParams.get('offset') || 0);
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
+    return [
+      keyword,
+      eventType,
+      actorEmail,
+      targetEmail,
+      unitCode,
+      recordId,
+      String(limit),
+      String(offset)
+    ].join('::');
+  }
+
+  function getAuditQueryCache(signature, listLoadedAt) {
+    if (!signature || !state.queryCache || typeof state.queryCache.get !== 'function') {
+      return null;
+    }
+    const cached = state.queryCache.get(signature);
+    if (!cached) return null;
+    if (!Number.isFinite(cached.loadedAt)) return null;
+    if (cached.listLoadedAt !== listLoadedAt) return null;
+    if ((Date.now() - cached.loadedAt) >= AUDIT_TRAIL_QUERY_CACHE_MS) return null;
+    return cached.value || null;
+  }
+
+  function setAuditQueryCache(signature, listLoadedAt, value) {
+    if (!signature || !state.queryCache || typeof state.queryCache.set !== 'function') return;
+    state.queryCache.set(signature, {
+      loadedAt: Date.now(),
+      listLoadedAt,
+      value
+    });
+    if (state.queryCache.size > AUDIT_TRAIL_QUERY_CACHE_MAX) {
+      const firstKey = state.queryCache.keys().next().value;
+      if (firstKey) state.queryCache.delete(firstKey);
+    }
   }
 
   async function fetchListMap() {
@@ -108,6 +165,7 @@ function createAuditTrailRouter(deps) {
         loadedAt: Date.now(),
         rows
       };
+      clearAuditQueryCache();
       logAuditTrail('list cache miss', {
         rows: rows.length,
         durationMs: Date.now() - startedAt
@@ -218,7 +276,22 @@ function createAuditTrailRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, 'Only admin can view audit trail');
       const rows = await listAllEntries();
+      const listLoadedAt = Number(state.entriesCache && state.entriesCache.loadedAt) || 0;
+      const querySignature = getAuditFilterSignature(url);
+      const cachedQuery = getAuditQueryCache(querySignature, listLoadedAt);
+      if (cachedQuery) {
+        await writeJson(res, buildJsonResponse(200, {
+          ok: true,
+          items: cachedQuery.items,
+          total: cachedQuery.total,
+          page: cachedQuery.page,
+          summary: cachedQuery.summary,
+          contractVersion: CONTRACT_VERSION
+        }), origin);
+        return;
+      }
       const filtered = filterEntries(rows.map((entry) => entry.item), url);
+      setAuditQueryCache(querySignature, listLoadedAt, filtered);
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         items: filtered.items,
