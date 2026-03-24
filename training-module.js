@@ -1172,10 +1172,10 @@
 
     const user = currentUser();
     const defaultTrainingYear = String(new Date().getFullYear() - 1911);
-    const lockedUserUnit = getScopedUnit(user) || user.unit || '';
+    const lockedUserUnit = getScopedUnit(user) || user.primaryUnit || user.unit || '';
     const unitPrefill = id && String(id).startsWith('unit:') ? String(id).slice(5).trim() : '';
     let existing = unitPrefill ? null : (id ? getTrainingForm(id) : null);
-    const unitValue = existing ? existing.unit : (unitPrefill || (isAdmin() ? (user.unit || getTrainingUnits()[0] || '') : (getScopedUnit(user) || user.unit)));
+    const unitValue = existing ? existing.unit : (unitPrefill || (isAdmin() ? (user.primaryUnit || user.unit || getTrainingUnits()[0] || '') : (getScopedUnit(user) || user.primaryUnit || user.unit)));
     const isUnitLocked = !!existing || !isAdmin();
     const takeoverDraft = !!(existing && existing.fillerUsername && existing.fillerUsername !== user.username && isUnitAdmin());
     let rowsState = sortTrainingRosterEntries(existing ? (existing.records || []) : []);
@@ -2912,7 +2912,8 @@
     const now = new Date().toISOString();
     const seen = new Set();
     getUsers().filter((user) => user.role !== ROLES.ADMIN).forEach((user) => {
-      getAuthorizedUnits(user).forEach((unit) => {
+      const authorizedUnits = getAuthorizedUnits(user);
+      authorizedUnits.forEach((unit) => {
         const key = (unit + '::' + user.name).toLowerCase();
         if (seen.has(key)) return;
         seen.add(key);

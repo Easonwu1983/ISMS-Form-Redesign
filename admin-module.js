@@ -154,7 +154,7 @@
     };
 
     function formatUserUnitSummary(user) {
-      const primary = String((user && (user.primaryUnit || user.unit)) || '').trim();
+      const primary = getPrimaryAuthorizedUnit(user);
       const units = getAuthorizedUnits(user).filter((unit) => unit && unit !== primary);
       if (!primary && !units.length) return '未指定';
       if (!units.length) return primary ? `${primary}（無額外授權）` : '未指定';

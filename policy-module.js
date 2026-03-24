@@ -47,6 +47,7 @@
       return [
         String(user.username || '').trim().toLowerCase(),
         String(user.role || '').trim(),
+        String(user.primaryUnit || user.unit || '').trim(),
         String(user.activeUnit || '').trim(),
         String(user.unit || '').trim(),
         String(user.name || '').trim(),
@@ -84,6 +85,7 @@
         isAdmin: user.role === ROLES.ADMIN,
         isUnitAdmin: user.role === ROLES.UNIT_ADMIN,
         globalReadScope: user.role === ROLES.ADMIN,
+        primaryUnit: String(user.primaryUnit || user.unit || '').trim(),
         authorizedUnits: normalizeUnitList(getAuthorizedUnits(user)),
         reviewUnits: normalizeUnitList(getReviewUnits(user))
       };

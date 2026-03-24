@@ -42,6 +42,9 @@
     const STORE_LOCKS = Object.create(null);
     let storageListenerInstalled = false;
     const STORAGE_WARNING_KEYS = Object.create(null);
+    const AUTHORIZED_UNITS_CACHE = new Map();
+    const REVIEW_UNITS_CACHE = new Map();
+    const USER_RECORD_CACHE = new Map();
     const STORE_VERSIONS = {
       [DATA_KEY]: 1,
       [CHECKLIST_KEY]: 1,
@@ -80,6 +83,28 @@
         envelope.revision = Math.floor(numericRevision);
       }
       return envelope;
+    }
+
+    function buildUserCacheKey(user, fields) {
+      if (!user || typeof user !== 'object') return '';
+      return (Array.isArray(fields) ? fields : [])
+        .map((field) => {
+          const value = user[field];
+          if (Array.isArray(value)) {
+            return value.map((entry) => String(entry || '').trim()).filter(Boolean).join('\u001f');
+          }
+          return String(value || '').trim();
+        })
+        .join('\u001e');
+    }
+
+    function getCachedUserList(cache, key, factory) {
+      const cleanKey = String(key || '').trim();
+      if (!cleanKey) return factory();
+      if (cache.has(cleanKey)) return cache.get(cleanKey);
+      const value = factory();
+      cache.set(cleanKey, value);
+      return value;
     }
 
     function isStoreEnvelope(value) {
@@ -701,14 +726,17 @@
     }
 
     function normalizeAuthorizedUnits(user) {
-      const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
-      const units = parseUserUnits(user?.authorizedUnits || user?.scopeUnits || user?.units);
-      const ordered = [];
-      if (primaryUnit) ordered.push(primaryUnit);
-      units.forEach((unit) => {
-        if (unit && !ordered.includes(unit)) ordered.push(unit);
+      const cacheKey = buildUserCacheKey(user, ['primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units']);
+      return getCachedUserList(AUTHORIZED_UNITS_CACHE, cacheKey, function () {
+        const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
+        const units = parseUserUnits(user?.authorizedUnits || user?.scopeUnits || user?.units);
+        const ordered = [];
+        if (primaryUnit) ordered.push(primaryUnit);
+        units.forEach((unit) => {
+          if (unit && !ordered.includes(unit)) ordered.push(unit);
+        });
+        return ordered;
       });
-      return ordered;
     }
 
     function parseSecurityRoles(value) {
@@ -742,7 +770,10 @@
     }
 
     function getReviewUnits(user) {
-      return parseUserUnits(user?.reviewUnits || user?.reviewScopes || user?.reviewScopeUnits);
+      const cacheKey = buildUserCacheKey(user, ['reviewUnits', 'reviewScopes', 'reviewScopeUnits']);
+      return getCachedUserList(REVIEW_UNITS_CACHE, cacheKey, function () {
+        return parseUserUnits(user?.reviewUnits || user?.reviewScopes || user?.reviewScopeUnits);
+      });
     }
 
     function getActiveUnit(user) {
@@ -753,22 +784,25 @@
     }
 
     function normalizeUserRecord(user) {
-      const role = normalizeUserRole(user?.role);
-      const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
-      const units = normalizeAuthorizedUnits(user);
-      const reviewUnits = getReviewUnits(user);
-      return {
-        ...user,
-        role,
-        primaryUnit: primaryUnit || units[0] || '',
-        authorizedUnits: units,
-        scopeUnits: units.slice(),
-        units,
-        reviewUnits,
-        securityRoles: parseSecurityRoles(user?.securityRoles),
-        unit: (primaryUnit || units[0] || ''),
-        activeUnit: role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units })
-      };
+      const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email']);
+      return getCachedUserList(USER_RECORD_CACHE, cacheKey, function () {
+        const role = normalizeUserRole(user?.role);
+        const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
+        const units = normalizeAuthorizedUnits(user);
+        const reviewUnits = getReviewUnits(user);
+        return {
+          ...user,
+          role,
+          primaryUnit: primaryUnit || units[0] || '',
+          authorizedUnits: units,
+          scopeUnits: units.slice(),
+          units,
+          reviewUnits,
+          securityRoles: parseSecurityRoles(user?.securityRoles),
+          unit: (primaryUnit || units[0] || ''),
+          activeUnit: role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units })
+        };
+      });
     }
 
     function loadData() {

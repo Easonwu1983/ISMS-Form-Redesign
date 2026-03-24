@@ -612,8 +612,9 @@
 
     const u = currentUser();
     const currentAuditYear = String(new Date().getFullYear() - 1911);
-    const defaultScopedUnit = getScopedUnit(u) || u.unit || '';
-    if (!id && u.role !== ROLES.ADMIN && defaultScopedUnit && getAuthorizedUnits(u).length <= 1) {
+    const authorizedUnits = getAuthorizedUnits(u);
+    const defaultScopedUnit = getScopedUnit(u) || u.primaryUnit || u.unit || '';
+    if (!id && u.role !== ROLES.ADMIN && defaultScopedUnit && authorizedUnits.length <= 1) {
       const duplicateChecklist = findExistingChecklistForUnitYear(defaultScopedUnit, currentAuditYear);
       if (duplicateChecklist) {
         toast('本年度已存在檢核表，請至列表繼續編輯或查看，勿重複新增。', 'error');
@@ -630,15 +631,15 @@
     sectionState.forEach((sec, si) => {
       sec.items.forEach((item) => sectionLookup.set(item.id, si));
     });
-    const selectedUnitCandidate = existing ? existing.unit : (getScopedUnit(u) || u.unit || '');
+    const selectedUnitCandidate = existing ? existing.unit : (getScopedUnit(u) || u.primaryUnit || u.unit || '');
     const selectedUnitParts = typeof splitUnitValue === 'function' ? splitUnitValue(selectedUnitCandidate) : { parent: '', child: '' };
     const selectedUnitGovernanceMode = getChecklistGovernanceState(selectedUnitCandidate).mode;
 
-    const checklistUnitLocked = !isAdmin(u) && getAuthorizedUnits(u).length <= 1;
+    const checklistUnitLocked = !isAdmin(u) && authorizedUnits.length <= 1;
     const checklistGovernanceLocked = !isAdmin(u) && selectedUnitGovernanceMode === 'consolidated' && !!(selectedUnitParts && selectedUnitParts.child);
     const checklistEditable = !checklistGovernanceLocked && (!existing || canEditChecklist(existing));
     if (existing && !canEditChecklist(existing) && !checklistGovernanceLocked) { navigate('checklist'); toast('\u9019\u4efd\u6aa2\u6838\u8868\u76ee\u524d\u4e0d\u53ef\u4fee\u6539', 'error'); return; }
-    const selectedUnit = checklistUnitLocked ? (getScopedUnit(u) || existing?.unit || '') : (existing ? existing.unit : (getScopedUnit(u) || u.unit || ''));
+    const selectedUnit = checklistUnitLocked ? (getScopedUnit(u) || existing?.unit || '') : (existing ? existing.unit : (getScopedUnit(u) || u.primaryUnit || u.unit || ''));
     const sectionsHtml = buildChecklistSectionsHtml(existing, sectionState, checklistEditable);
     const today = new Date().toISOString().split('T')[0];
     const totalItems = sectionState.reduce((sum, sec) => sum + sec.items.length, 0);
