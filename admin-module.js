@@ -1367,8 +1367,73 @@
     if (!canManageUsers()) { navigate('dashboard'); return; }
     const opts = options || {};
     const app = document.getElementById('app');
+    const visibleUsersCache = renderUsers._remoteViewCache || (renderUsers._remoteViewCache = {
+      items: [],
+      fetchedAt: 0,
+      promise: null
+    });
+
+    function getSystemUsersEndpointForAdmin() {
+      const runtimeConfig = typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__
+        ? window.__M365_UNIT_CONTACT_CONFIG__
+        : null;
+      const endpoint = runtimeConfig && typeof runtimeConfig.systemUsersEndpoint === 'string'
+        ? runtimeConfig.systemUsersEndpoint
+        : '/api/system-users';
+      return String(endpoint || '/api/system-users').trim() || '/api/system-users';
+    }
+
+    function getVisibleUsers() {
+      const localUsers = Array.isArray(getUsers()) ? getUsers() : [];
+      return localUsers.length ? localUsers : (Array.isArray(visibleUsersCache.items) ? visibleUsersCache.items : []);
+    }
+
+    function clearVisibleUsersCache() {
+      visibleUsersCache.items = [];
+      visibleUsersCache.fetchedAt = 0;
+      visibleUsersCache.promise = null;
+    }
+
+    async function fetchUsersForAdminView(fetchOptions) {
+      const remoteOpts = fetchOptions || {};
+      const activeUser = currentUser && currentUser();
+      const sessionToken = String(activeUser && activeUser.sessionToken || '').trim();
+      if (!sessionToken) return [];
+      const now = Date.now();
+      if (!remoteOpts.force && visibleUsersCache.items.length && (now - Number(visibleUsersCache.fetchedAt || 0)) < 30000) {
+        return visibleUsersCache.items.slice();
+      }
+      if (!remoteOpts.force && visibleUsersCache.promise) {
+        return visibleUsersCache.promise;
+      }
+      const endpoint = getSystemUsersEndpointForAdmin();
+      const requestUrl = new URL(endpoint, window.location.href);
+      const pending = fetch(requestUrl.toString(), {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          Accept: 'application/json'
+        }
+      }).then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || body && body.ok === false) {
+          throw new Error(String(body && body.error || `系統帳號清單讀取失敗 (${response.status})`));
+        }
+        const items = Array.isArray(body && body.items)
+          ? body.items
+          : (Array.isArray(body && body.value) ? body.value : []);
+        visibleUsersCache.items = Array.isArray(items) ? items.slice() : [];
+        visibleUsersCache.fetchedAt = Date.now();
+        return visibleUsersCache.items.slice();
+      }).finally(() => {
+        visibleUsersCache.promise = null;
+      });
+      visibleUsersCache.promise = pending;
+      return pending;
+    }
+
     if (!opts.skipSync && typeof syncUsersFromM365 === 'function') {
-      const existingUsers = getUsers();
+      const existingUsers = getVisibleUsers();
       if (!existingUsers.length) {
         app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">正在同步正式帳號清單...</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取最高管理者與單位管理者帳號資料...</div></div>`;
         refreshIcons();
@@ -1377,9 +1442,19 @@
         } catch (error) {
           console.warn('system users initial sync failed', error);
         }
+        if (!getUsers().length) {
+          try {
+            await fetchUsersForAdminView({ force: true });
+          } catch (error) {
+            console.warn('system users direct fetch failed', error);
+          }
+        } else {
+          clearVisibleUsersCache();
+        }
         return renderUsers({ skipSync: true });
       }
       syncUsersFromM365({ silent: true }).then(function () {
+        clearVisibleUsersCache();
         if (window.location.hash === '#users') {
           renderUsers({ skipSync: true }).catch(function (error) {
             console.warn('system users background rerender failed', error);
@@ -1387,9 +1462,27 @@
         }
       }).catch(function (error) {
         console.warn('system users background sync failed', error);
+        fetchUsersForAdminView().then(function () {
+          if (window.location.hash === '#users') {
+            renderUsers({ skipSync: true }).catch(function (rerenderError) {
+              console.warn('system users direct rerender failed', rerenderError);
+            });
+          }
+        }).catch(function (fetchError) {
+          console.warn('system users direct fetch failed', fetchError);
+        });
       });
+    } else if (!opts.skipSync && !getUsers().length) {
+      app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">正在同步正式帳號清單...</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取最高管理者與單位管理者帳號資料...</div></div>`;
+      refreshIcons();
+      try {
+        await fetchUsersForAdminView({ force: true });
+      } catch (error) {
+        console.warn('system users direct fetch failed', error);
+      }
+      return renderUsers({ skipSync: true });
     }
-    const users = getUsers();
+    const users = getVisibleUsers();
     const rows = users.length ? users.map((u) => {
       const primaryUnit = getPrimaryAuthorizedUnit(u) || '未指定';
       const isProtectedUser = String(u.username || '').trim() === 'admin' || String(u.role || '').trim() === ROLES.ADMIN;
@@ -1412,7 +1505,9 @@
       toast('找不到要刪除的帳號', 'error');
       return;
     }
-    const user = findUser(cleanUsername);
+    const visibleUsersCache = renderUsers._remoteViewCache || { items: [] };
+    const user = findUser(cleanUsername)
+      || (Array.isArray(visibleUsersCache.items) ? visibleUsersCache.items.find((item) => String(item && item.username || '').trim() === cleanUsername) : null);
     if (!user) {
       toast('找不到要刪除的帳號', 'error');
       return;
@@ -1429,6 +1524,12 @@
         await syncUsersFromM365({ silent: true, force: true }).catch(function (error) {
           console.warn('system users sync after delete failed', error);
         });
+      }
+      if (renderUsers._remoteViewCache) {
+        renderUsers._remoteViewCache.items = Array.isArray(renderUsers._remoteViewCache.items)
+          ? renderUsers._remoteViewCache.items.filter((item) => String(item && item.username || '').trim() !== cleanUsername)
+          : [];
+        renderUsers._remoteViewCache.fetchedAt = Date.now();
       }
       await renderUsers({ skipSync: true });
       toast(`已刪除 ${label}`);
@@ -2144,7 +2245,10 @@
       showUserModal(null);
     },
     editUser: function ({ dataset }) {
-      showUserModal(findUser(dataset.username));
+      const visibleUsersCache = renderUsers._remoteViewCache || { items: [] };
+      const user = findUser(dataset.username)
+        || (Array.isArray(visibleUsersCache.items) ? visibleUsersCache.items.find((item) => String(item && item.username || '').trim() === String(dataset.username || '').trim()) : null);
+      showUserModal(user || null);
     },
     deleteUser: function ({ dataset }) {
       handleDeleteUser(dataset.username);

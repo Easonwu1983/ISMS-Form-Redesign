@@ -206,7 +206,7 @@ function createAuditTrailRouter(deps) {
     const siteId = await resolveSiteId();
     const list = await resolveAuditList();
     const top = Math.max(1, Math.min(Number(limit) || 50, 200));
-    const body = await graphRequest('GET', `/sites/${siteId}/lists/${list.id}/items?$expand=fields($select=${AUDIT_TRAIL_FIELDS})&$orderby=fields/OccurredAt desc&$top=${top}`);
+    const body = await graphRequest('GET', `/sites/${siteId}/lists/${list.id}/items?$expand=fields($select=${AUDIT_TRAIL_FIELDS})&$orderby=id desc&$top=${top}`);
     const batch = Array.isArray(body && body.value) ? body.value : [];
     return batch.map((entry) => ({
       listItemId: cleanText(entry && entry.id),
@@ -214,7 +214,11 @@ function createAuditTrailRouter(deps) {
         listItemId: cleanText(entry && entry.id),
         ...mapGraphFieldsToAuditEntry(entry && entry.fields ? entry.fields : {})
       }
-    }));
+    })).sort((left, right) => {
+      const leftAt = Date.parse(left && left.item && left.item.occurredAt || '') || 0;
+      const rightAt = Date.parse(right && right.item && right.item.occurredAt || '') || 0;
+      return rightAt - leftAt;
+    });
   }
 
   function matchesKeyword(entry, keyword) {
