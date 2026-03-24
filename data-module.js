@@ -45,6 +45,7 @@
     const AUTHORIZED_UNITS_CACHE = new Map();
     const REVIEW_UNITS_CACHE = new Map();
     const USER_RECORD_CACHE = new Map();
+    const ACCESS_PROFILE_CACHE = new Map();
     const STORE_VERSIONS = {
       [DATA_KEY]: 1,
       [CHECKLIST_KEY]: 1,
@@ -783,25 +784,35 @@
       return units.includes(candidate) ? candidate : units[0];
     }
 
-    function normalizeUserRecord(user) {
+    function getAccessProfile(user) {
       const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email']);
-      return getCachedUserList(USER_RECORD_CACHE, cacheKey, function () {
+      return getCachedUserList(ACCESS_PROFILE_CACHE, cacheKey, function () {
         const role = normalizeUserRole(user?.role);
         const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
-        const units = normalizeAuthorizedUnits(user);
+        const authorizedUnits = normalizeAuthorizedUnits(user);
         const reviewUnits = getReviewUnits(user);
+        const scopeUnits = Array.from(new Set([primaryUnit, ...authorizedUnits].map((entry) => String(entry || '').trim()).filter(Boolean)));
+        const activeUnit = role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units: authorizedUnits });
+        const securityRoles = parseSecurityRoles(user?.securityRoles);
         return {
           ...user,
           role,
-          primaryUnit: primaryUnit || units[0] || '',
-          authorizedUnits: units,
-          scopeUnits: units.slice(),
-          units,
+          primaryUnit: primaryUnit || authorizedUnits[0] || '',
+          authorizedUnits,
+          scopeUnits,
+          units: authorizedUnits,
           reviewUnits,
-          securityRoles: parseSecurityRoles(user?.securityRoles),
-          unit: (primaryUnit || units[0] || ''),
-          activeUnit: role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units })
+          securityRoles,
+          unit: (primaryUnit || authorizedUnits[0] || ''),
+          activeUnit
         };
+      });
+    }
+
+    function normalizeUserRecord(user) {
+      const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email']);
+      return getCachedUserList(USER_RECORD_CACHE, cacheKey, function () {
+        return getAccessProfile(user);
       });
     }
 
@@ -1644,6 +1655,7 @@
       getAuthorizedUnits,
       getReviewUnits,
       getActiveUnit,
+      getAccessProfile,
       normalizeUserRecord,
       loadData,
       saveData,

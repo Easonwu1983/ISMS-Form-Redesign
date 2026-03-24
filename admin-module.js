@@ -10,6 +10,7 @@
       getUsers,
       getAuthorizedUnits,
       getReviewUnits,
+      getAccessProfile,
       parseUserUnits,
       getUnitSearchEntries,
       splitUnitValue,
@@ -151,6 +152,20 @@
     let securityWindowInventoryCache = {
       loadedAt: 0,
       value: null
+    };
+    let securityWindowFilteredCache = {
+      signature: '',
+      value: null
+    };
+    let unitGovernanceTopLevelCache = {
+      signature: '',
+      value: [],
+      filteredSignature: '',
+      filteredValue: []
+    };
+    let unitGovernanceFilteredCache = {
+      signature: '',
+      value: []
     };
 
     function formatUserUnitSummary(user) {
@@ -540,7 +555,11 @@
       return pending;
     }
 
-    function getGovernanceTopLevelUnits() {
+    function getGovernanceTopLevelUnitsSourceSignature() {
+      return typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('cats_unit_review') || '') : '0';
+    }
+
+    function buildGovernanceTopLevelUnitIndex() {
       const entries = Array.isArray(UNIT_SEARCH_ENTRIES) ? UNIT_SEARCH_ENTRIES : [];
       const groups = new Map();
       entries.forEach((entry) => {
@@ -573,12 +592,39 @@
             children: Array.from(group.children).sort((a, b) => a.localeCompare(b, 'zh-Hant'))
           };
         })
-        .filter((group) => {
-          const scopeUnits = getGovernanceReviewScopeUnits(currentUser());
-          if (isAdmin()) return true;
-          return scopeUnits.includes(group.unit);
-        })
         .sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
+    }
+
+    function getGovernanceTopLevelUnits() {
+      const sourceSignature = getGovernanceTopLevelUnitsSourceSignature();
+      if (unitGovernanceTopLevelCache.signature !== sourceSignature || !Array.isArray(unitGovernanceTopLevelCache.value)) {
+        unitGovernanceTopLevelCache = {
+          signature: sourceSignature,
+          value: buildGovernanceTopLevelUnitIndex(),
+          filteredSignature: '',
+          filteredValue: []
+        };
+      }
+      const user = currentUser();
+      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
+      const scopeUnits = getGovernanceReviewScopeUnits(user);
+      const isScopeAdmin = !!(accessProfile ? String(accessProfile.role || '').trim() === ROLES.ADMIN : isAdmin());
+      const filteredSignature = [
+        sourceSignature,
+        isScopeAdmin ? 'admin' : 'scoped',
+        String((accessProfile && accessProfile.username) || user && user.username || '').trim().toLowerCase(),
+        String((accessProfile && accessProfile.activeUnit) || user && user.activeUnit || '').trim(),
+        scopeUnits.join('\u001f')
+      ].join('||');
+      if (unitGovernanceTopLevelCache.filteredSignature === filteredSignature && Array.isArray(unitGovernanceTopLevelCache.filteredValue)) {
+        return unitGovernanceTopLevelCache.filteredValue;
+      }
+      const filtered = isScopeAdmin
+        ? unitGovernanceTopLevelCache.value
+        : unitGovernanceTopLevelCache.value.filter((group) => scopeUnits.includes(group.unit));
+      unitGovernanceTopLevelCache.filteredSignature = filteredSignature;
+      unitGovernanceTopLevelCache.filteredValue = filtered;
+      return filtered;
     }
 
     const GOVERNANCE_CATEGORY_ORDER = ['行政單位', '學術單位', '中心 / 研究單位'];
@@ -1507,12 +1553,27 @@
 
     const keyword = String(unitGovernanceState.filters.keyword || '').trim().toLowerCase();
     const modeFilter = String(unitGovernanceState.filters.mode || 'all').trim();
-    const items = unitGovernanceState.items.filter((unit) => {
-      if (modeFilter !== 'all' && String(unit.mode || 'independent').trim() !== modeFilter) return false;
-      if (!keyword) return true;
-      const haystack = [unit.unit, unit.category, unit.mode, unit.note, (unit.children || []).join(' ')].filter(Boolean).join(' ').toLowerCase();
-      return haystack.includes(keyword);
-    });
+    const itemsSignature = [
+      unitGovernanceState.lastLoadedAt,
+      unitGovernanceState.items.length,
+      keyword,
+      modeFilter
+    ].join('|');
+    let items = unitGovernanceState.items;
+    if (unitGovernanceFilteredCache.signature === itemsSignature && Array.isArray(unitGovernanceFilteredCache.value)) {
+      items = unitGovernanceFilteredCache.value;
+    } else {
+      items = unitGovernanceState.items.filter((unit) => {
+        if (modeFilter !== 'all' && String(unit.mode || 'independent').trim() !== modeFilter) return false;
+        if (!keyword) return true;
+        const haystack = [unit.unit, unit.category, unit.mode, unit.note, (unit.children || []).join(' ')].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(keyword);
+      });
+      unitGovernanceFilteredCache = {
+        signature: itemsSignature,
+        value: items
+      };
+    }
     const counts = items.reduce((result, unit) => {
       if (unit.mode === 'consolidated') result.consolidated += 1; else result.independent += 1;
       result.children += Array.isArray(unit.children) ? unit.children.length : 0;
@@ -1688,7 +1749,21 @@
     securityWindowState.filterSignature = filterSignature;
     let filtered;
     try {
-      filtered = filterSecurityWindowInventory(safeInventory, resolvedFilters);
+      const filterCacheSignature = [
+        safeInventory.generatedAt || '',
+        safeInventory.units.length,
+        safeInventory.people.length,
+        filterSignature
+      ].join('|');
+      if (securityWindowFilteredCache.signature === filterCacheSignature && securityWindowFilteredCache.value) {
+        filtered = securityWindowFilteredCache.value;
+      } else {
+        filtered = filterSecurityWindowInventory(safeInventory, resolvedFilters);
+        securityWindowFilteredCache = {
+          signature: filterCacheSignature,
+          value: filtered
+        };
+      }
     } catch (error) {
       console.warn('security window inventory filter failed', error);
       filtered = filterSecurityWindowInventory(buildEmptySecurityWindowInventory(), resolvedFilters);

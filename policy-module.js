@@ -8,6 +8,7 @@
       currentUser,
       getAuthorizedUnits,
       getReviewUnits,
+      getAccessProfile,
       getStoreTouchToken,
       getUnitGovernanceMode,
       splitUnitValue,
@@ -80,14 +81,15 @@
       if (permissionSnapshotCache.key === cacheKey && permissionSnapshotCache.value) {
         return permissionSnapshotCache.value;
       }
+      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
       const snapshot = {
-        user,
-        isAdmin: user.role === ROLES.ADMIN,
-        isUnitAdmin: user.role === ROLES.UNIT_ADMIN,
-        globalReadScope: user.role === ROLES.ADMIN,
-        primaryUnit: String(user.primaryUnit || user.unit || '').trim(),
-        authorizedUnits: normalizeUnitList(getAuthorizedUnits(user)),
-        reviewUnits: normalizeUnitList(getReviewUnits(user))
+        user: accessProfile || user,
+        isAdmin: String((accessProfile && accessProfile.role) || user.role || '').trim() === ROLES.ADMIN,
+        isUnitAdmin: String((accessProfile && accessProfile.role) || user.role || '').trim() === ROLES.UNIT_ADMIN,
+        globalReadScope: String((accessProfile && accessProfile.role) || user.role || '').trim() === ROLES.ADMIN,
+        primaryUnit: String((accessProfile && accessProfile.primaryUnit) || user.primaryUnit || user.unit || '').trim(),
+        authorizedUnits: normalizeUnitList((accessProfile && accessProfile.authorizedUnits) || getAuthorizedUnits(user)),
+        reviewUnits: normalizeUnitList((accessProfile && accessProfile.reviewUnits) || getReviewUnits(user))
       };
       permissionSnapshotCache.key = cacheKey;
       permissionSnapshotCache.value = snapshot;
