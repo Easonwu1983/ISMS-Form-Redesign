@@ -23,7 +23,8 @@
     } = deps;
 
     const LAST_EMAIL_KEY = 'unit-contact-last-email';
-    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.rtf';
+    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.pdf';
+    const AUTHORIZATION_TEMPLATE_URL = 'unit-contact-authorization-template.pdf';
     const AUTHORIZATION_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
     const AUTHORIZATION_UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
     const SECURITY_ROLE_OPTIONS = [
@@ -236,52 +237,17 @@
       return file;
     }
 
-    function escapeRtf(text) {
-      return String(text || '')
-        .replace(/\\/g, '\\\\')
-        .replace(/[{}]/g, '\\$&')
-        .replace(/[\u0080-\uFFFF]/g, (ch) => {
-          const code = ch.charCodeAt(0);
-          return '\\u' + (code > 32767 ? code - 65536 : code) + '?';
-        });
-    }
-
-    function buildAuthorizationTemplateRtf() {
-      const t = escapeRtf;
-      return [
-        '{\\\\rtf1\\\\ansi\\\\deff0',
-        '{\\\\fonttbl{\\\\f0 Arial;}{\\\\f1 Microsoft JhengHei;}}',
-        '\\\\viewkind4\\\\uc1\\\\lang1028\\\\f1\\\\fs24',
-        '\\\\pard\\\\qc\\\\b\\\\fs36 ' + t('單位資安窗口授權同意書') + '\\\\b0\\\\fs24\\\\par',
-        '\\\\pard\\\\qc ' + t('請先由單位主管簽章，再附於申請單位管理員帳號表單中上傳。') + '\\\\par',
-        '\\\\pard\\\\par',
-        '\\\\pard\\\\b ' + t('申請單位') + '\\\\b0\\\\tab ______________________________\\\\par',
-        '\\\\pard\\\\b ' + t('申請人姓名') + '\\\\b0\\\\tab ______________________________\\\\par',
-        '\\\\pard\\\\b ' + t('申請電子郵件') + '\\\\b0\\\\tab ______________________________\\\\par',
-        '\\\\pard\\\\b ' + t('資安角色') + '\\\\b0\\\\par',
-        '\\\\pard [ ] ' + t('一級單位資安窗口') + '\\\\par',
-        '\\\\pard [ ] ' + t('二級單位資安窗口') + '\\\\par',
-        '\\\\pard\\\\par',
-        '\\\\pard\\\\b ' + t('主管簽章') + '\\\\b0\\\\tab ______________________________\\\\par',
-        '\\\\pard\\\\b ' + t('日期') + '\\\\b0\\\\tab ______________________________\\\\par',
-        '\\\\pard\\\\par',
-        '\\\\pard\\\\qc ' + t('列印或轉存 PDF 後，請由主管簽章並上傳至系統。') + '\\\\par',
-        '}'
-      ].join('');
+    function getAuthorizationTemplateVersionKey() {
+      return String(window.__APP_ASSET_VERSION__ || (window.__APP_BUILD_INFO__ && window.__APP_BUILD_INFO__.versionKey) || Date.now());
     }
 
     function downloadAuthorizationTemplate() {
-      const blob = new Blob([buildAuthorizationTemplateRtf()], { type: 'application/rtf;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = AUTHORIZATION_TEMPLATE_URL + '?v=' + encodeURIComponent(getAuthorizationTemplateVersionKey());
       link.download = AUTHORIZATION_TEMPLATE_FILENAME;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      setTimeout(() => {
-        try { URL.revokeObjectURL(url); } catch (_) { }
-      }, 1000);
     }
 
     function renderAuthorizationDocumentSelection() {
@@ -304,9 +270,9 @@
       card.id = 'uca-authorization-doc-card';
       card.innerHTML = ''
         + '<div class="section-header">' + ic('file-text', 'icon-sm') + ' 授權同意書</div>'
-        + '<div class="form-hint" style="margin-top:8px">請先下載授權同意書，經單位主管簽章後再上傳。</div>'
+        + '<div class="form-hint" style="margin-top:8px">請先下載授權同意書 PDF，經單位主管簽章後再上傳。</div>'
         + '<div class="form-actions" style="margin-top:14px">'
-        + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 下載同意書</button>'
+        + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 下載同意書（PDF）</button>'
         + '</div>'
         + '<div class="form-group" style="margin-top:18px">'
         + '<label class="form-label form-required">上傳主管簽章之授權同意書</label>'

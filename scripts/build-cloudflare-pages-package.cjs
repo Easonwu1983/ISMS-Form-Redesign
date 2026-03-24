@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
+const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'cloudflare-pages');
@@ -362,24 +363,32 @@ function writeManifest(assetIntegrity) {
   }, null, 2), 'utf8');
 }
 
-fs.rmSync(outputDir, { recursive: true, force: true });
-ensureDir(outputDir);
-if (mode === 'redirect') {
-  writeRedirectIndex();
-  writeHeaders();
-  writeReadme();
-  writeManifest({});
-} else {
-  filesToCopy.forEach(copyRelative);
-  writeOverride();
-  writeWorkerProxy();
-  const assetIntegrity = collectAssetIntegrity();
-  rewriteIndex(assetIntegrity);
-  writeHeaders();
-  writeReadme();
-  writeManifest(assetIntegrity);
+async function main() {
+  fs.rmSync(outputDir, { recursive: true, force: true });
+  ensureDir(outputDir);
+  if (mode === 'redirect') {
+    writeRedirectIndex();
+    writeHeaders();
+    writeReadme();
+    writeManifest({});
+  } else {
+    filesToCopy.forEach(copyRelative);
+    writeOverride();
+    writeWorkerProxy();
+    await buildAuthorizationTemplatePdf(outputDir, buildInfo);
+    const assetIntegrity = collectAssetIntegrity();
+    rewriteIndex(assetIntegrity);
+    writeHeaders();
+    writeReadme();
+    writeManifest(assetIntegrity);
+  }
+
+  console.log(`cloudflare pages package ready: ${outputDir}`);
+  console.log(`backend base: ${backendBase}`);
+  console.log(`mode: ${mode}`);
 }
 
-console.log(`cloudflare pages package ready: ${outputDir}`);
-console.log(`backend base: ${backendBase}`);
-console.log(`mode: ${mode}`);
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

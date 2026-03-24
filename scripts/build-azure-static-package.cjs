@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
+const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'azure-staticwebapp');
@@ -134,14 +135,22 @@ function buildManifest() {
   fs.writeFileSync(path.join(outputDir, 'deploy-manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
 }
 
-fs.rmSync(outputDir, { recursive: true, force: true });
-ensureDir(outputDir);
-filesToCopy.forEach(copyRelative);
-rewriteIndex();
-buildOverride();
-buildStaticWebAppConfig();
-buildReadme();
-buildManifest();
+async function main() {
+  fs.rmSync(outputDir, { recursive: true, force: true });
+  ensureDir(outputDir);
+  filesToCopy.forEach(copyRelative);
+  await buildAuthorizationTemplatePdf(outputDir, buildInfo);
+  rewriteIndex();
+  buildOverride();
+  buildStaticWebAppConfig();
+  buildReadme();
+  buildManifest();
 
-console.log(`azure static package ready: ${outputDir}`);
-console.log(`backend base: ${backendBase}`);
+  console.log(`azure static package ready: ${outputDir}`);
+  console.log(`backend base: ${backendBase}`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

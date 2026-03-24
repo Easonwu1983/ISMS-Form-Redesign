@@ -1,6 +1,7 @@
 ﻿const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
+const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'homepage-ntu');
@@ -277,18 +278,26 @@ function buildManifest() {
   fs.writeFileSync(path.join(DIST, 'deploy-manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
 }
 
-fs.rmSync(DIST, { recursive: true, force: true });
-ensureDir(DIST);
-filesToCopy.forEach(copyRelative);
-if (mode === 'redirect') {
-  buildHomepageRedirectIndex();
-} else {
-  buildHomepageIndex();
-}
-buildHomepageOverride();
-buildReadme();
-buildManifest();
+async function main() {
+  fs.rmSync(DIST, { recursive: true, force: true });
+  ensureDir(DIST);
+  filesToCopy.forEach(copyRelative);
+  await buildAuthorizationTemplatePdf(DIST, buildInfo);
+  if (mode === 'redirect') {
+    buildHomepageRedirectIndex();
+  } else {
+    buildHomepageIndex();
+  }
+  buildHomepageOverride();
+  buildReadme();
+  buildManifest();
 
-console.log(`homepage package ready: ${DIST}`);
-console.log(`public entry: ${publicBase}`);
-console.log(`backend base: ${backendBase}`);
+  console.log(`homepage package ready: ${DIST}`);
+  console.log(`public entry: ${publicBase}`);
+  console.log(`backend base: ${backendBase}`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

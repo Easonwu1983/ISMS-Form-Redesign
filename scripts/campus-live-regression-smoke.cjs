@@ -101,6 +101,15 @@ async function run() {
     return { status: response.status };
   }, { critical: true });
 
+  await step('asset:unit-contact-authorization-template pdf', async () => {
+    const response = await fetch(`${DEFAULT_BASE}/unit-contact-authorization-template.pdf`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (bytes.length < 1024) throw new Error('authorization template pdf too small');
+    if (bytes.slice(0, 5).toString('ascii') !== '%PDF-') throw new Error('authorization template is not a PDF');
+    return { status: response.status, bytes: bytes.length, contentType: response.headers.get('content-type') || '' };
+  }, { critical: true });
+
   await step('asset:checklist-module encoding', async () => {
     const response = await fetch(`${DEFAULT_BASE}/checklist-module.js`);
     const text = await response.text();

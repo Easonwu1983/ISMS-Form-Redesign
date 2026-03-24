@@ -243,6 +243,13 @@ async function run() {
     await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
     pushStep('landing:login-form', true, 'login form visible');
 
+    const authTemplateResponse = await fetch(`${BASE_URL}/unit-contact-authorization-template.pdf`);
+    const authTemplateBytes = Buffer.from(await authTemplateResponse.arrayBuffer());
+    if (!authTemplateResponse.ok) throw new Error(`authorization template HTTP ${authTemplateResponse.status}`);
+    if (authTemplateBytes.length < 1024) throw new Error('authorization template pdf too small');
+    if (authTemplateBytes.slice(0, 5).toString('ascii') !== '%PDF-') throw new Error('authorization template is not a PDF');
+    pushStep('asset:unit-contact-authorization-template pdf', true, `bytes=${authTemplateBytes.length}`);
+
     await page.fill('[data-testid="login-user"]', 'admin');
     await page.fill('[data-testid="login-pass"]', 'admin123');
     await Promise.all([

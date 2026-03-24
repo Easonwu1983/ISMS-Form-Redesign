@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
+const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'google-firebase-hosting');
@@ -139,15 +140,23 @@ function writeManifest() {
   }, null, 2), 'utf8');
 }
 
-fs.rmSync(outputDir, { recursive: true, force: true });
-ensureDir(outputDir);
-filesToCopy.forEach(copyRelative);
-rewriteIndex();
-writeOverride();
-writeFirebaseConfig();
-writeFirebasercSample();
-writeReadme();
-writeManifest();
+async function main() {
+  fs.rmSync(outputDir, { recursive: true, force: true });
+  ensureDir(outputDir);
+  filesToCopy.forEach(copyRelative);
+  await buildAuthorizationTemplatePdf(outputDir, buildInfo);
+  rewriteIndex();
+  writeOverride();
+  writeFirebaseConfig();
+  writeFirebasercSample();
+  writeReadme();
+  writeManifest();
 
-console.log(`google firebase package ready: ${outputDir}`);
-console.log(`backend base: ${backendBase}`);
+  console.log(`google firebase package ready: ${outputDir}`);
+  console.log(`backend base: ${backendBase}`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
