@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 const {
   ACTIONS,
   CONTRACT_VERSION,
@@ -31,8 +34,15 @@ function createChecklistRouter(deps) {
   } = deps;
 
   const state = {
-    listMap: null
+    listMap: null,
+    entriesCache: null,
+    entriesCacheAt: 0,
+    entriesPromise: null,
+    entriesPrewarmQueued: false
   };
+  const CHECKLIST_CACHE_TTL_MS = 120000;
+  const CHECKLIST_PREWARM_DELAY_MS = 5000;
+  const CHECKLIST_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
@@ -85,6 +95,14 @@ function createChecklistRouter(deps) {
     ]);
   }
 
+  function compareChecklistRows(left, right) {
+    return cleanText(right && right.item && right.item.updatedAt).localeCompare(cleanText(left && left.item && left.item.updatedAt));
+  }
+
+  function sortChecklistRows(rows) {
+    return (Array.isArray(rows) ? rows : []).slice().sort(compareChecklistRows);
+  }
+
   async function fetchListMap() {
     const siteId = await resolveSiteId();
     const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
@@ -111,8 +129,21 @@ function createChecklistRouter(deps) {
     return getEnv('CHECKLISTS_LIST', 'Checklists');
   }
 
+  function getChecklistSnapshotPath() {
+    return path.join(process.cwd(), 'logs', 'campus-backend', 'checklists-cache.json');
+  }
+
   function getAuditListName() {
     return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
+  }
+
+  function logChecklistCache(message, details) {
+    const suffix = details && typeof details === 'object'
+      ? Object.entries(details)
+        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
+        .join(' ')
+      : '';
+    console.log(`[checklists] ${message}${suffix ? ` ${suffix}` : ''}`);
   }
 
   async function resolveChecklistsList() {
@@ -123,21 +154,160 @@ function createChecklistRouter(deps) {
     return resolveNamedList(getAuditListName());
   }
 
-  async function listAllEntries() {
+  function parsePositiveInteger(value) {
+    const cleanValue = cleanText(value);
+    if (!cleanValue) return null;
+    const parsed = Number(cleanValue);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return Math.floor(parsed);
+  }
+
+  function buildChecklistPageMeta(url, total) {
+    const rawLimit = parsePositiveInteger(url && url.searchParams && url.searchParams.get('limit'));
+    const rawOffset = parsePositiveInteger(url && url.searchParams && url.searchParams.get('offset')) || 0;
+    const safeTotal = Math.max(Number(total) || 0, 0);
+    const limit = rawLimit ? Math.min(rawLimit, 200) : safeTotal;
+    const safeOffset = Math.min(Math.max(rawOffset, 0), safeTotal);
+    const returned = limit > 0 ? Math.max(Math.min(limit, safeTotal - safeOffset), 0) : 0;
+    const paged = !!rawLimit || safeOffset > 0;
+    const pageCount = rawLimit && limit > 0 ? Math.ceil(safeTotal / limit) : (safeTotal > 0 ? 1 : 0);
+    const currentPage = rawLimit && limit > 0 && safeTotal > 0 ? Math.floor(safeOffset / limit) + 1 : (safeTotal > 0 ? 1 : 0);
+    return {
+      offset: safeOffset,
+      limit,
+      total: safeTotal,
+      returned,
+      pageCount,
+      currentPage,
+      hasPrev: safeOffset > 0,
+      hasNext: rawLimit ? (safeOffset + limit) < safeTotal : false,
+      prevOffset: rawLimit ? Math.max(safeOffset - limit, 0) : 0,
+      nextOffset: rawLimit && (safeOffset + limit) < safeTotal ? safeOffset + limit : safeOffset,
+      paged
+    };
+  }
+
+  function restoreChecklistCacheSnapshot() {
+    try {
+      const snapshotPath = getChecklistSnapshotPath();
+      if (!fs.existsSync(snapshotPath)) return false;
+      const raw = fs.readFileSync(snapshotPath, 'utf8').replace(/^\uFEFF/, '');
+      if (!raw.trim()) return false;
+      const parsed = JSON.parse(raw);
+      const rows = Array.isArray(parsed && parsed.rows) ? parsed.rows : [];
+      const loadedAt = Number(parsed && parsed.loadedAt);
+      if (!rows.length || !Number.isFinite(loadedAt)) return false;
+      const ageMs = Date.now() - loadedAt;
+      if (ageMs > CHECKLIST_SNAPSHOT_MAX_AGE_MS) {
+        logChecklistCache('snapshot skipped', { reason: 'expired', ageMs });
+        return false;
+      }
+      state.entriesCache = sortChecklistRows(rows);
+      state.entriesCacheAt = Date.now();
+      logChecklistCache('snapshot restored', {
+        rows: state.entriesCache.length,
+        ageMs
+      });
+      return true;
+    } catch (error) {
+      logChecklistCache('snapshot restore failed', {
+        message: cleanText(error && error.message) || 'unknown error'
+      });
+      return false;
+    }
+  }
+
+  async function persistChecklistCacheSnapshot(rows, loadedAt) {
+    const payload = {
+      loadedAt: Number(loadedAt) || Date.now(),
+      rows: Array.isArray(rows) ? rows : []
+    };
+    const snapshotPath = getChecklistSnapshotPath();
+    fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
+    const tempPath = `${snapshotPath}.tmp`;
+    await fs.promises.writeFile(tempPath, JSON.stringify(payload), 'utf8');
+    await fs.promises.rename(tempPath, snapshotPath);
+    logChecklistCache('snapshot saved', {
+      rows: payload.rows.length,
+      loadedAt: payload.loadedAt
+    });
+  }
+
+  function primeChecklistCacheInBackground(reason, delayMs, forceRefresh) {
+    if ((!forceRefresh && state.entriesCache) || state.entriesPromise || state.entriesPrewarmQueued) {
+      return false;
+    }
+    const safeDelay = Number.isFinite(delayMs) && delayMs >= 0 ? delayMs : 0;
+    state.entriesPrewarmQueued = true;
+    logChecklistCache('prewarm queued', {
+      reason: cleanText(reason) || 'unknown',
+      delayMs: safeDelay
+    });
+    setTimeout(() => {
+      state.entriesPrewarmQueued = false;
+      listAllEntries({ forceRefresh: !!forceRefresh })
+        .then((rows) => {
+          logChecklistCache('prewarm ready', {
+            reason: cleanText(reason) || 'unknown',
+            rows: Array.isArray(rows) ? rows.length : 0
+          });
+        })
+        .catch((error) => {
+          logChecklistCache('prewarm failed', {
+            reason: cleanText(reason) || 'unknown',
+            message: cleanText(error && error.message) || 'unknown error'
+          });
+        });
+    }, safeDelay);
+    return true;
+  }
+
+  function invalidateChecklistCache() {
+    state.entriesCache = null;
+    state.entriesCacheAt = 0;
+    state.entriesPromise = null;
+  }
+
+  async function listAllEntries(options) {
+    const forceRefresh = !!(options && options.forceRefresh);
+    if (!forceRefresh && Array.isArray(state.entriesCache)) {
+      if ((Date.now() - state.entriesCacheAt) >= CHECKLIST_CACHE_TTL_MS && !state.entriesPromise) {
+        primeChecklistCacheInBackground('ttl-expired', 0, true);
+      }
+      return state.entriesCache.slice();
+    }
+    if (state.entriesPromise) {
+      return state.entriesPromise.then((rows) => Array.isArray(rows) ? rows.slice() : []);
+    }
     const siteId = await resolveSiteId();
     const list = await resolveChecklistsList();
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      rows.push(...batch.map((entry) => ({
-        listItemId: cleanText(entry && entry.id),
-        item: mapGraphFieldsToChecklist(entry && entry.fields ? entry.fields : {})
-      })));
-      nextUrl = cleanText(body && body['@odata.nextLink']);
+    state.entriesPromise = (async () => {
+      const rows = [];
+      let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
+      while (nextUrl) {
+        const body = await graphRequest('GET', nextUrl);
+        const batch = Array.isArray(body && body.value) ? body.value : [];
+        rows.push(...batch.map((entry) => ({
+          listItemId: cleanText(entry && entry.id),
+          item: mapGraphFieldsToChecklist(entry && entry.fields ? entry.fields : {})
+        })));
+        nextUrl = cleanText(body && body['@odata.nextLink']);
+      }
+      state.entriesCache = sortChecklistRows(rows);
+      state.entriesCacheAt = Date.now();
+      persistChecklistCacheSnapshot(state.entriesCache, state.entriesCacheAt).catch((error) => {
+        logChecklistCache('snapshot write failed', {
+          message: cleanText(error && error.message) || 'unknown error'
+        });
+      });
+      return state.entriesCache;
+    })();
+    try {
+      const rows = await state.entriesPromise;
+      return Array.isArray(rows) ? rows.slice() : [];
+    } finally {
+      state.entriesPromise = null;
     }
-    return rows;
   }
 
   async function getEntryByChecklistId(checklistId) {
@@ -166,11 +336,13 @@ function createChecklistRouter(deps) {
     const normalized = createChecklistRecord(nextItem, nextItem.status, nextItem.updatedAt || new Date().toISOString());
     if (existingEntry) {
       await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapChecklistToGraphFields(normalized));
+      invalidateChecklistCache();
       return { created: false, item: normalized };
     }
     await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
       fields: mapChecklistToGraphFields(normalized)
     });
+    invalidateChecklistCache();
     return { created: true, item: normalized };
   }
 
@@ -186,6 +358,7 @@ function createChecklistRouter(deps) {
     for (const entry of matches) {
       await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${entry.listItemId}`);
     }
+    invalidateChecklistCache();
     return matches;
   }
 
@@ -228,7 +401,7 @@ function createChecklistRouter(deps) {
         if (!haystack.includes(query)) return false;
       }
       return true;
-    }).sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
+    });
   }
 
   async function buildHealth() {
@@ -268,21 +441,42 @@ function createChecklistRouter(deps) {
 
   async function handleHealth(_req, res, origin) {
     try {
-      await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
+      const health = await buildHealth();
+      if (!state.entriesCache && !state.entriesPromise) {
+        primeChecklistCacheInBackground('health-check', 0, false);
+      }
+      await writeJson(res, buildJsonResponse(200, health), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read checklist backend health.', 500), origin);
     }
   }
 
   async function handleList(req, res, origin, url) {
+    const startedAt = Date.now();
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllEntries();
       const items = filterItems(rows.map((entry) => entry.item), url)
         .filter((entry) => requestAuthz.canAccessChecklist(authz, entry));
+      const page = buildChecklistPageMeta(url, items.length);
+      const visibleItems = page.paged
+        ? items.slice(page.offset, page.offset + page.limit)
+        : items;
+      logChecklistCache('list served', {
+        username: authz.username,
+        totalRows: rows.length,
+        visibleRows: items.length,
+        returnedRows: visibleItems.length,
+        paged: page.paged,
+        limit: page.limit,
+        offset: page.offset,
+        durationMs: Date.now() - startedAt
+      });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        items: items.map(mapChecklistForClient),
+        items: visibleItems.map(mapChecklistForClient),
+        total: items.length,
+        page,
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
@@ -447,6 +641,9 @@ function createChecklistRouter(deps) {
 
     return false;
   }
+
+  restoreChecklistCacheSnapshot();
+  primeChecklistCacheInBackground('router-startup', CHECKLIST_PREWARM_DELAY_MS, true);
 
   return {
     tryHandle

@@ -1377,6 +1377,8 @@
         ok: !!(body && body.ok !== false),
         mode: getChecklistMode(),
         items: normalizeRemoteChecklists(body),
+        total: Number(body && body.total || 0),
+        page: body && body.page && typeof body.page === 'object' ? body.page : null,
         raw: body
       };
     }
