@@ -1383,6 +1383,11 @@ async function handleHealth(_req, res, origin) {
 
 function createServer() {
   return http.createServer(async (req, res) => {
+    const requestId = typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : crypto.randomBytes(16).toString('hex');
+    req.__ismsRequestId = requestId;
+    res.setHeader('x-request-id', requestId);
     const origin = cleanText(req.headers.origin);
     const url = new URL(req.url, `http://${req.headers.host}`);
 

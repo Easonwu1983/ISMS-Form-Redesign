@@ -52,6 +52,7 @@ function cleanVersion(value) {
 
 function assertDistManifestsAligned() {
   const manifestPaths = [
+    path.join(ROOT, 'deploy-manifest.json'),
     path.join(ROOT, 'dist', 'cloudflare-pages', 'deploy-manifest.json'),
     path.join(ROOT, 'dist', 'homepage-ntu', 'deploy-manifest.json'),
     path.join(ROOT, 'dist', 'azure-staticwebapp', 'deploy-manifest.json'),

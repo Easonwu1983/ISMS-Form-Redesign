@@ -58,6 +58,14 @@ function assertPdf(textBytes) {
   }
 }
 
+function assertRequestId(response, label) {
+  const requestId = String(response && response.headers && response.headers.get('x-request-id') || '').trim();
+  if (!requestId) {
+    throw new Error(`${label} missing x-request-id`);
+  }
+  return requestId;
+}
+
 (async () => {
   const results = createResultEnvelope({ steps: [], targets: [BASE_URL] });
 
@@ -108,6 +116,7 @@ function assertPdf(textBytes) {
         const { response, json } = await fetchJson(`${BASE_URL}${endpoint}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         if (!json || json.ready !== true) throw new Error(`${endpoint} not ready`);
+        assertRequestId(response, endpoint);
         return { status: response.status, ready: true };
       }, { critical: true });
     }

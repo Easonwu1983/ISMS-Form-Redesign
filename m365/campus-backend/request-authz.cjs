@@ -133,7 +133,7 @@ function createRequestAuthz(deps) {
 
   function resolveActiveUnit(req, user) {
     const requested = decodeHeaderUnit(readHeader(req, 'x-isms-active-unit'));
-    const authorizedUnits = parseUnits(user && user.units);
+    const authorizedUnits = parseUnits(user && (user.authorizedUnits || user.scopeUnits || user.units));
     if (requested && authorizedUnits.includes(requested)) return requested;
     return cleanText(user && user.activeUnit) || authorizedUnits[0] || '';
   }
@@ -158,10 +158,18 @@ function createRequestAuthz(deps) {
     if (!Number.isFinite(storedSessionVersion) || storedSessionVersion !== currentSessionVersion) {
       throw createHttpError('Session expired', 401);
     }
+    const authorizedUnits = parseUnits(userEntry.item && (userEntry.item.authorizedUnits || userEntry.item.scopeUnits || userEntry.item.units));
+    const scopeUnits = parseUnits(userEntry.item && (userEntry.item.scopeUnits || userEntry.item.authorizedUnits || userEntry.item.units));
+    const primaryUnit = cleanText(userEntry.item && (userEntry.item.primaryUnit || userEntry.item.unit)) || authorizedUnits[0] || '';
+    const securityRoles = parseUnits(userEntry.item && userEntry.item.securityRoles);
     const user = {
       ...userEntry.item,
-      units: parseUnits(userEntry.item.units),
-      activeUnit: resolveActiveUnit(req, userEntry.item)
+      primaryUnit,
+      authorizedUnits,
+      scopeUnits,
+      securityRoles,
+      units: authorizedUnits.slice(),
+      activeUnit: resolveActiveUnit(req, { ...userEntry.item, authorizedUnits, scopeUnits, units: authorizedUnits, primaryUnit })
     };
     const authz = {
       token,
@@ -169,8 +177,11 @@ function createRequestAuthz(deps) {
       username: cleanText(user.username),
       role: cleanText(user.role),
       user,
+      primaryUnit: cleanText(user.primaryUnit),
+      scopeUnits: parseUnits(user.scopeUnits),
       activeUnit: cleanText(user.activeUnit),
       authorizedUnits: parseUnits(user.units),
+      securityRoles: parseUnits(user.securityRoles),
       reviewUnits: cleanText(user.role) === USER_ROLES.UNIT_ADMIN ? await listReviewUnitsByUsername(user.username) : []
     };
     if (req) req.__ismsAuthz = authz;
@@ -198,7 +209,7 @@ function createRequestAuthz(deps) {
     const target = cleanText(unit);
     if (!target) return isAdmin(authz);
     if (isAdmin(authz)) return true;
-    return parseUnits(authz.authorizedUnits).includes(target);
+    return parseUnits(authz.authorizedUnits || authz.scopeUnits || authz.user && authz.user.authorizedUnits).includes(target);
   }
 
   function hasReviewScope(authz, unit) {
@@ -275,7 +286,7 @@ function createRequestAuthz(deps) {
       actorName: cleanText(authz && authz.user && authz.user.name),
       actorUsername: cleanText(authz && authz.username),
       actorRole: cleanText(authz && authz.role),
-      actorUnit: cleanText(authz && authz.user && authz.user.unit),
+      actorUnit: cleanText(authz && authz.primaryUnit) || cleanText(authz && authz.user && authz.user.unit),
       actorActiveUnit: cleanText(authz && authz.activeUnit)
     };
   }

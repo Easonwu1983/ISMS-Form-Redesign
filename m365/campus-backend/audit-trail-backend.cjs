@@ -55,6 +55,10 @@ function createAuditTrailRouter(deps) {
     console.log(`[audit-trail] ${message}${suffix ? ` ${suffix}` : ''}`);
   }
 
+  function getRequestId(req) {
+    return cleanText(req && req.__ismsRequestId) || cleanText(req && req.headers && req.headers['x-request-id']);
+  }
+
   function clearAuditQueryCache() {
     if (state.queryCache instanceof Map) {
       state.queryCache.clear();
@@ -265,6 +269,10 @@ function createAuditTrailRouter(deps) {
 
   async function handleHealth(_req, res, origin) {
     try {
+      const requestId = getRequestId(_req);
+      if (requestId) {
+        logAuditTrail('health requested', { requestId });
+      }
       await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read audit trail backend health.', 500), origin);
@@ -275,6 +283,12 @@ function createAuditTrailRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, 'Only admin can view audit trail');
+      const requestId = getRequestId(req);
+      logAuditTrail('list requested', {
+        requestId,
+        username: authz.username,
+        role: authz.role
+      });
       const rows = await listAllEntries();
       const listLoadedAt = Number(state.entriesCache && state.entriesCache.loadedAt) || 0;
       const querySignature = getAuditFilterSignature(url);
