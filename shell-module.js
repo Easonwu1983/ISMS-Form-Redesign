@@ -112,6 +112,76 @@
       return '';
     }
 
+    var AUTH_STORAGE_KEY = 'cats_auth';
+    var AUTH_VERIFY_CACHE_KEY = '__AUTH_VERIFY_CACHE__';
+    var AUTH_BOOTSTRAP_FRESH_KEY = '__AUTH_BOOTSTRAP_FRESH__';
+
+    function safeReadStorage(storage, key) {
+      try {
+        if (!storage || !key) return '';
+        return String(storage.getItem(key) || '');
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function safeRemoveStorage(storage, key) {
+      try {
+        if (storage && key) storage.removeItem(key);
+      } catch (_) { }
+    }
+
+    function parseJsonOrNull(raw) {
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function hasExpiredTimestamp(value) {
+      var parsed = Date.parse(String(value || '').trim());
+      return Number.isFinite(parsed) && parsed <= Date.now();
+    }
+
+    function purgeStaleLoginState() {
+      var localRaw = safeReadStorage(window.localStorage, AUTH_STORAGE_KEY);
+      var sessionRaw = safeReadStorage(window.sessionStorage, AUTH_STORAGE_KEY);
+      var verifyRaw = safeReadStorage(window.sessionStorage, AUTH_VERIFY_CACHE_KEY);
+      if (!localRaw && !sessionRaw && !verifyRaw) return false;
+
+      var localAuth = parseJsonOrNull(localRaw);
+      var sessionAuth = parseJsonOrNull(sessionRaw);
+      var verifyCache = parseJsonOrNull(verifyRaw);
+      var auth = localAuth || sessionAuth;
+      var shouldClear = false;
+
+      if ((localRaw && !localAuth) || (sessionRaw && !sessionAuth) || (verifyRaw && !verifyCache)) {
+        shouldClear = true;
+      }
+      if (auth) {
+        var sessionToken = String(auth.sessionToken || '').trim();
+        var sessionExpiresAt = String(auth.sessionExpiresAt || '').trim();
+        if (sessionToken || sessionExpiresAt) {
+          shouldClear = true;
+        }
+        if (sessionExpiresAt && hasExpiredTimestamp(sessionExpiresAt)) {
+          shouldClear = true;
+        }
+      }
+      if (verifyRaw) {
+        shouldClear = true;
+      }
+      if (!shouldClear) return false;
+
+      safeRemoveStorage(window.localStorage, AUTH_STORAGE_KEY);
+      safeRemoveStorage(window.sessionStorage, AUTH_STORAGE_KEY);
+      safeRemoveStorage(window.sessionStorage, AUTH_VERIFY_CACHE_KEY);
+      safeRemoveStorage(window.sessionStorage, AUTH_BOOTSTRAP_FRESH_KEY);
+      return true;
+    }
+
     function getRoleBadgeClass(role) {
       return ROLE_BADGE[role] || 'badge-unit-admin';
     }
@@ -136,6 +206,7 @@
     }
 
     function renderLogin() {
+      purgeStaleLoginState();
       var needsLocalBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
       document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="login-page"><div class="login-card" id="app" tabindex="-1">' +
         '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div>' +
