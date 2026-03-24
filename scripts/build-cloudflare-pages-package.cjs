@@ -24,6 +24,7 @@ const filesToCopy = [
   'index.html',
   'styles.css',
   'favicon.svg',
+  'favicon.ico',
   'asset-loader.js',
   'units.js',
   'units-data.json',
