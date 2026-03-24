@@ -107,6 +107,7 @@
     let trainingRosterGroupingCache = { token: '', groups: null };
     let trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
     let trainingRosterRenderCache = { signature: '', selectedSignature: '', defer: false };
+    let trainingRosterGroupMarkupCache = { signature: '', html: '' };
     let trainingDashboardUnitsCache = { signature: '', units: [] };
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
@@ -2429,12 +2430,26 @@
     const initialGroupCount = useChunkedRosterRender && opts.deferFullRender
       ? Math.min(3, groups.length)
       : 0;
-    const chunkedGroupsHtml = useChunkedRosterRender
-      ? buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, 0, initialGroupCount)
-      : buildTrainingRosterRowsFromGroups(groups, selectedRosterIds);
+    const groupMarkupSignature = [
+      snapshot.token || '',
+      String(snapshot.rawLength || 0),
+      String(hiddenCount || 0),
+      useChunkedRosterRender ? '1' : '0',
+      opts.deferFullRender ? '1' : '0',
+      String(initialGroupCount || 0)
+    ].join('::');
+    const chunkedGroupsHtml = trainingRosterGroupMarkupCache.signature === groupMarkupSignature
+      ? trainingRosterGroupMarkupCache.html
+      : (useChunkedRosterRender
+        ? buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, 0, initialGroupCount)
+        : buildTrainingRosterRowsFromGroups(groups, selectedRosterIds));
     const loadingChunkHtml = useChunkedRosterRender && initialGroupCount < groups.length
       ? '<div class="empty-state training-roster-chunk-loading" style="padding:28px"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
       : '';
+    trainingRosterGroupMarkupCache = {
+      signature: groupMarkupSignature,
+      html: chunkedGroupsHtml
+    };
     const groupsHtml = deferRosterGroups
       ? importedPreviewHtml + loadingChunkHtml
       : importedPreviewHtml + chunkedGroupsHtml + loadingChunkHtml;
@@ -2443,6 +2458,7 @@
       currentApp.innerHTML = pageHtml;
       currentApp.dataset.trainingRosterRenderSignature = rosterRenderSignature;
       refreshTrainingRosterDomCache(currentApp, rosterRenderSignature);
+      syncRosterSelectionDom();
     }
     trainingRosterRenderCache = {
       signature: rosterRenderSignature,

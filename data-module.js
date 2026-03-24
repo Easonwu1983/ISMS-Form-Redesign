@@ -809,6 +809,26 @@
       });
     }
 
+    function getAccessProfileSignature(user) {
+      const profile = getAccessProfile(user);
+      const authToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken(AUTH_KEY) || '') : '';
+      const dataToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken(DATA_KEY) || '') : '';
+      const reviewToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken(UNIT_REVIEW_KEY) || '') : '';
+      return [
+        String(profile && profile.username || '').trim().toLowerCase(),
+        String(profile && profile.role || '').trim(),
+        String(profile && profile.primaryUnit || '').trim(),
+        String(profile && profile.activeUnit || '').trim(),
+        Array.isArray(profile && profile.authorizedUnits) ? profile.authorizedUnits.join('\u001f') : '',
+        Array.isArray(profile && profile.scopeUnits) ? profile.scopeUnits.join('\u001f') : '',
+        Array.isArray(profile && profile.reviewUnits) ? profile.reviewUnits.join('\u001f') : '',
+        Array.isArray(profile && profile.securityRoles) ? profile.securityRoles.join('\u001f') : '',
+        authToken,
+        dataToken,
+        reviewToken
+      ].join('|');
+    }
+
     function normalizeUserRecord(user) {
       const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email']);
       return getCachedUserList(USER_RECORD_CACHE, cacheKey, function () {
@@ -1656,6 +1676,7 @@
       getReviewUnits,
       getActiveUnit,
       getAccessProfile,
+      getAccessProfileSignature,
       normalizeUserRecord,
       loadData,
       saveData,

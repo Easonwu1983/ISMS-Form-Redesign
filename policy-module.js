@@ -9,6 +9,7 @@
       getAuthorizedUnits,
       getReviewUnits,
       getAccessProfile,
+      getAccessProfileSignature,
       getStoreTouchToken,
       getUnitGovernanceMode,
       splitUnitValue,
@@ -42,6 +43,9 @@
 
     function getPermissionSnapshotKey(user = currentUser()) {
       if (!user) return 'anonymous';
+      if (typeof getAccessProfileSignature === 'function') {
+        return 'access-profile:' + getAccessProfileSignature(user);
+      }
       const authToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('cats_auth') || '') : '';
       const dataToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('cats_data') || '') : '';
       const reviewToken = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('cats_unit_review') || '') : '';

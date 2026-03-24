@@ -1383,6 +1383,7 @@ async function handleHealth(_req, res, origin) {
 
 function createServer() {
   return http.createServer(async (req, res) => {
+    const startedAt = Date.now();
     const requestId = typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
       : crypto.randomBytes(16).toString('hex');
@@ -1390,6 +1391,11 @@ function createServer() {
     res.setHeader('x-request-id', requestId);
     const origin = cleanText(req.headers.origin);
     const url = new URL(req.url, `http://${req.headers.host}`);
+    res.once('finish', () => {
+      if (!String(url.pathname || '').startsWith('/api/')) return;
+      const durationMs = Date.now() - startedAt;
+      console.log(`[http] requestId=${requestId} method=${req.method} path=${url.pathname} status=${res.statusCode} durationMs=${durationMs}`);
+    });
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {

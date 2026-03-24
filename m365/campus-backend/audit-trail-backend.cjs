@@ -280,20 +280,30 @@ function createAuditTrailRouter(deps) {
   }
 
   async function handleList(req, res, origin, url) {
+    const startedAt = Date.now();
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, 'Only admin can view audit trail');
       const requestId = getRequestId(req);
+      const querySignature = getAuditFilterSignature(url);
       logAuditTrail('list requested', {
         requestId,
         username: authz.username,
-        role: authz.role
+        role: authz.role,
+        querySignature
       });
       const rows = await listAllEntries();
       const listLoadedAt = Number(state.entriesCache && state.entriesCache.loadedAt) || 0;
-      const querySignature = getAuditFilterSignature(url);
       const cachedQuery = getAuditQueryCache(querySignature, listLoadedAt);
       if (cachedQuery) {
+        logAuditTrail('list query cache hit', {
+          requestId,
+          querySignature,
+          total: cachedQuery.total,
+          offset: cachedQuery.page && cachedQuery.page.offset,
+          limit: cachedQuery.page && cachedQuery.page.limit,
+          durationMs: Date.now() - startedAt
+        });
         await writeJson(res, buildJsonResponse(200, {
           ok: true,
           items: cachedQuery.items,
@@ -306,6 +316,14 @@ function createAuditTrailRouter(deps) {
       }
       const filtered = filterEntries(rows.map((entry) => entry.item), url);
       setAuditQueryCache(querySignature, listLoadedAt, filtered);
+      logAuditTrail('list query computed', {
+        requestId,
+        querySignature,
+        total: filtered.total,
+        offset: filtered.page && filtered.page.offset,
+        limit: filtered.page && filtered.page.limit,
+        durationMs: Date.now() - startedAt
+      });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         items: filtered.items,

@@ -369,15 +369,14 @@
     }
 
     function renderChecklistListContent(items, snapshotOverride, viewSnapshotOverride) {
-      const signature = [
+      const renderSignature = [
         typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
         String(checklistBrowseState.year || 'all'),
-        String(checklistBrowseState.status || 'all'),
-        String(checklistBrowseState.keyword || '')
+        String(checklistBrowseState.status || 'all')
       ].join('::');
       const contentEl = document.querySelector('.cl-list-content');
       if (!contentEl) return;
-      if (checklistListRenderCache.signature === signature && contentEl.dataset.checklistRenderSignature === signature) {
+      if (checklistListRenderCache.signature === renderSignature && contentEl.dataset.checklistRenderSignature === renderSignature) {
         applyChecklistKeywordFilter();
         return;
       }
@@ -385,11 +384,11 @@
       const viewSnapshot = viewSnapshotOverride || getChecklistListViewSnapshot(snapshot.items);
       const grouped = viewSnapshot.grouped;
       const html = grouped.length ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('') : '';
-      checklistListRenderCache = { signature, html };
-      contentEl.dataset.checklistRenderSignature = signature;
+      checklistListRenderCache = { signature: renderSignature, html };
+      contentEl.dataset.checklistRenderSignature = renderSignature;
       contentEl.innerHTML = `<div class="card checklist-empty-card cl-list-empty-state" hidden><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有符合條件的檢核表</div><div class="empty-state-desc">可切換年份、狀態或關鍵字重新搜尋。</div></div></div>`
         + html;
-      refreshChecklistListDomCache(contentEl, signature);
+      refreshChecklistListDomCache(contentEl, renderSignature);
       refreshIcons();
       bindCopyButtons();
       applyChecklistKeywordFilter();
@@ -415,16 +414,19 @@
       if (!contentEl) return;
       const keyword = String(checklistBrowseState.keyword || '').trim().toLowerCase();
       const hasKeyword = !!keyword;
-      const signature = [
+      const renderSignature = [
         typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
         String(checklistBrowseState.year || 'all'),
-        String(checklistBrowseState.status || 'all'),
+        String(checklistBrowseState.status || 'all')
+      ].join('::');
+      const appliedSignature = [
+        renderSignature,
         String(checklistBrowseState.keyword || '')
       ].join('::');
-      if (checklistListDomCache.signature !== signature || checklistListDomCache.contentEl !== contentEl) {
-        refreshChecklistListDomCache(contentEl, signature);
+      if (checklistListDomCache.signature !== renderSignature || checklistListDomCache.contentEl !== contentEl) {
+        refreshChecklistListDomCache(contentEl, renderSignature);
       }
-      if (checklistListDomCache.appliedSignature === signature) {
+      if (checklistListDomCache.appliedSignature === appliedSignature) {
         return;
       }
       const rowEls = Array.isArray(checklistListDomCache.rows) ? checklistListDomCache.rows : Array.from(contentEl.querySelectorAll('.cl-list-row'));
@@ -465,7 +467,7 @@
       if (hasKeyword && keywordEl && document.activeElement === keywordEl && typeof keywordEl.focus === 'function') {
         keywordEl.focus({ preventScroll: true });
       }
-      checklistListDomCache.appliedSignature = signature;
+      checklistListDomCache.appliedSignature = appliedSignature;
     }
 
     function buildChecklistYearAccordion(yearGroup) {

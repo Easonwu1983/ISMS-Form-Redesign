@@ -11,6 +11,7 @@
       getAuthorizedUnits,
       getReviewUnits,
       getAccessProfile,
+      getAccessProfileSignature,
       parseUserUnits,
       getUnitSearchEntries,
       splitUnitValue,
@@ -93,14 +94,14 @@
       actorEmail: '',
       unitCode: '',
       recordId: '',
-      limit: '100',
+      limit: '50',
       offset: '0'
     });
     const auditTrailState = {
       filters: { ...DEFAULT_AUDIT_FILTERS },
       items: [],
       summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
-      page: { offset: 0, limit: 100, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
+      page: { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       health: null,
       lastLoadedAt: '',
       filterSignature: '',
@@ -187,16 +188,24 @@
     }
 
     function getPrimaryAuthorizedUnit(user) {
-      return String((user && (user.primaryUnit || user.unit)) || '').trim() || (getAuthorizedUnits(user)[0] || '');
+      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
+      return String((accessProfile && (accessProfile.primaryUnit || accessProfile.unit)) || (user && (user.primaryUnit || user.unit)) || '').trim() || (getAuthorizedUnits(user)[0] || '');
     }
 
     function getExtraAuthorizedUnits(user) {
       const primary = getPrimaryAuthorizedUnit(user);
-      return getAuthorizedUnits(user).filter((unit) => unit && unit !== primary);
+      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
+      const units = Array.isArray(accessProfile && accessProfile.authorizedUnits)
+        ? accessProfile.authorizedUnits
+        : getAuthorizedUnits(user);
+      return units.filter((unit) => unit && unit !== primary);
     }
 
     function getGovernanceReviewScopeUnits(user) {
-      const units = getReviewUnits(user);
+      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
+      const units = Array.isArray(accessProfile && accessProfile.reviewUnits)
+        ? accessProfile.reviewUnits
+        : getReviewUnits(user);
       return Array.isArray(units) ? units.map((unit) => String(unit || '').trim()).filter(Boolean) : [];
     }
 
@@ -288,7 +297,7 @@
         actorEmail: String(document.getElementById('audit-actor-email')?.value || '').trim(),
         unitCode: String(document.getElementById('audit-unit-code')?.value || '').trim(),
         recordId: String(document.getElementById('audit-record-id')?.value || '').trim(),
-        limit: String(document.getElementById('audit-limit')?.value || '100').trim(),
+        limit: String(document.getElementById('audit-limit')?.value || '50').trim(),
         offset: '0'
       };
       return next;
@@ -632,12 +641,17 @@
       const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
       const scopeUnits = getGovernanceReviewScopeUnits(user);
       const isScopeAdmin = !!(accessProfile ? String(accessProfile.role || '').trim() === ROLES.ADMIN : isAdmin());
+      const accessSignature = typeof getAccessProfileSignature === 'function'
+        ? getAccessProfileSignature(user)
+        : [
+            String((accessProfile && accessProfile.username) || user && user.username || '').trim().toLowerCase(),
+            String((accessProfile && accessProfile.activeUnit) || user && user.activeUnit || '').trim(),
+            scopeUnits.join('\u001f')
+          ].join('|');
       const filteredSignature = [
         sourceSignature,
         isScopeAdmin ? 'admin' : 'scoped',
-        String((accessProfile && accessProfile.username) || user && user.username || '').trim().toLowerCase(),
-        String((accessProfile && accessProfile.activeUnit) || user && user.activeUnit || '').trim(),
-        scopeUnits.join('\u001f')
+        accessSignature
       ].join('||');
       if (unitGovernanceTopLevelCache.filteredSignature === filteredSignature && Array.isArray(unitGovernanceTopLevelCache.filteredValue)) {
         return unitGovernanceTopLevelCache.filteredValue;
