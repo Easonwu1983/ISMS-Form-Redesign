@@ -1,17 +1,10 @@
 # 接手索引
 
-先看：
+先看 [`docs/boot-checklist.md`](./boot-checklist.md)。
 
-1. [`docs/boot-checklist.md`](./boot-checklist.md)
-2. [`docs/one-minute-handoff.md`](./one-minute-handoff.md)
-3. [`docs/fast-redeploy-runbook.md`](./fast-redeploy-runbook.md)
+需要異常處理時再看：
 
-需要更深才看：
-
-- [`docs/project-execution-flow.md`](./project-execution-flow.md)
+- [`docs/fast-redeploy-runbook.md`](./fast-redeploy-runbook.md)
 - [`docs/release-and-rollback.md`](./release-and-rollback.md)
-- [`docs/data-layer-governance.md`](./data-layer-governance.md)
-- [`docs/module-architecture.md`](./module-architecture.md)
-- [`docs/reusable-m365-cloudflare-project-bootstrap.md`](./reusable-m365-cloudflare-project-bootstrap.md)
-- [`docs/system-operation-manual.md`](./system-operation-manual.md)
+- [`docs/project-execution-flow.md`](./project-execution-flow.md)
 
