@@ -813,13 +813,17 @@
     return sourceGroups.slice(from, to).map((group, offset) => buildTrainingRosterGroupTable(group, selectedSet, from + offset)).join('');
   }
 
-  function buildTrainingRosterRows(rosters, selectedRosterIds) {
+  function buildTrainingRosterRowsFromGroups(groups, selectedRosterIds) {
     const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
-    const groups = groupTrainingRosterEntries(rosters);
-    if (!groups.length) {
-      return '<div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無名單資料</div><div class="empty-state-desc">請先由管理者匯入名單，或由單位管理員新增名單外人員。</div></div>';
+    const sourceGroups = Array.isArray(groups) ? groups : [];
+    if (!sourceGroups.length) {
+      return '<div class="empty-state" style="padding:28px"><div class="empty-state-title">撠?鞈?</div><div class="empty-state-desc">隢??梁恣??亙??殷???桐?蝞∠??⊥憓??桀?鈭箏??/div></div>';
     }
-    return buildTrainingRosterGroupChunkHtml(groups, selectedSet, 0, groups.length);
+    return buildTrainingRosterGroupChunkHtml(sourceGroups, selectedSet, 0, sourceGroups.length);
+  }
+
+  function buildTrainingRosterRows(rosters, selectedRosterIds) {
+    return buildTrainingRosterRowsFromGroups(groupTrainingRosterEntries(rosters), selectedRosterIds);
   }
 
   function buildTrainingRosterPreviewRows(options) {
@@ -2427,7 +2431,7 @@
       : 0;
     const chunkedGroupsHtml = useChunkedRosterRender
       ? buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, 0, initialGroupCount)
-      : buildTrainingRosterRows(rosters, selectedRosterIds);
+      : buildTrainingRosterRowsFromGroups(groups, selectedRosterIds);
     const loadingChunkHtml = useChunkedRosterRender && initialGroupCount < groups.length
       ? '<div class="empty-state training-roster-chunk-loading" style="padding:28px"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
       : '';

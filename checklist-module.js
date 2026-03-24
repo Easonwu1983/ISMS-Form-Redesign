@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createChecklistModule = function createChecklistModule(deps) {
     const {
       TEMPLATE_KEY,
@@ -368,7 +368,7 @@
       };
     }
 
-    function renderChecklistListContent(items) {
+    function renderChecklistListContent(items, snapshotOverride, viewSnapshotOverride) {
       const signature = [
         typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
         String(checklistBrowseState.year || 'all'),
@@ -381,7 +381,8 @@
         applyChecklistKeywordFilter();
         return;
       }
-      const viewSnapshot = getChecklistListViewSnapshot(items);
+      const snapshot = snapshotOverride || getChecklistListSnapshot(items);
+      const viewSnapshot = viewSnapshotOverride || getChecklistListViewSnapshot(snapshot.items);
       const grouped = viewSnapshot.grouped;
       const html = grouped.length ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('') : '';
       checklistListRenderCache = { signature, html };
@@ -496,6 +497,7 @@
         console.warn('checklist list sync failed', error);
       });
     const snapshot = getChecklistListSnapshot(getVisibleChecklists());
+    const viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
     const checklists = snapshot.items;
     const years = snapshot.years;
     if (!checklistBrowseState.year || !years.includes(checklistBrowseState.year) && checklistBrowseState.year !== 'all') {
@@ -515,7 +517,7 @@
         <div class="cl-list-content"></div>
       </div>
     </div>`;
-    renderChecklistListContent(checklists);
+    renderChecklistListContent(checklists, snapshot, viewSnapshot);
     syncChecklistListToolbarState();
     refreshIcons();
     bindCopyButtons();
@@ -545,13 +547,13 @@
     });
     statusEl?.addEventListener('change', () => {
       checklistBrowseState.status = statusEl.value;
-      renderChecklistListContent(checklists);
+      renderChecklistListContent(checklists, snapshot, viewSnapshot);
       syncChecklistListToolbarState();
     });
     yearTabs.forEach((tab) => {
       tab.addEventListener('click', () => {
         checklistBrowseState.year = String(tab.dataset.checklistYear || 'all');
-        renderChecklistListContent(checklists);
+        renderChecklistListContent(checklists, snapshot, viewSnapshot);
         syncChecklistListToolbarState();
       });
     });
@@ -560,7 +562,7 @@
         checklistBrowseState.keyword = '';
         checklistBrowseState.status = 'all';
         checklistBrowseState.year = String(new Date().getFullYear() - 1911);
-        renderChecklistListContent(checklists);
+        renderChecklistListContent(checklists, snapshot, viewSnapshot);
         syncChecklistListToolbarState();
         applyChecklistKeywordFilter();
         const keywordEl = document.getElementById('cl-list-keyword');
