@@ -28,3 +28,4 @@
 ## 補充
 
 - `audit-trail` 會先讀取 `logs/campus-backend/audit-trail-cache.json`，再背景刷新 SharePoint 全量快取。
+- `training-rosters` 會先讀取 `logs/campus-backend/training-rosters-cache.json`，再背景刷新 SharePoint 全量快取。

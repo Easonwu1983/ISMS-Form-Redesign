@@ -21,6 +21,9 @@
   validateTrainingFormPayload,
   validateTrainingRosterPayload
 } = require('../azure-function/training-api/src/shared/contract');
+const fs = require('fs');
+const path = require('path');
+
 const {
   buildFieldChanges,
   summarizeAttachments
@@ -45,8 +48,11 @@ function createTrainingRouter(deps) {
     formsCachePromise: null,
     rostersCache: null,
     rostersCacheAt: 0,
-    rostersCachePromise: null
+    rostersCachePromise: null,
+    rostersPrewarmQueued: false
   };
+  const TRAINING_ROSTERS_PREWARM_DELAY_MS = 15000;
+  const TRAINING_ROSTERS_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
@@ -164,6 +170,10 @@ function createTrainingRouter(deps) {
     return getEnv('TRAINING_ROSTERS_LIST', 'TrainingRosters');
   }
 
+  function getTrainingRostersSnapshotPath() {
+    return path.join(process.cwd(), 'logs', 'campus-backend', 'training-rosters-cache.json');
+  }
+
   function getTrainingListCacheTtlMs() {
     const raw = Number(process.env.TRAINING_LIST_CACHE_TTL_MS || '');
     return Number.isFinite(raw) && raw >= 0 ? raw : (30 * 1000);
@@ -184,8 +194,95 @@ function createTrainingRouter(deps) {
     state.rostersCachePromise = null;
   }
 
+  function restoreRostersCacheSnapshot() {
+    try {
+      const snapshotPath = getTrainingRostersSnapshotPath();
+      if (!fs.existsSync(snapshotPath)) return false;
+      const raw = fs.readFileSync(snapshotPath, 'utf8').replace(/^\uFEFF/, '');
+      if (!raw.trim()) return false;
+      const parsed = JSON.parse(raw);
+      const rows = Array.isArray(parsed && parsed.rows) ? parsed.rows : [];
+      const loadedAt = Number(parsed && parsed.loadedAt);
+      if (!rows.length || !Number.isFinite(loadedAt)) return false;
+      const ageMs = Date.now() - loadedAt;
+      if (ageMs > TRAINING_ROSTERS_SNAPSHOT_MAX_AGE_MS) {
+        logTrainingRoster('snapshot skipped', {
+          reason: 'expired',
+          ageMs
+        });
+        return false;
+      }
+      state.rostersCache = rows.slice();
+      state.rostersCacheAt = Date.now();
+      logTrainingRoster('snapshot restored', {
+        rows: rows.length,
+        ageMs
+      });
+      return true;
+    } catch (error) {
+      logTrainingRoster('snapshot restore failed', {
+        message: cleanText(error && error.message) || 'unknown error'
+      });
+      return false;
+    }
+  }
+
+  async function persistRostersCacheSnapshot(rows, loadedAt) {
+    const payload = {
+      loadedAt: Number(loadedAt) || Date.now(),
+      rows: Array.isArray(rows) ? rows : []
+    };
+    const snapshotPath = getTrainingRostersSnapshotPath();
+    fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
+    const tempPath = `${snapshotPath}.tmp`;
+    await fs.promises.writeFile(tempPath, JSON.stringify(payload), 'utf8');
+    await fs.promises.rename(tempPath, snapshotPath);
+    logTrainingRoster('snapshot saved', {
+      rows: payload.rows.length,
+      loadedAt: payload.loadedAt
+    });
+  }
+
+  function primeRostersCacheInBackground(reason, delayMs, forceRefresh) {
+    if ((!forceRefresh && state.rostersCache) || state.rostersCachePromise || state.rostersPrewarmQueued) {
+      return false;
+    }
+    const safeDelay = Number.isFinite(delayMs) && delayMs >= 0 ? delayMs : 0;
+    state.rostersPrewarmQueued = true;
+    logTrainingRoster('prewarm queued', {
+      reason: cleanText(reason) || 'unknown',
+      delayMs: safeDelay
+    });
+    setTimeout(() => {
+      state.rostersPrewarmQueued = false;
+      listAllRosters({ forceRefresh: !!forceRefresh })
+        .then((rows) => {
+          logTrainingRoster('prewarm ready', {
+            reason: cleanText(reason) || 'unknown',
+            rows: Array.isArray(rows) ? rows.length : 0
+          });
+        })
+        .catch((error) => {
+          logTrainingRoster('prewarm failed', {
+            reason: cleanText(reason) || 'unknown',
+            message: cleanText(error && error.message) || 'unknown error'
+          });
+        });
+    }, safeDelay);
+    return true;
+  }
+
   function getAuditListName() {
     return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
+  }
+
+  function logTrainingRoster(message, details) {
+    const suffix = details && typeof details === 'object'
+      ? Object.entries(details)
+        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
+        .join(' ')
+      : '';
+    console.log(`[training-rosters] ${message}${suffix ? ` ${suffix}` : ''}`);
   }
 
   async function resolveTrainingFormsList() {
@@ -198,6 +295,39 @@ function createTrainingRouter(deps) {
 
   async function resolveAuditList() {
     return resolveNamedList(getAuditListName());
+  }
+
+  function parsePositiveInteger(value) {
+    const cleanValue = cleanText(value);
+    if (!cleanValue) return null;
+    const parsed = Number(cleanValue);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return Math.floor(parsed);
+  }
+
+  function buildRosterPageMeta(url, total) {
+    const rawLimit = parsePositiveInteger(url && url.searchParams && url.searchParams.get('limit'));
+    const rawOffset = parsePositiveInteger(url && url.searchParams && url.searchParams.get('offset')) || 0;
+    const safeTotal = Math.max(Number(total) || 0, 0);
+    const limit = rawLimit ? Math.min(rawLimit, 500) : safeTotal;
+    const safeOffset = Math.min(Math.max(rawOffset, 0), safeTotal);
+    const returned = limit > 0 ? Math.max(Math.min(limit, safeTotal - safeOffset), 0) : 0;
+    const paged = !!rawLimit || safeOffset > 0;
+    const pageCount = rawLimit && limit > 0 ? Math.ceil(safeTotal / limit) : (safeTotal > 0 ? 1 : 0);
+    const currentPage = rawLimit && limit > 0 && safeTotal > 0 ? Math.floor(safeOffset / limit) + 1 : (safeTotal > 0 ? 1 : 0);
+    return {
+      offset: safeOffset,
+      limit,
+      total: safeTotal,
+      returned,
+      pageCount,
+      currentPage,
+      hasPrev: safeOffset > 0,
+      hasNext: rawLimit ? (safeOffset + limit) < safeTotal : false,
+      prevOffset: rawLimit ? Math.max(safeOffset - limit, 0) : 0,
+      nextOffset: rawLimit && (safeOffset + limit) < safeTotal ? safeOffset + limit : safeOffset,
+      paged
+    };
   }
 
   async function listAllForms() {
@@ -233,8 +363,9 @@ function createTrainingRouter(deps) {
     }
   }
 
-  async function listAllRosters() {
-    if (Array.isArray(state.rostersCache) && getTrainingListCacheHit(state.rostersCacheAt)) {
+  async function listAllRosters(options) {
+    const forceRefresh = !!(options && options.forceRefresh);
+    if (!forceRefresh && Array.isArray(state.rostersCache) && getTrainingListCacheHit(state.rostersCacheAt)) {
       return state.rostersCache.slice();
     }
     if (state.rostersCachePromise) {
@@ -256,6 +387,11 @@ function createTrainingRouter(deps) {
     }
       state.rostersCache = rows.slice();
       state.rostersCacheAt = Date.now();
+      persistRostersCacheSnapshot(state.rostersCache, state.rostersCacheAt).catch((error) => {
+        logTrainingRoster('snapshot write failed', {
+          message: cleanText(error && error.message) || 'unknown error'
+        });
+      });
       return rows;
     })();
     try {
@@ -646,7 +782,11 @@ function createTrainingRouter(deps) {
 
   async function handleHealth(_req, res, origin) {
     try {
-      await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
+      const health = await buildHealth();
+      if (!state.rostersCache && !state.rostersCachePromise) {
+        primeRostersCacheInBackground('health-check', 0, false);
+      }
+      await writeJson(res, buildJsonResponse(200, health), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read training backend health.', 500), origin);
     }
@@ -812,9 +952,15 @@ function createTrainingRouter(deps) {
       const rows = await listAllRosters();
       const items = filterRosters(rows.map((entry) => entry.item), url)
         .filter((entry) => requestAuthz.canManageTrainingRoster(authz, entry));
+      const page = buildRosterPageMeta(url, items.length);
+      const visibleItems = page.paged
+        ? items.slice(page.offset, page.offset + page.limit)
+        : items;
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        items: items.map(mapTrainingRosterForClient),
+        items: visibleItems.map(mapTrainingRosterForClient),
+        total: items.length,
+        page,
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
@@ -1302,6 +1448,9 @@ function createTrainingRouter(deps) {
     }
     return Promise.resolve(false);
   }
+
+  restoreRostersCacheSnapshot();
+  primeRostersCacheInBackground('router-startup', TRAINING_ROSTERS_PREWARM_DELAY_MS, true);
 
   return {
     tryHandle

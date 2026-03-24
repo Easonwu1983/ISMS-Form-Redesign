@@ -1649,6 +1649,8 @@
         ok: !!(body && body.ok !== false),
         mode: getTrainingMode(),
         items: normalizeRemoteTrainingRosters(body),
+        total: Number(body && body.total || 0),
+        page: body && body.page && typeof body.page === 'object' ? body.page : null,
         raw: body
       };
     }
