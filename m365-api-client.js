@@ -257,9 +257,9 @@
       if (mode === 'm365-api') {
         const config = getConfig();
         if (String(config.activeProfile || '').trim() === 'a3CampusBackend') {
-          return '校內正式後端';
+          return '校內正式模式';
         }
-        return '正式後端模式';
+        return '正式模式';
       }
       if (mode === 'sharepoint-flow') {
         const config = getConfig();

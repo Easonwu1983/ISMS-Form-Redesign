@@ -1120,7 +1120,7 @@
     }
 
 
-    const SECURITY_ROLE_OPTIONS = ['二級單位資安窗口', '一級單位資安窗口'];
+    const SECURITY_ROLE_OPTIONS = ['一級單位資安窗口', '二級單位資安窗口'];
     const UNIT_SEARCH_ENTRIES = typeof getUnitSearchEntries === 'function'
       ? getUnitSearchEntries([], { excludeUnits: ['學校分部總辦事處'] })
       : [];

@@ -27,8 +27,8 @@
     const AUTHORIZATION_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
     const AUTHORIZATION_UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
     const SECURITY_ROLE_OPTIONS = [
-      '二級單位資安窗口',
-      '一級單位資安窗口'
+      '一級單位資安窗口',
+      '二級單位資安窗口'
     ];
 
     function getMount() {
@@ -243,47 +243,43 @@
         '<head>',
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        '<title>?桐?鞈?蝒??????/title>',
+        '<title>單位資安窗口授權同意書</title>',
         '<style>',
         '@page{size:A4;margin:16mm}',
         '*{box-sizing:border-box}',
-        'body{margin:0;padding:24px;background:#eef2f7;color:#1f2937;font-family:"Microsoft JhengHei","Noto Sans TC",Arial,sans-serif;line-height:1.75}',
-        '.document{max-width:210mm;margin:0 auto;background:#fff;border:1px solid #d6dde8;border-radius:18px;box-shadow:0 14px 34px rgba(15,23,42,.08);padding:18mm 16mm}',
-        '.header{text-align:center;margin-bottom:12mm}',
-        '.kicker{font-size:12px;letter-spacing:.14em;color:#64748b;text-transform:uppercase;margin-bottom:8px}',
-        'h1{margin:0;font-size:28px;line-height:1.25;letter-spacing:.05em;color:#0f172a}',
-        '.lead{margin:10px 0 0;color:#475467;font-size:14px;line-height:1.8}',
-        '.meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;margin-top:12mm}',
-        '.field{border:1px solid #e4e8ef;border-radius:14px;background:#f9fbfe;padding:14px 16px;break-inside:avoid}',
-        '.label{display:block;font-size:13px;color:#667085;margin-bottom:8px;font-weight:700}',
-        '.value{display:block;min-height:26px;padding-bottom:5px;border-bottom:1px solid #cfd8e3;word-break:break-all}',
-        '.section{margin-top:12mm;padding:16px 18px;border-left:4px solid #2f6fb5;background:#f4f8fc;border-radius:14px}',
-        '.section-title{font-size:14px;font-weight:700;color:#334155;margin-bottom:10px}',
-        '.check-list{display:flex;flex-direction:column;gap:8px;font-size:15px;color:#1f2937}',
-        '.signature{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12mm}',
-        '.footer{margin-top:12mm;padding-top:10px;border-top:1px solid #e4e8ef;font-size:13px;color:#64748b}',
-        '@media print{body{background:#fff;padding:0}.document{max-width:none;border:none;border-radius:0;box-shadow:none;padding:0} .meta,.signature{gap:10px}}',
-        '@media (max-width:720px){body{padding:14px}.document{padding:18px;border-radius:14px}.meta,.signature{grid-template-columns:1fr}.header{text-align:left}h1{font-size:23px}}',
+        'body{margin:0;font-family:"Noto Sans TC",Arial,sans-serif;background:#f5f7fb;color:#1f2937}',
+        '.document{max-width:780px;margin:0 auto;padding:24px 28px 32px;background:#fff}',
+        '.header{border-bottom:2px solid #d7deea;padding-bottom:18px}',
+        '.kicker{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px}',
+        'h1{margin:0;font-size:28px;line-height:1.3;color:#0f172a}',
+        '.lead{margin:0;font-size:14px;line-height:1.8;color:#4b5563}',
+        '.meta,.signature{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:20px}',
+        '.field{border:1px solid #d7deea;border-radius:14px;padding:14px 16px;min-height:72px}',
+        '.label{display:block;font-size:12px;letter-spacing:.08em;color:#64748b;margin-bottom:10px}',
+        '.value{display:block;min-height:20px}',
+        '.check-list{display:grid;gap:8px;font-size:14px;line-height:1.7}',
+        '.footer{margin-top:18px;font-size:12px;color:#64748b;line-height:1.8;text-align:center}',
+        '@media print{body{background:#fff}.document{padding:0;max-width:none}}',
         '</style>',
         '</head>',
         '<body>',
         '<div class="document">',
         '<div class="header">',
         '<div class="kicker">ISMS Campus Portal</div>',
-        '<h1>?桐?鞈?蝒??????/h1>',
-        '<p class="lead">隢?桐?銝餌恣蝪賜?敺?雿?唾??桐?蝞∠??∪董???辣??/p>',
+        '<h1>單位資安窗口授權同意書</h1>',
+        '<p class="lead">請先由單位主管簽章，再附於申請單位管理員帳號表單中上傳。</p>',
         '</div>',
         '<div class="meta">',
-        '<div class="field"><span class="label">?唾??桐?</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">?唾?鈭箏???/span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">?唾??餃??萎辣</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">???</span><div class="check-list"><div>??鈭??桐?鞈?蝒</div><div>??銝蝝雿?摰???/div></div></div>',
+        '<div class="field"><span class="label">申請單位</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">申請人姓名</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">申請電子郵件</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">資安角色</span><div class="check-list"><div>一級單位資安窗口</div><div>二級單位資安窗口</div></div></div>',
         '</div>',
         '<div class="signature">',
-        '<div class="field"><span class="label">銝餌恣蝪賜?</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">?交?</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">主管簽章</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">日期</span><span class="value">&nbsp;</span></div>',
         '</div>',
-        '<div class="footer">憛怠戎敺?????PDF?PG ??PNG嚗??唾?唾?銵典??/div>',
+        '<div class="footer">列印或轉存 PDF 後，請由主管簽章並上傳至系統。</div>',
         '</div>',
         '</body>',
         '</html>'
@@ -310,11 +306,11 @@
       if (!preview) return;
       const file = input && input.files && input.files[0] ? input.files[0] : null;
       if (!file) {
-        preview.innerHTML = '<span class="unit-contact-file-empty">撠?豢?瑼?</span>';
+        preview.innerHTML = '<span class="unit-contact-file-empty">尚未選擇檔案</span>';
         return;
       }
       preview.innerHTML = '<span class="unit-contact-file-name">' + esc(file.name) + '</span>'
-        + '<button type="button" class="btn btn-ghost btn-sm" data-action="unit-contact-clear-auth-doc">蝘駁瑼?</button>';
+        + '<button type="button" class="btn btn-ghost btn-sm" data-action="unit-contact-clear-auth-doc">清除檔案</button>';
     }
 
     function ensureAuthorizationDocumentSection(form) {
@@ -323,16 +319,16 @@
       card.className = 'card unit-contact-auth-doc-card';
       card.id = 'uca-authorization-doc-card';
       card.innerHTML = ''
-        + '<div class="section-header">' + ic('file-text', 'icon-sm') + ' 銝??桐?鞈?蝒??????/div>'
-        + '<div class="form-hint" style="margin-top:8px">隢?銝??砍??嚗??桐?銝餌恣蝪賜?敺????單?????/div>'
+        + '<div class="section-header">' + ic('file-text', 'icon-sm') + ' 授權同意書</div>'
+        + '<div class="form-hint" style="margin-top:8px">請先下載授權同意書，經單位主管簽章後再上傳。</div>'
         + '<div class="form-actions" style="margin-top:14px">'
-        + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 銝?????/button>'
+        + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 下載同意書</button>'
         + '</div>'
         + '<div class="form-group" style="margin-top:18px">'
-        + '<label class="form-label form-required">銝銝餌恣蝪賜?銋?甈??</label>'
+        + '<label class="form-label form-required">上傳主管簽章之授權同意書</label>'
         + '<input type="file" class="form-input" id="uca-authorization-doc" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" data-testid="unit-contact-authorization-doc-input">'
-        + '<div class="form-hint">?? PDF?PG?NG嚗之撠???5MB??/div>'
-        + '<div class="unit-contact-auth-doc-preview" id="uca-authorization-doc-preview"><span class="unit-contact-file-empty">撠?豢?瑼?</span></div>'
+        + '<div class="form-hint">僅支援 PDF、JPG、PNG，檔案大小上限 5MB。</div>'
+        + '<div class="unit-contact-auth-doc-preview" id="uca-authorization-doc-preview"><span class="unit-contact-file-empty">尚未選擇檔案</span></div>'
         + '</div>';
       const actions = form.querySelector('.form-actions');
       if (actions && actions.parentNode === form) {
@@ -383,8 +379,8 @@
     function buildModeNotice() {
       const modeKey = getM365ModeKey();
       const description = modeKey === 'local-emulator'
-        ? '目前為本機模擬環境，資料會寫入本機快取，不會同步到正式 M365。'
-        : '目前為正式整合環境，所有申請、授權與查詢都會同步至 M365。';
+        ? '本機模擬環境，資料只會保存在本機快取。'
+        : '正式模式，資料會同步至 M365。';
       return ''
         + '<div class="unit-contact-mode-banner">'
         + '<div class="unit-contact-mode-icon">' + ic('shield-check', 'icon-lg') + '</div>'
