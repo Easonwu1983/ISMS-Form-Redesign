@@ -140,6 +140,24 @@ function createTrainingRouter(deps) {
     ]);
   }
 
+  function compareTrainingRosterRows(left, right) {
+    const leftUnit = cleanText(left && left.item && left.item.unit);
+    const rightUnit = cleanText(right && right.item && right.item.unit);
+    if (leftUnit !== rightUnit) {
+      return leftUnit.localeCompare(rightUnit);
+    }
+    const leftName = cleanText(left && left.item && left.item.name);
+    const rightName = cleanText(right && right.item && right.item.name);
+    if (leftName !== rightName) {
+      return leftName.localeCompare(rightName);
+    }
+    return cleanText(left && left.item && left.item.id).localeCompare(cleanText(right && right.item && right.item.id));
+  }
+
+  function sortTrainingRosterRows(rows) {
+    return (Array.isArray(rows) ? rows : []).slice().sort(compareTrainingRosterRows);
+  }
+
   async function fetchListMap() {
     const siteId = await resolveSiteId();
     const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
@@ -212,10 +230,10 @@ function createTrainingRouter(deps) {
         });
         return false;
       }
-      state.rostersCache = rows.slice();
+      state.rostersCache = sortTrainingRosterRows(rows);
       state.rostersCacheAt = Date.now();
       logTrainingRoster('snapshot restored', {
-        rows: rows.length,
+        rows: state.rostersCache.length,
         ageMs
       });
       return true;
@@ -388,7 +406,7 @@ function createTrainingRouter(deps) {
       })));
       nextUrl = cleanText(body && body['@odata.nextLink']);
     }
-      state.rostersCache = rows.slice();
+      state.rostersCache = sortTrainingRosterRows(rows);
       state.rostersCacheAt = Date.now();
       persistRostersCacheSnapshot(state.rostersCache, state.rostersCacheAt).catch((error) => {
         logTrainingRoster('snapshot write failed', {
@@ -713,9 +731,6 @@ function createTrainingRouter(deps) {
         if (!haystack.includes(query)) return false;
       }
       return true;
-    }).sort((left, right) => {
-      if (left.unit === right.unit) return String(left.name || '').localeCompare(String(right.name || ''));
-      return String(left.unit || '').localeCompare(String(right.unit || ''));
     });
   }
 
