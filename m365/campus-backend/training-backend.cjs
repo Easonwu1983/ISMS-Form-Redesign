@@ -383,10 +383,10 @@ function createTrainingRouter(deps) {
 
   async function listAllRosters(options) {
     const forceRefresh = !!(options && options.forceRefresh);
-    if (!forceRefresh && Array.isArray(state.rostersCache) && getTrainingListCacheHit(state.rostersCacheAt)) {
-      return state.rostersCache.slice();
-    }
-    if (!forceRefresh && state.rostersCachePromise && Array.isArray(state.rostersCache)) {
+    if (!forceRefresh && Array.isArray(state.rostersCache)) {
+      if (!getTrainingListCacheHit(state.rostersCacheAt) && !state.rostersCachePromise) {
+        primeRostersCacheInBackground('ttl-expired', 0, true);
+      }
       return state.rostersCache.slice();
     }
     if (state.rostersCachePromise) {
