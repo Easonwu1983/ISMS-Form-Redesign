@@ -34,3 +34,8 @@ function getBuildInfo(platform, cwd) {
 module.exports = {
   getBuildInfo
 };
+
+if (require.main === module) {
+  const platform = String(process.argv[2] || 'generic').trim() || 'generic';
+  process.stdout.write(`${JSON.stringify(getBuildInfo(platform, process.cwd()), null, 2)}\n`);
+}
