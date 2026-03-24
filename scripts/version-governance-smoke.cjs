@@ -127,7 +127,7 @@ async function waitForAppReady(page) {
 }
 
 async function loadManifest(baseUrl, browser) {
-  const manifestUrl = `${baseUrl}/deploy-manifest.json`;
+  const manifestUrl = `${baseUrl}/deploy-manifest.json?ts=${Date.now()}`;
   let response = null;
   let text = '';
   try {
