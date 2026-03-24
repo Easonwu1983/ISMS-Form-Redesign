@@ -1,6 +1,7 @@
 # 切帳號快速接手手冊
 
-先看一分鐘版：
+先看一頁版：
+- [`docs/boot-checklist.md`](./boot-checklist.md)
 - [`docs/one-minute-handoff.md`](./one-minute-handoff.md)
 
 這份文件只保留切帳號時一定會用到的步驟。更完整的背景與架構，請看：
