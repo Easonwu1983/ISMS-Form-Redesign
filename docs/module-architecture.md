@@ -1,141 +1,31 @@
-# Module Architecture
+# 模組架構
 
-- Updated: 2026-03-11
-- Goal: keep `app.js` as the application kernel and move feature UI into focused modules
+只保留模組分工。
 
-## Current Module Split
+## 核心模組
 
-### [shell-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/shell-module.js)
+- [`app.js`](../app.js)：啟動、路由、模組掛載
+- [`shell-module.js`](../shell-module.js)：登入殼層、導覽、版型
+- [`auth-module.js`](../auth-module.js)：登入、登出、密碼、當前使用者
+- [`data-module.js`](../data-module.js)：本地資料、快取、遷移
+- [`unit-module.js`](../unit-module.js)：單位樹、分類、搜尋
+- [`policy-module.js`](../policy-module.js)：角色、權限、可見性
+- [`ui-module.js`](../ui-module.js)：共用 UI helper
+- [`attachment-module.js`](../attachment-module.js)：附件儲存與預覽
+- [`workflow-support-module.js`](../workflow-support-module.js)：共用流程工具
 
-- Owns login screen rendering
-- Owns app shell rendering (`sidebar`, `header`, `main-content`)
-- Owns route dispatch entrypoint via `handleRoute()`
-- Owns mobile sidebar state and global shell handlers
+## 業務模組
 
-### [data-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/data-module.js)
+- [`unit-contact-application-module.js`](../unit-contact-application-module.js)：單位資安窗口申請
+- [`case-module.js`](../case-module.js)：矯正單
+- [`checklist-module.js`](../checklist-module.js)：內稽檢核表
+- [`training-module.js`](../training-module.js)：教育訓練
+- [`admin-module.js`](../admin-module.js)：帳號管理、資安窗口、稽核軌跡、單位治理
 
-- Owns `localStorage` store access and cache
-- Owns data normalization for users, corrective actions, checklists, and training forms
-- Owns CRUD for correction data, checklist data, training data, unit review store, and login logs
-- Owns store schema versioning and migration dispatch for persisted data
-- Owns schema health diagnostics used by the admin health panel
-- Keeps persistence concerns out of feature and shell modules
+## 介面契約
 
-### [auth-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/auth-module.js)
+- `app.js` 負責載入與路由
+- 功能模組只處理自己的畫面與事件
+- 共用 helper 不要再散落到各模組
+- 新功能先想清楚要放哪個模組，不要直接塞進 `app.js`
 
-- Owns session storage reads and writes for authenticated user state
-- Owns login, logout, password reset helper, and current user hydration
-- Owns scoped unit switching for multi-unit users
-- Owns admin bootstrap repair for the primary administrator profile
-
-### [unit-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/unit-module.js)
-
-- Owns official unit catalog access and metadata lookup
-- Owns custom-unit governance, approval registry, and merge flow
-- Owns unit category classification and searchable cascade selector behavior
-- Reads its official catalog from [units-data.json](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/units-data.json) through the thin loader [units.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/units.js)
-- Keeps unit-specific rules and autocomplete logic out of `app.js`
-
-### [attachment-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/attachment-module.js)
-
-- Owns IndexedDB-backed attachment persistence for corrective-action evidence and training signoff files
-- Owns migration from legacy inline base64 attachments into attachment descriptors
-- Owns reusable attachment preview rendering and object-URL cleanup
-- Keeps binary payloads out of `localStorage` and feature modules
-
-### [ui-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/ui-module.js)
-
-- Owns shared formatting helpers such as `fmt`, `fmtTime`, and icon rendering
-- Owns reusable UI helpers such as `toast`, copy-id interactions, test-id helpers, and checkbox/radio builders
-- Owns icon refresh bootstrap for Lucide
-
-### [policy-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/policy-module.js)
-
-- Owns role and permission policy helpers
-- Owns record visibility and editability rules for corrective actions, checklists, and training forms
-- Owns training undo-window and manual-row deletion policy
-- Keeps access-control decisions centralized instead of scattered across features
-
-### [workflow-support-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/workflow-support-module.js)
-
-- Owns shared record-number builders for corrective actions, checklists, and training forms
-- Owns training export, print, and roster-import parsing helpers
-- Owns seeded demo corrective-action bootstrap data
-- Keeps workflow support logic out of `app.js` and feature modules
-
-### [m365-api-client.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/m365-api-client.js)
-
-- Owns the M365 integration seam for public unit-contact application flows
-- Starts with a local emulator mode so frontend flow can be built before SharePoint / Power Automate is connected
-- Will later absorb submit/status calls to SharePoint-backed APIs or Azure Function endpoints
-
-### [unit-contact-application-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/unit-contact-application-module.js)
-
-- Public homepage-adjacent flow for `申請單位資安窗口`
-- Owns the application form, success state, progress lookup, and activation handoff page
-- Reuses the existing unit cascade selector while staying accessible before login
-
-### [case-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/case-module.js)
-
-- Corrective action dashboard
-- Corrective action list
-- Create / detail / respond / tracking flows
-
-### [checklist-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/checklist-module.js)
-
-- Checklist list, fill, detail, manage
-- Checklist question template editing
-
-### [training-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/training-module.js)
-
-- Training dashboard
-- Training fill and detail flows
-- Training roster import / export / print support
-
-### [admin-module.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/admin-module.js)
-
-- User management
-- Unit review
-- Login log
-- Schema health panel for admin diagnostics and migration repair
-
-## What Still Lives In [app.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/app.js)
-
-- Shared constants and enums
-- Store/module factories and dependency wiring
-- Module factories and route whitelist
-- Application bootstrap
-- A smaller set of cross-feature utility functions that are still shared by multiple modules
-
-## Why This Split Helps
-
-- Feature work can stay local to one module instead of touching the whole app
-- Regression tests can target smaller surfaces with less selector drift
-- Future migration from `innerHTML` to componentized rendering becomes incremental
-- NotebookLM context capture is easier because module boundaries are clearer
-
-## Interaction Contract
-
-- Shared click handling now lives in [app.js](/C:/Users/MOECISH/Desktop/ai-isms/ISMS-Form-Redesign/app.js) via `installGlobalDelegation()`
-- Feature modules register handlers through `registerActionHandlers(namespace, handlers)`
-- Rendered UI should prefer `data-action`, `data-route`, and `data-dismiss-modal` instead of inline `onclick`
-- This keeps module code testable and prevents `window._legacyHandler` globals from spreading again
-
-## Current Cleanup Checklist
-
-1. Split feature UI into dedicated `case / checklist / training / admin / shell` modules.
-2. Split persistence and migration into `data-module.js`.
-3. Split auth/session bootstrap into `auth-module.js`.
-4. Split unit catalog, autocomplete, and custom-unit governance into `unit-module.js`.
-5. Split permission and visibility rules into `policy-module.js`.
-6. Split shared formatting and copy/test helpers into `ui-module.js`.
-7. Split record numbering, training export/import/print helpers, and seed bootstrap into `workflow-support-module.js`.
-8. Split binary attachment persistence and preview rendering into `attachment-module.js`.
-9. Split public unit-contact application flow into `unit-contact-application-module.js` with `m365-api-client.js` as the backend seam.
-10. Replace most route-facing feature dependencies in `app.js` with thin delegates.
-
-## Recommended Next Refactors
-
-1. Continue converting long feature-specific `innerHTML` sections into smaller render partials.
-2. Clean up a few docs/pages that still display mojibake in some terminals due legacy encoding.
-3. Consider exporting schema diagnostics for offline support bundles if operational troubleshooting grows.
