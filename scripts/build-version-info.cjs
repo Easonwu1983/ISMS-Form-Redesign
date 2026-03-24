@@ -37,5 +37,11 @@ module.exports = {
 
 if (require.main === module) {
   const platform = String(process.argv[2] || 'generic').trim() || 'generic';
-  process.stdout.write(`${JSON.stringify(getBuildInfo(platform, process.cwd()), null, 2)}\n`);
+  const buildInfo = getBuildInfo(platform, process.cwd());
+  process.stdout.write(`${JSON.stringify({
+    builtAt: buildInfo.builtAt,
+    versionKey: buildInfo.versionKey,
+    buildInfo,
+    platform
+  }, null, 2)}\n`);
 }
