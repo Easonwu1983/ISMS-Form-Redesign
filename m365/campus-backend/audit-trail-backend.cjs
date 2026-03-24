@@ -23,8 +23,8 @@ function createAuditTrailRouter(deps) {
     entriesPromise: null,
     queryCache: new Map()
   };
-  const AUDIT_TRAIL_CACHE_MS = 30000;
-  const AUDIT_TRAIL_QUERY_CACHE_MS = 15000;
+  const AUDIT_TRAIL_CACHE_MS = 300000;
+  const AUDIT_TRAIL_QUERY_CACHE_MS = 60000;
   const AUDIT_TRAIL_QUERY_CACHE_MAX = 32;
   const AUDIT_TRAIL_FIELDS = [
     'Title',
@@ -98,6 +98,25 @@ function createAuditTrailRouter(deps) {
     if (cached.listLoadedAt !== listLoadedAt) return null;
     if ((Date.now() - cached.loadedAt) >= AUDIT_TRAIL_QUERY_CACHE_MS) return null;
     return cached.value || null;
+  }
+
+  function hasDetailedAuditFilters(url) {
+    return [
+      cleanText(url && url.searchParams && url.searchParams.get('keyword')),
+      cleanText(url && url.searchParams && url.searchParams.get('eventType')),
+      cleanText(url && url.searchParams && url.searchParams.get('actorEmail')),
+      cleanText(url && url.searchParams && url.searchParams.get('targetEmail')),
+      cleanText(url && url.searchParams && url.searchParams.get('unitCode')),
+      cleanText(url && url.searchParams && url.searchParams.get('recordId'))
+    ].some(Boolean);
+  }
+
+  function getAuditQueryPageMeta(url) {
+    const rawLimit = Number(url && url.searchParams && url.searchParams.get('limit') || 100);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 100;
+    const rawOffset = Number(url && url.searchParams && url.searchParams.get('offset') || 0);
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
+    return { limit, offset };
   }
 
   function setAuditQueryCache(signature, listLoadedAt, value) {
@@ -181,6 +200,21 @@ function createAuditTrailRouter(deps) {
     } finally {
       state.entriesPromise = null;
     }
+  }
+
+  async function listRecentEntries(limit) {
+    const siteId = await resolveSiteId();
+    const list = await resolveAuditList();
+    const top = Math.max(1, Math.min(Number(limit) || 50, 200));
+    const body = await graphRequest('GET', `/sites/${siteId}/lists/${list.id}/items?$expand=fields($select=${AUDIT_TRAIL_FIELDS})&$orderby=fields/OccurredAt desc&$top=${top}`);
+    const batch = Array.isArray(body && body.value) ? body.value : [];
+    return batch.map((entry) => ({
+      listItemId: cleanText(entry && entry.id),
+      item: {
+        listItemId: cleanText(entry && entry.id),
+        ...mapGraphFieldsToAuditEntry(entry && entry.fields ? entry.fields : {})
+      }
+    }));
   }
 
   function matchesKeyword(entry, keyword) {
@@ -292,6 +326,47 @@ function createAuditTrailRouter(deps) {
         role: authz.role,
         querySignature
       });
+      const pageMeta = getAuditQueryPageMeta(url);
+      const canUseFastPath = !state.entriesCache && !state.entriesPromise && !hasDetailedAuditFilters(url) && pageMeta.offset === 0;
+      if (canUseFastPath) {
+        const recentRows = await listRecentEntries(pageMeta.limit);
+        const recentItems = recentRows.map((entry) => entry.item);
+        const fastResult = {
+          items: recentItems,
+          total: recentItems.length,
+          summary: summarizeAuditEntries(recentItems),
+          page: {
+            offset: 0,
+            limit: pageMeta.limit,
+            total: recentItems.length,
+            pageCount: recentItems.length ? 1 : 0,
+            currentPage: recentItems.length ? 1 : 0,
+            hasPrev: false,
+            hasNext: recentItems.length >= pageMeta.limit,
+            prevOffset: 0,
+            nextOffset: pageMeta.limit,
+            pageStart: recentItems.length ? 1 : 0,
+            pageEnd: recentItems.length
+          }
+        };
+        setAuditQueryCache(querySignature, 0, fastResult);
+        logAuditTrail('list fast-path', {
+          requestId,
+          querySignature,
+          total: fastResult.total,
+          limit: pageMeta.limit,
+          durationMs: Date.now() - startedAt
+        });
+        await writeJson(res, buildJsonResponse(200, {
+          ok: true,
+          items: fastResult.items,
+          total: fastResult.total,
+          page: fastResult.page,
+          summary: fastResult.summary,
+          contractVersion: CONTRACT_VERSION
+        }), origin);
+        return;
+      }
       const rows = await listAllEntries();
       const listLoadedAt = Number(state.entriesCache && state.entriesCache.loadedAt) || 0;
       const cachedQuery = getAuditQueryCache(querySignature, listLoadedAt);

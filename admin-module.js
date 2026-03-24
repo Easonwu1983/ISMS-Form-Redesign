@@ -1363,14 +1363,45 @@
       return esc(String(role || '—'));
     }
 
-  function renderUsers() {
+  async function renderUsers(options) {
     if (!canManageUsers()) { navigate('dashboard'); return; }
+    const opts = options || {};
+    const app = document.getElementById('app');
+    if (!opts.skipSync && typeof syncUsersFromM365 === 'function') {
+      const existingUsers = getUsers();
+      if (!existingUsers.length) {
+        app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">正在同步正式帳號清單...</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取最高管理者與單位管理者帳號資料...</div></div>`;
+        refreshIcons();
+        try {
+          await syncUsersFromM365({ silent: true, force: true });
+        } catch (error) {
+          console.warn('system users initial sync failed', error);
+        }
+        return renderUsers({ skipSync: true });
+      }
+      syncUsersFromM365({ silent: true }).then(function () {
+        if (window.location.hash === '#users') {
+          renderUsers({ skipSync: true }).catch(function (error) {
+            console.warn('system users background rerender failed', error);
+          });
+        }
+      }).catch(function (error) {
+        console.warn('system users background sync failed', error);
+      });
+    }
     const users = getUsers();
-    const rows = users.map(u => {
+    const rows = users.length ? users.map((u) => {
       const primaryUnit = getPrimaryAuthorizedUnit(u) || '未指定';
-      return `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${getRoleBadgeClass(u.role)}">${getRoleLabel(u.role)}</span></td><td>${esc(formatSecurityRolesSummary(u.securityRoles))}</td><td>${esc(primaryUnit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`;
-    }).join('');
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
+      const isProtectedUser = String(u.username || '').trim() === 'admin' || String(u.role || '').trim() === ROLES.ADMIN;
+      const actionButtons = [
+        `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button>`
+      ];
+      if (!isProtectedUser) {
+        actionButtons.push(`<button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>`);
+      }
+      return `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${getRoleBadgeClass(u.role)}">${getRoleLabel(u.role)}</span></td><td>${esc(formatSecurityRolesSummary(u.securityRoles))}</td><td>${esc(primaryUnit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${actionButtons.join('')}</div></td></tr>`;
+    }).join('') : `<tr><td colspan="9"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('users')}</div><div class="empty-state-title">目前沒有可顯示的帳號資料</div><div class="empty-state-desc">系統會先同步正式帳號清單；若仍為空白，請重新整理或檢查系統帳號後端。</div></div></td></tr>`;
+    app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
       <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要歸屬單位</th><th>額外授權範圍</th><th>審核範圍</th><th>電子郵件</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
@@ -1394,7 +1425,12 @@
     if (!window.confirm(`確定要刪除 ${label} 嗎？此操作無法復原。`)) return;
     try {
       await submitUserDelete(cleanUsername, { username: cleanUsername });
-      renderUsers();
+      if (typeof syncUsersFromM365 === 'function') {
+        await syncUsersFromM365({ silent: true, force: true }).catch(function (error) {
+          console.warn('system users sync after delete failed', error);
+        });
+      }
+      await renderUsers({ skipSync: true });
       toast(`已刪除 ${label}`);
     } catch (error) {
       toast(String(error && error.message || error || '刪除失敗'), 'error');
