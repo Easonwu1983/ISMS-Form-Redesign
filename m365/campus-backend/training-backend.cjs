@@ -965,15 +965,33 @@ function createTrainingRouter(deps) {
   }
 
   async function handleRosterList(req, res, origin, url) {
+    const startedAt = Date.now();
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
+      const cacheState = Array.isArray(state.rostersCache)
+        ? (state.rostersCachePromise ? 'stale-while-refresh' : (getTrainingListCacheHit(state.rostersCacheAt) ? 'fresh' : 'stale'))
+        : (state.rostersCachePromise ? 'promise-only' : 'miss');
       const rows = await listAllRosters();
+      const filterStartedAt = Date.now();
       const items = filterRosters(rows.map((entry) => entry.item), url)
         .filter((entry) => requestAuthz.canManageTrainingRoster(authz, entry));
+      const filterDurationMs = Date.now() - filterStartedAt;
       const page = buildRosterPageMeta(url, items.length);
       const visibleItems = page.paged
         ? items.slice(page.offset, page.offset + page.limit)
         : items;
+      logTrainingRoster('list served', {
+        username: authz.username,
+        cacheState,
+        totalRows: rows.length,
+        visibleRows: items.length,
+        returnedRows: visibleItems.length,
+        paged: page.paged,
+        limit: page.limit,
+        offset: page.offset,
+        filterDurationMs,
+        durationMs: Date.now() - startedAt
+      });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         items: visibleItems.map(mapTrainingRosterForClient),
