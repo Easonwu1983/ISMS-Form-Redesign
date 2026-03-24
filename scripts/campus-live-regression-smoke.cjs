@@ -20,10 +20,10 @@ const OUT_PATH = path.join(process.cwd(), 'logs', 'campus-live-regression-smoke.
     const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'auth.login', payload: { username: 'admin', password: 'admin123' } })
+      body: JSON.stringify({ action: 'auth.login', payload: { username: 'easonwu', password: '2wsx#EDC' } })
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('login response invalid');
+    if (!json || !json.ok || !json.item || json.item.username !== 'easonwu') throw new Error('login response invalid');
     if (Object.prototype.hasOwnProperty.call(json.item || {}, 'password')) throw new Error('password field leaked in auth response');
     const token = String(json && json.session && json.session.token || '').trim();
     if (!token) throw new Error('missing session token');
@@ -205,7 +205,7 @@ async function run() {
     const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'auth.login', payload: { username: 'admin', password: 'wrong-password' } })
+      body: JSON.stringify({ action: 'auth.login', payload: { username: 'easonwu', password: 'wrong-password' } })
     });
     if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
     return { status: response.status, ok: json && json.ok === false };
@@ -260,7 +260,7 @@ async function run() {
     const verification = await requestAdminJson(`${DEFAULT_BASE}/api/auth/verify`);
     const { response, json } = verification;
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!json || !json.ok || !json.item || json.item.username !== 'admin') throw new Error('verify response invalid');
+    if (!json || !json.ok || !json.item || json.item.username !== 'easonwu') throw new Error('verify response invalid');
     return { username: json.item.username };
   }, { critical: true });
 

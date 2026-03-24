@@ -19,8 +19,8 @@ const {
 
 const FRONT_BASE = String(process.env.ACCOUNT_FLOW_FRONT_BASE || 'https://isms-campus-portal.pages.dev/').trim().replace(/\/$/, '');
 const API_BASE = String(process.env.ACCOUNT_FLOW_API_BASE || 'http://127.0.0.1:8088').trim().replace(/\/$/, '');
-const ADMIN_USERNAME = String(process.env.ACCOUNT_FLOW_ADMIN_USERNAME || 'admin').trim();
-const ADMIN_PASSWORD = String(process.env.ACCOUNT_FLOW_ADMIN_PASSWORD || 'admin123').trim();
+const ADMIN_USERNAME = String(process.env.ACCOUNT_FLOW_ADMIN_USERNAME || 'easonwu').trim();
+const ADMIN_PASSWORD = String(process.env.ACCOUNT_FLOW_ADMIN_PASSWORD || '2wsx#EDC').trim();
 const OUT_DIR = createArtifactRun('unit-contact-account-to-fill-smoke').outDir;
 const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-account-to-fill-smoke.json');
 const CURRENT_ROC_YEAR = String(new Date().getFullYear() - 1911);
@@ -362,7 +362,7 @@ async function loginViaPage(page, username, password) {
   let graphContext = null;
 
   try {
-    await runStep(results, 'ACCOUNT-FLOW-1', 'admin', 'resolve test unit without current-year training form', async () => {
+    await runStep(results, 'ACCOUNT-FLOW-1', 'easonwu', 'resolve test unit without current-year training form', async () => {
       const login = await loginAsAdmin();
       adminToken = login.token;
       const selected = await chooseTargetUnit(adminToken);
@@ -420,7 +420,7 @@ async function loginViaPage(page, username, password) {
       return { cardText: cardText.slice(0, 240) };
     });
 
-    await runStep(results, 'ACCOUNT-FLOW-4', 'admin', 'approve application and align smoke password', async () => {
+    await runStep(results, 'ACCOUNT-FLOW-4', 'easonwu', 'approve application and align smoke password', async () => {
       const login = await loginAsAdmin();
       adminToken = login.token;
       const reviewBody = await apiJson('POST', '/api/unit-contact/review', {
@@ -452,7 +452,7 @@ async function loginViaPage(page, username, password) {
         units: [targetUnit],
         activeUnit: targetUnit,
         actorName: '系統管理員',
-        actorEmail: 'admin@company.com'
+        actorEmail: 'easonwu@company.com'
       });
       createdApplicationListItemId = await findApplicationListItem(graphContext, createdApplicationId).then((item) => cleanText(item && item.id));
       const reporterLogin = await loginAsUser(testUsername, testPassword);
@@ -536,7 +536,7 @@ async function loginViaPage(page, username, password) {
       };
     });
 
-    await runStep(results, 'ACCOUNT-FLOW-8', 'admin', 'verify saved training draft through backend API', async () => {
+    await runStep(results, 'ACCOUNT-FLOW-8', 'easonwu', 'verify saved training draft through backend API', async () => {
       const login = await loginAsAdmin();
       adminToken = login.token;
       const forms = await getTrainingForms(adminToken);

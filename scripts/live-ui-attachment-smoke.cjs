@@ -34,7 +34,7 @@ const results = createResultEnvelope({
   findings: [],
   cleanup: [],
   context: {
-    admin: { username: 'admin', password: 'admin123' },
+    admin: { username: 'easonwu', password: '2wsx#EDC' },
     reporter: { username: 'unit1', password: 'unit123', name: '計中管理者' }
   }
 });
@@ -349,8 +349,8 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
         }
         const result = await api.reviewCorrectiveAction(id, {
           decision: 'start_review',
-          actorName: user.name || user.username || 'admin',
-          actorUsername: user.username || 'admin'
+          actorName: user.name || user.username || 'easonwu',
+          actorUsername: user.username || 'easonwu'
         });
         return {
           status: result && result.item && result.item.status,
@@ -373,8 +373,8 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
         }
         const result = await api.reviewCorrectiveAction(id, {
           decision: 'tracking',
-          actorName: user.name || user.username || 'admin',
-          actorUsername: user.username || 'admin'
+          actorName: user.name || user.username || 'easonwu',
+          actorUsername: user.username || 'easonwu'
         });
         return {
           status: result && result.item && result.item.status,
@@ -436,8 +436,8 @@ async function cleanupTrainingArtifacts(trainingId, actor) {
         }
         const result = await api.reviewCorrectiveActionTracking(id, {
           decision: 'close',
-          actorName: user.name || user.username || 'admin',
-          actorUsername: user.username || 'admin'
+          actorName: user.name || user.username || 'easonwu',
+          actorUsername: user.username || 'easonwu'
         });
         return {
           status: result && result.item && result.item.status,

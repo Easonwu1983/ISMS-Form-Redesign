@@ -31,8 +31,8 @@ function pickExecutablePath() {
 async function login(page) {
   await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
   await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
-  await page.fill('[data-testid="login-user"]', 'admin');
-  await page.fill('[data-testid="login-pass"]', 'admin123');
+  await page.fill('[data-testid="login-user"]', 'easonwu');
+  await page.fill('[data-testid="login-pass"]', '2wsx#EDC');
   await Promise.all([
     page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
@@ -245,8 +245,8 @@ async function run() {
     if (authTemplateBytes.slice(0, 5).toString('ascii') !== '%PDF-') throw new Error('authorization template is not a PDF');
     pushStep('asset:unit-contact-authorization-template pdf', true, `bytes=${authTemplateBytes.length}`);
 
-    await page.fill('[data-testid="login-user"]', 'admin');
-    await page.fill('[data-testid="login-pass"]', 'admin123');
+    await page.fill('[data-testid="login-user"]', 'easonwu');
+    await page.fill('[data-testid="login-pass"]', '2wsx#EDC');
     await Promise.all([
       page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
       page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
@@ -301,7 +301,7 @@ async function run() {
         handlerUnitCode: 'A.B',
         handlerName: currentUser.name,
         handlerUsername: currentUser.username,
-        handlerEmail: currentUser.email || 'admin@company.com',
+        handlerEmail: currentUser.email || 'easonwu@company.com',
         handlerDate: '2026-03-15',
         problemDesc: 'Smoke 測試矯正單待矯正案件',
         occurrence: 'Smoke 測試用問題描述',
@@ -332,7 +332,7 @@ async function run() {
         handlerUnitCode: 'A.B',
         handlerName: currentUser.name,
         handlerUsername: currentUser.username,
-        handlerEmail: currentUser.email || 'admin@company.com',
+        handlerEmail: currentUser.email || 'easonwu@company.com',
         handlerDate: '2026-03-15',
         problemDesc: 'Smoke 測試矯正單追蹤案件',
         occurrence: 'Smoke 測試用追蹤情境',
@@ -407,7 +407,7 @@ async function run() {
         handlerUnitCode: 'A.B',
         handlerName: currentUser.name,
         handlerUsername: currentUser.username,
-        handlerEmail: currentUser.email || 'admin@company.com',
+        handlerEmail: currentUser.email || 'easonwu@company.com',
         handlerDate: '2026-03-15',
         problemDesc: 'Smoke 測試矯正單待矯正案件',
         occurrence: 'Smoke 測試用問題描述',
@@ -438,7 +438,7 @@ async function run() {
         handlerUnitCode: 'A.B',
         handlerName: currentUser.name,
         handlerUsername: currentUser.username,
-        handlerEmail: currentUser.email || 'admin@company.com',
+        handlerEmail: currentUser.email || 'easonwu@company.com',
         handlerDate: '2026-03-15',
         problemDesc: 'Smoke 測試矯正單追蹤案件',
         occurrence: 'Smoke 測試用追蹤情境',
@@ -568,8 +568,8 @@ async function run() {
       const smokeChecklist = {
         id: detailId,
         unit: document.getElementById('cl-unit') ? document.getElementById('cl-unit').value : '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44',
-        fillerName: document.getElementById('cl-filler') ? document.getElementById('cl-filler').value : 'admin',
-        fillerUsername: 'admin',
+        fillerName: document.getElementById('cl-filler') ? document.getElementById('cl-filler').value : 'easonwu',
+        fillerUsername: 'easonwu',
         auditYear: '999',
         fillDate: '2026-03-14',
         supervisorName: 'SYSTEM SMOKE',

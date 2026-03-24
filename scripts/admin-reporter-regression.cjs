@@ -53,7 +53,7 @@ async function waitForCaseStatus(page, caseId, expectedStatus, timeout = 15000) 
   const results = createResultEnvelope({
     steps: [],
     context: {
-      admin: { username: 'admin', password: 'admin123' },
+      admin: { username: 'easonwu', password: '2wsx#EDC' },
       reporter: { username: 'unit1', password: 'unit123' }
     }
   });

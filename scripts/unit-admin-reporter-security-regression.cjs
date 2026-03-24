@@ -86,7 +86,7 @@ async function ensureLocalAdminAccount(page) {
     const hasLocalUsers = !!(authModule && typeof authModule.hasLocalUsers === 'function' && authModule.hasLocalUsers());
     const store = dataModule && typeof dataModule.loadData === 'function' ? dataModule.loadData() : null;
     const users = Array.isArray(store && store.users) ? store.users : [];
-    const admin = users.find((user) => String(user && user.username || '').trim() === 'admin');
+    const admin = users.find((user) => String(user && user.username || '').trim() === 'easonwu');
     return {
       hasLocalUsers,
       hasAdmin: !!admin
@@ -103,14 +103,14 @@ async function ensureLocalAdminAccount(page) {
       throw new Error('missing auth module bootstrap');
     }
     const created = await authModule.bootstrapLocalAdminAccount({
-      username: 'admin',
+      username: 'easonwu',
       password: 'Admin123A',
       name: '計算機及資訊網路中心',
-      email: 'admin@g.ntu.edu.tw'
+      email: 'easonwu@g.ntu.edu.tw'
     });
     return {
-      username: created && created.username ? String(created.username) : 'admin',
-      email: created && created.email ? String(created.email) : 'admin@g.ntu.edu.tw'
+      username: created && created.username ? String(created.username) : 'easonwu',
+      email: created && created.email ? String(created.email) : 'easonwu@g.ntu.edu.tw'
     };
   });
 
@@ -269,7 +269,7 @@ async function resolveTestContext(page) {
     proposerUnit: sameUnit,
     proposerUnitCode: '',
     proposerName: 'Security Regression',
-    proposerUsername: 'admin',
+    proposerUsername: 'easonwu',
     proposerDate: today,
     handlerUnit: sameUnit,
     handlerUnitCode: '',
@@ -284,15 +284,15 @@ async function resolveTestContext(page) {
     occurrence: 'Security regression same-unit case',
     correctiveDueDate: closeDate,
     notifyHandler: true,
-    actorName: 'admin',
-    actorUsername: 'admin'
+    actorName: 'easonwu',
+    actorUsername: 'easonwu'
   };
   const crossUnitPayload = {
     id: crossUnitId,
     proposerUnit: crossUnit,
     proposerUnitCode: '',
     proposerName: 'Security Regression',
-    proposerUsername: 'admin',
+    proposerUsername: 'easonwu',
     proposerDate: today,
     handlerUnit: crossUnit,
     handlerUnitCode: '',
@@ -307,8 +307,8 @@ async function resolveTestContext(page) {
     occurrence: 'Security regression cross-unit case',
     correctiveDueDate: closeDate,
     notifyHandler: true,
-    actorName: 'admin',
-    actorUsername: 'admin'
+    actorName: 'easonwu',
+    actorUsername: 'easonwu'
   };
   const sameUnitCreated = await createCorrectiveActionViaApi(page, sameUnitPayload);
   if (!sameUnitCreated || !sameUnitCreated.ok) throw new Error('failed to create same-unit corrective action');
@@ -587,7 +587,7 @@ async function assertBlockedCaseAccess(page, caseId, routePrefix) {
     trace('finally start');
     if (ctx && Array.isArray(ctx.tempAccounts) && ctx.tempAccounts.length) {
       trace('cleanup temp accounts start');
-      await setLocalAuthSession(page, 'admin').catch(() => {});
+      await setLocalAuthSession(page, 'easonwu').catch(() => {});
       for (const account of ctx.tempAccounts) {
         await deleteTempUnitManager(page, account && account.username);
       }

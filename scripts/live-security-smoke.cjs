@@ -187,11 +187,11 @@ async function run() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'auth.login',
-          payload: { username: 'admin', password: 'admin123' }
+          payload: { username: 'easonwu', password: '2wsx#EDC' }
         })
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      if (!json || !json.ok || !json.item || json.item.username !== 'admin') {
+      if (!json || !json.ok || !json.item || json.item.username !== 'easonwu') {
         throw new Error('invalid auth.login response');
       }
       if (json.item.password) throw new Error('password leaked in auth.login response');
@@ -206,7 +206,7 @@ async function run() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'auth.login',
-          payload: { username: 'admin', password: 'wrong-password' }
+          payload: { username: 'easonwu', password: 'wrong-password' }
         })
       });
       if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
@@ -290,7 +290,7 @@ async function run() {
         }
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      if (!json || !json.ok || !json.item || json.item.username !== 'admin') {
+      if (!json || !json.ok || !json.item || json.item.username !== 'easonwu') {
         throw new Error('invalid auth.verify response');
       }
       return { username: json.item.username };

@@ -222,7 +222,7 @@ async function verifyBase(browser, baseUrl, label, results) {
     });
 
     await runStep(results, `${label}:sidebar`, label, 'sidebar version chip matches deploy manifest after login', async () => {
-      await loginAt(page, baseUrl, 'admin', 'admin123');
+      await loginAt(page, baseUrl, 'easonwu', '2wsx#EDC');
       await page.waitForSelector('.sidebar-footer [data-testid="app-version-chip"]', { timeout: 30000 });
       const data = await page.evaluate(() => ({
         buildInfo: window.__APP_BUILD_INFO__ || null

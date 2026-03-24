@@ -17,8 +17,8 @@ const RESULT_PATH = path.join(OUT_DIR, 'checklist-governance-smoke.json');
 const BASE_URL = String(process.env.TEST_BASE_URL || process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/').trim().replace(/\/$/, '');
 const API_BASE = BASE_URL;
 const ADMIN = {
-  username: String(process.env.CHECKLIST_GOVERNANCE_ADMIN_USERNAME || 'admin').trim(),
-  password: String(process.env.CHECKLIST_GOVERNANCE_ADMIN_PASSWORD || 'admin123').trim()
+  username: String(process.env.CHECKLIST_GOVERNANCE_ADMIN_USERNAME || 'easonwu').trim(),
+  password: String(process.env.CHECKLIST_GOVERNANCE_ADMIN_PASSWORD || '2wsx#EDC').trim()
 };
 
 function cleanText(value) {
@@ -182,7 +182,7 @@ async function readChecklistLockState(page) {
     page = await context.newPage();
     attachDiagnostics(page, results);
 
-    await runStep(results, 'CG-01', 'admin', 'login and open unit governance page', async () => {
+    await runStep(results, 'CG-01', 'easonwu', 'login and open unit governance page', async () => {
       const loginResult = await loginAsAdmin();
       adminToken = loginResult.token;
       await login(page, ADMIN.username, ADMIN.password);
@@ -191,7 +191,7 @@ async function readChecklistLockState(page) {
       return 'unit-review ready';
     });
 
-    await runStep(results, 'CG-02', 'admin', 'pick a governed parent/child unit pair', async () => {
+    await runStep(results, 'CG-02', 'easonwu', 'pick a governed parent/child unit pair', async () => {
       const pair = await pickGovernancePair(page);
       chosenParent = cleanText(pair.parent);
       chosenChild = cleanText(pair.child);
@@ -202,7 +202,7 @@ async function readChecklistLockState(page) {
       return { parent: chosenParent, child: chosenChild, childUnit: chosenChildUnit };
     });
 
-    await runStep(results, 'CG-03', 'admin', 'save consolidated governance mode for the parent unit', async () => {
+    await runStep(results, 'CG-03', 'easonwu', 'save consolidated governance mode for the parent unit', async () => {
       originalReviewStore = await page.evaluate(() => {
         if (!window._dataModule || typeof window._dataModule.loadUnitReviewStore !== 'function') return null;
         return window._dataModule.loadUnitReviewStore();
@@ -223,7 +223,7 @@ async function readChecklistLockState(page) {
       return saved;
     });
 
-    await runStep(results, 'CG-04', 'admin', 'provision a temporary unit admin for the chosen child unit', async () => {
+    await runStep(results, 'CG-04', 'easonwu', 'provision a temporary unit admin for the chosen child unit', async () => {
       tempUsername = `gov-smoke-${Date.now()}@g.ntu.edu.tw`;
       tempPassword = `G${Date.now()}#Aa1`;
       const body = await upsertSystemUser(adminToken, {
@@ -237,8 +237,8 @@ async function readChecklistLockState(page) {
         units: [chosenChildUnit],
         activeUnit: chosenChildUnit,
         securityRoles: ['二級單位資安窗口'],
-        actorName: 'admin',
-        actorEmail: 'admin@localhost'
+        actorName: 'easonwu',
+        actorEmail: 'easonwu@localhost'
       });
       if (!(body && body.created !== false)) {
         // Upsert may update an existing temp user in a rare rerun; that is fine.

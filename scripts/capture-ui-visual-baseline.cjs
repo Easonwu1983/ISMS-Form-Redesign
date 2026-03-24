@@ -23,8 +23,8 @@ function pickExecutablePath() {
 
 async function login(page) {
   await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
-  await page.fill('[data-testid="login-user"]', 'admin');
-  await page.fill('[data-testid="login-pass"]', 'admin123');
+  await page.fill('[data-testid="login-user"]', 'easonwu');
+  await page.fill('[data-testid="login-pass"]', '2wsx#EDC');
   await Promise.all([
     page.waitForFunction(() => !!document.querySelector('.btn-logout'), { timeout: 30000 }),
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())

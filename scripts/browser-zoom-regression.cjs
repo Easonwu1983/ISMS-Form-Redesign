@@ -106,7 +106,7 @@ async function inspectLayout(page) {
         attachDiagnostics(page, results);
         try {
           await resetApp(page);
-          await login(page, 'admin', 'admin123');
+          await login(page, 'easonwu', '2wsx#EDC');
           for (const zoom of ZOOMS) {
             await applyZoom(page, zoom);
             for (const route of ROUTES) {

@@ -110,7 +110,7 @@ async function deleteTrainingRostersByNames(page, names) {
         body: JSON.stringify(buildEnvelope('training.roster.delete', {
           id: item.id,
           actorName: 'training-import-persistence-smoke',
-          actorUsername: 'admin'
+          actorUsername: 'easonwu'
         }))
       });
     }
@@ -125,7 +125,7 @@ async function deleteTrainingRostersByNames(page, names) {
   const results = createResultEnvelope({
     steps: [],
     context: {
-      admin: { username: 'admin', password: 'admin123' },
+      admin: { username: 'easonwu', password: '2wsx#EDC' },
       names,
       importUnit: ''
     }

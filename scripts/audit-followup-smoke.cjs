@@ -65,7 +65,7 @@ async function loginToken(username, password) {
 
 async function main() {
   await runStep(RESULTS, 'delete-guard', 'api', 'system user delete is blocked when corrective actions are open', async () => {
-    const { token } = await loginToken('admin', 'admin123');
+    const { token } = await loginToken('easonwu', '2wsx#EDC');
 
     const usersResp = await requestJson('/api/system-users', { headers: authHeaders(token) });
     if (!usersResp.response.ok) throw new Error(`system users list failed: HTTP ${usersResp.response.status}`);
@@ -140,7 +140,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
     attachDiagnostics(page, RESULTS);
     try {
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       await page.goto(`${BASE_URL}#create`, { waitUntil: 'networkidle', timeout: 45000 });
       await page.waitForSelector('#f-hunit', { state: 'attached', timeout: 15000 });
       await page.waitForSelector('#f-hname', { state: 'attached', timeout: 15000 });

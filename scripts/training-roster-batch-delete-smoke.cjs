@@ -14,7 +14,7 @@ const {
 
 const runMeta = createArtifactRun('training-roster-batch-delete-smoke');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-roster-batch-delete-smoke.json');
-const ROLE_ADMIN = 'admin';
+const ROLE_ADMIN = 'easonwu';
 const TEST_UNIT = `RosterBatchUnit-${Date.now()}`;
 const TEST_ROWS = [
   {
@@ -113,7 +113,7 @@ async function deleteRostersByNames(page, names) {
       payload: {
         ids,
         actorName: 'training-roster-batch-delete-smoke',
-        actorUsername: 'admin'
+        actorUsername: 'easonwu'
       }
     };
     const del = await fetch('/api/training/rosters/delete-batch', {
@@ -177,7 +177,7 @@ async function waitForTrainingRosterGroupRows(page, names, timeout) {
   const results = createResultEnvelope({
     steps: [],
     context: {
-      admin: { username: ROLE_ADMIN, password: 'admin123' },
+      admin: { username: ROLE_ADMIN, password: '2wsx#EDC' },
       names: TEST_ROWS.map((row) => row.name)
     }
   });

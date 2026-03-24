@@ -50,7 +50,7 @@ async function seedSecurityFixtures(page) {
       proposerUnit: unit,
       proposerUnitCode: '022',
       proposerName: payload,
-      proposerUsername: 'admin',
+      proposerUsername: 'easonwu',
       proposerDate: today,
       handlerUnit: unit,
       handlerUnitCode: '022',
@@ -75,7 +75,7 @@ async function seedSecurityFixtures(page) {
       rootElimDueDate: today,
       reviewResult: payload,
       reviewNextDate: today,
-      reviewer: 'admin',
+      reviewer: 'easonwu',
       reviewDate: today,
       trackings: [],
       pendingTracking: null,
@@ -94,7 +94,7 @@ async function seedSecurityFixtures(page) {
       id: checklistId,
       unit,
       fillerName: '測試填報人',
-      fillerUsername: 'admin',
+      fillerUsername: 'easonwu',
       fillDate: today,
       auditYear: '114',
       supervisor: payload,
@@ -120,7 +120,7 @@ async function seedSecurityFixtures(page) {
       unit,
       statsUnit,
       fillerName: '測試填報人',
-      fillerUsername: 'admin',
+      fillerUsername: 'easonwu',
       submitterPhone: '02-3366-1234',
       submitterEmail: 'security@g.ntu.edu.tw',
       fillDate: today,
@@ -139,7 +139,7 @@ async function seedSecurityFixtures(page) {
           jobTitle: payload,
           source: 'manual',
           createdBy: '測試填報人',
-          createdByUsername: 'admin',
+          createdByUsername: 'easonwu',
           createdAt: now,
           status: '在職',
           completedGeneral: '是',
@@ -225,7 +225,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03', 'Admin', 'Security window inventory is grouped by tier', async () => {
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'security-window');
       await page.waitForSelector('.security-window-category-stack .security-window-category-card');
       const structure = await page.evaluate(() => {
@@ -274,7 +274,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-04', 'Admin', 'Case detail escapes XSS payloads', async () => {
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
       await gotoHash(page, 'detail/' + CASE_ID);
       await page.waitForSelector('.detail-title');

@@ -266,7 +266,7 @@ async function prepareTrainingUploadFixture(page) {
 
     await runStep(results, 'UPLOAD-04', 'Admin', 'Roster import file validation', async () => {
       await logout(page);
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'training-roster');
       await page.waitForSelector('#training-import-file');
       await page.setInputFiles('#training-import-file', INVALID_EXE);

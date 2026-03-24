@@ -14,7 +14,7 @@ const {
 
 const runMeta = createArtifactRun('training-roster-focus-smoke');
 const RESULT_PATH = path.join(runMeta.outDir, 'training-roster-focus-smoke.json');
-const ROLE_ADMIN = 'admin';
+const ROLE_ADMIN = 'easonwu';
 const TITLE_ROSTER_RENDER = 'training roster focus restore on delete rerender';
 const IMPORT_TARGET_UNIT = `RosterFocusUnit-${Date.now()}`;
 const IMPORT_TARGET_TITLE = 'Engineer';
@@ -172,7 +172,7 @@ async function deleteTrainingRostersByNames(page, names) {
         body: JSON.stringify(buildEnvelope('training.roster.delete', {
           id: item.id,
           actorName: 'training-roster-focus-smoke',
-          actorUsername: 'admin'
+          actorUsername: 'easonwu'
         }))
   });
 }
@@ -204,7 +204,7 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
   const results = createResultEnvelope({
     steps: [],
     context: {
-      admin: { username: ROLE_ADMIN, password: 'admin123' },
+      admin: { username: ROLE_ADMIN, password: '2wsx#EDC' },
       names,
       importUnit: IMPORT_TARGET_UNIT
     }

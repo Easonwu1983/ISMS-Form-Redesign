@@ -25,7 +25,7 @@ const results = {
   pageErrors: [],
   artifacts: [],
   context: {
-    admin: { username: 'admin', password: 'admin123' },
+    admin: { username: 'easonwu', password: '2wsx#EDC' },
     reporter: { username: 'user3', password: 'user123' },
     proxyReporter: { username: 'user2', password: 'user123' },
     viewer: { username: 'viewer1', password: 'viewer123' }
@@ -221,7 +221,7 @@ function isoDate(offsetDays) {
     await resetApp(page);
 
     await runStep('ADM-01', '最高管理者', '登入與管理權限', async () => {
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       const navPresence = {};
       const knownLinks = ['#users', '#login-log', '#checklist-manage', '#unit-review', '#training-roster'];
       for (const href of knownLinks) {
@@ -253,7 +253,7 @@ function isoDate(offsetDays) {
     await logout(page);
 
     await runStep('ADM-02', '最高管理者', '建立矯正單', async () => {
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'create');
       await page.waitForSelector('#create-form');
       await chooseUnitForHandlerUsername(page, 'f-hunit', 'f-hname', 'unit1');
@@ -391,7 +391,7 @@ function isoDate(offsetDays) {
     await logout(page);
 
     await runStep('RP-06', '單位窗口', '教育訓練草稿導頁一致性', async () => {
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'training');
       await page.waitForFunction(() => !!document.querySelector('.training-dashboard-page') || !!document.querySelector('.training-table-card'), { timeout: 15000 });
       const fillLink = page.locator('a[href^="#training-fill/"]').first();
@@ -447,7 +447,7 @@ function isoDate(offsetDays) {
 
     await runStep('ADM-03', '最高管理者', '審核矯正單並轉入追蹤', async () => {
       if (!createdCarId) throw new Error('missing car id for admin review');
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'detail/' + createdCarId);
       await page.waitForFunction(() => !!document.querySelector('.detail-header'), { timeout: 15000 });
       const reviewButton = page.locator('[data-testid="case-transition-review"]');
@@ -499,7 +499,7 @@ function isoDate(offsetDays) {
 
     await runStep('ADM-04', '最高管理者', '審核追蹤提報並結案', async () => {
       if (!createdCarId) throw new Error('missing car id for final review');
-      await login(page, 'admin', 'admin123');
+      await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'detail/' + createdCarId);
       await page.waitForFunction(() => !!document.querySelector('.detail-header'), { timeout: 15000 });
       const approveButton = page.locator('[data-testid="case-tracking-approve-close"]');

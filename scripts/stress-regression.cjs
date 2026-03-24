@@ -145,7 +145,7 @@ async function cleanupImportedRosters(page, prefix) {
         payload: {
           ids,
           actorName: 'stress-regression-cleanup',
-          actorUsername: 'admin'
+          actorUsername: 'easonwu'
         }
       })
     });
@@ -248,7 +248,7 @@ async function seedLongCase(page) {
     await resetApp(page);
 
     await runStep(results, 'STRESS-01', 'Admin', 'Import 320-row roster CSV', async () => {
-      await loginDirect(page, 'admin', 'admin123');
+      await loginDirect(page, 'easonwu', '2wsx#EDC');
       await cleanupImportedRosters(page, ROSTER_PREFIX);
       await gotoHash(page, 'training-roster');
       await page.waitForSelector('#training-roster-toggle-import', { state: 'visible', timeout: 30000 });
@@ -313,7 +313,7 @@ async function seedLongCase(page) {
               failed: Number(item && item.summary && item.summary.failed || 0),
               items: Array.isArray(item && item.items) ? item.items.length : 0
             }));
-      }, { items: dataRows, actorName: 'admin', actorUsername: 'admin', chunkSize: TRAINING_IMPORT_CHUNK_SIZE, concurrency: 2 });
+      }, { items: dataRows, actorName: 'easonwu', actorUsername: 'easonwu', chunkSize: TRAINING_IMPORT_CHUNK_SIZE, concurrency: 2 });
       if (!Array.isArray(batchResults) || !batchResults.length) {
         throw new Error('training roster batch import returned no results');
       }
@@ -376,7 +376,7 @@ async function seedLongCase(page) {
     });
   } finally {
     try {
-      await loginDirect(page, 'admin', 'admin123');
+      await loginDirect(page, 'easonwu', '2wsx#EDC');
       await cleanupImportedRosters(page, ROSTER_PREFIX);
     } catch (_) {}
     await browser.close();

@@ -9,8 +9,8 @@ const {
 } = require('./_m365-a3-backend-utils.cjs');
 
 const BASE = String(process.env.UNIT_CONTACT_ADMIN_REVIEW_BASE || 'http://127.0.0.1:8088').trim().replace(/\/$/, '');
-const ADMIN_USERNAME = String(process.env.UNIT_CONTACT_ADMIN_REVIEW_USERNAME || 'admin').trim();
-const ADMIN_PASSWORD = String(process.env.UNIT_CONTACT_ADMIN_REVIEW_PASSWORD || 'admin123').trim();
+const ADMIN_USERNAME = String(process.env.UNIT_CONTACT_ADMIN_REVIEW_USERNAME || 'easonwu').trim();
+const ADMIN_PASSWORD = String(process.env.UNIT_CONTACT_ADMIN_REVIEW_PASSWORD || '2wsx#EDC').trim();
 const ROOT = process.cwd();
 const LOG_DIR = path.join(ROOT, 'logs');
 const RESULT_PATH = path.join(LOG_DIR, 'unit-contact-admin-review-smoke.json');

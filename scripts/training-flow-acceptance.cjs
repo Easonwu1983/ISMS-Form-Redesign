@@ -37,7 +37,7 @@ const results = createResultEnvelope({
   steps: [],
   artifacts: [],
   context: {
-    admin: { username: 'admin', password: 'admin123' },
+    admin: { username: 'easonwu', password: '2wsx#EDC' },
     reporter: { username: 'unit1', password: 'unit123' },
     importedNames: IMPORT_NAMES,
     importUnit: '',
@@ -238,7 +238,7 @@ async function deleteTrainingRostersByNames(page, names) {
         },
         body: JSON.stringify({
           action: 'training.roster.delete',
-          payload: { id: item.id, actorName: 'training-flow-acceptance', actorUsername: 'admin' }
+          payload: { id: item.id, actorName: 'training-flow-acceptance', actorUsername: 'easonwu' }
         })
       });
     }
@@ -257,7 +257,7 @@ async function deleteTrainingForm(page, formId) {
       },
       body: JSON.stringify({
         action: 'training.form.delete',
-        payload: { id, actorName: 'training-flow-acceptance', actorUsername: 'admin' }
+        payload: { id, actorName: 'training-flow-acceptance', actorUsername: 'easonwu' }
       })
     });
   }, formId);

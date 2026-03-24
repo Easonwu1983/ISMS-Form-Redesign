@@ -128,7 +128,7 @@ async function deleteTempUnitManager(page, username) {
   const results = createResultEnvelope({
     steps: [],
     context: {
-      admin: { username: 'admin', password: 'admin123' },
+      admin: { username: 'easonwu', password: '2wsx#EDC' },
       unitManager: { username: 'unit1', password: 'unit123' },
       otherUnitManager: null,
       probeSuffix
