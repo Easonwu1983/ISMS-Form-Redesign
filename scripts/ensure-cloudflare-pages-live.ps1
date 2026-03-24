@@ -32,8 +32,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File $bootstrapScript `
     -OriginUrl $OriginUrl `
     -Protocol $Protocol
 
-$secondExit = Invoke-CloudflareHealthCheck
-if ($secondExit -ne 0) {
+function Wait-ForCloudflareHealth {
+    param(
+        [int]$Attempts = 6,
+        [int]$DelaySeconds = 10
+    )
+
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        $exitCode = Invoke-CloudflareHealthCheck
+        if ($exitCode -eq 0) {
+            return $true
+        }
+
+        if ($attempt -lt $Attempts) {
+            Write-Warning "Cloudflare Pages health still failing after bootstrap recovery. Retrying in $DelaySeconds seconds... ($attempt/$Attempts)"
+            Start-Sleep -Seconds $DelaySeconds
+        }
+    }
+
+    return $false
+}
+
+if (-not (Wait-ForCloudflareHealth)) {
     throw 'Cloudflare Pages live health is still failing after bootstrap recovery.'
 }
 
