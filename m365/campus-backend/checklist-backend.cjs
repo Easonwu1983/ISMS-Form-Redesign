@@ -381,12 +381,27 @@ function createChecklistRouter(deps) {
 
   function filterItems(items, url) {
     const status = cleanText(url.searchParams.get('status'));
+    const statusBucket = cleanText(url.searchParams.get('statusBucket'));
     const unit = cleanText(url.searchParams.get('unit'));
     const auditYear = cleanText(url.searchParams.get('auditYear'));
     const fillerUsername = cleanText(url.searchParams.get('fillerUsername'));
     const query = cleanText(url.searchParams.get('q')).toLowerCase();
     return items.filter((entry) => {
       if (status && entry.status !== status) return false;
+      if (statusBucket) {
+        const normalizedStatus = cleanText(entry.status).toLowerCase();
+        const summary = entry.summary && typeof entry.summary === 'object' ? entry.summary : {};
+        const answered = Number(summary.conform || 0)
+          + Number(summary.partial || 0)
+          + Number(summary.nonConform || 0)
+          + Number(summary.na || 0);
+        const derivedBucket = normalizedStatus === STATUSES.SUBMITTED
+          ? 'closed'
+          : (answered > 0 || Number(summary.total || 0) > 0 || entry.updatedAt || entry.fillDate
+            ? 'pending_export'
+            : 'editing');
+        if (derivedBucket !== statusBucket) return false;
+      }
       if (unit && entry.unit !== unit) return false;
       if (auditYear && entry.auditYear !== auditYear) return false;
       if (fillerUsername && entry.fillerUsername !== fillerUsername) return false;

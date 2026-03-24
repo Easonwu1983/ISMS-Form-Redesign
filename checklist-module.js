@@ -106,6 +106,29 @@
     let checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
     let checklistListViewCache = { signature: '', filtered: [], grouped: [] };
     let checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
+    const CHECKLIST_REMOTE_PAGE_LIMIT_OPTIONS = ['25', '50', '100'];
+    const CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT = '50';
+    const CHECKLIST_REMOTE_PAGE_CACHE_MAX = 12;
+    const checklistRemotePageCache = new Map();
+    let checklistRemotePageState = {
+      filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
+      page: {
+        offset: 0,
+        limit: Number(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+        total: 0,
+        pageCount: 0,
+        currentPage: 0,
+        hasPrev: false,
+        hasNext: false,
+        prevOffset: 0,
+        nextOffset: 0,
+        pageStart: 0,
+        pageEnd: 0
+      },
+      items: [],
+      total: 0,
+      signature: ''
+    };
 
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
@@ -128,6 +151,133 @@
         }
         run();
       });
+    }
+
+    function getChecklistRemoteClient() {
+      if (typeof window === 'undefined' || !window._m365ApiClient || typeof window._m365ApiClient !== 'object') return null;
+      return window._m365ApiClient;
+    }
+
+    function canUseRemoteChecklistPaging() {
+      const client = getChecklistRemoteClient();
+      return !!(client
+        && typeof client.getChecklistMode === 'function'
+        && client.getChecklistMode() === 'm365-api'
+        && typeof client.listChecklists === 'function');
+    }
+
+    function normalizeChecklistRemoteFilters(filters) {
+      const source = filters && typeof filters === 'object' ? filters : {};
+      const limit = Math.max(1, Math.min(Number(source.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT) || Number(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT), 200));
+      const offset = Math.max(0, Number(source.offset || 0) || 0);
+      return {
+        limit: String(limit),
+        offset: String(offset),
+        auditYear: String(source.auditYear || '').trim(),
+        statusBucket: String(source.statusBucket || 'all').trim() || 'all',
+        q: String(source.q || '').trim()
+      };
+    }
+
+    function getChecklistRemoteSignature(filters) {
+      const normalized = normalizeChecklistRemoteFilters(filters);
+      return [
+        normalized.limit,
+        normalized.offset,
+        normalized.auditYear || 'all',
+        normalized.statusBucket || 'all',
+        normalized.q || ''
+      ].join('::');
+    }
+
+    function normalizeChecklistRemotePage(page, filters, items, total) {
+      const normalizedFilters = normalizeChecklistRemoteFilters(filters);
+      const limit = Math.max(1, Number(normalizedFilters.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT) || Number(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT));
+      const resolvedItems = Array.isArray(items) ? items : [];
+      const safeTotal = Math.max(0, Number(total) || resolvedItems.length);
+      const maxOffset = safeTotal > 0 ? Math.max(0, Math.floor((safeTotal - 1) / limit) * limit) : 0;
+      const offset = Math.min(Math.max(0, Number(page && page.offset) || Number(normalizedFilters.offset || 0) || 0), maxOffset);
+      const pageCount = safeTotal > 0 ? Math.max(1, Math.ceil(safeTotal / limit)) : 0;
+      const currentPage = safeTotal > 0 ? Math.floor(offset / limit) + 1 : 0;
+      const pageStart = resolvedItems.length ? offset + 1 : 0;
+      const pageEnd = resolvedItems.length ? offset + resolvedItems.length : 0;
+      return {
+        offset,
+        limit,
+        total: safeTotal,
+        pageCount,
+        currentPage,
+        hasPrev: offset > 0,
+        hasNext: pageEnd > 0 && pageEnd < safeTotal,
+        prevOffset: Math.max(0, offset - limit),
+        nextOffset: Math.min(maxOffset, offset + limit),
+        pageStart,
+        pageEnd
+      };
+    }
+
+    function getChecklistRemotePageSummary(page) {
+      const normalizedPage = normalizeChecklistRemotePage(page, checklistRemotePageState.filters, checklistRemotePageState.items, checklistRemotePageState.total);
+      if (!normalizedPage.total) return '目前沒有符合條件的檢核表';
+      return '第 ' + normalizedPage.currentPage + ' / ' + normalizedPage.pageCount + ' 頁，顯示 '
+        + normalizedPage.pageStart + '-' + normalizedPage.pageEnd + ' / ' + normalizedPage.total + ' 筆';
+    }
+
+    function renderChecklistListPager(page) {
+      const normalizedPage = normalizeChecklistRemotePage(page, checklistRemotePageState.filters, checklistRemotePageState.items, checklistRemotePageState.total);
+      const limitOptions = CHECKLIST_REMOTE_PAGE_LIMIT_OPTIONS
+        .map((value) => '<option value="' + esc(value) + '" ' + (String(normalizedPage.limit) === value ? 'selected' : '') + '>' + esc(value) + '</option>')
+        .join('');
+      return '<div class="review-toolbar review-toolbar--compact checklist-list-pager" style="margin-top:16px">'
+        + '<div class="review-toolbar-main"><span class="review-card-subtitle">' + esc(getChecklistRemotePageSummary(normalizedPage)) + '</span></div>'
+        + '<div class="review-toolbar-actions">'
+        + '<label class="form-label" for="cl-list-page-limit" style="margin:0 4px 0 0">每頁</label>'
+        + '<select class="form-select" id="cl-list-page-limit" style="min-width:88px">' + limitOptions + '</select>'
+        + '<button type="button" class="btn btn-secondary btn-sm" id="cl-list-prev-page" ' + (normalizedPage.hasPrev ? '' : 'disabled') + '>' + ic('chevron-left', 'icon-sm') + ' 上一頁</button>'
+        + '<button type="button" class="btn btn-secondary btn-sm" id="cl-list-next-page" ' + (normalizedPage.hasNext ? '' : 'disabled') + '>下一頁 ' + ic('chevron-right', 'icon-sm') + '</button>'
+        + '</div></div>';
+    }
+
+    async function loadChecklistRemotePage(filters, options) {
+      const client = getChecklistRemoteClient();
+      if (!client || typeof client.listChecklists !== 'function') {
+        return {
+          filters: normalizeChecklistRemoteFilters(filters),
+          items: [],
+          total: 0,
+          page: normalizeChecklistRemotePage(null, filters, [], 0),
+          raw: null
+        };
+      }
+      const resolvedFilters = normalizeChecklistRemoteFilters(filters);
+      const signature = getChecklistRemoteSignature(resolvedFilters);
+      if (!(options && options.force) && checklistRemotePageCache.has(signature)) {
+        return checklistRemotePageCache.get(signature);
+      }
+      const requestQuery = {
+        limit: resolvedFilters.limit,
+        offset: resolvedFilters.offset
+      };
+      if (resolvedFilters.auditYear && resolvedFilters.auditYear !== 'all') requestQuery.auditYear = resolvedFilters.auditYear;
+      if (resolvedFilters.statusBucket && resolvedFilters.statusBucket !== 'all') requestQuery.statusBucket = resolvedFilters.statusBucket;
+      if (resolvedFilters.q) requestQuery.q = resolvedFilters.q;
+      const response = await client.listChecklists(requestQuery);
+      const items = Array.isArray(response && response.items) ? response.items : [];
+      const total = Math.max(0, Number(response && response.total) || items.length);
+      const value = {
+        filters: resolvedFilters,
+        items,
+        total,
+        page: normalizeChecklistRemotePage(response && response.page, resolvedFilters, items, total),
+        raw: response
+      };
+      checklistRemotePageCache.set(signature, value);
+      while (checklistRemotePageCache.size > CHECKLIST_REMOTE_PAGE_CACHE_MAX) {
+        const oldestKey = checklistRemotePageCache.keys().next().value;
+        if (!oldestKey) break;
+        checklistRemotePageCache.delete(oldestKey);
+      }
+      return value;
     }
 
     const CHECKLIST_LIST_STATUS_OPTIONS = [
@@ -321,7 +471,8 @@
     function getChecklistListSnapshot(items) {
       const source = Array.isArray(items) ? items.slice() : [];
       const token = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '';
-      const cacheKey = token + '::' + String(source.length);
+      const remoteSignature = canUseRemoteChecklistPaging() ? String(checklistRemotePageState.signature || '') : '';
+      const cacheKey = token + '::' + String(source.length) + '::' + remoteSignature;
       if (checklistListSnapshotCache.token === cacheKey && Array.isArray(checklistListSnapshotCache.items)) {
         return checklistListSnapshotCache;
       }
@@ -340,7 +491,8 @@
       const signature = [
         snapshot.token || '',
         String(checklistBrowseState.year || 'all'),
-        String(checklistBrowseState.status || 'all')
+        String(checklistBrowseState.status || 'all'),
+        canUseRemoteChecklistPaging() ? String(checklistRemotePageState.signature || '') : ''
       ].join('::');
       if (checklistListViewCache.signature === signature && Array.isArray(checklistListViewCache.grouped)) {
         return checklistListViewCache;
@@ -372,7 +524,8 @@
       const renderSignature = [
         typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
         String(checklistBrowseState.year || 'all'),
-        String(checklistBrowseState.status || 'all')
+        String(checklistBrowseState.status || 'all'),
+        canUseRemoteChecklistPaging() ? String(checklistRemotePageState.signature || '') : ''
       ].join('::');
       const contentEl = document.querySelector('.cl-list-content');
       if (!contentEl) return;
@@ -417,7 +570,8 @@
       const renderSignature = [
         typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
         String(checklistBrowseState.year || 'all'),
-        String(checklistBrowseState.status || 'all')
+        String(checklistBrowseState.status || 'all'),
+        canUseRemoteChecklistPaging() ? String(checklistRemotePageState.signature || '') : ''
       ].join('::');
       const appliedSignature = [
         renderSignature,
@@ -491,19 +645,47 @@
       return '<details class="cl-year-accordion" open data-cl-year-key="' + esc(yearValue || '未知') + '"><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span>' + deleteButton + '<span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';
     }
 
-    async function renderChecklistList(options) {
+  async function renderChecklistList(options) {
     const opts = options || {};
-    const syncPromise = opts.skipSync
+    const useRemoteList = canUseRemoteChecklistPaging();
+    const syncPromise = (opts.skipSync || useRemoteList)
       ? Promise.resolve()
       : scheduleDeferredPromise(() => syncChecklistsFromM365({ silent: true }), 250).catch((error) => {
         console.warn('checklist list sync failed', error);
       });
-    const snapshot = getChecklistListSnapshot(getVisibleChecklists());
-    const viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
-    const checklists = snapshot.items;
-    const years = snapshot.years;
+    const localSnapshot = getChecklistListSnapshot(getVisibleChecklists());
+    const years = localSnapshot.years;
     if (!checklistBrowseState.year || !years.includes(checklistBrowseState.year) && checklistBrowseState.year !== 'all') {
       checklistBrowseState.year = years.includes(String(new Date().getFullYear() - 1911)) ? String(new Date().getFullYear() - 1911) : (years[0] || 'all');
+    }
+    let checklists;
+    let snapshot;
+    let viewSnapshot;
+    let remotePage = null;
+    if (useRemoteList) {
+      const remoteFilters = normalizeChecklistRemoteFilters(opts.remoteFilters || {
+        limit: checklistRemotePageState.filters.limit,
+        offset: checklistRemotePageState.filters.offset,
+        auditYear: checklistBrowseState.year,
+        statusBucket: checklistBrowseState.status,
+        q: checklistBrowseState.keyword
+      });
+      const remotePageResult = await loadChecklistRemotePage(remoteFilters, { force: !!opts.forceRemotePage });
+      checklistRemotePageState = {
+        filters: remotePageResult.filters,
+        page: remotePageResult.page,
+        items: Array.isArray(remotePageResult.items) ? remotePageResult.items.slice() : [],
+        total: remotePageResult.total,
+        signature: getChecklistRemoteSignature(remotePageResult.filters)
+      };
+      remotePage = remotePageResult.page;
+      checklists = checklistRemotePageState.items;
+      snapshot = getChecklistListSnapshot(checklists);
+      viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
+    } else {
+      snapshot = localSnapshot;
+      viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
+      checklists = snapshot.items;
     }
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page">
@@ -516,6 +698,7 @@
           ${buildChecklistListYearTabs(years)}
         </div>
         </div>
+        ${useRemoteList ? renderChecklistListPager(remotePage) : ''}
         <div class="cl-list-content"></div>
       </div>
     </div>`;
@@ -523,7 +706,7 @@
     syncChecklistListToolbarState();
     refreshIcons();
     bindCopyButtons();
-    if (!opts.skipSync && syncPromise && typeof syncPromise.then === 'function') {
+    if (!opts.skipSync && !useRemoteList && syncPromise && typeof syncPromise.then === 'function') {
       syncPromise.then(() => {
         if (!String(window.location.hash || '').startsWith('#checklist')) return;
         renderChecklistList({ skipSync: true });
@@ -535,11 +718,27 @@
     const keywordEl = document.getElementById('cl-list-keyword');
     const statusEl = document.getElementById('cl-list-status');
     const yearTabs = document.querySelectorAll('[data-checklist-year]');
+    const pageLimitEl = document.getElementById('cl-list-page-limit');
+    const prevPageButton = document.getElementById('cl-list-prev-page');
+    const nextPageButton = document.getElementById('cl-list-next-page');
     let browseTimer = null;
     const scheduleRerender = () => {
       if (browseTimer) window.clearTimeout(browseTimer);
       browseTimer = window.setTimeout(() => {
         browseTimer = null;
+        if (useRemoteList) {
+          renderChecklistList({
+            skipSync: true,
+            remoteFilters: {
+              limit: pageLimitEl && pageLimitEl.value ? pageLimitEl.value : checklistRemotePageState.filters.limit,
+              offset: '0',
+              auditYear: checklistBrowseState.year,
+              statusBucket: checklistBrowseState.status,
+              q: checklistBrowseState.keyword
+            }
+          });
+          return;
+        }
         applyChecklistKeywordFilter();
       }, 120);
     };
@@ -549,21 +748,104 @@
     });
     statusEl?.addEventListener('change', () => {
       checklistBrowseState.status = statusEl.value;
+      if (useRemoteList) {
+        renderChecklistList({
+          skipSync: true,
+          remoteFilters: {
+            limit: pageLimitEl && pageLimitEl.value ? pageLimitEl.value : checklistRemotePageState.filters.limit,
+            offset: '0',
+            auditYear: checklistBrowseState.year,
+            statusBucket: checklistBrowseState.status,
+            q: checklistBrowseState.keyword
+          }
+        });
+        return;
+      }
       renderChecklistListContent(checklists, snapshot, viewSnapshot);
       syncChecklistListToolbarState();
     });
     yearTabs.forEach((tab) => {
       tab.addEventListener('click', () => {
         checklistBrowseState.year = String(tab.dataset.checklistYear || 'all');
+        if (useRemoteList) {
+          renderChecklistList({
+            skipSync: true,
+            remoteFilters: {
+              limit: pageLimitEl && pageLimitEl.value ? pageLimitEl.value : checklistRemotePageState.filters.limit,
+              offset: '0',
+              auditYear: checklistBrowseState.year,
+              statusBucket: checklistBrowseState.status,
+              q: checklistBrowseState.keyword
+            }
+          });
+          return;
+        }
         renderChecklistListContent(checklists, snapshot, viewSnapshot);
         syncChecklistListToolbarState();
       });
     });
+    if (useRemoteList && pageLimitEl) {
+      pageLimitEl.addEventListener('change', () => {
+        renderChecklistList({
+          skipSync: true,
+          remoteFilters: {
+            limit: pageLimitEl.value || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT,
+            offset: '0',
+            auditYear: checklistBrowseState.year,
+            statusBucket: checklistBrowseState.status,
+            q: checklistBrowseState.keyword
+          }
+        });
+      });
+    }
+    if (useRemoteList && prevPageButton) {
+      prevPageButton.addEventListener('click', () => {
+        if (!checklistRemotePageState.page || !checklistRemotePageState.page.hasPrev) return;
+        renderChecklistList({
+          skipSync: true,
+          remoteFilters: {
+            limit: String(checklistRemotePageState.page.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+            offset: String(checklistRemotePageState.page.prevOffset || 0),
+            auditYear: checklistBrowseState.year,
+            statusBucket: checklistBrowseState.status,
+            q: checklistBrowseState.keyword
+          }
+        });
+      });
+    }
+    if (useRemoteList && nextPageButton) {
+      nextPageButton.addEventListener('click', () => {
+        if (!checklistRemotePageState.page || !checklistRemotePageState.page.hasNext) return;
+        renderChecklistList({
+          skipSync: true,
+          remoteFilters: {
+            limit: String(checklistRemotePageState.page.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+            offset: String(checklistRemotePageState.page.nextOffset || 0),
+            auditYear: checklistBrowseState.year,
+            statusBucket: checklistBrowseState.status,
+            q: checklistBrowseState.keyword
+          }
+        });
+      });
+    }
     registerActionHandlers(document.getElementById('app'), {
       resetListFilters: function () {
         checklistBrowseState.keyword = '';
         checklistBrowseState.status = 'all';
         checklistBrowseState.year = String(new Date().getFullYear() - 1911);
+        if (useRemoteList) {
+          renderChecklistList({
+            skipSync: true,
+            remoteFilters: {
+              limit: pageLimitEl && pageLimitEl.value ? pageLimitEl.value : CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT,
+              offset: '0',
+              auditYear: checklistBrowseState.year,
+              statusBucket: checklistBrowseState.status,
+              q: ''
+            }
+          });
+          return;
+        }
         renderChecklistListContent(checklists, snapshot, viewSnapshot);
         syncChecklistListToolbarState();
         applyChecklistKeywordFilter();
