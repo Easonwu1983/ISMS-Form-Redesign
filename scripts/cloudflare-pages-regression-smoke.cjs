@@ -787,10 +787,14 @@ async function run() {
         .filter(Boolean);
       return Array.from(new Set(labels));
     });
-    const expectedCategories = ['行政單位', '學術單位', '中心', '研究單位'];
+    const expectedCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
     const missingCategories = expectedCategories.filter((label) => !securityWindowCategories.includes(label));
     if (missingCategories.length) {
       throw new Error(`security window missing categories: ${missingCategories.join(', ')}`);
+    }
+    const unexpectedCategories = securityWindowCategories.filter((label) => !expectedCategories.includes(label));
+    if (unexpectedCategories.length) {
+      throw new Error(`security window has unexpected categories: ${unexpectedCategories.join(', ')}`);
     }
     if (!securityWindowText.includes('一級單位') || !securityWindowText.includes('二級單位')) {
       throw new Error('security window page did not render grouped unit tiers');

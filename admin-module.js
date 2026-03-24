@@ -881,28 +881,29 @@
         </div>`;
     }
 
-    const SECURITY_WINDOW_CATEGORY_ORDER = ['行政單位', '學術單位', '中心', '研究單位', '其他單位'];
+    const SECURITY_WINDOW_CATEGORY_ORDER = ['行政單位', '學術單位', '中心 / 研究單位'];
 
     function normalizeSecurityWindowCategory(category) {
       const raw = String(category || '').trim();
-      if (!raw) return '其他單位';
+      if (!raw) return null;
       if (SECURITY_WINDOW_CATEGORY_ORDER.includes(raw)) return raw;
       if (raw.includes('行政')) return '行政單位';
       if (raw.includes('學術')) return '學術單位';
-      if (raw.includes('中心')) return '中心';
-      if (raw.includes('研究')) return '研究單位';
-      return '其他單位';
+      if (raw.includes('中心') || raw.includes('研究')) return '中心 / 研究單位';
+      return null;
     }
 
     function groupSecurityWindowUnitsByCategory(units) {
       const groups = new Map();
       (Array.isArray(units) ? units : []).forEach((unit) => {
         const category = normalizeSecurityWindowCategory(unit && unit.category);
+        if (!category) return;
         if (!groups.has(category)) groups.set(category, []);
         groups.get(category).push(unit);
       });
       return SECURITY_WINDOW_CATEGORY_ORDER
-        .map((category) => ({ category, items: groups.get(category) || [] }));
+        .map((category) => ({ category, items: groups.get(category) || [] }))
+        .filter((group) => Array.isArray(group.items) && group.items.length);
     }
 
     function renderSecurityWindowUnitCard(unit) {
@@ -921,7 +922,7 @@
 
     function renderSecurityWindowCategoryCard(group, index) {
       const items = Array.isArray(group && group.items) ? group.items : [];
-      const category = String(group && group.category || '').trim() || '其他單位';
+      const category = String(group && group.category || '').trim() || '中心 / 研究單位';
       const unitCount = items.length;
       const assignedCount = items.filter((unit) => unit && unit.hasWindow).length;
       const pendingCount = items.reduce((sum, unit) => sum + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0);
@@ -935,9 +936,7 @@
       ];
       const openAttr = index === 0 ? ' open' : '';
       const subtitle = `${category} · ${childCount} 個二級單位`;
-      const bodyHtml = items.length
-        ? `<div class="security-window-group-stack security-window-group-stack--nested">${items.map((unit) => renderSecurityWindowUnitCard(unit)).join('')}</div>`
-        : `<div class="empty-state security-window-category-empty"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">目前沒有${esc(category)}的資安窗口資料</div><div class="empty-state-desc">若後續有新增或申請，會自動出現在此分類下。</div></div>`;
+      const bodyHtml = `<div class="security-window-group-stack security-window-group-stack--nested">${items.map((unit) => renderSecurityWindowUnitCard(unit)).join('')}</div>`;
       return `<details class="training-group-card security-window-category-card"${openAttr} data-security-window-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body">${bodyHtml}</div></details>`;
     }
 
@@ -1573,7 +1572,7 @@
         if (securityWindowLoadPromise) {
           inventory = await securityWindowLoadPromise;
         } else {
-          app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">盤點全校各單位資安窗口、待審核申請與尚未設定狀態，僅最高管理者可檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在載入資安窗口盤點資料...</div></div>`;
+          app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">盤點全校各單位的資安窗口配置，依行政單位、學術單位、中心 / 研究單位分層顯示，僅最高管理者可檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在載入資安窗口盤點資料...</div></div>`;
           refreshIcons();
           inventory = await loadSecurityWindowInventory(!!opts.force);
         }
@@ -1603,7 +1602,7 @@
         <div>
           <div class="page-eyebrow">系統管理</div>
           <h1 class="page-title">資安窗口</h1>
-          <p class="page-subtitle">盤點全校各單位的資安窗口配置、待審核申請與未設定單位，僅最高管理者可檢視。</p>
+          <p class="page-subtitle">盤點全校各單位的資安窗口配置，依行政單位、學術單位、中心 / 研究單位分層顯示，僅最高管理者可檢視。</p>
         </div>
         <div class="review-header-actions">
           <button type="button" class="btn btn-secondary" data-action="admin.refreshSecurityWindow">${ic('refresh-cw', 'icon-sm')} 重新整理</button>
@@ -1617,7 +1616,7 @@
         <div class="stat-card overdue"><div class="stat-icon">${ic('users-round')}</div><div class="stat-value">${summary.peopleWithoutWindow}</div><div class="stat-label">尚未設定人員</div></div>
       </div>
       <div class="card review-table-card">
-        <div class="card-header"><span class="card-title">單位盤點</span><span class="review-card-subtitle">依一級單位展開，顯示各單位與二級單位的資安窗口狀態</span></div>
+        <div class="card-header"><span class="card-title">單位盤點</span><span class="review-card-subtitle">依行政單位、學術單位、中心 / 研究單位展開，顯示各單位與二級單位的資安窗口狀態</span></div>
         <form id="security-window-filter-form" class="review-toolbar">
           <div class="review-toolbar-main">
             <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="security-window-keyword" value="${esc(resolvedFilters.keyword)}" placeholder="單位、姓名、帳號、電子郵件、角色"></div>

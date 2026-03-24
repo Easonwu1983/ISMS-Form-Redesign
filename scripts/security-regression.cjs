@@ -239,9 +239,11 @@ async function assertNoXssExecution(page, label) {
       });
       if (!structure.stack) throw new Error('security window stack missing');
       if (structure.cardCount < 1) throw new Error('security window cards missing');
-      const expectedCategories = ['行政單位', '學術單位', '中心', '研究單位'];
+      const expectedCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
       const missingCategories = expectedCategories.filter((label) => !structure.categories.includes(label));
       if (missingCategories.length) throw new Error(`security window missing categories: ${missingCategories.join(', ')}`);
+      const unexpectedCategories = structure.categories.filter((label) => !expectedCategories.includes(label));
+      if (unexpectedCategories.length) throw new Error(`security window has unexpected categories: ${unexpectedCategories.join(', ')}`);
       if (!String(structure.text || '').includes('一級單位')) throw new Error('tier 1 label missing');
       if (!String(structure.text || '').includes('二級單位')) throw new Error('tier 2 label missing');
       return `security window grouped cards visible (${structure.cardCount} cards)`;
