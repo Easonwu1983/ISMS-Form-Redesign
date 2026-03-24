@@ -91,12 +91,20 @@
 - `http://140.112.97.150/api/unit-contact/health` 回 `ready:true`
 - `caddy` 與 `isms-unit-contact-backend.service` 都是 `active`
 - smoke 通過
-## 8. ??????
+## 8. 入口靜態資產
 
 1. `deploy-manifest.json`
-   - ??: `/srv/isms-form-redesign/deploy-manifest.json`
-   - ??? VM ?? `git HEAD` ??
+   - 路徑: `/srv/isms-form-redesign/deploy-manifest.json`
+   - 作用: 版本對照與 release gate
 2. `unit-contact-authorization-template.pdf`
-   - ??: `/srv/isms-form-redesign/unit-contact-authorization-template.pdf`
-   - ????????????
+   - 路徑: `/srv/isms-form-redesign/unit-contact-authorization-template.pdf`
+   - 作用: 申請單位管理員授權同意書下載
+
+## 9. 最短維運版
+
+1. `git pull --ff-only origin main`
+2. `node scripts/build-version-info.cjs > deploy-manifest.json`
+3. `systemctl restart isms-unit-contact-backend.service caddy.service`
+4. `curl http://140.112.97.150/api/unit-contact/health`
+5. `node scripts/vm-entry-smoke.cjs`
 
