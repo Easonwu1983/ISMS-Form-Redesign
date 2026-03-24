@@ -141,6 +141,11 @@ function createTrainingRouter(deps) {
   }
 
   function compareTrainingRosterRows(left, right) {
+    const leftBroken = isTrainingRosterRowBroken(left);
+    const rightBroken = isTrainingRosterRowBroken(right);
+    if (leftBroken !== rightBroken) {
+      return leftBroken ? 1 : -1;
+    }
     const leftUnit = cleanText(left && left.item && left.item.unit);
     const rightUnit = cleanText(right && right.item && right.item.unit);
     if (leftUnit !== rightUnit) {
@@ -156,6 +161,20 @@ function createTrainingRouter(deps) {
 
   function sortTrainingRosterRows(rows) {
     return (Array.isArray(rows) ? rows : []).slice().sort(compareTrainingRosterRows);
+  }
+
+  function hasTrainingDisplayCorruption(value) {
+    const text = cleanText(value);
+    if (!text) return false;
+    if (/\?{3,}/.test(text)) return true;
+    return /(\uFFFD|銵|摮貉|銝剖|蝟餌絞|撣唾|瑼Ｘ)/.test(text);
+  }
+
+  function isTrainingRosterRowBroken(entry) {
+    const item = entry && entry.item ? entry.item : {};
+    const name = cleanText(item.name);
+    if (/^DBG-\d+/i.test(name)) return true;
+    return [item.unit, item.statsUnit, item.unitName, item.identity, item.jobTitle].some(hasTrainingDisplayCorruption);
   }
 
   async function fetchListMap() {
