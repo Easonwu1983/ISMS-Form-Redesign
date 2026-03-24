@@ -154,13 +154,26 @@
     };
 
     function formatUserUnitSummary(user) {
-      const units = getAuthorizedUnits(user);
-      return units.length ? units.join('、') : '未指定';
+      const primary = String((user && (user.primaryUnit || user.unit)) || '').trim();
+      const units = getAuthorizedUnits(user).filter((unit) => unit && unit !== primary);
+      if (!primary && !units.length) return '未指定';
+      if (!units.length) return primary ? `${primary}（無額外授權）` : '未指定';
+      const extraLabel = units.length ? units.join('、') : '無額外授權';
+      return primary ? `主：${primary}；額外：${extraLabel}` : `額外：${extraLabel}`;
     }
 
     function formatUserReviewUnitSummary(user) {
       const units = getReviewUnits(user);
       return units.length ? units.join('、') : '沿用既有審核邏輯';
+    }
+
+    function getPrimaryAuthorizedUnit(user) {
+      return String((user && (user.primaryUnit || user.unit)) || '').trim() || (getAuthorizedUnits(user)[0] || '');
+    }
+
+    function getExtraAuthorizedUnits(user) {
+      const primary = getPrimaryAuthorizedUnit(user);
+      return getAuthorizedUnits(user).filter((unit) => unit && unit !== primary);
     }
 
     function getGovernanceReviewScopeUnits(user) {
@@ -1270,9 +1283,12 @@
   function renderUsers() {
     if (!canManageUsers()) { navigate('dashboard'); return; }
     const users = getUsers();
-    const rows = users.map(u => `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${getRoleBadgeClass(u.role)}">${getRoleLabel(u.role)}</span></td><td>${esc(formatSecurityRolesSummary(u.securityRoles))}</td><td>${esc(u.unit || '未指定')}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`).join('');
-    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
-      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要單位</th><th>授權單位</th><th>可審核單位</th><th>電子郵件</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    const rows = users.map(u => {
+      const primaryUnit = getPrimaryAuthorizedUnit(u) || '未指定';
+      return `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${getRoleBadgeClass(u.role)}">${getRoleLabel(u.role)}</span></td><td>${esc(formatSecurityRolesSummary(u.securityRoles))}</td><td>${esc(primaryUnit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${u.username !== 'admin' ? `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button><button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>` : ''}</div></td></tr>`;
+    }).join('');
+    document.getElementById('app').innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
+      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要歸屬單位</th><th>額外授權範圍</th><th>審核範圍</th><th>電子郵件</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
 
@@ -1286,8 +1302,9 @@
       return fallbackRoot;
     }());
     const units = getAuthorizedUnits(eu);
+    const primaryUnit = getPrimaryAuthorizedUnit(eu);
+    const extraUnits = getExtraAuthorizedUnits(eu);
     const reviewUnits = getReviewUnits(eu);
-    const initUnit = units[0] || '';
     const selectedSecurityRoles = normalizeSecurityRoles(eu && eu.securityRoles);
 
     mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${esc(title)}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="user-form">
@@ -1295,15 +1312,15 @@
       <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
       <div class="form-group"><label class="form-label form-required">電子郵件</label><input type="email" class="form-input" id="u-email" value="${isE ? esc(eu.email || '') : ''}" required></div>
       <div class="form-row"><div class="form-group"><label class="form-label form-required">角色</label><select class="form-select" id="u-role" required><option value="${ROLES.UNIT_ADMIN}" ${isE && eu.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option><option value="${ROLES.ADMIN}" ${isE && eu.role === ROLES.ADMIN ? 'selected' : ''}>最高管理者</option></select></div>
-      <div class="form-group"><label class="form-label" id="u-unit-label">主要單位</label>${buildUnitCascadeControl('u-unit', initUnit, false, false)}</div></div>
+      <div class="form-group"><label class="form-label" id="u-unit-label">主要歸屬單位</label>${buildUnitCascadeControl('u-unit', primaryUnit, false, false)}</div></div>
       <div class="form-group" id="u-security-role-group"><label class="form-label form-required">資安角色</label>${buildSecurityRoleCheckboxes(selectedSecurityRoles)}<div class="form-hint">請至少選擇一種資安角色身分。</div></div>
-      <div class="form-group"><label class="form-label">額外授權單位</label>${buildUnitMultiSelectControl('u-units', units.slice(1), '請輸入單位名稱', '可搜尋並加入多個授權單位。')}</div>
-      <div class="form-group"><label class="form-label">可審核單位</label>${buildUnitMultiSelectControl('u-review-units', reviewUnits, '請輸入單位名稱', '僅單位管理員可設定，留空表示不限制。')}</div>
+      <div class="form-group"><label class="form-label">額外授權資源範圍</label>${buildUnitMultiSelectControl('u-units', extraUnits, '請輸入單位名稱', '可搜尋並加入額外授權的資源範圍。')}</div>
+      <div class="form-group"><label class="form-label">審核資源範圍</label>${buildUnitMultiSelectControl('u-review-units', reviewUnits, '請輸入單位名稱', '僅單位管理員可設定，留空表示沿用既有規則。')}</div>
       <div class="form-group"><label class="form-label ${isE ? '' : 'form-required'}">${isE ? '密碼（留空不修改）' : '密碼'}</label><input type="text" class="form-input" id="u-pass" ${isE ? '' : 'required'}></div>
       <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div>
     </form></div></div>`;
 
-    initUnitCascade('u-unit', initUnit, { disabled: false });
+    initUnitCascade('u-unit', primaryUnit, { disabled: false });
 
     const roleEl = document.getElementById('u-role');
     const unitLabel = document.getElementById('u-unit-label');
@@ -1322,22 +1339,11 @@
       });
     }
 
-    function syncScopedUnits() {
-      if (roleEl.value !== ROLES.UNIT_ADMIN) return;
-      const roles = readSelectedSecurityRoles();
-      const mainUnit = String(unitEl.value || '').trim();
-      const childUnits = getDirectChildUnits(mainUnit);
-      if (roles.includes('一級單位資安窗口') && childUnits.length) {
-        extraUnitsPicker.setValues(childUnits);
-        reviewUnitsPicker.setValues(childUnits);
-      } else if (roles.length === 1 && roles[0] === '二級單位資安窗口') {
-        reviewUnitsPicker.clear();
-      }
-    }
+    function syncScopedUnits() {}
 
     function syncRoleFields() {
       const unitAdminMode = roleEl.value === ROLES.UNIT_ADMIN;
-      unitLabel.textContent = unitAdminMode ? '主要單位' : '主要單位（選填）';
+      unitLabel.textContent = unitAdminMode ? '主要歸屬單位' : '主要歸屬單位（選填）';
       parentEl.required = unitAdminMode;
       if (securityRoleGroup) {
         securityRoleGroup.style.display = unitAdminMode ? '' : 'none';
@@ -1356,7 +1362,7 @@
       syncScopedUnits();
     }
 
-    syncRoleFields();    unitEl.addEventListener('change', syncScopedUnits);
+    syncRoleFields();
     roleEl.addEventListener('change', syncRoleFields);
     document.querySelectorAll('input[name="u-security-roles"]').forEach((input) => {
       input.addEventListener('change', syncScopedUnits);
@@ -1373,12 +1379,23 @@
       const reviewScopeUnits = parseUserUnits(document.getElementById('u-review-units').value);
       const securityRoles = rl === ROLES.UNIT_ADMIN ? readSelectedSecurityRoles() : [];
       const pw = document.getElementById('u-pass').value;
-      const finalUnits = Array.from(new Set([ut, ...extraUnits].filter(Boolean)));
+      const authorizedUnits = Array.from(new Set([ut, ...extraUnits].filter(Boolean)));
 
-      if (rl === ROLES.UNIT_ADMIN && !finalUnits.length) { toast('請至少指定一個授權單位', 'error'); return; }
+      if (rl === ROLES.UNIT_ADMIN && !authorizedUnits.length) { toast('請至少指定一個授權單位', 'error'); return; }
       if (rl === ROLES.UNIT_ADMIN && !securityRoles.length) { toast('請至少選擇一種資安角色身分', 'error'); return; }
 
-      const payload = { name: nm, email: em, role: rl, unit: finalUnits[0] || '', units: finalUnits, activeUnit: finalUnits[0] || '', securityRoles };
+      const payload = {
+        name: nm,
+        email: em,
+        role: rl,
+        primaryUnit: ut,
+        unit: ut,
+        authorizedUnits,
+        scopeUnits: authorizedUnits,
+        units: authorizedUnits,
+        activeUnit: ut,
+        securityRoles
+      };
       if (pw) payload.password = pw;
       try {
         if (!isE && findUser(un)) { toast('帳號已存在', 'error'); return; }

@@ -339,18 +339,22 @@
     function normalizePayload(payload) {
       const unitValue = cleanText(payload && payload.unitValue);
       const officialMeta = getOfficialUnitMeta(unitValue);
+      const primaryUnit = cleanText(payload && payload.primaryUnit) || unitValue;
+      const authorizedUnits = parseUnitList(payload && (payload.authorizedUnits || payload.scopeUnits || payload.units), primaryUnit);
       return {
         applicantName: cleanText(payload && payload.applicantName),
         applicantEmail: cleanEmail(payload && payload.applicantEmail),
         extensionNumber: cleanText(payload && payload.extensionNumber),
         unitCategory: cleanText(payload && payload.unitCategory),
-        primaryUnit: cleanText(payload && payload.primaryUnit),
+        primaryUnit,
         secondaryUnit: cleanText(payload && payload.secondaryUnit),
         unitValue,
         unitCode: cleanText(payload && payload.unitCode) || cleanText(officialMeta && officialMeta.code),
         contactType: cleanText(payload && payload.contactType) || 'primary',
         note: cleanText(payload && payload.note),
         securityRoles: parseSecurityRoles(payload && payload.securityRoles),
+        authorizedUnits,
+        scopeUnits: authorizedUnits.slice(),
         authorizationDocAttachmentId: cleanText(payload && payload.authorizationDocAttachmentId),
         authorizationDocFileName: cleanText(payload && payload.authorizationDocFileName),
         authorizationDocContentType: cleanText(payload && payload.authorizationDocContentType),
@@ -358,6 +362,29 @@
         authorizationDocUploadedAt: cleanText(payload && payload.authorizationDocUploadedAt),
         authorizationDocDriveItemId: cleanText(payload && payload.authorizationDocDriveItemId)
       };
+    }
+
+    function parseUnitList(value, primaryUnit) {
+      const ordered = [];
+      const primary = cleanText(primaryUnit);
+      if (primary) ordered.push(primary);
+      const source = Array.isArray(value)
+        ? value
+        : (typeof value === 'string'
+            ? (() => {
+                const raw = cleanText(value);
+                if (!raw) return [];
+                try {
+                  const parsed = JSON.parse(raw);
+                  if (Array.isArray(parsed)) return parsed;
+                } catch (_) {}
+                return raw.split(/\r?\n|,|;|\|/);
+              })()
+            : []);
+      source.map((entry) => cleanText(entry)).filter(Boolean).forEach((entry) => {
+        if (!ordered.includes(entry)) ordered.push(entry);
+      });
+      return ordered;
     }
 
     function assertApplicationPayload(payload) {
@@ -531,6 +558,7 @@
       if (!source || typeof source !== 'object') return null;
       const directId = cleanText(source.ApplicationId || source.applicationId || source.id || source.Title || source.title);
       if (!directId) return null;
+      const authorizedUnits = parseUnitList(source.AuthorizedUnitsJson || source.authorizedUnits || source.scopeUnits || source.ScopeUnitsJson, cleanText(source.PrimaryUnitName || source.primaryUnit || source.primaryUnitName || source.UnitValue));
       const normalized = {
         id: directId,
         applicantName: cleanText(source.ApplicantName || source.applicantName || source.DisplayName),
@@ -544,6 +572,7 @@
         contactType: cleanText(source.ContactType || source.contactType) || 'primary',
         note: cleanText(source.Note || source.note),
         securityRoles: parseSecurityRoles(source.securityRoles || source.SecurityRolesJson),
+        authorizedUnits,
         status: cleanText(source.Status || source.status) || UNIT_CONTACT_APPLICATION_STATUSES.PENDING_REVIEW,
         statusLabel: cleanText(source.StatusLabel || source.statusLabel),
         statusDetail: cleanText(source.StatusDetail || source.statusDetail || source.ReviewComment || source.reviewComment),
@@ -587,6 +616,7 @@
 
     function buildRemoteApplicationFallback(payload, body) {
       const source = body && typeof body === 'object' ? body : {};
+      const authorizedUnits = parseUnitList(payload && (payload.authorizedUnits || payload.scopeUnits || payload.units), cleanText(payload && payload.primaryUnit) || cleanText(payload && payload.unitValue));
       return decorateApplication({
         id: cleanText(source.id || source.applicationId || source.ApplicationId || source.Title) || ('pending-' + Date.now()),
         applicantName: cleanText(payload && payload.applicantName),
@@ -600,6 +630,7 @@
         contactType: cleanText(payload && payload.contactType) || 'primary',
         note: cleanText(payload && payload.note),
         securityRoles: parseSecurityRoles(payload && payload.securityRoles),
+        authorizedUnits,
         status: cleanText(source.status || source.Status) || UNIT_CONTACT_APPLICATION_STATUSES.PENDING_REVIEW,
         statusLabel: cleanText(source.statusLabel || source.StatusLabel),
         statusDetail: cleanText(source.statusDetail || source.StatusDetail),

@@ -1,7 +1,7 @@
 ﻿const crypto = require('crypto');
 
 
-const CONTRACT_VERSION = '2026-03-20';
+const CONTRACT_VERSION = '2026-03-24';
 
 const USER_ACTIONS = {
   LIST: 'system-user.list',
@@ -73,9 +73,28 @@ function parseUserUnits(value) {
     return Array.from(new Set(value.map((entry) => cleanText(entry)).filter(Boolean)));
   }
   if (typeof value === 'string') {
-    return Array.from(new Set(value.split(/\r?\n|,|;|\|/).map((entry) => cleanText(entry)).filter(Boolean)));
+    const raw = cleanText(value);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set(parsed.map((entry) => cleanText(entry)).filter(Boolean)));
+      }
+    } catch (_) {}
+    return Array.from(new Set(raw.split(/\r?\n|,|;|\|/).map((entry) => cleanText(entry)).filter(Boolean)));
   }
   return [];
+}
+
+function normalizeAuthorizedUnits(value, primaryUnit) {
+  const units = parseUserUnits(value);
+  const primary = cleanText(primaryUnit);
+  const ordered = [];
+  if (primary) ordered.push(primary);
+  units.forEach((entry) => {
+    if (entry && !ordered.includes(entry)) ordered.push(entry);
+  });
+  return ordered;
 }
 
 function parseSecurityRoles(value) {
@@ -105,13 +124,11 @@ function normalizeUserRole(role) {
 function normalizeSystemUserPayload(payload) {
   const base = payload && typeof payload === 'object' ? payload : {};
   const role = normalizeUserRole(base.role);
-  const units = parseUserUnits(base.units || base.authorizedUnits || base.AuthorizedUnitsJson);
+  const primaryUnit = cleanText(base.primaryUnit || base.unit || base.PrimaryUnit);
+  const authorizedUnits = normalizeAuthorizedUnits(base.authorizedUnits || base.scopeUnits || base.units || base.AuthorizedUnitsJson || base.ScopeUnitsJson, primaryUnit);
   const securityRoles = parseSecurityRoles(base.securityRoles || base.SecurityRolesJson || base.securityRolesJson);
-  const primaryUnit = cleanText(base.unit || base.primaryUnit || base.PrimaryUnit);
-  if (primaryUnit && !units.includes(primaryUnit)) {
-    units.unshift(primaryUnit);
-  }
-  const activeUnit = role === USER_ROLES.ADMIN ? '' : (cleanText(base.activeUnit || base.ActiveUnit) || units[0] || '');
+  const activeUnit = role === USER_ROLES.ADMIN ? '' : (cleanText(base.activeUnit || base.ActiveUnit) || authorizedUnits[0] || primaryUnit || '');
+  const resolvedPrimaryUnit = primaryUnit || authorizedUnits[0] || '';
   return {
     username: cleanText(base.username || base.userName || base.UserName),
     password: cleanText(base.password || base.PasswordSecret || base.Password),
@@ -119,8 +136,11 @@ function normalizeSystemUserPayload(payload) {
     email: cleanEmail(base.email || base.Email),
     role,
     securityRoles,
-    unit: units[0] || '',
-    units,
+    primaryUnit: resolvedPrimaryUnit,
+    authorizedUnits,
+    scopeUnits: authorizedUnits.slice(),
+    unit: resolvedPrimaryUnit,
+    units: authorizedUnits.slice(),
     activeUnit,
     createdAt: cleanText(base.createdAt || base.CreatedAt),
     updatedAt: cleanText(base.updatedAt || base.UpdatedAt),
@@ -251,8 +271,8 @@ function mapSystemUserToGraphFields(entry) {
     Email: item.email,
     Role: item.role,
     SecurityRolesJson: JSON.stringify(item.securityRoles || []),
-    PrimaryUnit: item.unit,
-    AuthorizedUnitsJson: JSON.stringify(item.units || []),
+    PrimaryUnit: item.primaryUnit || item.unit,
+    AuthorizedUnitsJson: JSON.stringify(item.authorizedUnits || item.units || []),
     ActiveUnit: item.activeUnit,
     CreatedAt: item.createdAt || null,
     UpdatedAt: item.updatedAt || null,
@@ -267,7 +287,7 @@ function mapSystemUserToGraphFields(entry) {
 }
 
 function mapGraphFieldsToSystemUser(fields) {
-  const units = parseJsonField(fields.AuthorizedUnitsJson, function () { return []; });
+  const authorizedUnits = parseJsonField(fields.AuthorizedUnitsJson || fields.ScopeUnitsJson, function () { return []; });
   const securityRoles = parseJsonField(fields.SecurityRolesJson, function () { return []; });
   const username = cleanText(fields.UserName || fields.Title);
   const rawTitle = cleanText(fields.Title);
@@ -279,8 +299,11 @@ function mapGraphFieldsToSystemUser(fields) {
     email: fields.Email,
     role: fields.Role,
     securityRoles,
+    primaryUnit: fields.PrimaryUnit,
+    authorizedUnits,
+    scopeUnits: authorizedUnits,
     unit: fields.PrimaryUnit,
-    units,
+    units: authorizedUnits,
     activeUnit: fields.ActiveUnit,
     createdAt: fields.CreatedAt,
     updatedAt: fields.UpdatedAt,
@@ -322,7 +345,10 @@ function validateSystemUserPayload(payload, options) {
   if (!cleanEmail(payload.email)) throw createError('Missing email', 400);
   if (opts.requirePassword && !cleanText(payload.password)) throw createError('Missing password', 400);
   if (cleanText(payload.password)) validatePasswordComplexity(payload.password, 'password');
-  if (payload.role !== USER_ROLES.ADMIN && !payload.units.length) {
+  const authorizedUnits = Array.isArray(payload.authorizedUnits) && payload.authorizedUnits.length
+    ? payload.authorizedUnits
+    : (Array.isArray(payload.units) ? payload.units : []);
+  if (payload.role !== USER_ROLES.ADMIN && !authorizedUnits.length) {
     throw createError('At least one authorized unit is required', 400);
   }
   if (payload.role === USER_ROLES.UNIT_ADMIN && !Array.isArray(payload.securityRoles) && !parseSecurityRoles(payload.securityRoles).length) {

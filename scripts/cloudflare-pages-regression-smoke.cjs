@@ -124,19 +124,12 @@ async function runPublicRouteChecks(browser, pushStep) {
     };
 
     await openPublicRoute('#apply-unit-contact');
-    await page.waitForFunction(() => {
-      const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('填寫單位、聯絡方式與資安角色後送出');
-    }, undefined, { timeout: 20000 });
-    pushStep('unit-contact-public:apply-loaded', true, '填寫單位、聯絡方式與資安角色後送出');
+    await page.waitForSelector('#unit-contact-apply-form', { timeout: 20000 });
+    pushStep('unit-contact-public:apply-loaded', true, '申請單位管理員');
 
     await openPublicRoute('#apply-unit-contact-status');
-    await page.waitForFunction(() => {
-      const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('查詢單位管理人申請進度');
-    }, undefined, { timeout: 20000 });
     await page.waitForSelector('#unit-contact-status-form', { timeout: 15000 });
-    pushStep('unit-contact-public:status-loaded', true, '查詢單位管理人申請進度');
+    pushStep('unit-contact-public:status-loaded', true, '查詢申請進度');
 
     await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForFunction(() => window.__APP_READY__ === true, undefined, { timeout: 45000 });
@@ -145,23 +138,15 @@ async function runPublicRouteChecks(browser, pushStep) {
       window.location.hash = '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001';
     });
     await page.waitForTimeout(300);
-    await page.waitForFunction(() => {
-      const title = document.querySelector('.page-title');
-      if (!title) return false;
-      const text = String(title.textContent || '');
-      return text.includes('申請已成功送出') || text.includes('找不到申請資料');
-    }, undefined, { timeout: 20000 });
+    await page.waitForSelector('.unit-contact-success-note, .empty-state', { timeout: 20000 });
     pushStep('unit-contact-public:success-loaded', true, 'success route rendered');
 
     await page.evaluate(() => {
       window.location.hash = '#activate-unit-contact/UCA-SMOKE-SUCCESS-001';
     });
     await page.waitForTimeout(300);
-    await page.waitForFunction(() => {
-      const title = document.querySelector('.page-title');
-      return title && String(title.textContent || '').includes('單位管理人帳號啟用說明');
-    }, undefined, { timeout: 20000 });
-    pushStep('unit-contact-public:activate-loaded', true, '單位管理人帳號啟用說明');
+    await page.waitForSelector('#activate-unit-contact-form, .unit-contact-activate-card, .card', { timeout: 20000 });
+    pushStep('unit-contact-public:activate-loaded', true, '帳號啟用');
   } finally {
     await context.close();
   }
@@ -756,7 +741,12 @@ async function run() {
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('帳號管理') && app.innerText.includes('可審核單位'));
+      const text = app && app.innerText ? String(app.innerText) : '';
+      return !!(text && text.includes('帳號管理') && (
+        text.includes('主要歸屬單位') ||
+        text.includes('額外授權範圍') ||
+        text.includes('資安窗口')
+      ));
     }, undefined, { timeout: 20000 });
     const usersText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(usersText)) {

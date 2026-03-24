@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createUnitContactApplicationModule = function createUnitContactApplicationModule(deps) {
     const {
       UNIT_CONTACT_APPLICATION_STATUSES,
@@ -23,7 +23,7 @@
     } = deps;
 
     const LAST_EMAIL_KEY = 'unit-contact-last-email';
-    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.doc';
+    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.docx';
     const AUTHORIZATION_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
     const AUTHORIZATION_UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
     const SECURITY_ROLE_OPTIONS = [
@@ -91,13 +91,148 @@
         .filter(Boolean);
     }
 
+    function parseUnitList(value) {
+      if (Array.isArray(value)) {
+        return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
+      }
+      if (typeof value === 'string') {
+        const raw = String(value || '').trim();
+        if (!raw) return [];
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            return Array.from(new Set(parsed.map((entry) => String(entry || '').trim()).filter(Boolean)));
+          }
+        } catch (_) {}
+        return Array.from(new Set(raw.split(/\r?\n|,|;|\|/).map((entry) => String(entry || '').trim()).filter(Boolean)));
+      }
+      return [];
+    }
+
+    function getUnitSearchEntries() {
+      const moduleApi = window._unitModule;
+      if (!moduleApi || typeof moduleApi.getUnitSearchEntries !== 'function') return [];
+      return moduleApi.getUnitSearchEntries([], {});
+    }
+
+    function buildAuthorizedScopePicker(baseId, values, placeholder, hint) {
+      const selected = parseUnitList(values);
+      const chips = selected.map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '">?</button></span>').join('');
+      return '<div class="unit-chip-picker" data-unit-chip-picker="' + esc(baseId) + '">'
+        + '<div class="unit-chip-picker-search">'
+        + '<input type="search" class="form-input unit-chip-picker-search-input" id="' + esc(baseId) + '-search" placeholder="' + esc(placeholder || '請輸入單位名稱') + '" autocomplete="off">'
+        + '<div class="unit-chip-picker-results" id="' + esc(baseId) + '-results" role="listbox" hidden></div>'
+        + '</div>'
+        + '<div class="unit-chip-picker-chips" id="' + esc(baseId) + '-chips">' + (chips || '<span class="unit-chip-picker-empty">尚未選擇</span>') + '</div>'
+        + '<textarea class="unit-chip-picker-hidden" id="' + esc(baseId) + '" hidden>' + esc(selected.join('\n')) + '</textarea>'
+        + '</div>'
+        + (hint ? '<div class="form-hint">' + esc(hint) + '</div>' : '');
+    }
+
+    function initAuthorizedScopePicker(baseId) {
+      const hiddenEl = document.getElementById(baseId);
+      const searchEl = document.getElementById(baseId + '-search');
+      const resultsEl = document.getElementById(baseId + '-results');
+      const chipsEl = document.getElementById(baseId + '-chips');
+      if (!hiddenEl || !searchEl || !resultsEl || !chipsEl) return null;
+      const state = new Set(parseUnitList(hiddenEl.value));
+      const syncHidden = () => {
+        hiddenEl.value = Array.from(state).join('\n');
+        hiddenEl.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const renderChips = () => {
+        const chips = Array.from(state).map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '">?</button></span>').join('');
+        chipsEl.innerHTML = chips || '<span class="unit-chip-picker-empty">尚未選擇</span>';
+      };
+      const renderResults = (query) => {
+        const text = String(query || '').trim();
+        if (!text) {
+          resultsEl.hidden = true;
+          resultsEl.innerHTML = '';
+          return;
+        }
+        const tokens = text.split(/\s+/).map((part) => String(part || '').trim().toLowerCase()).filter(Boolean);
+        const matches = getUnitSearchEntries().filter((entry) => !state.has(entry.value) && tokens.every((token) => entry.searchText.toLowerCase().includes(token))).slice(0, 8);
+        resultsEl.hidden = false;
+        if (!matches.length) {
+          resultsEl.innerHTML = '<div class="unit-chip-picker-empty">找不到符合條件的單位</div>';
+          return;
+        }
+        resultsEl.innerHTML = matches.map((entry) => '<button type="button" class="unit-cascade-search-option unit-chip-picker-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(entry.category || '') + (entry.code ? ' 繚 ' + entry.code : '') + '</span></button>').join('');
+      };
+      const addValue = (value) => {
+        const next = String(value || '').trim();
+        if (!next || state.has(next)) return;
+        state.add(next);
+        renderChips();
+        syncHidden();
+      };
+      const removeValue = (value) => {
+        const next = String(value || '').trim();
+        if (!state.has(next)) return;
+        state.delete(next);
+        renderChips();
+        syncHidden();
+      };
+      chipsEl.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-unit]');
+        if (!button) return;
+        event.preventDefault();
+        removeValue(button.dataset.removeUnit);
+      });
+      resultsEl.addEventListener('mousedown', (event) => {
+        const button = event.target.closest('[data-unit-value]');
+        if (!button) return;
+        event.preventDefault();
+        addValue(button.dataset.unitValue);
+        searchEl.value = '';
+        resultsEl.hidden = true;
+        resultsEl.innerHTML = '';
+      });
+      searchEl.addEventListener('input', () => renderResults(searchEl.value));
+      searchEl.addEventListener('focus', () => renderResults(searchEl.value));
+      searchEl.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        const button = resultsEl.querySelector('[data-unit-value]');
+        if (!button) return;
+        event.preventDefault();
+        addValue(button.dataset.unitValue);
+        searchEl.value = '';
+        resultsEl.hidden = true;
+        resultsEl.innerHTML = '';
+      });
+      document.addEventListener('click', (event) => {
+        if (!resultsEl.contains(event.target) && event.target !== searchEl) {
+          resultsEl.hidden = true;
+        }
+      });
+      renderChips();
+      syncHidden();
+      return {
+        setValues(values) {
+          state.clear();
+          parseUnitList(values).forEach((value) => state.add(value));
+          renderChips();
+          syncHidden();
+        },
+        getValues() { return Array.from(state); },
+        addValue,
+        removeValue,
+        clear() {
+          state.clear();
+          renderChips();
+          syncHidden();
+        }
+      };
+    }
+
     function validateAuthorizationDocument(file) {
-      if (!(file instanceof File)) throw new Error('請上傳主管授權同意書');
+      if (!(file instanceof File)) throw new Error('請上傳有效檔案');
       const size = Number(file.size || 0);
       const name = String(file.name || '').trim().toLowerCase();
-      if (!size) throw new Error('請上傳主管授權同意書');
-      if (size > AUTHORIZATION_UPLOAD_MAX_BYTES) throw new Error('主管授權同意書檔案不可超過 5MB');
-      if (!/\.(pdf|jpe?g|png)$/i.test(name)) throw new Error('主管授權同意書僅限 PDF、JPG 或 PNG');
+      if (!size) throw new Error('請上傳有效檔案');
+      if (size > AUTHORIZATION_UPLOAD_MAX_BYTES) throw new Error('檔案大小不可超過 5MB');
+      if (!/\.(pdf|jpe?g|png)$/i.test(name)) throw new Error('僅支援 PDF、JPG 或 PNG');
       return file;
     }
 
@@ -108,7 +243,7 @@
         '<head>',
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        '<title>單位資安窗口授權同意書</title>',
+        '<title>?桐?鞈?蝒??????/title>',
         '<style>',
         '@page{size:A4;margin:16mm}',
         '*{box-sizing:border-box}',
@@ -135,20 +270,20 @@
         '<div class="document">',
         '<div class="header">',
         '<div class="kicker">ISMS Campus Portal</div>',
-        '<h1>單位資安窗口授權同意書</h1>',
-        '<p class="lead">請由單位主管簽章後，作為申請單位管理員帳號之附件。</p>',
+        '<h1>?桐?鞈?蝒??????/h1>',
+        '<p class="lead">隢?桐?銝餌恣蝪賜?敺?雿?唾??桐?蝞∠??∪董???辣??/p>',
         '</div>',
         '<div class="meta">',
-        '<div class="field"><span class="label">申請單位</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">申請人姓名</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">申請電子郵件</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">授權項目</span><div class="check-list"><div>□ 二級單位資安窗口</div><div>□ 一級單位資安窗口</div></div></div>',
+        '<div class="field"><span class="label">?唾??桐?</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">?唾?鈭箏???/span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">?唾??餃??萎辣</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">???</span><div class="check-list"><div>??鈭??桐?鞈?蝒</div><div>??銝蝝雿?摰???/div></div></div>',
         '</div>',
         '<div class="signature">',
-        '<div class="field"><span class="label">主管簽章</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">日期</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">銝餌恣蝪賜?</span><span class="value">&nbsp;</span></div>',
+        '<div class="field"><span class="label">?交?</span><span class="value">&nbsp;</span></div>',
         '</div>',
-        '<div class="footer">填妥後請掃描成 PDF、JPG 或 PNG，上傳至申請表單。</div>',
+        '<div class="footer">憛怠戎敺?????PDF?PG ??PNG嚗??唾?唾?銵典??/div>',
         '</div>',
         '</body>',
         '</html>'
@@ -175,11 +310,11 @@
       if (!preview) return;
       const file = input && input.files && input.files[0] ? input.files[0] : null;
       if (!file) {
-        preview.innerHTML = '<span class="unit-contact-file-empty">尚未選擇檔案</span>';
+        preview.innerHTML = '<span class="unit-contact-file-empty">撠?豢?瑼?</span>';
         return;
       }
       preview.innerHTML = '<span class="unit-contact-file-name">' + esc(file.name) + '</span>'
-        + '<button type="button" class="btn btn-ghost btn-sm" data-action="unit-contact-clear-auth-doc">移除檔案</button>';
+        + '<button type="button" class="btn btn-ghost btn-sm" data-action="unit-contact-clear-auth-doc">蝘駁瑼?</button>';
     }
 
     function ensureAuthorizationDocumentSection(form) {
@@ -188,16 +323,16 @@
       card.className = 'card unit-contact-auth-doc-card';
       card.id = 'uca-authorization-doc-card';
       card.innerHTML = ''
-        + '<div class="section-header">' + ic('file-text', 'icon-sm') + ' 下載單位資安窗口授權同意書</div>'
-        + '<div class="form-hint" style="margin-top:8px">請先下載本同意書，經單位主管簽章後，再上傳掃描檔。</div>'
+        + '<div class="section-header">' + ic('file-text', 'icon-sm') + ' 銝??桐?鞈?蝒??????/div>'
+        + '<div class="form-hint" style="margin-top:8px">隢?銝??砍??嚗??桐?銝餌恣蝪賜?敺????單?????/div>'
         + '<div class="form-actions" style="margin-top:14px">'
-        + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 下載同意書</button>'
+        + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 銝?????/button>'
         + '</div>'
         + '<div class="form-group" style="margin-top:18px">'
-        + '<label class="form-label form-required">上傳主管簽章之授權同意書</label>'
+        + '<label class="form-label form-required">銝銝餌恣蝪賜?銋?甈??</label>'
         + '<input type="file" class="form-input" id="uca-authorization-doc" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" data-testid="unit-contact-authorization-doc-input">'
-        + '<div class="form-hint">僅限 PDF、JPG、PNG，大小上限 5MB。</div>'
-        + '<div class="unit-contact-auth-doc-preview" id="uca-authorization-doc-preview"><span class="unit-contact-file-empty">尚未選擇檔案</span></div>'
+        + '<div class="form-hint">?? PDF?PG?NG嚗之撠???5MB??/div>'
+        + '<div class="unit-contact-auth-doc-preview" id="uca-authorization-doc-preview"><span class="unit-contact-file-empty">撠?豢?瑼?</span></div>'
         + '</div>';
       const actions = form.querySelector('.form-actions');
       if (actions && actions.parentNode === form) {
@@ -225,7 +360,7 @@
         download: options && options.download ? "1" : ""
       });
       const blob = response && response.blob;
-      if (!(blob instanceof Blob)) throw new Error('無法載入授權同意書');
+      if (!(blob instanceof Blob)) throw new Error('授權同意書無法預覽');
       const objectUrl = URL.createObjectURL(blob);
       const previewWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
       if (!previewWindow) window.location.href = objectUrl;
@@ -248,8 +383,8 @@
     function buildModeNotice() {
       const modeKey = getM365ModeKey();
       const description = modeKey === 'local-emulator'
-        ? '目前為本機模擬模式，申請資料只會保留在目前瀏覽器。若要讓最高管理員實際審核，請切換到正式後端。'
-        : '目前為正式後端模式，送出的申請會同步到系統後端，供最高管理員審核並直接啟用。';
+        ? '目前為本機模擬環境，資料會寫入本機快取，不會同步到正式 M365。'
+        : '目前為正式整合環境，所有申請、授權與查詢都會同步至 M365。';
       return ''
         + '<div class="unit-contact-mode-banner">'
         + '<div class="unit-contact-mode-icon">' + ic('shield-check', 'icon-lg') + '</div>'
@@ -268,18 +403,23 @@
 
     function buildStatusBadge(application) {
       const tone = String(application && application.statusTone || 'pending').trim() || 'pending';
-      const label = String(application && application.statusLabel || '待審核').trim() || '待審核';
+      const label = String(application && application.statusLabel || '處理中').trim() || '處理中';
       return '<span class="unit-contact-status-badge unit-contact-status-badge--' + esc(tone) + '">' + esc(label) + '</span>';
     }
 
     function buildApplicationSummary(application) {
       const roles = normalizeSecurityRoles(application && application.securityRoles);
+      const authorizedUnits = parseUnitList(application && (application.authorizedUnits || application.scopeUnits || application.units));
+      const primaryUnit = String(application && (application.unitValue || application.primaryUnit) || '').trim();
+      const extraUnits = authorizedUnits.filter((unit) => unit && unit !== primaryUnit);
+      const extraText = extraUnits.length ? extraUnits.join('、') : '無額外授權';
       return ''
         + '<div class="unit-contact-summary-grid">'
-        + '<div><span>申請編號</span><strong>' + esc(application.id) + '</strong></div>'
-        + '<div><span>申請單位</span><strong>' + esc(application.unitValue) + '</strong></div>'
-        + '<div><span>申請人</span><strong>' + esc(application.applicantName) + '</strong></div>'
-        + '<div><span>申請電子郵件</span><strong>' + esc(application.applicantEmail) + '</strong></div>'
+        + '<div><span>申請編號</span><strong>' + esc(application && application.id || '—') + '</strong></div>'
+        + '<div><span>主要歸屬單位</span><strong>' + esc(primaryUnit || application && application.unitValue || '—') + '</strong></div>'
+        + '<div><span>額外授權範圍</span><strong>' + esc(extraText) + '</strong></div>'
+        + '<div><span>申請人</span><strong>' + esc(application && application.applicantName || '—') + '</strong></div>'
+        + '<div><span>申請電子郵件</span><strong>' + esc(application && application.applicantEmail || '—') + '</strong></div>'
         + (roles.length ? '<div><span>資安角色</span><strong>' + esc(roles.join('、')) + '</strong></div>' : '')
         + '</div>';
     }
@@ -289,41 +429,40 @@
       const id = encodeURIComponent(String(application && application.id || '').trim());
       const actions = [];
       if (status === UNIT_CONTACT_APPLICATION_STATUSES.RETURNED) {
-        actions.push('<a class="btn btn-primary" href="#apply-unit-contact">重新送出申請</a>');
+        actions.push('<a class="btn btn-primary" href="#apply-unit-contact">返回修改</a>');
         actions.push('<a class="btn btn-secondary" href="#apply-unit-contact-status">重新查詢</a>');
       } else if (
         status === UNIT_CONTACT_APPLICATION_STATUSES.APPROVED
         || status === UNIT_CONTACT_APPLICATION_STATUSES.ACTIVATION_PENDING
         || status === UNIT_CONTACT_APPLICATION_STATUSES.ACTIVE
       ) {
-        actions.push('<a class="btn btn-primary" href="#activate-unit-contact/' + id + '">啟用帳號</a>');
+        actions.push('<a class="btn btn-primary" href="#activate-unit-contact/' + id + '">前往啟用</a>');
         actions.push('<a class="btn btn-secondary" href="#apply-unit-contact-status">重新查詢</a>');
       } else if (status === UNIT_CONTACT_APPLICATION_STATUSES.REJECTED) {
-        actions.push('<a class="btn btn-primary" href="#apply-unit-contact">重新送出申請</a>');
+        actions.push('<a class="btn btn-primary" href="#apply-unit-contact">重新申請</a>');
         actions.push('<a class="btn btn-secondary" href="#apply-unit-contact-status">重新查詢</a>');
       }
       if (application && application.hasAuthorizationDoc) {
-        actions.push('<button type="button" class="btn btn-secondary" data-action="unit-contact-view-auth-doc" data-application-id="' + esc(String(application.id || '').trim()) + '" data-lookup-email="' + esc(String(lookupEmail || '').trim().toLowerCase()) + '">' + ic('file-text', 'icon-sm') + ' 檢視授權同意書</button>');
+        actions.push('<button type="button" class="btn btn-secondary" data-action="unit-contact-view-auth-doc" data-application-id="' + esc(String(application.id || '').trim()) + '" data-lookup-email="' + esc(String(lookupEmail || '').trim().toLowerCase()) + '">檢視授權同意書</button>');
       }
       if (!actions.length) return '';
       return '<div class="form-actions unit-contact-status-actions">' + actions.join('') + '</div>';
     }
 
     function buildApplicationStatusCard(application, lookupEmail) {
-      const detail = String(application && application.statusDetail || '').trim()
-        || '已送出申請，請留意後續狀態更新。';
+      const detail = String(application && application.statusDetail || '').trim() || '目前尚無補充說明。';
       const roles = normalizeSecurityRoles(application && application.securityRoles);
       return ''
         + '<article class="card unit-contact-status-card">'
         + '<div class="unit-contact-status-card-top">'
-        + '<div><div class="unit-contact-status-id">' + esc(application.id) + '</div></div>'
+        + '<div><div class="unit-contact-status-id">' + esc(application && application.id || '—') + '</div></div>'
         + buildStatusBadge(application)
         + '</div>'
         + '<div class="unit-contact-status-detail">' + esc(detail) + '</div>'
         + '<div class="unit-contact-status-meta">'
-        + '<span>申請編號：' + esc(application.id) + '</span>'
-        + '<span>送出時間：' + esc(fmtTime(application.submittedAt)) + '</span>'
-        + '<span>最後更新：' + esc(fmtTime(application.updatedAt || application.submittedAt)) + '</span>'
+        + '<span>申請編號：' + esc(application && application.id || '—') + '</span>'
+        + '<span>送出時間：' + esc(fmtTime(application && application.submittedAt)) + '</span>'
+        + '<span>最後更新：' + esc(fmtTime(application && (application.updatedAt || application.submittedAt))) + '</span>'
         + (roles.length ? '<span>資安角色：' + esc(roles.join('、')) + '</span>' : '')
         + '</div>'
         + buildStatusActions(application, lookupEmail)
@@ -339,7 +478,7 @@
     }
 
     function markDirty() {
-      setUnsavedChangesGuard(true, '申請資料尚未送出，若現在離開頁面，剛剛填寫的內容將不會保留。');
+      setUnsavedChangesGuard(true, '申請內容尚未送出，離開前請先確認是否要保留變更。');
     }
 
     function clearDirty() {
@@ -354,51 +493,55 @@
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          '單位管理人申請',
-          '填寫單位、聯絡方式與資安角色後送出',
-          '送出前請先確認申請單位與申請電子郵件都正確。審核通過後，系統會直接啟用帳號並寄送登入資訊。',
-          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
+          '申請單位管理員',
+          '先確認主要歸屬單位，再補充可跨單位授權的資源範圍。',
+          '若申請者同時兼辦其他單位，請在下方補充額外授權資源範圍。審核通過後，系統會依主要歸屬單位與授權範圍建立帳號權限。',
+          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢進度</a>'
         )
         + buildModeNotice()
         + '<div class="unit-contact-layout">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-form-card">'
-        + '<div class="section-header">' + ic('plus-circle', 'icon-sm') + ' 送出申請</div>'
+        + '<div class="section-header">' + ic('plus-circle', 'icon-sm') + ' 申請表單</div>'
         + '<form id="unit-contact-apply-form" data-testid="unit-contact-apply-form">'
         + '<div class="form-row"><div class="form-group"><label class="form-label form-required">申請單位</label>'
         + buildUnitCascadeControl('uca-unit', '', false, true)
-        + '<div class="form-hint">請填正式名稱或完整自訂名稱，避免後續審核與啟用混淆。</div></div></div>'
+        + '<div class="form-hint">請先選擇主要歸屬單位；若有跨單位兼辦，再補充額外授權資源範圍。</div></div></div>'
+        + '<div class="form-group"><label class="form-label">額外授權資源範圍（可複選）</label>'
+        + buildAuthorizedScopePicker('uca-authorized-units', [], '請輸入單位名稱', '若有跨單位兼辦，請在此加選額外授權範圍；主歸屬單位仍以上方選擇為準。')
+        + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
         + '<div class="form-group"><label class="form-label form-required">申請人姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入申請人姓名" required></div>'
         + '<div class="form-group"><label class="form-label form-required">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" required></div>'
         + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="請輸入可收信的電子郵件（例如 ntu.edu.tw 或 Gmail）" required></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="例如 ntu.edu.tw 的信箱或 Gmail" required></div>'
         + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充職稱、代理原因或其他說明"></div></div>'
         + '<div class="form-group unit-contact-security-role-group"><label class="form-label form-required">資安角色</label>'
         + buildSecurityRoleCheckboxes([])
-        + '<div class="form-hint">請至少勾選一項資安角色身分。</div></div>'
+        + '<div class="form-hint">若同時為一、二級單位資安窗口請複選，至少勾選一項。</div></div>'
         + '<div class="form-actions">'
         + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
-        + '<a class="btn btn-ghost" href="#apply-unit-contact-status">改為查詢進度</a>'
+        + '<a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>'
         + '</div>'
         + '</form></div></div>'
         + '<aside class="unit-contact-side">'
-        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請流程</div>'
-        + buildStepCard('1. 填寫並送出申請', '填妥申請單位、申請人與聯絡資訊後送出。')
-        + buildStepCard('2. 等待最高管理員審核', '最高管理員會依申請內容進行通過、退回補件或拒絕。')
-        + buildStepCard('3. 直接使用申請電子郵件登入', '審核通過後，系統會直接啟用帳號，並寄送初始密碼。登入帳號固定為申請時填寫的電子郵件。')
+        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請步驟</div>'
+        + buildStepCard('1. 下載同意書', '先下載主管授權同意書，請主管簽章後再進行申請。')
+        + buildStepCard('2. 填寫資料', '填入主要歸屬單位與額外授權資源範圍，確保權限範圍清楚。')
+        + buildStepCard('3. 上傳送出', '上傳簽章文件並送出，審核通過後即可啟用帳號。')
         + '</div>'
-        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 送出前請確認</div>'
+        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 申請提醒</div>'
         + '<ul class="unit-contact-checklist">'
-        + '<li>申請單位已填寫正式名稱或完整自訂名稱。</li>'
-        + '<li>申請電子郵件可用 ntu.edu.tw 或 Gmail，只要可正常收信即可。</li>'
-        + '<li>審核通過後會直接啟用帳號，登入帳號固定為申請時填寫的電子郵件。</li>'
-        + '<li>送出後請記下申請電子郵件，後續可用來查詢申請進度。</li>'
+        + '<li>主要歸屬單位決定帳號主視角。</li>'
+        + '<li>額外授權資源範圍用於跨單位兼辦。</li>'
+        + '<li>授權同意書為必填附件。</li>'
+        + '<li>審核通過後會直接啟用並寄送登入資訊。</li>'
         + '</ul></div>'
         + '</aside></div></section>';
 
       initUnitCascade('uca-unit', '', { disabled: false });
+      const authorizedScopePicker = initAuthorizedScopePicker('uca-authorized-units');
 
       const form = document.getElementById('unit-contact-apply-form');
       ensureAuthorizationDocumentSection(form);
@@ -418,20 +561,20 @@
         const authDocFile = authDocInput && authDocInput.files && authDocInput.files[0] ? authDocInput.files[0] : null;
 
         if (!unitState.unitValue) {
-          toast('請先選擇申請單位。', 'error');
+          toast('請先選擇申請單位', 'error');
           return;
         }
         if (!isApplicantEmail(applicantEmail)) {
-          toast('請輸入可收信的電子郵件地址。', 'error');
+          toast('請輸入可收信的電子郵件', 'error');
           return;
         }
         if (!securityRoles.length) {
-          toast('請至少選擇一種資安角色身分。', 'error');
+          toast('請至少選擇一種資安角色身分', 'error');
           return;
         }
 
         if (!authDocFile) {
-          toast('??????????', 'error');
+          toast('請上傳主管授權同意書', 'error');
           return;
         }
 
@@ -441,7 +584,7 @@
           if (submitButton) {
             submitButton.disabled = true;
             submitButton.dataset.originalText = submitButton.innerHTML;
-            submitButton.innerHTML = '送出中...';
+            submitButton.innerHTML = '?銝?..';
           }
 
           const uploadedAuthDoc = await submitAttachmentUpload({ file: authDocFile, name: authDocFile.name, type: authDocFile.type }, {
@@ -450,14 +593,23 @@
             recordType: 'unit-contact-application',
             fileName: authDocFile.name
           });
-          if (!uploadedAuthDoc || !uploadedAuthDoc.attachmentId) throw new Error('請上傳主管授權同意書');
+          if (!uploadedAuthDoc || !uploadedAuthDoc.attachmentId) throw new Error('授權同意書上傳失敗');
+          const extraAuthorizedUnits = authorizedScopePicker && typeof authorizedScopePicker.getValues === 'function'
+            ? authorizedScopePicker.getValues()
+            : parseUnitList(document.getElementById('uca-authorized-units') && document.getElementById('uca-authorized-units').value);
+          const authorizedUnits = Array.from(new Set([unitState.unitValue, ...extraAuthorizedUnits].filter(Boolean)));
           const result = await submitUnitContactApplication({
             ...unitState,
             unitCode: getUnitCode(unitState.unitValue),
             applicantName,
             extensionNumber,
             applicantEmail,
-            note,            securityRoles,
+            note,
+            securityRoles,
+            primaryUnit: unitState.primaryUnit || unitState.unitValue,
+            authorizedUnits,
+            scopeUnits: authorizedUnits,
+            units: authorizedUnits,
             authorizationDocAttachmentId: String(uploadedAuthDoc && uploadedAuthDoc.attachmentId || '').trim(),
             authorizationDocDriveItemId: String(uploadedAuthDoc && uploadedAuthDoc.driveItemId || '').trim(),
             authorizationDocFileName: String(uploadedAuthDoc && uploadedAuthDoc.name || authDocFile.name || '').trim(),
@@ -466,13 +618,13 @@
             authorizationDocUploadedAt: String(uploadedAuthDoc && uploadedAuthDoc.uploadedAt || new Date().toISOString()).trim()
           });
 
-          if (!result || !result.application) throw new Error('申請送出後未收到有效回應。');
+          if (!result || !result.application) throw new Error('申請送出失敗');
           saveLastEmail(applicantEmail);
           clearDirty();
-          toast('申請已送出，請記下申請電子郵件並留意後續通知。');
+          toast('申請已送出，審核通過後將直接啟用帳號。');
           navigate('apply-unit-contact-success/' + encodeURIComponent(result.application.id), { allowDirtyNavigation: true });
         } catch (error) {
-          toast(String(error && error.message || error || '申請送出失敗。'), 'error');
+          toast(String(error && error.message || error || '申請失敗'), 'error');
         } finally {
           if (submitButton) {
             submitButton.disabled = false;
@@ -495,11 +647,11 @@
           + '<section class="unit-contact-shell">'
           + buildPublicHero(
             '申請已送出',
-            '找不到申請資料',
-          '目前無法載入這筆申請。若剛完成送件，請改由查詢頁輸入申請電子郵件查看進度。',
-            '<a class="btn btn-primary" href="#apply-unit-contact">重新送出申請</a>'
+            '目前找不到申請資料。',
+            '可能是連結已失效，請重新申請或改用申請進度查詢。',
+            '<a class="btn btn-primary" href="#apply-unit-contact">重新申請</a>'
           )
-          + '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">找不到申請資料</div><div class="empty-state-desc">請改用申請電子郵件到查詢頁查看，或重新送出申請。</div></div>'
+          + '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">找不到申請資料</div><div class="empty-state-desc">請重新申請或使用進度查詢功能確認目前狀態。</div></div>'
           + '</section>';
         refreshIcons();
         return;
@@ -508,17 +660,17 @@
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
           '申請已送出',
-          '申請已成功送出',
-          '請記下申請編號與申請電子郵件，後續可回到查詢頁查看審核進度與登入資訊寄送結果。',
-          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
+          '已收到申請資料，審核通過後將直接啟用帳號。',
+          '請妥善保存申請編號，以便後續查詢進度與追蹤審核狀態。',
+          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢進度</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-success-card">'
         + '<div class="unit-contact-success-mark">' + ic('badge-check', 'icon-xl') + '</div>'
         + buildApplicationSummary(application)
-        + '<div class="unit-contact-success-note">若管理端需要補件或已完成審核，系統會更新申請狀態。登入帳號會固定使用申請電子郵件。</div>'
-        + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">立即查詢進度</a><a class="btn btn-ghost" href="#apply-unit-contact">送出另一筆申請</a></div>'
+        + '<div class="unit-contact-success-note">授權同意書與申請資料已保留，後續若有補件需求，可由進度頁面查詢並重新提交。</div>'
+        + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">查詢進度</a><a class="btn btn-ghost" href="#apply-unit-contact">再次申請</a></div>'
         + '</div></div></div></section>';
       refreshIcons();
     }
@@ -532,28 +684,28 @@
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          '申請進度查詢',
-          '查詢單位管理人申請進度',
-          '請輸入送件時使用的電子郵件，系統會列出該電子郵件下的申請狀態與後續操作。',
+          '查詢申請進度',
+          '輸入申請時填寫的電子郵件即可查詢。',
+          '若有跨單位兼辦，系統會一併顯示主要歸屬單位與額外授權範圍。',
           '<a class="btn btn-secondary" href="#apply-unit-contact">' + ic('arrow-left', 'icon-sm') + ' 返回申請</a>'
         )
         + '<div class="unit-contact-layout">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-form-card">'
-        + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 依電子郵件查詢</div>'
+        + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 申請進度查詢</div>'
         + '<form id="unit-contact-status-form">'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入送件時使用的電子郵件" required></div>'
-        + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary" style="width:100%">' + ic('search', 'icon-sm') + ' 開始查詢</button></div>'
+        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入申請時填寫的電子郵件" required></div>'
+        + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary" style="width:100%">' + ic('search', 'icon-sm') + ' 查詢</button></div>'
         + '</div></form>'
         + '<div id="unit-contact-status-results"></div>'
         + '</div></div>'
         + '<aside class="unit-contact-side">'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('info', 'icon-sm') + ' 查詢說明</div>'
         + '<ul class="unit-contact-checklist">'
-        + '<li>請輸入申請時使用的電子郵件。</li>'
-        + '<li>若看到退回補件，可直接回到申請頁補正後重新送出。</li>'
-        + '<li>若看到已通過或已啟用，代表系統會直接寄送登入資訊，可查看登入說明與後續通知。</li>'
+        + '<li>請輸入申請時的電子郵件。</li>'
+        + '<li>系統會顯示申請單位、資安角色與審核狀態。</li>'
+        + '<li>若審核已通過，將可直接前往啟用頁面。</li>'
         + '</ul></div></aside>'
         + '</div></section>';
 
@@ -562,7 +714,7 @@
       if (resultsEl && !resultsEl.dataset.authDocPreviewBound) {
         resultsEl.dataset.authDocPreviewBound = '1';
         resultsEl.addEventListener('click', async function (event) {
-          const button = event.target && event.target.closest ? event.target.closest('[data-action=\"unit-contact-view-auth-doc\"]') : null;
+          const button = event.target && event.target.closest ? event.target.closest('[data-action="unit-contact-view-auth-doc"]') : null;
           if (!button) return;
           event.preventDefault();
           const applicationId = String(button.getAttribute('data-application-id') || '').trim();
@@ -574,13 +726,13 @@
           try {
             const response = await requestUnitContactAuthorizationDocument(applicationId, { email: lookupEmail });
             const blob = response && response.blob;
-            if (!(blob instanceof Blob)) throw new Error('無法讀取授權同意書');
+            if (!(blob instanceof Blob)) throw new Error('授權同意書無法預覽');
             const objectUrl = URL.createObjectURL(blob);
             const previewWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer');
             if (!previewWindow) window.location.href = objectUrl;
             setTimeout(() => { try { URL.revokeObjectURL(objectUrl); } catch (_) { } }, 10000);
           } catch (error) {
-            toast(String(error && error.message || error || '無法讀取授權同意書'), 'error');
+            toast(String(error && error.message || error || '授權同意書無法預覽'), 'error');
           } finally {
             button.disabled = false;
             button.innerHTML = originalText;
@@ -591,11 +743,11 @@
       async function runLookup() {
         const email = String(document.getElementById('uca-status-email').value || '').trim().toLowerCase();
         if (!email) {
-          toast('請輸入申請電子郵件。', 'error');
+          toast('請輸入申請時填寫的電子郵件', 'error');
           return;
         }
         if (!isApplicantEmail(email)) {
-          toast('請輸入可收信的電子郵件地址。', 'error');
+          toast('請輸入有效的電子郵件格式', 'error');
           return;
         }
         saveLastEmail(email);
@@ -603,7 +755,7 @@
         try {
           const applications = await lookupUnitContactApplicationsByEmail(email);
           if (!applications.length) {
-            resultsEl.innerHTML = '<div class="empty-state unit-contact-inline-empty"><div class="empty-state-icon">' + ic('inbox', 'icon-lg') + '</div><div class="empty-state-title">找不到申請紀錄</div><div class="empty-state-desc">請確認申請電子郵件是否正確，或先回到申請頁重新送件。</div></div>';
+            resultsEl.innerHTML = '<div class="empty-state unit-contact-inline-empty"><div class="empty-state-icon">' + ic('inbox', 'icon-lg') + '</div><div class="empty-state-title">查無申請資料</div><div class="empty-state-desc">請確認輸入的是申請時填寫的電子郵件，或稍後再試一次。</div></div>';
             refreshIcons();
             return;
           }
@@ -611,7 +763,7 @@
           refreshIcons();
         } catch (error) {
           resultsEl.innerHTML = '';
-          toast(String(error && error.message || error || '查詢失敗。'), 'error');
+          toast(String(error && error.message || error || '查詢失敗'), 'error');
         }
       }
 
@@ -638,18 +790,18 @@
       mount.innerHTML = ''
         + '<section class="unit-contact-shell">'
         + buildPublicHero(
-          '帳號啟用說明',
-          '單位管理人帳號啟用說明',
-          '當申請已通過或已啟用時，可依此頁說明確認登入方式。登入帳號固定為申請時填寫的電子郵件。',
-          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢申請進度</a>'
+          '帳號啟用',
+          '確認申請資料與授權範圍後，即可啟用帳號。',
+          '若申請時包含額外授權資源範圍，啟用後系統會一併套用對應權限。',
+          '<a class="btn btn-secondary" href="#apply-unit-contact-status">' + ic('search', 'icon-sm') + ' 查詢進度</a>'
         )
         + '<div class="unit-contact-layout unit-contact-layout--single">'
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-side-card">'
-        + '<div class="section-header">' + ic('key', 'icon-sm') + ' 登入說明</div>'
-        + '<div class="unit-contact-activation-copy">若您已收到通知，請使用申請時填寫的電子郵件作為登入帳號，並搭配通知中的初始密碼登入系統，首次登入後請立即修改密碼。若狀態仍為待審核或退回補件，請先回到查詢頁確認最新進度。</div>'
+        + '<div class="section-header">' + ic('key', 'icon-sm') + ' 啟用說明</div>'
+        + '<div class="unit-contact-activation-copy">請先確認申請資料與授權範圍是否正確。若無誤，按下啟用後即可開通帳號並套用對應的單位權限。</div>'
         + (application ? buildApplicationSummary(application) : '')
-        + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">返回查詢頁</a></div>'
+        + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">返回查詢</a></div>'
         + '</div></div></div></section>';
       refreshIcons();
     }

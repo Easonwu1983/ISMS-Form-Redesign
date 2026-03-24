@@ -687,9 +687,28 @@
         return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
       }
       if (typeof value === 'string') {
-        return Array.from(new Set(value.split(/\r?\n|,|;|\|/).map((entry) => String(entry || '').trim()).filter(Boolean)));
+        const raw = String(value || '').trim();
+        if (!raw) return [];
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            return Array.from(new Set(parsed.map((entry) => String(entry || '').trim()).filter(Boolean)));
+          }
+        } catch (_) {}
+        return Array.from(new Set(raw.split(/\r?\n|,|;|\|/).map((entry) => String(entry || '').trim()).filter(Boolean)));
       }
       return [];
+    }
+
+    function normalizeAuthorizedUnits(user) {
+      const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
+      const units = parseUserUnits(user?.authorizedUnits || user?.scopeUnits || user?.units);
+      const ordered = [];
+      if (primaryUnit) ordered.push(primaryUnit);
+      units.forEach((unit) => {
+        if (unit && !ordered.includes(unit)) ordered.push(unit);
+      });
+      return ordered;
     }
 
     function parseSecurityRoles(value) {
@@ -716,7 +735,7 @@
     }
 
     function getAuthorizedUnits(user) {
-      const units = parseUserUnits(user?.units);
+      const units = normalizeAuthorizedUnits(user);
       if (units.length) return units;
       const unit = String(user?.unit || '').trim();
       return unit ? [unit] : [];
@@ -735,15 +754,19 @@
 
     function normalizeUserRecord(user) {
       const role = normalizeUserRole(user?.role);
-      const units = getAuthorizedUnits(user);
+      const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
+      const units = normalizeAuthorizedUnits(user);
       const reviewUnits = getReviewUnits(user);
       return {
         ...user,
         role,
+        primaryUnit: primaryUnit || units[0] || '',
+        authorizedUnits: units,
+        scopeUnits: units.slice(),
         units,
         reviewUnits,
         securityRoles: parseSecurityRoles(user?.securityRoles),
-        unit: units[0] || '',
+        unit: (primaryUnit || units[0] || ''),
         activeUnit: role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units })
       };
     }

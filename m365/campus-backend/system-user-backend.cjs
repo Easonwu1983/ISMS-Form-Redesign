@@ -303,14 +303,21 @@ function createSystemUserRouter(deps) {
   function buildSystemUserSnapshot(item) {
     if (!item) return null;
     const passwordState = readStoredPasswordState(item.password);
+    const primaryUnit = cleanText(item.primaryUnit || item.unit);
+    const authorizedUnits = Array.isArray(item.authorizedUnits) && item.authorizedUnits.length
+      ? item.authorizedUnits.slice()
+      : (Array.isArray(item.units) ? item.units.slice() : []);
     return {
       username: cleanText(item.username),
       name: cleanText(item.name),
       email: cleanText(item.email),
       role: cleanText(item.role),
       securityRoles: Array.isArray(item.securityRoles) ? item.securityRoles.slice() : [],
-      unit: cleanText(item.unit),
-      units: Array.isArray(item.units) ? item.units.slice() : [],
+      primaryUnit,
+      authorizedUnits,
+      scopeUnits: authorizedUnits.slice(),
+      unit: primaryUnit,
+      units: authorizedUnits.slice(),
       activeUnit: cleanText(item.activeUnit),
       hasPassword: passwordState.hasPassword === true,
       mustChangePassword: passwordState.mustChangePassword === true,
@@ -326,7 +333,9 @@ function createSystemUserRouter(deps) {
       'email',
       'role',
       { key: 'securityRoles', kind: 'array' },
+      'primaryUnit',
       'unit',
+      { key: 'authorizedUnits', kind: 'array' },
       { key: 'units', kind: 'array' },
       'activeUnit',
       {
@@ -803,8 +812,13 @@ function createSystemUserRouter(deps) {
         securityRoles: Array.isArray(incoming.securityRoles) && incoming.securityRoles.length
           ? incoming.securityRoles
           : (Array.isArray(source.securityRoles) ? source.securityRoles : []),
-        unit: cleanText(incoming.unit) || cleanText(source.unit),
-        units: Array.isArray(incoming.units) && incoming.units.length ? incoming.units : source.units,
+        primaryUnit: cleanText(incoming.primaryUnit) || cleanText(incoming.unit) || cleanText(source.primaryUnit) || cleanText(source.unit),
+        authorizedUnits: Array.isArray(incoming.authorizedUnits) && incoming.authorizedUnits.length
+          ? incoming.authorizedUnits
+          : (Array.isArray(incoming.units) && incoming.units.length ? incoming.units : (Array.isArray(source.authorizedUnits) && source.authorizedUnits.length ? source.authorizedUnits : source.units)),
+        units: Array.isArray(incoming.authorizedUnits) && incoming.authorizedUnits.length
+          ? incoming.authorizedUnits
+          : (Array.isArray(incoming.units) && incoming.units.length ? incoming.units : (Array.isArray(source.authorizedUnits) && source.authorizedUnits.length ? source.authorizedUnits : source.units)),
         activeUnit: cleanText(incoming.activeUnit) || cleanText(source.activeUnit),
         createdAt: cleanText(source.createdAt) || cleanText(incoming.createdAt),
         updatedAt: now,
@@ -834,7 +848,10 @@ function createSystemUserRouter(deps) {
         name: payload.name,
         email: payload.email,
         role: payload.role,
-        unit: payload.unit,
+        primaryUnit: payload.primaryUnit,
+        authorizedUnits: payload.authorizedUnits,
+        scopeUnits: payload.scopeUnits,
+        unit: payload.primaryUnit,
         units: payload.units,
         activeUnit: payload.activeUnit,
         createdAt: existing ? cleanText(source.createdAt) || now : (payload.createdAt || now),

@@ -116,6 +116,29 @@ function parseSecurityRoles(value) {
   return [];
 }
 
+function parseUnitList(value, primaryUnit) {
+  const ordered = [];
+  const primary = cleanText(primaryUnit);
+  if (primary) ordered.push(primary);
+  const source = Array.isArray(value)
+    ? value
+    : (typeof value === 'string'
+        ? (() => {
+            const raw = cleanText(value);
+            if (!raw) return [];
+            try {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) return parsed;
+            } catch (_) {}
+            return raw.split(/\r?\n|,|;|\|/);
+          })()
+        : []);
+  source.map((entry) => cleanText(entry)).filter(Boolean).forEach((entry) => {
+    if (!ordered.includes(entry)) ordered.push(entry);
+  });
+  return ordered;
+}
+
 function validateActionEnvelope(envelope, expectedAction) {
   if (!envelope || typeof envelope !== 'object') {
     throw createError('\u7f3a\u5c11 request envelope\u3002', 400);
@@ -128,18 +151,21 @@ function validateActionEnvelope(envelope, expectedAction) {
 }
 
 function normalizeApplyPayload(payload) {
+  const primaryUnit = cleanText(payload && payload.primaryUnit);
+  const unitValue = cleanText(payload && payload.unitValue);
   return {
     applicantName: cleanText(payload && payload.applicantName),
     applicantEmail: cleanEmail(payload && payload.applicantEmail),
     extensionNumber: cleanText(payload && payload.extensionNumber),
     unitCategory: cleanText(payload && payload.unitCategory),
-    primaryUnit: cleanText(payload && payload.primaryUnit),
+    primaryUnit: primaryUnit || unitValue,
     secondaryUnit: cleanText(payload && payload.secondaryUnit),
-    unitValue: cleanText(payload && payload.unitValue),
+    unitValue,
     unitCode: cleanText(payload && payload.unitCode),
     contactType: cleanText(payload && payload.contactType) || 'primary',
     note: cleanText(payload && payload.note),
     securityRoles: parseSecurityRoles(payload && payload.securityRoles),
+    authorizedUnits: parseUnitList(payload && (payload.authorizedUnits || payload.scopeUnits || payload.units), primaryUnit || unitValue),
     authorizationDocAttachmentId: cleanText(payload && payload.authorizationDocAttachmentId),
     authorizationDocFileName: cleanText(payload && payload.authorizationDocFileName),
     authorizationDocContentType: cleanText(payload && payload.authorizationDocContentType),
@@ -227,6 +253,12 @@ function composeNoteWithMeta(note, meta) {
   const visible = cleanText(note);
   const input = meta && typeof meta === 'object' ? meta : {};
   const filtered = Object.entries(input).reduce((result, [key, value]) => {
+    if (Array.isArray(value) || (value && typeof value === 'object')) {
+      if (Array.isArray(value) ? value.length : Object.keys(value).length) {
+        result[key] = value;
+      }
+      return result;
+    }
     const text = cleanText(value);
     if (text) result[key] = text;
     return result;
@@ -280,6 +312,7 @@ function createApplicationRecord(payload, sequence, now) {
     secondaryUnit: payload.secondaryUnit,
     unitValue: payload.unitValue,
     unitCode: payload.unitCode,
+    authorizedUnits: Array.isArray(payload.authorizedUnits) ? payload.authorizedUnits.slice() : [],
     contactType: payload.contactType || 'primary',
     note: payload.note || '',
     securityRoles: Array.isArray(payload.securityRoles) ? payload.securityRoles.slice() : [],
@@ -307,6 +340,7 @@ function normalizeStoredApplication(application) {
   const noteMeta = splitNoteMeta(application.note);
   const primaryUnit = resolveMeaningfulText(application.primaryUnit);
   const secondaryUnit = resolveMeaningfulText(application.secondaryUnit);
+  const authorizedUnits = parseUnitList(application.authorizedUnits || application.AuthorizedUnitsJson || noteMeta.meta.authorizedUnits || noteMeta.meta.scopeUnits, primaryUnit || application.unitValue);
   const composedUnitValue = primaryUnit && secondaryUnit
     ? `${primaryUnit}／${secondaryUnit}`
     : (primaryUnit || secondaryUnit || '');
@@ -323,6 +357,7 @@ function normalizeStoredApplication(application) {
     contactType: cleanText(application.contactType) || 'primary',
     note: noteMeta.note,
     securityRoles: parseSecurityRoles(noteMeta.meta.securityRoles || application.securityRoles || application.SecurityRolesJson),
+    authorizedUnits,
     status: cleanText(application.status) || STATUSES.PENDING_REVIEW,
     statusLabel: cleanText(application.statusLabel),
     statusDetail: cleanText(application.statusDetail),
@@ -361,6 +396,7 @@ function mapApplicationForClient(application) {
     contactType: normalized.contactType,
     note: normalized.note,
     securityRoles: normalized.securityRoles,
+    authorizedUnits: normalized.authorizedUnits,
     authorizationDocAttachmentId: normalized.authorizationDocAttachmentId || "",
     authorizationDocFileName: normalized.authorizationDocFileName || "",
     authorizationDocContentType: normalized.authorizationDocContentType || "",
@@ -399,6 +435,7 @@ function mapApplicationForPublicClient(application) {
     unitCode: normalized.unitCode,
     contactType: normalized.contactType,
     securityRoles: normalized.securityRoles,
+    authorizedUnits: normalized.authorizedUnits,
     hasAuthorizationDoc: !!(normalized.authorizationDocAttachmentId || normalized.authorizationDocDriveItemId),
     status: normalized.status,
     statusLabel: normalized.statusLabel,
@@ -419,6 +456,7 @@ function mapApplicationForPublicStatus(application) {
     statusTone: normalized.statusTone,
     submittedAt: normalized.submittedAt,
     updatedAt: normalized.updatedAt,
+    authorizedUnits: normalized.authorizedUnits,
     hasAuthorizationDoc: !!(normalized.authorizationDocAttachmentId || normalized.authorizationDocDriveItemId)
   };
 }
@@ -440,6 +478,7 @@ function mapApplicationToGraphFields(application) {
     Note: composeNoteWithMeta(normalized.note, {
       externalUserId: normalized.externalUserId,
       securityRoles: normalized.securityRoles,
+      authorizedUnits: normalized.authorizedUnits,
       authorizationDocAttachmentId: normalized.authorizationDocAttachmentId,
       authorizationDocFileName: normalized.authorizationDocFileName,
       authorizationDocContentType: normalized.authorizationDocContentType,
@@ -447,6 +486,7 @@ function mapApplicationToGraphFields(application) {
       authorizationDocUploadedAt: normalized.authorizationDocUploadedAt,
       authorizationDocDriveItemId: normalized.authorizationDocDriveItemId
     }),
+    AuthorizedUnitsJson: JSON.stringify(normalized.authorizedUnits || []),
     Status: normalized.status,
     StatusLabel: normalized.statusLabel,
     StatusDetail: normalized.statusDetail,
@@ -464,6 +504,7 @@ function mapApplicationToGraphFields(application) {
 }
 
 function mapGraphFieldsToApplication(fields) {
+  const noteMeta = splitNoteMeta(fields.Note);
   return normalizeStoredApplication({
     id: fields.ApplicationId || fields.Title,
     applicantName: fields.ApplicantName,
@@ -475,7 +516,8 @@ function mapGraphFieldsToApplication(fields) {
     unitValue: fields.UnitValue,
     unitCode: fields.UnitCode,
     contactType: fields.ContactType,
-    note: fields.Note,
+    note: noteMeta.note,
+    authorizedUnits: parseUnitList(fields.AuthorizedUnitsJson || noteMeta.meta.authorizedUnits || noteMeta.meta.scopeUnits, fields.PrimaryUnitName || fields.UnitValue),
     authorizationDocAttachmentId: fields.AuthorizationDocAttachmentId,
     authorizationDocFileName: fields.AuthorizationDocFileName,
     authorizationDocContentType: fields.AuthorizationDocContentType,

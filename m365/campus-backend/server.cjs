@@ -549,6 +549,9 @@ async function tryCreateAuditRow(input) {
 
 function buildApplicationSnapshot(application) {
   if (!application) return null;
+  const authorizedUnits = Array.isArray(application.authorizedUnits)
+    ? application.authorizedUnits.slice()
+    : (Array.isArray(application.units) ? application.units.slice() : []);
   return {
     id: cleanText(application.id),
     applicantName: cleanText(application.applicantName),
@@ -559,6 +562,7 @@ function buildApplicationSnapshot(application) {
     secondaryUnit: cleanText(application.secondaryUnit),
     unitValue: cleanText(application.unitValue),
     unitCode: cleanText(application.unitCode),
+    authorizedUnits,
     contactType: cleanText(application.contactType),
     status: cleanText(application.status),
     reviewedBy: cleanText(application.reviewedBy),
@@ -583,6 +587,7 @@ function buildApplicationChanges(beforeItem, afterItem) {
     'secondaryUnit',
     'unitValue',
     'unitCode',
+    { key: 'authorizedUnits', kind: 'array' },
     'contactType',
     'note',
     'status',
@@ -769,6 +774,11 @@ async function provisionUnitContactSystemUser(application) {
   const existingUserEntry = await getSystemUserEntryByUsername(loginUsername);
   const initialPassword = generateRandomInitialPassword();
   const nextPasswordSecret = createGeneratedPasswordSecret(initialPassword, cleanText(existingUserEntry && existingUserEntry.item && existingUserEntry.item.password));
+  const primaryUnit = cleanText(application && application.primaryUnit) || cleanText(application && application.unitValue);
+  const authorizedUnits = Array.isArray(application && application.authorizedUnits)
+    ? application.authorizedUnits.map((entry) => cleanText(entry)).filter(Boolean)
+    : [];
+  const matrixUnits = Array.from(new Set([primaryUnit, ...authorizedUnits].filter(Boolean)));
   const systemUserPayload = {
     username: loginUsername,
     password: nextPasswordSecret,
@@ -776,9 +786,12 @@ async function provisionUnitContactSystemUser(application) {
     email: cleanText(application && application.applicantEmail),
     role: USER_ROLES.UNIT_ADMIN,
     securityRoles: Array.isArray(application && application.securityRoles) ? application.securityRoles : [],
-    unit: cleanText(application && application.unitValue),
-    units: cleanText(application && application.unitValue) ? [cleanText(application.unitValue)] : [],
-    activeUnit: cleanText(application && application.unitValue),
+    primaryUnit,
+    authorizedUnits: matrixUnits,
+    scopeUnits: matrixUnits,
+    unit: primaryUnit,
+    units: matrixUnits,
+    activeUnit: primaryUnit,
     mustChangePassword: true,
     backendMode: state.tokenMode === 'app-only' ? 'campus-sharepoint-app-only' : 'campus-sharepoint-cli',
     recordSource: 'unit-contact-activation'
