@@ -19,19 +19,6 @@ function Invoke-CloudflareHealthCheck {
     return $LASTEXITCODE
 }
 
-$firstExit = Invoke-CloudflareHealthCheck
-if ($firstExit -eq 0) {
-    Write-Host 'Cloudflare Pages live health is already green.'
-    exit 0
-}
-
-Write-Warning 'Cloudflare Pages live health check failed. Running bootstrap recovery.'
-powershell -NoProfile -ExecutionPolicy Bypass -File $bootstrapScript `
-    -ProjectName $ProjectName `
-    -Branch $Branch `
-    -OriginUrl $OriginUrl `
-    -Protocol $Protocol
-
 function Wait-ForCloudflareHealth {
     param(
         [int]$Attempts = 6,
@@ -52,6 +39,18 @@ function Wait-ForCloudflareHealth {
 
     return $false
 }
+
+if (Wait-ForCloudflareHealth -Attempts 2 -DelaySeconds 5) {
+    Write-Host 'Cloudflare Pages live health is already green.'
+    exit 0
+}
+
+Write-Warning 'Cloudflare Pages live health check failed. Running bootstrap recovery.'
+powershell -NoProfile -ExecutionPolicy Bypass -File $bootstrapScript `
+    -ProjectName $ProjectName `
+    -Branch $Branch `
+    -OriginUrl $OriginUrl `
+    -Protocol $Protocol
 
 if (-not (Wait-ForCloudflareHealth)) {
     throw 'Cloudflare Pages live health is still failing after bootstrap recovery.'
