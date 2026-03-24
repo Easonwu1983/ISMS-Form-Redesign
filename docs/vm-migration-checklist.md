@@ -91,3 +91,12 @@
 - `http://140.112.97.150/api/unit-contact/health` 回 `ready:true`
 - `caddy` 與 `isms-unit-contact-backend.service` 都是 `active`
 - smoke 通過
+## 8. ??????
+
+1. `deploy-manifest.json`
+   - ??: `/srv/isms-form-redesign/deploy-manifest.json`
+   - ??? VM ?? `git HEAD` ??
+2. `unit-contact-authorization-template.pdf`
+   - ??: `/srv/isms-form-redesign/unit-contact-authorization-template.pdf`
+   - ????????????
+
