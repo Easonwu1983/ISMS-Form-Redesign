@@ -1361,6 +1361,32 @@
     refreshIcons();
   }
 
+  async function handleDeleteUser(username) {
+    const cleanUsername = String(username || '').trim();
+    if (!cleanUsername) {
+      toast('找不到要刪除的帳號', 'error');
+      return;
+    }
+    const user = findUser(cleanUsername);
+    if (!user) {
+      toast('找不到要刪除的帳號', 'error');
+      return;
+    }
+    if (cleanUsername === 'admin' || String(user.role || '').trim() === ROLES.ADMIN) {
+      toast('最高管理者無法刪除', 'error');
+      return;
+    }
+    const label = `${user.name || user.username || cleanUsername}（${cleanUsername}）`;
+    if (!window.confirm(`確定要刪除 ${label} 嗎？此操作無法復原。`)) return;
+    try {
+      await submitUserDelete(cleanUsername, { username: cleanUsername });
+      renderUsers();
+      toast(`已刪除 ${label}`);
+    } catch (error) {
+      toast(String(error && error.message || error || '刪除失敗'), 'error');
+    }
+  }
+
   function showUserModal(eu) {
     const isE = !!eu;
     const title = isE ? '編輯使用者' : '新增使用者';
