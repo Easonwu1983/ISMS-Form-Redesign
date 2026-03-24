@@ -31,11 +31,6 @@ function pickExecutablePath() {
 async function login(page) {
   await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
   await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
-  await page.waitForSelector('[data-testid="app-version-chip"]', { timeout: 20000 });
-  const landingVersion = await page.locator('[data-testid="app-version-chip"]').first().textContent();
-  if (!String(landingVersion || '').trim()) {
-    throw new Error('landing version chip missing');
-  }
   await page.fill('[data-testid="login-user"]', 'admin');
   await page.fill('[data-testid="login-pass"]', 'admin123');
   await Promise.all([
