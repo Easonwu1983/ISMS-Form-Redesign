@@ -333,43 +333,52 @@ function createAuditTrailRouter(deps) {
       const pageMeta = getAuditQueryPageMeta(url);
       const canUseFastPath = !state.entriesCache && !state.entriesPromise && !hasDetailedAuditFilters(url) && pageMeta.offset === 0;
       if (canUseFastPath) {
-        const recentRows = await listRecentEntries(pageMeta.limit);
-        const recentItems = recentRows.map((entry) => entry.item);
-        const fastResult = {
-          items: recentItems,
-          total: recentItems.length,
-          summary: summarizeAuditEntries(recentItems),
-          page: {
-            offset: 0,
-            limit: pageMeta.limit,
+        try {
+          const recentRows = await listRecentEntries(pageMeta.limit);
+          const recentItems = recentRows.map((entry) => entry.item);
+          const fastResult = {
+            items: recentItems,
             total: recentItems.length,
-            pageCount: recentItems.length ? 1 : 0,
-            currentPage: recentItems.length ? 1 : 0,
-            hasPrev: false,
-            hasNext: recentItems.length >= pageMeta.limit,
-            prevOffset: 0,
-            nextOffset: pageMeta.limit,
-            pageStart: recentItems.length ? 1 : 0,
-            pageEnd: recentItems.length
-          }
-        };
-        setAuditQueryCache(querySignature, 0, fastResult);
-        logAuditTrail('list fast-path', {
-          requestId,
-          querySignature,
-          total: fastResult.total,
-          limit: pageMeta.limit,
-          durationMs: Date.now() - startedAt
-        });
-        await writeJson(res, buildJsonResponse(200, {
-          ok: true,
-          items: fastResult.items,
-          total: fastResult.total,
-          page: fastResult.page,
-          summary: fastResult.summary,
-          contractVersion: CONTRACT_VERSION
-        }), origin);
-        return;
+            summary: summarizeAuditEntries(recentItems),
+            page: {
+              offset: 0,
+              limit: pageMeta.limit,
+              total: recentItems.length,
+              pageCount: recentItems.length ? 1 : 0,
+              currentPage: recentItems.length ? 1 : 0,
+              hasPrev: false,
+              hasNext: recentItems.length >= pageMeta.limit,
+              prevOffset: 0,
+              nextOffset: pageMeta.limit,
+              pageStart: recentItems.length ? 1 : 0,
+              pageEnd: recentItems.length
+            }
+          };
+          setAuditQueryCache(querySignature, 0, fastResult);
+          logAuditTrail('list fast-path', {
+            requestId,
+            querySignature,
+            total: fastResult.total,
+            limit: pageMeta.limit,
+            durationMs: Date.now() - startedAt
+          });
+          await writeJson(res, buildJsonResponse(200, {
+            ok: true,
+            items: fastResult.items,
+            total: fastResult.total,
+            page: fastResult.page,
+            summary: fastResult.summary,
+            contractVersion: CONTRACT_VERSION
+          }), origin);
+          return;
+        } catch (fastPathError) {
+          logAuditTrail('list fast-path fallback', {
+            requestId,
+            querySignature,
+            message: String(fastPathError && fastPathError.message || fastPathError || ''),
+            durationMs: Date.now() - startedAt
+          });
+        }
       }
       const rows = await listAllEntries();
       const listLoadedAt = Number(state.entriesCache && state.entriesCache.loadedAt) || 0;
