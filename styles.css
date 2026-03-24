@@ -316,6 +316,10 @@ body {
 
 .login-btn {
   width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 13px;
   background: var(--accent-gradient);
   color: white;
@@ -1577,6 +1581,10 @@ tbody td:first-child {
   border-radius: 20px;
   background: linear-gradient(135deg, rgba(30, 64, 175, 0.08), rgba(14, 165, 233, 0.08));
   border: 1px solid rgba(30, 64, 175, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .login-entry-eyebrow {
@@ -1613,12 +1621,19 @@ tbody td:first-child {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
+  width: 100%;
+  justify-content: center;
 }
 
 .login-entry-actions .btn {
   flex: 1 1 170px;
+  max-width: 100%;
   justify-content: center;
   min-height: 46px;
+}
+
+.login-entry-text {
+  text-align: center;
 }
 
 @media (max-width: 760px), (max-height: 760px) {
