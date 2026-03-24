@@ -273,7 +273,7 @@
         '<div class="field"><span class="label">申請單位</span><span class="value">&nbsp;</span></div>',
         '<div class="field"><span class="label">申請人姓名</span><span class="value">&nbsp;</span></div>',
         '<div class="field"><span class="label">申請電子郵件</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">資安角色</span><div class="check-list"><div>一級單位資安窗口</div><div>二級單位資安窗口</div></div></div>',
+        '<div class="field"><span class="label">資安角色</span><div class="check-list"><div>☐ 一級單位資安窗口</div><div>☐ 二級單位資安窗口</div></div></div>',
         '</div>',
         '<div class="signature">',
         '<div class="field"><span class="label">主管簽章</span><span class="value">&nbsp;</span></div>',
