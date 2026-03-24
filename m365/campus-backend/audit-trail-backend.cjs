@@ -130,6 +130,52 @@ function createAuditTrailRouter(deps) {
     return { limit, offset };
   }
 
+  function buildAuditPageMeta(total, limit, offset, returnedCount, hasNextOverride) {
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 200) : 100;
+    const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+    const safeCount = Number.isFinite(returnedCount) && returnedCount > 0 ? Math.floor(returnedCount) : 0;
+    if (Number.isFinite(total) && total >= 0) {
+      const safeTotal = Math.floor(total);
+      const maxOffset = safeTotal > 0 ? Math.max(0, Math.floor((safeTotal - 1) / safeLimit) * safeLimit) : 0;
+      const normalizedOffset = Math.min(Math.max(0, safeOffset), maxOffset);
+      const pageCount = safeTotal > 0 ? Math.max(1, Math.ceil(safeTotal / safeLimit)) : 0;
+      const currentPage = safeTotal > 0 ? Math.floor(normalizedOffset / safeLimit) + 1 : 0;
+      const hasPrev = normalizedOffset > 0;
+      const hasNext = normalizedOffset + safeLimit < safeTotal;
+      return {
+        offset: normalizedOffset,
+        limit: safeLimit,
+        total: safeTotal,
+        pageCount,
+        currentPage,
+        hasPrev,
+        hasNext,
+        prevOffset: hasPrev ? Math.max(0, normalizedOffset - safeLimit) : 0,
+        nextOffset: hasNext ? normalizedOffset + safeLimit : normalizedOffset,
+        pageStart: safeCount ? normalizedOffset + 1 : 0,
+        pageEnd: safeCount ? normalizedOffset + safeCount : 0
+      };
+    }
+    const hasPrev = safeOffset > 0;
+    const hasNext = !!hasNextOverride;
+    const currentPage = safeCount || hasPrev || hasNext ? Math.floor(safeOffset / safeLimit) + 1 : 0;
+    const inferredTotal = safeOffset + safeCount + (hasNext ? 1 : 0);
+    const pageCount = currentPage ? (hasNext ? currentPage + 1 : currentPage) : 0;
+    return {
+      offset: safeOffset,
+      limit: safeLimit,
+      total: inferredTotal,
+      pageCount,
+      currentPage,
+      hasPrev,
+      hasNext,
+      prevOffset: hasPrev ? Math.max(0, safeOffset - safeLimit) : 0,
+      nextOffset: hasNext ? safeOffset + safeLimit : safeOffset,
+      pageStart: safeCount ? safeOffset + 1 : 0,
+      pageEnd: safeCount ? safeOffset + safeCount : 0
+    };
+  }
+
   function setAuditQueryCache(signature, listLoadedAt, value) {
     if (!signature || !state.queryCache || typeof state.queryCache.set !== 'function') return;
     state.queryCache.set(signature, {
@@ -200,9 +246,11 @@ function createAuditTrailRouter(deps) {
         nextUrl = cleanText(body && body['@odata.nextLink']);
       }
       rows.sort((left, right) => cleanText(right.item && right.item.occurredAt).localeCompare(cleanText(left.item && left.item.occurredAt), 'zh-Hant'));
+      const summary = summarizeAuditEntries(rows.map((entry) => entry.item));
       state.entriesCache = {
         loadedAt: Date.now(),
-        rows
+        rows,
+        summary
       };
       clearAuditQueryCache();
       persistEntriesCacheSnapshot(state.entriesCache).catch((error) => {
@@ -223,23 +271,52 @@ function createAuditTrailRouter(deps) {
     }
   }
 
-  async function listRecentEntries(limit) {
+  async function listRecentEntriesPage(offset, limit) {
     const siteId = await resolveSiteId();
     const list = await resolveAuditList();
-    const top = Math.max(1, Math.min(Number(limit) || 50, 200));
-    const body = await graphRequest('GET', `/sites/${siteId}/lists/${list.id}/items?$expand=fields($select=${AUDIT_TRAIL_FIELDS})&$orderby=id desc&$top=${top}`);
-    const batch = Array.isArray(body && body.value) ? body.value : [];
-    return batch.map((entry) => ({
-      listItemId: cleanText(entry && entry.id),
-      item: {
-        listItemId: cleanText(entry && entry.id),
-        ...mapGraphFieldsToAuditEntry(entry && entry.fields ? entry.fields : {})
+    const pageSize = Math.max(1, Math.min(Math.max(Number(limit) || 50, 100), 200));
+    let remainingOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields($select=${AUDIT_TRAIL_FIELDS})&$orderby=id desc&$top=${pageSize}`;
+    const rows = [];
+    let hasNext = false;
+    while (nextUrl) {
+      const body = await graphRequest('GET', nextUrl);
+      const batch = Array.isArray(body && body.value) ? body.value : [];
+      let startIndex = 0;
+      if (remainingOffset > 0) {
+        if (remainingOffset >= batch.length) {
+          remainingOffset -= batch.length;
+          nextUrl = cleanText(body && body['@odata.nextLink']);
+          continue;
+        }
+        startIndex = remainingOffset;
+        remainingOffset = 0;
       }
-    })).sort((left, right) => {
-      const leftAt = Date.parse(left && left.item && left.item.occurredAt || '') || 0;
-      const rightAt = Date.parse(right && right.item && right.item.occurredAt || '') || 0;
-      return rightAt - leftAt;
-    });
+      for (let index = startIndex; index < batch.length; index += 1) {
+        const entry = batch[index];
+        rows.push({
+          listItemId: cleanText(entry && entry.id),
+          item: {
+            listItemId: cleanText(entry && entry.id),
+            ...mapGraphFieldsToAuditEntry(entry && entry.fields ? entry.fields : {})
+          }
+        });
+        if (rows.length > limit) {
+          hasNext = true;
+          break;
+        }
+      }
+      if (hasNext) break;
+      nextUrl = cleanText(body && body['@odata.nextLink']);
+      if (rows.length === limit && nextUrl) {
+        hasNext = true;
+        break;
+      }
+    }
+    return {
+      rows: rows.slice(0, Math.max(0, Number(limit) || 0)),
+      hasNext
+    };
   }
 
   function restoreEntriesCacheSnapshot() {
@@ -262,7 +339,10 @@ function createAuditTrailRouter(deps) {
       }
       state.entriesCache = {
         loadedAt,
-        rows
+        rows,
+        summary: parsed && parsed.summary && typeof parsed.summary === 'object'
+          ? parsed.summary
+          : summarizeAuditEntries(rows.map((entry) => entry.item))
       };
       clearAuditQueryCache();
       logAuditTrail('list snapshot restored', {
@@ -281,7 +361,10 @@ function createAuditTrailRouter(deps) {
   async function persistEntriesCacheSnapshot(cache) {
     const payload = {
       loadedAt: Number(cache && cache.loadedAt) || Date.now(),
-      rows: Array.isArray(cache && cache.rows) ? cache.rows : []
+      rows: Array.isArray(cache && cache.rows) ? cache.rows : [],
+      summary: cache && cache.summary && typeof cache.summary === 'object'
+        ? cache.summary
+        : summarizeAuditEntries(Array.isArray(cache && cache.rows) ? cache.rows.map((entry) => entry.item) : [])
     };
     const snapshotPath = getAuditSnapshotPath();
     fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
@@ -351,30 +434,28 @@ function createAuditTrailRouter(deps) {
       matches.push(entry);
     }
     const total = matches.length;
-    const maxOffset = total > 0 ? Math.max(0, Math.floor((total - 1) / limit) * limit) : 0;
-    const safeOffset = Math.min(Math.max(0, offset), maxOffset);
-    const itemsOnPage = matches.slice(safeOffset, safeOffset + limit);
-    const pageCount = total > 0 ? Math.max(1, Math.ceil(total / limit)) : 0;
-    const currentPage = total > 0 ? Math.floor(safeOffset / limit) + 1 : 0;
-    const hasPrev = safeOffset > 0;
-    const hasNext = safeOffset + limit < total;
+    const page = buildAuditPageMeta(total, limit, offset, 0);
+    const itemsOnPage = matches.slice(page.offset, page.offset + page.limit);
     return {
       items: itemsOnPage,
       total,
       summary: summarizeAuditEntries(matches),
-      page: {
-        offset: safeOffset,
-        limit,
-        total,
-        pageCount,
-        currentPage,
-        hasPrev,
-        hasNext,
-        prevOffset: hasPrev ? Math.max(0, safeOffset - limit) : 0,
-        nextOffset: hasNext ? safeOffset + limit : safeOffset,
-        pageStart: itemsOnPage.length ? safeOffset + 1 : 0,
-        pageEnd: itemsOnPage.length ? safeOffset + itemsOnPage.length : 0
-      }
+      page: buildAuditPageMeta(total, page.limit, page.offset, itemsOnPage.length)
+    };
+  }
+
+  function buildUnfilteredCachedResult(pageMeta) {
+    const rows = Array.isArray(state.entriesCache && state.entriesCache.rows) ? state.entriesCache.rows : [];
+    const summary = state.entriesCache && state.entriesCache.summary && typeof state.entriesCache.summary === 'object'
+      ? state.entriesCache.summary
+      : summarizeAuditEntries(rows.map((entry) => entry.item));
+    const basePage = buildAuditPageMeta(rows.length, pageMeta.limit, pageMeta.offset, 0);
+    const items = rows.slice(basePage.offset, basePage.offset + basePage.limit).map((entry) => entry.item);
+    return {
+      items,
+      total: rows.length,
+      summary,
+      page: buildAuditPageMeta(rows.length, basePage.limit, basePage.offset, items.length)
     };
   }
 
@@ -437,34 +518,53 @@ function createAuditTrailRouter(deps) {
         querySignature
       });
       const pageMeta = getAuditQueryPageMeta(url);
-      const canUseFastPath = !state.entriesCache && !state.entriesPromise && !hasDetailedAuditFilters(url) && pageMeta.offset === 0;
+      const hasDetailedFilters = hasDetailedAuditFilters(url);
+      const canUseCachedUnfilteredPath = !hasDetailedFilters && state.entriesCache && Array.isArray(state.entriesCache.rows);
+      if (canUseCachedUnfilteredPath) {
+        const cachedUnfiltered = buildUnfilteredCachedResult(pageMeta);
+        setAuditQueryCache(querySignature, Number(state.entriesCache && state.entriesCache.loadedAt) || 0, cachedUnfiltered);
+        logAuditTrail('list cached unfiltered page', {
+          requestId,
+          querySignature,
+          total: cachedUnfiltered.total,
+          offset: cachedUnfiltered.page && cachedUnfiltered.page.offset,
+          limit: cachedUnfiltered.page && cachedUnfiltered.page.limit,
+          durationMs: Date.now() - startedAt
+        });
+        await writeJson(res, buildJsonResponse(200, {
+          ok: true,
+          items: cachedUnfiltered.items,
+          total: cachedUnfiltered.total,
+          page: cachedUnfiltered.page,
+          summary: cachedUnfiltered.summary,
+          contractVersion: CONTRACT_VERSION
+        }), origin);
+        return;
+      }
+      const canUseFastPath = !state.entriesCache && !state.entriesPromise && !hasDetailedFilters;
       if (canUseFastPath) {
         try {
-          const recentRows = await listRecentEntries(pageMeta.limit);
-          const recentItems = recentRows.map((entry) => entry.item);
+          const recentPage = await listRecentEntriesPage(pageMeta.offset, pageMeta.limit);
+          const recentItems = recentPage.rows.map((entry) => entry.item);
+          const cachedTotal = Number(state.entriesCache && state.entriesCache.rows && state.entriesCache.rows.length);
+          const total = Number.isFinite(cachedTotal) && cachedTotal >= 0 ? cachedTotal : null;
+          const summary = state.entriesCache && state.entriesCache.summary && typeof state.entriesCache.summary === 'object'
+            ? state.entriesCache.summary
+            : summarizeAuditEntries(recentItems);
+          const page = buildAuditPageMeta(total, pageMeta.limit, pageMeta.offset, recentItems.length, recentPage.hasNext);
           const fastResult = {
             items: recentItems,
-            total: recentItems.length,
-            summary: summarizeAuditEntries(recentItems),
-            page: {
-              offset: 0,
-              limit: pageMeta.limit,
-              total: recentItems.length,
-              pageCount: recentItems.length ? 1 : 0,
-              currentPage: recentItems.length ? 1 : 0,
-              hasPrev: false,
-              hasNext: recentItems.length >= pageMeta.limit,
-              prevOffset: 0,
-              nextOffset: pageMeta.limit,
-              pageStart: recentItems.length ? 1 : 0,
-              pageEnd: recentItems.length
-            }
+            total: page.total,
+            summary,
+            page
           };
           setAuditQueryCache(querySignature, 0, fastResult);
+          primeEntriesCacheInBackground('list-fast-path', 0, true);
           logAuditTrail('list fast-path', {
             requestId,
             querySignature,
             total: fastResult.total,
+            offset: fastResult.page && fastResult.page.offset,
             limit: pageMeta.limit,
             durationMs: Date.now() - startedAt
           });
