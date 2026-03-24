@@ -1,6 +1,8 @@
 # 切帳號最短接手清單
 
-這份清單只保留每次切帳號後一定要看的步驟。先照這份跑，不要先翻長文件。
+這份清單只保留每次切帳號後一定要看的步驟。先照這份跑；如果要更短，直接看：
+
+- [`docs/one-minute-handoff.md`](./one-minute-handoff.md)
 
 ## 先確認 4 件事
 
@@ -103,4 +105,3 @@ node scripts/run-with-campus-stack.cjs "node scripts/live-regression-suite.cjs"
 - `live-security-smoke`：通過
 - `cloudflare-pages-regression-smoke`：通過
 - `version-governance-smoke`：通過
-

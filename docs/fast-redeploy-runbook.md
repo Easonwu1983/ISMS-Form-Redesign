@@ -1,5 +1,8 @@
 # 切帳號快速接手手冊
 
+先看一分鐘版：
+- [`docs/one-minute-handoff.md`](./one-minute-handoff.md)
+
 這份文件只保留切帳號時一定會用到的步驟。更完整的背景與架構，請看：
 
 - [`docs/project-execution-flow.md`](./project-execution-flow.md)
