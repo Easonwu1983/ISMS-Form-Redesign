@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 const {
   CONTRACT_VERSION,
   buildErrorResponse,
@@ -28,6 +31,7 @@ function createAuditTrailRouter(deps) {
   const AUDIT_TRAIL_QUERY_CACHE_MS = 60000;
   const AUDIT_TRAIL_QUERY_CACHE_MAX = 32;
   const AUDIT_TRAIL_PREWARM_DELAY_MS = 15000;
+  const AUDIT_TRAIL_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
   const AUDIT_TRAIL_FIELDS = [
     'Title',
     'EventType',
@@ -46,6 +50,11 @@ function createAuditTrailRouter(deps) {
 
   function getAuditListName() {
     return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
+  }
+
+  function getAuditSnapshotPath() {
+    const root = process.cwd();
+    return path.join(root, 'logs', 'campus-backend', 'audit-trail-cache.json');
   }
 
   function logAuditTrail(message, details) {
@@ -155,9 +164,14 @@ function createAuditTrailRouter(deps) {
   }
 
   async function listAllEntries() {
+    return listAllEntriesWithOptions({});
+  }
+
+  async function listAllEntriesWithOptions(options) {
     const now = Date.now();
+    const forceRefresh = !!(options && options.forceRefresh);
     const cached = state.entriesCache;
-    if (cached && Array.isArray(cached.rows) && Number.isFinite(cached.loadedAt) && (now - cached.loadedAt) < AUDIT_TRAIL_CACHE_MS) {
+    if (!forceRefresh && cached && Array.isArray(cached.rows) && Number.isFinite(cached.loadedAt) && (now - cached.loadedAt) < AUDIT_TRAIL_CACHE_MS) {
       logAuditTrail('list cache hit', {
         rows: cached.rows.length,
         ageMs: now - cached.loadedAt
@@ -191,6 +205,11 @@ function createAuditTrailRouter(deps) {
         rows
       };
       clearAuditQueryCache();
+      persistEntriesCacheSnapshot(state.entriesCache).catch((error) => {
+        logAuditTrail('list snapshot write failed', {
+          message: cleanText(error && error.message) || 'unknown error'
+        });
+      });
       logAuditTrail('list cache miss', {
         rows: rows.length,
         durationMs: Date.now() - startedAt
@@ -223,8 +242,60 @@ function createAuditTrailRouter(deps) {
     });
   }
 
-  function primeEntriesCacheInBackground(reason, delayMs) {
-    if (state.entriesCache || state.entriesPromise || state.prewarmQueued) {
+  function restoreEntriesCacheSnapshot() {
+    try {
+      const snapshotPath = getAuditSnapshotPath();
+      if (!fs.existsSync(snapshotPath)) return false;
+      const raw = fs.readFileSync(snapshotPath, 'utf8').replace(/^\uFEFF/, '');
+      if (!raw.trim()) return false;
+      const parsed = JSON.parse(raw);
+      const rows = Array.isArray(parsed && parsed.rows) ? parsed.rows : [];
+      const loadedAt = Number(parsed && parsed.loadedAt);
+      if (!rows.length || !Number.isFinite(loadedAt)) return false;
+      const ageMs = Date.now() - loadedAt;
+      if (ageMs > AUDIT_TRAIL_SNAPSHOT_MAX_AGE_MS) {
+        logAuditTrail('list snapshot skipped', {
+          reason: 'expired',
+          ageMs
+        });
+        return false;
+      }
+      state.entriesCache = {
+        loadedAt,
+        rows
+      };
+      clearAuditQueryCache();
+      logAuditTrail('list snapshot restored', {
+        rows: rows.length,
+        ageMs
+      });
+      return true;
+    } catch (error) {
+      logAuditTrail('list snapshot restore failed', {
+        message: cleanText(error && error.message) || 'unknown error'
+      });
+      return false;
+    }
+  }
+
+  async function persistEntriesCacheSnapshot(cache) {
+    const payload = {
+      loadedAt: Number(cache && cache.loadedAt) || Date.now(),
+      rows: Array.isArray(cache && cache.rows) ? cache.rows : []
+    };
+    const snapshotPath = getAuditSnapshotPath();
+    fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
+    const tempPath = `${snapshotPath}.tmp`;
+    await fs.promises.writeFile(tempPath, JSON.stringify(payload), 'utf8');
+    await fs.promises.rename(tempPath, snapshotPath);
+    logAuditTrail('list snapshot saved', {
+      rows: payload.rows.length,
+      loadedAt: payload.loadedAt
+    });
+  }
+
+  function primeEntriesCacheInBackground(reason, delayMs, forceRefresh) {
+    if ((!forceRefresh && state.entriesCache) || state.entriesPromise || state.prewarmQueued) {
       return false;
     }
     const safeDelay = Number.isFinite(delayMs) && delayMs >= 0 ? delayMs : 0;
@@ -235,7 +306,7 @@ function createAuditTrailRouter(deps) {
     });
     setTimeout(() => {
       state.prewarmQueued = false;
-      listAllEntries()
+      listAllEntriesWithOptions({ forceRefresh })
         .then((rows) => {
           logAuditTrail('list prewarm ready', {
             reason: cleanText(reason) || 'unknown',
@@ -473,7 +544,8 @@ function createAuditTrailRouter(deps) {
     return false;
   }
 
-  primeEntriesCacheInBackground('router-startup', AUDIT_TRAIL_PREWARM_DELAY_MS);
+  restoreEntriesCacheSnapshot();
+  primeEntriesCacheInBackground('router-startup', AUDIT_TRAIL_PREWARM_DELAY_MS, true);
 
   return {
     tryHandle

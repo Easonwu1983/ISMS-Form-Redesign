@@ -24,3 +24,7 @@
 - `/api/unit-contact/health` 為 `ready:true`
 - root `deploy-manifest.json` 的 `versionKey` 與 VM `git rev-parse --short=12 HEAD` 一致
 - `vm-entry-smoke` 通過
+
+## 補充
+
+- `audit-trail` 會先讀取 `logs/campus-backend/audit-trail-cache.json`，再背景刷新 SharePoint 全量快取。
