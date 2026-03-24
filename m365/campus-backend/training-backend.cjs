@@ -368,6 +368,9 @@ function createTrainingRouter(deps) {
     if (!forceRefresh && Array.isArray(state.rostersCache) && getTrainingListCacheHit(state.rostersCacheAt)) {
       return state.rostersCache.slice();
     }
+    if (!forceRefresh && state.rostersCachePromise && Array.isArray(state.rostersCache)) {
+      return state.rostersCache.slice();
+    }
     if (state.rostersCachePromise) {
       return state.rostersCachePromise.then((rows) => Array.isArray(rows) ? rows.slice() : []);
     }
