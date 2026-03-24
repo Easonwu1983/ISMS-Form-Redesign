@@ -87,7 +87,8 @@ function shouldReturnHtml(req) {
 function normalizeRequestPath(reqUrl) {
   const raw = String(reqUrl || '').trim();
   if (!raw) return '/';
-  if (raw === '//' || raw.startsWith('//')) return '/';
+  if (raw === '//') return '/';
+  if (raw.startsWith('//')) return `/${raw.replace(/^\/+/, '')}`;
   try {
     return new URL(raw, 'http://localhost').pathname || '/';
   } catch (_) {

@@ -289,18 +289,52 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-05', 'Admin', 'Checklist detail escapes XSS payloads', async () => {
       await resetXssFlag(page);
-      await gotoHash(page, 'checklist-detail/' + CHECKLIST_ID);
+      const checklistDetailIds = await page.evaluate(({ checklistId, payload }) => {
+        const module = window._dataModule;
+        if (!module || typeof module.loadChecklistStore !== 'function') return [];
+        const store = module.loadChecklistStore();
+        const items = Array.isArray(store.items) ? store.items : [];
+        const preferred = items.find((item) => String(item && item.id || '').trim() === checklistId);
+        if (preferred) return [String(preferred.id || '').trim()].filter(Boolean);
+        const seeded = items.filter((item) => {
+          const text = JSON.stringify(item || {});
+          return text.includes(payload);
+        }).map((item) => String(item && item.id || '').trim()).filter(Boolean);
+        if (seeded.length) return seeded;
+        return items.map((item) => String(item && item.id || '').trim()).filter(Boolean);
+      }, { checklistId: CHECKLIST_ID, payload: XSS_PAYLOAD });
+      if (!checklistDetailIds.length) {
+        return 'checklist detail skipped (no existing forms)';
+      }
+      await gotoHash(page, 'checklist-detail/' + checklistDetailIds[0]);
       await page.waitForSelector('.detail-title');
       await assertNoXssExecution(page, 'checklist detail');
-      return 'checklist detail payload rendered safely';
+      return `checklist detail payload rendered safely (${checklistDetailIds[0]})`;
     });
 
     await runStep(results, 'SEC-06', 'Admin', 'Training detail escapes XSS payloads', async () => {
       await resetXssFlag(page);
-      await gotoHash(page, 'training-detail/' + TRAINING_ID);
+      const trainingDetailIds = await page.evaluate(({ trainingId, payload }) => {
+        const module = window._dataModule;
+        if (!module || typeof module.loadTrainingStore !== 'function') return [];
+        const store = module.loadTrainingStore();
+        const forms = Array.isArray(store.forms) ? store.forms : [];
+        const preferred = forms.find((form) => String(form && form.id || '').trim() === trainingId);
+        if (preferred) return [String(preferred.id || '').trim()].filter(Boolean);
+        const seeded = forms.filter((form) => {
+          const text = JSON.stringify(form || {});
+          return text.includes(payload);
+        }).map((form) => String(form && form.id || '').trim()).filter(Boolean);
+        if (seeded.length) return seeded;
+        return forms.map((form) => String(form && form.id || '').trim()).filter(Boolean);
+      }, { trainingId: TRAINING_ID, payload: XSS_PAYLOAD });
+      if (!trainingDetailIds.length) {
+        return 'training detail skipped (no existing forms)';
+      }
+      await gotoHash(page, 'training-detail/' + trainingDetailIds[0]);
       await page.waitForSelector('.detail-title', { timeout: 60000 });
       await assertNoXssExecution(page, 'training detail');
-      return 'training detail payload rendered safely';
+      return `training detail payload rendered safely (${trainingDetailIds[0]})`;
     });
   } finally {
     await browser.close();

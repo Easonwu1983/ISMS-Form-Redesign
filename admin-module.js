@@ -317,6 +317,43 @@
       return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(meta.summary)}</span></div><div class="review-toolbar-actions"><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailPrevPage" ${meta.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailNextPage" ${meta.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><span class="review-card-subtitle" style="margin-left:8px">頁次 ${meta.currentPage || 0} / ${meta.pageCount || 0}</span></div></div>`;
     }
 
+    function showAuditEntryModal(index) {
+      const items = Array.isArray(auditTrailState.items) ? auditTrailState.items : [];
+      const entryIndex = Math.max(0, Number(index) || 0);
+      const entry = items[entryIndex] || null;
+      if (!entry) {
+        toast('找不到稽核紀錄明細', 'error');
+        return;
+      }
+      const payload = entry && typeof entry.payload === 'object' && entry.payload ? entry.payload : null;
+      const payloadText = payload
+        ? JSON.stringify(payload, null, 2)
+        : String(entry.payloadJson || entry.payloadPreview || '—');
+      const mr = document.getElementById('modal-root') || (function () {
+        const fallbackRoot = document.createElement('div');
+        fallbackRoot.id = 'modal-root';
+        document.body.appendChild(fallbackRoot);
+        return fallbackRoot;
+      }());
+      const fieldRows = [
+        ['事件類型', entry.eventType || '—'],
+        ['時間', formatAuditOccurredAt(entry.occurredAt)],
+        ['操作人', entry.actorEmail || '—'],
+        ['目標', entry.targetEmail || '—'],
+        ['單位', entry.unitCode || '—'],
+        ['紀錄編號', entry.recordId || '—']
+      ].map(([label, value]) => `<div class="audit-modal-field"><div class="audit-modal-label">${esc(label)}</div><div class="audit-modal-value">${esc(value)}</div></div>`).join('');
+
+      mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal" style="max-width:min(96vw,980px);width:min(96vw,980px);max-height:90vh;overflow:auto"><div class="modal-header"><span class="modal-title">操作稽核差異檢視</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><div class="modal-body"><div class="audit-modal-summary">${fieldRows}</div><div class="form-group" style="margin-top:18px"><label class="form-label">內容摘要</label><div class="review-card-subtitle" style="white-space:pre-wrap;line-height:1.6">${esc(entry.payloadPreview || '—')}</div></div><div class="form-group"><label class="form-label">完整內容</label><pre class="audit-modal-pre">${esc(payloadText)}</pre></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss-modal>關閉</button></div></div></div>`;
+      const backdrop = document.getElementById('modal-bg');
+      if (backdrop) {
+        backdrop.addEventListener('click', (event) => {
+          if (event.target === event.currentTarget) closeModalRoot();
+        });
+      }
+      refreshIcons();
+    }
+
     async function loadAuditTrailData(nextFilters, options) {
       const force = !!(options && options.force);
       const prefetch = !!(options && options.prefetch);
