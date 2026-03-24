@@ -23,7 +23,7 @@
     } = deps;
 
     const LAST_EMAIL_KEY = 'unit-contact-last-email';
-    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.docx';
+    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.doc';
     const AUTHORIZATION_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
     const AUTHORIZATION_UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
     const SECURITY_ROLE_OPTIONS = [
@@ -380,7 +380,7 @@
       const modeKey = getM365ModeKey();
       const description = modeKey === 'local-emulator'
         ? '本機模擬環境，資料只會保存在本機快取。'
-        : '正式模式，資料會同步至 M365。';
+        : '正式申請模式，資料會依正式流程處理。';
       return ''
         + '<div class="unit-contact-mode-banner">'
         + '<div class="unit-contact-mode-icon">' + ic('shield-check', 'icon-lg') + '</div>'
