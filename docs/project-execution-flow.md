@@ -1,6 +1,6 @@
-# 專案流程
+﻿# 執行流程索引
 
-## 接手
+## 接手層
 
 - [handoff-index.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/handoff-index.md)
 - [boot-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/boot-checklist.md)
@@ -10,10 +10,11 @@
 - [vm-migration-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/vm-migration-checklist.md)
 - [release-and-rollback.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/release-and-rollback.md)
 
-## 例外
+## 例外層
 
 - [fast-redeploy-runbook.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/fast-redeploy-runbook.md)
 
-## 規則
+## 細節層
 
 - [data-layer-governance.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/data-layer-governance.md)
+- [module-architecture.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/module-architecture.md)

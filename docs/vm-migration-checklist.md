@@ -1,56 +1,26 @@
-# 校內 VM 維運清單
+﻿# 校內 VM 維運
 
-## 固定資訊
+## 目標主機
 
-- host：`140.112.97.150`
-- SSH 使用者：`useradmin`
+- IP：`140.112.97.150`
+- SSH 帳號：`useradmin`
 - repo：`/srv/isms-form-redesign`
 - service user：`ismsbackend`
-- 入口：[http://140.112.97.150/](http://140.112.97.150/)
-- health：[http://140.112.97.150/api/unit-contact/health](http://140.112.97.150/api/unit-contact/health)
 
-## 同步
+## 更新步驟
 
-1. `sudo -u ismsbackend git -C /srv/isms-form-redesign pull --ff-only origin main`
-2. 如果 `git pull` 被未追蹤檔擋住，先刪掉手動複製進 repo 根目的檔案，例如 `favicon.ico`
-3. 重生 VM 的兩份 manifest：
-
-```bash
-cd /srv/isms-form-redesign
-node - <<'NODE'
-const fs = require('fs');
-const path = require('path');
-const { getBuildInfo } = require('./scripts/build-version-info.cjs');
-const root = process.cwd();
-const buildInfo = getBuildInfo('cloudflare-pages', root);
-const manifest = {
-  builtAt: buildInfo.builtAt,
-  versionKey: buildInfo.versionKey,
-  buildInfo,
-  mode: 'full-proxy',
-  backendBase: 'http://140.112.97.150',
-  redirectTarget: 'http://140.112.97.150/',
-  platform: 'cloudflare-pages',
-  assetIntegrity: {}
-};
-for (const target of [path.join(root, 'deploy-manifest.json'), path.join(root, 'dist', 'cloudflare-pages', 'deploy-manifest.json')]) {
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, JSON.stringify(manifest, null, 2), 'utf8');
-}
-NODE
-```
-
-4. `sudo systemctl restart isms-unit-contact-backend.service caddy.service`
-5. 驗證：
+1. `ssh useradmin@140.112.97.150`
+2. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend git -C /srv/isms-form-redesign pull --ff-only origin main`
+3. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend sh -lc 'cd /srv/isms-form-redesign && node scripts/build-version-info.cjs campus-vm > deploy-manifest.json'`
+4. `echo 'P@ss_w0rD' | sudo -S systemctl restart isms-unit-contact-backend.service caddy.service`
+5. 檢查：
    - `curl http://140.112.97.150/api/unit-contact/health`
    - `curl http://140.112.97.150/deploy-manifest.json`
-   - `curl http://140.112.97.150/favicon.ico`
+   - `curl http://140.112.97.150/unit-contact-authorization-template.pdf -I`
    - `node scripts/vm-entry-smoke.cjs`
-   - 必要時再跑 `node scripts/campus-live-regression-smoke.cjs`
 
-## 現況
+## 完成條件
 
-- 唯一最高管理者是 `easonwu`
-- smoke 腳本已改成 `easonwu` 路徑
-- `/favicon.ico` 已納入 repo 和打包流程
-- `unit-contact-authorization-template.pdf` 必須回 `200` 且 `Content-Type` 是 `application/pdf`
+- `/api/unit-contact/health` 為 `ready:true`
+- root `deploy-manifest.json` 的 `versionKey` 與 VM `git rev-parse --short=12 HEAD` 一致
+- `vm-entry-smoke` 通過

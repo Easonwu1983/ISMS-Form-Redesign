@@ -1,28 +1,16 @@
-﻿# 靘???
+﻿# 例外處理
 
-## ?∪ VM `git pull` 鋡急?
+## `8088` 不通但 `18080` 正常
 
-- 憒? `/srv/isms-form-redesign` ????鋆賡脣?餈質馱瑼?靘? `favicon.ico`嚗??芣???頝?`git pull --ff-only origin main`
+- 重啟 gateway：`powershell -ExecutionPolicy Bypass -File scripts/start-host-campus-gateway.ps1`
 
-## ?銝???
-- ?祆??閬????剁?
-  - `deploy-manifest.json`
-  - `dist/cloudflare-pages/deploy-manifest.json`
-- ?∪ VM ?閬????剁?
-  - `/srv/isms-form-redesign/deploy-manifest.json`
-  - `/srv/isms-form-redesign/dist/cloudflare-pages/deploy-manifest.json`
-- ?拚? `versionKey`?buildInfo.commit` ?賢??? `git HEAD` 銝??
-## ?詨?靽∪仃??
-- ??runtime ??`tokenMode`
-- 敹???`app-only`
+## 核准信寄送失敗
 
-## admin 甈? smoke ?箇 `403`
+- 檢查 `tokenMode` 是否為 `app-only`
+- 檢查 `mailSenderUpn` 是否為 `easonwu@m365.ntu.edu.tw`
 
-- ?Ⅱ隤?live 鞈?撅文??`easonwu` ??`?擃恣?`
-- ?Ⅱ隤?smoke ?單撌脩?韏?`easonwu`嚗?閬???`admin/admin123`
+## 版本不一致
 
-## Pages ??VM ?箇 `404`
-
-- ?炎??`/favicon.ico` ?臬摮銝血? `200`
-- ?炎??`deploy-manifest.json` ?臬?舀??啁?
-
+- 看 root `deploy-manifest.json`
+- 看 `dist/cloudflare-pages/deploy-manifest.json`
+- 看 VM root `deploy-manifest.json`

@@ -21,11 +21,13 @@ function createAuditTrailRouter(deps) {
     listMap: null,
     entriesCache: null,
     entriesPromise: null,
-    queryCache: new Map()
+    queryCache: new Map(),
+    prewarmQueued: false
   };
   const AUDIT_TRAIL_CACHE_MS = 300000;
   const AUDIT_TRAIL_QUERY_CACHE_MS = 60000;
   const AUDIT_TRAIL_QUERY_CACHE_MAX = 32;
+  const AUDIT_TRAIL_PREWARM_DELAY_MS = 15000;
   const AUDIT_TRAIL_FIELDS = [
     'Title',
     'EventType',
@@ -221,6 +223,35 @@ function createAuditTrailRouter(deps) {
     });
   }
 
+  function primeEntriesCacheInBackground(reason, delayMs) {
+    if (state.entriesCache || state.entriesPromise || state.prewarmQueued) {
+      return false;
+    }
+    const safeDelay = Number.isFinite(delayMs) && delayMs >= 0 ? delayMs : 0;
+    state.prewarmQueued = true;
+    logAuditTrail('list prewarm queued', {
+      reason: cleanText(reason) || 'unknown',
+      delayMs: safeDelay
+    });
+    setTimeout(() => {
+      state.prewarmQueued = false;
+      listAllEntries()
+        .then((rows) => {
+          logAuditTrail('list prewarm ready', {
+            reason: cleanText(reason) || 'unknown',
+            rows: Array.isArray(rows) ? rows.length : 0
+          });
+        })
+        .catch((error) => {
+          logAuditTrail('list prewarm failed', {
+            reason: cleanText(reason) || 'unknown',
+            message: cleanText(error && error.message) || 'unknown error'
+          });
+        });
+    }, safeDelay);
+    return true;
+  }
+
   function matchesKeyword(entry, keyword) {
     if (!keyword) return true;
     const haystack = cleanText(entry && entry.searchText).toLowerCase();
@@ -311,7 +342,11 @@ function createAuditTrailRouter(deps) {
       if (requestId) {
         logAuditTrail('health requested', { requestId });
       }
-      await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
+      const health = await buildHealth();
+      if (health && health.ready) {
+        primeEntriesCacheInBackground('health-check', 0);
+      }
+      await writeJson(res, buildJsonResponse(200, health), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read audit trail backend health.', 500), origin);
     }
@@ -437,6 +472,8 @@ function createAuditTrailRouter(deps) {
     }
     return false;
   }
+
+  primeEntriesCacheInBackground('router-startup', AUDIT_TRAIL_PREWARM_DELAY_MS);
 
   return {
     tryHandle
