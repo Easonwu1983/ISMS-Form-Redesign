@@ -23,7 +23,7 @@
     } = deps;
 
     const LAST_EMAIL_KEY = 'unit-contact-last-email';
-    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.doc';
+    const AUTHORIZATION_TEMPLATE_FILENAME = '單位資安窗口授權同意書.rtf';
     const AUTHORIZATION_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
     const AUTHORIZATION_UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
     const SECURITY_ROLE_OPTIONS = [
@@ -236,58 +236,42 @@
       return file;
     }
 
-    function buildAuthorizationTemplateHtml() {
+    function escapeRtf(text) {
+      return String(text || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/[{}]/g, '\\$&')
+        .replace(/[\u0080-\uFFFF]/g, (ch) => {
+          const code = ch.charCodeAt(0);
+          return '\\u' + (code > 32767 ? code - 65536 : code) + '?';
+        });
+    }
+
+    function buildAuthorizationTemplateRtf() {
+      const t = escapeRtf;
       return [
-        '<!doctype html>',
-        '<html lang="zh-Hant">',
-        '<head>',
-        '<meta charset="utf-8">',
-        '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        '<title>單位資安窗口授權同意書</title>',
-        '<style>',
-        '@page{size:A4;margin:16mm}',
-        '*{box-sizing:border-box}',
-        'body{margin:0;font-family:"Noto Sans TC",Arial,sans-serif;background:#f5f7fb;color:#1f2937}',
-        '.document{max-width:780px;margin:0 auto;padding:24px 28px 32px;background:#fff}',
-        '.header{border-bottom:2px solid #d7deea;padding-bottom:18px}',
-        '.kicker{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px}',
-        'h1{margin:0;font-size:28px;line-height:1.3;color:#0f172a}',
-        '.lead{margin:0;font-size:14px;line-height:1.8;color:#4b5563}',
-        '.meta,.signature{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:20px}',
-        '.field{border:1px solid #d7deea;border-radius:14px;padding:14px 16px;min-height:72px}',
-        '.label{display:block;font-size:12px;letter-spacing:.08em;color:#64748b;margin-bottom:10px}',
-        '.value{display:block;min-height:20px}',
-        '.check-list{display:grid;gap:8px;font-size:14px;line-height:1.7}',
-        '.footer{margin-top:18px;font-size:12px;color:#64748b;line-height:1.8;text-align:center}',
-        '@media print{body{background:#fff}.document{padding:0;max-width:none}}',
-        '</style>',
-        '</head>',
-        '<body>',
-        '<div class="document">',
-        '<div class="header">',
-        '<div class="kicker">ISMS Campus Portal</div>',
-        '<h1>單位資安窗口授權同意書</h1>',
-        '<p class="lead">請先由單位主管簽章，再附於申請單位管理員帳號表單中上傳。</p>',
-        '</div>',
-        '<div class="meta">',
-        '<div class="field"><span class="label">申請單位</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">申請人姓名</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">申請電子郵件</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">資安角色</span><div class="check-list"><div>☐ 一級單位資安窗口</div><div>☐ 二級單位資安窗口</div></div></div>',
-        '</div>',
-        '<div class="signature">',
-        '<div class="field"><span class="label">主管簽章</span><span class="value">&nbsp;</span></div>',
-        '<div class="field"><span class="label">日期</span><span class="value">&nbsp;</span></div>',
-        '</div>',
-        '<div class="footer">列印或轉存 PDF 後，請由主管簽章並上傳至系統。</div>',
-        '</div>',
-        '</body>',
-        '</html>'
+        '{\\\\rtf1\\\\ansi\\\\deff0',
+        '{\\\\fonttbl{\\\\f0 Arial;}{\\\\f1 Microsoft JhengHei;}}',
+        '\\\\viewkind4\\\\uc1\\\\lang1028\\\\f1\\\\fs24',
+        '\\\\pard\\\\qc\\\\b\\\\fs36 ' + t('單位資安窗口授權同意書') + '\\\\b0\\\\fs24\\\\par',
+        '\\\\pard\\\\qc ' + t('請先由單位主管簽章，再附於申請單位管理員帳號表單中上傳。') + '\\\\par',
+        '\\\\pard\\\\par',
+        '\\\\pard\\\\b ' + t('申請單位') + '\\\\b0\\\\tab ______________________________\\\\par',
+        '\\\\pard\\\\b ' + t('申請人姓名') + '\\\\b0\\\\tab ______________________________\\\\par',
+        '\\\\pard\\\\b ' + t('申請電子郵件') + '\\\\b0\\\\tab ______________________________\\\\par',
+        '\\\\pard\\\\b ' + t('資安角色') + '\\\\b0\\\\par',
+        '\\\\pard [ ] ' + t('一級單位資安窗口') + '\\\\par',
+        '\\\\pard [ ] ' + t('二級單位資安窗口') + '\\\\par',
+        '\\\\pard\\\\par',
+        '\\\\pard\\\\b ' + t('主管簽章') + '\\\\b0\\\\tab ______________________________\\\\par',
+        '\\\\pard\\\\b ' + t('日期') + '\\\\b0\\\\tab ______________________________\\\\par',
+        '\\\\pard\\\\par',
+        '\\\\pard\\\\qc ' + t('列印或轉存 PDF 後，請由主管簽章並上傳至系統。') + '\\\\par',
+        '}'
       ].join('');
     }
 
     function downloadAuthorizationTemplate() {
-      const blob = new Blob([buildAuthorizationTemplateHtml()], { type: 'application/msword;charset=utf-8' });
+      const blob = new Blob([buildAuthorizationTemplateRtf()], { type: 'application/rtf;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
