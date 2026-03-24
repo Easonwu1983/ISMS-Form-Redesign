@@ -816,9 +816,25 @@ async function run() {
     await page.goto(`${BASE_URL}/#unit-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
     await page.waitForSelector('.review-table-card, .empty-state', { timeout: 45000 });
+    await page.waitForFunction(() => !!document.querySelector('.governance-category-stack .governance-category-card'), undefined, { timeout: 45000 });
     const unitReviewText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(unitReviewText)) {
       throw new Error('unit review contains placeholder question marks');
+    }
+    const unitReviewCategories = await page.$$eval('.governance-category-card[data-governance-category]', (nodes) => {
+      const labels = nodes
+        .map((node) => String(node.getAttribute('data-governance-category') || '').trim())
+        .filter(Boolean);
+      return Array.from(new Set(labels));
+    });
+    const expectedGovernanceCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
+    const missingGovernanceCategories = expectedGovernanceCategories.filter((label) => !unitReviewCategories.includes(label));
+    if (missingGovernanceCategories.length) {
+      throw new Error(`unit review missing categories: ${missingGovernanceCategories.join(', ')}`);
+    }
+    const unexpectedGovernanceCategories = unitReviewCategories.filter((label) => !expectedGovernanceCategories.includes(label));
+    if (unexpectedGovernanceCategories.length) {
+      throw new Error(`unit review has unexpected categories: ${unexpectedGovernanceCategories.join(', ')}`);
     }
     pushStep('unit-review:loaded', true, 'unit review page ready');
 

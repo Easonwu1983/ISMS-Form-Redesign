@@ -123,6 +123,19 @@ async function run() {
     return { status: response.status };
   }, { critical: true });
 
+  await step('asset:admin-module governance categories', async () => {
+    const response = await fetch(`${DEFAULT_BASE}/admin-module.js`);
+    const text = await response.text();
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const expectedCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
+    if (!text.includes('data-governance-category')) throw new Error('unit governance category data attribute missing');
+    if (!text.includes('governance-category-stack')) throw new Error('unit governance category stack missing');
+    for (const label of expectedCategories) {
+      if (!text.includes(label)) throw new Error(`unit governance category missing: ${label}`);
+    }
+    return { status: response.status };
+  }, { critical: true });
+
   await step('asset:unit-module copy', async () => {
     const response = await fetch(`${DEFAULT_BASE}/unit-module.js`);
     const text = await response.text();

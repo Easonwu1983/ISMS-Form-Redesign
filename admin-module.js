@@ -531,6 +531,31 @@
         .sort((a, b) => a.unit.localeCompare(b.unit, 'zh-Hant'));
     }
 
+    const GOVERNANCE_CATEGORY_ORDER = ['行政單位', '學術單位', '中心 / 研究單位'];
+
+    function normalizeGovernanceCategory(category) {
+      const raw = String(category || '').trim();
+      if (!raw) return null;
+      if (GOVERNANCE_CATEGORY_ORDER.includes(raw)) return raw;
+      if (raw.includes('行政')) return '行政單位';
+      if (raw.includes('學術')) return '學術單位';
+      if (raw.includes('中心') || raw.includes('研究')) return '中心 / 研究單位';
+      return null;
+    }
+
+    function groupGovernanceUnitsByCategory(units) {
+      const groups = new Map();
+      (Array.isArray(units) ? units : []).forEach((unit) => {
+        const category = normalizeGovernanceCategory(unit && unit.category);
+        if (!category) return;
+        if (!groups.has(category)) groups.set(category, []);
+        groups.get(category).push(unit);
+      });
+      return GOVERNANCE_CATEGORY_ORDER
+        .map((category) => ({ category, items: groups.get(category) || [] }))
+        .filter((group) => Array.isArray(group.items) && group.items.length);
+    }
+
     function buildGovernanceModeBadge(mode) {
       const normalized = String(mode || '').trim() === 'consolidated' ? 'consolidated' : 'independent';
       const label = normalized === 'consolidated' ? '合併填報' : '獨立填報';
@@ -581,6 +606,25 @@
           </div>
         </div>
       </div>`;
+    }
+
+    function renderGovernanceCategoryCard(group, index) {
+      const items = Array.isArray(group && group.items) ? group.items : [];
+      const category = String(group && group.category || '').trim() || '中心 / 研究單位';
+      const unitCount = items.length;
+      const consolidatedCount = items.filter((unit) => String(unit && unit.mode || 'independent').trim() === 'consolidated').length;
+      const independentCount = unitCount - consolidatedCount;
+      const childCount = items.reduce((sum, unit) => sum + (Array.isArray(unit && unit.children) ? unit.children.length : 0), 0);
+      const summaryChips = [
+        ['單位數', unitCount],
+        ['合併填報', consolidatedCount],
+        ['獨立填報', independentCount],
+        ['轄下二級單位', childCount]
+      ];
+      const openAttr = index === 0 ? ' open' : '';
+      const subtitle = `${category} · ${unitCount} 個一級單位`;
+      const bodyHtml = `<div class="security-window-group-stack security-window-group-stack--nested governance-group-stack governance-group-stack--nested">${items.map((unit) => buildGovernanceUnitCard(unit)).join('')}</div>`;
+      return `<details class="training-group-card security-window-category-card governance-category-card"${openAttr} data-governance-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary governance-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid governance-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip governance-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag governance-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body governance-category-body">${bodyHtml}</div></details>`;
     }
 
     function getSecurityWindowFilterSignature(filters) {
@@ -1420,9 +1464,10 @@
       result.children += Array.isArray(unit.children) ? unit.children.length : 0;
       return result;
     }, { total: items.length, consolidated: 0, independent: 0, children: 0 });
-    const cardsHtml = items.length ? items.map((unit) => buildGovernanceUnitCard(unit)).join('') : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
+    const groupedItems = groupGovernanceUnitsByCategory(items);
+    const cardsHtml = groupedItems.length ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index)).join('') : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
     app.innerHTML = `<div class="animate-in">
-      <div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">設定一級單位的獨立 / 合併填報模式，並同步反映在儀表板與管考清單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div>
+      <div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">設定一級單位的獨立 / 合併填報模式，並依行政單位、學術單位、中心 / 研究單位分層檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div>
       <div class="stats-grid review-stats-grid">
         <div class="stat-card total"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${counts.total}</div><div class="stat-label">可設定單位</div></div>
         <div class="stat-card closed"><div class="stat-icon">${ic('layers-3')}</div><div class="stat-value">${counts.consolidated}</div><div class="stat-label">合併填報</div></div>
@@ -1430,7 +1475,7 @@
         <div class="stat-card overdue"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${counts.children}</div><div class="stat-label">轄下二級單位</div></div>
       </div>
       <div class="card review-table-card governance-table-card">
-        <div class="card-header"><span class="card-title">治理設定清單</span><span class="review-card-subtitle">最高管理員可管理全部單位；單位管理員僅可管理自己被授權的單位</span></div>
+        <div class="card-header"><span class="card-title">治理分類清單</span><span class="review-card-subtitle">依行政單位、學術單位、中心 / 研究單位展開，統一查看填報模式與轄下單位。</span></div>
         <div class="review-toolbar">
           <div class="review-toolbar-main">
             <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="unit-governance-keyword" value="${esc(unitGovernanceState.filters.keyword || '')}" placeholder="單位名稱、子單位、模式、備註"></div>
@@ -1441,7 +1486,7 @@
             <button type="button" class="btn btn-secondary" data-action="admin.resetGovernanceFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button>
           </div>
         </div>
-        <div class="governance-grid">${cardsHtml}</div>
+        <div class="security-window-category-stack governance-category-stack">${cardsHtml}</div>
       </div>
     </div>`;
     refreshIcons();

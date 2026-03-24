@@ -249,6 +249,30 @@ async function assertNoXssExecution(page, label) {
       return `security window grouped cards visible (${structure.cardCount} cards)`;
     });
 
+    await runStep(results, 'SEC-03b', 'Admin', 'Unit governance is grouped by the same categories', async () => {
+      await gotoHash(page, 'unit-review');
+      await page.waitForSelector('.governance-category-stack .governance-category-card');
+      const structure = await page.evaluate(() => {
+        const root = document.querySelector('#app') || document.body;
+        return {
+          stack: Boolean(document.querySelector('.governance-category-stack')),
+          cardCount: document.querySelectorAll('.governance-category-card').length,
+          categories: Array.from(new Set(Array.from(document.querySelectorAll('.governance-category-card[data-governance-category]')).map((node) => String(node.getAttribute('data-governance-category') || '').trim()).filter(Boolean))),
+          text: String(root.textContent || '')
+        };
+      });
+      if (!structure.stack) throw new Error('unit governance stack missing');
+      if (structure.cardCount < 1) throw new Error('unit governance cards missing');
+      const expectedCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
+      const missingCategories = expectedCategories.filter((label) => !structure.categories.includes(label));
+      if (missingCategories.length) throw new Error(`unit governance missing categories: ${missingCategories.join(', ')}`);
+      const unexpectedCategories = structure.categories.filter((label) => !expectedCategories.includes(label));
+      if (unexpectedCategories.length) throw new Error(`unit governance has unexpected categories: ${unexpectedCategories.join(', ')}`);
+      if (!String(structure.text || '').includes('單位治理')) throw new Error('unit governance title missing');
+      if (!String(structure.text || '').includes('填報模式與授權設定')) throw new Error('unit governance subtitle missing');
+      return `unit governance grouped cards visible (${structure.cardCount} cards)`;
+    });
+
     await runStep(results, 'SEC-04', 'Admin', 'Case detail escapes XSS payloads', async () => {
       await login(page, 'admin', 'admin123');
       await seedSecurityFixtures(page);
