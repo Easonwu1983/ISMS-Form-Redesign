@@ -201,13 +201,16 @@ function createUnitGovernanceRouter(deps) {
     return metaByValue.get(parent) || metaByValue.get(unitValue) || {};
   }
 
-  function categorizeTopLevelUnit(unitValue, metaByValue) {
+  function categorizeTopLevelUnit(unitValue, metaByValue, catalogEntry) {
     const unit = cleanText(splitUnitValue(unitValue).parent || unitValue);
     if (!unit) return '行政單位';
     if (CENTER_OVERRIDE_UNITS.has(unit)) return '中心 / 研究單位';
     if (ADMIN_PRIMARY_WHITELIST.has(unit)) return '行政單位';
     if (ACADEMIC_PRIMARY_WHITELIST.has(unit)) return '學術單位';
-    const meta = getTopLevelUnitMeta(metaByValue, unit);
+    const meta = {
+      ...getTopLevelUnitMeta(metaByValue, unit),
+      ...(catalogEntry && typeof catalogEntry === 'object' ? catalogEntry : {})
+    };
     const code = cleanText(meta.topCode || meta.code).toUpperCase();
     if (/(中心|研究)/.test(unit)) return '中心 / 研究單位';
     if (/(學院|學系|研究所|學位學程)/.test(unit)) return '學術單位';
@@ -228,16 +231,17 @@ function createUnitGovernanceRouter(deps) {
     const metaByValue = new Map(Object.entries(rawMeta).map(([key, value]) => [cleanText(key), value || {}]));
     const groups = new Map();
     catalog.forEach((entry) => {
-      const value = cleanText(entry);
+      const source = entry && typeof entry === 'object' ? entry : { value: entry };
+      const value = cleanText(source.value);
       if (!value || HIDDEN_OFFICIAL_UNIT_VALUES.has(value)) return;
       const parsed = splitUnitValue(value);
-      const parent = cleanText(parsed.parent || value);
-      const child = cleanText(parsed.child);
+      const parent = cleanText(source.topName || parsed.parent || value);
+      const child = cleanText(source.childName || parsed.child);
       if (!parent || HIDDEN_OFFICIAL_UNIT_VALUES.has(parent)) return;
       if (!groups.has(parent)) {
         groups.set(parent, {
           unit: parent,
-          category: categorizeTopLevelUnit(parent, metaByValue),
+          category: categorizeTopLevelUnit(parent, metaByValue, source),
           children: new Set()
         });
       }
