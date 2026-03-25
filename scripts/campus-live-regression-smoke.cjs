@@ -3,6 +3,8 @@ const path = require('path');
 
 const DEFAULT_BASE = process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088';
 const OUT_PATH = path.join(process.cwd(), 'logs', 'campus-live-regression-smoke.json');
+const KNOWN_TRAINING_UNIT = '計算機及資訊網路中心／資訊網路組';
+const KNOWN_TRAINING_STATS_UNIT = '計算機及資訊網路中心';
 
   async function requestJson(url, options) {
     const response = await fetch(url, options);
@@ -254,6 +256,24 @@ async function run() {
       throw new Error(`duplicate roster ids detected: ${duplicates.map(([id, count]) => `${id}x${count}`).join(', ')}`);
     }
     return { count: items.length };
+  }, { critical: true });
+
+  await step('training-rosters filters by unit and statsUnit', async () => {
+    const unit = encodeURIComponent(KNOWN_TRAINING_UNIT);
+    const statsUnit = encodeURIComponent(KNOWN_TRAINING_STATS_UNIT);
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/training/rosters?limit=20&unit=${unit}&statsUnit=${statsUnit}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    if (!items.length) {
+      return { skipped: true, reason: 'known training unit returned no rows' };
+    }
+    const mismatched = items.find((item) => String(item && item.unit || '').trim() !== decodeURIComponent(unit) || String(item && item.statsUnit || '').trim() !== decodeURIComponent(statsUnit));
+    if (mismatched) throw new Error('filtered roster query returned mismatched unit/statsUnit rows');
+    return {
+      unit: decodeURIComponent(unit),
+      statsUnit: decodeURIComponent(statsUnit),
+      count: items.length
+    };
   }, { critical: true });
 
   await step('auth verify authorized', async () => {

@@ -49,10 +49,13 @@ function createTrainingRouter(deps) {
     rostersCache: null,
     rostersCacheAt: 0,
     rostersCachePromise: null,
-    rostersPrewarmQueued: false
+    rostersPrewarmQueued: false,
+    rostersQueryCache: new Map()
   };
   const TRAINING_ROSTERS_PREWARM_DELAY_MS = 15000;
   const TRAINING_ROSTERS_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+  const TRAINING_ROSTERS_QUERY_CACHE_MS = 60000;
+  const TRAINING_ROSTERS_QUERY_CACHE_MAX = 24;
 
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
@@ -229,6 +232,9 @@ function createTrainingRouter(deps) {
     state.rostersCache = null;
     state.rostersCacheAt = 0;
     state.rostersCachePromise = null;
+    if (state.rostersQueryCache instanceof Map) {
+      state.rostersQueryCache.clear();
+    }
   }
 
   function restoreRostersCacheSnapshot() {
@@ -251,6 +257,9 @@ function createTrainingRouter(deps) {
       }
       state.rostersCache = sortTrainingRosterRows(rows);
       state.rostersCacheAt = Date.now();
+      if (state.rostersQueryCache instanceof Map) {
+        state.rostersQueryCache.clear();
+      }
       logTrainingRoster('snapshot restored', {
         rows: state.rostersCache.length,
         ageMs
@@ -427,6 +436,9 @@ function createTrainingRouter(deps) {
     }
       state.rostersCache = sortTrainingRosterRows(rows);
       state.rostersCacheAt = Date.now();
+      if (state.rostersQueryCache instanceof Map) {
+        state.rostersQueryCache.clear();
+      }
       persistRostersCacheSnapshot(state.rostersCache, state.rostersCacheAt).catch((error) => {
         logTrainingRoster('snapshot write failed', {
           message: cleanText(error && error.message) || 'unknown error'
@@ -753,6 +765,38 @@ function createTrainingRouter(deps) {
     });
   }
 
+  function getRosterQuerySignature(url) {
+    return [
+      cleanText(url && url.searchParams && url.searchParams.get('q')).toLowerCase(),
+      cleanText(url && url.searchParams && url.searchParams.get('source')),
+      cleanText(url && url.searchParams && url.searchParams.get('unit')),
+      cleanText(url && url.searchParams && url.searchParams.get('statsUnit'))
+    ].join('::');
+  }
+
+  function getRosterQueryCache(signature) {
+    if (!signature || !(state.rostersQueryCache instanceof Map)) return null;
+    const cached = state.rostersQueryCache.get(signature);
+    if (!cached || !Array.isArray(cached.items)) return null;
+    if (Number(cached.cacheAt || 0) !== Number(state.rostersCacheAt || 0)) return null;
+    if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_ROSTERS_QUERY_CACHE_MS) return null;
+    return cached.items;
+  }
+
+  function setRosterQueryCache(signature, items) {
+    if (!signature || !(state.rostersQueryCache instanceof Map)) return;
+    state.rostersQueryCache.set(signature, {
+      loadedAt: Date.now(),
+      cacheAt: Number(state.rostersCacheAt || 0),
+      items: Array.isArray(items) ? items : []
+    });
+    while (state.rostersQueryCache.size > TRAINING_ROSTERS_QUERY_CACHE_MAX) {
+      const oldestKey = state.rostersQueryCache.keys().next().value;
+      if (!oldestKey) break;
+      state.rostersQueryCache.delete(oldestKey);
+    }
+  }
+
   async function buildHealth() {
     const siteId = await resolveSiteId();
     const { decoded, mode } = await getDelegatedToken();
@@ -992,8 +1036,15 @@ function createTrainingRouter(deps) {
         : (state.rostersCachePromise ? 'promise-only' : 'miss');
       const rows = await listAllRosters();
       const filterStartedAt = Date.now();
-      const items = filterRosters(rows.map((entry) => entry.item), url)
-        .filter((entry) => requestAuthz.canManageTrainingRoster(authz, entry));
+      const querySignature = getRosterQuerySignature(url);
+      let filteredItems = getRosterQueryCache(querySignature);
+      let queryCacheState = 'hit';
+      if (!filteredItems) {
+        filteredItems = filterRosters(rows.map((entry) => entry.item), url);
+        setRosterQueryCache(querySignature, filteredItems);
+        queryCacheState = 'computed';
+      }
+      const items = filteredItems.filter((entry) => requestAuthz.canManageTrainingRoster(authz, entry));
       const filterDurationMs = Date.now() - filterStartedAt;
       const page = buildRosterPageMeta(url, items.length);
       const visibleItems = page.paged
@@ -1008,6 +1059,8 @@ function createTrainingRouter(deps) {
         paged: page.paged,
         limit: page.limit,
         offset: page.offset,
+        querySignature,
+        queryCacheState,
         filterDurationMs,
         durationMs: Date.now() - startedAt
       });
