@@ -56,6 +56,53 @@ function createUnitGovernanceRouter(deps) {
     return String(value || '').trim();
   }
 
+  function cleanLowerText(value) {
+    return cleanText(value).toLowerCase();
+  }
+
+  function parsePositiveInteger(value) {
+    const parsed = Number.parseInt(String(value || '').trim(), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }
+
+  function buildTextHaystack(parts) {
+    return (Array.isArray(parts) ? parts : [parts])
+      .flatMap((part) => Array.isArray(part) ? part : [part])
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+  }
+
+  function buildPageMeta(url, total, defaultLimit, maxLimit) {
+    const searchParams = url && url.searchParams ? url.searchParams : null;
+    const safeTotal = Math.max(Number(total) || 0, 0);
+    const safeDefaultLimit = Math.max(1, Number(defaultLimit) || 20);
+    const safeMaxLimit = Math.max(safeDefaultLimit, Number(maxLimit) || safeDefaultLimit);
+    const rawLimit = parsePositiveInteger(searchParams && searchParams.get('limit')) || safeDefaultLimit;
+    const limit = Math.min(Math.max(rawLimit, 1), safeMaxLimit);
+    const rawOffset = parsePositiveInteger(searchParams && searchParams.get('offset')) || 0;
+    const maxOffset = safeTotal > 0 ? Math.max(0, Math.floor((safeTotal - 1) / limit) * limit) : 0;
+    const offset = Math.min(Math.max(rawOffset, 0), maxOffset);
+    const returned = limit > 0 ? Math.max(Math.min(limit, safeTotal - offset), 0) : 0;
+    const pageCount = safeTotal > 0 ? Math.max(1, Math.ceil(safeTotal / limit)) : 0;
+    const currentPage = safeTotal > 0 ? Math.floor(offset / limit) + 1 : 0;
+    return {
+      offset,
+      limit,
+      total: safeTotal,
+      returned,
+      pageCount,
+      currentPage,
+      hasPrev: offset > 0,
+      hasNext: safeTotal > 0 && (offset + limit) < safeTotal,
+      prevOffset: Math.max(offset - limit, 0),
+      nextOffset: safeTotal > 0 && (offset + limit) < safeTotal ? offset + limit : offset,
+      pageStart: returned > 0 ? offset + 1 : 0,
+      pageEnd: returned > 0 ? offset + returned : 0,
+      paged: true
+    };
+  }
+
   function parseUnits(value) {
     if (Array.isArray(value)) {
       return Array.from(new Set(value.map((entry) => cleanText(entry)).filter(Boolean)));
@@ -275,6 +322,48 @@ function createUnitGovernanceRouter(deps) {
     });
   }
 
+  function queryGovernanceItems(items, url) {
+    const source = Array.isArray(items) ? items : [];
+    const keyword = cleanLowerText(url && url.searchParams && url.searchParams.get('keyword'));
+    const mode = cleanText(url && url.searchParams && url.searchParams.get('mode')).toLowerCase() || 'all';
+    const category = cleanText(url && url.searchParams && url.searchParams.get('category')) || 'all';
+    const filteredItems = source.filter((item) => {
+      const itemMode = cleanText(item && item.mode).toLowerCase() || 'independent';
+      const itemCategory = cleanText(item && item.category) || '';
+      if (mode !== 'all' && itemMode !== mode) return false;
+      if (category !== 'all' && itemCategory !== category) return false;
+      if (!keyword) return true;
+      const haystack = buildTextHaystack([
+        item && item.unit,
+        itemCategory,
+        itemMode,
+        item && item.note,
+        item && item.children
+      ]);
+      return haystack.includes(keyword);
+    });
+    const page = buildPageMeta(url, filteredItems.length, 12, 60);
+    const visibleItems = filteredItems.slice(page.offset, page.offset + page.limit);
+    const summary = filteredItems.reduce((result, item) => {
+      result.total += 1;
+      if (cleanText(item && item.mode).toLowerCase() === 'consolidated') result.consolidated += 1;
+      else result.independent += 1;
+      result.children += Array.isArray(item && item.children) ? item.children.length : 0;
+      return result;
+    }, { total: 0, consolidated: 0, independent: 0, children: 0 });
+    return {
+      items: visibleItems,
+      summary,
+      page,
+      filters: {
+        keyword: cleanText(keyword),
+        mode,
+        category
+      },
+      generatedAt: new Date().toISOString()
+    };
+  }
+
   function normalizeSecurityRoles(value) {
     return parseUnits(value);
   }
@@ -449,6 +538,77 @@ function createUnitGovernanceRouter(deps) {
     return cloneJson(inventory);
   }
 
+  function querySecurityWindowInventory(inventory, url) {
+    const source = inventory && typeof inventory === 'object' ? inventory : buildEmptyInventory();
+    const keyword = cleanLowerText(url && url.searchParams && url.searchParams.get('keyword'));
+    const status = cleanText(url && url.searchParams && url.searchParams.get('status')) || 'all';
+    const category = cleanText(url && url.searchParams && url.searchParams.get('category')) || 'all';
+    const matchesKeyword = (parts) => {
+      if (!keyword) return true;
+      return buildTextHaystack(parts).includes(keyword);
+    };
+    const filteredUnits = (Array.isArray(source.units) ? source.units : []).filter((unit) => {
+      const unitStatus = cleanText(unit && unit.status) || 'missing';
+      const unitMode = cleanText(unit && unit.mode) || 'independent';
+      const unitCategory = cleanText(unit && unit.category) || '';
+      if (status !== 'all') {
+        if (status === 'assigned' && unitStatus !== 'assigned') return false;
+        if (status === 'missing' && unitStatus !== 'missing') return false;
+        if (status === 'pending' && unitStatus !== 'pending') return false;
+        if (status === 'exempted' && unitMode !== 'consolidated') return false;
+      }
+      if (category !== 'all' && unitCategory !== category) return false;
+      return matchesKeyword([
+        unit && unit.unit,
+        unitCategory,
+        unitMode,
+        unit && unit.note,
+        unit && unit.children,
+        (unit && unit.holders || []).map((person) => [person.name, person.username, person.email].filter(Boolean).join(' ')),
+        (unit && unit.pending || []).map((item) => [item.applicantName, item.applicantEmail, item.status].filter(Boolean).join(' '))
+      ]);
+    });
+    const filteredPeople = (Array.isArray(source.people) ? source.people : []).filter((person) => {
+      if (status !== 'all') {
+        if (status === 'assigned' && !person.hasWindow) return false;
+        if (status === 'missing' && person.hasWindow) return false;
+      }
+      return matchesKeyword([
+        person && person.name,
+        person && person.username,
+        person && person.email,
+        person && person.activeUnit,
+        person && person.units,
+        person && person.securityRoles
+      ]);
+    });
+    const page = buildPageMeta(url, filteredUnits.length, 12, 60);
+    const visibleUnits = filteredUnits.slice(page.offset, page.offset + page.limit);
+    const summary = {
+      totalUnits: filteredUnits.length,
+      unitsWithWindows: filteredUnits.filter((unit) => unit && unit.hasWindow).length,
+      unitsWithoutWindows: filteredUnits.filter((unit) => !(unit && unit.hasWindow)).length,
+      peopleWithWindows: filteredPeople.filter((person) => person && person.hasWindow).length,
+      peopleWithoutWindow: filteredPeople.filter((person) => !(person && person.hasWindow)).length,
+      pendingApplications: filteredUnits.reduce((count, unit) => count + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0),
+      exemptedUnits: filteredUnits.reduce((count, unit) => count + (Number(unit && unit.exemptedRows) || 0), 0)
+    };
+    return {
+      inventory: {
+        generatedAt: cleanText(source.generatedAt) || new Date().toISOString(),
+        units: visibleUnits,
+        people: filteredPeople,
+        summary
+      },
+      page,
+      filters: {
+        keyword: cleanText(keyword),
+        status,
+        category
+      }
+    };
+  }
+
   async function handleHealth(req, res, origin) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
@@ -479,14 +639,18 @@ function createUnitGovernanceRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, '僅最高管理者可管理單位治理');
-      const items = buildGovernanceItems();
+      const result = queryGovernanceItems(buildGovernanceItems(), new URL(req.url, 'http://localhost'));
       await writeJson(res, {
         status: 200,
         jsonBody: {
           ok: true,
-          items,
+          items: result.items,
+          summary: result.summary,
+          page: result.page,
+          filters: result.filters,
+          total: result.page.total,
           contractVersion: CONTRACT_VERSION,
-          generatedAt: new Date().toISOString()
+          generatedAt: result.generatedAt
         }
       }, origin);
     } catch (error) {
@@ -576,12 +740,15 @@ function createUnitGovernanceRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, '僅最高管理者可檢視資安窗口');
-      const inventory = await buildSecurityWindowInventory();
+      const result = querySecurityWindowInventory(await buildSecurityWindowInventory(), new URL(req.url, 'http://localhost'));
       await writeJson(res, {
         status: 200,
         jsonBody: {
           ok: true,
-          inventory,
+          inventory: result.inventory,
+          page: result.page,
+          filters: result.filters,
+          total: result.page.total,
           contractVersion: CONTRACT_VERSION
         }
       }, origin);

@@ -241,6 +241,31 @@ async function run() {
     };
   }, { critical: true });
 
+  await step('unit-governance paged query authorized', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/unit-governance?limit=10&category=${encodeURIComponent('行政單位')}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!json || !Array.isArray(json.items) || !json.page || !json.summary) throw new Error('unit governance response invalid');
+    if (!json.items.every((item) => String(item && item.category || '').trim() === '行政單位')) throw new Error('unit governance category filter mismatch');
+    return {
+      count: json.items.length,
+      total: json.page.total || 0,
+      pageCount: json.page.pageCount || 0
+    };
+  }, { critical: true });
+
+  await step('security-window paged query authorized', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/security-window/inventory?limit=10&category=${encodeURIComponent('行政單位')}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const inventory = json && json.inventory && typeof json.inventory === 'object' ? json.inventory : null;
+    if (!inventory || !Array.isArray(inventory.units) || !json.page || !inventory.summary) throw new Error('security window response invalid');
+    if (!inventory.units.every((item) => String(item && item.category || '').trim() === '行政單位')) throw new Error('security window category filter mismatch');
+    return {
+      count: inventory.units.length,
+      total: json.page.total || 0,
+      pageCount: json.page.pageCount || 0
+    };
+  }, { critical: true });
+
   await step('training-rosters ids unique', async () => {
     const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/training/rosters`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

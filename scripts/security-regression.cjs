@@ -251,12 +251,16 @@ async function assertNoXssExecution(page, label) {
         return {
           stack: Boolean(document.querySelector('.security-window-category-stack')),
           cardCount: document.querySelectorAll('.security-window-category-card').length,
+          categoryFilter: Boolean(document.querySelector('#security-window-category')),
+          pageNumber: Boolean(document.querySelector('#security-window-page-number')),
           categories: Array.from(new Set(Array.from(document.querySelectorAll('.security-window-category-card[data-security-window-category]')).map((node) => String(node.getAttribute('data-security-window-category') || '').trim()).filter(Boolean))),
           text: String(root.textContent || '')
         };
       });
       if (!structure.stack) throw new Error('security window stack missing');
       if (structure.cardCount < 1) throw new Error('security window cards missing');
+      if (!structure.categoryFilter) throw new Error('security window category filter missing');
+      if (!structure.pageNumber) throw new Error('security window pager missing');
       const expectedCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
       const missingCategories = expectedCategories.filter((label) => !structure.categories.includes(label));
       if (missingCategories.length) throw new Error(`security window missing categories: ${missingCategories.join(', ')}`);
@@ -275,12 +279,16 @@ async function assertNoXssExecution(page, label) {
         return {
           stack: Boolean(document.querySelector('.governance-category-stack')),
           cardCount: document.querySelectorAll('.governance-category-card').length,
+          categoryFilter: Boolean(document.querySelector('#unit-governance-category')),
+          pageNumber: Boolean(document.querySelector('#unit-governance-page-number')),
           categories: Array.from(new Set(Array.from(document.querySelectorAll('.governance-category-card[data-governance-category]')).map((node) => String(node.getAttribute('data-governance-category') || '').trim()).filter(Boolean))),
           text: String(root.textContent || '')
         };
       });
       if (!structure.stack) throw new Error('unit governance stack missing');
       if (structure.cardCount < 1) throw new Error('unit governance cards missing');
+      if (!structure.categoryFilter) throw new Error('unit governance category filter missing');
+      if (!structure.pageNumber) throw new Error('unit governance pager missing');
       const expectedCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
       const missingCategories = expectedCategories.filter((label) => !structure.categories.includes(label));
       if (missingCategories.length) throw new Error(`unit governance missing categories: ${missingCategories.join(', ')}`);

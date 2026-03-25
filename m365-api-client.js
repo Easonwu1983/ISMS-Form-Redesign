@@ -1177,14 +1177,26 @@
       };
     }
 
-    async function listUnitGovernanceEntries() {
-      const body = await requestJson(getUnitGovernanceEndpoint(), {
+    async function listUnitGovernanceEntries(query) {
+      const endpoint = getUnitGovernanceEndpoint();
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const filters = query && typeof query === 'object' ? query : {};
+      Object.entries(filters).forEach(([key, value]) => {
+        const cleanValue = cleanText(value);
+        if (cleanValue) url.searchParams.set(key, cleanValue);
+      });
+      const body = await requestJson(url.toString(), {
         method: 'GET',
         contractVersion: CONTRACT_VERSION
       });
       return {
         ok: !!(body && body.ok !== false),
         items: Array.isArray(body && body.items) ? body.items : [],
+        summary: body && body.summary && typeof body.summary === 'object' ? body.summary : null,
+        page: body && body.page && typeof body.page === 'object' ? body.page : null,
+        filters: body && body.filters && typeof body.filters === 'object' ? body.filters : null,
+        total: Math.max(0, Number(body && body.total) || 0),
+        generatedAt: cleanText(body && body.generatedAt),
         raw: body
       };
     }
@@ -1202,14 +1214,24 @@
       };
     }
 
-    async function getSecurityWindowInventory() {
-      const body = await requestJson(getSecurityWindowInventoryEndpoint(), {
+    async function getSecurityWindowInventory(query) {
+      const endpoint = getSecurityWindowInventoryEndpoint();
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const filters = query && typeof query === 'object' ? query : {};
+      Object.entries(filters).forEach(([key, value]) => {
+        const cleanValue = cleanText(value);
+        if (cleanValue) url.searchParams.set(key, cleanValue);
+      });
+      const body = await requestJson(url.toString(), {
         method: 'GET',
         contractVersion: CONTRACT_VERSION
       });
       return {
         ok: !!(body && body.ok !== false),
         inventory: body && body.inventory && typeof body.inventory === 'object' ? body.inventory : null,
+        page: body && body.page && typeof body.page === 'object' ? body.page : null,
+        filters: body && body.filters && typeof body.filters === 'object' ? body.filters : null,
+        total: Math.max(0, Number(body && body.total) || 0),
         raw: body
       };
     }

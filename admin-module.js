@@ -136,21 +136,32 @@
       loading: false,
       lastLoadedAt: ''
     };
+    const DEFAULT_GOVERNANCE_FILTERS = Object.freeze({
+      keyword: '',
+      mode: 'all',
+      category: 'all',
+      limit: '12',
+      offset: '0'
+    });
     const unitGovernanceState = {
-      filters: {
-        keyword: '',
-        mode: 'all'
-      },
+      filters: { ...DEFAULT_GOVERNANCE_FILTERS },
       items: [],
+      summary: { total: 0, consolidated: 0, independent: 0, children: 0 },
+      page: { offset: 0, limit: 12, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       loading: false,
       lastLoadedAt: ''
     };
+    const DEFAULT_SECURITY_WINDOW_FILTERS = Object.freeze({
+      keyword: '',
+      status: 'all',
+      category: 'all',
+      limit: '12',
+      offset: '0'
+    });
     const securityWindowState = {
-      filters: {
-        keyword: '',
-        status: 'all'
-      },
+      filters: { ...DEFAULT_SECURITY_WINDOW_FILTERS },
       inventory: null,
+      page: { offset: 0, limit: 12, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       loading: false,
       lastLoadedAt: '',
       filterSignature: ''
@@ -244,13 +255,166 @@
         && typeof client.upsertUnitGovernanceEntry === 'function');
     }
 
-    async function listGovernanceItemsForAdmin() {
+    function normalizePagedFilters(filters, defaults) {
+      return {
+        ...(defaults || {}),
+        ...(filters && typeof filters === 'object' ? filters : {})
+      };
+    }
+
+    function buildAdminCollectionPage(filters, total, defaultLimit, maxLimit) {
+      const nextFilters = filters && typeof filters === 'object' ? filters : {};
+      const safeTotal = Math.max(Number(total) || 0, 0);
+      const safeDefaultLimit = Math.max(1, Number(defaultLimit) || 12);
+      const safeMaxLimit = Math.max(safeDefaultLimit, Number(maxLimit) || safeDefaultLimit);
+      const limit = Math.min(Math.max(Number.parseInt(String(nextFilters.limit || safeDefaultLimit), 10) || safeDefaultLimit, 1), safeMaxLimit);
+      const maxOffset = safeTotal > 0 ? Math.max(0, Math.floor((safeTotal - 1) / limit) * limit) : 0;
+      const offset = Math.min(Math.max(Number.parseInt(String(nextFilters.offset || '0'), 10) || 0, 0), maxOffset);
+      const returned = limit > 0 ? Math.max(Math.min(limit, safeTotal - offset), 0) : 0;
+      const pageCount = safeTotal > 0 ? Math.max(1, Math.ceil(safeTotal / limit)) : 0;
+      const currentPage = safeTotal > 0 ? Math.floor(offset / limit) + 1 : 0;
+      return {
+        offset,
+        limit,
+        total: safeTotal,
+        returned,
+        pageCount,
+        currentPage,
+        hasPrev: offset > 0,
+        hasNext: safeTotal > 0 && (offset + limit) < safeTotal,
+        prevOffset: Math.max(offset - limit, 0),
+        nextOffset: safeTotal > 0 && (offset + limit) < safeTotal ? offset + limit : offset,
+        pageStart: returned > 0 ? offset + 1 : 0,
+        pageEnd: returned > 0 ? offset + returned : 0
+      };
+    }
+
+    function getAdminCollectionOffsetByPageNumber(page, targetPage) {
+      const safePageCount = Math.max(1, Number(page && page.pageCount) || 1);
+      const safeLimit = Math.max(1, Number(page && page.limit) || 12);
+      const parsed = Number.parseInt(String(targetPage || '').trim(), 10);
+      const safeTargetPage = Math.min(safePageCount, Math.max(1, Number.isFinite(parsed) ? parsed : 1));
+      return (safeTargetPage - 1) * safeLimit;
+    }
+
+    function formatAdminCollectionSummary(page, emptyText) {
+      const safePage = page && typeof page === 'object' ? page : {};
+      if (!Number(safePage.total || 0)) {
+        return emptyText || '目前沒有符合條件的資料';
+      }
+      return `第 ${safePage.currentPage || 0} / ${safePage.pageCount || 0} 頁，顯示 ${safePage.pageStart || 0}-${safePage.pageEnd || 0} / ${safePage.total || 0} 筆`;
+    }
+
+    function renderAdminCollectionPager(config) {
+      const page = config && config.page ? config.page : {};
+      const pageMax = Math.max(1, Number(page.pageCount) || 1);
+      const pageValue = Math.max(1, Number(page.currentPage) || 1);
+      const disableJump = Number(page.total || 0) > 0 ? '' : 'disabled';
+      const idPrefix = String(config && config.idPrefix || '').trim();
+      const actionPrefix = String(config && config.actionPrefix || '').trim();
+      const summary = String(config && config.summary || formatAdminCollectionSummary(page)).trim();
+      const limitValue = String(page.limit || '');
+      const limitOptions = ['12', '24', '48']
+        .map((value) => `<option value="${esc(value)}" ${limitValue === value ? 'selected' : ''}>${esc(value)}</option>`)
+        .join('');
+      return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(summary)}</span></div><div class="review-toolbar-actions"><label class="form-label" for="${esc(idPrefix)}-page-limit" style="margin:0 4px 0 0">每頁</label><select class="form-select" id="${esc(idPrefix)}-page-limit" style="width:96px">${limitOptions}</select><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}FirstPage" ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}PrevPage" ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><span class="review-card-subtitle" style="margin:0 4px 0 8px">頁次 ${page.currentPage || 0} / ${page.pageCount || 0}</span><label class="form-label" for="${esc(idPrefix)}-page-number" style="margin:0 4px 0 8px">跳至</label><input type="number" class="form-input" id="${esc(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px"><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}JumpPage" ${disableJump}>前往</button><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}NextPage" ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}LastPage" ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button></div></div>`;
+    }
+
+    function bindAdminCollectionPager(config) {
+      const idPrefix = String(config && config.idPrefix || '').trim();
+      const page = config && config.page ? config.page : {};
+      const onChange = config && typeof config.onChange === 'function' ? config.onChange : null;
+      const actionPrefix = String(config && config.actionPrefix || '').trim();
+      if (!idPrefix || !onChange) return;
+      const limitSelect = document.getElementById(`${idPrefix}-page-limit`);
+      const pageNumberInput = document.getElementById(`${idPrefix}-page-number`);
+      const firstButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'FirstPage')}"]`) : null;
+      const prevButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'PrevPage')}"]`) : null;
+      const jumpButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'JumpPage')}"]`) : null;
+      const nextButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'NextPage')}"]`) : null;
+      const lastButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'LastPage')}"]`) : null;
+      if (limitSelect) {
+        limitSelect.addEventListener('change', () => onChange({
+          limit: String(limitSelect.value || ''),
+          offset: '0'
+        }));
+      }
+      if (pageNumberInput) {
+        pageNumberInput.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          const nextOffset = getAdminCollectionOffsetByPageNumber(page, pageNumberInput.value || '1');
+          onChange({ offset: String(nextOffset) });
+        });
+      }
+      if (jumpButton && pageNumberInput) {
+        jumpButton.addEventListener('click', () => {
+          const nextOffset = getAdminCollectionOffsetByPageNumber(page, pageNumberInput.value || '1');
+          onChange({ offset: String(nextOffset) });
+        });
+      }
+      if (firstButton) {
+        firstButton.addEventListener('click', () => onChange({ offset: '0' }));
+      }
+      if (prevButton) {
+        prevButton.addEventListener('click', () => onChange({ offset: String(page.prevOffset || 0) }));
+      }
+      if (nextButton) {
+        nextButton.addEventListener('click', () => onChange({ offset: String(page.nextOffset || 0) }));
+      }
+      if (lastButton) {
+        lastButton.addEventListener('click', () => {
+          const nextOffset = getAdminCollectionOffsetByPageNumber(page, page.pageCount || 1);
+          onChange({ offset: String(nextOffset) });
+        });
+      }
+    }
+
+    function summarizeGovernanceItems(items) {
+      return (Array.isArray(items) ? items : []).reduce((result, unit) => {
+        result.total += 1;
+        if (String(unit && unit.mode || 'independent').trim() === 'consolidated') result.consolidated += 1;
+        else result.independent += 1;
+        result.children += Array.isArray(unit && unit.children) ? unit.children.length : 0;
+        return result;
+      }, { total: 0, consolidated: 0, independent: 0, children: 0 });
+    }
+
+    async function listGovernanceItemsForAdmin(filters) {
+      const nextFilters = normalizePagedFilters(filters, DEFAULT_GOVERNANCE_FILTERS);
       if (!isRemoteGovernanceEnabled()) {
-        return getGovernanceTopLevelUnits();
+        const items = (Array.isArray(getGovernanceTopLevelUnits()) ? getGovernanceTopLevelUnits() : []).filter((unit) => {
+          const keyword = String(nextFilters.keyword || '').trim().toLowerCase();
+          const modeFilter = String(nextFilters.mode || 'all').trim();
+          const categoryFilter = String(nextFilters.category || 'all').trim();
+          if (modeFilter !== 'all' && String(unit && unit.mode || 'independent').trim() !== modeFilter) return false;
+          if (categoryFilter !== 'all' && String(unit && unit.category || '').trim() !== categoryFilter) return false;
+          if (!keyword) return true;
+          const haystack = [unit && unit.unit, unit && unit.category, unit && unit.mode, unit && unit.note, (unit && unit.children) || []]
+            .flat()
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(keyword);
+        });
+        const page = buildAdminCollectionPage(nextFilters, items.length, 12, 60);
+        return {
+          items: items.slice(page.offset, page.offset + page.limit),
+          page,
+          summary: summarizeGovernanceItems(items),
+          filters: nextFilters,
+          generatedAt: new Date().toISOString()
+        };
       }
       const client = getAdminApiClient();
-      const response = await client.listUnitGovernanceEntries();
-      return Array.isArray(response && response.items) ? response.items : [];
+      const response = await client.listUnitGovernanceEntries(nextFilters);
+      return {
+        items: Array.isArray(response && response.items) ? response.items : [],
+        page: response && response.page ? response.page : buildAdminCollectionPage(nextFilters, response && response.total, 12, 60),
+        summary: response && response.summary ? response.summary : summarizeGovernanceItems(response && response.items),
+        filters: { ...nextFilters, ...(response && response.filters ? response.filters : {}) },
+        generatedAt: String(response && response.generatedAt || '').trim() || new Date().toISOString()
+      };
     }
 
     async function saveGovernanceModeForAdmin(unit, mode, note) {
@@ -272,14 +436,29 @@
       return setUnitGovernanceMode(unit, mode, String(actor.name || '').trim(), note);
     }
 
-    async function fetchSecurityWindowInventoryFromSource() {
+    async function fetchSecurityWindowInventoryFromSource(filters) {
+      const nextFilters = normalizePagedFilters(filters, DEFAULT_SECURITY_WINDOW_FILTERS);
       if (isRemoteGovernanceEnabled()) {
         const client = getAdminApiClient();
-        const response = await client.getSecurityWindowInventory();
-        return response && response.inventory ? response.inventory : buildEmptySecurityWindowInventory();
+        const response = await client.getSecurityWindowInventory(nextFilters);
+        return {
+          inventory: response && response.inventory ? response.inventory : buildEmptySecurityWindowInventory(),
+          page: response && response.page ? response.page : buildAdminCollectionPage(nextFilters, response && response.total, 12, 60),
+          filters: { ...nextFilters, ...(response && response.filters ? response.filters : {}) }
+        };
       }
       const applications = await listUnitContactApplications({ limit: '200' });
-      return buildSecurityWindowInventory(getUsers(), Array.isArray(applications) ? applications : []);
+      const inventory = buildSecurityWindowInventory(getUsers(), Array.isArray(applications) ? applications : []);
+      const filteredInventory = filterSecurityWindowInventory(inventory, nextFilters);
+      const page = buildAdminCollectionPage(nextFilters, Array.isArray(filteredInventory.units) ? filteredInventory.units.length : 0, 12, 60);
+      return {
+        inventory: {
+          ...filteredInventory,
+          units: Array.isArray(filteredInventory.units) ? filteredInventory.units.slice(page.offset, page.offset + page.limit) : []
+        },
+        page,
+        filters: nextFilters
+      };
     }
 
     function getAuditTrailEventTypeOptions(summary, items) {
@@ -856,9 +1035,12 @@
       const next = {
         keyword: '',
         status: 'all',
+        category: 'all',
+        limit: String(DEFAULT_SECURITY_WINDOW_FILTERS.limit),
+        offset: '0',
         ...(filters || {})
       };
-      return [next.keyword, next.status]
+      return [next.keyword, next.status, next.category, next.limit, next.offset]
         .map((value) => String(value || '').trim())
         .join('|');
     }
@@ -1288,10 +1470,23 @@
       });
     }
 
+    function getGovernanceFiltersFromDom() {
+      return {
+        keyword: document.getElementById('unit-governance-keyword') ? document.getElementById('unit-governance-keyword').value.trim() : '',
+        mode: document.getElementById('unit-governance-mode') ? document.getElementById('unit-governance-mode').value.trim() : 'all',
+        category: document.getElementById('unit-governance-category') ? document.getElementById('unit-governance-category').value.trim() : 'all',
+        limit: document.getElementById('unit-governance-page-limit') ? document.getElementById('unit-governance-page-limit').value.trim() : String(DEFAULT_GOVERNANCE_FILTERS.limit),
+        offset: '0'
+      };
+    }
+
     function getSecurityWindowFiltersFromDom() {
-        return {
-          keyword: document.getElementById('security-window-keyword') ? document.getElementById('security-window-keyword').value.trim() : '',
-          status: document.getElementById('security-window-status') ? document.getElementById('security-window-status').value.trim() : 'all'
+      return {
+        keyword: document.getElementById('security-window-keyword') ? document.getElementById('security-window-keyword').value.trim() : '',
+        status: document.getElementById('security-window-status') ? document.getElementById('security-window-status').value.trim() : 'all',
+        category: document.getElementById('security-window-category') ? document.getElementById('security-window-category').value.trim() : 'all',
+        limit: document.getElementById('security-window-page-limit') ? document.getElementById('security-window-page-limit').value.trim() : String(DEFAULT_SECURITY_WINDOW_FILTERS.limit),
+        offset: '0'
       };
     }
 
@@ -1827,53 +2022,34 @@
     refreshIcons();
   }
 
-    async function renderUnitReview(nextFilters) {
+  async function renderUnitReview(nextFilters) {
       if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可管理單位治理', 'error'); return; }
-      unitGovernanceState.filters = { ...unitGovernanceState.filters, ...(nextFilters || {}) };
+      unitGovernanceState.filters = normalizePagedFilters({ ...unitGovernanceState.filters, ...(nextFilters || {}) }, DEFAULT_GOVERNANCE_FILTERS);
       unitGovernanceState.loading = true;
     const app = document.getElementById('app');
     app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">可為一級單位設定獨立或合併填報模式，並快速檢視轄下二級單位的填報關聯。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在整理單位治理資料...</div></div>`;
     refreshIcons();
     try {
-      const items = await listGovernanceItemsForAdmin();
-      unitGovernanceState.items = Array.isArray(items) ? items : [];
-      unitGovernanceState.lastLoadedAt = new Date().toISOString();
+      const result = await listGovernanceItemsForAdmin(unitGovernanceState.filters);
+      unitGovernanceState.items = Array.isArray(result && result.items) ? result.items : [];
+      unitGovernanceState.summary = result && result.summary ? result.summary : summarizeGovernanceItems(unitGovernanceState.items);
+      unitGovernanceState.page = result && result.page ? result.page : buildAdminCollectionPage(unitGovernanceState.filters, unitGovernanceState.items.length, 12, 60);
+      unitGovernanceState.filters = normalizePagedFilters(result && result.filters ? result.filters : unitGovernanceState.filters, DEFAULT_GOVERNANCE_FILTERS);
+      unitGovernanceState.lastLoadedAt = String(result && result.generatedAt || '').trim() || new Date().toISOString();
     } catch (error) {
       app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">無法讀取單位治理資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">單位治理資料尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
       return;
     }
-
-    const keyword = String(unitGovernanceState.filters.keyword || '').trim().toLowerCase();
-    const modeFilter = String(unitGovernanceState.filters.mode || 'all').trim();
-    const itemsSignature = [
-      unitGovernanceState.lastLoadedAt,
-      unitGovernanceState.items.length,
-      keyword,
-      modeFilter
-    ].join('|');
-    let items = unitGovernanceState.items;
-    if (unitGovernanceFilteredCache.signature === itemsSignature && Array.isArray(unitGovernanceFilteredCache.value)) {
-      items = unitGovernanceFilteredCache.value;
-    } else {
-      items = unitGovernanceState.items.filter((unit) => {
-        if (modeFilter !== 'all' && String(unit.mode || 'independent').trim() !== modeFilter) return false;
-        if (!keyword) return true;
-        const haystack = [unit.unit, unit.category, unit.mode, unit.note, (unit.children || []).join(' ')].filter(Boolean).join(' ').toLowerCase();
-        return haystack.includes(keyword);
-      });
-      unitGovernanceFilteredCache = {
-        signature: itemsSignature,
-        value: items
-      };
-    }
-    const counts = items.reduce((result, unit) => {
-      if (unit.mode === 'consolidated') result.consolidated += 1; else result.independent += 1;
-      result.children += Array.isArray(unit.children) ? unit.children.length : 0;
-      return result;
-    }, { total: items.length, consolidated: 0, independent: 0, children: 0 });
-    const groupedItems = groupGovernanceUnitsByCategory(items);
+    const counts = unitGovernanceState.summary || summarizeGovernanceItems(unitGovernanceState.items);
+    const groupedItems = groupGovernanceUnitsByCategory(unitGovernanceState.items);
     const cardsHtml = groupedItems.length ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index)).join('') : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
+    const governancePagerHtml = renderAdminCollectionPager({
+      idPrefix: 'unit-governance',
+      actionPrefix: 'admin.unitGovernance',
+      page: unitGovernanceState.page,
+      summary: formatAdminCollectionSummary(unitGovernanceState.page, '目前沒有符合條件的單位治理資料')
+    });
     app.innerHTML = `<div class="animate-in">
       <div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">設定一級單位的獨立 / 合併填報模式，並依行政單位、學術單位、中心 / 研究單位分層檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div>
       <div class="stats-grid review-stats-grid">
@@ -1887,7 +2063,8 @@
         <div class="review-toolbar">
           <div class="review-toolbar-main">
             <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="unit-governance-keyword" value="${esc(unitGovernanceState.filters.keyword || '')}" placeholder="單位名稱、子單位、模式、備註"></div>
-            <div class="form-group" style="min-width:180px"><label class="form-label">填報模式</label><select class="form-select" id="unit-governance-mode"><option value="all" ${modeFilter === 'all' ? 'selected' : ''}>全部</option><option value="independent" ${modeFilter === 'independent' ? 'selected' : ''}>獨立填報</option><option value="consolidated" ${modeFilter === 'consolidated' ? 'selected' : ''}>合併 / 統一填報</option></select></div>
+            <div class="form-group" style="min-width:180px"><label class="form-label">填報模式</label><select class="form-select" id="unit-governance-mode"><option value="all" ${unitGovernanceState.filters.mode === 'all' ? 'selected' : ''}>全部</option><option value="independent" ${unitGovernanceState.filters.mode === 'independent' ? 'selected' : ''}>獨立填報</option><option value="consolidated" ${unitGovernanceState.filters.mode === 'consolidated' ? 'selected' : ''}>合併 / 統一填報</option></select></div>
+            <div class="form-group" style="min-width:200px"><label class="form-label">分類</label><select class="form-select" id="unit-governance-category"><option value="all" ${unitGovernanceState.filters.category === 'all' ? 'selected' : ''}>全部</option><option value="行政單位" ${unitGovernanceState.filters.category === '行政單位' ? 'selected' : ''}>行政單位</option><option value="學術單位" ${unitGovernanceState.filters.category === '學術單位' ? 'selected' : ''}>學術單位</option><option value="中心 / 研究單位" ${unitGovernanceState.filters.category === '中心 / 研究單位' ? 'selected' : ''}>中心 / 研究單位</option></select></div>
           </div>
           <div class="review-toolbar-actions">
             <button type="button" class="btn btn-primary" data-action="admin.applyGovernanceFilters">${ic('filter', 'icon-sm')} 套用篩選</button>
@@ -1895,21 +2072,26 @@
           </div>
         </div>
         <div class="security-window-category-stack governance-category-stack">${cardsHtml}</div>
+        ${governancePagerHtml}
       </div>
     </div>`;
     refreshIcons();
+    bindAdminCollectionPager({
+      idPrefix: 'unit-governance',
+      actionPrefix: 'admin.unitGovernance',
+      page: unitGovernanceState.page,
+      onChange: function (delta) {
+        renderUnitReview({ ...unitGovernanceState.filters, ...(delta || {}) });
+      }
+    });
     if (typeof bindCopyButtons === 'function') bindCopyButtons();
     else if (window && typeof window.bindCopyButtons === 'function') window.bindCopyButtons();
     registerActionHandlers('admin', {
       applyGovernanceFilters: function () {
-        unitGovernanceState.filters.keyword = document.getElementById('unit-governance-keyword') ? document.getElementById('unit-governance-keyword').value : '';
-        unitGovernanceState.filters.mode = document.getElementById('unit-governance-mode') ? document.getElementById('unit-governance-mode').value : 'all';
-        renderUnitReview(unitGovernanceState.filters);
+        renderUnitReview(getGovernanceFiltersFromDom());
       },
       resetGovernanceFilters: function () {
-        unitGovernanceState.filters.keyword = '';
-        unitGovernanceState.filters.mode = 'all';
-        renderUnitReview(unitGovernanceState.filters);
+        renderUnitReview({ ...DEFAULT_GOVERNANCE_FILTERS });
       },
       saveGovernanceMode: function ({ dataset }) {
         const unit = String(dataset && dataset.unit || '').trim();
@@ -2018,56 +2200,35 @@
   async function renderSecurityWindow(nextFilters, options) {
     if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理者可檢視資安窗口', 'error'); return; }
     const opts = options || {};
-    securityWindowState.filters = { ...securityWindowState.filters, ...(nextFilters || {}) };
+    securityWindowState.filters = normalizePagedFilters({ ...securityWindowState.filters, ...(nextFilters || {}) }, DEFAULT_SECURITY_WINDOW_FILTERS);
     const app = document.getElementById('app');
-    const resolvedFilters = { keyword: '', status: 'all', ...securityWindowState.filters };
-    const filterSignature = getSecurityWindowFilterSignature(resolvedFilters);
-    const canRenderFromCache = securityWindowState.filterSignature === filterSignature && securityWindowState.inventory;
-    let inventory = canRenderFromCache ? securityWindowState.inventory : null;
-    if (!inventory) {
-      try {
-        if (securityWindowLoadPromise) {
-          inventory = await securityWindowLoadPromise;
-        } else {
-          app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">盤點全校各單位的資安窗口配置，依行政單位、學術單位、中心 / 研究單位分層顯示，僅最高管理者可檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在載入資安窗口盤點資料...</div></div>`;
-          refreshIcons();
-          inventory = await loadSecurityWindowInventory(!!opts.force);
-        }
-      } catch (error) {
-        app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">資安窗口盤點資料載入失敗，請稍後再試。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshSecurityWindow">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">載入失敗</div><div class="empty-state-desc">${esc(String(error && error.message || error || '無法載入資安窗口盤點資料'))}</div></div></div></div>`;
-        refreshIcons();
-        return;
-      }
+    const resolvedFilters = { ...DEFAULT_SECURITY_WINDOW_FILTERS, ...securityWindowState.filters };
+    let response;
+    try {
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">盤點全校各單位的資安窗口配置，依行政單位、學術單位、中心 / 研究單位分層顯示，僅最高管理者可檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在載入資安窗口盤點資料...</div></div>`;
+      refreshIcons();
+      response = await fetchSecurityWindowInventoryFromSource(resolvedFilters, opts);
+    } catch (error) {
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">資安窗口盤點資料載入失敗，請稍後再試。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshSecurityWindow">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">載入失敗</div><div class="empty-state-desc">${esc(String(error && error.message || error || '無法載入資安窗口盤點資料'))}</div></div></div></div>`;
+      refreshIcons();
+      return;
     }
 
-    const safeInventory = normalizeSecurityWindowInventory(inventory);
+    const safeInventory = normalizeSecurityWindowInventory(response && response.inventory);
     securityWindowState.inventory = safeInventory;
+    securityWindowState.page = response && response.page ? response.page : buildAdminCollectionPage(resolvedFilters, safeInventory.units.length, 12, 60);
+    securityWindowState.filters = normalizePagedFilters(response && response.filters ? response.filters : resolvedFilters, DEFAULT_SECURITY_WINDOW_FILTERS);
     securityWindowState.lastLoadedAt = safeInventory.generatedAt || new Date().toISOString();
-    securityWindowState.filterSignature = filterSignature;
-    let filtered;
-    try {
-      const filterCacheSignature = [
-        safeInventory.generatedAt || '',
-        safeInventory.units.length,
-        safeInventory.people.length,
-        filterSignature
-      ].join('|');
-      if (securityWindowFilteredCache.signature === filterCacheSignature && securityWindowFilteredCache.value) {
-        filtered = securityWindowFilteredCache.value;
-      } else {
-        filtered = filterSecurityWindowInventory(safeInventory, resolvedFilters);
-        securityWindowFilteredCache = {
-          signature: filterCacheSignature,
-          value: filtered
-        };
-      }
-    } catch (error) {
-      console.warn('security window inventory filter failed', error);
-      filtered = filterSecurityWindowInventory(buildEmptySecurityWindowInventory(), resolvedFilters);
-    }
-    const summary = filtered.summary;
-    const unitCardsHtml = renderSecurityWindowUnitCards(filtered.units);
-    const peopleRowsHtml = renderSecurityWindowPersonRows(filtered.people);
+    securityWindowState.filterSignature = getSecurityWindowFilterSignature(securityWindowState.filters);
+    const summary = safeInventory.summary || buildEmptySecurityWindowInventory().summary;
+    const unitCardsHtml = renderSecurityWindowUnitCards(safeInventory.units);
+    const peopleRowsHtml = renderSecurityWindowPersonRows(safeInventory.people);
+    const unitPagerHtml = renderAdminCollectionPager({
+      idPrefix: 'security-window',
+      actionPrefix: 'admin.securityWindow',
+      page: securityWindowState.page,
+      summary: formatAdminCollectionSummary(securityWindowState.page, '目前沒有符合條件的資安窗口單位')
+    });
     app.innerHTML = `<div class="animate-in">
       <div class="page-header review-page-header">
         <div>
@@ -2090,8 +2251,9 @@
         <div class="card-header"><span class="card-title">單位盤點</span><span class="review-card-subtitle">依行政單位、學術單位、中心 / 研究單位展開，顯示各單位與二級單位的資安窗口狀態</span></div>
         <form id="security-window-filter-form" class="review-toolbar">
           <div class="review-toolbar-main">
-            <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="security-window-keyword" value="${esc(resolvedFilters.keyword)}" placeholder="單位、姓名、帳號、電子郵件、角色"></div>
-            <div class="form-group" style="min-width:180px"><label class="form-label">狀態</label><select class="form-select" id="security-window-status"><option value="all" ${resolvedFilters.status === 'all' ? 'selected' : ''}>全部</option><option value="assigned" ${resolvedFilters.status === 'assigned' ? 'selected' : ''}>已設定</option><option value="missing" ${resolvedFilters.status === 'missing' ? 'selected' : ''}>未設定</option><option value="pending" ${resolvedFilters.status === 'pending' ? 'selected' : ''}>待審核</option><option value="exempted" ${resolvedFilters.status === 'exempted' ? 'selected' : ''}>由一級單位統一</option></select></div>
+            <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="security-window-keyword" value="${esc(securityWindowState.filters.keyword)}" placeholder="單位、姓名、帳號、電子郵件、角色"></div>
+            <div class="form-group" style="min-width:180px"><label class="form-label">狀態</label><select class="form-select" id="security-window-status"><option value="all" ${securityWindowState.filters.status === 'all' ? 'selected' : ''}>全部</option><option value="assigned" ${securityWindowState.filters.status === 'assigned' ? 'selected' : ''}>已設定</option><option value="missing" ${securityWindowState.filters.status === 'missing' ? 'selected' : ''}>未設定</option><option value="pending" ${securityWindowState.filters.status === 'pending' ? 'selected' : ''}>待審核</option><option value="exempted" ${securityWindowState.filters.status === 'exempted' ? 'selected' : ''}>由一級單位統一</option></select></div>
+            <div class="form-group" style="min-width:200px"><label class="form-label">分類</label><select class="form-select" id="security-window-category"><option value="all" ${securityWindowState.filters.category === 'all' ? 'selected' : ''}>全部</option><option value="行政單位" ${securityWindowState.filters.category === '行政單位' ? 'selected' : ''}>行政單位</option><option value="學術單位" ${securityWindowState.filters.category === '學術單位' ? 'selected' : ''}>學術單位</option><option value="中心 / 研究單位" ${securityWindowState.filters.category === '中心 / 研究單位' ? 'selected' : ''}>中心 / 研究單位</option></select></div>
           </div>
           <div class="review-toolbar-actions">
             <button type="button" class="btn btn-secondary" data-action="admin.applySecurityWindowFilters">${ic('search', 'icon-sm')} 套用</button>
@@ -2099,6 +2261,7 @@
           </div>
         </form>
         <div class="governance-grid">${unitCardsHtml}</div>
+        ${unitPagerHtml}
       </div>
       <div class="card review-table-card" style="margin-top:18px">
         <div class="card-header"><span class="card-title">資安窗口人員</span><span class="review-card-subtitle">依姓名、帳號、單位與狀態快速查找資安窗口人員</span></div>
@@ -2112,6 +2275,14 @@
         renderSecurityWindow(getSecurityWindowFiltersFromDom());
       });
     }
+    bindAdminCollectionPager({
+      idPrefix: 'security-window',
+      actionPrefix: 'admin.securityWindow',
+      page: securityWindowState.page,
+      onChange: function (delta) {
+        renderSecurityWindow({ ...securityWindowState.filters, ...(delta || {}) });
+      }
+    });
     wireReviewTableScrollers(app);
     refreshIcons();
   }  async function handleRefreshSecurityWindow() {
@@ -2123,14 +2294,18 @@
   }
 
   async function handleResetSecurityWindowFilters() {
-    await renderSecurityWindow({
-      keyword: '',
-      status: 'all'
-    });
+    await renderSecurityWindow({ ...DEFAULT_SECURITY_WINDOW_FILTERS });
   }
 
   async function handleExportSecurityWindow() {
-    const inventory = await loadSecurityWindowInventory(false);
+    let inventory;
+    if (isRemoteGovernanceEnabled()) {
+      const client = getAdminApiClient();
+      const response = await client.getSecurityWindowInventory({ ...securityWindowState.filters, limit: '500', offset: '0' });
+      inventory = response && response.inventory ? response.inventory : buildEmptySecurityWindowInventory();
+    } else {
+      inventory = await loadSecurityWindowInventory(false);
+    }
     const filters = { ...securityWindowState.filters };
     downloadJson('isms-security-window-' + new Date().toISOString().slice(0, 10) + '.json', {
       exportedAt: new Date().toISOString(),
