@@ -173,9 +173,37 @@
       value: []
     };
 
+    function normalizeAdminUnitList(units) {
+      const source = Array.isArray(units) ? units : [];
+      return Array.from(new Set(source.map((unit) => String(unit || '').trim()).filter(Boolean)));
+    }
+
+    function getAdminAccessProfile(user) {
+      const source = user && typeof user === 'object' ? user : {};
+      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(source) : null;
+      const primaryUnit = String((accessProfile && (accessProfile.primaryUnit || accessProfile.unit)) || source.primaryUnit || source.unit || '').trim();
+      const authorizedUnits = normalizeAdminUnitList([primaryUnit].concat(Array.isArray(accessProfile && accessProfile.authorizedUnits)
+        ? accessProfile.authorizedUnits
+        : getAuthorizedUnits(source)));
+      const reviewUnits = normalizeAdminUnitList(Array.isArray(accessProfile && accessProfile.reviewUnits)
+        ? accessProfile.reviewUnits
+        : getReviewUnits(source));
+      return {
+        ...source,
+        ...(accessProfile && typeof accessProfile === 'object' ? accessProfile : {}),
+        role: String((accessProfile && accessProfile.role) || source.role || '').trim(),
+        primaryUnit: primaryUnit || (authorizedUnits[0] || ''),
+        activeUnit: String((accessProfile && accessProfile.activeUnit) || source.activeUnit || primaryUnit || authorizedUnits[0] || '').trim(),
+        authorizedUnits,
+        reviewUnits,
+        securityRoles: normalizeSecurityRoles((accessProfile && accessProfile.securityRoles) || source.securityRoles)
+      };
+    }
+
     function formatUserUnitSummary(user) {
-      const primary = getPrimaryAuthorizedUnit(user);
-      const units = getAuthorizedUnits(user).filter((unit) => unit && unit !== primary);
+      const profile = getAdminAccessProfile(user);
+      const primary = profile.primaryUnit;
+      const units = profile.authorizedUnits.filter((unit) => unit && unit !== primary);
       if (!primary && !units.length) return '未指定';
       if (!units.length) return primary ? `${primary}（無額外授權）` : '未指定';
       const extraLabel = units.length ? units.join('、') : '無額外授權';
@@ -183,30 +211,21 @@
     }
 
     function formatUserReviewUnitSummary(user) {
-      const units = getReviewUnits(user);
+      const units = getAdminAccessProfile(user).reviewUnits;
       return units.length ? units.join('、') : '沿用既有審核邏輯';
     }
 
     function getPrimaryAuthorizedUnit(user) {
-      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
-      return String((accessProfile && (accessProfile.primaryUnit || accessProfile.unit)) || (user && (user.primaryUnit || user.unit)) || '').trim() || (getAuthorizedUnits(user)[0] || '');
+      return String(getAdminAccessProfile(user).primaryUnit || '').trim();
     }
 
     function getExtraAuthorizedUnits(user) {
-      const primary = getPrimaryAuthorizedUnit(user);
-      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
-      const units = Array.isArray(accessProfile && accessProfile.authorizedUnits)
-        ? accessProfile.authorizedUnits
-        : getAuthorizedUnits(user);
-      return units.filter((unit) => unit && unit !== primary);
+      const profile = getAdminAccessProfile(user);
+      return profile.authorizedUnits.filter((unit) => unit && unit !== profile.primaryUnit);
     }
 
     function getGovernanceReviewScopeUnits(user) {
-      const accessProfile = typeof getAccessProfile === 'function' ? getAccessProfile(user) : null;
-      const units = Array.isArray(accessProfile && accessProfile.reviewUnits)
-        ? accessProfile.reviewUnits
-        : getReviewUnits(user);
-      return Array.isArray(units) ? units.map((unit) => String(unit || '').trim()).filter(Boolean) : [];
+      return getAdminAccessProfile(user).reviewUnits;
     }
 
     function getAuditTrailEventTypeOptions(summary, items) {
@@ -777,8 +796,9 @@
     }
 
     function normalizeSecurityWindowPerson(user) {
-      const units = Array.from(new Set(getAuthorizedUnits(user).map((unit) => String(unit || '').trim()).filter(Boolean)));
-      const securityRoles = normalizeSecurityRoles(user && user.securityRoles);
+      const profile = getAdminAccessProfile(user);
+      const units = profile.authorizedUnits;
+      const securityRoles = profile.securityRoles;
       return {
         username: String(user && user.username || '').trim(),
         name: String(user && user.name || '').trim(),
@@ -787,7 +807,7 @@
         units,
         securityRoles,
         hasWindow: securityRoles.length > 0,
-        activeUnit: String(user && user.activeUnit || user && user.unit || units[0] || '').trim()
+        activeUnit: String(profile.activeUnit || profile.primaryUnit || units[0] || '').trim()
       };
     }
 
@@ -1547,11 +1567,11 @@
       document.body.appendChild(fallbackRoot);
       return fallbackRoot;
     }());
-    const units = getAuthorizedUnits(eu);
-    const primaryUnit = getPrimaryAuthorizedUnit(eu);
-    const extraUnits = getExtraAuthorizedUnits(eu);
-    const reviewUnits = getReviewUnits(eu);
-    const selectedSecurityRoles = normalizeSecurityRoles(eu && eu.securityRoles);
+    const profile = getAdminAccessProfile(eu);
+    const primaryUnit = profile.primaryUnit;
+    const extraUnits = profile.authorizedUnits.filter((unit) => unit && unit !== primaryUnit);
+    const reviewUnits = profile.reviewUnits;
+    const selectedSecurityRoles = profile.securityRoles;
 
     mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${esc(title)}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="user-form">
       <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>

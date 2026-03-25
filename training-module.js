@@ -116,7 +116,7 @@
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
     const trainingRosterRemotePageCache = new Map();
     let trainingRosterRemotePageState = {
-      filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0' },
+      filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '' },
       page: {
         offset: 0,
         limit: Number(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
@@ -305,19 +305,30 @@
         && typeof client.listTrainingRosters === 'function');
     }
 
+    function normalizeTrainingRosterPageKeyword(value) {
+      return String(value || '').trim().slice(0, 100);
+    }
+
+    function normalizeTrainingRosterPageSource(value) {
+      const normalized = String(value || '').trim().toLowerCase();
+      return normalized === 'import' || normalized === 'manual' ? normalized : '';
+    }
+
     function normalizeTrainingRosterPageFilters(filters) {
       const source = filters && typeof filters === 'object' ? filters : {};
       const limit = Math.max(1, Math.min(Number(source.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT) || Number(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT), 500));
       const offset = Math.max(0, Number(source.offset || 0) || 0);
       return {
         limit: String(limit),
-        offset: String(offset)
+        offset: String(offset),
+        q: normalizeTrainingRosterPageKeyword(source.q || source.keyword || ''),
+        source: normalizeTrainingRosterPageSource(source.source || '')
       };
     }
 
     function getTrainingRosterRemoteSignature(filters) {
       const normalized = normalizeTrainingRosterPageFilters(filters);
-      return [normalized.limit, normalized.offset].join('::');
+      return [normalized.limit, normalized.offset, normalized.q, normalized.source].join('::');
     }
 
     function normalizeTrainingRosterRemotePage(page, filters, items, total) {
@@ -355,12 +366,27 @@
 
     function renderTrainingRosterPager(page) {
       const normalizedPage = normalizeTrainingRosterRemotePage(page, trainingRosterRemotePageState.filters, trainingRosterRemotePageState.items, trainingRosterRemotePageState.total);
+      const normalizedFilters = normalizeTrainingRosterPageFilters(trainingRosterRemotePageState.filters);
       const limitOptions = TRAINING_ROSTER_PAGE_LIMIT_OPTIONS
         .map((value) => '<option value="' + esc(value) + '" ' + (String(normalizedPage.limit) === value ? 'selected' : '') + '>' + esc(value) + '</option>')
         .join('');
+      const sourceOptions = [
+        ['', '全部來源'],
+        ['import', '管理者匯入'],
+        ['manual', '填報新增']
+      ].map(([value, label]) => '<option value="' + esc(value) + '" ' + (normalizedFilters.source === value ? 'selected' : '') + '>' + esc(label) + '</option>').join('');
+      const activeFilters = [];
+      if (normalizedFilters.q) activeFilters.push('關鍵字：' + normalizedFilters.q);
+      if (normalizedFilters.source === 'import') activeFilters.push('來源：管理者匯入');
+      if (normalizedFilters.source === 'manual') activeFilters.push('來源：填報新增');
       return '<div class="review-toolbar review-toolbar--compact training-roster-pager" style="margin:14px 0 16px">'
-        + '<div class="review-toolbar-main"><span class="review-card-subtitle">' + esc(getTrainingRosterPageSummary(normalizedPage)) + '</span></div>'
+        + '<div class="review-toolbar-main">'
+        + '<span class="review-card-subtitle">' + esc(getTrainingRosterPageSummary(normalizedPage)) + '</span>'
+        + (activeFilters.length ? '<div class="form-hint" style="margin-top:4px">目前篩選：' + esc(activeFilters.join('｜')) + '</div>' : '')
+        + '</div>'
         + '<div class="review-toolbar-actions">'
+        + '<input type="search" class="form-input" id="training-roster-keyword" placeholder="搜尋姓名、本職單位、身分別、職稱" value="' + esc(normalizedFilters.q || '') + '" style="min-width:260px">'
+        + '<select class="form-select" id="training-roster-source" style="min-width:132px">' + sourceOptions + '</select>'
         + '<label class="form-label" for="training-roster-page-limit" style="margin:0 4px 0 0">\u6bcf\u9801</label>'
         + '<select class="form-select" id="training-roster-page-limit" style="min-width:88px">' + limitOptions + '</select>'
         + '<button type="button" class="btn btn-secondary btn-sm" id="training-roster-prev-page" ' + (normalizedPage.hasPrev ? '' : 'disabled') + '>' + ic('chevron-left', 'icon-sm') + ' \u4e0a\u4e00\u9801</button>'
@@ -2741,56 +2767,73 @@
 
     const toggleBtn = document.getElementById('training-roster-toggle-import');
     const importWrap = document.getElementById('training-roster-import-wrap');
+    const keywordInput = document.getElementById('training-roster-keyword');
+    const sourceSelect = document.getElementById('training-roster-source');
     const pageLimitSelect = document.getElementById('training-roster-page-limit');
     const prevPageButton = document.getElementById('training-roster-prev-page');
     const nextPageButton = document.getElementById('training-roster-next-page');
+    const rerenderRemoteRosterPage = (nextFilters) => {
+      renderTrainingRoster({
+        skipSync: true,
+        deferFullRender: true,
+        restoreFocusState: focusState,
+        selectedRosterIds: Array.from(selectedRosterIds),
+        remoteFilters: normalizeTrainingRosterPageFilters({
+          ...(trainingRosterRemotePageState.filters || {}),
+          ...(nextFilters || {})
+        })
+      });
+    };
     if (toggleBtn && importWrap) {
       toggleBtn.addEventListener('click', () => {
         const visible = importWrap.style.display !== 'none';
         importWrap.style.display = visible ? 'none' : '';
       });
     }
+    if (useRemoteRosters && keywordInput) {
+      let keywordTimer = null;
+      keywordInput.addEventListener('input', () => {
+        if (keywordTimer) window.clearTimeout(keywordTimer);
+        keywordTimer = window.setTimeout(() => {
+          keywordTimer = null;
+          rerenderRemoteRosterPage({
+            q: keywordInput.value || '',
+            offset: '0'
+          });
+        }, 220);
+      });
+    }
+    if (useRemoteRosters && sourceSelect) {
+      sourceSelect.addEventListener('change', () => {
+        rerenderRemoteRosterPage({
+          source: sourceSelect.value || '',
+          offset: '0'
+        });
+      });
+    }
     if (useRemoteRosters && pageLimitSelect) {
       pageLimitSelect.addEventListener('change', () => {
-        renderTrainingRoster({
-          skipSync: true,
-          deferFullRender: true,
-          restoreFocusState: focusState,
-          selectedRosterIds: Array.from(selectedRosterIds),
-          remoteFilters: {
-            limit: pageLimitSelect.value || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT,
-            offset: '0'
-          }
+        rerenderRemoteRosterPage({
+          limit: pageLimitSelect.value || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT,
+          offset: '0'
         });
       });
     }
     if (useRemoteRosters && prevPageButton) {
       prevPageButton.addEventListener('click', () => {
         if (!trainingRosterRemotePageState.page || !trainingRosterRemotePageState.page.hasPrev) return;
-        renderTrainingRoster({
-          skipSync: true,
-          deferFullRender: true,
-          restoreFocusState: focusState,
-          selectedRosterIds: Array.from(selectedRosterIds),
-          remoteFilters: {
-            limit: String(trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-            offset: String(trainingRosterRemotePageState.page.prevOffset || 0)
-          }
+        rerenderRemoteRosterPage({
+          limit: String(trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
+          offset: String(trainingRosterRemotePageState.page.prevOffset || 0)
         });
       });
     }
     if (useRemoteRosters && nextPageButton) {
       nextPageButton.addEventListener('click', () => {
         if (!trainingRosterRemotePageState.page || !trainingRosterRemotePageState.page.hasNext) return;
-        renderTrainingRoster({
-          skipSync: true,
-          deferFullRender: true,
-          restoreFocusState: focusState,
-          selectedRosterIds: Array.from(selectedRosterIds),
-          remoteFilters: {
-            limit: String(trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-            offset: String(trainingRosterRemotePageState.page.nextOffset || 0)
-          }
+        rerenderRemoteRosterPage({
+          limit: String(trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
+          offset: String(trainingRosterRemotePageState.page.nextOffset || 0)
         });
       });
     }
