@@ -408,14 +408,37 @@
     }
 
     function getTrainingUserSignature(user) {
-      const input = user || currentUser() || {};
+      const input = getTrainingAccessProfile(user) || {};
       return [
         String(input.username || '').trim().toLowerCase(),
         String(input.role || '').trim(),
         String(input.activeUnit || '').trim(),
-        String(input.unit || '').trim(),
+        String(input.primaryUnit || input.unit || '').trim(),
         String(input.sessionToken || '').trim()
       ].join('::');
+    }
+
+    function normalizeTrainingUnitList(units) {
+      const source = Array.isArray(units) ? units : [];
+      return Array.from(new Set(source.map((unit) => String(unit || '').trim()).filter(Boolean)));
+    }
+
+    function getTrainingAccessProfile(user) {
+      const base = user || currentUser();
+      if (!base) return null;
+      const authorizedUnits = normalizeTrainingUnitList(
+        Array.isArray(base.authorizedUnits) && base.authorizedUnits.length
+          ? base.authorizedUnits
+          : getAuthorizedUnits(base)
+      );
+      const activeUnit = String(base.activeUnit || getScopedUnit(base) || base.primaryUnit || base.unit || authorizedUnits[0] || '').trim();
+      const primaryUnit = String(base.primaryUnit || activeUnit || base.unit || '').trim();
+      return {
+        ...base,
+        primaryUnit,
+        authorizedUnits,
+        activeUnit
+      };
     }
 
     function getTrainingListSnapshot(user) {
@@ -1317,13 +1340,13 @@
       return;
     }
 
-    const user = currentUser();
+    const user = getTrainingAccessProfile(currentUser());
     const defaultTrainingYear = String(new Date().getFullYear() - 1911);
-    const lockedUserUnit = getScopedUnit(user) || user.primaryUnit || user.unit || '';
+    const lockedUserUnit = user.activeUnit || user.primaryUnit || user.unit || '';
     const unitPrefill = id && String(id).startsWith('unit:') ? String(id).slice(5).trim() : '';
     let existing = unitPrefill ? null : (id ? getTrainingForm(id) : null);
-    const unitValue = existing ? existing.unit : (unitPrefill || (isAdmin() ? (user.primaryUnit || user.unit || getTrainingUnits()[0] || '') : (getScopedUnit(user) || user.primaryUnit || user.unit)));
-    const isUnitLocked = !!existing || !isAdmin();
+    const unitValue = existing ? existing.unit : (unitPrefill || (isAdmin(user) ? (user.primaryUnit || user.activeUnit || user.unit || getTrainingUnits()[0] || '') : (user.activeUnit || user.primaryUnit || user.unit)));
+    const isUnitLocked = !!existing || !isAdmin(user);
     const takeoverDraft = !!(existing && existing.fillerUsername && existing.fillerUsername !== user.username && isUnitAdmin());
     let rowsState = sortTrainingRosterEntries(existing ? (existing.records || []) : []);
     const selectedKeys = new Set();
@@ -1347,7 +1370,7 @@
 
     document.getElementById('app').innerHTML = buildTrainingFillPage({ existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user });
 
-    if (!id && !isAdmin() && lockedUserUnit) {
+    if (!id && !isAdmin(user) && lockedUserUnit) {
       const duplicateDraft = findExistingTrainingFormForUnitYear(lockedUserUnit, defaultTrainingYear);
       if (duplicateDraft && isTrainingVisible(duplicateDraft)) {
         toast('本年度已存在填報單，請至列表繼續編輯或查看，勿重複新增。', 'error');
@@ -2142,8 +2165,8 @@
     }
     cleanupRenderedAttachmentUrls();
 
-    const user = currentUser();
-    const canManage = !!user && !isViewer(user) && (user.role === ROLES.ADMIN || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
+    const user = getTrainingAccessProfile(currentUser());
+    const canManage = !!user && !isViewer(user) && (isAdmin(user) || hasUnitAccess(form.unit, user) || form.fillerUsername === user.username);
     const canUndo = canUndoTrainingForm(form, user);
     const undoRemainingMinutes = canUndo ? getTrainingUndoRemainingMinutes(form) : 0;
     let filesState = (form.signedFiles || []).map((entry) => applyTrainingSignoffFileName(entry, form));
@@ -3164,8 +3187,8 @@
     if (store.rosters.length > 0) return;
     const now = new Date().toISOString();
     const seen = new Set();
-    getUsers().filter((user) => user.role !== ROLES.ADMIN).forEach((user) => {
-      const authorizedUnits = getAuthorizedUnits(user);
+    getUsers().map((user) => getTrainingAccessProfile(user)).filter((user) => !isAdmin(user)).forEach((user) => {
+      const authorizedUnits = Array.isArray(user.authorizedUnits) ? user.authorizedUnits : [];
       authorizedUnits.forEach((unit) => {
         const key = (unit + '::' + user.name).toLowerCase();
         if (seen.has(key)) return;

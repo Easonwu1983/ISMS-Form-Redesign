@@ -153,6 +153,29 @@
       });
     }
 
+    function normalizeChecklistUnitList(units) {
+      const source = Array.isArray(units) ? units : [];
+      return Array.from(new Set(source.map((unit) => String(unit || '').trim()).filter(Boolean)));
+    }
+
+    function getChecklistAccessProfile(user) {
+      const base = user || currentUser();
+      if (!base) return null;
+      const authorizedUnits = normalizeChecklistUnitList(
+        Array.isArray(base.authorizedUnits) && base.authorizedUnits.length
+          ? base.authorizedUnits
+          : getAuthorizedUnits(base)
+      );
+      const activeUnit = String(base.activeUnit || getScopedUnit(base) || base.primaryUnit || base.unit || authorizedUnits[0] || '').trim();
+      const primaryUnit = String(base.primaryUnit || activeUnit || base.unit || '').trim();
+      return {
+        ...base,
+        primaryUnit,
+        authorizedUnits,
+        activeUnit
+      };
+    }
+
     function getChecklistRemoteClient() {
       if (typeof window === 'undefined' || !window._m365ApiClient || typeof window._m365ApiClient !== 'object') return null;
       return window._m365ApiClient;
@@ -896,10 +919,10 @@
     cleanupRenderedAttachmentUrls();
     if (!canFillChecklist()) { navigate('checklist'); toast('您沒有填報檢核表權限', 'error'); return; }
 
-    const u = currentUser();
+    const u = getChecklistAccessProfile(currentUser());
     const currentAuditYear = String(new Date().getFullYear() - 1911);
-    const authorizedUnits = getAuthorizedUnits(u);
-    const defaultScopedUnit = getScopedUnit(u) || u.primaryUnit || u.unit || '';
+    const authorizedUnits = Array.isArray(u && u.authorizedUnits) ? u.authorizedUnits : [];
+    const defaultScopedUnit = String((u && u.activeUnit) || (u && u.primaryUnit) || (u && u.unit) || '').trim();
     if (!id && u.role !== ROLES.ADMIN && defaultScopedUnit && authorizedUnits.length <= 1) {
       const duplicateChecklist = findExistingChecklistForUnitYear(defaultScopedUnit, currentAuditYear);
       if (duplicateChecklist) {
@@ -917,7 +940,7 @@
     sectionState.forEach((sec, si) => {
       sec.items.forEach((item) => sectionLookup.set(item.id, si));
     });
-    const selectedUnitCandidate = existing ? existing.unit : (getScopedUnit(u) || u.primaryUnit || u.unit || '');
+    const selectedUnitCandidate = existing ? existing.unit : defaultScopedUnit;
     const selectedUnitParts = typeof splitUnitValue === 'function' ? splitUnitValue(selectedUnitCandidate) : { parent: '', child: '' };
     const selectedUnitGovernanceMode = getChecklistGovernanceState(selectedUnitCandidate).mode;
 
@@ -925,7 +948,7 @@
     const checklistGovernanceLocked = !isAdmin(u) && selectedUnitGovernanceMode === 'consolidated' && !!(selectedUnitParts && selectedUnitParts.child);
     const checklistEditable = !checklistGovernanceLocked && (!existing || canEditChecklist(existing));
     if (existing && !canEditChecklist(existing) && !checklistGovernanceLocked) { navigate('checklist'); toast('\u9019\u4efd\u6aa2\u6838\u8868\u76ee\u524d\u4e0d\u53ef\u4fee\u6539', 'error'); return; }
-    const selectedUnit = checklistUnitLocked ? (getScopedUnit(u) || existing?.unit || '') : (existing ? existing.unit : (getScopedUnit(u) || u.primaryUnit || u.unit || ''));
+    const selectedUnit = checklistUnitLocked ? (u.activeUnit || existing?.unit || '') : (existing ? existing.unit : defaultScopedUnit);
     const sectionsHtml = buildChecklistSectionsHtml(existing, sectionState, checklistEditable);
     const today = new Date().toISOString().split('T')[0];
     const totalItems = sectionState.reduce((sum, sec) => sum + sec.items.length, 0);
@@ -1053,7 +1076,7 @@
     }
 
     function getChecklistOwnerId() {
-      const unitValue = checklistUnitLocked ? (getScopedUnit(u) || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
+      const unitValue = checklistUnitLocked ? (u.activeUnit || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
       const fillDateValue = document.getElementById('cl-date').value;
       const auditYearValue = document.getElementById('cl-year').value;
       return existing ? existing.id : generateChecklistIdForYear(unitValue, auditYearValue, fillDateValue);
@@ -1212,7 +1235,7 @@
       const now = new Date().toISOString();
       const supervisorNameValue = document.getElementById('cl-supervisor-name').value.trim();
       const supervisorTitleValue = document.getElementById('cl-supervisor-title').value.trim();
-      const unitValue = checklistUnitLocked ? (getScopedUnit(u) || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
+      const unitValue = checklistUnitLocked ? (u.activeUnit || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
       const fillDateValue = document.getElementById('cl-date').value;
       const auditYearValue = document.getElementById('cl-year').value;
       return {

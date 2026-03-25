@@ -48,6 +48,28 @@
       return !!(page && ROUTE_WHITELIST[page] && ROUTE_WHITELIST[page].public);
     }
 
+    function normalizeUnitList(units) {
+      var source = Array.isArray(units) ? units : [];
+      return Array.from(new Set(source.map(function (unit) {
+        return String(unit || '').trim();
+      }).filter(Boolean)));
+    }
+
+    function getShellAccessProfile(user) {
+      var base = user || currentUser();
+      if (!base) return null;
+      var authorizedUnits = normalizeUnitList(
+        Array.isArray(base.authorizedUnits) && base.authorizedUnits.length
+          ? base.authorizedUnits
+          : getAuthorizedUnits(base)
+      );
+      var activeUnit = String(base.activeUnit || getScopedUnit(base) || base.primaryUnit || base.unit || authorizedUnits[0] || '').trim();
+      return Object.assign({}, base, {
+        authorizedUnits: authorizedUnits,
+        activeUnit: activeUnit
+      });
+    }
+
     function isMobileViewport() {
       if (window.matchMedia) return window.matchMedia('(max-width: 1280px)').matches;
       return window.innerWidth <= 1280;
@@ -434,7 +456,7 @@
     }
 
     function renderSidebar() {
-      var u = currentUser();
+      var u = getShellAccessProfile();
       if (!u) return;
       var items = getVisibleItems();
       var pendingCount = items.filter(function (item) { return item.status === STATUSES.PENDING || isOverdue(item); }).length;
@@ -473,14 +495,14 @@
     }
 
     function renderHeader() {
-      var u = currentUser();
+      var u = getShellAccessProfile();
       if (!u) return;
       var route = getRoute();
       var switchHtml = '';
       if (canSwitchAuthorizedUnit(u)) {
         switchHtml = '<label class="header-scope-switch"><span class="header-scope-label">目前單位</span><select class="form-select header-scope-select" id="header-unit-switch">' +
-          getAuthorizedUnits(u).map(function (unit) {
-            return '<option value="' + esc(unit) + '" ' + (getScopedUnit(u) === unit ? 'selected' : '') + '>' + esc(unit) + '</option>';
+          u.authorizedUnits.map(function (unit) {
+            return '<option value="' + esc(unit) + '" ' + (u.activeUnit === unit ? 'selected' : '') + '>' + esc(unit) + '</option>';
           }).join('') +
           '</select></label>';
       }
