@@ -116,7 +116,7 @@
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
     const trainingRosterRemotePageCache = new Map();
     let trainingRosterRemotePageState = {
-      filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '' },
+      filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
       page: {
         offset: 0,
         limit: Number(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
@@ -322,13 +322,15 @@
         limit: String(limit),
         offset: String(offset),
         q: normalizeTrainingRosterPageKeyword(source.q || source.keyword || ''),
-        source: normalizeTrainingRosterPageSource(source.source || '')
+        source: normalizeTrainingRosterPageSource(source.source || ''),
+        unit: String(source.unit || '').trim(),
+        statsUnit: String(source.statsUnit || '').trim()
       };
     }
 
     function getTrainingRosterRemoteSignature(filters) {
       const normalized = normalizeTrainingRosterPageFilters(filters);
-      return [normalized.limit, normalized.offset, normalized.q, normalized.source].join('::');
+      return [normalized.limit, normalized.offset, normalized.q, normalized.source, normalized.unit, normalized.statsUnit].join('::');
     }
 
     function normalizeTrainingRosterRemotePage(page, filters, items, total) {
@@ -367,6 +369,21 @@
     function renderTrainingRosterPager(page) {
       const normalizedPage = normalizeTrainingRosterRemotePage(page, trainingRosterRemotePageState.filters, trainingRosterRemotePageState.items, trainingRosterRemotePageState.total);
       const normalizedFilters = normalizeTrainingRosterPageFilters(trainingRosterRemotePageState.filters);
+      const statsUnitOptions = ['']
+        .concat(getTrainingDashboardUnits())
+        .map((value) => '<option value="' + esc(value) + '" ' + (normalizedFilters.statsUnit === value ? 'selected' : '') + '>' + esc(value || '全部統計單位') + '</option>')
+        .join('');
+      const unitOptions = ['']
+        .concat(getTrainingUnits()
+          .filter((unit) => {
+            const cleanUnit = String(unit || '').trim();
+            if (!cleanUnit) return false;
+            if (!normalizedFilters.statsUnit) return true;
+            return String(getTrainingStatsUnit(cleanUnit) || '').trim() === normalizedFilters.statsUnit;
+          })
+          .sort(compareZhStroke))
+        .map((value) => '<option value="' + esc(value) + '" ' + (normalizedFilters.unit === value ? 'selected' : '') + '>' + esc(value || '全部填報單位') + '</option>')
+        .join('');
       const limitOptions = TRAINING_ROSTER_PAGE_LIMIT_OPTIONS
         .map((value) => '<option value="' + esc(value) + '" ' + (String(normalizedPage.limit) === value ? 'selected' : '') + '>' + esc(value) + '</option>')
         .join('');
@@ -379,6 +396,8 @@
       if (normalizedFilters.q) activeFilters.push('關鍵字：' + normalizedFilters.q);
       if (normalizedFilters.source === 'import') activeFilters.push('來源：管理者匯入');
       if (normalizedFilters.source === 'manual') activeFilters.push('來源：填報新增');
+      if (normalizedFilters.statsUnit) activeFilters.push('統計單位：' + normalizedFilters.statsUnit);
+      if (normalizedFilters.unit) activeFilters.push('填報單位：' + normalizedFilters.unit);
       return '<div class="review-toolbar review-toolbar--compact training-roster-pager" style="margin:14px 0 16px">'
         + '<div class="review-toolbar-main">'
         + '<span class="review-card-subtitle">' + esc(getTrainingRosterPageSummary(normalizedPage)) + '</span>'
@@ -386,6 +405,8 @@
         + '</div>'
         + '<div class="review-toolbar-actions">'
         + '<input type="search" class="form-input" id="training-roster-keyword" placeholder="搜尋姓名、本職單位、身分別、職稱" value="' + esc(normalizedFilters.q || '') + '" style="min-width:260px">'
+        + '<select class="form-select" id="training-roster-stats-unit" style="min-width:180px">' + statsUnitOptions + '</select>'
+        + '<select class="form-select" id="training-roster-unit" style="min-width:220px">' + unitOptions + '</select>'
         + '<select class="form-select" id="training-roster-source" style="min-width:132px">' + sourceOptions + '</select>'
         + '<label class="form-label" for="training-roster-page-limit" style="margin:0 4px 0 0">\u6bcf\u9801</label>'
         + '<select class="form-select" id="training-roster-page-limit" style="min-width:88px">' + limitOptions + '</select>'
@@ -2768,6 +2789,8 @@
     const toggleBtn = document.getElementById('training-roster-toggle-import');
     const importWrap = document.getElementById('training-roster-import-wrap');
     const keywordInput = document.getElementById('training-roster-keyword');
+    const statsUnitSelect = document.getElementById('training-roster-stats-unit');
+    const unitSelect = document.getElementById('training-roster-unit');
     const sourceSelect = document.getElementById('training-roster-source');
     const pageLimitSelect = document.getElementById('training-roster-page-limit');
     const prevPageButton = document.getElementById('training-roster-prev-page');
@@ -2807,6 +2830,25 @@
       sourceSelect.addEventListener('change', () => {
         rerenderRemoteRosterPage({
           source: sourceSelect.value || '',
+          offset: '0'
+        });
+      });
+    }
+    if (useRemoteRosters && statsUnitSelect) {
+      statsUnitSelect.addEventListener('change', () => {
+        rerenderRemoteRosterPage({
+          statsUnit: statsUnitSelect.value || '',
+          unit: '',
+          offset: '0'
+        });
+      });
+    }
+    if (useRemoteRosters && unitSelect) {
+      unitSelect.addEventListener('change', () => {
+        const selectedUnit = unitSelect.value || '';
+        rerenderRemoteRosterPage({
+          unit: selectedUnit,
+          statsUnit: selectedUnit ? String(getTrainingStatsUnit(selectedUnit) || '').trim() : String((statsUnitSelect && statsUnitSelect.value) || '').trim(),
           offset: '0'
         });
       });
