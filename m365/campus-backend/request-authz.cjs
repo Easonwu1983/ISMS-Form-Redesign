@@ -295,6 +295,8 @@ function createRequestAuthz(deps) {
     USER_ROLES,
     cleanText,
     createHttpError,
+    listSystemUsers,
+    listReviewScopes,
     requireAuthenticatedUser,
     requireAdmin,
     requireSelfOrAdmin,

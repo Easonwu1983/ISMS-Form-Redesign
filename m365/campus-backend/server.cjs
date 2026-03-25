@@ -27,6 +27,7 @@ const {
 const { createChecklistRouter } = require('./checklist-backend.cjs');
 const { createCorrectiveActionRouter } = require('./corrective-action-backend.cjs');
 const { createAuditTrailRouter } = require('./audit-trail-backend.cjs');
+const { createUnitGovernanceRouter } = require('./unit-governance-backend.cjs');
 const { createReviewScopeRouter } = require('./review-scope-backend.cjs');
 const { createAttachmentRouter } = require('./attachment-backend.cjs');
 const { createSystemUserRouter } = require('./system-user-backend.cjs');
@@ -1023,6 +1024,17 @@ const auditTrailRouter = createAuditTrailRouter({
   requestAuthz
 });
 
+const unitGovernanceRouter = createUnitGovernanceRouter({
+  parseJsonBody,
+  writeJson,
+  requestAuthz,
+  listUnitContactApplications: async function () {
+    const rows = await listAllApplications();
+    return rows.map((entry) => entry.application);
+  },
+  createAuditRow: tryCreateAuditRow
+});
+
 const trainingRouter = createTrainingRouter({
   parseJsonBody,
   writeJson,
@@ -1444,6 +1456,9 @@ function createServer() {
         return;
       }
       if (await auditTrailRouter.tryHandle(req, res, origin, url)) {
+        return;
+      }
+      if (await unitGovernanceRouter.tryHandle(req, res, origin, url)) {
         return;
       }
       if (await checklistRouter.tryHandle(req, res, origin, url)) {

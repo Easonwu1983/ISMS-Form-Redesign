@@ -1116,6 +1116,14 @@
       return submitEndpoint.replace(/\/apply$/, '/activate');
     }
 
+    function getUnitGovernanceEndpoint() {
+      return '/api/unit-governance';
+    }
+
+    function getSecurityWindowInventoryEndpoint() {
+      return '/api/security-window/inventory';
+    }
+
     async function listUnitContactApplications(filters) {
       const endpoint = getUnitContactApplicationsEndpoint();
       if (!endpoint) throw new Error('未設定 unit-contact applications endpoint');
@@ -1165,6 +1173,43 @@
         ok: !!(body && body.ok !== false),
         item: items[0] || null,
         delivery: body && body.delivery ? body.delivery : null,
+        raw: body
+      };
+    }
+
+    async function listUnitGovernanceEntries() {
+      const body = await requestJson(getUnitGovernanceEndpoint(), {
+        method: 'GET',
+        contractVersion: CONTRACT_VERSION
+      });
+      return {
+        ok: !!(body && body.ok !== false),
+        items: Array.isArray(body && body.items) ? body.items : [],
+        raw: body
+      };
+    }
+
+    async function upsertUnitGovernanceEntry(payload) {
+      const body = await requestJson(getUnitGovernanceEndpoint() + '/upsert', {
+        method: 'POST',
+        contractVersion: CONTRACT_VERSION,
+        body: payload && typeof payload === 'object' ? payload : {}
+      });
+      return {
+        ok: !!(body && body.ok !== false),
+        item: body && body.item && typeof body.item === 'object' ? body.item : null,
+        raw: body
+      };
+    }
+
+    async function getSecurityWindowInventory() {
+      const body = await requestJson(getSecurityWindowInventoryEndpoint(), {
+        method: 'GET',
+        contractVersion: CONTRACT_VERSION
+      });
+      return {
+        ok: !!(body && body.ok !== false),
+        inventory: body && body.inventory && typeof body.inventory === 'object' ? body.inventory : null,
         raw: body
       };
     }
@@ -1828,6 +1873,9 @@
       listUnitContactApplications,
       reviewUnitContactApplication,
       activateUnitContactApplication,
+      listUnitGovernanceEntries,
+      upsertUnitGovernanceEntry,
+      getSecurityWindowInventory,
       markActivationPending,
       getCorrectiveActionHealth,
       listCorrectiveActions,

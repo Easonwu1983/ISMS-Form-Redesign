@@ -231,6 +231,57 @@
       return getAdminAccessProfile(user).reviewUnits;
     }
 
+    function getAdminApiClient() {
+      return typeof window !== 'undefined' && window && window._m365ApiClient ? window._m365ApiClient : null;
+    }
+
+    function isRemoteGovernanceEnabled() {
+      const client = getAdminApiClient();
+      return !!(client
+        && typeof client.getMode === 'function'
+        && client.getMode() === 'm365-api'
+        && typeof client.listUnitGovernanceEntries === 'function'
+        && typeof client.upsertUnitGovernanceEntry === 'function');
+    }
+
+    async function listGovernanceItemsForAdmin() {
+      if (!isRemoteGovernanceEnabled()) {
+        return getGovernanceTopLevelUnits();
+      }
+      const client = getAdminApiClient();
+      const response = await client.listUnitGovernanceEntries();
+      return Array.isArray(response && response.items) ? response.items : [];
+    }
+
+    async function saveGovernanceModeForAdmin(unit, mode, note) {
+      const actor = currentUser() || {};
+      if (isRemoteGovernanceEnabled()) {
+        const client = getAdminApiClient();
+        const response = await client.upsertUnitGovernanceEntry({
+          unit,
+          mode,
+          note,
+          actorName: String(actor.name || '').trim(),
+          actorUsername: String(actor.username || '').trim()
+        });
+        if (typeof setUnitGovernanceMode === 'function') {
+          setUnitGovernanceMode(unit, mode, String(actor.name || '').trim(), note);
+        }
+        return response && response.item ? response.item : null;
+      }
+      return setUnitGovernanceMode(unit, mode, String(actor.name || '').trim(), note);
+    }
+
+    async function fetchSecurityWindowInventoryFromSource() {
+      if (isRemoteGovernanceEnabled()) {
+        const client = getAdminApiClient();
+        const response = await client.getSecurityWindowInventory();
+        return response && response.inventory ? response.inventory : buildEmptySecurityWindowInventory();
+      }
+      const applications = await listUnitContactApplications({ limit: '200' });
+      return buildSecurityWindowInventory(getUsers(), Array.isArray(applications) ? applications : []);
+    }
+
     function getAuditTrailEventTypeOptions(summary, items) {
       const summaryOptions = Array.isArray(summary && summary.eventTypes) ? summary.eventTypes : [];
       const itemOptions = Array.isArray(items)
@@ -1784,7 +1835,7 @@
     app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">可為一級單位設定獨立或合併填報模式，並快速檢視轄下二級單位的填報關聯。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在整理單位治理資料...</div></div>`;
     refreshIcons();
     try {
-      const items = getGovernanceTopLevelUnits();
+      const items = await listGovernanceItemsForAdmin();
       unitGovernanceState.items = Array.isArray(items) ? items : [];
       unitGovernanceState.lastLoadedAt = new Date().toISOString();
     } catch (error) {
@@ -1867,9 +1918,14 @@
         const noteEl = document.querySelector(`[data-governance-unit-note="${CSS.escape(unit)}"]`);
         const mode = modeEl ? modeEl.value : 'independent';
         const note = noteEl ? noteEl.value.trim() : '';
-        const result = setUnitGovernanceMode(unit, mode, currentUser()?.name || '', note);
-        toast(result && result.mode === 'consolidated' ? `${unit} 已設定為合併填報` : `${unit} 已設定為獨立填報`);
-        renderUnitReview(unitGovernanceState.filters);
+        saveGovernanceModeForAdmin(unit, mode, note)
+          .then((result) => {
+            toast(result && result.mode === 'consolidated' ? `${unit} 已設定為合併填報` : `${unit} 已設定為獨立填報`);
+            renderUnitReview(unitGovernanceState.filters);
+          })
+          .catch((error) => {
+            toast(String(error && error.message || error || '儲存單位治理設定失敗'), 'error');
+          });
       }
     });
   }
@@ -1938,8 +1994,7 @@
       return securityWindowLoadPromise;
     }
     const pending = (async () => {
-      const applications = await listUnitContactApplications({ limit: '200' });
-      const inventory = buildSecurityWindowInventory(getUsers(), Array.isArray(applications) ? applications : []);
+      const inventory = await fetchSecurityWindowInventoryFromSource();
       securityWindowInventoryCache = {
         loadedAt: Date.now(),
         value: inventory
