@@ -363,18 +363,31 @@
     function getAuditTrailPageActionMeta(page) {
       const currentPage = Math.max(0, Number(page && page.currentPage) || 0);
       const pageCount = Math.max(0, Number(page && page.pageCount) || 0);
+      const limit = Math.max(1, Number(page && page.limit) || 50);
       return {
         currentPage,
         pageCount,
+        limit,
         summary: getAuditTrailPageSummary(page),
         hasPrev: !!(page && page.hasPrev),
-        hasNext: !!(page && page.hasNext)
+        hasNext: !!(page && page.hasNext),
+        isEmpty: !Number(page && page.total)
       };
     }
 
     function renderAuditTrailPager(page) {
       const meta = getAuditTrailPageActionMeta(page);
-      return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(meta.summary)}</span></div><div class="review-toolbar-actions"><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailPrevPage" ${meta.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailNextPage" ${meta.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><span class="review-card-subtitle" style="margin-left:8px">頁次 ${meta.currentPage || 0} / ${meta.pageCount || 0}</span></div></div>`;
+      const pageValue = meta.currentPage || 1;
+      const pageMax = meta.pageCount || 1;
+      const disableJump = meta.isEmpty ? 'disabled' : '';
+      return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(meta.summary)}</span></div><div class="review-toolbar-actions"><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailFirstPage" ${meta.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailPrevPage" ${meta.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><span class="review-card-subtitle" style="margin:0 4px 0 8px">頁次 ${meta.currentPage || 0} / ${meta.pageCount || 0}</span><label class="form-label" for="audit-page-number" style="margin:0 4px 0 8px">跳至</label><input type="number" class="form-input" id="audit-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px"><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailJumpPage" ${disableJump}>前往</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailNextPage" ${meta.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailLastPage" ${meta.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button></div></div>`;
+    }
+
+    function getAuditTrailOffsetByPageNumber(page, targetPage) {
+      const meta = getAuditTrailPageActionMeta(page);
+      const safePageCount = Math.max(1, meta.pageCount || 1);
+      const safeTargetPage = Math.min(Math.max(1, Number(targetPage) || 1), safePageCount);
+      return Math.max(0, (safeTargetPage - 1) * meta.limit);
     }
 
     function showAuditEntryModal(index) {
@@ -2151,6 +2164,21 @@
         renderAuditTrail(getAuditTrailFiltersFromDom());
       });
     }
+    const auditLimitSelect = document.getElementById('audit-limit');
+    if (auditLimitSelect) {
+      auditLimitSelect.addEventListener('change', function () {
+        renderAuditTrail(getAuditTrailFiltersFromDom());
+      });
+    }
+    const auditPageInput = document.getElementById('audit-page-number');
+    if (auditPageInput) {
+      auditPageInput.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        const nextOffset = getAuditTrailOffsetByPageNumber(auditTrailState.page, auditPageInput.value);
+        renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
+      });
+    }
     wireReviewTableScrollers(app);
     refreshIcons();
   }
@@ -2392,9 +2420,23 @@
       const nextOffset = Math.max(0, Number(page.prevOffset || 0) || 0);
       return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
     },
+    auditTrailFirstPage: function () {
+      return renderAuditTrail({ ...auditTrailState.filters, offset: '0' });
+    },
+    auditTrailJumpPage: function () {
+      const targetPage = document.getElementById('audit-page-number')?.value || '1';
+      const nextOffset = getAuditTrailOffsetByPageNumber(auditTrailState.page, targetPage);
+      return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
+    },
     auditTrailNextPage: function () {
       const page = auditTrailState.page || {};
       const nextOffset = Math.max(0, Number(page.nextOffset || 0) || 0);
+      return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
+    },
+    auditTrailLastPage: function () {
+      const page = auditTrailState.page || {};
+      const meta = getAuditTrailPageActionMeta(page);
+      const nextOffset = getAuditTrailOffsetByPageNumber(page, meta.pageCount || 1);
       return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
     },
     refreshSchemaHealth: function () {
