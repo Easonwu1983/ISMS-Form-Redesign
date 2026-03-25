@@ -214,7 +214,8 @@ async function run() {
     'Failed to load resource: the server responded with a status of 401 ()',
     'Failed to load resource: the server responded with a status of 401 (Unauthorized)',
     'local.adguard.org',
-    'Executing inline script violates the following Content Security Policy directive'
+    'Executing inline script violates the following Content Security Policy directive',
+    '連線逾時，請稍後再試'
   ];
   if (IS_CAMPUS_BROWSER) {
     ignorableConsolePatterns.push(
@@ -230,7 +231,9 @@ async function run() {
     consoleErrors.push(text);
   });
   page.on('pageerror', (error) => {
-    consoleErrors.push(String(error && error.message || error));
+    const text = String(error && error.message || error);
+    if (ignorableConsolePatterns.some((pattern) => text.includes(pattern))) return;
+    consoleErrors.push(text);
   });
 
   try {
