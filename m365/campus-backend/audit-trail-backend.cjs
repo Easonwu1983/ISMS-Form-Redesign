@@ -79,6 +79,8 @@ function createAuditTrailRouter(deps) {
   function getAuditFilterSignature(url) {
     const keyword = cleanText(url && url.searchParams && url.searchParams.get('keyword')).toLowerCase();
     const eventType = cleanText(url && url.searchParams && url.searchParams.get('eventType'));
+    const occurredFrom = cleanText(url && url.searchParams && url.searchParams.get('occurredFrom'));
+    const occurredTo = cleanText(url && url.searchParams && url.searchParams.get('occurredTo'));
     const actorEmail = cleanText(url && url.searchParams && url.searchParams.get('actorEmail')).toLowerCase().toLowerCase();
     const targetEmail = cleanText(url && url.searchParams && url.searchParams.get('targetEmail')).toLowerCase();
     const unitCode = cleanText(url && url.searchParams && url.searchParams.get('unitCode'));
@@ -90,6 +92,8 @@ function createAuditTrailRouter(deps) {
     return [
       keyword,
       eventType,
+      occurredFrom,
+      occurredTo,
       actorEmail,
       targetEmail,
       unitCode,
@@ -115,6 +119,8 @@ function createAuditTrailRouter(deps) {
     return [
       cleanText(url && url.searchParams && url.searchParams.get('keyword')),
       cleanText(url && url.searchParams && url.searchParams.get('eventType')),
+      cleanText(url && url.searchParams && url.searchParams.get('occurredFrom')),
+      cleanText(url && url.searchParams && url.searchParams.get('occurredTo')),
       cleanText(url && url.searchParams && url.searchParams.get('actorEmail')),
       cleanText(url && url.searchParams && url.searchParams.get('targetEmail')),
       cleanText(url && url.searchParams && url.searchParams.get('unitCode')),
@@ -412,9 +418,22 @@ function createAuditTrailRouter(deps) {
     return haystack.includes(keyword);
   }
 
+  function getAuditOccurredDateKey(entry) {
+    const occurredAt = cleanText(entry && entry.occurredAt);
+    if (!occurredAt) return '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(occurredAt)) {
+      return occurredAt.slice(0, 10);
+    }
+    const parsed = new Date(occurredAt);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toISOString().slice(0, 10);
+  }
+
   function filterEntries(items, url) {
     const keyword = cleanText(url.searchParams.get('keyword')).toLowerCase();
     const eventType = cleanText(url.searchParams.get('eventType'));
+    const occurredFrom = cleanText(url.searchParams.get('occurredFrom'));
+    const occurredTo = cleanText(url.searchParams.get('occurredTo'));
     const actorEmail = cleanText(url.searchParams.get('actorEmail')).toLowerCase();
     const targetEmail = cleanText(url.searchParams.get('targetEmail')).toLowerCase();
     const unitCode = cleanText(url.searchParams.get('unitCode'));
@@ -425,7 +444,10 @@ function createAuditTrailRouter(deps) {
     const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
     const matches = [];
     for (const entry of Array.isArray(items) ? items : []) {
+      const occurredDateKey = getAuditOccurredDateKey(entry);
       if (eventType && cleanText(entry.eventTypeKey || entry.eventType) !== eventType) continue;
+      if (occurredFrom && (!occurredDateKey || occurredDateKey < occurredFrom)) continue;
+      if (occurredTo && (!occurredDateKey || occurredDateKey > occurredTo)) continue;
       if (actorEmail && cleanText(entry.actorEmailKey || entry.actorEmail).toLowerCase() !== actorEmail) continue;
       if (targetEmail && cleanText(entry.targetEmailKey || entry.targetEmail).toLowerCase() !== targetEmail) continue;
       if (unitCode && cleanText(entry.unitCodeKey || entry.unitCode) !== unitCode) continue;

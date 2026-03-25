@@ -291,6 +291,15 @@ async function assertNoXssExecution(page, label) {
       return `unit governance grouped cards visible (${structure.cardCount} cards)`;
     });
 
+    await runStep(results, 'SEC-03c', 'Unit admin', 'Non-admin cannot open security window or unit governance', async () => {
+      await login(page, 'unit1', 'unit123');
+      await gotoHash(page, 'security-window');
+      if ((await currentHash(page)) === '#security-window') throw new Error('unit admin unexpectedly opened security-window');
+      await gotoHash(page, 'unit-review');
+      if ((await currentHash(page)) === '#unit-review') throw new Error('unit admin unexpectedly opened unit-review');
+      return 'security window and unit governance remained protected';
+    });
+
     await runStep(results, 'SEC-04', 'Admin', 'Case detail escapes XSS payloads', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
