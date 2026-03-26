@@ -1326,6 +1326,7 @@
 
     async function renderTraining(options) {
       const opts = options || {};
+      const accessProfile = getTrainingAccessProfile();
       const syncPromise = opts.skipSync
         ? Promise.resolve()
         : scheduleDeferredPromise(() => syncTrainingFormsFromM365({ silent: true }), 250).catch((error) => {
