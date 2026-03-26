@@ -48,8 +48,12 @@ function createUnitGovernanceRouter(deps) {
     officialUnits: null,
     governanceCache: null,
     governanceCacheAt: 0,
+    governanceItemsCache: null,
+    governanceItemsCacheAt: 0,
+    governanceQueryCache: new Map(),
     inventoryCache: null,
-    inventoryCacheAt: 0
+    inventoryCacheAt: 0,
+    inventoryQueryCache: new Map()
   };
 
   function cleanText(value) {
@@ -117,6 +121,38 @@ function createUnitGovernanceRouter(deps) {
     return value && typeof value === 'object'
       ? JSON.parse(JSON.stringify(value))
       : value;
+  }
+
+  function trimQueryCache(cache, maxEntries) {
+    const target = cache instanceof Map ? cache : null;
+    const safeMaxEntries = Math.max(1, Number(maxEntries) || 12);
+    if (!target) return;
+    while (target.size > safeMaxEntries) {
+      const oldestKey = target.keys().next().value;
+      if (!oldestKey) break;
+      target.delete(oldestKey);
+    }
+  }
+
+  function readQueryCache(cache, cacheKey) {
+    if (!(cache instanceof Map) || !cacheKey || !cache.has(cacheKey)) return null;
+    const cached = cache.get(cacheKey);
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cached);
+    return cloneJson(cached);
+  }
+
+  function writeQueryCache(cache, cacheKey, value, maxEntries) {
+    if (!(cache instanceof Map) || !cacheKey) return cloneJson(value);
+    cache.set(cacheKey, cloneJson(value));
+    trimQueryCache(cache, maxEntries);
+    return cloneJson(value);
+  }
+
+  function buildQueryCacheKey(parts) {
+    return (Array.isArray(parts) ? parts : [parts])
+      .map((part) => cleanText(part))
+      .join('::');
   }
 
   function createError(message, statusCode) {
@@ -237,8 +273,12 @@ function createUnitGovernanceRouter(deps) {
     fs.renameSync(tempPath, filePath);
     state.governanceCache = normalized;
     state.governanceCacheAt = Date.now();
+    state.governanceItemsCache = null;
+    state.governanceItemsCacheAt = 0;
+    state.governanceQueryCache.clear();
     state.inventoryCache = null;
     state.inventoryCacheAt = 0;
+    state.inventoryQueryCache.clear();
     return cloneJson(normalized);
   }
 
@@ -304,11 +344,15 @@ function createUnitGovernanceRouter(deps) {
     return state.officialUnits;
   }
 
-  function buildGovernanceItems() {
+  function getGovernanceItemsSnapshot() {
+    const cached = state.governanceItemsCache && (Date.now() - state.governanceItemsCacheAt) < GOVERNANCE_CACHE_TTL_MS
+      ? state.governanceItemsCache
+      : null;
+    if (cached) return cloneJson(cached);
     const officialUnits = loadOfficialUnits();
     const store = loadGovernanceStore();
     const modeMap = new Map(Object.values(store.governance.unitModes || {}).map((entry) => [cleanText(entry.unit), entry]));
-    return officialUnits.map((entry) => {
+    const items = officialUnits.map((entry) => {
       const modeEntry = modeMap.get(entry.unit) || null;
       return {
         unit: entry.unit,
@@ -320,13 +364,37 @@ function createUnitGovernanceRouter(deps) {
         updatedBy: cleanText(modeEntry && modeEntry.updatedBy)
       };
     });
+    const snapshot = {
+      items,
+      generatedAt: new Date().toISOString(),
+      signature: buildQueryCacheKey([
+        state.governanceCacheAt,
+        officialUnits.length,
+        Object.keys(store.governance.unitModes || {}).length
+      ])
+    };
+    state.governanceItemsCache = snapshot;
+    state.governanceItemsCacheAt = Date.now();
+    state.governanceQueryCache.clear();
+    return cloneJson(snapshot);
   }
 
-  function queryGovernanceItems(items, url) {
-    const source = Array.isArray(items) ? items : [];
+  function queryGovernanceItems(snapshot, url) {
+    const sourceSnapshot = snapshot && typeof snapshot === 'object' ? snapshot : { items: [], generatedAt: '', signature: '' };
+    const source = Array.isArray(sourceSnapshot.items) ? sourceSnapshot.items : [];
     const keyword = cleanLowerText(url && url.searchParams && url.searchParams.get('keyword'));
     const mode = cleanText(url && url.searchParams && url.searchParams.get('mode')).toLowerCase() || 'all';
     const category = cleanText(url && url.searchParams && url.searchParams.get('category')) || 'all';
+    const cacheKey = buildQueryCacheKey([
+      sourceSnapshot.signature || sourceSnapshot.generatedAt,
+      keyword,
+      mode,
+      category,
+      url && url.searchParams && url.searchParams.get('limit'),
+      url && url.searchParams && url.searchParams.get('offset')
+    ]);
+    const cached = readQueryCache(state.governanceQueryCache, cacheKey);
+    if (cached) return cached;
     const filteredItems = source.filter((item) => {
       const itemMode = cleanText(item && item.mode).toLowerCase() || 'independent';
       const itemCategory = cleanText(item && item.category) || '';
@@ -351,7 +419,7 @@ function createUnitGovernanceRouter(deps) {
       result.children += Array.isArray(item && item.children) ? item.children.length : 0;
       return result;
     }, { total: 0, consolidated: 0, independent: 0, children: 0 });
-    return {
+    return writeQueryCache(state.governanceQueryCache, cacheKey, {
       items: visibleItems,
       summary,
       page,
@@ -360,8 +428,8 @@ function createUnitGovernanceRouter(deps) {
         mode,
         category
       },
-      generatedAt: new Date().toISOString()
-    };
+      generatedAt: cleanText(sourceSnapshot.generatedAt) || new Date().toISOString()
+    }, 24);
   }
 
   function normalizeSecurityRoles(value) {
@@ -535,6 +603,7 @@ function createUnitGovernanceRouter(deps) {
     };
     state.inventoryCache = inventory;
     state.inventoryCacheAt = Date.now();
+    state.inventoryQueryCache.clear();
     return cloneJson(inventory);
   }
 
@@ -543,6 +612,16 @@ function createUnitGovernanceRouter(deps) {
     const keyword = cleanLowerText(url && url.searchParams && url.searchParams.get('keyword'));
     const status = cleanText(url && url.searchParams && url.searchParams.get('status')) || 'all';
     const category = cleanText(url && url.searchParams && url.searchParams.get('category')) || 'all';
+    const cacheKey = buildQueryCacheKey([
+      cleanText(source.generatedAt),
+      keyword,
+      status,
+      category,
+      url && url.searchParams && url.searchParams.get('limit'),
+      url && url.searchParams && url.searchParams.get('offset')
+    ]);
+    const cached = readQueryCache(state.inventoryQueryCache, cacheKey);
+    if (cached) return cached;
     const matchesKeyword = (parts) => {
       if (!keyword) return true;
       return buildTextHaystack(parts).includes(keyword);
@@ -593,7 +672,7 @@ function createUnitGovernanceRouter(deps) {
       pendingApplications: filteredUnits.reduce((count, unit) => count + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0),
       exemptedUnits: filteredUnits.reduce((count, unit) => count + (Number(unit && unit.exemptedRows) || 0), 0)
     };
-    return {
+    return writeQueryCache(state.inventoryQueryCache, cacheKey, {
       inventory: {
         generatedAt: cleanText(source.generatedAt) || new Date().toISOString(),
         units: visibleUnits,
@@ -606,7 +685,7 @@ function createUnitGovernanceRouter(deps) {
         status,
         category
       }
-    };
+    }, 24);
   }
 
   async function handleHealth(req, res, origin) {
@@ -639,7 +718,7 @@ function createUnitGovernanceRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, '僅最高管理者可管理單位治理');
-      const result = queryGovernanceItems(buildGovernanceItems(), new URL(req.url, 'http://localhost'));
+      const result = queryGovernanceItems(getGovernanceItemsSnapshot(), new URL(req.url, 'http://localhost'));
       await writeJson(res, {
         status: 200,
         jsonBody: {
