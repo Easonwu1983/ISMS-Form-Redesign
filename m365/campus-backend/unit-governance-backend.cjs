@@ -5,6 +5,8 @@ const CONTRACT_VERSION = '2026-03-25';
 const GOVERNANCE_CACHE_TTL_MS = 30000;
 const INVENTORY_CACHE_TTL_MS = 30000;
 const GOVERNANCE_HISTORY_MAX = 80;
+const GOVERNANCE_QUERY_CACHE_MAX = 24;
+const INVENTORY_QUERY_CACHE_MAX = 24;
 const GOVERNANCE_CATEGORY_ORDER = ['行政單位', '學術單位', '中心 / 研究單位'];
 const GOVERNANCE_PENDING_STATUSES = new Set(['pending_review', 'returned', 'approved', 'activation_pending']);
 const HIDDEN_OFFICIAL_UNIT_VALUES = new Set(['國立臺灣大學系統']);
@@ -153,6 +155,104 @@ function createUnitGovernanceRouter(deps) {
     return (Array.isArray(parts) ? parts : [parts])
       .map((part) => cleanText(part))
       .join('::');
+  }
+
+  function summarizeGovernanceItems(items) {
+    return (Array.isArray(items) ? items : []).reduce((result, item) => {
+      result.total += 1;
+      if (cleanText(item && item.mode).toLowerCase() === 'consolidated') result.consolidated += 1;
+      else result.independent += 1;
+      result.children += Array.isArray(item && item.children) ? item.children.length : 0;
+      return result;
+    }, { total: 0, consolidated: 0, independent: 0, children: 0 });
+  }
+
+  function getGovernanceBucketKey(mode, category) {
+    return buildQueryCacheKey([mode || 'all', category || 'all']);
+  }
+
+  function buildGovernanceQueryBuckets(items) {
+    const source = Array.isArray(items) ? items : [];
+    const categories = ['all'].concat(GOVERNANCE_CATEGORY_ORDER);
+    const modes = ['all', 'independent', 'consolidated'];
+    const buckets = {};
+    modes.forEach((mode) => {
+      categories.forEach((category) => {
+        const filteredItems = source.filter((item) => {
+          const itemMode = cleanText(item && item.mode).toLowerCase() || 'independent';
+          const itemCategory = cleanText(item && item.category) || '';
+          if (mode !== 'all' && itemMode !== mode) return false;
+          if (category !== 'all' && itemCategory !== category) return false;
+          return true;
+        });
+        buckets[getGovernanceBucketKey(mode, category)] = {
+          items: filteredItems,
+          summary: summarizeGovernanceItems(filteredItems)
+        };
+      });
+    });
+    return buckets;
+  }
+
+  function summarizeSecurityWindowInventory(units, people) {
+    const safeUnits = Array.isArray(units) ? units : [];
+    const safePeople = Array.isArray(people) ? people : [];
+    return {
+      totalUnits: safeUnits.length,
+      unitsWithWindows: safeUnits.filter((unit) => unit && unit.hasWindow).length,
+      unitsWithoutWindows: safeUnits.filter((unit) => !(unit && unit.hasWindow)).length,
+      peopleWithWindows: safePeople.filter((person) => person && person.hasWindow).length,
+      peopleWithoutWindow: safePeople.filter((person) => !(person && person.hasWindow)).length,
+      pendingApplications: safeUnits.reduce((count, unit) => count + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0),
+      exemptedUnits: safeUnits.reduce((count, unit) => count + (Number(unit && unit.exemptedRows) || 0), 0)
+    };
+  }
+
+  function getSecurityWindowBucketKey(status, category) {
+    return buildQueryCacheKey([status || 'all', category || 'all']);
+  }
+
+  function buildSecurityWindowQueryBuckets(units, people) {
+    const safeUnits = Array.isArray(units) ? units : [];
+    const safePeople = Array.isArray(people) ? people : [];
+    const categories = ['all'].concat(GOVERNANCE_CATEGORY_ORDER);
+    const statuses = ['all', 'assigned', 'missing', 'pending', 'exempted'];
+    const unitBuckets = {};
+    const summaryBuckets = {};
+    statuses.forEach((status) => {
+      categories.forEach((category) => {
+        const filteredUnits = safeUnits.filter((unit) => {
+          const unitStatus = cleanText(unit && unit.status) || 'missing';
+          const unitMode = cleanText(unit && unit.mode) || 'independent';
+          const unitCategory = cleanText(unit && unit.category) || '';
+          if (status !== 'all') {
+            if (status === 'assigned' && unitStatus !== 'assigned') return false;
+            if (status === 'missing' && unitStatus !== 'missing') return false;
+            if (status === 'pending' && unitStatus !== 'pending') return false;
+            if (status === 'exempted' && unitMode !== 'consolidated') return false;
+          }
+          if (category !== 'all' && unitCategory !== category) return false;
+          return true;
+        });
+        const peopleStatus = status === 'pending' || status === 'exempted' ? 'all' : status;
+        const filteredPeople = safePeople.filter((person) => {
+          if (peopleStatus !== 'all') {
+            if (peopleStatus === 'assigned' && !person.hasWindow) return false;
+            if (peopleStatus === 'missing' && person.hasWindow) return false;
+          }
+          return true;
+        });
+        const bucketKey = getSecurityWindowBucketKey(status, category);
+        unitBuckets[bucketKey] = filteredUnits;
+        summaryBuckets[bucketKey] = summarizeSecurityWindowInventory(filteredUnits, filteredPeople);
+      });
+    });
+    const peopleBuckets = {
+      all: safePeople,
+      assigned: safePeople.filter((person) => person && person.hasWindow),
+      missing: safePeople.filter((person) => !(person && person.hasWindow))
+    };
+    return { unitBuckets, peopleBuckets, summaryBuckets };
   }
 
   function createError(message, statusCode) {
@@ -348,7 +448,7 @@ function createUnitGovernanceRouter(deps) {
     const cached = state.governanceItemsCache && (Date.now() - state.governanceItemsCacheAt) < GOVERNANCE_CACHE_TTL_MS
       ? state.governanceItemsCache
       : null;
-    if (cached) return cloneJson(cached);
+    if (cached) return cached;
     const officialUnits = loadOfficialUnits();
     const store = loadGovernanceStore();
     const modeMap = new Map(Object.values(store.governance.unitModes || {}).map((entry) => [cleanText(entry.unit), entry]));
@@ -366,6 +466,8 @@ function createUnitGovernanceRouter(deps) {
     });
     const snapshot = {
       items,
+      summary: summarizeGovernanceItems(items),
+      buckets: buildGovernanceQueryBuckets(items),
       generatedAt: new Date().toISOString(),
       signature: buildQueryCacheKey([
         state.governanceCacheAt,
@@ -376,7 +478,7 @@ function createUnitGovernanceRouter(deps) {
     state.governanceItemsCache = snapshot;
     state.governanceItemsCacheAt = Date.now();
     state.governanceQueryCache.clear();
-    return cloneJson(snapshot);
+    return snapshot;
   }
 
   function queryGovernanceItems(snapshot, url) {
@@ -395,33 +497,35 @@ function createUnitGovernanceRouter(deps) {
     ]);
     const cached = readQueryCache(state.governanceQueryCache, cacheKey);
     if (cached) return cached;
-    const filteredItems = source.filter((item) => {
-      const itemMode = cleanText(item && item.mode).toLowerCase() || 'independent';
-      const itemCategory = cleanText(item && item.category) || '';
-      if (mode !== 'all' && itemMode !== mode) return false;
-      if (category !== 'all' && itemCategory !== category) return false;
-      if (!keyword) return true;
-      const haystack = buildTextHaystack([
-        item && item.unit,
-        itemCategory,
-        itemMode,
-        item && item.note,
-        item && item.children
-      ]);
-      return haystack.includes(keyword);
-    });
+    let filteredItems = [];
+    let summary = null;
+    if (!keyword && sourceSnapshot.buckets && typeof sourceSnapshot.buckets === 'object') {
+      const bucket = sourceSnapshot.buckets[getGovernanceBucketKey(mode, category)] || null;
+      filteredItems = Array.isArray(bucket && bucket.items) ? bucket.items : source;
+      summary = bucket && bucket.summary ? bucket.summary : sourceSnapshot.summary;
+    } else {
+      filteredItems = source.filter((item) => {
+        const itemMode = cleanText(item && item.mode).toLowerCase() || 'independent';
+        const itemCategory = cleanText(item && item.category) || '';
+        if (mode !== 'all' && itemMode !== mode) return false;
+        if (category !== 'all' && itemCategory !== category) return false;
+        if (!keyword) return true;
+        const haystack = buildTextHaystack([
+          item && item.unit,
+          itemCategory,
+          itemMode,
+          item && item.note,
+          item && item.children
+        ]);
+        return haystack.includes(keyword);
+      });
+      summary = summarizeGovernanceItems(filteredItems);
+    }
     const page = buildPageMeta(url, filteredItems.length, 12, 60);
     const visibleItems = filteredItems.slice(page.offset, page.offset + page.limit);
-    const summary = filteredItems.reduce((result, item) => {
-      result.total += 1;
-      if (cleanText(item && item.mode).toLowerCase() === 'consolidated') result.consolidated += 1;
-      else result.independent += 1;
-      result.children += Array.isArray(item && item.children) ? item.children.length : 0;
-      return result;
-    }, { total: 0, consolidated: 0, independent: 0, children: 0 });
     return writeQueryCache(state.governanceQueryCache, cacheKey, {
       items: visibleItems,
-      summary,
+      summary: summary || summarizeGovernanceItems(filteredItems),
       page,
       filters: {
         keyword: cleanText(keyword),
@@ -429,7 +533,7 @@ function createUnitGovernanceRouter(deps) {
         category
       },
       generatedAt: cleanText(sourceSnapshot.generatedAt) || new Date().toISOString()
-    }, 24);
+    }, GOVERNANCE_QUERY_CACHE_MAX);
   }
 
   function normalizeSecurityRoles(value) {
@@ -483,7 +587,7 @@ function createUnitGovernanceRouter(deps) {
     const cached = state.inventoryCache && (Date.now() - state.inventoryCacheAt) < INVENTORY_CACHE_TTL_MS
       ? state.inventoryCache
       : null;
-    if (cached) return cloneJson(cached);
+    if (cached) return cached;
 
     const [userRows, applications] = await Promise.all([
       requestAuthz.listSystemUsers(),
@@ -575,36 +679,17 @@ function createUnitGovernanceRouter(deps) {
       };
     });
 
-    const summary = units.reduce((result, entry) => {
-      result.totalUnits += 1;
-      if (entry.hasWindow) result.unitsWithWindows += 1;
-      else result.unitsWithoutWindows += 1;
-      result.peopleWithWindows += Array.isArray(entry.holders) ? entry.holders.length : 0;
-      result.pendingApplications += Array.isArray(entry.pending) ? entry.pending.length : 0;
-      result.exemptedUnits += Number(entry.exemptedRows || 0);
-      return result;
-    }, {
-      totalUnits: 0,
-      unitsWithWindows: 0,
-      unitsWithoutWindows: 0,
-      peopleWithWindows: 0,
-      pendingApplications: 0,
-      exemptedUnits: 0
-    });
-
     const inventory = {
       units,
       people: uniquePeople,
-      summary: {
-        ...summary,
-        peopleWithoutWindow: uniquePeople.filter((entry) => !entry.hasWindow).length
-      },
+      summary: summarizeSecurityWindowInventory(units, uniquePeople),
+      buckets: buildSecurityWindowQueryBuckets(units, uniquePeople),
       generatedAt: new Date().toISOString()
     };
     state.inventoryCache = inventory;
     state.inventoryCacheAt = Date.now();
     state.inventoryQueryCache.clear();
-    return cloneJson(inventory);
+    return inventory;
   }
 
   function querySecurityWindowInventory(inventory, url) {
@@ -626,58 +711,67 @@ function createUnitGovernanceRouter(deps) {
       if (!keyword) return true;
       return buildTextHaystack(parts).includes(keyword);
     };
-    const filteredUnits = (Array.isArray(source.units) ? source.units : []).filter((unit) => {
-      const unitStatus = cleanText(unit && unit.status) || 'missing';
-      const unitMode = cleanText(unit && unit.mode) || 'independent';
-      const unitCategory = cleanText(unit && unit.category) || '';
-      if (status !== 'all') {
-        if (status === 'assigned' && unitStatus !== 'assigned') return false;
-        if (status === 'missing' && unitStatus !== 'missing') return false;
-        if (status === 'pending' && unitStatus !== 'pending') return false;
-        if (status === 'exempted' && unitMode !== 'consolidated') return false;
-      }
-      if (category !== 'all' && unitCategory !== category) return false;
-      return matchesKeyword([
-        unit && unit.unit,
-        unitCategory,
-        unitMode,
-        unit && unit.note,
-        unit && unit.children,
-        (unit && unit.holders || []).map((person) => [person.name, person.username, person.email].filter(Boolean).join(' ')),
-        (unit && unit.pending || []).map((item) => [item.applicantName, item.applicantEmail, item.status].filter(Boolean).join(' '))
-      ]);
-    });
-    const filteredPeople = (Array.isArray(source.people) ? source.people : []).filter((person) => {
-      if (status !== 'all') {
-        if (status === 'assigned' && !person.hasWindow) return false;
-        if (status === 'missing' && person.hasWindow) return false;
-      }
-      return matchesKeyword([
-        person && person.name,
-        person && person.username,
-        person && person.email,
-        person && person.activeUnit,
-        person && person.units,
-        person && person.securityRoles
-      ]);
-    });
+    let filteredUnits = [];
+    let filteredPeople = [];
+    let summary = null;
+    if (!keyword && source.buckets && typeof source.buckets === 'object') {
+      const bucketKey = getSecurityWindowBucketKey(status, category);
+      filteredUnits = Array.isArray(source.buckets.unitBuckets && source.buckets.unitBuckets[bucketKey])
+        ? source.buckets.unitBuckets[bucketKey]
+        : (Array.isArray(source.units) ? source.units : []);
+      const peopleStatus = status === 'pending' || status === 'exempted' ? 'all' : status;
+      filteredPeople = Array.isArray(source.buckets.peopleBuckets && source.buckets.peopleBuckets[peopleStatus])
+        ? source.buckets.peopleBuckets[peopleStatus]
+        : (Array.isArray(source.people) ? source.people : []);
+      summary = source.buckets.summaryBuckets && source.buckets.summaryBuckets[bucketKey]
+        ? source.buckets.summaryBuckets[bucketKey]
+        : source.summary;
+    } else {
+      filteredUnits = (Array.isArray(source.units) ? source.units : []).filter((unit) => {
+        const unitStatus = cleanText(unit && unit.status) || 'missing';
+        const unitMode = cleanText(unit && unit.mode) || 'independent';
+        const unitCategory = cleanText(unit && unit.category) || '';
+        if (status !== 'all') {
+          if (status === 'assigned' && unitStatus !== 'assigned') return false;
+          if (status === 'missing' && unitStatus !== 'missing') return false;
+          if (status === 'pending' && unitStatus !== 'pending') return false;
+          if (status === 'exempted' && unitMode !== 'consolidated') return false;
+        }
+        if (category !== 'all' && unitCategory !== category) return false;
+        return matchesKeyword([
+          unit && unit.unit,
+          unitCategory,
+          unitMode,
+          unit && unit.note,
+          unit && unit.children,
+          (unit && unit.holders || []).map((person) => [person.name, person.username, person.email].filter(Boolean).join(' ')),
+          (unit && unit.pending || []).map((item) => [item.applicantName, item.applicantEmail, item.status].filter(Boolean).join(' '))
+        ]);
+      });
+      filteredPeople = (Array.isArray(source.people) ? source.people : []).filter((person) => {
+        if (status !== 'all') {
+          if (status === 'assigned' && !person.hasWindow) return false;
+          if (status === 'missing' && person.hasWindow) return false;
+        }
+        return matchesKeyword([
+          person && person.name,
+          person && person.username,
+          person && person.email,
+          person && person.activeUnit,
+          person && person.units,
+          person && person.securityRoles
+        ]);
+      });
+      summary = summarizeSecurityWindowInventory(filteredUnits, filteredPeople);
+    }
     const page = buildPageMeta(url, filteredUnits.length, 12, 60);
     const visibleUnits = filteredUnits.slice(page.offset, page.offset + page.limit);
-    const summary = {
-      totalUnits: filteredUnits.length,
-      unitsWithWindows: filteredUnits.filter((unit) => unit && unit.hasWindow).length,
-      unitsWithoutWindows: filteredUnits.filter((unit) => !(unit && unit.hasWindow)).length,
-      peopleWithWindows: filteredPeople.filter((person) => person && person.hasWindow).length,
-      peopleWithoutWindow: filteredPeople.filter((person) => !(person && person.hasWindow)).length,
-      pendingApplications: filteredUnits.reduce((count, unit) => count + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0),
-      exemptedUnits: filteredUnits.reduce((count, unit) => count + (Number(unit && unit.exemptedRows) || 0), 0)
-    };
     return writeQueryCache(state.inventoryQueryCache, cacheKey, {
       inventory: {
         generatedAt: cleanText(source.generatedAt) || new Date().toISOString(),
         units: visibleUnits,
         people: filteredPeople,
-        summary
+        summary: summary || summarizeSecurityWindowInventory(filteredUnits, filteredPeople)
       },
       page,
       filters: {
@@ -685,7 +779,7 @@ function createUnitGovernanceRouter(deps) {
         status,
         category
       }
-    }, 24);
+    }, INVENTORY_QUERY_CACHE_MAX);
   }
 
   async function handleHealth(req, res, origin) {
