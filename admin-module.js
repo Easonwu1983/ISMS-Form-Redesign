@@ -334,14 +334,18 @@
     }
 
     function renderAdminCollectionPager(config) {
+      const defaultLimit = Math.max(1, Number(config && config.defaultLimit || 12) || 12);
+      const limitOptions = Array.isArray(config && config.limitOptions) && config.limitOptions.length
+        ? config.limitOptions.map((value) => String(value))
+        : ['12', '24', '48'];
       const pager = getSharedPagerModule();
       if (pager && typeof pager.renderPagerToolbar === 'function') {
         return pager.renderPagerToolbar({
           ...(config || {}),
           esc,
           ic,
-          defaultLimit: 12,
-          limitOptions: ['12', '24', '48'],
+          defaultLimit,
+          limitOptions,
           toolbarStyle: 'margin:14px 0 0'
         });
       }
@@ -353,19 +357,26 @@
       const actionPrefix = String(config && config.actionPrefix || '').trim();
       const summary = String(config && config.summary || formatAdminCollectionSummary(page)).trim();
       const limitValue = String(page.limit || '');
-      const limitOptions = ['12', '24', '48']
+      const limitOptionsHtml = limitOptions
         .map((value) => `<option value="${esc(value)}" ${limitValue === value ? 'selected' : ''}>${esc(value)}</option>`)
         .join('');
-      return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(summary)}</span></div><div class="review-toolbar-actions"><label class="form-label" for="${esc(idPrefix)}-page-limit" style="margin:0 4px 0 0">每頁</label><select class="form-select" id="${esc(idPrefix)}-page-limit" style="width:96px">${limitOptions}</select><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}FirstPage" ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}PrevPage" ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><span class="review-card-subtitle" style="margin:0 4px 0 8px">頁次 ${page.currentPage || 0} / ${page.pageCount || 0}</span><label class="form-label" for="${esc(idPrefix)}-page-number" style="margin:0 4px 0 8px">跳至</label><input type="number" class="form-input" id="${esc(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px"><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}JumpPage" ${disableJump}>前往</button><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}NextPage" ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><button type="button" class="btn btn-secondary btn-sm" data-action="${esc(actionPrefix)}LastPage" ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button></div></div>`;
+      const actionAttr = function (suffix) {
+        return actionPrefix ? ` data-action="${esc(actionPrefix)}${suffix}"` : '';
+      };
+      return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(summary)}</span></div><div class="review-toolbar-actions"><label class="form-label" for="${esc(idPrefix)}-page-limit" style="margin:0 4px 0 0">每頁</label><select class="form-select" id="${esc(idPrefix)}-page-limit" style="width:96px">${limitOptionsHtml}</select><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><span class="review-card-subtitle" style="margin:0 4px 0 8px">頁次 ${page.currentPage || 0} / ${page.pageCount || 0}</span><label class="form-label" for="${esc(idPrefix)}-page-number" style="margin:0 4px 0 8px">跳至</label><input type="number" class="form-input" id="${esc(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px"><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>前往</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button></div></div>`;
     }
 
     function bindAdminCollectionPager(config) {
+      const defaultLimit = Math.max(1, Number(config && config.defaultLimit || 12) || 12);
+      const getOffsetByPageNumber = config && typeof config.getOffsetByPageNumber === 'function'
+        ? config.getOffsetByPageNumber
+        : getAdminCollectionOffsetByPageNumber;
       const pager = getSharedPagerModule();
       if (pager && typeof pager.bindPagerControls === 'function') {
         pager.bindPagerControls({
           ...(config || {}),
-          defaultLimit: 12,
-          getOffsetByPageNumber: getAdminCollectionOffsetByPageNumber
+          defaultLimit,
+          getOffsetByPageNumber
         });
         return;
       }
@@ -376,11 +387,17 @@
       if (!idPrefix || !onChange) return;
       const limitSelect = document.getElementById(`${idPrefix}-page-limit`);
       const pageNumberInput = document.getElementById(`${idPrefix}-page-number`);
-      const firstButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'FirstPage')}"]`) : null;
-      const prevButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'PrevPage')}"]`) : null;
-      const jumpButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'JumpPage')}"]`) : null;
-      const nextButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'NextPage')}"]`) : null;
-      const lastButton = actionPrefix ? document.querySelector(`[data-action="${CSS.escape(actionPrefix + 'LastPage')}"]`) : null;
+      const queryAction = function (suffix, actionName) {
+        const byId = document.getElementById(`${idPrefix}-${suffix}`);
+        if (byId) return byId;
+        if (!actionPrefix) return null;
+        return document.querySelector(`[data-action="${CSS.escape(actionPrefix + actionName)}"]`);
+      };
+      const firstButton = queryAction('first-page', 'FirstPage');
+      const prevButton = queryAction('prev-page', 'PrevPage');
+      const jumpButton = queryAction('jump-page', 'JumpPage');
+      const nextButton = queryAction('next-page', 'NextPage');
+      const lastButton = queryAction('last-page', 'LastPage');
       if (limitSelect) {
         limitSelect.addEventListener('change', () => onChange({
           limit: String(limitSelect.value || ''),
@@ -391,13 +408,13 @@
         pageNumberInput.addEventListener('keydown', (event) => {
           if (event.key !== 'Enter') return;
           event.preventDefault();
-          const nextOffset = getAdminCollectionOffsetByPageNumber(page, pageNumberInput.value || '1');
+          const nextOffset = getOffsetByPageNumber(page, pageNumberInput.value || '1');
           onChange({ offset: String(nextOffset) });
         });
       }
       if (jumpButton && pageNumberInput) {
         jumpButton.addEventListener('click', () => {
-          const nextOffset = getAdminCollectionOffsetByPageNumber(page, pageNumberInput.value || '1');
+          const nextOffset = getOffsetByPageNumber(page, pageNumberInput.value || '1');
           onChange({ offset: String(nextOffset) });
         });
       }
@@ -412,7 +429,7 @@
       }
       if (lastButton) {
         lastButton.addEventListener('click', () => {
-          const nextOffset = getAdminCollectionOffsetByPageNumber(page, page.pageCount || 1);
+          const nextOffset = getOffsetByPageNumber(page, page.pageCount || 1);
           onChange({ offset: String(nextOffset) });
         });
       }
@@ -664,10 +681,14 @@
 
     function renderAuditTrailPager(page) {
       const meta = getAuditTrailPageActionMeta(page);
-      const pageValue = meta.currentPage || 1;
-      const pageMax = meta.pageCount || 1;
-      const disableJump = meta.isEmpty ? 'disabled' : '';
-      return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(meta.summary)}</span></div><div class="review-toolbar-actions"><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailFirstPage" ${meta.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailPrevPage" ${meta.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><span class="review-card-subtitle" style="margin:0 4px 0 8px">頁次 ${meta.currentPage || 0} / ${meta.pageCount || 0}</span><label class="form-label" for="audit-page-number" style="margin:0 4px 0 8px">跳至</label><input type="number" class="form-input" id="audit-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px"><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailJumpPage" ${disableJump}>前往</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailNextPage" ${meta.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><button type="button" class="btn btn-secondary btn-sm" data-action="admin.auditTrailLastPage" ${meta.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button></div></div>`;
+      return renderAdminCollectionPager({
+        idPrefix: 'audit',
+        page: meta,
+        summary: meta.summary,
+        defaultLimit: 50,
+        limitOptions: ['50', '100', '200'],
+        getOffsetByPageNumber: getAuditTrailOffsetByPageNumber
+      });
     }
 
     function getAuditTrailOffsetByPageNumber(page, targetPage) {
@@ -2584,21 +2605,20 @@
         renderAuditTrail(getAuditTrailFiltersFromDom());
       });
     }
-    const auditLimitSelect = document.getElementById('audit-limit');
-    if (auditLimitSelect) {
-      auditLimitSelect.addEventListener('change', function () {
-        renderAuditTrail(getAuditTrailFiltersFromDom());
-      });
-    }
-    const auditPageInput = document.getElementById('audit-page-number');
-    if (auditPageInput) {
-      auditPageInput.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter') return;
-        event.preventDefault();
-        const nextOffset = getAuditTrailOffsetByPageNumber(auditTrailState.page, auditPageInput.value);
-        renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
-      });
-    }
+    bindAdminCollectionPager({
+      idPrefix: 'audit',
+      page: auditTrailState.page,
+      defaultLimit: 50,
+      limitOptions: ['50', '100', '200'],
+      getOffsetByPageNumber: getAuditTrailOffsetByPageNumber,
+      onChange: function (delta) {
+        renderAuditTrail({
+          ...auditTrailState.filters,
+          limit: String((delta && delta.limit) || auditTrailState.page.limit || 50),
+          offset: String((delta && delta.offset) || 0)
+        });
+      }
+    });
     wireReviewTableScrollers(app);
     refreshIcons();
   }

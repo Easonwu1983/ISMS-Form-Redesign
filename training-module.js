@@ -416,6 +416,27 @@
       if (normalizedFilters.source === 'manual') activeFilters.push('來源：填報新增');
       if (normalizedFilters.statsUnit) activeFilters.push('統計單位：' + normalizedFilters.statsUnit);
       if (normalizedFilters.unit) activeFilters.push('填報單位：' + normalizedFilters.unit);
+      const extraActionsHtml = ''
+        + '<input type="search" class="form-input" id="training-roster-keyword" placeholder="搜尋姓名、本職單位、身分別、職稱" value="' + esc(normalizedFilters.q || '') + '" style="min-width:260px">'
+        + '<select class="form-select" id="training-roster-stats-unit" style="min-width:180px">' + statsUnitOptions + '</select>'
+        + '<select class="form-select" id="training-roster-unit" style="min-width:220px">' + unitOptions + '</select>'
+        + '<select class="form-select" id="training-roster-source" style="min-width:132px">' + sourceOptions + '</select>';
+      if (pager && typeof pager.renderPagerToolbar === 'function') {
+        return pager.renderPagerToolbar({
+          page: normalizedPage,
+          idPrefix: 'training-roster',
+          limitOptions: TRAINING_ROSTER_PAGE_LIMIT_OPTIONS,
+          defaultLimit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT,
+          esc,
+          ic,
+          toolbarClass: 'review-toolbar review-toolbar--compact training-roster-pager',
+          toolbarStyle: 'margin:14px 0 16px',
+          summary: getTrainingRosterPageSummary(normalizedPage),
+          mainHtml: '<span class="review-card-subtitle">' + esc(getTrainingRosterPageSummary(normalizedPage)) + '</span>'
+            + (activeFilters.length ? '<div class="form-hint" style="margin-top:4px">目前篩選：' + esc(activeFilters.join('｜')) + '</div>' : ''),
+          extraActionsHtml
+        });
+      }
       const pagerControls = pager && typeof pager.renderPagerControls === 'function'
         ? pager.renderPagerControls({
             page: normalizedPage,
@@ -432,14 +453,10 @@
         + (activeFilters.length ? '<div class="form-hint" style="margin-top:4px">目前篩選：' + esc(activeFilters.join('｜')) + '</div>' : '')
         + '</div>'
         + '<div class="review-toolbar-actions">'
-        + '<input type="search" class="form-input" id="training-roster-keyword" placeholder="搜尋姓名、本職單位、身分別、職稱" value="' + esc(normalizedFilters.q || '') + '" style="min-width:260px">'
-        + '<select class="form-select" id="training-roster-stats-unit" style="min-width:180px">' + statsUnitOptions + '</select>'
-        + '<select class="form-select" id="training-roster-unit" style="min-width:220px">' + unitOptions + '</select>'
-        + '<select class="form-select" id="training-roster-source" style="min-width:132px">' + sourceOptions + '</select>'
+        + extraActionsHtml
         + pagerControls
         + '</div></div>';
     }
-
     function clearTrainingRosterRemotePageCache() {
       trainingRosterRemotePageCache.clear();
     }

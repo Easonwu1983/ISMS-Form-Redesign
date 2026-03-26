@@ -101,9 +101,10 @@
       const summary = String(options.summary || formatPageSummary(page, options.emptyText, options.defaultLimit)).trim();
       const mainHtml = options.mainHtml
         || `<span class="review-card-subtitle">${esc(summary)}</span>`;
+      const extraActionsHtml = String(options.extraActionsHtml || '').trim();
       return `<div class="${escAttr(toolbarClass)}"${toolbarStyle ? ` style="${escAttr(toolbarStyle)}"` : ''}>`
         + `<div class="review-toolbar-main">${mainHtml}</div>`
-        + `<div class="review-toolbar-actions">${renderPagerControls(options)}</div>`
+        + `<div class="review-toolbar-actions">${extraActionsHtml}${renderPagerControls(options)}</div>`
         + `</div>`;
     }
 

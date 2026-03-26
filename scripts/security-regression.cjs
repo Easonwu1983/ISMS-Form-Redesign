@@ -242,6 +242,40 @@ async function assertNoXssExecution(page, label) {
       return 'schema health remained protected';
     });
 
+    await runStep(results, 'SEC-02b', 'Unit admin', 'Authorized unit switcher matches current scope', async () => {
+      await login(page, 'unit1', 'unit123');
+      await page.waitForTimeout(150);
+      const access = await page.evaluate(async () => {
+        const response = await fetch('/api/auth/verify', { credentials: 'include' });
+        const json = await response.json();
+        const user = json && json.user && typeof json.user === 'object' ? json.user : {};
+        const authorizedUnits = Array.isArray(user.authorizedUnits)
+          ? user.authorizedUnits.map((unit) => String(unit || '').trim()).filter(Boolean)
+          : [];
+        const activeUnit = String(user.activeUnit || '').trim();
+        const switcher = document.getElementById('header-unit-switch');
+        const domUnits = switcher
+          ? Array.from(switcher.options).map((option) => String(option.value || '').trim()).filter(Boolean)
+          : [];
+        return {
+          authorizedUnits,
+          activeUnit,
+          domUnits,
+          hasSwitcher: Boolean(switcher)
+        };
+      });
+      if (access.authorizedUnits.length > 1) {
+        if (!access.hasSwitcher) throw new Error('authorized unit switcher missing');
+        const expected = access.authorizedUnits.slice().sort().join('|');
+        const actual = access.domUnits.slice().sort().join('|');
+        if (expected !== actual) throw new Error('authorized unit switcher options mismatch');
+        if (!access.domUnits.includes(access.activeUnit)) throw new Error('active unit not present in switcher');
+        return `switcher=${access.domUnits.length}`;
+      }
+      if (access.hasSwitcher) throw new Error('switcher should stay hidden for single-scope user');
+      return 'single-scope user has no switcher';
+    });
+
     await runStep(results, 'SEC-03', 'Admin', 'Security window inventory is grouped by tier', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'security-window');
