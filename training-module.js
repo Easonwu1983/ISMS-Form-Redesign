@@ -111,7 +111,9 @@
     let trainingRosterPageShellCache = { signature: '', html: '' };
     let trainingDashboardUnitsCache = { signature: '', units: [] };
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
+    let trainingRemoteListSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
+    const TRAINING_REMOTE_LIST_SUMMARY_TTL_MS = 15000;
     const TRAINING_ROSTER_PAGE_LIMIT_OPTIONS = ['100', '200', '500'];
     const TRAINING_ROSTER_DEFAULT_PAGE_LIMIT = '200';
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
@@ -530,6 +532,91 @@
       };
     }
 
+    function normalizeTrainingListCounts(summary) {
+      const source = summary && typeof summary === 'object' ? summary : {};
+      return {
+        total: Math.max(0, Number(source.total) || 0),
+        draft: Math.max(0, Number(source.draft) || 0),
+        pending: Math.max(0, Number(source.pending) || 0),
+        submitted: Math.max(0, Number(source.submitted) || 0),
+        returned: Math.max(0, Number(source.returned) || 0)
+      };
+    }
+
+    function serializeTrainingListCounts(summary) {
+      const normalized = normalizeTrainingListCounts(summary);
+      return [
+        normalized.total,
+        normalized.draft,
+        normalized.pending,
+        normalized.submitted,
+        normalized.returned
+      ].join('|');
+    }
+
+    function getTrainingRemoteListSummarySignature(user) {
+      const profile = getTrainingAccessProfile(user) || {};
+      return [
+        getTrainingUserSignature(profile),
+        normalizeTrainingUnitList(profile.authorizedUnits).join('|')
+      ].join('::');
+    }
+
+    function getTrainingRemoteListSummaryClient() {
+      if (typeof window === 'undefined') return null;
+      const client = window._m365ApiClient;
+      if (!client || typeof client.listTrainingForms !== 'function') return null;
+      if (typeof client.getTrainingMode === 'function' && client.getTrainingMode() !== 'm365-api') return null;
+      return client;
+    }
+
+    function readTrainingRemoteListSummary(user, force) {
+      const signature = getTrainingRemoteListSummarySignature(user);
+      if (!signature) return null;
+      if (trainingRemoteListSummaryCache.signature !== signature) return null;
+      if (!trainingRemoteListSummaryCache.summary) return null;
+      const age = Date.now() - Number(trainingRemoteListSummaryCache.fetchedAt || 0);
+      if (force || age > TRAINING_REMOTE_LIST_SUMMARY_TTL_MS) return null;
+      return normalizeTrainingListCounts(trainingRemoteListSummaryCache.summary);
+    }
+
+    function primeTrainingRemoteListSummary(user, options) {
+      const opts = options || {};
+      const client = getTrainingRemoteListSummaryClient();
+      const signature = getTrainingRemoteListSummarySignature(user);
+      if (!client || !signature) return Promise.resolve(null);
+      if (!opts.force
+        && trainingRemoteListSummaryCache.signature === signature
+        && trainingRemoteListSummaryCache.promise) {
+        return trainingRemoteListSummaryCache.promise;
+      }
+      const promise = client.listTrainingForms().then((response) => {
+        const summary = normalizeTrainingListCounts(response && response.summary);
+        trainingRemoteListSummaryCache = {
+          signature,
+          summary,
+          fetchedAt: Date.now(),
+          promise: null
+        };
+        return summary;
+      }).catch((error) => {
+        if (trainingRemoteListSummaryCache.signature === signature) {
+          trainingRemoteListSummaryCache = {
+            ...trainingRemoteListSummaryCache,
+            promise: null
+          };
+        }
+        throw error;
+      });
+      trainingRemoteListSummaryCache = {
+        signature,
+        summary: trainingRemoteListSummaryCache.signature === signature ? trainingRemoteListSummaryCache.summary : null,
+        fetchedAt: trainingRemoteListSummaryCache.signature === signature ? trainingRemoteListSummaryCache.fetchedAt : 0,
+        promise
+      };
+      return promise;
+    }
+
     function getTrainingListSnapshot(user) {
       const input = user || currentUser();
       const signature = [
@@ -543,13 +630,7 @@
       const visibleForms = Array.isArray(source)
         ? source.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
         : [];
-      const summary = {
-        total: 0,
-        draft: 0,
-        pending: 0,
-        submitted: 0,
-        returned: 0
-      };
+      const summary = normalizeTrainingListCounts();
       for (const form of visibleForms) {
         summary.total += 1;
         if (form.status === TRAINING_STATUSES.DRAFT) summary.draft += 1;
@@ -1250,14 +1331,18 @@
         : scheduleDeferredPromise(() => syncTrainingFormsFromM365({ silent: true }), 250).catch((error) => {
           console.warn('training list sync failed', error);
         });
-      const listSnapshot = getTrainingListSnapshot();
+      const listSnapshot = getTrainingListSnapshot(accessProfile);
       const visibleForms = listSnapshot.visibleForms;
-      const summary = listSnapshot.summary;
+      const remoteSummary = opts.skipRemoteSummary
+        ? null
+        : readTrainingRemoteListSummary(accessProfile, !!opts.forceRemoteSummary);
+      const summary = normalizeTrainingListCounts(remoteSummary || listSnapshot.summary);
       const toolbar = '<div class="training-toolbar-actions">'
         + (canFillTraining() ? '<a href="#training-fill" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 新增填報</a>' : '')
         + (visibleForms.length ? '<button class="btn btn-secondary" id="training-export-all">' + ic('download', 'icon-sm') + ' 匯出 Excel</button>' : '')
         + (isAdmin() ? '<a href="#training-roster" class="btn btn-secondary">' + ic('users', 'icon-sm') + ' 名單管理</a>' : '')
         + '</div>';
+      let renderedSummarySignature = serializeTrainingListCounts(summary);
 
     const buildFormActions = (form, options) => {
       const opts = options || {};
@@ -1366,6 +1451,7 @@
       }).join('') : '<tr><td colspan="8"><div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無填報單</div><div class="empty-state-desc">可先建立草稿，完成流程一後再進入簽核。</div></div></td></tr>';
       contentHtml = buildTrainingTableCard('我的填報單', '流程一完成後內容會先鎖定；若尚未列印簽核表，可在 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。', '', '<th>編號</th><th>填報單位</th><th>狀態</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>最後更新</th><th>操作</th>', rows);
     }
+    renderedSummarySignature = serializeTrainingListCounts(summary);
 
     document.getElementById('app').innerHTML = '<div class="animate-in training-dashboard-page">'
       + '<div class="page-header"><div><h1 class="page-title">資安教育訓練統計</h1><p class="page-subtitle">依流程一填報、流程二列印、流程三上傳簽核表完成整體申報；流程一送出後若尚未列印，可於 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回。</p></div>' + toolbar + '</div>'
@@ -1375,10 +1461,23 @@
       + contentHtml
       + '</div>';
 
+    if (!opts.skipRemoteSummary) {
+      const shouldPrimeRemoteSummary = !!getTrainingRemoteListSummaryClient() && (!!opts.forceRemoteSummary || !remoteSummary);
+      if (shouldPrimeRemoteSummary) {
+        primeTrainingRemoteListSummary(accessProfile, { force: !!opts.forceRemoteSummary }).then((nextSummary) => {
+          if (!String(window.location.hash || '').startsWith('#training')) return;
+          if (serializeTrainingListCounts(nextSummary) === renderedSummarySignature) return;
+          renderTraining({ skipSync: true });
+        }).catch((error) => {
+          console.warn('training list remote summary sync failed', error);
+        });
+      }
+    }
+
     if (!opts.skipSync) {
       syncPromise.then(() => {
         if (!String(window.location.hash || '').startsWith('#training')) return;
-        renderTraining({ skipSync: true });
+        renderTraining({ skipSync: true, forceRemoteSummary: true });
       }).catch((error) => {
         console.warn('training list background sync failed', error);
       });

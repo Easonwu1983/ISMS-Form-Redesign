@@ -302,6 +302,73 @@ async function assertNoXssExecution(page, label) {
       return `activeUnit=${targetUnit}`;
     });
 
+    await runStep(results, 'SEC-02d', 'Unit admin', 'Unit admin API scope stays within authorized resources', async () => {
+      const scopedPage = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
+      attachDiagnostics(scopedPage, results);
+      try {
+        await login(scopedPage, 'unit1', 'unit123');
+        await scopedPage.waitForTimeout(150);
+        const apiState = await scopedPage.evaluate(async () => {
+          const auth = window._authModule && typeof window._authModule.currentUser === 'function'
+            ? window._authModule.currentUser()
+            : null;
+          const token = String(auth && auth.sessionToken || '').trim();
+          if (!token) {
+            throw new Error('missing session token');
+          }
+          const headers = {
+            Authorization: `Bearer ${token}`
+          };
+
+          async function fetchJson(url) {
+            const response = await fetch(url, { credentials: 'include', headers });
+            let body = null;
+            try {
+              body = await response.json();
+            } catch (_) {
+              body = null;
+            }
+            return { status: response.status, body };
+          }
+
+          const selfUser = await fetchJson('/api/system-users/unit1');
+          const adminUser = await fetchJson('/api/system-users/easonwu');
+          const reviewScopes = await fetchJson('/api/review-scopes');
+          const reviewItems = Array.isArray(reviewScopes.body && reviewScopes.body.items) ? reviewScopes.body.items : [];
+          const selfItem = selfUser.body && selfUser.body.item && typeof selfUser.body.item === 'object' ? selfUser.body.item : null;
+          return {
+            selfStatus: selfUser.status,
+            selfUsername: String(selfItem && selfItem.username || '').trim(),
+            selfHasPassword: !!(selfItem && Object.prototype.hasOwnProperty.call(selfItem, 'password')),
+            adminStatus: adminUser.status,
+            reviewStatus: reviewScopes.status,
+            reviewUsernames: reviewItems.map((item) => String(item && item.username || '').trim()).filter(Boolean)
+          };
+        });
+        if (apiState.selfStatus !== 200) throw new Error(`self detail returned ${apiState.selfStatus}`);
+        if (apiState.selfUsername !== 'unit1') throw new Error('self detail did not resolve unit1');
+        if (apiState.selfHasPassword) throw new Error('self detail leaked password field');
+        if (apiState.adminStatus === 200) throw new Error('unit admin can read admin detail');
+        if (apiState.reviewStatus !== 200) throw new Error(`review scopes returned ${apiState.reviewStatus}`);
+        const foreignScopes = apiState.reviewUsernames.filter((username) => username !== 'unit1');
+        if (foreignScopes.length) throw new Error(`review scopes leaked foreign users: ${foreignScopes.join(', ')}`);
+
+        await gotoHash(scopedPage, 'users');
+        await scopedPage.waitForTimeout(200);
+        const usersHash = await currentHash(scopedPage);
+        if (String(usersHash || '').startsWith('#users')) throw new Error('unit admin reached users page');
+
+        await gotoHash(scopedPage, 'unit-contact-review');
+        await scopedPage.waitForTimeout(200);
+        const reviewHash = await currentHash(scopedPage);
+        if (String(reviewHash || '').startsWith('#unit-contact-review')) throw new Error('unit admin reached unit-contact-review');
+
+        return `reviewScopes=${apiState.reviewUsernames.length}`;
+      } finally {
+        await scopedPage.close().catch(() => {});
+      }
+    });
+
     await runStep(results, 'SEC-03', 'Admin', 'Security window inventory is grouped by tier', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'security-window');
