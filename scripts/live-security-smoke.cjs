@@ -26,6 +26,20 @@ const TARGETS = uniqueTargets([
   { id: 'cloudflare-pages', base: process.env.ISMS_CLOUDFLARE_PAGES_BASE || 'https://isms-campus-portal.pages.dev' }
 ]);
 
+async function resolveApiBase(target) {
+  if (!target || target.id !== 'cloudflare-pages') return target.base;
+  try {
+    const { response, json } = await requestJson(`${target.base}/deploy-manifest.json`, {
+      headers: { 'cache-control': 'no-cache' }
+    });
+    const backendBase = normalizeBase(json && json.backendBase);
+    if (response.ok && backendBase) return backendBase;
+  } catch (_) {
+    // Fall back to the same origin when the manifest is unavailable.
+  }
+  return target.base;
+}
+
 async function requestText(url, options) {
   const retryableStatuses = new Set([502, 503, 504]);
   let lastError = null;
@@ -90,6 +104,7 @@ async function run() {
 
   for (const target of TARGETS) {
     let sessionToken = '';
+    const apiBase = await resolveApiBase(target);
 
     await step(target, 'homepage', async () => {
       const { response, text } = await requestText(`${target.base}/`);
@@ -132,7 +147,7 @@ async function run() {
 
     for (const endpoint of ['auth', 'system-users', 'audit-trail', 'review-scopes', 'attachments']) {
       await step(target, `health:${endpoint}`, async () => {
-        const { response, json } = await requestJson(`${target.base}/api/${endpoint}/health`);
+        const { response, json } = await requestJson(`${apiBase}/api/${endpoint}/health`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         if (!json || json.ok === false || json.ready === false) {
           throw new Error(json && (json.message || json.error) || `${endpoint} health not ready`);
@@ -148,7 +163,7 @@ async function run() {
     }
 
     await step(target, 'unit-contact.health.minimal', async () => {
-      const { response, json } = await requestJson(`${target.base}/api/unit-contact/health`);
+      const { response, json } = await requestJson(`${apiBase}/api/unit-contact/health`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (!json || json.ok === false || json.ready === false) {
         throw new Error(json && (json.message || json.error) || 'unit-contact health not ready');
@@ -161,7 +176,7 @@ async function run() {
     }, true);
 
     await step(target, 'unit-contact.health.method.rejected', async () => {
-      const { response } = await requestJson(`${target.base}/api/unit-contact/health`, {
+      const { response } = await requestJson(`${apiBase}/api/unit-contact/health`, {
         method: 'POST'
       });
       if (response.status !== 405) throw new Error(`expected 405, got ${response.status}`);
@@ -169,7 +184,7 @@ async function run() {
     }, true);
 
     await step(target, 'unit-contact.health.cors.rejected', async () => {
-      const { response } = await requestJson(`${target.base}/api/unit-contact/health`, {
+      const { response } = await requestJson(`${apiBase}/api/unit-contact/health`, {
         headers: {
           Origin: 'https://evil.example'
         }
@@ -182,7 +197,7 @@ async function run() {
     }, true);
 
     await step(target, 'auth.login.success', async () => {
-      const { response, json } = await requestJson(`${target.base}/api/auth/login`, {
+      const { response, json } = await requestJson(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -201,7 +216,7 @@ async function run() {
     }, true);
 
     await step(target, 'auth.login.failure', async () => {
-      const { response } = await requestJson(`${target.base}/api/auth/login`, {
+      const { response } = await requestJson(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -214,25 +229,25 @@ async function run() {
     }, true);
 
     await step(target, 'system-users.anonymous.denied', async () => {
-      const { response } = await requestJson(`${target.base}/api/system-users`);
+      const { response } = await requestJson(`${apiBase}/api/system-users`);
       if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
       return { status: response.status };
     }, true);
 
     await step(target, 'audit-trail.anonymous.denied', async () => {
-      const { response } = await requestJson(`${target.base}/api/audit-trail?limit=5`);
+      const { response } = await requestJson(`${apiBase}/api/audit-trail?limit=5`);
       if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
       return { status: response.status };
     }, true);
 
     await step(target, 'review-scopes.anonymous.denied', async () => {
-      const { response } = await requestJson(`${target.base}/api/review-scopes`);
+      const { response } = await requestJson(`${apiBase}/api/review-scopes`);
       if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
       return { status: response.status };
     }, true);
 
     await step(target, 'attachments.upload.anonymous.denied', async () => {
-      const { response } = await requestJson(`${target.base}/api/attachments/upload`, {
+      const { response } = await requestJson(`${apiBase}/api/attachments/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -242,7 +257,7 @@ async function run() {
     }, true);
 
     await step(target, 'system-users.authorized', async () => {
-      const { response, json } = await requestJson(`${target.base}/api/system-users`, {
+      const { response, json } = await requestJson(`${apiBase}/api/system-users`, {
         headers: {
           Authorization: `Bearer ${sessionToken}`
         }
@@ -257,7 +272,7 @@ async function run() {
     }, true);
 
     await step(target, 'review-scopes.authorized', async () => {
-      const { response, json } = await requestJson(`${target.base}/api/review-scopes`, {
+      const { response, json } = await requestJson(`${apiBase}/api/review-scopes`, {
         headers: {
           Authorization: `Bearer ${sessionToken}`
         }
@@ -268,7 +283,7 @@ async function run() {
     }, true);
 
     await step(target, 'audit-trail.authorized', async () => {
-      const { response, json } = await requestJson(`${target.base}/api/audit-trail?limit=10`, {
+      const { response, json } = await requestJson(`${apiBase}/api/audit-trail?limit=10`, {
         headers: {
           Authorization: `Bearer ${sessionToken}`
         }
@@ -284,7 +299,7 @@ async function run() {
     }, true);
 
     await step(target, 'auth.verify.authorized', async () => {
-      const { response, json } = await requestJson(`${target.base}/api/auth/verify`, {
+      const { response, json } = await requestJson(`${apiBase}/api/auth/verify`, {
         headers: {
           Authorization: `Bearer ${sessionToken}`
         }
@@ -297,7 +312,7 @@ async function run() {
     }, true);
 
     await step(target, 'auth.logout', async () => {
-      const { response, json } = await requestJson(`${target.base}/api/auth/logout`, {
+      const { response, json } = await requestJson(`${apiBase}/api/auth/logout`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${sessionToken}`,
@@ -313,7 +328,7 @@ async function run() {
     }, true);
 
     await step(target, 'auth.verify.old-session.denied', async () => {
-      const { response } = await requestJson(`${target.base}/api/auth/verify`, {
+      const { response } = await requestJson(`${apiBase}/api/auth/verify`, {
         headers: {
           Authorization: `Bearer ${sessionToken}`
         }

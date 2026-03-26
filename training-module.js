@@ -1362,10 +1362,26 @@
         actorUsername: currentUser()?.username || ''
       });
       clearTrainingRosterRemotePageCache();
-      await renderTrainingRoster({
-        skipSync: true,
-        restoreFocusState: focusState || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null)
-      });
+      const restoreFocusState = focusState || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null);
+      try {
+        await renderTrainingRoster({
+          skipSync: true,
+          restoreFocusState
+        });
+      } catch (error) {
+        console.warn('training roster rerender after delete failed; retrying once', error);
+        clearTrainingRosterRemotePageCache();
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          await renderTrainingRoster({
+            skipSync: true,
+            restoreFocusState
+          });
+        } catch (retryError) {
+          console.error('training roster rerender after delete failed twice', retryError);
+          toast('名單刪除成功，但列表刷新失敗，請重新整理頁面。', 'warning');
+        }
+      }
       const deletedCount = Number(result && result.deletedCount || 0);
       toast(deletedCount > 1 ? ('名單已刪除，並同步清理重複資料 ' + deletedCount + ' 筆') : '名單已刪除', 'success');
       if (result && result.warning) {

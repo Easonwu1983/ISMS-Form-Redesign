@@ -188,10 +188,17 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
       try {
         await gotoHash(page, 'training-roster');
       } catch (_) {}
-      const perRowTimeout = Math.max(3000, Math.min(30000, timeout - (Date.now() - startedAt)));
-      for (const name of names) {
-        await page.locator(`tr[data-roster-name="${name.replace(/"/g, '\\"')}"]`).first().waitFor({ state: 'attached', timeout: perRowTimeout });
+      const primaryName = String(names[0] || '').trim();
+      if (primaryName) {
+        const keyword = page.locator('#training-roster-keyword');
+        if (await keyword.count()) {
+          await keyword.fill(primaryName);
+          await keyword.dispatchEvent('input');
+          await page.waitForTimeout(800);
+        }
       }
+      const perRowTimeout = Math.max(3000, Math.min(30000, timeout - (Date.now() - startedAt)));
+      await page.locator(`tr[data-roster-name="${String(names[0] || '').replace(/"/g, '\\"')}"]`).first().waitFor({ state: 'attached', timeout: perRowTimeout });
       return rows;
     }
     await page.waitForTimeout(400);
@@ -244,7 +251,9 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
         jobTitle: IMPORT_TARGET_TITLE
       });
 
-      await page.click('[data-testid="training-import-submit"]');
+      await ensureTrainingImportPanelVisible(page);
+      await page.waitForSelector('[data-testid="training-import-submit"]', { state: 'visible', timeout: 10000 });
+      await page.locator('#training-import-form').evaluate((form) => form.requestSubmit());
       await waitForTrainingRostersByNames(page, names, 240000);
       await page.waitForSelector('details.training-roster-group-card', { state: 'visible', timeout: 30000 });
       await expandRosterGroups(page);
