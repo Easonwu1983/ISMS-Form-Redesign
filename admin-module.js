@@ -121,6 +121,15 @@
     const AUDIT_TRAIL_QUERY_CACHE_MAX = 12;
     const auditTrailQueryCache = new Map();
     const auditTrailLoadPromiseMap = new Map();
+    const AUDIT_TRAIL_SUMMARY_CACHE_MS = 15000;
+    const AUDIT_TRAIL_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
+    let auditTrailSummaryCache = {
+      signature: '',
+      summary: null,
+      fetchedAt: 0,
+      promise: null
+    };
+    let auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     let auditTrailRenderCache = {
       signature: '',
       filterSignature: ''
@@ -601,6 +610,121 @@
         next.limit,
         next.offset
       ].map((value) => String(value || '').trim()).join('|');
+    }
+
+    function getAuditTrailSummarySignature(filters) {
+      const next = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
+      return [
+        next.keyword,
+        next.eventType,
+        next.occurredFrom,
+        next.occurredTo,
+        next.actorEmail,
+        next.targetEmail,
+        next.unitCode,
+        next.recordId
+      ].map((value) => String(value || '').trim()).join('|');
+    }
+
+    function normalizeAuditTrailSummary(summary) {
+      const source = summary && typeof summary === 'object' ? summary : {};
+      return {
+        total: Math.max(0, Number(source.total) || 0),
+        actorCount: Math.max(0, Number(source.actorCount) || 0),
+        latestOccurredAt: String(source.latestOccurredAt || '').trim(),
+        eventTypes: Array.isArray(source.eventTypes) ? source.eventTypes.slice() : []
+      };
+    }
+
+    function serializeAuditTrailSummary(summary) {
+      const safe = normalizeAuditTrailSummary(summary);
+      return [safe.total, safe.actorCount, safe.latestOccurredAt, safe.eventTypes.join(',')].join('|');
+    }
+
+    function readAuditTrailSummary(filters, force) {
+      const signature = getAuditTrailSummarySignature(filters);
+      if (auditTrailSummaryCache.signature !== signature) return null;
+      if (!auditTrailSummaryCache.summary) return null;
+      const age = Date.now() - Number(auditTrailSummaryCache.fetchedAt || 0);
+      if (force || age > AUDIT_TRAIL_SUMMARY_CACHE_MS) return null;
+      return normalizeAuditTrailSummary(auditTrailSummaryCache.summary);
+    }
+
+    function resetAuditTrailSummaryBootstrapState() {
+      const timer = Number(auditTrailSummaryBootstrapState.timer || 0);
+      if (timer && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+        window.clearTimeout(timer);
+      }
+      auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
+    }
+
+    function primeAuditTrailSummary(filters, options) {
+      const summaryFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}), summaryOnly: '1', limit: '50', offset: '0' };
+      const signature = getAuditTrailSummarySignature(summaryFilters);
+      const force = !!(options && options.force);
+      if (!force && auditTrailSummaryCache.signature === signature && auditTrailSummaryCache.promise) {
+        return auditTrailSummaryCache.promise;
+      }
+      const promise = fetchAuditTrailEntries(summaryFilters).then((response) => {
+        const summary = normalizeAuditTrailSummary(response && response.summary);
+        if (auditTrailSummaryBootstrapState.signature === signature) resetAuditTrailSummaryBootstrapState();
+        auditTrailSummaryCache = {
+          signature,
+          summary,
+          fetchedAt: Date.now(),
+          promise: null
+        };
+        return summary;
+      }).catch((error) => {
+        if (auditTrailSummaryCache.signature === signature) {
+          auditTrailSummaryCache = {
+            ...auditTrailSummaryCache,
+            promise: null
+          };
+        }
+        throw error;
+      });
+      auditTrailSummaryCache = {
+        signature,
+        summary: auditTrailSummaryCache.signature === signature ? auditTrailSummaryCache.summary : null,
+        fetchedAt: auditTrailSummaryCache.signature === signature ? auditTrailSummaryCache.fetchedAt : 0,
+        promise
+      };
+      return promise;
+    }
+
+    function queueAuditTrailSummaryBootstrap(filters) {
+      const signature = getAuditTrailSummarySignature(filters);
+      if (readAuditTrailSummary(filters, false)) {
+        if (auditTrailSummaryBootstrapState.signature === signature) resetAuditTrailSummaryBootstrapState();
+        return;
+      }
+      if (auditTrailSummaryCache.signature === signature && auditTrailSummaryCache.promise) return;
+      if (auditTrailSummaryBootstrapState.signature !== signature) {
+        resetAuditTrailSummaryBootstrapState();
+        auditTrailSummaryBootstrapState.signature = signature;
+      }
+      if (auditTrailSummaryBootstrapState.timer) return;
+      if (auditTrailSummaryBootstrapState.attempt >= AUDIT_TRAIL_SUMMARY_BOOTSTRAP_DELAYS.length) return;
+      const delay = AUDIT_TRAIL_SUMMARY_BOOTSTRAP_DELAYS[auditTrailSummaryBootstrapState.attempt];
+      auditTrailSummaryBootstrapState.attempt += 1;
+      auditTrailSummaryBootstrapState.timer = window.setTimeout(() => {
+        auditTrailSummaryBootstrapState.timer = 0;
+        if (readAuditTrailSummary(filters, false)) {
+          resetAuditTrailSummaryBootstrapState();
+          return;
+        }
+        primeAuditTrailSummary(filters).then((summary) => {
+          if (!String(window.location.hash || '').startsWith('#audit-trail')) return;
+          if (serializeAuditTrailSummary(summary) !== serializeAuditTrailSummary(auditTrailState.summary)) {
+            renderAuditTrail({ ...auditTrailState.filters });
+          }
+        }).catch((error) => {
+          console.warn('audit trail summary bootstrap failed', error);
+        }).finally(() => {
+          resetAuditTrailSummaryBootstrapState();
+        });
+      }, delay);
     }
 
     function isAuditTrailDataFresh(signature) {
@@ -2659,6 +2783,10 @@
           ...cachedState,
           filters: resolvedFilters
         };
+        const cachedSummary = readAuditTrailSummary(resolvedFilters, false);
+        if (cachedSummary) {
+          state.summary = cachedSummary;
+        }
         Object.assign(auditTrailState, state);
         if (!isAuditTrailDataFresh(filterSignature) && !getAuditTrailLoadPromise(filterSignature)) {
           loadAuditTrailData(resolvedFilters).then(function () {
@@ -2736,6 +2864,23 @@
         });
       }
     });
+    const renderedSummarySignature = serializeAuditTrailSummary(state.summary);
+    const cachedSummary = readAuditTrailSummary(resolvedFilters, !!(nextFilters && nextFilters.forceRemoteSummary));
+    if (cachedSummary && serializeAuditTrailSummary(cachedSummary) !== renderedSummarySignature) {
+      auditTrailState.summary = cachedSummary;
+    }
+    const shouldPrimeAuditTrailSummary = !!(nextFilters && nextFilters.forceRemoteSummary) || !cachedSummary;
+    if (shouldPrimeAuditTrailSummary) {
+      primeAuditTrailSummary(resolvedFilters, { force: !!(nextFilters && nextFilters.forceRemoteSummary) }).then((summary) => {
+        if (!String(window.location.hash || '').startsWith('#audit-trail')) return;
+        if (serializeAuditTrailSummary(summary) === renderedSummarySignature) return;
+        renderAuditTrail({ ...resolvedFilters });
+      }).catch((error) => {
+        console.warn('audit trail remote summary sync failed', error);
+      });
+    } else if (!cachedSummary) {
+      queueAuditTrailSummaryBootstrap(resolvedFilters);
+    }
     wireReviewTableScrollers(app);
     refreshIcons();
   }

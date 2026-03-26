@@ -312,6 +312,19 @@ async function run() {
     };
   }, { critical: true });
 
+  await step('audit-trail summary-only present', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/audit-trail?summaryOnly=1&limit=20`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const summary = json && json.summary && typeof json.summary === 'object' ? json.summary : null;
+    if (!summary) throw new Error('audit trail summary-only summary missing');
+    if (items.length !== 0) throw new Error(`audit trail summary-only should not return items, got ${items.length}`);
+    return {
+      total: Number(summary.total || 0),
+      latestOccurredAt: String(summary.latestOccurredAt || '')
+    };
+  }, { critical: true });
+
   await step('unit-governance paged query authorized', async () => {
     const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/unit-governance?limit=10&category=${encodeURIComponent('行政單位')}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -348,6 +361,21 @@ async function run() {
     const closed = Number(summary.closed || 0);
     if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary bucket mismatch');
     if (total !== Number(json && json.total || 0)) throw new Error('checklists summary total mismatch');
+    return { total, pendingExport, closed };
+  }, { critical: true });
+
+  await step('checklists summary-only present', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/checklists?summaryOnly=1&limit=5`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const summary = json && json.summary && typeof json.summary === 'object' ? json.summary : null;
+    if (!summary) throw new Error('checklists summary-only summary missing');
+    if (items.length !== 0) throw new Error(`checklists summary-only should not return items, got ${items.length}`);
+    const total = Number(summary.total || 0);
+    const editing = Number(summary.editing || 0);
+    const pendingExport = Number(summary.pendingExport || 0);
+    const closed = Number(summary.closed || 0);
+    if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary-only bucket mismatch');
     return { total, pendingExport, closed };
   }, { critical: true });
 

@@ -85,6 +85,7 @@ function createAuditTrailRouter(deps) {
     const targetEmail = cleanText(url && url.searchParams && url.searchParams.get('targetEmail')).toLowerCase();
     const unitCode = cleanText(url && url.searchParams && url.searchParams.get('unitCode'));
     const recordId = cleanText(url && url.searchParams && url.searchParams.get('recordId'));
+    const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly'));
     const rawLimit = Number(url && url.searchParams && url.searchParams.get('limit') || 100);
     const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 100;
     const rawOffset = Number(url && url.searchParams && url.searchParams.get('offset') || 0);
@@ -98,6 +99,7 @@ function createAuditTrailRouter(deps) {
       targetEmail,
       unitCode,
       recordId,
+      summaryOnly,
       String(limit),
       String(offset)
     ].join('::');
@@ -531,6 +533,7 @@ function createAuditTrailRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, 'Only admin can view audit trail');
+      const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
       const requestId = getRequestId(req);
       const querySignature = getAuditFilterSignature(url);
       logAuditTrail('list requested', {
@@ -555,9 +558,16 @@ function createAuditTrailRouter(deps) {
         });
         await writeJson(res, buildJsonResponse(200, {
           ok: true,
-          items: cachedUnfiltered.items,
+          items: summaryOnly ? [] : cachedUnfiltered.items,
           total: cachedUnfiltered.total,
-          page: cachedUnfiltered.page,
+          page: summaryOnly
+            ? {
+                ...cachedUnfiltered.page,
+                returned: 0,
+                pageStart: 0,
+                pageEnd: 0
+              }
+            : cachedUnfiltered.page,
           summary: cachedUnfiltered.summary,
           contractVersion: CONTRACT_VERSION
         }), origin);
@@ -592,9 +602,16 @@ function createAuditTrailRouter(deps) {
           });
           await writeJson(res, buildJsonResponse(200, {
             ok: true,
-            items: fastResult.items,
+            items: summaryOnly ? [] : fastResult.items,
             total: fastResult.total,
-            page: fastResult.page,
+            page: summaryOnly
+              ? {
+                  ...fastResult.page,
+                  returned: 0,
+                  pageStart: 0,
+                  pageEnd: 0
+                }
+              : fastResult.page,
             summary: fastResult.summary,
             contractVersion: CONTRACT_VERSION
           }), origin);
@@ -622,9 +639,16 @@ function createAuditTrailRouter(deps) {
         });
         await writeJson(res, buildJsonResponse(200, {
           ok: true,
-          items: cachedQuery.items,
+          items: summaryOnly ? [] : cachedQuery.items,
           total: cachedQuery.total,
-          page: cachedQuery.page,
+          page: summaryOnly
+            ? {
+                ...cachedQuery.page,
+                returned: 0,
+                pageStart: 0,
+                pageEnd: 0
+              }
+            : cachedQuery.page,
           summary: cachedQuery.summary,
           contractVersion: CONTRACT_VERSION
         }), origin);
@@ -642,9 +666,16 @@ function createAuditTrailRouter(deps) {
       });
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        items: filtered.items,
+        items: summaryOnly ? [] : filtered.items,
         total: filtered.total,
-        page: filtered.page,
+        page: summaryOnly
+          ? {
+              ...filtered.page,
+              returned: 0,
+              pageStart: 0,
+              pageEnd: 0
+            }
+          : filtered.page,
         summary: filtered.summary,
         contractVersion: CONTRACT_VERSION
       }), origin);

@@ -110,6 +110,10 @@
     const CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT = '50';
     const CHECKLIST_REMOTE_PAGE_CACHE_MAX = 12;
     const checklistRemotePageCache = new Map();
+    let checklistRemoteSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+    let checklistRemoteSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
+    const CHECKLIST_REMOTE_SUMMARY_TTL_MS = 15000;
+    const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
     let checklistRemotePageState = {
       filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
       page: {
@@ -130,6 +134,132 @@
       total: 0,
       signature: ''
     };
+
+    function serializeChecklistRemoteSummary(summary) {
+      const safe = normalizeChecklistRemoteSummary(summary, summary && summary.total);
+      return [safe.total, safe.editing, safe.pendingExport, safe.closed].join('|');
+    }
+
+    function getChecklistRemoteSummarySignature(filters) {
+      const accessProfile = getChecklistAccessProfile();
+      const normalizedFilters = normalizeChecklistRemoteFilters(filters);
+      const authorizedUnits = normalizeChecklistUnitList(accessProfile && accessProfile.authorizedUnits);
+      return [
+        accessProfile && accessProfile.username || '',
+        accessProfile && accessProfile.primaryUnit || '',
+        accessProfile && accessProfile.activeUnit || '',
+        authorizedUnits.join(','),
+        normalizedFilters.auditYear || 'all',
+        normalizedFilters.statusBucket || 'all',
+        normalizedFilters.q || ''
+      ].join('::');
+    }
+
+    function getChecklistRemoteSummaryFilters(filters) {
+      const normalized = normalizeChecklistRemoteFilters(filters);
+      return {
+        auditYear: normalized.auditYear,
+        statusBucket: normalized.statusBucket,
+        q: normalized.q
+      };
+    }
+
+    function getChecklistRemoteSummaryClient() {
+      const client = getChecklistRemoteClient();
+      if (!client || (typeof client.getChecklistListSummary !== 'function' && typeof client.listChecklists !== 'function')) return null;
+      return client;
+    }
+
+    function resetChecklistRemoteSummaryBootstrapState() {
+      const timer = Number(checklistRemoteSummaryBootstrapState.timer || 0);
+      if (timer && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+        window.clearTimeout(timer);
+      }
+      checklistRemoteSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
+    }
+
+    function readChecklistRemoteSummary(filters, force) {
+      const signature = getChecklistRemoteSummarySignature(filters);
+      if (checklistRemoteSummaryCache.signature !== signature) return null;
+      if (!checklistRemoteSummaryCache.summary) return null;
+      const age = Date.now() - Number(checklistRemoteSummaryCache.fetchedAt || 0);
+      if (force || age > CHECKLIST_REMOTE_SUMMARY_TTL_MS) return null;
+      return normalizeChecklistRemoteSummary(checklistRemoteSummaryCache.summary, checklistRemoteSummaryCache.summary && checklistRemoteSummaryCache.summary.total);
+    }
+
+    function primeChecklistRemoteSummary(filters, options) {
+      const client = getChecklistRemoteSummaryClient();
+      if (!client) return Promise.resolve(null);
+      const summaryFilters = getChecklistRemoteSummaryFilters(filters);
+      const signature = getChecklistRemoteSummarySignature(summaryFilters);
+      const force = !!(options && options.force);
+      if (!force && checklistRemoteSummaryCache.signature === signature && checklistRemoteSummaryCache.promise) {
+        return checklistRemoteSummaryCache.promise;
+      }
+      const loadSummary = typeof client.getChecklistListSummary === 'function'
+        ? client.getChecklistListSummary.bind(client)
+        : client.listChecklists.bind(client);
+      const promise = loadSummary(summaryFilters).then((response) => {
+        const summary = normalizeChecklistRemoteSummary(response && response.summary, response && response.total);
+        if (checklistRemoteSummaryBootstrapState.signature === signature) resetChecklistRemoteSummaryBootstrapState();
+        checklistRemoteSummaryCache = {
+          signature,
+          summary,
+          fetchedAt: Date.now(),
+          promise: null
+        };
+        return summary;
+      }).catch((error) => {
+        if (checklistRemoteSummaryCache.signature === signature) {
+          checklistRemoteSummaryCache = {
+            ...checklistRemoteSummaryCache,
+            promise: null
+          };
+        }
+        throw error;
+      });
+      checklistRemoteSummaryCache = {
+        signature,
+        summary: checklistRemoteSummaryCache.signature === signature ? checklistRemoteSummaryCache.summary : null,
+        fetchedAt: checklistRemoteSummaryCache.signature === signature ? checklistRemoteSummaryCache.fetchedAt : 0,
+        promise
+      };
+      return promise;
+    }
+
+    function queueChecklistRemoteSummaryBootstrap(filters) {
+      const signature = getChecklistRemoteSummarySignature(filters);
+      if (readChecklistRemoteSummary(filters, false)) {
+        if (checklistRemoteSummaryBootstrapState.signature === signature) resetChecklistRemoteSummaryBootstrapState();
+        return;
+      }
+      if (checklistRemoteSummaryCache.signature === signature && checklistRemoteSummaryCache.promise) return;
+      if (checklistRemoteSummaryBootstrapState.signature !== signature) {
+        resetChecklistRemoteSummaryBootstrapState();
+        checklistRemoteSummaryBootstrapState.signature = signature;
+      }
+      if (checklistRemoteSummaryBootstrapState.timer) return;
+      if (checklistRemoteSummaryBootstrapState.attempt >= CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS.length) return;
+      const delay = CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS[checklistRemoteSummaryBootstrapState.attempt];
+      checklistRemoteSummaryBootstrapState.attempt += 1;
+      checklistRemoteSummaryBootstrapState.timer = window.setTimeout(() => {
+        checklistRemoteSummaryBootstrapState.timer = 0;
+        if (readChecklistRemoteSummary(filters, false)) {
+          resetChecklistRemoteSummaryBootstrapState();
+          return;
+        }
+        primeChecklistRemoteSummary(filters).then((summary) => {
+          if (!String(window.location.hash || '').startsWith('#checklist')) return;
+          if (serializeChecklistRemoteSummary(summary) !== serializeChecklistRemoteSummary(checklistRemotePageState.summary)) {
+            renderChecklistList({ skipSync: true });
+          }
+        }).catch((error) => {
+          console.warn('checklist list summary bootstrap failed', error);
+        }).finally(() => {
+          resetChecklistRemoteSummaryBootstrapState();
+        });
+      }, delay);
+    }
 
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
@@ -748,6 +878,8 @@
     let viewSnapshot;
     let remotePage = null;
     let listSummary;
+    let remoteSummary = null;
+    let renderedSummarySignature = '';
     if (useRemoteList) {
       const remoteFilters = normalizeChecklistRemoteFilters(opts.remoteFilters || {
         limit: checklistRemotePageState.filters.limit,
@@ -756,6 +888,9 @@
         statusBucket: checklistBrowseState.status,
         q: checklistBrowseState.keyword
       });
+      remoteSummary = opts.skipRemoteSummary
+        ? null
+        : readChecklistRemoteSummary(remoteFilters, !!opts.forceRemoteSummary);
       const remotePageResult = await loadChecklistRemotePage(remoteFilters, { force: !!opts.forceRemotePage });
       checklistRemotePageState = {
         filters: remotePageResult.filters,
@@ -767,7 +902,7 @@
       };
       remotePage = remotePageResult.page;
       checklists = checklistRemotePageState.items;
-      listSummary = checklistRemotePageState.summary;
+      listSummary = normalizeChecklistRemoteSummary(remoteSummary || checklistRemotePageState.summary, checklistRemotePageState.total);
       snapshot = getChecklistListSnapshot(checklists);
       viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
     } else {
@@ -776,6 +911,7 @@
       checklists = snapshot.items;
       listSummary = summarizeChecklistListItems(viewSnapshot.filtered);
     }
+    renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page">
       <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報內容，可快速搜尋填報人員與單位狀態。</p></div><div class="page-header-actions">${fillBtn}</div></div>
@@ -803,6 +939,20 @@
       }).catch((error) => {
         console.warn('checklist list background rerender failed', error);
       });
+    }
+    if (useRemoteList && !opts.skipRemoteSummary) {
+      const shouldPrimeRemoteSummary = !!getChecklistRemoteSummaryClient() && (!!opts.forceRemoteSummary || !remoteSummary);
+      if (shouldPrimeRemoteSummary) {
+        primeChecklistRemoteSummary(checklistRemotePageState.filters, { force: !!opts.forceRemoteSummary }).then((nextSummary) => {
+          if (!String(window.location.hash || '').startsWith('#checklist')) return;
+          if (serializeChecklistRemoteSummary(nextSummary) === renderedSummarySignature) return;
+          renderChecklistList({ skipSync: true });
+        }).catch((error) => {
+          console.warn('checklist list remote summary sync failed', error);
+        });
+      } else if (!remoteSummary) {
+        queueChecklistRemoteSummaryBootstrap(checklistRemotePageState.filters);
+      }
     }
 
     const keywordEl = document.getElementById('cl-list-keyword');

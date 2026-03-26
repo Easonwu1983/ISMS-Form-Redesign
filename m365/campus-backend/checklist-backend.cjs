@@ -199,6 +199,7 @@ function createChecklistRouter(deps) {
       String(params.get('auditYear') || '').trim(),
       String(params.get('fillerUsername') || '').trim(),
       String(params.get('q') || '').trim(),
+      String(params.get('summaryOnly') || '').trim(),
       String(params.get('limit') || '').trim(),
       String(params.get('offset') || '').trim()
     ].join('::');
@@ -548,6 +549,7 @@ function createChecklistRouter(deps) {
     const startedAt = Date.now();
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
+      const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
       const rows = await listAllEntries();
       const cacheKey = buildChecklistQueryCacheKey(authz, url, state.entriesCacheAt || rows.length);
       const cached = readQueryCache(state.queryCache, cacheKey);
@@ -570,12 +572,20 @@ function createChecklistRouter(deps) {
       const visibleItems = page.paged
         ? items.slice(page.offset, page.offset + page.limit)
         : items;
+      const responsePage = summaryOnly
+        ? {
+            ...page,
+            returned: 0,
+            pageStart: 0,
+            pageEnd: 0
+          }
+        : page;
       const responseBody = {
         ok: true,
-        items: visibleItems.map(mapChecklistForClient),
+        items: summaryOnly ? [] : visibleItems.map(mapChecklistForClient),
         total: items.length,
         summary: summarizeChecklistItems(items),
-        page,
+        page: responsePage,
         contractVersion: CONTRACT_VERSION
       };
       const cachedBody = writeQueryCache(state.queryCache, cacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);

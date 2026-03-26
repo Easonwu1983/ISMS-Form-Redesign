@@ -1471,6 +1471,26 @@
       };
     }
 
+    async function getChecklistListSummary(query) {
+      const filters = query && typeof query === 'object' ? { ...query } : {};
+      filters.summaryOnly = '1';
+      const response = await listChecklists(filters);
+      return {
+        ok: !!response.ok,
+        mode: response.mode,
+        summary: response.summary && typeof response.summary === 'object'
+          ? {
+              total: Number(response.summary.total || 0),
+              editing: Number(response.summary.editing || 0),
+              pendingExport: Number(response.summary.pendingExport || 0),
+              closed: Number(response.summary.closed || 0)
+            }
+          : { total: 0, editing: 0, pendingExport: 0, closed: 0 },
+        total: Math.max(0, Number(response.total) || 0),
+        raw: response.raw
+      };
+    }
+
     async function getChecklistRecord(id) {
       const body = await requestChecklist('/' + encodeURIComponent(cleanText(id)), {
         method: 'GET'
@@ -1945,6 +1965,7 @@
       reviewCorrectiveActionTracking,
       getChecklistHealth,
       listChecklists,
+      getChecklistListSummary,
       getChecklistRecord,
       saveChecklistDraft,
       submitChecklist,
