@@ -567,7 +567,7 @@
     function getTrainingRemoteListSummaryClient() {
       if (typeof window === 'undefined') return null;
       const client = window._m365ApiClient;
-      if (!client || typeof client.listTrainingForms !== 'function') return null;
+      if (!client || (typeof client.getTrainingFormsSummary !== 'function' && typeof client.listTrainingForms !== 'function')) return null;
       if (typeof client.getTrainingMode === 'function') {
         const mode = String(client.getTrainingMode() || '').trim();
         if (mode && mode !== 'm365-api') return null;
@@ -648,7 +648,10 @@
         && trainingRemoteListSummaryCache.promise) {
         return trainingRemoteListSummaryCache.promise;
       }
-      const promise = client.listTrainingForms().then((response) => {
+      const loadSummary = typeof client.getTrainingFormsSummary === 'function'
+        ? client.getTrainingFormsSummary.bind(client)
+        : client.listTrainingForms.bind(client);
+      const promise = loadSummary().then((response) => {
         const summary = normalizeTrainingListCounts(response && response.summary);
         if (trainingRemoteListSummaryBootstrapState.signature === signature) resetTrainingRemoteListSummaryBootstrapState();
         trainingRemoteListSummaryCache = {

@@ -28,11 +28,11 @@ function pickExecutablePath() {
   return undefined;
 }
 
-async function login(page) {
+async function login(page, username = 'easonwu', password = '2wsx#EDC') {
   await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
   await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
-  await page.fill('[data-testid="login-user"]', 'easonwu');
-  await page.fill('[data-testid="login-pass"]', '2wsx#EDC');
+  await page.fill('[data-testid="login-user"]', username);
+  await page.fill('[data-testid="login-pass"]', password);
   await Promise.all([
     page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
     page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
@@ -42,6 +42,77 @@ async function login(page) {
   const sidebarVersion = await page.locator('.sidebar-footer [data-testid="app-version-chip"]').first().textContent();
   if (!String(sidebarVersion || '').trim()) {
     throw new Error('sidebar version chip missing');
+  }
+}
+
+async function runUnitAdminScopeChecks(browser, pushStep) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+  try {
+    await login(page, 'unit1', 'unit123');
+    pushStep('unit-admin:login', true, 'unit admin login succeeded');
+
+    const apiState = await page.evaluate(async () => {
+      const user = window._authModule && typeof window._authModule.currentUser === 'function'
+        ? window._authModule.currentUser()
+        : null;
+      const token = String(user && user.sessionToken || '').trim();
+      if (!token) throw new Error('missing unit admin session token');
+      const fetchJson = async (path) => {
+        const response = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+        let json = null;
+        try { json = await response.json(); } catch (_) { json = null; }
+        return { status: response.status, json };
+      };
+      const selfUser = await fetchJson('/api/system-users/unit1');
+      const adminUser = await fetchJson('/api/system-users/easonwu');
+      const reviewScopes = await fetchJson('/api/review-scopes');
+      return {
+        selfStatus: selfUser.status,
+        selfUsername: selfUser.json && selfUser.json.item && selfUser.json.item.username,
+        selfHasPassword: !!(selfUser.json && selfUser.json.item && Object.prototype.hasOwnProperty.call(selfUser.json.item, 'password')),
+        adminStatus: adminUser.status,
+        reviewStatus: reviewScopes.status,
+        reviewUsernames: Array.isArray(reviewScopes.json && reviewScopes.json.items)
+          ? reviewScopes.json.items.map((item) => String(item && item.username || '').trim()).filter(Boolean)
+          : []
+      };
+    });
+    if (apiState.selfStatus !== 200 || apiState.selfUsername !== 'unit1') {
+      throw new Error(`unit admin self detail invalid: ${JSON.stringify(apiState)}`);
+    }
+    if (apiState.selfHasPassword) {
+      throw new Error('unit admin self detail leaked password');
+    }
+    if (apiState.adminStatus === 200) {
+      throw new Error('unit admin unexpectedly read admin detail');
+    }
+    if (apiState.reviewStatus !== 200) {
+      throw new Error(`unit admin review scopes failed: ${apiState.reviewStatus}`);
+    }
+    const foreignUsernames = apiState.reviewUsernames.filter((username) => username !== 'unit1');
+    if (foreignUsernames.length) {
+      throw new Error(`unit admin review scopes leaked: ${foreignUsernames.join(', ')}`);
+    }
+    pushStep('unit-admin:api-scope', true, `reviewScopes=${apiState.reviewUsernames.length}`);
+
+    await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
+    const usersHash = await page.evaluate(() => String(window.location.hash || ''));
+    if (usersHash.startsWith('#users')) {
+      throw new Error('unit admin reached users page');
+    }
+    pushStep('unit-admin:users-denied', true, usersHash || '#');
+
+    await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(1200);
+    const reviewHash = await page.evaluate(() => String(window.location.hash || ''));
+    if (reviewHash.startsWith('#unit-contact-review')) {
+      throw new Error('unit admin reached unit-contact-review');
+    }
+    pushStep('unit-admin:unit-contact-review-denied', true, reviewHash || '#');
+  } finally {
+    await context.close();
   }
 }
 
@@ -833,6 +904,7 @@ async function run() {
     }
     pushStep('unit-review:loaded', true, 'unit review page ready');
 
+    await runUnitAdminScopeChecks(browser, pushStep);
     await runPublicRouteChecks(browser, pushStep);
     await runVisualBaselineChecks(browser, pushStep);
     await runPublicVisualBaselineChecks(browser, pushStep);

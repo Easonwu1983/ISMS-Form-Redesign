@@ -443,7 +443,8 @@ function createTrainingRouter(deps) {
       String(params.get('statsUnit') || '').trim(),
       String(params.get('trainingYear') || '').trim(),
       String(params.get('fillerUsername') || '').trim(),
-      String(params.get('q') || '').trim().toLowerCase()
+      String(params.get('q') || '').trim().toLowerCase(),
+      String(params.get('summaryOnly') || '').trim()
     ].join('::');
   }
 
@@ -974,6 +975,7 @@ function createTrainingRouter(deps) {
       const startedAt = Date.now();
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllForms();
+      const summaryOnly = String(url.searchParams.get('summaryOnly') || '').trim() === '1';
       const cacheKey = buildFormQuerySignature(authz, url);
       const cached = readFormsQueryCache(cacheKey);
       if (cached) {
@@ -981,6 +983,7 @@ function createTrainingRouter(deps) {
           username: authz.username,
           totalRows: rows.length,
           total: cached.total,
+          summaryOnly,
           durationMs: Date.now() - startedAt
         });
         await writeJson(res, buildJsonResponse(200, cached), origin);
@@ -991,7 +994,7 @@ function createTrainingRouter(deps) {
       const summary = summarizeTrainingForms(items);
       const responseBody = {
         ok: true,
-        items: items.map(mapTrainingFormForClient),
+        items: summaryOnly ? [] : items.map(mapTrainingFormForClient),
         summary,
         total: items.length,
         contractVersion: CONTRACT_VERSION
@@ -1003,6 +1006,7 @@ function createTrainingRouter(deps) {
         visibleRows: items.length,
         submitted: summary.submitted,
         pending: summary.pending,
+        summaryOnly,
         durationMs: Date.now() - startedAt
       });
       await writeJson(res, buildJsonResponse(200, cachedBody), origin);

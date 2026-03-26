@@ -1613,6 +1613,19 @@
       };
     }
 
+    async function getTrainingFormsSummary(query) {
+      const filters = query && typeof query === 'object' ? { ...query } : {};
+      filters.summaryOnly = '1';
+      const response = await listTrainingForms(filters);
+      return {
+        ok: !!response.ok,
+        mode: response.mode,
+        summary: normalizeTrainingListSummary(response.summary),
+        total: Math.max(0, Number(response.total) || 0),
+        raw: response.raw
+      };
+    }
+
     async function getTrainingFormRecord(id) {
       const body = await requestTrainingForms('/' + encodeURIComponent(cleanText(id)), {
         method: 'GET'
@@ -1930,6 +1943,7 @@
       deleteChecklistsByYear,
       getTrainingHealth,
       listTrainingForms,
+      getTrainingFormsSummary,
       getTrainingFormRecord,
       saveTrainingDraft,
       submitTrainingStepOne,

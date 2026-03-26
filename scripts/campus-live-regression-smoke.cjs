@@ -392,6 +392,22 @@ async function run() {
     };
   }, { critical: true });
 
+  await step('training-forms summary-only present', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/training/forms?summaryOnly=1`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const summary = json && json.summary && typeof json.summary === 'object' ? json.summary : null;
+    if (!summary) throw new Error('training forms summary-only summary missing');
+    if (items.length !== 0) throw new Error(`training forms summary-only should not return items, got ${items.length}`);
+    const total = Number(summary.total || 0);
+    const draft = Number(summary.draft || 0);
+    const pending = Number(summary.pending || 0);
+    const submitted = Number(summary.submitted || 0);
+    const returned = Number(summary.returned || 0);
+    if ((draft + pending + submitted + returned) !== total) throw new Error('training forms summary-only bucket mismatch');
+    return { total, pending, submitted };
+  }, { critical: true });
+
   await step('auth verify authorized', async () => {
     const verification = await requestAdminJson(`${DEFAULT_BASE}/api/auth/verify`);
     const { response, json } = verification;
