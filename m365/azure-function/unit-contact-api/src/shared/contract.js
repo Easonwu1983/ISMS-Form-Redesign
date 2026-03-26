@@ -524,13 +524,14 @@ function mapGraphFieldsToApplication(fields) {
     unitCode: fields.UnitCode,
     contactType: fields.ContactType,
     note: noteMeta.note,
+    securityRoles: fields.SecurityRolesJson || noteMeta.meta.securityRoles,
     authorizedUnits: parseUnitList(fields.AuthorizedUnitsJson || noteMeta.meta.authorizedUnits || noteMeta.meta.scopeUnits, fields.PrimaryUnitName || fields.UnitValue),
-    authorizationDocAttachmentId: fields.AuthorizationDocAttachmentId,
-    authorizationDocFileName: fields.AuthorizationDocFileName,
-    authorizationDocContentType: fields.AuthorizationDocContentType,
-    authorizationDocSize: fields.AuthorizationDocSize,
-    authorizationDocUploadedAt: fields.AuthorizationDocUploadedAt,
-    authorizationDocDriveItemId: fields.AuthorizationDocDriveItemId,
+    authorizationDocAttachmentId: fields.AuthorizationDocAttachmentId || noteMeta.meta.authorizationDocAttachmentId,
+    authorizationDocFileName: fields.AuthorizationDocFileName || noteMeta.meta.authorizationDocFileName,
+    authorizationDocContentType: fields.AuthorizationDocContentType || noteMeta.meta.authorizationDocContentType,
+    authorizationDocSize: fields.AuthorizationDocSize || noteMeta.meta.authorizationDocSize,
+    authorizationDocUploadedAt: fields.AuthorizationDocUploadedAt || noteMeta.meta.authorizationDocUploadedAt,
+    authorizationDocDriveItemId: fields.AuthorizationDocDriveItemId || noteMeta.meta.authorizationDocDriveItemId,
     status: fields.Status,
     statusLabel: fields.StatusLabel,
     statusDetail: fields.StatusDetail || fields.ReviewComment,
@@ -543,7 +544,7 @@ function mapGraphFieldsToApplication(fields) {
     reviewComment: fields.ReviewComment,
     activationSentAt: fields.ActivationSentAt,
     activatedAt: fields.ActivatedAt,
-    externalUserId: fields.ExternalUserId
+    externalUserId: fields.ExternalUserId || noteMeta.meta.externalUserId || noteMeta.meta.requestedUsername
   });
 }
 
