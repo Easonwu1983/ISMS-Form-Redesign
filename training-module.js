@@ -112,8 +112,10 @@
     let trainingDashboardUnitsCache = { signature: '', units: [] };
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
     let trainingRemoteListSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+    let trainingRemoteListSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
     const TRAINING_REMOTE_LIST_SUMMARY_TTL_MS = 15000;
+    const TRAINING_REMOTE_LIST_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
     const TRAINING_ROSTER_PAGE_LIMIT_OPTIONS = ['100', '200', '500'];
     const TRAINING_ROSTER_DEFAULT_PAGE_LIMIT = '200';
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
@@ -566,8 +568,64 @@
       if (typeof window === 'undefined') return null;
       const client = window._m365ApiClient;
       if (!client || typeof client.listTrainingForms !== 'function') return null;
-      if (typeof client.getTrainingMode === 'function' && client.getTrainingMode() !== 'm365-api') return null;
+      if (typeof client.getTrainingMode === 'function') {
+        const mode = String(client.getTrainingMode() || '').trim();
+        if (mode && mode !== 'm365-api') return null;
+      }
       return client;
+    }
+
+    function resetTrainingRemoteListSummaryBootstrapState() {
+      const timer = Number(trainingRemoteListSummaryBootstrapState.timer || 0);
+      if (timer && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+        try { window.clearTimeout(timer); } catch (_) { }
+      }
+      trainingRemoteListSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
+    }
+
+    function queueTrainingRemoteListSummaryBootstrap(user) {
+      if (typeof window === 'undefined' || typeof window.setTimeout !== 'function') return;
+      const signature = getTrainingRemoteListSummarySignature(user);
+      if (!signature) return;
+      if (readTrainingRemoteListSummary(user, false)) {
+        if (trainingRemoteListSummaryBootstrapState.signature === signature) resetTrainingRemoteListSummaryBootstrapState();
+        return;
+      }
+      if (trainingRemoteListSummaryCache.signature === signature && trainingRemoteListSummaryCache.promise) return;
+      if (trainingRemoteListSummaryBootstrapState.signature !== signature) {
+        resetTrainingRemoteListSummaryBootstrapState();
+        trainingRemoteListSummaryBootstrapState.signature = signature;
+      }
+      if (trainingRemoteListSummaryBootstrapState.timer) return;
+      if (trainingRemoteListSummaryBootstrapState.attempt >= TRAINING_REMOTE_LIST_SUMMARY_BOOTSTRAP_DELAYS.length) return;
+      const delay = TRAINING_REMOTE_LIST_SUMMARY_BOOTSTRAP_DELAYS[trainingRemoteListSummaryBootstrapState.attempt];
+      trainingRemoteListSummaryBootstrapState.attempt += 1;
+      trainingRemoteListSummaryBootstrapState.timer = window.setTimeout(() => {
+        trainingRemoteListSummaryBootstrapState.timer = 0;
+        if (!String(window.location.hash || '').startsWith('#training')) {
+          resetTrainingRemoteListSummaryBootstrapState();
+          return;
+        }
+        if (readTrainingRemoteListSummary(user, false)) {
+          resetTrainingRemoteListSummaryBootstrapState();
+          return;
+        }
+        if (!getTrainingRemoteListSummaryClient()) {
+          queueTrainingRemoteListSummaryBootstrap(user);
+          return;
+        }
+        primeTrainingRemoteListSummary(user).then((summary) => {
+          if (!String(window.location.hash || '').startsWith('#training')) return;
+          const localSummary = getTrainingListSnapshot(user).summary;
+          if (serializeTrainingListCounts(summary) !== serializeTrainingListCounts(localSummary)) {
+            renderTraining({ skipSync: true });
+          }
+        }).catch((error) => {
+          console.warn('training list summary bootstrap failed', error);
+        }).finally(() => {
+          resetTrainingRemoteListSummaryBootstrapState();
+        });
+      }, delay);
     }
 
     function readTrainingRemoteListSummary(user, force) {
@@ -592,6 +650,7 @@
       }
       const promise = client.listTrainingForms().then((response) => {
         const summary = normalizeTrainingListCounts(response && response.summary);
+        if (trainingRemoteListSummaryBootstrapState.signature === signature) resetTrainingRemoteListSummaryBootstrapState();
         trainingRemoteListSummaryCache = {
           signature,
           summary,
@@ -1462,16 +1521,18 @@
       + contentHtml
       + '</div>';
 
-    if (!opts.skipRemoteSummary) {
-      const shouldPrimeRemoteSummary = !!getTrainingRemoteListSummaryClient() && (!!opts.forceRemoteSummary || !remoteSummary);
-      if (shouldPrimeRemoteSummary) {
-        primeTrainingRemoteListSummary(accessProfile, { force: !!opts.forceRemoteSummary }).then((nextSummary) => {
-          if (!String(window.location.hash || '').startsWith('#training')) return;
+      if (!opts.skipRemoteSummary) {
+        const shouldPrimeRemoteSummary = !!getTrainingRemoteListSummaryClient() && (!!opts.forceRemoteSummary || !remoteSummary);
+        if (shouldPrimeRemoteSummary) {
+          primeTrainingRemoteListSummary(accessProfile, { force: !!opts.forceRemoteSummary }).then((nextSummary) => {
+            if (!String(window.location.hash || '').startsWith('#training')) return;
           if (serializeTrainingListCounts(nextSummary) === renderedSummarySignature) return;
           renderTraining({ skipSync: true });
         }).catch((error) => {
           console.warn('training list remote summary sync failed', error);
         });
+      } else if (!remoteSummary) {
+        queueTrainingRemoteListSummaryBootstrap(accessProfile);
       }
     }
 

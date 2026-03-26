@@ -32,6 +32,20 @@ const KNOWN_TRAINING_STATS_UNIT = '計算機及資訊網路中心';
     return { username: json.item.username, role: json.item.role, token };
   }
 
+  async function loginUnitAdminSession() {
+    const { response, json } = await requestJson(`${DEFAULT_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'auth.login', payload: { username: 'unit1', password: 'unit123' } })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!json || !json.ok || !json.item || json.item.username !== 'unit1') throw new Error('unit admin login response invalid');
+    if (Object.prototype.hasOwnProperty.call(json.item || {}, 'password')) throw new Error('password field leaked in unit admin auth response');
+    const token = String(json && json.session && json.session.token || '').trim();
+    if (!token) throw new Error('missing unit admin session token');
+    return { username: json.item.username, role: json.item.role, token };
+  }
+
 async function run() {
   const report = {
     startedAt: new Date().toISOString(),
@@ -39,6 +53,7 @@ async function run() {
     checks: []
   };
   let adminSessionToken = '';
+  let unitAdminSessionToken = '';
 
   async function requestAdminJson(url, options = {}, retryOn401 = true) {
     const headers = { ...(options.headers || {}) };
@@ -50,6 +65,21 @@ async function run() {
       const session = await loginAdminSession();
       adminSessionToken = session.token;
       const retryHeaders = { ...(options.headers || {}), Authorization: `Bearer ${adminSessionToken}` };
+      response = await requestJson(url, { ...options, headers: retryHeaders });
+    }
+    return response;
+  }
+
+  async function requestUnitAdminJson(url, options = {}, retryOn401 = true) {
+    const headers = { ...(options.headers || {}) };
+    if (!headers.Authorization && unitAdminSessionToken) {
+      headers.Authorization = `Bearer ${unitAdminSessionToken}`;
+    }
+    let response = await requestJson(url, { ...options, headers });
+    if (retryOn401 && response.response.status === 401) {
+      const session = await loginUnitAdminSession();
+      unitAdminSessionToken = session.token;
+      const retryHeaders = { ...(options.headers || {}), Authorization: `Bearer ${unitAdminSessionToken}` };
       response = await requestJson(url, { ...options, headers: retryHeaders });
     }
     return response;
@@ -213,6 +243,12 @@ async function run() {
     return { status: response.status, ok: json && json.ok === false };
   }, { critical: true });
 
+  await step('unit admin login success', async () => {
+    const session = await loginUnitAdminSession();
+    unitAdminSessionToken = session.token;
+    return { username: session.username, role: session.role };
+  }, { critical: true });
+
   await step('system-users list anonymous denied', async () => {
     const { response } = await requestJson(`${DEFAULT_BASE}/api/system-users`);
     if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`);
@@ -229,6 +265,41 @@ async function run() {
       throw new Error('password field leaked in system-users list');
     }
     return { count };
+  }, { critical: true });
+
+  await step('unit-admin system-user self detail authorized', async () => {
+    const { response, json } = await requestUnitAdminJson(`${DEFAULT_BASE}/api/system-users/unit1`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const item = json && json.item && typeof json.item === 'object' ? json.item : null;
+    if (!item || item.username !== 'unit1') throw new Error('unit admin self detail invalid');
+    if (Object.prototype.hasOwnProperty.call(item || {}, 'password')) throw new Error('password field leaked in system-user detail');
+    return { username: item.username };
+  }, { critical: true });
+
+  await step('unit-admin system-user foreign detail denied', async () => {
+    const { response } = await requestUnitAdminJson(`${DEFAULT_BASE}/api/system-users/easonwu`, {}, false);
+    if (response.status !== 403) throw new Error(`expected 403, got ${response.status}`);
+    return { status: response.status };
+  }, { critical: true });
+
+  await step('unit-admin review-scopes scoped to self', async () => {
+    const { response, json } = await requestUnitAdminJson(`${DEFAULT_BASE}/api/review-scopes`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const usernames = items.map((item) => String(item && item.username || '').trim()).filter(Boolean);
+    const foreignUsernames = usernames.filter((username) => username !== 'unit1');
+    if (foreignUsernames.length) throw new Error(`foreign review scopes leaked: ${foreignUsernames.join(', ')}`);
+    return { count: items.length };
+  }, { critical: true });
+
+  await step('unit-admin unit-contact review denied', async () => {
+    const { response } = await requestUnitAdminJson(`${DEFAULT_BASE}/api/unit-contact/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }, false);
+    if (response.status !== 403) throw new Error(`expected 403, got ${response.status}`);
+    return { status: response.status };
   }, { critical: true });
 
   await step('audit-trail list authorized', async () => {
