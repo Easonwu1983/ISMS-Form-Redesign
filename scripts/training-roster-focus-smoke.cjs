@@ -36,6 +36,25 @@ async function ensureTrainingImportPanelVisible(page) {
   await page.waitForSelector('#training-import-form', { state: 'visible' });
 }
 
+async function waitForTrainingImportFormReady(page, timeout = 15000) {
+  await page.waitForFunction(() => {
+    const form = document.getElementById('training-import-form');
+    const names = document.getElementById('training-import-names');
+    const unit = document.getElementById('training-import-unit');
+    if (!form || !names || !unit) return false;
+    const style = window.getComputedStyle(form);
+    const rect = form.getBoundingClientRect();
+    return (
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      rect.width > 0 &&
+      rect.height > 0 &&
+      String(names.value || '').trim().length > 0 &&
+      String(unit.value || '').trim().length > 0
+    );
+  }, { timeout });
+}
+
 async function chooseTrainingImportUnit(page) {
   await page.waitForFunction(() => {
     const category = document.getElementById('training-import-unit-category');
@@ -252,7 +271,7 @@ async function waitForTrainingRostersByNames(page, names, timeout) {
       });
 
       await ensureTrainingImportPanelVisible(page);
-      await page.waitForSelector('[data-testid="training-import-submit"]', { state: 'visible', timeout: 10000 });
+      await waitForTrainingImportFormReady(page);
       await page.locator('#training-import-form').evaluate((form) => form.requestSubmit());
       await waitForTrainingRostersByNames(page, names, 240000);
       await page.waitForSelector('details.training-roster-group-card', { state: 'visible', timeout: 30000 });

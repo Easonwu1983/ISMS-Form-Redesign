@@ -399,8 +399,21 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03b', 'Admin', 'Unit governance is grouped by the same categories', async () => {
-      await gotoHash(page, 'unit-review');
-      await page.waitForSelector('.governance-category-stack .governance-category-card');
+      let governanceReady = false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await gotoHash(page, 'unit-review');
+        try {
+          await page.waitForSelector('.governance-category-stack .governance-category-card', { timeout: 15000 });
+          governanceReady = true;
+          break;
+        } catch (error) {
+          if (attempt === 1) throw error;
+          await page.waitForTimeout(250);
+        }
+      }
+      if (!governanceReady) {
+        throw new Error('unit governance cards did not render');
+      }
       const structure = await page.evaluate(() => {
         const root = document.querySelector('#app') || document.body;
         return {

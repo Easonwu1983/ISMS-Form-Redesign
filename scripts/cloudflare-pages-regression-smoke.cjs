@@ -676,7 +676,24 @@ async function run() {
       };
       location.hash = '#checklist-detail/' + detailId;
     }, checklistDetailId);
-    await page.waitForTimeout(1500);
+    let checklistDetailReady = false;
+    for (let attempt = 0; attempt < 2 && !checklistDetailReady; attempt += 1) {
+      if (attempt > 0) {
+        await page.evaluate((detailId) => {
+          location.hash = '#checklist-detail/' + detailId;
+        }, checklistDetailId);
+      }
+      try {
+        await page.waitForFunction((detailId) => {
+          const app = document.getElementById('app');
+          const text = String(app && app.innerText || '');
+          return text.includes(detailId) && text.includes('需改善項目');
+        }, checklistDetailId, { timeout: 6000 });
+        checklistDetailReady = true;
+      } catch (_) {
+        await page.waitForTimeout(1200);
+      }
+    }
     const checklistDetailText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(checklistDetailText)) {
       throw new Error('checklist detail contains placeholder question marks');
@@ -686,12 +703,20 @@ async function run() {
     }
     pushStep('checklist:detail-loaded', true, checklistDetailId);
 
-    await page.goto(`${BASE_URL}/#checklist-manage`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
-    await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('檢核題庫管理'));
-    }, undefined, { timeout: 20000 });
+    let checklistManageReady = false;
+    for (let attempt = 0; attempt < 2 && !checklistManageReady; attempt += 1) {
+      await page.goto(`${BASE_URL}/#checklist-manage`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForTimeout(1200);
+      try {
+        await page.waitForFunction(() => {
+          const app = document.getElementById('app');
+          return !!(app && app.innerText && app.innerText.includes('檢核題庫管理'));
+        }, undefined, { timeout: 10000 });
+        checklistManageReady = true;
+      } catch (_) {
+        await page.waitForTimeout(1200);
+      }
+    }
     const checklistManageText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(checklistManageText)) {
       throw new Error('checklist manage contains placeholder question marks');

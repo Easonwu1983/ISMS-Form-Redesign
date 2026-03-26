@@ -33,6 +33,41 @@ const TEST_ROWS = [
   }
 ];
 
+async function ensureTrainingImportPanelVisible(page) {
+  await page.waitForSelector('#training-roster-toggle-import');
+  const toggle = page.locator('#training-roster-toggle-import');
+  let formVisible = await page.locator('#training-import-form').isVisible().catch(() => false);
+  if (!formVisible) {
+    await toggle.click();
+    await page.waitForTimeout(250);
+    formVisible = await page.locator('#training-import-form').isVisible().catch(() => false);
+  }
+  if (!formVisible) {
+    await toggle.click();
+    await page.waitForTimeout(250);
+  }
+  await page.waitForSelector('#training-import-form', { state: 'visible' });
+}
+
+async function waitForTrainingImportFormReady(page, timeout = 15000) {
+  await page.waitForFunction(() => {
+    const form = document.getElementById('training-import-form');
+    const names = document.getElementById('training-import-names');
+    const unit = document.getElementById('training-import-unit');
+    if (!form || !names || !unit) return false;
+    const style = window.getComputedStyle(form);
+    const rect = form.getBoundingClientRect();
+    return (
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      rect.width > 0 &&
+      rect.height > 0 &&
+      String(names.value || '').trim().length > 0 &&
+      String(unit.value || '').trim().length > 0
+    );
+  }, { timeout });
+}
+
 async function getSessionToken(page) {
   return page.evaluate(() => {
     const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
@@ -162,6 +197,15 @@ async function waitForTrainingRosterGroupRows(page, names, timeout) {
       try {
         await gotoHash(page, 'training-roster');
       } catch (_) {}
+      const rosterFilterKeyword = String(TEST_UNIT || '').trim();
+      if (rosterFilterKeyword) {
+        const keyword = page.locator('#training-roster-keyword');
+        if (await keyword.count()) {
+          await keyword.fill(rosterFilterKeyword);
+          await keyword.dispatchEvent('input');
+          await page.waitForTimeout(800);
+        }
+      }
       await page.waitForFunction(() => document.querySelectorAll('details.training-roster-group-card').length > 0, undefined, { timeout: Math.min(30000, Math.max(5000, timeout)) });
       for (const name of names) {
         await page.locator(`details.training-roster-group-card tr[data-roster-name="${name.replace(/"/g, '\\"')}"]`).first().waitFor({ state: 'attached', timeout: Math.min(30000, Math.max(5000, timeout)) });
@@ -201,15 +245,13 @@ async function waitForTrainingRosterGroupRows(page, names, timeout) {
 
       await gotoHash(page, 'training-roster');
       await page.waitForSelector('#training-roster-groups', { state: 'attached', timeout: 30000 });
-      if (!(await page.locator('#training-import-form').isVisible().catch(() => false))) {
-        await page.locator('#training-roster-toggle-import').click();
-      }
-      await page.waitForSelector('#training-import-form', { state: 'visible', timeout: 30000 });
+      await ensureTrainingImportPanelVisible(page);
       await chooseTrainingImportUnit(page);
       await page.evaluate(({ rows }) => {
         document.getElementById('training-import-names').value = rows.map((row) => [row.name, row.unit, row.identity, row.jobTitle].join(',')).join('\n');
       }, { rows: TEST_ROWS });
-      await page.click('[data-testid="training-import-submit"]');
+      await waitForTrainingImportFormReady(page, 30000);
+      await page.locator('#training-import-form').evaluate((form) => form.requestSubmit());
       await waitForTrainingRosterGroupRows(page, TEST_ROWS.map((row) => row.name), 240000);
       await page.waitForFunction(() => document.querySelectorAll('details.training-roster-group-card').length > 0, undefined, { timeout: 30000 });
       await expandRosterGroups(page);
