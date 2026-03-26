@@ -186,6 +186,16 @@
       signature: '',
       value: []
     };
+    let unitGovernanceRenderCache = {
+      signature: '',
+      cardsHtml: ''
+    };
+    let securityWindowRenderCache = {
+      unitCardsSignature: '',
+      unitCardsHtml: '',
+      peopleRowsSignature: '',
+      peopleRowsHtml: ''
+    };
 
     function normalizeAdminUnitList(units) {
       const source = Array.isArray(units) ? units : [];
@@ -1435,6 +1445,116 @@
       return `<div class="security-window-category-stack">${groups.map((group, index) => renderSecurityWindowCategoryCard(group, index)).join('')}</div>`;
     }
 
+    function buildUnitGovernanceCardsRenderSignature(items, filters, page, loadedAt) {
+      const safeFilters = filters || {};
+      const safePage = page || {};
+      const rows = Array.isArray(items) ? items : [];
+      return JSON.stringify([
+        String(loadedAt || '').trim(),
+        String(safeFilters.keyword || '').trim(),
+        String(safeFilters.mode || 'all').trim(),
+        String(safeFilters.category || 'all').trim(),
+        Number(safePage.offset || 0),
+        Number(safePage.limit || 12),
+        Number(safePage.total || rows.length),
+        rows.map((item) => [
+          String(item && item.unit || '').trim(),
+          String(item && item.category || '').trim(),
+          String(item && item.mode || '').trim(),
+          Number(Array.isArray(item && item.children) ? item.children.length : 0),
+          String(item && item.updatedAt || '').trim()
+        ])
+      ]);
+    }
+
+    function getCachedUnitGovernanceCardsHtml(items, filters, page, loadedAt) {
+      const signature = buildUnitGovernanceCardsRenderSignature(items, filters, page, loadedAt);
+      if (unitGovernanceRenderCache.signature === signature && unitGovernanceRenderCache.cardsHtml) {
+        return unitGovernanceRenderCache.cardsHtml;
+      }
+      const groupedItems = groupGovernanceUnitsByCategory(items);
+      const cardsHtml = groupedItems.length
+        ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index)).join('')
+        : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
+      unitGovernanceRenderCache = {
+        signature,
+        cardsHtml
+      };
+      return cardsHtml;
+    }
+
+    function buildSecurityWindowUnitCardsRenderSignature(units, filters, page, generatedAt) {
+      const safeFilters = filters || {};
+      const safePage = page || {};
+      const rows = Array.isArray(units) ? units : [];
+      return JSON.stringify([
+        String(generatedAt || '').trim(),
+        String(safeFilters.keyword || '').trim(),
+        String(safeFilters.status || 'all').trim(),
+        String(safeFilters.category || 'all').trim(),
+        Number(safePage.offset || 0),
+        Number(safePage.limit || 12),
+        Number(safePage.total || rows.length),
+        rows.map((item) => [
+          String(item && item.unit || '').trim(),
+          String(item && item.category || '').trim(),
+          String(item && item.mode || '').trim(),
+          String(item && item.status || '').trim(),
+          Number(Array.isArray(item && item.children) ? item.children.length : 0),
+          Number(Array.isArray(item && item.holders) ? item.holders.length : 0),
+          Number(Array.isArray(item && item.pending) ? item.pending.length : 0)
+        ])
+      ]);
+    }
+
+    function getCachedSecurityWindowUnitCardsHtml(units, filters, page, generatedAt) {
+      const signature = buildSecurityWindowUnitCardsRenderSignature(units, filters, page, generatedAt);
+      if (securityWindowRenderCache.unitCardsSignature === signature && securityWindowRenderCache.unitCardsHtml) {
+        return securityWindowRenderCache.unitCardsHtml;
+      }
+      const unitCardsHtml = renderSecurityWindowUnitCards(units);
+      securityWindowRenderCache.unitCardsSignature = signature;
+      securityWindowRenderCache.unitCardsHtml = unitCardsHtml;
+      return unitCardsHtml;
+    }
+
+    function buildSecurityWindowPeopleRowsRenderSignature(people, filters, generatedAt) {
+      const safeFilters = filters || {};
+      const rows = Array.isArray(people) ? people : [];
+      return JSON.stringify([
+        String(generatedAt || '').trim(),
+        String(safeFilters.keyword || '').trim(),
+        String(safeFilters.status || 'all').trim(),
+        String(safeFilters.category || 'all').trim(),
+        rows.length,
+        rows.slice(0, 5).map((item) => [
+          String(item && item.username || '').trim(),
+          String(item && item.activeUnit || '').trim(),
+          Array.isArray(item && item.units) ? item.units.length : 0,
+          Array.isArray(item && item.securityRoles) ? item.securityRoles.join('|') : '',
+          item && item.hasWindow ? 1 : 0
+        ]),
+        rows.slice(-5).map((item) => [
+          String(item && item.username || '').trim(),
+          String(item && item.activeUnit || '').trim(),
+          Array.isArray(item && item.units) ? item.units.length : 0,
+          Array.isArray(item && item.securityRoles) ? item.securityRoles.join('|') : '',
+          item && item.hasWindow ? 1 : 0
+        ])
+      ]);
+    }
+
+    function getCachedSecurityWindowPeopleRowsHtml(people, filters, generatedAt) {
+      const signature = buildSecurityWindowPeopleRowsRenderSignature(people, filters, generatedAt);
+      if (securityWindowRenderCache.peopleRowsSignature === signature && securityWindowRenderCache.peopleRowsHtml) {
+        return securityWindowRenderCache.peopleRowsHtml;
+      }
+      const peopleRowsHtml = renderSecurityWindowPersonRows(people);
+      securityWindowRenderCache.peopleRowsSignature = signature;
+      securityWindowRenderCache.peopleRowsHtml = peopleRowsHtml;
+      return peopleRowsHtml;
+    }
+
     function buildReviewTableShell(key, headersHtml, rowsHtml, options) {
       const config = options || {};
       const toolbarSubtitle = config.toolbarSubtitle
@@ -2076,8 +2196,12 @@
       return;
     }
     const counts = unitGovernanceState.summary || summarizeGovernanceItems(unitGovernanceState.items);
-    const groupedItems = groupGovernanceUnitsByCategory(unitGovernanceState.items);
-    const cardsHtml = groupedItems.length ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index)).join('') : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
+    const cardsHtml = getCachedUnitGovernanceCardsHtml(
+      unitGovernanceState.items,
+      unitGovernanceState.filters,
+      unitGovernanceState.page,
+      unitGovernanceState.lastLoadedAt
+    );
     const governancePagerHtml = renderAdminCollectionPager({
       idPrefix: 'unit-governance',
       actionPrefix: 'admin.unitGovernance',
@@ -2255,8 +2379,17 @@
     securityWindowState.lastLoadedAt = safeInventory.generatedAt || new Date().toISOString();
     securityWindowState.filterSignature = getSecurityWindowFilterSignature(securityWindowState.filters);
     const summary = safeInventory.summary || buildEmptySecurityWindowInventory().summary;
-    const unitCardsHtml = renderSecurityWindowUnitCards(safeInventory.units);
-    const peopleRowsHtml = renderSecurityWindowPersonRows(safeInventory.people);
+    const unitCardsHtml = getCachedSecurityWindowUnitCardsHtml(
+      safeInventory.units,
+      securityWindowState.filters,
+      securityWindowState.page,
+      safeInventory.generatedAt
+    );
+    const peopleRowsHtml = getCachedSecurityWindowPeopleRowsHtml(
+      safeInventory.people,
+      securityWindowState.filters,
+      safeInventory.generatedAt
+    );
     const unitPagerHtml = renderAdminCollectionPager({
       idPrefix: 'security-window',
       actionPrefix: 'admin.securityWindow',
