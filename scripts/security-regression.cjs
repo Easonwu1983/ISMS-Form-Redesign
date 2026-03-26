@@ -276,6 +276,32 @@ async function assertNoXssExecution(page, label) {
       return 'single-scope user has no switcher';
     });
 
+    await runStep(results, 'SEC-02c', 'Unit admin', 'Active unit switch updates training and checklist fill scope', async () => {
+      await login(page, 'unit1', 'unit123');
+      await page.waitForTimeout(150);
+      const access = await page.evaluate(() => {
+        const switcher = document.getElementById('header-unit-switch');
+        return switcher
+          ? Array.from(switcher.options).map((option) => String(option.value || '').trim()).filter(Boolean)
+          : [];
+      });
+      if (access.length < 2) {
+        return 'single-scope user skipped';
+      }
+      const targetUnit = access[1];
+      await page.selectOption('#header-unit-switch', targetUnit);
+      await page.waitForTimeout(250);
+      await gotoHash(page, 'training-fill');
+      await page.waitForSelector('#tr-unit');
+      const trainingUnit = await page.locator('#tr-unit').inputValue();
+      if (String(trainingUnit || '').trim() !== targetUnit) throw new Error('training fill unit did not follow active unit');
+      await gotoHash(page, 'checklist-fill');
+      await page.waitForSelector('#cl-unit');
+      const checklistUnit = await page.locator('#cl-unit').inputValue();
+      if (String(checklistUnit || '').trim() !== targetUnit) throw new Error('checklist fill unit did not follow active unit');
+      return `activeUnit=${targetUnit}`;
+    });
+
     await runStep(results, 'SEC-03', 'Admin', 'Security window inventory is grouped by tier', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'security-window');

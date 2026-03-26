@@ -301,6 +301,26 @@ async function run() {
     };
   }, { critical: true });
 
+  await step('training-forms summary present', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/training/forms`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const summary = json && json.summary && typeof json.summary === 'object' ? json.summary : null;
+    if (!summary) throw new Error('training forms summary missing');
+    const total = Number(summary.total || 0);
+    const draft = Number(summary.draft || 0);
+    const pending = Number(summary.pending || 0);
+    const submitted = Number(summary.submitted || 0);
+    const returned = Number(summary.returned || 0);
+    if (total !== items.length) throw new Error('training forms summary total mismatch');
+    if ((draft + pending + submitted + returned) !== total) throw new Error('training forms summary bucket mismatch');
+    return {
+      total,
+      pending,
+      submitted
+    };
+  }, { critical: true });
+
   await step('auth verify authorized', async () => {
     const verification = await requestAdminJson(`${DEFAULT_BASE}/api/auth/verify`);
     const { response, json } = verification;

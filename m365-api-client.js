@@ -944,6 +944,17 @@
       };
     }
 
+    function normalizeTrainingListSummary(value) {
+      const summary = value && typeof value === 'object' ? value : {};
+      return {
+        total: Number(summary.total || 0),
+        draft: Number(summary.draft || 0),
+        pending: Number(summary.pending || 0),
+        submitted: Number(summary.submitted || 0),
+        returned: Number(summary.returned || 0)
+      };
+    }
+
     function normalizeTrainingAttachments(value) {
       const list = parseJsonValue(value, function () { return []; });
       return Array.isArray(list) ? list.map(normalizeTrainingAttachment) : [];
@@ -1596,6 +1607,8 @@
         ok: !!(body && body.ok !== false),
         mode: getTrainingMode(),
         items: normalizeRemoteTrainingForms(body),
+        summary: normalizeTrainingListSummary(body && body.summary),
+        total: Math.max(0, Number(body && body.total) || 0),
         raw: body
       };
     }

@@ -46,6 +46,7 @@ function createTrainingRouter(deps) {
     formsCache: null,
     formsCacheAt: 0,
     formsCachePromise: null,
+    formsQueryCache: new Map(),
     rostersCache: null,
     rostersCacheAt: 0,
     rostersCachePromise: null,
@@ -54,6 +55,8 @@ function createTrainingRouter(deps) {
   };
   const TRAINING_ROSTERS_PREWARM_DELAY_MS = 15000;
   const TRAINING_ROSTERS_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+  const TRAINING_FORMS_QUERY_CACHE_MS = 60000;
+  const TRAINING_FORMS_QUERY_CACHE_MAX = 48;
   const TRAINING_ROSTERS_QUERY_CACHE_MS = 60000;
   const TRAINING_ROSTERS_QUERY_CACHE_MAX = 24;
 
@@ -114,6 +117,23 @@ function createTrainingRouter(deps) {
       { label: 'incompleteCount', kind: 'number', get: function (item) { return item && item.summary && item.summary.incompleteCount; } },
       { label: 'signedFileCount', kind: 'number', get: function (item) { return item === beforeItem ? beforeSigned.count : afterSigned.count; } }
     ]);
+  }
+
+  function cloneJson(value) {
+    return value && typeof value === 'object'
+      ? JSON.parse(JSON.stringify(value))
+      : value;
+  }
+
+  function trimQueryCache(cache, maxEntries) {
+    const target = cache instanceof Map ? cache : null;
+    const safeMaxEntries = Math.max(1, Number(maxEntries) || 12);
+    if (!target) return;
+    while (target.size > safeMaxEntries) {
+      const oldestKey = target.keys().next().value;
+      if (!oldestKey) break;
+      target.delete(oldestKey);
+    }
   }
 
   function buildTrainingRosterSnapshot(item) {
@@ -229,6 +249,9 @@ function createTrainingRouter(deps) {
     state.formsCache = null;
     state.formsCacheAt = 0;
     state.formsCachePromise = null;
+    if (state.formsQueryCache instanceof Map) {
+      state.formsQueryCache.clear();
+    }
     state.rostersCache = null;
     state.rostersCacheAt = 0;
     state.rostersCachePromise = null;
@@ -331,6 +354,15 @@ function createTrainingRouter(deps) {
     console.log(`[training-rosters] ${message}${suffix ? ` ${suffix}` : ''}`);
   }
 
+  function logTrainingForms(message, details) {
+    const suffix = details && typeof details === 'object'
+      ? Object.entries(details)
+        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
+        .join(' ')
+      : '';
+    console.log(`[training-forms] ${message}${suffix ? ` ${suffix}` : ''}`);
+  }
+
   async function resolveTrainingFormsList() {
     return resolveNamedList(getTrainingFormsListName());
   }
@@ -376,6 +408,67 @@ function createTrainingRouter(deps) {
     };
   }
 
+  function summarizeTrainingForms(items) {
+    const summary = {
+      total: 0,
+      draft: 0,
+      pending: 0,
+      submitted: 0,
+      returned: 0
+    };
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const status = cleanText(item && item.status);
+      summary.total += 1;
+      if (status === FORM_STATUSES.DRAFT) summary.draft += 1;
+      if (status === FORM_STATUSES.PENDING_SIGNOFF) summary.pending += 1;
+      if (status === FORM_STATUSES.SUBMITTED) summary.submitted += 1;
+      if (status === FORM_STATUSES.RETURNED) summary.returned += 1;
+    });
+    return summary;
+  }
+
+  function buildFormQuerySignature(authz, url) {
+    const safeAuthz = authz && typeof authz === 'object' ? authz : {};
+    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits) ? safeAuthz.authorizedUnits : [];
+    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
+    return [
+      String(state.formsCacheAt || 0).trim(),
+      String(safeAuthz.username || '').trim(),
+      String(safeAuthz.role || '').trim(),
+      String(safeAuthz.primaryUnit || '').trim(),
+      String(safeAuthz.activeUnit || '').trim(),
+      authorizedUnits.join('|'),
+      String(params.get('status') || '').trim(),
+      String(params.get('unit') || '').trim(),
+      String(params.get('statsUnit') || '').trim(),
+      String(params.get('trainingYear') || '').trim(),
+      String(params.get('fillerUsername') || '').trim(),
+      String(params.get('q') || '').trim().toLowerCase()
+    ].join('::');
+  }
+
+  function readFormsQueryCache(cacheKey) {
+    if (!(state.formsQueryCache instanceof Map) || !cacheKey || !state.formsQueryCache.has(cacheKey)) return null;
+    const cached = state.formsQueryCache.get(cacheKey);
+    if (!cached || typeof cached !== 'object' || !cached.body) return null;
+    if (Number(cached.cacheAt || 0) !== Number(state.formsCacheAt || 0)) return null;
+    if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_FORMS_QUERY_CACHE_MS) return null;
+    state.formsQueryCache.delete(cacheKey);
+    state.formsQueryCache.set(cacheKey, cached);
+    return cloneJson(cached.body);
+  }
+
+  function writeFormsQueryCache(cacheKey, body) {
+    if (!(state.formsQueryCache instanceof Map) || !cacheKey) return cloneJson(body);
+    state.formsQueryCache.set(cacheKey, {
+      loadedAt: Date.now(),
+      cacheAt: Number(state.formsCacheAt || 0),
+      body: cloneJson(body)
+    });
+    trimQueryCache(state.formsQueryCache, TRAINING_FORMS_QUERY_CACHE_MAX);
+    return cloneJson(body);
+  }
+
   async function listAllForms() {
     if (Array.isArray(state.formsCache) && getTrainingListCacheHit(state.formsCacheAt)) {
       return state.formsCache.slice();
@@ -399,6 +492,9 @@ function createTrainingRouter(deps) {
     }
       state.formsCache = rows.slice();
       state.formsCacheAt = Date.now();
+      if (state.formsQueryCache instanceof Map) {
+        state.formsQueryCache.clear();
+      }
       return rows;
     })();
     try {
@@ -875,15 +971,41 @@ function createTrainingRouter(deps) {
 
   async function handleFormList(req, res, origin, url) {
     try {
+      const startedAt = Date.now();
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllForms();
+      const cacheKey = buildFormQuerySignature(authz, url);
+      const cached = readFormsQueryCache(cacheKey);
+      if (cached) {
+        logTrainingForms('query cache hit', {
+          username: authz.username,
+          totalRows: rows.length,
+          total: cached.total,
+          durationMs: Date.now() - startedAt
+        });
+        await writeJson(res, buildJsonResponse(200, cached), origin);
+        return;
+      }
       const items = filterForms(rows.map((entry) => entry.item), url)
         .filter((entry) => requestAuthz.canAccessTrainingForm(authz, entry));
-      await writeJson(res, buildJsonResponse(200, {
+      const summary = summarizeTrainingForms(items);
+      const responseBody = {
         ok: true,
         items: items.map(mapTrainingFormForClient),
+        summary,
+        total: items.length,
         contractVersion: CONTRACT_VERSION
-      }), origin);
+      };
+      const cachedBody = writeFormsQueryCache(cacheKey, responseBody);
+      logTrainingForms('list served', {
+        username: authz.username,
+        totalRows: rows.length,
+        visibleRows: items.length,
+        submitted: summary.submitted,
+        pending: summary.pending,
+        durationMs: Date.now() - startedAt
+      });
+      await writeJson(res, buildJsonResponse(200, cachedBody), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to list training forms.', 500), origin);
     }
