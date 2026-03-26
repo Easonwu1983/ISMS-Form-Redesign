@@ -131,6 +131,29 @@ async function waitForDashboardReady(page) {
   }, undefined, { timeout: 45000 });
 }
 
+async function ensureAdminSession(page) {
+  const authState = await page.evaluate(async () => {
+    const currentUser = window._authModule && typeof window._authModule.currentUser === 'function'
+      ? window._authModule.currentUser()
+      : null;
+    const token = String(currentUser && currentUser.sessionToken || '').trim();
+    if (!token) return { ok: false, reason: 'missing-token' };
+    try {
+      const response = await fetch('/api/auth/verify', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return { ok: response.ok, status: response.status };
+    } catch (error) {
+      return { ok: false, reason: String(error && error.message || error || 'verify-failed') };
+    }
+  });
+  if (!authState || !authState.ok) {
+    await login(page);
+  }
+}
+
 async function runPublicVisualBaselineChecks(browser, pushStep) {
   if (!fs.existsSync(DEFAULT_BASELINE_DIR)) {
     throw new Error(`visual baseline directory not found: ${DEFAULT_BASELINE_DIR}`);
@@ -861,6 +884,7 @@ async function run() {
     }
     pushStep('users:loaded', true, 'account table ready');
 
+    await ensureAdminSession(page);
     await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
     let securityWindowReady = false;
@@ -898,6 +922,7 @@ async function run() {
     }
     pushStep('security-window:loaded', true, 'security window page ready');
 
+    await ensureAdminSession(page);
     await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
@@ -910,10 +935,21 @@ async function run() {
     }
     pushStep('unit-contact-review:loaded', true, 'unit contact review page ready');
 
-    await page.goto(`${BASE_URL}/#unit-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
-    await page.waitForSelector('.review-table-card, .empty-state', { timeout: 45000 });
-    await page.waitForFunction(() => !!document.querySelector('.governance-category-stack .governance-category-card'), undefined, { timeout: 45000 });
+    await ensureAdminSession(page);
+    let unitReviewReady = false;
+    for (let attempt = 0; attempt < 2 && !unitReviewReady; attempt += 1) {
+      await page.goto(`${BASE_URL}/#unit-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForTimeout(1200);
+      try {
+        await page.waitForSelector('.review-table-card, .empty-state', { timeout: 15000 });
+        await page.waitForFunction(() => !!document.querySelector('.governance-category-stack .governance-category-card'), undefined, { timeout: 15000 });
+        unitReviewReady = true;
+      } catch (error) {
+        if (attempt >= 1) throw error;
+        await ensureAdminSession(page);
+        await page.waitForTimeout(250);
+      }
+    }
     const unitReviewText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(unitReviewText)) {
       throw new Error('unit review contains placeholder question marks');
