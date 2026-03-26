@@ -1,4 +1,201 @@
 (function () {
+  function createPagerModule() {
+    function escHtml(value) {
+      if (typeof document === 'undefined') return String(value === null || value === undefined ? '' : value);
+      const node = document.createElement('div');
+      node.textContent = value === null || value === undefined ? '' : String(value);
+      return node.innerHTML;
+    }
+
+    function escAttr(value) {
+      return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function normalizePage(page, defaultLimit) {
+      const source = page && typeof page === 'object' ? page : {};
+      const limit = Math.max(1, Number(source.limit || defaultLimit || 50) || Number(defaultLimit || 50) || 50);
+      const total = Math.max(0, Number(source.total || 0) || 0);
+      const pageCount = total > 0
+        ? Math.max(1, Number(source.pageCount || Math.ceil(total / limit)) || Math.ceil(total / limit))
+        : 0;
+      const currentPage = total > 0
+        ? Math.min(pageCount, Math.max(1, Number(source.currentPage || Math.floor((Number(source.offset || 0) || 0) / limit) + 1) || 1))
+        : 0;
+      return {
+        offset: Math.max(0, Number(source.offset || 0) || 0),
+        limit,
+        total,
+        pageCount,
+        currentPage,
+        hasPrev: !!source.hasPrev,
+        hasNext: !!source.hasNext,
+        prevOffset: Math.max(0, Number(source.prevOffset || 0) || 0),
+        nextOffset: Math.max(0, Number(source.nextOffset || 0) || 0),
+        pageStart: Math.max(0, Number(source.pageStart || 0) || 0),
+        pageEnd: Math.max(0, Number(source.pageEnd || 0) || 0)
+      };
+    }
+
+    function getOffsetByPageNumber(page, targetPage, defaultLimit) {
+      const normalized = normalizePage(page, defaultLimit);
+      if (!normalized.total) return 0;
+      const parsed = Number.parseInt(String(targetPage || '').trim(), 10);
+      const safePage = Math.min(
+        Math.max(1, normalized.pageCount || 1),
+        Math.max(1, Number.isFinite(parsed) ? parsed : 1)
+      );
+      return (safePage - 1) * normalized.limit;
+    }
+
+    function formatPageSummary(page, emptyText, defaultLimit) {
+      const normalized = normalizePage(page, defaultLimit);
+      if (!normalized.total) return emptyText || '目前沒有符合條件的資料';
+      return `第 ${normalized.currentPage} / ${normalized.pageCount} 頁，顯示 ${normalized.pageStart}-${normalized.pageEnd} / ${normalized.total} 筆`;
+    }
+
+    function renderPagerControls(config) {
+      const options = config && typeof config === 'object' ? config : {};
+      const esc = typeof options.esc === 'function' ? options.esc : escHtml;
+      const ic = typeof options.ic === 'function' ? options.ic : function () { return ''; };
+      const page = normalizePage(options.page, options.defaultLimit);
+      const idPrefix = String(options.idPrefix || 'pager').trim() || 'pager';
+      const actionPrefix = String(options.actionPrefix || '').trim();
+      const showLimit = options.showLimit !== false;
+      const limitOptions = Array.isArray(options.limitOptions) && options.limitOptions.length
+        ? options.limitOptions.map((value) => String(value))
+        : [String(page.limit || 50)];
+      const pageMax = page.pageCount || 1;
+      const pageValue = page.currentPage || 1;
+      const disableJump = page.total ? '' : 'disabled';
+      const actionAttr = function (name) {
+        return actionPrefix ? ` data-action="${escAttr(actionPrefix + name)}"` : '';
+      };
+      const limitHtml = showLimit
+        ? `<label class="form-label" for="${escAttr(idPrefix)}-page-limit" style="margin:0 4px 0 0">每頁</label>`
+          + `<select class="form-select" id="${escAttr(idPrefix)}-page-limit" style="min-width:88px">`
+          + limitOptions.map((value) => `<option value="${esc(value)}" ${String(page.limit) === value ? 'selected' : ''}>${esc(value)}</option>`).join('')
+          + '</select>'
+        : '';
+      return `${limitHtml}`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button>`
+        + `<span class="review-card-subtitle" style="margin:0 4px 0 8px">頁次 ${page.currentPage || 0} / ${page.pageCount || 0}</span>`
+        + `<label class="form-label" for="${escAttr(idPrefix)}-page-number" style="margin:0 4px 0 8px">跳至</label>`
+        + `<input type="number" class="form-input" id="${escAttr(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px">`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>前往</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button>`;
+    }
+
+    function renderPagerToolbar(config) {
+      const options = config && typeof config === 'object' ? config : {};
+      const esc = typeof options.esc === 'function' ? options.esc : escHtml;
+      const toolbarClass = String(options.toolbarClass || 'review-toolbar review-toolbar--compact').trim();
+      const toolbarStyle = String(options.toolbarStyle || '').trim();
+      const page = normalizePage(options.page, options.defaultLimit);
+      const summary = String(options.summary || formatPageSummary(page, options.emptyText, options.defaultLimit)).trim();
+      const mainHtml = options.mainHtml
+        || `<span class="review-card-subtitle">${esc(summary)}</span>`;
+      return `<div class="${escAttr(toolbarClass)}"${toolbarStyle ? ` style="${escAttr(toolbarStyle)}"` : ''}>`
+        + `<div class="review-toolbar-main">${mainHtml}</div>`
+        + `<div class="review-toolbar-actions">${renderPagerControls(options)}</div>`
+        + `</div>`;
+    }
+
+    function bindPagerControls(config) {
+      const options = config && typeof config === 'object' ? config : {};
+      const idPrefix = String(options.idPrefix || '').trim();
+      const onChange = typeof options.onChange === 'function' ? options.onChange : null;
+      if (!idPrefix || !onChange || typeof document === 'undefined') return;
+      const page = normalizePage(options.page, options.defaultLimit);
+      const getOffset = typeof options.getOffsetByPageNumber === 'function'
+        ? options.getOffsetByPageNumber
+        : function (currentPage, targetPage) {
+            return getOffsetByPageNumber(currentPage, targetPage, options.defaultLimit);
+          };
+      const actionPrefix = String(options.actionPrefix || '').trim();
+      const queryAction = function (suffix, actionName) {
+        const byId = document.getElementById(`${idPrefix}-${suffix}`);
+        if (byId) return byId;
+        if (!actionPrefix || !document.querySelector) return null;
+        const actionValue = actionPrefix + actionName;
+        if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') {
+          return document.querySelector(`[data-action="${CSS.escape(actionValue)}"]`);
+        }
+        return document.querySelector(`[data-action="${actionValue}"]`);
+      };
+      const limitSelect = document.getElementById(`${idPrefix}-page-limit`);
+      const pageNumberInput = document.getElementById(`${idPrefix}-page-number`);
+      const firstButton = queryAction('first-page', 'FirstPage');
+      const prevButton = queryAction('prev-page', 'PrevPage');
+      const jumpButton = queryAction('jump-page', 'JumpPage');
+      const nextButton = queryAction('next-page', 'NextPage');
+      const lastButton = queryAction('last-page', 'LastPage');
+
+      if (limitSelect) {
+        limitSelect.addEventListener('change', function () {
+          onChange({
+            limit: String(limitSelect.value || page.limit || options.defaultLimit || 50),
+            offset: '0'
+          });
+        });
+      }
+      if (pageNumberInput) {
+        pageNumberInput.addEventListener('keydown', function (event) {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          const nextOffset = getOffset(page, pageNumberInput.value || '1');
+          onChange({ offset: String(nextOffset) });
+        });
+      }
+      if (jumpButton && pageNumberInput) {
+        jumpButton.addEventListener('click', function () {
+          const nextOffset = getOffset(page, pageNumberInput.value || '1');
+          onChange({ offset: String(nextOffset) });
+        });
+      }
+      if (firstButton) {
+        firstButton.addEventListener('click', function () {
+          onChange({ offset: '0' });
+        });
+      }
+      if (prevButton) {
+        prevButton.addEventListener('click', function () {
+          onChange({ offset: String(page.prevOffset || 0) });
+        });
+      }
+      if (nextButton) {
+        nextButton.addEventListener('click', function () {
+          onChange({ offset: String(page.nextOffset || 0) });
+        });
+      }
+      if (lastButton) {
+        lastButton.addEventListener('click', function () {
+          const nextOffset = getOffset(page, page.pageCount || 1);
+          onChange({ offset: String(nextOffset) });
+        });
+      }
+    }
+
+    return {
+      normalizePage,
+      getOffsetByPageNumber,
+      formatPageSummary,
+      renderPagerControls,
+      renderPagerToolbar,
+      bindPagerControls
+    };
+  }
+
+  if (typeof window !== 'undefined' && !window.__ISMS_PAGER__) {
+    window.__ISMS_PAGER__ = createPagerModule();
+  }
+
   window.createUiModule = function createUiModule() {
     const DEFAULT_UNSAVED_MESSAGE = '目前有未儲存的變更，確定要離開此頁嗎？';
     const MODAL_ROOT_ID = 'modal-root';

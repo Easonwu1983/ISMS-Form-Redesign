@@ -246,7 +246,17 @@
         + normalizedPage.pageStart + '-' + normalizedPage.pageEnd + ' / ' + normalizedPage.total + ' \u7b46';
     }
 
+    function getChecklistPagerModule() {
+      return typeof window !== 'undefined' && window.__ISMS_PAGER__ && typeof window.__ISMS_PAGER__ === 'object'
+        ? window.__ISMS_PAGER__
+        : null;
+    }
+
     function getChecklistRemoteOffsetByPageNumber(page, targetPage) {
+      const pager = getChecklistPagerModule();
+      if (pager && typeof pager.getOffsetByPageNumber === 'function') {
+        return pager.getOffsetByPageNumber(page, targetPage, CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT);
+      }
       const normalizedPage = normalizeChecklistRemotePage(page, checklistRemotePageState.filters, checklistRemotePageState.items, checklistRemotePageState.total);
       if (!normalizedPage.total) return 0;
       const pageCount = normalizedPage.pageCount || 1;
@@ -257,26 +267,21 @@
 
     function renderChecklistListPager(page) {
       const normalizedPage = normalizeChecklistRemotePage(page, checklistRemotePageState.filters, checklistRemotePageState.items, checklistRemotePageState.total);
-      const pageMax = normalizedPage.pageCount || 1;
-      const pageValue = normalizedPage.currentPage || 1;
-      const disableJump = normalizedPage.total ? '' : 'disabled';
-      const limitOptions = CHECKLIST_REMOTE_PAGE_LIMIT_OPTIONS
-        .map((value) => '<option value="' + esc(value) + '" ' + (String(normalizedPage.limit) === value ? 'selected' : '') + '>' + esc(value) + '</option>')
-        .join('');
-      return '<div class="review-toolbar review-toolbar--compact checklist-list-pager" style="margin-top:16px">'
-        + '<div class="review-toolbar-main"><span class="review-card-subtitle">' + esc(getChecklistRemotePageSummary(normalizedPage)) + '</span></div>'
-        + '<div class="review-toolbar-actions">'
-        + '<label class="form-label" for="cl-list-page-limit" style="margin:0 4px 0 0">\u6bcf\u9801</label>'
-        + '<select class="form-select" id="cl-list-page-limit" style="min-width:88px">' + limitOptions + '</select>'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="cl-list-first-page" ' + (normalizedPage.hasPrev ? '' : 'disabled') + '>' + ic('chevrons-left', 'icon-sm') + ' \u9996\u9801</button>'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="cl-list-prev-page" ' + (normalizedPage.hasPrev ? '' : 'disabled') + '>' + ic('chevron-left', 'icon-sm') + ' \u4e0a\u4e00\u9801</button>'
-        + '<span class="review-card-subtitle" style="margin:0 4px 0 8px">\u9801\u6b21 ' + (normalizedPage.currentPage || 0) + ' / ' + (normalizedPage.pageCount || 0) + '</span>'
-        + '<label class="form-label" for="cl-list-page-number" style="margin:0 4px 0 8px">\u8df3\u81f3</label>'
-        + '<input type="number" class="form-input" id="cl-list-page-number" min="1" max="' + esc(pageMax) + '" value="' + esc(pageValue) + '" ' + disableJump + ' style="width:88px">'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="cl-list-jump-page" ' + disableJump + '>\u524d\u5f80</button>'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="cl-list-next-page" ' + (normalizedPage.hasNext ? '' : 'disabled') + '>\u4e0b\u4e00\u9801 ' + ic('chevron-right', 'icon-sm') + '</button>'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="cl-list-last-page" ' + (normalizedPage.hasNext ? '' : 'disabled') + '>\u672b\u9801 ' + ic('chevrons-right', 'icon-sm') + '</button>'
-        + '</div></div>';
+      const pager = getChecklistPagerModule();
+      if (pager && typeof pager.renderPagerToolbar === 'function') {
+        return pager.renderPagerToolbar({
+          page: normalizedPage,
+          idPrefix: 'cl-list',
+          limitOptions: CHECKLIST_REMOTE_PAGE_LIMIT_OPTIONS,
+          defaultLimit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT,
+          summary: getChecklistRemotePageSummary(normalizedPage),
+          toolbarClass: 'review-toolbar review-toolbar--compact checklist-list-pager',
+          toolbarStyle: 'margin-top:16px',
+          esc,
+          ic
+        });
+      }
+      return '';
     }
 
     async function loadChecklistRemotePage(filters, options) {
@@ -760,12 +765,6 @@
     const statusEl = document.getElementById('cl-list-status');
     const yearTabs = document.querySelectorAll('[data-checklist-year]');
     const pageLimitEl = document.getElementById('cl-list-page-limit');
-    const firstPageButton = document.getElementById('cl-list-first-page');
-    const prevPageButton = document.getElementById('cl-list-prev-page');
-    const pageNumberInput = document.getElementById('cl-list-page-number');
-    const jumpPageButton = document.getElementById('cl-list-jump-page');
-    const nextPageButton = document.getElementById('cl-list-next-page');
-    const lastPageButton = document.getElementById('cl-list-last-page');
     let browseTimer = null;
     const rerenderRemoteChecklistPage = (nextFilters) => {
       renderChecklistList({
@@ -829,85 +828,24 @@
         syncChecklistListToolbarState();
       });
     });
-    if (useRemoteList && pageLimitEl) {
-      pageLimitEl.addEventListener('change', () => {
-        rerenderRemoteChecklistPage({
-          limit: pageLimitEl.value || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT,
-          offset: '0',
-          auditYear: checklistBrowseState.year,
-          statusBucket: checklistBrowseState.status,
-          q: checklistBrowseState.keyword
+    if (useRemoteList) {
+      const pager = getChecklistPagerModule();
+      if (pager && typeof pager.bindPagerControls === 'function') {
+        pager.bindPagerControls({
+          idPrefix: 'cl-list',
+          page: checklistRemotePageState.page,
+          defaultLimit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT,
+          onChange: (delta) => {
+            rerenderRemoteChecklistPage({
+              limit: String((delta && delta.limit) || checklistRemotePageState.page.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+              offset: String((delta && delta.offset) || 0),
+              auditYear: checklistBrowseState.year,
+              statusBucket: checklistBrowseState.status,
+              q: checklistBrowseState.keyword
+            });
+          }
         });
-      });
-    }
-    if (useRemoteList && pageNumberInput) {
-      pageNumberInput.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter') return;
-        event.preventDefault();
-        jumpPageButton?.click();
-      });
-    }
-    if (useRemoteList && firstPageButton) {
-      firstPageButton.addEventListener('click', () => {
-        if (!checklistRemotePageState.page || !checklistRemotePageState.page.hasPrev) return;
-        rerenderRemoteChecklistPage({
-          limit: String(checklistRemotePageState.page.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
-          offset: '0',
-          auditYear: checklistBrowseState.year,
-          statusBucket: checklistBrowseState.status,
-          q: checklistBrowseState.keyword
-        });
-      });
-    }
-    if (useRemoteList && prevPageButton) {
-      prevPageButton.addEventListener('click', () => {
-        if (!checklistRemotePageState.page || !checklistRemotePageState.page.hasPrev) return;
-        rerenderRemoteChecklistPage({
-          limit: String(checklistRemotePageState.page.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
-          offset: String(checklistRemotePageState.page.prevOffset || 0),
-          auditYear: checklistBrowseState.year,
-          statusBucket: checklistBrowseState.status,
-          q: checklistBrowseState.keyword
-        });
-      });
-    }
-    if (useRemoteList && jumpPageButton) {
-      jumpPageButton.addEventListener('click', () => {
-        const targetPage = pageNumberInput && pageNumberInput.value ? pageNumberInput.value : '1';
-        const nextOffset = getChecklistRemoteOffsetByPageNumber(checklistRemotePageState.page, targetPage);
-        rerenderRemoteChecklistPage({
-          limit: String(checklistRemotePageState.page && checklistRemotePageState.page.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
-          offset: String(nextOffset),
-          auditYear: checklistBrowseState.year,
-          statusBucket: checklistBrowseState.status,
-          q: checklistBrowseState.keyword
-        });
-      });
-    }
-    if (useRemoteList && nextPageButton) {
-      nextPageButton.addEventListener('click', () => {
-        if (!checklistRemotePageState.page || !checklistRemotePageState.page.hasNext) return;
-        rerenderRemoteChecklistPage({
-          limit: String(checklistRemotePageState.page.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
-          offset: String(checklistRemotePageState.page.nextOffset || 0),
-          auditYear: checklistBrowseState.year,
-          statusBucket: checklistBrowseState.status,
-          q: checklistBrowseState.keyword
-        });
-      });
-    }
-    if (useRemoteList && lastPageButton) {
-      lastPageButton.addEventListener('click', () => {
-        if (!checklistRemotePageState.page || !checklistRemotePageState.page.hasNext) return;
-        const nextOffset = getChecklistRemoteOffsetByPageNumber(checklistRemotePageState.page, checklistRemotePageState.page.pageCount || 1);
-        rerenderRemoteChecklistPage({
-          limit: String(checklistRemotePageState.page.limit || CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
-          offset: String(nextOffset),
-          auditYear: checklistBrowseState.year,
-          statusBucket: checklistBrowseState.status,
-          q: checklistBrowseState.keyword
-        });
-      });
+      }
     }
 
     registerActionHandlers(document.getElementById('app'), {

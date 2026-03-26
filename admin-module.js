@@ -289,7 +289,17 @@
       };
     }
 
+    function getSharedPagerModule() {
+      return typeof window !== 'undefined' && window.__ISMS_PAGER__ && typeof window.__ISMS_PAGER__ === 'object'
+        ? window.__ISMS_PAGER__
+        : null;
+    }
+
     function getAdminCollectionOffsetByPageNumber(page, targetPage) {
+      const pager = getSharedPagerModule();
+      if (pager && typeof pager.getOffsetByPageNumber === 'function') {
+        return pager.getOffsetByPageNumber(page, targetPage, 12);
+      }
       const safePageCount = Math.max(1, Number(page && page.pageCount) || 1);
       const safeLimit = Math.max(1, Number(page && page.limit) || 12);
       const parsed = Number.parseInt(String(targetPage || '').trim(), 10);
@@ -298,6 +308,10 @@
     }
 
     function formatAdminCollectionSummary(page, emptyText) {
+      const pager = getSharedPagerModule();
+      if (pager && typeof pager.formatPageSummary === 'function') {
+        return pager.formatPageSummary(page, emptyText, 12);
+      }
       const safePage = page && typeof page === 'object' ? page : {};
       if (!Number(safePage.total || 0)) {
         return emptyText || '目前沒有符合條件的資料';
@@ -306,6 +320,17 @@
     }
 
     function renderAdminCollectionPager(config) {
+      const pager = getSharedPagerModule();
+      if (pager && typeof pager.renderPagerToolbar === 'function') {
+        return pager.renderPagerToolbar({
+          ...(config || {}),
+          esc,
+          ic,
+          defaultLimit: 12,
+          limitOptions: ['12', '24', '48'],
+          toolbarStyle: 'margin:14px 0 0'
+        });
+      }
       const page = config && config.page ? config.page : {};
       const pageMax = Math.max(1, Number(page.pageCount) || 1);
       const pageValue = Math.max(1, Number(page.currentPage) || 1);
@@ -321,6 +346,15 @@
     }
 
     function bindAdminCollectionPager(config) {
+      const pager = getSharedPagerModule();
+      if (pager && typeof pager.bindPagerControls === 'function') {
+        pager.bindPagerControls({
+          ...(config || {}),
+          defaultLimit: 12,
+          getOffsetByPageNumber: getAdminCollectionOffsetByPageNumber
+        });
+        return;
+      }
       const idPrefix = String(config && config.idPrefix || '').trim();
       const page = config && config.page ? config.page : {};
       const onChange = config && typeof config.onChange === 'function' ? config.onChange : null;

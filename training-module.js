@@ -366,7 +366,17 @@
         + normalizedPage.pageStart + '-' + normalizedPage.pageEnd + ' / ' + normalizedPage.total + ' \u7b46';
     }
 
+    function getTrainingPagerModule() {
+      return typeof window !== 'undefined' && window.__ISMS_PAGER__ && typeof window.__ISMS_PAGER__ === 'object'
+        ? window.__ISMS_PAGER__
+        : null;
+    }
+
     function getTrainingRosterOffsetByPageNumber(page, targetPage) {
+      const pager = getTrainingPagerModule();
+      if (pager && typeof pager.getOffsetByPageNumber === 'function') {
+        return pager.getOffsetByPageNumber(page, targetPage, TRAINING_ROSTER_DEFAULT_PAGE_LIMIT);
+      }
       const normalizedPage = normalizeTrainingRosterRemotePage(page, trainingRosterRemotePageState.filters, trainingRosterRemotePageState.items, trainingRosterRemotePageState.total);
       if (!normalizedPage.total) return 0;
       const pageCount = normalizedPage.pageCount || 1;
@@ -377,10 +387,8 @@
 
     function renderTrainingRosterPager(page) {
       const normalizedPage = normalizeTrainingRosterRemotePage(page, trainingRosterRemotePageState.filters, trainingRosterRemotePageState.items, trainingRosterRemotePageState.total);
+      const pager = getTrainingPagerModule();
       const normalizedFilters = normalizeTrainingRosterPageFilters(trainingRosterRemotePageState.filters);
-      const pageMax = normalizedPage.pageCount || 1;
-      const pageValue = normalizedPage.currentPage || 1;
-      const disableJump = normalizedPage.total ? '' : 'disabled';
       const statsUnitOptions = ['']
         .concat(getTrainingDashboardUnits())
         .map((value) => '<option value="' + esc(value) + '" ' + (normalizedFilters.statsUnit === value ? 'selected' : '') + '>' + esc(value || '全部統計單位') + '</option>')
@@ -396,9 +404,6 @@
           .sort(compareZhStroke))
         .map((value) => '<option value="' + esc(value) + '" ' + (normalizedFilters.unit === value ? 'selected' : '') + '>' + esc(value || '全部填報單位') + '</option>')
         .join('');
-      const limitOptions = TRAINING_ROSTER_PAGE_LIMIT_OPTIONS
-        .map((value) => '<option value="' + esc(value) + '" ' + (String(normalizedPage.limit) === value ? 'selected' : '') + '>' + esc(value) + '</option>')
-        .join('');
       const sourceOptions = [
         ['', '全部來源'],
         ['import', '管理者匯入'],
@@ -410,6 +415,16 @@
       if (normalizedFilters.source === 'manual') activeFilters.push('來源：填報新增');
       if (normalizedFilters.statsUnit) activeFilters.push('統計單位：' + normalizedFilters.statsUnit);
       if (normalizedFilters.unit) activeFilters.push('填報單位：' + normalizedFilters.unit);
+      const pagerControls = pager && typeof pager.renderPagerControls === 'function'
+        ? pager.renderPagerControls({
+            page: normalizedPage,
+            idPrefix: 'training-roster',
+            limitOptions: TRAINING_ROSTER_PAGE_LIMIT_OPTIONS,
+            defaultLimit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT,
+            esc,
+            ic
+          })
+        : '';
       return '<div class="review-toolbar review-toolbar--compact training-roster-pager" style="margin:14px 0 16px">'
         + '<div class="review-toolbar-main">'
         + '<span class="review-card-subtitle">' + esc(getTrainingRosterPageSummary(normalizedPage)) + '</span>'
@@ -420,16 +435,7 @@
         + '<select class="form-select" id="training-roster-stats-unit" style="min-width:180px">' + statsUnitOptions + '</select>'
         + '<select class="form-select" id="training-roster-unit" style="min-width:220px">' + unitOptions + '</select>'
         + '<select class="form-select" id="training-roster-source" style="min-width:132px">' + sourceOptions + '</select>'
-        + '<label class="form-label" for="training-roster-page-limit" style="margin:0 4px 0 0">\u6bcf\u9801</label>'
-        + '<select class="form-select" id="training-roster-page-limit" style="min-width:88px">' + limitOptions + '</select>'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="training-roster-first-page" ' + (normalizedPage.hasPrev ? '' : 'disabled') + '>' + ic('chevrons-left', 'icon-sm') + ' \u9996\u9801</button>'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="training-roster-prev-page" ' + (normalizedPage.hasPrev ? '' : 'disabled') + '>' + ic('chevron-left', 'icon-sm') + ' \u4e0a\u4e00\u9801</button>'
-        + '<span class="review-card-subtitle" style="margin:0 4px 0 8px">\u9801\u6b21 ' + (normalizedPage.currentPage || 0) + ' / ' + (normalizedPage.pageCount || 0) + '</span>'
-        + '<label class="form-label" for="training-roster-page-number" style="margin:0 4px 0 8px">\u8df3\u81f3</label>'
-        + '<input type="number" class="form-input" id="training-roster-page-number" min="1" max="' + esc(pageMax) + '" value="' + esc(pageValue) + '" ' + disableJump + ' style="width:88px">'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="training-roster-jump-page" ' + disableJump + '>\u524d\u5f80</button>'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="training-roster-next-page" ' + (normalizedPage.hasNext ? '' : 'disabled') + '>\u4e0b\u4e00\u9801 ' + ic('chevron-right', 'icon-sm') + '</button>'
-        + '<button type="button" class="btn btn-secondary btn-sm" id="training-roster-last-page" ' + (normalizedPage.hasNext ? '' : 'disabled') + '>\u672b\u9801 ' + ic('chevrons-right', 'icon-sm') + '</button>'
+        + pagerControls
         + '</div></div>';
     }
 
@@ -2811,12 +2817,6 @@
     const unitSelect = document.getElementById('training-roster-unit');
     const sourceSelect = document.getElementById('training-roster-source');
     const pageLimitSelect = document.getElementById('training-roster-page-limit');
-    const firstPageButton = document.getElementById('training-roster-first-page');
-    const prevPageButton = document.getElementById('training-roster-prev-page');
-    const pageNumberInput = document.getElementById('training-roster-page-number');
-    const jumpPageButton = document.getElementById('training-roster-jump-page');
-    const nextPageButton = document.getElementById('training-roster-next-page');
-    const lastPageButton = document.getElementById('training-roster-last-page');
     const rerenderRemoteRosterPage = (nextFilters) => {
       renderTrainingRoster({
         skipSync: true,
@@ -2875,69 +2875,22 @@
         });
       });
     }
-    if (useRemoteRosters && pageLimitSelect) {
-      pageLimitSelect.addEventListener('change', () => {
-        rerenderRemoteRosterPage({
-          limit: pageLimitSelect.value || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT,
-          offset: '0'
+    if (useRemoteRosters) {
+      const pager = getTrainingPagerModule();
+      if (pager && typeof pager.bindPagerControls === 'function') {
+        pager.bindPagerControls({
+          idPrefix: 'training-roster',
+          page: trainingRosterRemotePageState.page,
+          defaultLimit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT,
+          onChange: (delta) => {
+            rerenderRemoteRosterPage({
+              limit: String((delta && delta.limit) || trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
+              offset: String((delta && delta.offset) || 0)
+            });
+          }
         });
-      });
+      }
     }
-    if (useRemoteRosters && pageNumberInput) {
-      pageNumberInput.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter') return;
-        event.preventDefault();
-        jumpPageButton?.click();
-      });
-    }
-    if (useRemoteRosters && firstPageButton) {
-      firstPageButton.addEventListener('click', () => {
-        if (!trainingRosterRemotePageState.page || !trainingRosterRemotePageState.page.hasPrev) return;
-        rerenderRemoteRosterPage({
-          limit: String(trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-          offset: '0'
-        });
-      });
-    }
-    if (useRemoteRosters && prevPageButton) {
-      prevPageButton.addEventListener('click', () => {
-        if (!trainingRosterRemotePageState.page || !trainingRosterRemotePageState.page.hasPrev) return;
-        rerenderRemoteRosterPage({
-          limit: String(trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-          offset: String(trainingRosterRemotePageState.page.prevOffset || 0)
-        });
-      });
-    }
-    if (useRemoteRosters && jumpPageButton) {
-      jumpPageButton.addEventListener('click', () => {
-        const targetPage = pageNumberInput && pageNumberInput.value ? pageNumberInput.value : '1';
-        const nextOffset = getTrainingRosterOffsetByPageNumber(trainingRosterRemotePageState.page, targetPage);
-        rerenderRemoteRosterPage({
-          limit: String(trainingRosterRemotePageState.page && trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-          offset: String(nextOffset)
-        });
-      });
-    }
-    if (useRemoteRosters && nextPageButton) {
-      nextPageButton.addEventListener('click', () => {
-        if (!trainingRosterRemotePageState.page || !trainingRosterRemotePageState.page.hasNext) return;
-        rerenderRemoteRosterPage({
-          limit: String(trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-          offset: String(trainingRosterRemotePageState.page.nextOffset || 0)
-        });
-      });
-    }
-    if (useRemoteRosters && lastPageButton) {
-      lastPageButton.addEventListener('click', () => {
-        if (!trainingRosterRemotePageState.page || !trainingRosterRemotePageState.page.hasNext) return;
-        const nextOffset = getTrainingRosterOffsetByPageNumber(trainingRosterRemotePageState.page, trainingRosterRemotePageState.page.pageCount || 1);
-        rerenderRemoteRosterPage({
-          limit: String(trainingRosterRemotePageState.page.limit || TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-          offset: String(nextOffset)
-        });
-      });
-    }
-
     const selectAllButton = document.getElementById('training-roster-select-all');
     const clearSelectionButton = document.getElementById('training-roster-clear-selection');
     const groupsContainer = document.getElementById('training-roster-groups');
