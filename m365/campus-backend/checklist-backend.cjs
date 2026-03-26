@@ -448,17 +448,7 @@ function createChecklistRouter(deps) {
     return items.filter((entry) => {
       if (status && entry.status !== status) return false;
       if (statusBucket) {
-        const normalizedStatus = cleanText(entry.status).toLowerCase();
-        const summary = entry.summary && typeof entry.summary === 'object' ? entry.summary : {};
-        const answered = Number(summary.conform || 0)
-          + Number(summary.partial || 0)
-          + Number(summary.nonConform || 0)
-          + Number(summary.na || 0);
-        const derivedBucket = normalizedStatus === STATUSES.SUBMITTED
-          ? 'closed'
-          : (answered > 0 || Number(summary.total || 0) > 0 || entry.updatedAt || entry.fillDate
-            ? 'pending_export'
-            : 'editing');
+        const derivedBucket = getChecklistStatusBucketKey(entry);
         if (derivedBucket !== statusBucket) return false;
       }
       if (unit && entry.unit !== unit) return false;
@@ -475,6 +465,35 @@ function createChecklistRouter(deps) {
         if (!haystack.includes(query)) return false;
       }
       return true;
+    });
+  }
+
+  function getChecklistStatusBucketKey(entry) {
+    const normalizedStatus = cleanText(entry && entry.status).toLowerCase();
+    const summary = entry && entry.summary && typeof entry.summary === 'object' ? entry.summary : {};
+    const answered = Number(summary.conform || 0)
+      + Number(summary.partial || 0)
+      + Number(summary.nonConform || 0)
+      + Number(summary.na || 0);
+    if (normalizedStatus === STATUSES.SUBMITTED) return 'closed';
+    return (answered > 0 || Number(summary.total || 0) > 0 || (entry && (entry.updatedAt || entry.fillDate)))
+      ? 'pending_export'
+      : 'editing';
+  }
+
+  function summarizeChecklistItems(items) {
+    return (Array.isArray(items) ? items : []).reduce((result, entry) => {
+      result.total += 1;
+      const bucket = getChecklistStatusBucketKey(entry);
+      if (bucket === 'closed') result.closed += 1;
+      else if (bucket === 'pending_export') result.pendingExport += 1;
+      else result.editing += 1;
+      return result;
+    }, {
+      total: 0,
+      editing: 0,
+      pendingExport: 0,
+      closed: 0
     });
   }
 
@@ -555,6 +574,7 @@ function createChecklistRouter(deps) {
         ok: true,
         items: visibleItems.map(mapChecklistForClient),
         total: items.length,
+        summary: summarizeChecklistItems(items),
         page,
         contractVersion: CONTRACT_VERSION
       };

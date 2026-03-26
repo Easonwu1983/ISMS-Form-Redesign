@@ -1458,6 +1458,14 @@
         mode: getChecklistMode(),
         items: normalizeRemoteChecklists(body),
         total: Number(body && body.total || 0),
+        summary: body && body.summary && typeof body.summary === 'object'
+          ? {
+              total: Number(body.summary.total || 0),
+              editing: Number(body.summary.editing || 0),
+              pendingExport: Number(body.summary.pendingExport || 0),
+              closed: Number(body.summary.closed || 0)
+            }
+          : null,
         page: body && body.page && typeof body.page === 'object' ? body.page : null,
         raw: body
       };

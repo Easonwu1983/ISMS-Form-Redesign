@@ -126,6 +126,7 @@
         pageEnd: 0
       },
       items: [],
+      summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
       total: 0,
       signature: ''
     };
@@ -239,6 +240,42 @@
       };
     }
 
+    function normalizeChecklistRemoteSummary(summary, total) {
+      const source = summary && typeof summary === 'object' ? summary : {};
+      return {
+        total: Math.max(0, Number(total) || Number(source.total) || 0),
+        editing: Math.max(0, Number(source.editing) || 0),
+        pendingExport: Math.max(0, Number(source.pendingExport) || 0),
+        closed: Math.max(0, Number(source.closed) || 0)
+      };
+    }
+
+    function summarizeChecklistListItems(items) {
+      return (Array.isArray(items) ? items : []).reduce((result, item) => {
+        result.total += 1;
+        const bucket = getChecklistStatusBucket(item);
+        if (bucket.key === 'closed') result.closed += 1;
+        else if (bucket.key === 'pending_export') result.pendingExport += 1;
+        else result.editing += 1;
+        return result;
+      }, {
+        total: 0,
+        editing: 0,
+        pendingExport: 0,
+        closed: 0
+      });
+    }
+
+    function renderChecklistListSummary(summary) {
+      const safeSummary = normalizeChecklistRemoteSummary(summary, summary && summary.total);
+      return `<div class="dashboard-panel-summary checklist-list-summary">
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">總數</span><strong class="dashboard-panel-pill-value">${safeSummary.total}</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">草稿</span><strong class="dashboard-panel-pill-value">${safeSummary.editing}</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待匯出</span><strong class="dashboard-panel-pill-value">${safeSummary.pendingExport}</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已送出</span><strong class="dashboard-panel-pill-value">${safeSummary.closed}</strong></div>
+      </div>`;
+    }
+
     function getChecklistRemotePageSummary(page) {
       const normalizedPage = normalizeChecklistRemotePage(page, checklistRemotePageState.filters, checklistRemotePageState.items, checklistRemotePageState.total);
       if (!normalizedPage.total) return '\u76ee\u524d\u6c92\u6709\u7b26\u5408\u689d\u4ef6\u7684\u6aa2\u6838\u8868';
@@ -290,6 +327,7 @@
         return {
           filters: normalizeChecklistRemoteFilters(filters),
           items: [],
+          summary: normalizeChecklistRemoteSummary(null, 0),
           total: 0,
           page: normalizeChecklistRemotePage(null, filters, [], 0),
           raw: null
@@ -313,6 +351,7 @@
       const value = {
         filters: resolvedFilters,
         items,
+        summary: normalizeChecklistRemoteSummary(response && response.summary, total),
         total,
         page: normalizeChecklistRemotePage(response && response.page, resolvedFilters, items, total),
         raw: response
@@ -708,6 +747,7 @@
     let snapshot;
     let viewSnapshot;
     let remotePage = null;
+    let listSummary;
     if (useRemoteList) {
       const remoteFilters = normalizeChecklistRemoteFilters(opts.remoteFilters || {
         limit: checklistRemotePageState.filters.limit,
@@ -721,17 +761,20 @@
         filters: remotePageResult.filters,
         page: remotePageResult.page,
         items: Array.isArray(remotePageResult.items) ? remotePageResult.items.slice() : [],
+        summary: normalizeChecklistRemoteSummary(remotePageResult.summary, remotePageResult.total),
         total: remotePageResult.total,
         signature: getChecklistRemoteSignature(remotePageResult.filters)
       };
       remotePage = remotePageResult.page;
       checklists = checklistRemotePageState.items;
+      listSummary = checklistRemotePageState.summary;
       snapshot = getChecklistListSnapshot(checklists);
       viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
     } else {
       snapshot = localSnapshot;
       viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
       checklists = snapshot.items;
+      listSummary = summarizeChecklistListItems(viewSnapshot.filtered);
     }
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page">
@@ -744,6 +787,7 @@
           ${buildChecklistListYearTabs(years)}
         </div>
         </div>
+        ${renderChecklistListSummary(listSummary)}
         ${useRemoteList ? renderChecklistListPager(remotePage) : ''}
         <div class="cl-list-content"></div>
       </div>

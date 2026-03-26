@@ -337,6 +337,20 @@ async function run() {
     };
   }, { critical: true });
 
+  await step('checklists summary present', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/checklists?limit=5`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const summary = json && json.summary && typeof json.summary === 'object' ? json.summary : null;
+    if (!summary) throw new Error('checklists summary missing');
+    const total = Number(summary.total || 0);
+    const editing = Number(summary.editing || 0);
+    const pendingExport = Number(summary.pendingExport || 0);
+    const closed = Number(summary.closed || 0);
+    if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary bucket mismatch');
+    if (total !== Number(json && json.total || 0)) throw new Error('checklists summary total mismatch');
+    return { total, pendingExport, closed };
+  }, { critical: true });
+
   await step('training-rosters ids unique', async () => {
     const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/training/rosters`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

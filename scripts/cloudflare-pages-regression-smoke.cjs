@@ -593,6 +593,12 @@ async function run() {
       throw new Error('checklist list contains placeholder question marks');
     }
     pushStep('checklist:list-loaded', true, checklistListText.includes('目前沒有檢核表') ? 'empty-state' : 'table');
+    await page.waitForFunction(() => document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4, undefined, { timeout: 20000 });
+    const checklistSummaryLabels = await page.locator('.checklist-list-summary .dashboard-panel-pill-label').allTextContents();
+    if (!checklistSummaryLabels.includes('總數') || !checklistSummaryLabels.includes('已送出')) {
+      throw new Error('checklist list summary pills missing expected labels');
+    }
+    pushStep('checklist:list-summary', true, checklistSummaryLabels.join(' / '));
     const checklistRows = await page.locator('.cl-list-row').evaluateAll((rows) => rows.map((row) => String(row.getAttribute('data-cl-search-text') || '').trim()).filter(Boolean));
     const checklistQuery = checklistRows.length ? String(checklistRows[0]).slice(0, 12) : '';
     if (checklistQuery) {
