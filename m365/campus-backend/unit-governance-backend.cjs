@@ -521,7 +521,7 @@ function createUnitGovernanceRouter(deps) {
       });
     });
 
-    const governanceItems = buildGovernanceItems();
+    const governanceItems = getGovernanceItemsSnapshot().items;
     const uniquePeople = Array.from(new Map(people.map((person) => [person.username, person])).values())
       .sort((left, right) => cleanText(left.name || left.username).localeCompare(cleanText(right.name || right.username), 'zh-Hant'));
 
