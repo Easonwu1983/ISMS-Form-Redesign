@@ -108,6 +108,7 @@
     let trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
     let trainingRosterRenderCache = { signature: '', selectedSignature: '', defer: false };
     let trainingRosterGroupMarkupCache = { signature: '', html: '' };
+    let trainingRosterPageShellCache = { signature: '', html: '' };
     let trainingDashboardUnitsCache = { signature: '', units: [] };
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
@@ -2731,7 +2732,30 @@
       ? importedPreviewHtml + loadingChunkHtml
       : importedPreviewHtml + chunkedGroupsHtml + loadingChunkHtml;
     const pagerHtml = useRemoteRosters ? renderTrainingRosterPager(rosterPage) : '';
-    const pageHtml = buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size, pagerHtml);
+    const pageShellSignature = importedPreviewHtml
+      ? ''
+      : [
+          rosterRenderSignature,
+          groupMarkupSignature,
+          String(hiddenCount || 0),
+          String(selectedRosterIds.size || 0),
+          useRemoteRosters ? JSON.stringify([
+            Number(rosterPage && rosterPage.offset || 0),
+            Number(rosterPage && rosterPage.limit || 0),
+            Number(rosterPage && rosterPage.total || 0),
+            Number(rosterPage && rosterPage.currentPage || 0),
+            Number(rosterPage && rosterPage.pageCount || 0)
+          ]) : 'local'
+        ].join('::');
+    const pageHtml = pageShellSignature && trainingRosterPageShellCache.signature === pageShellSignature
+      ? trainingRosterPageShellCache.html
+      : buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size, pagerHtml);
+    if (pageShellSignature) {
+      trainingRosterPageShellCache = {
+        signature: pageShellSignature,
+        html: pageHtml
+      };
+    }
     if (currentApp) {
       currentApp.innerHTML = pageHtml;
       currentApp.dataset.trainingRosterRenderSignature = rosterRenderSignature;

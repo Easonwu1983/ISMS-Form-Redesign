@@ -84,13 +84,14 @@ function shouldReturnHtml(req) {
   return accept.includes('text/html') || accept.includes('*/*');
 }
 
-function normalizeRequestPath(reqUrl) {
+function normalizeRequestTarget(reqUrl) {
   const raw = String(reqUrl || '').trim();
   if (!raw) return '/';
   if (raw === '//') return '/';
   if (raw.startsWith('//')) return `/${raw.replace(/^\/+/, '')}`;
   try {
-    return new URL(raw, 'http://localhost').pathname || '/';
+    const parsed = new URL(raw, 'http://localhost');
+    return `${parsed.pathname || '/'}${parsed.search || ''}`;
   } catch (_) {
     return '/';
   }
@@ -261,7 +262,7 @@ function writeForbidden(req, res, ip) {
 }
 
 function proxyRequest(req, res, remoteAddress) {
-  const targetUrl = new URL(normalizeRequestPath(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
+  const targetUrl = new URL(normalizeRequestTarget(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
   const isApiRoute = targetUrl.pathname === '/deploy-manifest.json' || targetUrl.pathname.startsWith('/api/');
   const upstreamBase = isApiRoute ? `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}` : FRONTEND_BASE;
   const upstreamUrl = new URL(`${targetUrl.pathname}${targetUrl.search}`, upstreamBase);
@@ -307,7 +308,7 @@ function proxyRequest(req, res, remoteAddress) {
 
 const server = http.createServer((req, res) => {
   const remoteAddress = normalizeRemoteAddress(req.socket.remoteAddress);
-  const targetUrl = new URL(normalizeRequestPath(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
+  const targetUrl = new URL(normalizeRequestTarget(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
   if (targetUrl.pathname === '/deploy-manifest.json') {
     writeDeployManifest(res);
     return;
