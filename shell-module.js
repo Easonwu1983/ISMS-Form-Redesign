@@ -137,6 +137,7 @@
     var AUTH_STORAGE_KEY = 'cats_auth';
     var AUTH_VERIFY_CACHE_KEY = '__AUTH_VERIFY_CACHE__';
     var AUTH_BOOTSTRAP_FRESH_KEY = '__AUTH_BOOTSTRAP_FRESH__';
+    var AUTH_APP_TRANSITION_KEY = '__AUTH_APP_TRANSITION__';
 
     function safeReadStorage(storage, key) {
       try {
@@ -202,6 +203,45 @@
       safeRemoveStorage(window.sessionStorage, AUTH_VERIFY_CACHE_KEY);
       safeRemoveStorage(window.sessionStorage, AUTH_BOOTSTRAP_FRESH_KEY);
       return true;
+    }
+
+    function setAppTransitionFlag() {
+      try {
+        window.sessionStorage.setItem(AUTH_APP_TRANSITION_KEY, '1');
+      } catch (_) { }
+    }
+
+    function consumeAppTransitionFlag() {
+      try {
+        var enabled = String(window.sessionStorage.getItem(AUTH_APP_TRANSITION_KEY) || '').trim() === '1';
+        window.sessionStorage.removeItem(AUTH_APP_TRANSITION_KEY);
+        return enabled;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function renderAppTransitionOverlay() {
+      return '<div class="app-transition-overlay" id="app-transition-overlay" aria-hidden="true">' +
+        '<div class="app-transition-shell">' +
+        '<div class="app-transition-icon">' + ntuLogo('ntu-logo-sm') + '</div>' +
+        '<div class="app-transition-title">正在載入系統</div>' +
+        '<div class="app-transition-subtitle">登入成功，正在切換到儀表板。</div>' +
+        '</div></div>';
+    }
+
+    function dismissAppTransitionOverlay() {
+      if (typeof window === 'undefined') return;
+      window.requestAnimationFrame(function () {
+        var overlay = document.getElementById('app-transition-overlay');
+        if (!overlay) return;
+        overlay.classList.add('is-leaving');
+        window.setTimeout(function () {
+          if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+        }, 280);
+      });
     }
 
     function getRoleBadgeClass(role) {
@@ -314,6 +354,7 @@
             try {
               sessionStorage.setItem('__AUTH_BOOTSTRAP_FRESH__', '1');
             } catch (_) { }
+            setAppTransitionFlag();
             if (typeof markAuthenticatedBootstrapReady === 'function') {
               try {
                 markAuthenticatedBootstrapReady(user);
@@ -579,9 +620,11 @@
         renderLogin();
         return;
       }
-      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>';
+      var showTransitionOverlay = consumeAppTransitionFlag();
+      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div>' + (showTransitionOverlay ? renderAppTransitionOverlay() : '');
       if (typeof window !== 'undefined' && window.__REMOTE_BOOTSTRAP_STATE__ === 'ready') {
         handleRoute();
+        if (showTransitionOverlay) dismissAppTransitionOverlay();
         return;
       }
       renderBootstrapShell();
@@ -595,6 +638,8 @@
           return;
         }
         handleRoute();
+      }).finally(function () {
+        if (showTransitionOverlay) dismissAppTransitionOverlay();
       });
     }
 

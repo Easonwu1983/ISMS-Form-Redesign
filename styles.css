@@ -5034,6 +5034,61 @@ tbody td:first-child {
   background: var(--accent-gradient);
 }
 
+.app-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(221, 235, 252, 0.96), transparent 42%),
+    linear-gradient(180deg, rgba(244, 248, 254, 0.98), rgba(235, 243, 252, 0.96));
+  opacity: 1;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+
+.app-transition-overlay.is-leaving {
+  opacity: 0;
+}
+
+.app-transition-shell {
+  min-width: min(92vw, 360px);
+  padding: 28px 32px;
+  border-radius: 26px;
+  border: 1px solid rgba(219, 231, 244, 0.96);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 26px 56px -38px rgba(15, 23, 42, 0.42);
+  text-align: center;
+}
+
+.app-transition-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+  border-radius: 18px;
+  background: rgba(23, 93, 168, 0.1);
+  color: var(--accent-primary);
+}
+
+.app-transition-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+}
+
+.app-transition-subtitle {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
 .login-logo {
   margin-bottom: 28px;
 }
