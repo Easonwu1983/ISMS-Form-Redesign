@@ -38,11 +38,13 @@ function createChecklistRouter(deps) {
     entriesCache: null,
     entriesCacheAt: 0,
     entriesPromise: null,
-    entriesPrewarmQueued: false
+    entriesPrewarmQueued: false,
+    queryCache: new Map()
   };
   const CHECKLIST_CACHE_TTL_MS = 120000;
   const CHECKLIST_PREWARM_DELAY_MS = 5000;
   const CHECKLIST_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+  const CHECKLIST_QUERY_CACHE_MAX = 80;
 
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
@@ -144,6 +146,62 @@ function createChecklistRouter(deps) {
         .join(' ')
       : '';
     console.log(`[checklists] ${message}${suffix ? ` ${suffix}` : ''}`);
+  }
+
+  function cloneJson(value) {
+    return value && typeof value === 'object'
+      ? JSON.parse(JSON.stringify(value))
+      : value;
+  }
+
+  function trimQueryCache(cache, maxEntries) {
+    const target = cache instanceof Map ? cache : null;
+    const safeMaxEntries = Math.max(1, Number(maxEntries) || 12);
+    if (!target) return;
+    while (target.size > safeMaxEntries) {
+      const oldestKey = target.keys().next().value;
+      if (!oldestKey) break;
+      target.delete(oldestKey);
+    }
+  }
+
+  function readQueryCache(cache, cacheKey) {
+    if (!(cache instanceof Map) || !cacheKey || !cache.has(cacheKey)) return null;
+    const cached = cache.get(cacheKey);
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cached);
+    return cloneJson(cached);
+  }
+
+  function writeQueryCache(cache, cacheKey, value, maxEntries) {
+    if (!(cache instanceof Map) || !cacheKey) return cloneJson(value);
+    cache.set(cacheKey, cloneJson(value));
+    trimQueryCache(cache, maxEntries);
+    return cloneJson(value);
+  }
+
+  function buildChecklistQueryCacheKey(authz, url, cacheVersion) {
+    const safeAuthz = authz && typeof authz === 'object' ? authz : {};
+    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits) ? safeAuthz.authorizedUnits : [];
+    const reviewUnits = Array.isArray(safeAuthz.reviewUnits) ? safeAuthz.reviewUnits : [];
+    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
+    return [
+      String(cacheVersion || 0).trim(),
+      String(safeAuthz.username || '').trim(),
+      String(safeAuthz.role || '').trim(),
+      String(safeAuthz.primaryUnit || '').trim(),
+      String(safeAuthz.activeUnit || '').trim(),
+      authorizedUnits.join('|'),
+      reviewUnits.join('|'),
+      String(params.get('status') || '').trim(),
+      String(params.get('statusBucket') || '').trim(),
+      String(params.get('unit') || '').trim(),
+      String(params.get('auditYear') || '').trim(),
+      String(params.get('fillerUsername') || '').trim(),
+      String(params.get('q') || '').trim(),
+      String(params.get('limit') || '').trim(),
+      String(params.get('offset') || '').trim()
+    ].join('::');
   }
 
   async function resolveChecklistsList() {
@@ -266,6 +324,7 @@ function createChecklistRouter(deps) {
     state.entriesCache = null;
     state.entriesCacheAt = 0;
     state.entriesPromise = null;
+    state.queryCache.clear();
   }
 
   async function listAllEntries(options) {
@@ -471,12 +530,35 @@ function createChecklistRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const rows = await listAllEntries();
+      const cacheKey = buildChecklistQueryCacheKey(authz, url, state.entriesCacheAt || rows.length);
+      const cached = readQueryCache(state.queryCache, cacheKey);
+      if (cached) {
+        logChecklistCache('query cache hit', {
+          username: authz.username,
+          totalRows: rows.length,
+          total: cached.total,
+          returnedRows: cached.page && cached.page.returned,
+          limit: cached.page && cached.page.limit,
+          offset: cached.page && cached.page.offset,
+          durationMs: Date.now() - startedAt
+        });
+        await writeJson(res, buildJsonResponse(200, cached), origin);
+        return;
+      }
       const items = filterItems(rows.map((entry) => entry.item), url)
         .filter((entry) => requestAuthz.canAccessChecklist(authz, entry));
       const page = buildChecklistPageMeta(url, items.length);
       const visibleItems = page.paged
         ? items.slice(page.offset, page.offset + page.limit)
         : items;
+      const responseBody = {
+        ok: true,
+        items: visibleItems.map(mapChecklistForClient),
+        total: items.length,
+        page,
+        contractVersion: CONTRACT_VERSION
+      };
+      const cachedBody = writeQueryCache(state.queryCache, cacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);
       logChecklistCache('list served', {
         username: authz.username,
         totalRows: rows.length,
@@ -485,15 +567,10 @@ function createChecklistRouter(deps) {
         paged: page.paged,
         limit: page.limit,
         offset: page.offset,
+        cacheHit: false,
         durationMs: Date.now() - startedAt
       });
-      await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        items: visibleItems.map(mapChecklistForClient),
-        total: items.length,
-        page,
-        contractVersion: CONTRACT_VERSION
-      }), origin);
+      await writeJson(res, buildJsonResponse(200, cachedBody), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to list checklists.', 500), origin);
     }

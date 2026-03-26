@@ -167,6 +167,17 @@ function createUnitGovernanceRouter(deps) {
     }, { total: 0, consolidated: 0, independent: 0, children: 0 });
   }
 
+  function summarizeGovernanceCategory(items, fallbackCategory) {
+    const summary = summarizeGovernanceItems(items);
+    return {
+      category: cleanText(fallbackCategory),
+      unitCount: Number(summary.total || 0),
+      consolidatedCount: Number(summary.consolidated || 0),
+      independentCount: Number(summary.independent || 0),
+      childCount: Number(summary.children || 0)
+    };
+  }
+
   function getGovernanceBucketKey(mode, category) {
     return buildQueryCacheKey([mode || 'all', category || 'all']);
   }
@@ -205,6 +216,18 @@ function createUnitGovernanceRouter(deps) {
       peopleWithoutWindow: safePeople.filter((person) => !(person && person.hasWindow)).length,
       pendingApplications: safeUnits.reduce((count, unit) => count + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0),
       exemptedUnits: safeUnits.reduce((count, unit) => count + (Number(unit && unit.exemptedRows) || 0), 0)
+    };
+  }
+
+  function summarizeSecurityWindowCategory(units, fallbackCategory) {
+    const safeUnits = Array.isArray(units) ? units : [];
+    return {
+      category: cleanText(fallbackCategory),
+      unitCount: safeUnits.length,
+      assignedCount: safeUnits.filter((unit) => unit && unit.hasWindow).length,
+      pendingCount: safeUnits.reduce((sum, unit) => sum + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0),
+      missingCount: safeUnits.filter((unit) => unit && !unit.hasWindow && !(Array.isArray(unit.pending) && unit.pending.length)).length,
+      childCount: safeUnits.reduce((sum, unit) => sum + (Array.isArray(unit && unit.children) ? unit.children.length : 0), 0)
     };
   }
 
@@ -253,6 +276,60 @@ function createUnitGovernanceRouter(deps) {
       missing: safePeople.filter((person) => !(person && person.hasWindow))
     };
     return { unitBuckets, peopleBuckets, summaryBuckets };
+  }
+
+  function buildGovernanceCategorySummariesFromBuckets(snapshot, mode, categoryFilter) {
+    const safeSnapshot = snapshot && typeof snapshot === 'object' ? snapshot : {};
+    const buckets = safeSnapshot.buckets && typeof safeSnapshot.buckets === 'object' ? safeSnapshot.buckets : {};
+    const categories = categoryFilter && categoryFilter !== 'all'
+      ? [categoryFilter]
+      : GOVERNANCE_CATEGORY_ORDER.slice();
+    return categories.reduce((result, category) => {
+      const bucket = buckets[getGovernanceBucketKey(mode || 'all', category)] || null;
+      const items = Array.isArray(bucket && bucket.items) ? bucket.items : [];
+      result[category] = summarizeGovernanceCategory(items, category);
+      return result;
+    }, {});
+  }
+
+  function buildGovernanceCategorySummariesFromItems(items, categoryFilter) {
+    const source = Array.isArray(items) ? items : [];
+    const categories = categoryFilter && categoryFilter !== 'all'
+      ? [categoryFilter]
+      : Array.from(new Set(source.map((item) => cleanText(item && item.category)).filter(Boolean)));
+    return categories.reduce((result, category) => {
+      const categoryItems = source.filter((item) => cleanText(item && item.category) === category);
+      result[category] = summarizeGovernanceCategory(categoryItems, category);
+      return result;
+    }, {});
+  }
+
+  function buildSecurityWindowCategorySummariesFromInventory(inventory, status, categoryFilter) {
+    const source = inventory && typeof inventory === 'object' ? inventory : {};
+    const buckets = source.buckets && typeof source.buckets === 'object' ? source.buckets : {};
+    const unitBuckets = buckets.unitBuckets && typeof buckets.unitBuckets === 'object' ? buckets.unitBuckets : {};
+    const categories = categoryFilter && categoryFilter !== 'all'
+      ? [categoryFilter]
+      : GOVERNANCE_CATEGORY_ORDER.slice();
+    return categories.reduce((result, category) => {
+      const units = Array.isArray(unitBuckets[getSecurityWindowBucketKey(status || 'all', category)])
+        ? unitBuckets[getSecurityWindowBucketKey(status || 'all', category)]
+        : [];
+      result[category] = summarizeSecurityWindowCategory(units, category);
+      return result;
+    }, {});
+  }
+
+  function buildSecurityWindowCategorySummariesFromUnits(units, categoryFilter) {
+    const source = Array.isArray(units) ? units : [];
+    const categories = categoryFilter && categoryFilter !== 'all'
+      ? [categoryFilter]
+      : Array.from(new Set(source.map((unit) => cleanText(unit && unit.category)).filter(Boolean)));
+    return categories.reduce((result, category) => {
+      const categoryUnits = source.filter((unit) => cleanText(unit && unit.category) === category);
+      result[category] = summarizeSecurityWindowCategory(categoryUnits, category);
+      return result;
+    }, {});
   }
 
   function createError(message, statusCode) {
@@ -521,11 +598,15 @@ function createUnitGovernanceRouter(deps) {
       });
       summary = summarizeGovernanceItems(filteredItems);
     }
+    const categorySummaries = !keyword && sourceSnapshot.buckets && typeof sourceSnapshot.buckets === 'object'
+      ? buildGovernanceCategorySummariesFromBuckets(sourceSnapshot, mode, category)
+      : buildGovernanceCategorySummariesFromItems(filteredItems, category);
     const page = buildPageMeta(url, filteredItems.length, 12, 60);
     const visibleItems = filteredItems.slice(page.offset, page.offset + page.limit);
     return writeQueryCache(state.governanceQueryCache, cacheKey, {
       items: visibleItems,
       summary: summary || summarizeGovernanceItems(filteredItems),
+      categorySummaries,
       page,
       filters: {
         keyword: cleanText(keyword),
@@ -579,7 +660,8 @@ function createUnitGovernanceRouter(deps) {
         peopleWithoutWindow: 0,
         pendingApplications: 0,
         exemptedUnits: 0
-      }
+      },
+      categorySummaries: {}
     };
   }
 
@@ -764,6 +846,9 @@ function createUnitGovernanceRouter(deps) {
       });
       summary = summarizeSecurityWindowInventory(filteredUnits, filteredPeople);
     }
+    const categorySummaries = !keyword && source.buckets && typeof source.buckets === 'object'
+      ? buildSecurityWindowCategorySummariesFromInventory(source, status, category)
+      : buildSecurityWindowCategorySummariesFromUnits(filteredUnits, category);
     const page = buildPageMeta(url, filteredUnits.length, 12, 60);
     const visibleUnits = filteredUnits.slice(page.offset, page.offset + page.limit);
     return writeQueryCache(state.inventoryQueryCache, cacheKey, {
@@ -771,8 +856,10 @@ function createUnitGovernanceRouter(deps) {
         generatedAt: cleanText(source.generatedAt) || new Date().toISOString(),
         units: visibleUnits,
         people: filteredPeople,
-        summary: summary || summarizeSecurityWindowInventory(filteredUnits, filteredPeople)
+        summary: summary || summarizeSecurityWindowInventory(filteredUnits, filteredPeople),
+        categorySummaries
       },
+      categorySummaries,
       page,
       filters: {
         keyword: cleanText(keyword),
@@ -817,13 +904,14 @@ function createUnitGovernanceRouter(deps) {
         status: 200,
         jsonBody: {
           ok: true,
-          items: result.items,
-          summary: result.summary,
-          page: result.page,
-          filters: result.filters,
-          total: result.page.total,
-          contractVersion: CONTRACT_VERSION,
-          generatedAt: result.generatedAt
+            items: result.items,
+            summary: result.summary,
+            categorySummaries: result.categorySummaries,
+            page: result.page,
+            filters: result.filters,
+            total: result.page.total,
+            contractVersion: CONTRACT_VERSION,
+            generatedAt: result.generatedAt
         }
       }, origin);
     } catch (error) {
@@ -917,12 +1005,13 @@ function createUnitGovernanceRouter(deps) {
       await writeJson(res, {
         status: 200,
         jsonBody: {
-          ok: true,
-          inventory: result.inventory,
-          page: result.page,
-          filters: result.filters,
-          total: result.page.total,
-          contractVersion: CONTRACT_VERSION
+            ok: true,
+            inventory: result.inventory,
+            categorySummaries: result.categorySummaries,
+            page: result.page,
+            filters: result.filters,
+            total: result.page.total,
+            contractVersion: CONTRACT_VERSION
         }
       }, origin);
     } catch (error) {

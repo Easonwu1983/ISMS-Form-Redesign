@@ -151,6 +151,7 @@
       filters: { ...DEFAULT_GOVERNANCE_FILTERS },
       items: [],
       summary: { total: 0, consolidated: 0, independent: 0, children: 0 },
+      categorySummaries: {},
       page: { offset: 0, limit: 12, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       loading: false,
       lastLoadedAt: ''
@@ -165,6 +166,7 @@
     const securityWindowState = {
       filters: { ...DEFAULT_SECURITY_WINDOW_FILTERS },
       inventory: null,
+      categorySummaries: {},
       page: { offset: 0, limit: 12, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       loading: false,
       lastLoadedAt: '',
@@ -445,6 +447,51 @@
       }, { total: 0, consolidated: 0, independent: 0, children: 0 });
     }
 
+    function normalizeCategorySummaryMap(value, projector) {
+      const source = value && typeof value === 'object' ? value : {};
+      return Object.keys(source).reduce((result, category) => {
+        const normalizedCategory = String(category || '').trim();
+        if (!normalizedCategory) return result;
+        result[normalizedCategory] = projector(source[category], normalizedCategory);
+        return result;
+      }, {});
+    }
+
+    function summarizeGovernanceCategoryItems(items, category) {
+      const summary = summarizeGovernanceItems(items);
+      return {
+        category: String(category || '').trim(),
+        unitCount: Number(summary.total || 0),
+        consolidatedCount: Number(summary.consolidated || 0),
+        independentCount: Number(summary.independent || 0),
+        childCount: Number(summary.children || 0)
+      };
+    }
+
+    function normalizeGovernanceCategorySummaries(value) {
+      return normalizeCategorySummaryMap(value, function (summary, category) {
+        const safe = summary && typeof summary === 'object' ? summary : {};
+        return {
+          category,
+          unitCount: Number(safe.unitCount || safe.total || 0),
+          consolidatedCount: Number(safe.consolidatedCount || safe.consolidated || 0),
+          independentCount: Number(safe.independentCount || safe.independent || 0),
+          childCount: Number(safe.childCount || safe.children || 0)
+        };
+      });
+    }
+
+    function buildGovernanceCategorySummaryMap(items, categoryFilter) {
+      const rows = Array.isArray(items) ? items : [];
+      const categories = categoryFilter && categoryFilter !== 'all'
+        ? [String(categoryFilter).trim()]
+        : Array.from(new Set(rows.map((item) => String(item && item.category || '').trim()).filter(Boolean)));
+      return categories.reduce((result, category) => {
+        result[category] = summarizeGovernanceCategoryItems(rows.filter((item) => String(item && item.category || '').trim() === category), category);
+        return result;
+      }, {});
+    }
+
     async function listGovernanceItemsForAdmin(filters) {
       const nextFilters = normalizePagedFilters(filters, DEFAULT_GOVERNANCE_FILTERS);
       if (!isRemoteGovernanceEnabled()) {
@@ -467,6 +514,7 @@
           items: items.slice(page.offset, page.offset + page.limit),
           page,
           summary: summarizeGovernanceItems(items),
+          categorySummaries: buildGovernanceCategorySummaryMap(items, nextFilters.category),
           filters: nextFilters,
           generatedAt: new Date().toISOString()
         };
@@ -477,6 +525,7 @@
         items: Array.isArray(response && response.items) ? response.items : [],
         page: response && response.page ? response.page : buildAdminCollectionPage(nextFilters, response && response.total, 12, 60),
         summary: response && response.summary ? response.summary : summarizeGovernanceItems(response && response.items),
+        categorySummaries: normalizeGovernanceCategorySummaries(response && response.categorySummaries),
         filters: { ...nextFilters, ...(response && response.filters ? response.filters : {}) },
         generatedAt: String(response && response.generatedAt || '').trim() || new Date().toISOString()
       };
@@ -509,7 +558,8 @@
         return {
           inventory: response && response.inventory ? response.inventory : buildEmptySecurityWindowInventory(),
           page: response && response.page ? response.page : buildAdminCollectionPage(nextFilters, response && response.total, 12, 60),
-          filters: { ...nextFilters, ...(response && response.filters ? response.filters : {}) }
+          filters: { ...nextFilters, ...(response && response.filters ? response.filters : {}) },
+          categorySummaries: normalizeSecurityWindowCategorySummaries((response && response.categorySummaries) || (response && response.inventory && response.inventory.categorySummaries))
         };
       }
       const applications = await listUnitContactApplications({ limit: '200' });
@@ -522,7 +572,8 @@
           units: Array.isArray(filteredInventory.units) ? filteredInventory.units.slice(page.offset, page.offset + page.limit) : []
         },
         page,
-        filters: nextFilters
+        filters: nextFilters,
+        categorySummaries: buildSecurityWindowCategorySummaryMap(filteredInventory.units, nextFilters.category)
       };
     }
 
@@ -1081,13 +1132,16 @@
       </div>`;
     }
 
-    function renderGovernanceCategoryCard(group, index) {
+    function renderGovernanceCategoryCard(group, index, categorySummaries) {
       const items = Array.isArray(group && group.items) ? group.items : [];
       const category = String(group && group.category || '').trim() || '中心 / 研究單位';
-      const unitCount = items.length;
-      const consolidatedCount = items.filter((unit) => String(unit && unit.mode || 'independent').trim() === 'consolidated').length;
-      const independentCount = unitCount - consolidatedCount;
-      const childCount = items.reduce((sum, unit) => sum + (Array.isArray(unit && unit.children) ? unit.children.length : 0), 0);
+      const summary = categorySummaries && categorySummaries[category]
+        ? categorySummaries[category]
+        : summarizeGovernanceCategoryItems(items, category);
+      const unitCount = Number(summary && summary.unitCount || items.length);
+      const consolidatedCount = Number(summary && summary.consolidatedCount || 0);
+      const independentCount = Number(summary && summary.independentCount || Math.max(unitCount - consolidatedCount, 0));
+      const childCount = Number(summary && summary.childCount || 0);
       const summaryChips = [
         ['單位數', unitCount],
         ['合併填報', consolidatedCount],
@@ -1192,6 +1246,43 @@
           exemptedUnits: Number(summary.exemptedUnits || 0)
         }
       };
+    }
+
+    function summarizeSecurityWindowCategoryItems(units, category) {
+      const rows = Array.isArray(units) ? units : [];
+      return {
+        category: String(category || '').trim(),
+        unitCount: rows.length,
+        assignedCount: rows.filter((unit) => unit && unit.hasWindow).length,
+        pendingCount: rows.reduce((sum, unit) => sum + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0),
+        missingCount: rows.filter((unit) => unit && !unit.hasWindow && !(Array.isArray(unit.pending) && unit.pending.length)).length,
+        childCount: rows.reduce((sum, unit) => sum + (Array.isArray(unit && unit.children) ? unit.children.length : 0), 0)
+      };
+    }
+
+    function normalizeSecurityWindowCategorySummaries(value) {
+      return normalizeCategorySummaryMap(value, function (summary, category) {
+        const safe = summary && typeof summary === 'object' ? summary : {};
+        return {
+          category,
+          unitCount: Number(safe.unitCount || 0),
+          assignedCount: Number(safe.assignedCount || 0),
+          pendingCount: Number(safe.pendingCount || 0),
+          missingCount: Number(safe.missingCount || 0),
+          childCount: Number(safe.childCount || 0)
+        };
+      });
+    }
+
+    function buildSecurityWindowCategorySummaryMap(units, categoryFilter) {
+      const rows = Array.isArray(units) ? units : [];
+      const categories = categoryFilter && categoryFilter !== 'all'
+        ? [String(categoryFilter).trim()]
+        : Array.from(new Set(rows.map((unit) => String(unit && unit.category || '').trim()).filter(Boolean)));
+      return categories.reduce((result, category) => {
+        result[category] = summarizeSecurityWindowCategoryItems(rows.filter((unit) => String(unit && unit.category || '').trim() === category), category);
+        return result;
+      }, {});
     }
 
     function renderSecurityWindowPersonBadge(person) {
@@ -1441,14 +1532,17 @@
       return `<details class="training-group-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="training-group-summary security-window-summary"><div><span class="training-group-title">${esc(unit.unit)}</span><div class="training-group-subtitle">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div><div class="training-group-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="governance-card-body" style="padding-top:14px"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div>${renderSecurityWindowScopeRows(unit)}</div></details>`;
     }
 
-    function renderSecurityWindowCategoryCard(group, index) {
+    function renderSecurityWindowCategoryCard(group, index, categorySummaries) {
       const items = Array.isArray(group && group.items) ? group.items : [];
       const category = String(group && group.category || '').trim() || '中心 / 研究單位';
-      const unitCount = items.length;
-      const assignedCount = items.filter((unit) => unit && unit.hasWindow).length;
-      const pendingCount = items.reduce((sum, unit) => sum + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0);
-      const childCount = items.reduce((sum, unit) => sum + (Array.isArray(unit && unit.children) ? unit.children.length : 0), 0);
-      const missingCount = items.filter((unit) => unit && !unit.hasWindow && !(Array.isArray(unit.pending) && unit.pending.length)).length;
+      const summary = categorySummaries && categorySummaries[category]
+        ? categorySummaries[category]
+        : summarizeSecurityWindowCategoryItems(items, category);
+      const unitCount = Number(summary && summary.unitCount || items.length);
+      const assignedCount = Number(summary && summary.assignedCount || 0);
+      const pendingCount = Number(summary && summary.pendingCount || 0);
+      const childCount = Number(summary && summary.childCount || 0);
+      const missingCount = Number(summary && summary.missingCount || 0);
       const summaryChips = [
         ['單位數', unitCount],
         ['已設定', assignedCount],
@@ -1461,16 +1555,33 @@
       return `<details class="training-group-card security-window-category-card"${openAttr} data-security-window-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body">${bodyHtml}</div></details>`;
     }
 
-    function renderSecurityWindowUnitCards(units) {
+    function renderSecurityWindowUnitCards(units, categorySummaries) {
       const rows = Array.isArray(units) ? units : [];
       if (!rows.length) {
         return `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">目前沒有符合條件的資安窗口單位</div><div class="empty-state-desc">請調整關鍵字、狀態或先確認單位治理設定。</div></div>`;
       }
       const groups = groupSecurityWindowUnitsByCategory(rows);
-      return `<div class="security-window-category-stack">${groups.map((group, index) => renderSecurityWindowCategoryCard(group, index)).join('')}</div>`;
+      return `<div class="security-window-category-stack">${groups.map((group, index) => renderSecurityWindowCategoryCard(group, index, categorySummaries)).join('')}</div>`;
     }
 
-    function buildUnitGovernanceCardsRenderSignature(items, filters, page, loadedAt) {
+    function serializeCategorySummaries(categorySummaries) {
+      const source = categorySummaries && typeof categorySummaries === 'object' ? categorySummaries : {};
+      return Object.keys(source).sort().map((category) => {
+        const summary = source[category] && typeof source[category] === 'object' ? source[category] : {};
+        return [
+          category,
+          Number(summary.unitCount || summary.total || 0),
+          Number(summary.consolidatedCount || summary.consolidated || 0),
+          Number(summary.independentCount || summary.independent || 0),
+          Number(summary.childCount || summary.children || 0),
+          Number(summary.assignedCount || 0),
+          Number(summary.pendingCount || 0),
+          Number(summary.missingCount || 0)
+        ];
+      });
+    }
+
+    function buildUnitGovernanceCardsRenderSignature(items, filters, page, loadedAt, categorySummaries) {
       const safeFilters = filters || {};
       const safePage = page || {};
       const rows = Array.isArray(items) ? items : [];
@@ -1482,24 +1593,25 @@
         Number(safePage.offset || 0),
         Number(safePage.limit || 12),
         Number(safePage.total || rows.length),
-        rows.map((item) => [
-          String(item && item.unit || '').trim(),
-          String(item && item.category || '').trim(),
-          String(item && item.mode || '').trim(),
-          Number(Array.isArray(item && item.children) ? item.children.length : 0),
-          String(item && item.updatedAt || '').trim()
-        ])
-      ]);
-    }
+          rows.map((item) => [
+            String(item && item.unit || '').trim(),
+            String(item && item.category || '').trim(),
+            String(item && item.mode || '').trim(),
+            Number(Array.isArray(item && item.children) ? item.children.length : 0),
+            String(item && item.updatedAt || '').trim()
+          ]),
+          serializeCategorySummaries(categorySummaries)
+        ]);
+      }
 
-    function getCachedUnitGovernanceCardsHtml(items, filters, page, loadedAt) {
-      const signature = buildUnitGovernanceCardsRenderSignature(items, filters, page, loadedAt);
+    function getCachedUnitGovernanceCardsHtml(items, filters, page, loadedAt, categorySummaries) {
+      const signature = buildUnitGovernanceCardsRenderSignature(items, filters, page, loadedAt, categorySummaries);
       if (unitGovernanceRenderCache.signature === signature && unitGovernanceRenderCache.cardsHtml) {
         return unitGovernanceRenderCache.cardsHtml;
       }
       const groupedItems = groupGovernanceUnitsByCategory(items);
       const cardsHtml = groupedItems.length
-        ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index)).join('')
+        ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index, categorySummaries)).join('')
         : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
       unitGovernanceRenderCache = {
         signature,
@@ -1508,7 +1620,7 @@
       return cardsHtml;
     }
 
-    function buildSecurityWindowUnitCardsRenderSignature(units, filters, page, generatedAt) {
+    function buildSecurityWindowUnitCardsRenderSignature(units, filters, page, generatedAt, categorySummaries) {
       const safeFilters = filters || {};
       const safePage = page || {};
       const rows = Array.isArray(units) ? units : [];
@@ -1520,24 +1632,25 @@
         Number(safePage.offset || 0),
         Number(safePage.limit || 12),
         Number(safePage.total || rows.length),
-        rows.map((item) => [
-          String(item && item.unit || '').trim(),
-          String(item && item.category || '').trim(),
-          String(item && item.mode || '').trim(),
-          String(item && item.status || '').trim(),
-          Number(Array.isArray(item && item.children) ? item.children.length : 0),
-          Number(Array.isArray(item && item.holders) ? item.holders.length : 0),
-          Number(Array.isArray(item && item.pending) ? item.pending.length : 0)
-        ])
+          rows.map((item) => [
+            String(item && item.unit || '').trim(),
+            String(item && item.category || '').trim(),
+            String(item && item.mode || '').trim(),
+            String(item && item.status || '').trim(),
+            Number(Array.isArray(item && item.children) ? item.children.length : 0),
+            Number(Array.isArray(item && item.holders) ? item.holders.length : 0),
+            Number(Array.isArray(item && item.pending) ? item.pending.length : 0)
+          ]),
+          serializeCategorySummaries(categorySummaries)
       ]);
     }
 
-    function getCachedSecurityWindowUnitCardsHtml(units, filters, page, generatedAt) {
-      const signature = buildSecurityWindowUnitCardsRenderSignature(units, filters, page, generatedAt);
+    function getCachedSecurityWindowUnitCardsHtml(units, filters, page, generatedAt, categorySummaries) {
+      const signature = buildSecurityWindowUnitCardsRenderSignature(units, filters, page, generatedAt, categorySummaries);
       if (securityWindowRenderCache.unitCardsSignature === signature && securityWindowRenderCache.unitCardsHtml) {
         return securityWindowRenderCache.unitCardsHtml;
       }
-      const unitCardsHtml = renderSecurityWindowUnitCards(units);
+      const unitCardsHtml = renderSecurityWindowUnitCards(units, categorySummaries);
       securityWindowRenderCache.unitCardsSignature = signature;
       securityWindowRenderCache.unitCardsHtml = unitCardsHtml;
       return unitCardsHtml;
@@ -2209,24 +2322,26 @@
     app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">可為一級單位設定獨立或合併填報模式，並快速檢視轄下二級單位的填報關聯。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在整理單位治理資料...</div></div>`;
     refreshIcons();
     try {
-      const result = await listGovernanceItemsForAdmin(unitGovernanceState.filters);
-      unitGovernanceState.items = Array.isArray(result && result.items) ? result.items : [];
-      unitGovernanceState.summary = result && result.summary ? result.summary : summarizeGovernanceItems(unitGovernanceState.items);
-      unitGovernanceState.page = result && result.page ? result.page : buildAdminCollectionPage(unitGovernanceState.filters, unitGovernanceState.items.length, 12, 60);
-      unitGovernanceState.filters = normalizePagedFilters(result && result.filters ? result.filters : unitGovernanceState.filters, DEFAULT_GOVERNANCE_FILTERS);
-      unitGovernanceState.lastLoadedAt = String(result && result.generatedAt || '').trim() || new Date().toISOString();
+        const result = await listGovernanceItemsForAdmin(unitGovernanceState.filters);
+        unitGovernanceState.items = Array.isArray(result && result.items) ? result.items : [];
+        unitGovernanceState.summary = result && result.summary ? result.summary : summarizeGovernanceItems(unitGovernanceState.items);
+        unitGovernanceState.categorySummaries = normalizeGovernanceCategorySummaries(result && result.categorySummaries);
+        unitGovernanceState.page = result && result.page ? result.page : buildAdminCollectionPage(unitGovernanceState.filters, unitGovernanceState.items.length, 12, 60);
+        unitGovernanceState.filters = normalizePagedFilters(result && result.filters ? result.filters : unitGovernanceState.filters, DEFAULT_GOVERNANCE_FILTERS);
+        unitGovernanceState.lastLoadedAt = String(result && result.generatedAt || '').trim() || new Date().toISOString();
     } catch (error) {
       app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">無法讀取單位治理資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">單位治理資料尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
       return;
     }
     const counts = unitGovernanceState.summary || summarizeGovernanceItems(unitGovernanceState.items);
-    const cardsHtml = getCachedUnitGovernanceCardsHtml(
-      unitGovernanceState.items,
-      unitGovernanceState.filters,
-      unitGovernanceState.page,
-      unitGovernanceState.lastLoadedAt
-    );
+      const cardsHtml = getCachedUnitGovernanceCardsHtml(
+        unitGovernanceState.items,
+        unitGovernanceState.filters,
+        unitGovernanceState.page,
+        unitGovernanceState.lastLoadedAt,
+        unitGovernanceState.categorySummaries
+      );
     const governancePagerHtml = renderAdminCollectionPager({
       idPrefix: 'unit-governance',
       actionPrefix: 'admin.unitGovernance',
@@ -2397,19 +2512,21 @@
       return;
     }
 
-    const safeInventory = normalizeSecurityWindowInventory(response && response.inventory);
-    securityWindowState.inventory = safeInventory;
-    securityWindowState.page = response && response.page ? response.page : buildAdminCollectionPage(resolvedFilters, safeInventory.units.length, 12, 60);
-    securityWindowState.filters = normalizePagedFilters(response && response.filters ? response.filters : resolvedFilters, DEFAULT_SECURITY_WINDOW_FILTERS);
-    securityWindowState.lastLoadedAt = safeInventory.generatedAt || new Date().toISOString();
+      const safeInventory = normalizeSecurityWindowInventory(response && response.inventory);
+      securityWindowState.inventory = safeInventory;
+      securityWindowState.categorySummaries = normalizeSecurityWindowCategorySummaries(response && response.categorySummaries);
+      securityWindowState.page = response && response.page ? response.page : buildAdminCollectionPage(resolvedFilters, safeInventory.units.length, 12, 60);
+      securityWindowState.filters = normalizePagedFilters(response && response.filters ? response.filters : resolvedFilters, DEFAULT_SECURITY_WINDOW_FILTERS);
+      securityWindowState.lastLoadedAt = safeInventory.generatedAt || new Date().toISOString();
     securityWindowState.filterSignature = getSecurityWindowFilterSignature(securityWindowState.filters);
     const summary = safeInventory.summary || buildEmptySecurityWindowInventory().summary;
-    const unitCardsHtml = getCachedSecurityWindowUnitCardsHtml(
-      safeInventory.units,
-      securityWindowState.filters,
-      securityWindowState.page,
-      safeInventory.generatedAt
-    );
+      const unitCardsHtml = getCachedSecurityWindowUnitCardsHtml(
+        safeInventory.units,
+        securityWindowState.filters,
+        securityWindowState.page,
+        safeInventory.generatedAt,
+        securityWindowState.categorySummaries
+      );
     const peopleRowsHtml = getCachedSecurityWindowPeopleRowsHtml(
       safeInventory.people,
       securityWindowState.filters,

@@ -1193,6 +1193,7 @@
         ok: !!(body && body.ok !== false),
         items: Array.isArray(body && body.items) ? body.items : [],
         summary: body && body.summary && typeof body.summary === 'object' ? body.summary : null,
+        categorySummaries: body && body.categorySummaries && typeof body.categorySummaries === 'object' ? body.categorySummaries : null,
         page: body && body.page && typeof body.page === 'object' ? body.page : null,
         filters: body && body.filters && typeof body.filters === 'object' ? body.filters : null,
         total: Math.max(0, Number(body && body.total) || 0),
@@ -1229,6 +1230,7 @@
       return {
         ok: !!(body && body.ok !== false),
         inventory: body && body.inventory && typeof body.inventory === 'object' ? body.inventory : null,
+        categorySummaries: body && body.categorySummaries && typeof body.categorySummaries === 'object' ? body.categorySummaries : null,
         page: body && body.page && typeof body.page === 'object' ? body.page : null,
         filters: body && body.filters && typeof body.filters === 'object' ? body.filters : null,
         total: Math.max(0, Number(body && body.total) || 0),
