@@ -2542,11 +2542,11 @@
       return;
       }
 
+    const health = state.health || { ready: false, message: '未取得後端健康資訊' };
     const renderSignature = getAuditTrailRenderSignature(state, health);
     if (auditTrailRenderCache.signature === renderSignature && app && app.dataset.auditTrailRenderSignature === renderSignature) {
       return;
     }
-    const health = state.health || { ready: false, message: '未取得後端健康資訊' };
     let pageHtml = auditTrailMarkupCache.signature === renderSignature
       ? auditTrailMarkupCache.html
       : '';
