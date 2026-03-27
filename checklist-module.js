@@ -134,6 +134,7 @@
       total: 0,
       signature: ''
     };
+    let checklistAccessProfileListenerInstalled = false;
 
     function serializeChecklistRemoteSummary(summary) {
       const safe = normalizeChecklistRemoteSummary(summary, summary && summary.total);
@@ -307,9 +308,82 @@
       };
     }
 
+    function recordChecklistBootstrapStep(step, detail) {
+      if (typeof window === 'undefined' || !window.__ISMS_BOOTSTRAP__ || typeof window.__ISMS_BOOTSTRAP__.record !== 'function') return;
+      window.__ISMS_BOOTSTRAP__.record(step, detail);
+    }
+
+    function resetChecklistRemoteCaches(reason) {
+      const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
+      checklistRemotePageCache.clear();
+      checklistRemoteSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+      resetChecklistRemoteSummaryBootstrapState();
+      checklistRemotePageState = {
+        filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
+        page: {
+          offset: 0,
+          limit: Number(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+          total: 0,
+          pageCount: 0,
+          currentPage: 0,
+          hasPrev: false,
+          hasNext: false,
+          prevOffset: 0,
+          nextOffset: 0,
+          pageStart: 0,
+          pageEnd: 0
+        },
+        items: [],
+        summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
+        total: 0,
+        signature: ''
+      };
+      checklistBrowseState.keyword = '';
+      checklistBrowseState.selectedYear = '';
+      checklistBrowseState.status = 'all';
+      checklistListRenderCache = { signature: '', html: '' };
+      checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
+      checklistListViewCache = { signature: '', filtered: [], grouped: [] };
+      checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
+      recordChecklistBootstrapStep('checklist-cache-reset', safeReason);
+    }
+
+    function installChecklistAccessProfileListener() {
+      if (checklistAccessProfileListenerInstalled || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+      window.addEventListener('isms:access-profile-changed', function (event) {
+        const detail = event && event.detail ? event.detail : {};
+        resetChecklistRemoteCaches(detail.reason || 'profile-changed');
+      });
+      checklistAccessProfileListenerInstalled = true;
+    }
+
     function getChecklistRemoteClient() {
-      if (typeof window === 'undefined' || !window._m365ApiClient || typeof window._m365ApiClient !== 'object') return null;
-      return window._m365ApiClient;
+      installChecklistAccessProfileListener();
+      if (typeof window === 'undefined') return null;
+      if (window._m365ApiClient && typeof window._m365ApiClient === 'object') return window._m365ApiClient;
+      try {
+        if (window.__ISMS_BOOTSTRAP__ && typeof window.__ISMS_BOOTSTRAP__.resolveM365ApiClient === 'function') {
+          const client = window.__ISMS_BOOTSTRAP__.resolveM365ApiClient();
+          if (client && typeof client === 'object') {
+            recordChecklistBootstrapStep('checklist-client-hydrated', 'bootstrap-resolver');
+            return client;
+          }
+        }
+      } catch (error) {
+        recordChecklistBootstrapStep('checklist-client-hydrate-failed', String(error && error.message || error || 'unknown'));
+      }
+      try {
+        if (typeof window.getM365ApiClient === 'function') {
+          const client = window.getM365ApiClient();
+          if (client && typeof client === 'object') {
+            recordChecklistBootstrapStep('checklist-client-hydrated', 'window-getter');
+            return client;
+          }
+        }
+      } catch (error) {
+        recordChecklistBootstrapStep('checklist-client-hydrate-failed', String(error && error.message || error || 'unknown'));
+      }
+      return null;
     }
 
     function canUseRemoteChecklistPaging() {

@@ -847,9 +847,48 @@
     return trainingModuleApi;
   }
   let m365ApiClientApi = null;
+  function getBootstrapCoordinator() {
+    if (typeof window === 'undefined') return null;
+    const existing = window.__ISMS_BOOTSTRAP__;
+    if (existing && typeof existing === 'object') return existing;
+    const created = {
+      services: {},
+      steps: [],
+      record(step, detail) {
+        const safeStep = String(step || '').trim();
+        if (!safeStep) return;
+        const entry = {
+          step: safeStep,
+          detail: detail == null ? '' : String(detail),
+          at: new Date().toISOString()
+        };
+        this.steps.push(entry);
+        while (this.steps.length > 50) this.steps.shift();
+        console.info('[ISMS:bootstrap]', safeStep, entry.detail || '');
+      }
+    };
+    window.__ISMS_BOOTSTRAP__ = created;
+    return created;
+  }
+  function recordBootstrapStep(step, detail) {
+    const coordinator = getBootstrapCoordinator();
+    if (coordinator && typeof coordinator.record === 'function') {
+      coordinator.record(step, detail);
+    }
+  }
+  function registerCoreService(name, resolver) {
+    const safeName = String(name || '').trim();
+    if (!safeName || typeof resolver !== 'function') return;
+    const coordinator = getBootstrapCoordinator();
+    if (!coordinator) return;
+    coordinator.services[safeName] = resolver;
+    if (safeName === 'm365ApiClient') coordinator.resolveM365ApiClient = resolver;
+    if (safeName === 'shellModule') coordinator.resolveShellModule = resolver;
+  }
   function getM365ApiClient() {
     if (m365ApiClientApi) return m365ApiClientApi;
     if (typeof window === 'undefined' || typeof window.createM365ApiClient !== 'function') {
+      recordBootstrapStep('m365-client-missing-factory', 'createM365ApiClient unavailable');
       throw new Error('m365-api-client.js not loaded');
     }
     m365ApiClientApi = window.createM365ApiClient({
@@ -863,6 +902,11 @@
       getSessionAuthHeaders
     });
     window._m365ApiClient = m365ApiClientApi;
+    if (typeof window !== 'undefined') {
+      window.getM365ApiClient = getM365ApiClient;
+    }
+    registerCoreService('m365ApiClient', getM365ApiClient);
+    recordBootstrapStep('m365-client-ready', 'created');
     return m365ApiClientApi;
   }
   const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
@@ -3457,6 +3501,7 @@
   function getShellModule() {
     if (shellModuleApi) return shellModuleApi;
     if (typeof window === 'undefined' || typeof window.createShellModule !== 'function') {
+      recordBootstrapStep('shell-module-missing-factory', 'createShellModule unavailable');
       throw new Error('shell-module.js not loaded');
     }
     shellModuleApi = window.createShellModule({
@@ -3501,6 +3546,11 @@
       registerActionHandlers
     });
     window._shellModule = shellModuleApi;
+    if (typeof window !== 'undefined') {
+      window.getShellModule = getShellModule;
+    }
+    registerCoreService('shellModule', getShellModule);
+    recordBootstrapStep('shell-module-ready', 'created');
     return shellModuleApi;
   }
   const ROUTE_WHITELIST = {
@@ -4180,10 +4230,30 @@
     document.addEventListener('visibilitychange', handleDocumentVisibilityChange);
     window.addEventListener('isms:storage-warning', handleStorageWarningEvent);
   }
+  function initializeCoreServices(reason) {
+    const label = String(reason || 'bootstrap').trim() || 'bootstrap';
+    getBootstrapCoordinator();
+    try {
+      getM365ApiClient();
+      recordBootstrapStep('core-service-ready', 'm365ApiClient:' + label);
+    } catch (error) {
+      recordBootstrapStep('core-service-failed', 'm365ApiClient:' + String(error && error.message || error || 'unknown'));
+      throw error;
+    }
+    try {
+      getShellModule();
+      recordBootstrapStep('core-service-ready', 'shellModule:' + label);
+    } catch (error) {
+      recordBootstrapStep('core-service-failed', 'shellModule:' + String(error && error.message || error || 'unknown'));
+      throw error;
+    }
+  }
 
   async function initApp() {
+    recordBootstrapStep('app-init-start', window.location.hash || '#dashboard');
     installGlobalDelegation();
     installAppEventListeners();
+    initializeCoreServices('initApp');
     renderApp();
     void ensureAuthenticatedRemoteBootstrap();
     const scheduleStoreMigration = function () {
@@ -4257,10 +4327,12 @@
     if (typeof window !== 'undefined') {
       window.__APP_READY__ = true;
     }
+    recordBootstrapStep('app-ready', window.location.hash || '#dashboard');
   }
 
   // ─── Init ──────────────────────────────────
   initApp().catch(function (error) {
+    recordBootstrapStep('app-init-failed', String(error && error.message || error || 'unknown'));
     console.error(error && error.stack ? error.stack : String(error));
     document.getElementById('app').innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">系統初始化失敗</div><div class="empty-state-desc">' + esc(String(error && error.message || error || '未知錯誤')) + '</div></div>';
     if (typeof window !== 'undefined') {

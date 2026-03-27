@@ -453,6 +453,10 @@ async function assertNoXssExecution(page, label) {
       await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForTimeout(1200);
       await page.waitForSelector('#system-users-page-limit');
+      const unavailableUsersError = await page.evaluate(() => String(document.getElementById('app')?.innerText || ''));
+      if (unavailableUsersError.includes('system users paged client unavailable')) {
+        throw new Error('users direct-route bootstrap unavailable');
+      }
       const initial = await page.evaluate(() => ({
         role: Boolean(document.querySelector('#system-users-role')),
         unit: Boolean(document.querySelector('#system-users-unit')),
@@ -498,6 +502,10 @@ async function assertNoXssExecution(page, label) {
       }
       if (!reviewReady) {
         throw new Error('unit contact review page did not render');
+      }
+      const unavailableReviewError = await page.evaluate(() => String(document.getElementById('app')?.innerText || ''));
+      if (unavailableReviewError.includes('unit contact applications paged client unavailable')) {
+        throw new Error('unit contact review direct-route bootstrap unavailable');
       }
       const initial = await page.evaluate(() => ({
         status: Boolean(document.querySelector('#unit-contact-review-status')),

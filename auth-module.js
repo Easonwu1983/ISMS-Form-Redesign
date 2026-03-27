@@ -105,7 +105,25 @@
       }
     }
 
-    function clearAuthSessionStorage() {
+    function notifyAccessProfileChanged(reason, user) {
+      if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+      const detail = {
+        reason: String(reason || 'session-updated').trim() || 'session-updated',
+        username: user && user.username ? String(user.username) : '',
+        role: user && user.role ? String(user.role) : '',
+        activeUnit: user && user.activeUnit ? String(user.activeUnit) : '',
+        at: new Date().toISOString()
+      };
+      try {
+        window.dispatchEvent(new CustomEvent('isms:access-profile-changed', { detail }));
+      } catch (_) {
+        // Ignore event dispatch failures.
+      }
+    }
+
+    function clearAuthSessionStorage(options) {
+      const opts = options && typeof options === 'object' ? options : {};
+      const previousUser = opts.previousUser || readAuthSession();
       writeAuthStorage(sessionStorage, null);
       writeAuthStorage(localStorage, null);
       try {
@@ -115,12 +133,20 @@
       authSessionCacheValue = null;
       currentUserCacheKey = '';
       currentUserCacheValue = null;
+      if (opts.notify) {
+        notifyAccessProfileChanged(opts.reason || 'session-cleared', previousUser);
+      }
     }
 
-    function writeAuthSession(user) {
+    function writeAuthSession(user, options) {
+      const opts = options && typeof options === 'object' ? options : {};
       const normalized = user ? normalizeUserRecord(user) : null;
       if (!normalized) {
-        clearAuthSessionStorage();
+        clearAuthSessionStorage({
+          notify: !!opts.notify,
+          reason: opts.reason || 'session-cleared',
+          previousUser: opts.previousUser || null
+        });
         return null;
       }
       writeAuthStorage(sessionStorage, normalized);
@@ -129,6 +155,9 @@
       authSessionCacheValue = null;
       currentUserCacheKey = '';
       currentUserCacheValue = null;
+      if (opts.notify) {
+        notifyAccessProfileChanged(opts.reason || 'session-updated', normalized);
+      }
       return normalized;
     }
 
@@ -260,7 +289,7 @@
           const success = !!remoteUser;
           addLoginLog(cleanUsername, remoteUser, success);
           if (!success) return null;
-          return writeAuthSession(remoteUser);
+          return writeAuthSession(remoteUser, { notify: true, reason: 'login' });
         } catch (error) {
           addLoginLog(cleanUsername, null, false);
           throw error;
@@ -271,7 +300,7 @@
       const success = !!(user && await verifyLocalPassword(user, cleanPassword));
       addLoginLog(cleanUsername, user, success);
       if (!success) return null;
-      return writeAuthSession(user);
+      return writeAuthSession(user, { notify: true, reason: 'login' });
     }
 
     async function logout() {
@@ -286,7 +315,7 @@
           // Ignore remote logout failures and still clear local session.
         }
       }
-      clearAuthSessionStorage();
+      clearAuthSessionStorage({ notify: true, reason: 'logout', previousUser: auth });
     }
 
     function canSwitchAuthorizedUnit(user = currentUser()) {
@@ -304,7 +333,7 @@
       if (!user) return false;
       const target = String(unit || '').trim();
       if (!getAuthorizedUnits(user).includes(target)) return false;
-      writeAuthSession({ ...user, activeUnit: target });
+      writeAuthSession({ ...user, activeUnit: target }, { notify: true, reason: 'active-unit-switched' });
       return true;
     }
 
@@ -390,7 +419,7 @@
       const input = payload && typeof payload === 'object' ? payload : {};
       if (typeof redeemResetPasswordWithBackend === 'function') {
         const user = await redeemResetPasswordWithBackend(input);
-        return user ? writeAuthSession(user) : null;
+        return user ? writeAuthSession(user, { notify: true, reason: 'password-reset-redeemed' }) : null;
       }
       const matched = findUser(input.username);
       if (!matched || String(input.token || '').trim() !== 'LOCAL-RESET') return null;
@@ -400,7 +429,7 @@
         passwordHash: await hashLocalPassword(String(input.newPassword || '').trim()),
         mustChangePassword: false
       });
-      return writeAuthSession({ ...matched, password: '', passwordHash: '', mustChangePassword: false });
+      return writeAuthSession({ ...matched, password: '', passwordHash: '', mustChangePassword: false }, { notify: true, reason: 'password-reset-redeemed' });
     }
 
     async function changePassword(payload) {
@@ -413,7 +442,7 @@
           ...input,
           sessionToken: auth && auth.sessionToken
         });
-        return user ? writeAuthSession(user) : null;
+        return user ? writeAuthSession(user, { notify: true, reason: 'password-changed' }) : null;
       }
       const matched = findUser(input.username);
       if (!matched || !(await verifyLocalPassword(matched, String(input.currentPassword || '')))) return null;
@@ -422,7 +451,7 @@
         passwordHash: await hashLocalPassword(newPw),
         mustChangePassword: false
       });
-      return writeAuthSession({ ...matched, password: '', passwordHash: '', mustChangePassword: false });
+      return writeAuthSession({ ...matched, password: '', passwordHash: '', mustChangePassword: false }, { notify: true, reason: 'password-changed' });
     }
 
     return {

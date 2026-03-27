@@ -140,6 +140,7 @@
       signature: ''
     };
     let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
+      let trainingAccessProfileListenerInstalled = false;
       let trainingRowsStateVersion = 0;
       let trainingRowsFilterCache = { signature: '', rows: [] };
       const trainingManualRosterDraftCache = new Map();
@@ -297,9 +298,93 @@
       });
     }
 
+    function recordTrainingBootstrapStep(step, detail) {
+      if (typeof window === 'undefined' || !window.__ISMS_BOOTSTRAP__ || typeof window.__ISMS_BOOTSTRAP__.record !== 'function') return;
+      window.__ISMS_BOOTSTRAP__.record(step, detail);
+    }
+
+    function resetTrainingRemoteCaches(reason) {
+      const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
+      clearTrainingRosterRemotePageCache();
+      trainingRosterRemotePageState = {
+        filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
+        page: {
+          offset: 0,
+          limit: Number(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
+          total: 0,
+          pageCount: 0,
+          currentPage: 0,
+          hasPrev: false,
+          hasNext: false,
+          prevOffset: 0,
+          nextOffset: 0,
+          pageStart: 0,
+          pageEnd: 0
+        },
+        items: [],
+        total: 0,
+        signature: ''
+      };
+      trainingRemoteListSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+      resetTrainingRemoteListSummaryBootstrapState();
+      trainingRosterGroupingCache = { token: '', groups: null };
+      trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
+      trainingRosterRenderCache = { signature: '', selectedSignature: '', defer: false };
+      trainingRosterGroupMarkupCache = { signature: '', html: '' };
+      trainingRosterPageShellCache = { signature: '', html: '' };
+      trainingDashboardUnitsCache = { signature: '', units: [] };
+      trainingListViewCache = { signature: '', visibleForms: [], summary: null };
+      trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
+      trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
+      trainingRowsFilterCache = { signature: '', rows: [] };
+      lastTrainingRosterFocusState = null;
+      trainingManualRosterDraftCache.clear();
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          window.sessionStorage.removeItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY);
+        }
+      } catch (_) {
+        // Ignore draft storage cleanup failures.
+      }
+      recordTrainingBootstrapStep('training-cache-reset', safeReason);
+    }
+
+    function installTrainingAccessProfileListener() {
+      if (trainingAccessProfileListenerInstalled || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+      window.addEventListener('isms:access-profile-changed', function (event) {
+        const detail = event && event.detail ? event.detail : {};
+        resetTrainingRemoteCaches(detail.reason || 'profile-changed');
+      });
+      trainingAccessProfileListenerInstalled = true;
+    }
+
     function getTrainingRemoteClient() {
-      if (typeof window === 'undefined' || !window._m365ApiClient || typeof window._m365ApiClient !== 'object') return null;
-      return window._m365ApiClient;
+      installTrainingAccessProfileListener();
+      if (typeof window === 'undefined') return null;
+      if (window._m365ApiClient && typeof window._m365ApiClient === 'object') return window._m365ApiClient;
+      try {
+        if (window.__ISMS_BOOTSTRAP__ && typeof window.__ISMS_BOOTSTRAP__.resolveM365ApiClient === 'function') {
+          const client = window.__ISMS_BOOTSTRAP__.resolveM365ApiClient();
+          if (client && typeof client === 'object') {
+            recordTrainingBootstrapStep('training-client-hydrated', 'bootstrap-resolver');
+            return client;
+          }
+        }
+      } catch (error) {
+        recordTrainingBootstrapStep('training-client-hydrate-failed', String(error && error.message || error || 'unknown'));
+      }
+      try {
+        if (typeof window.getM365ApiClient === 'function') {
+          const client = window.getM365ApiClient();
+          if (client && typeof client === 'object') {
+            recordTrainingBootstrapStep('training-client-hydrated', 'window-getter');
+            return client;
+          }
+        }
+      } catch (error) {
+        recordTrainingBootstrapStep('training-client-hydrate-failed', String(error && error.message || error || 'unknown'));
+      }
+      return null;
     }
 
     function canUseRemoteTrainingRosterPaging() {
@@ -565,8 +650,7 @@
     }
 
     function getTrainingRemoteListSummaryClient() {
-      if (typeof window === 'undefined') return null;
-      const client = window._m365ApiClient;
+      const client = getTrainingRemoteClient();
       if (!client || (typeof client.getTrainingFormsSummary !== 'function' && typeof client.listTrainingForms !== 'function')) return null;
       if (typeof client.getTrainingMode === 'function') {
         const mode = String(client.getTrainingMode() || '').trim();

@@ -232,6 +232,7 @@
       peopleRowsSignature: '',
       peopleRowsHtml: ''
     };
+    let adminAccessProfileListenerInstalled = false;
 
     function normalizeAdminUnitList(units) {
       const source = Array.isArray(units) ? units : [];
@@ -288,8 +289,119 @@
       return getAdminAccessProfile(user).reviewUnits;
     }
 
+    function recordAdminBootstrapStep(step, detail) {
+      if (typeof window === 'undefined' || !window.__ISMS_BOOTSTRAP__ || typeof window.__ISMS_BOOTSTRAP__.record !== 'function') return;
+      window.__ISMS_BOOTSTRAP__.record(step, detail);
+    }
+
+    function resetAdminRemoteCaches(reason) {
+      const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
+      systemUsersState.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
+      systemUsersState.items = [];
+      systemUsersState.summary = { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 };
+      systemUsersState.page = { offset: 0, limit: 20, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
+      systemUsersState.loading = false;
+      systemUsersState.lastLoadedAt = '';
+      unitContactReviewState.filters = { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS };
+      unitContactReviewState.items = [];
+      unitContactReviewState.summary = { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 };
+      unitContactReviewState.page = { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
+      unitContactReviewState.loading = false;
+      unitContactReviewState.lastLoadedAt = '';
+      auditTrailState.filters = { ...DEFAULT_AUDIT_FILTERS };
+      auditTrailState.items = [];
+      auditTrailState.summary = { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] };
+      auditTrailState.page = { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
+      auditTrailState.health = null;
+      auditTrailState.lastLoadedAt = '';
+      auditTrailState.filterSignature = '';
+      auditTrailState.loading = false;
+      auditTrailQueryCache.clear();
+      auditTrailLoadPromiseMap.clear();
+      auditTrailHealthLoadPromise = null;
+      auditTrailHealthCache = { value: null, loadedAt: 0 };
+      auditTrailSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+      auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
+      auditTrailRenderCache = { signature: '', filterSignature: '' };
+      auditTrailMarkupCache = { signature: '', html: '' };
+      unitGovernanceState.filters = { ...DEFAULT_GOVERNANCE_FILTERS };
+      unitGovernanceState.items = [];
+      unitGovernanceState.summary = { total: 0, consolidated: 0, independent: 0, children: 0 };
+      unitGovernanceState.categorySummaries = {};
+      unitGovernanceState.page = { offset: 0, limit: 12, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
+      unitGovernanceState.loading = false;
+      unitGovernanceState.lastLoadedAt = '';
+      securityWindowState.filters = { ...DEFAULT_SECURITY_WINDOW_FILTERS };
+      securityWindowState.inventory = null;
+      securityWindowState.categorySummaries = {};
+      securityWindowState.page = { offset: 0, limit: 12, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
+      securityWindowState.loading = false;
+      securityWindowState.lastLoadedAt = '';
+      securityWindowState.filterSignature = '';
+      securityWindowLoadPromise = null;
+      securityWindowInventoryCache = { loadedAt: 0, value: null };
+      securityWindowFilteredCache = { signature: '', value: null };
+      unitGovernanceTopLevelCache = { signature: '', value: [], filteredSignature: '', filteredValue: [] };
+      unitGovernanceFilteredCache = { signature: '', value: [] };
+      unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
+      securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
+      if (renderUsers._remoteViewCache) {
+        renderUsers._remoteViewCache.items = [];
+        renderUsers._remoteViewCache.summary = null;
+        renderUsers._remoteViewCache.page = null;
+        renderUsers._remoteViewCache.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
+        renderUsers._remoteViewCache.signature = '';
+        renderUsers._remoteViewCache.fetchedAt = 0;
+        renderUsers._remoteViewCache.promise = null;
+      }
+      if (renderUnitContactReview._remoteViewCache) {
+        renderUnitContactReview._remoteViewCache.items = [];
+        renderUnitContactReview._remoteViewCache.summary = null;
+        renderUnitContactReview._remoteViewCache.page = null;
+        renderUnitContactReview._remoteViewCache.filters = { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS };
+        renderUnitContactReview._remoteViewCache.signature = '';
+        renderUnitContactReview._remoteViewCache.fetchedAt = 0;
+        renderUnitContactReview._remoteViewCache.promise = null;
+      }
+      recordAdminBootstrapStep('admin-cache-reset', safeReason);
+    }
+
+    function installAdminAccessProfileListener() {
+      if (adminAccessProfileListenerInstalled || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+      window.addEventListener('isms:access-profile-changed', function (event) {
+        const detail = event && event.detail ? event.detail : {};
+        resetAdminRemoteCaches(detail.reason || 'profile-changed');
+      });
+      adminAccessProfileListenerInstalled = true;
+    }
+
     function getAdminApiClient() {
-      return typeof window !== 'undefined' && window && window._m365ApiClient ? window._m365ApiClient : null;
+      installAdminAccessProfileListener();
+      if (typeof window === 'undefined' || !window) return null;
+      if (window._m365ApiClient && typeof window._m365ApiClient === 'object') return window._m365ApiClient;
+      try {
+        if (window.__ISMS_BOOTSTRAP__ && typeof window.__ISMS_BOOTSTRAP__.resolveM365ApiClient === 'function') {
+          const client = window.__ISMS_BOOTSTRAP__.resolveM365ApiClient();
+          if (client && typeof client === 'object') {
+            recordAdminBootstrapStep('admin-client-hydrated', 'bootstrap-resolver');
+            return client;
+          }
+        }
+      } catch (error) {
+        recordAdminBootstrapStep('admin-client-hydrate-failed', String(error && error.message || error || 'unknown'));
+      }
+      try {
+        if (typeof window.getM365ApiClient === 'function') {
+          const client = window.getM365ApiClient();
+          if (client && typeof client === 'object') {
+            recordAdminBootstrapStep('admin-client-hydrated', 'window-getter');
+            return client;
+          }
+        }
+      } catch (error) {
+        recordAdminBootstrapStep('admin-client-hydrate-failed', String(error && error.message || error || 'unknown'));
+      }
+      return null;
     }
 
     function isRemoteGovernanceEnabled() {
