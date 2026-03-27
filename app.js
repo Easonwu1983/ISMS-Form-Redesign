@@ -848,6 +848,7 @@
   let serviceRegistryModuleApi = null;
   let appRouteModuleApi = null;
   let appPageOrchestrationModuleApi = null;
+  let appShellOrchestrationModuleApi = null;
   let appEntryModuleApi = null;
   let appAuthSessionModuleApi = null;
   let appRouterModuleApi = null;
@@ -923,6 +924,21 @@
       readyStep: 'app-page-orchestration-ready'
     });
     return appPageOrchestrationModuleApi;
+  }
+  function getAppShellOrchestrationModule() {
+    if (appShellOrchestrationModuleApi) return appShellOrchestrationModuleApi;
+    appShellOrchestrationModuleApi = resolveFactoryService('appShellOrchestrationModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAppShellOrchestrationModule !== 'function') {
+          recordBootstrapStep('app-shell-orchestration-missing-factory', 'createAppShellOrchestrationModule unavailable');
+          throw new Error('app-shell-orchestration-module.js not loaded');
+        }
+        return window.createAppShellOrchestrationModule();
+      },
+      globalSlot: '_appShellOrchestrationModule',
+      readyStep: 'app-shell-orchestration-ready'
+    });
+    return appShellOrchestrationModuleApi;
   }
   function getAppAuthSessionModule() {
     if (appAuthSessionModuleApi) return appAuthSessionModuleApi;
@@ -3354,7 +3370,7 @@
           recordBootstrapStep('shell-module-missing-factory', 'createShellModule unavailable');
           throw new Error('shell-module.js not loaded');
         }
-        return window.createShellModule({
+        return window.createShellModule(getAppShellOrchestrationModule().buildShellModuleDeps({
           ROUTE_WHITELIST,
           ROLE_BADGE,
           STATUSES,
@@ -3394,7 +3410,7 @@
           hasUnsavedChangesGuard,
           confirmDiscardUnsavedChanges,
           registerActionHandlers
-        });
+        }));
       },
       globalSlot: '_shellModule',
       globalGetter: 'getShellModule',
@@ -3470,16 +3486,13 @@
   }
   function mkChk(name, opts, sel) { return getUiModule().mkChk(name, opts, sel); }
   function mkRadio(name, opts, sel) { return getUiModule().mkRadio(name, opts, sel); }
-  function isMobileViewport() { return getShellModule().isMobileViewport(); }
-  function closeSidebar() { return getShellModule().closeSidebar(); }
-  function toggleSidebar() { return getShellModule().toggleSidebar(); }
-  function renderLogin() { return getShellModule().renderLogin(); }
-  function renderApp() {
-    ensureSessionHeartbeat();
-    return getShellModule().renderApp();
-  }
-  function renderSidebar() { return getShellModule().renderSidebar(); }
-  function renderHeader() { return getShellModule().renderHeader(); }
+  function isMobileViewport() { return getAppShellOrchestrationModule().isMobileViewport({ getShellModule }); }
+  function closeSidebar() { return getAppShellOrchestrationModule().closeSidebar({ getShellModule }); }
+  function toggleSidebar() { return getAppShellOrchestrationModule().toggleSidebar({ getShellModule }); }
+  function renderLogin() { return getAppShellOrchestrationModule().renderLogin({ getShellModule }); }
+  function renderApp() { return getAppShellOrchestrationModule().renderApp({ getShellModule, ensureSessionHeartbeat }); }
+  function renderSidebar() { return getAppShellOrchestrationModule().renderSidebar({ getShellModule }); }
+  function renderHeader() { return getAppShellOrchestrationModule().renderHeader({ getShellModule }); }
 
   // ─── Render: Dashboard ─────────────────────
   function getCurrentNextTrackingDate(item) {
@@ -3931,7 +3944,7 @@
   function mergeTrainingRows(targetUnit, carryRows) { return getWorkflowSupportModule().mergeTrainingRows(targetUnit, carryRows); }
 
 
-  function handleRoute() { return getShellModule().handleRoute(); }
+  function handleRoute() { return getAppShellOrchestrationModule().handleRoute({ getShellModule }); }
 
   // ─── Seed Data ─────────────────────────────
   function seedData() { return getWorkflowSupportModule().seedData(); }

@@ -313,39 +313,71 @@
       window.__ISMS_BOOTSTRAP__.record(step, detail);
     }
 
-    function resetChecklistRemoteCaches(reason) {
+    function normalizeChecklistCacheScope(scope) {
+      return String(scope || '').trim().toLowerCase();
+    }
+
+    function dispatchChecklistCacheInvalidation(scope, reason) {
+      if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
+      const normalizedScope = normalizeChecklistCacheScope(scope);
+      if (!normalizedScope) return;
+      window.dispatchEvent(new CustomEvent('isms:cache-invalidate', {
+        detail: {
+          scope: normalizedScope,
+          reason: String(reason || 'checklist-cache-invalidated').trim() || 'checklist-cache-invalidated'
+        }
+      }));
+    }
+
+    function dispatchChecklistCacheInvalidationScopes(scopes, reason) {
+      const normalizedScopes = Array.from(new Set((Array.isArray(scopes) ? scopes : [scopes])
+        .map(normalizeChecklistCacheScope)
+        .filter(Boolean)));
+      normalizedScopes.forEach((scope) => dispatchChecklistCacheInvalidation(scope, reason));
+    }
+
+    function resetChecklistRemoteCaches(reason, scope) {
+      const normalizedScope = normalizeChecklistCacheScope(scope);
       const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
-      checklistRemotePageCache.clear();
-      checklistRemoteSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
-      resetChecklistRemoteSummaryBootstrapState();
-      checklistRemotePageState = {
-        filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
-        page: {
-          offset: 0,
-          limit: Number(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+      const resetAll = !normalizedScope || normalizedScope === 'all' || normalizedScope === 'access-profile' || normalizedScope === 'checklists';
+      const resetListSummary = resetAll || normalizedScope === 'checklists-list' || normalizedScope === 'checklists-summary';
+      const resetTemplate = resetAll || normalizedScope === 'checklists-template';
+      if (resetListSummary) {
+        checklistRemotePageCache.clear();
+        checklistRemoteSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+        resetChecklistRemoteSummaryBootstrapState();
+        checklistRemotePageState = {
+          filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
+          page: {
+            offset: 0,
+            limit: Number(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+            total: 0,
+            pageCount: 0,
+            currentPage: 0,
+            hasPrev: false,
+            hasNext: false,
+            prevOffset: 0,
+            nextOffset: 0,
+            pageStart: 0,
+            pageEnd: 0
+          },
+          items: [],
+          summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
           total: 0,
-          pageCount: 0,
-          currentPage: 0,
-          hasPrev: false,
-          hasNext: false,
-          prevOffset: 0,
-          nextOffset: 0,
-          pageStart: 0,
-          pageEnd: 0
-        },
-        items: [],
-        summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
-        total: 0,
-        signature: ''
-      };
-      checklistBrowseState.keyword = '';
-      checklistBrowseState.selectedYear = '';
-      checklistBrowseState.status = 'all';
-      checklistListRenderCache = { signature: '', html: '' };
-      checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
-      checklistListViewCache = { signature: '', filtered: [], grouped: [] };
-      checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
-      recordChecklistBootstrapStep('checklist-cache-reset', safeReason);
+          signature: ''
+        };
+        checklistBrowseState.keyword = '';
+        checklistBrowseState.selectedYear = '';
+        checklistBrowseState.status = 'all';
+        checklistListRenderCache = { signature: '', html: '' };
+        checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
+        checklistListViewCache = { signature: '', filtered: [], grouped: [] };
+        checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
+      }
+      if (resetTemplate) {
+        checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
+      }
+      recordChecklistBootstrapStep('checklist-cache-reset', safeReason + (normalizedScope ? ':' + normalizedScope : ''));
     }
 
     function installChecklistAccessProfileListener() {
@@ -356,9 +388,10 @@
       });
       window.addEventListener('isms:cache-invalidate', function (event) {
         const detail = event && event.detail ? event.detail : {};
-        const scope = String(detail.scope || '').trim().toLowerCase();
-        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'checklists') {
-          resetChecklistRemoteCaches(detail.reason || 'cache-invalidated');
+        const scope = normalizeChecklistCacheScope(detail.scope);
+        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'checklists'
+          || scope === 'checklists-list' || scope === 'checklists-summary' || scope === 'checklists-template') {
+          resetChecklistRemoteCaches(detail.reason || 'cache-invalidated', scope);
         }
       });
       checklistAccessProfileListenerInstalled = true;
@@ -1569,6 +1602,7 @@
           return;
         }
         const result = await submitChecklistDraft(data);
+        dispatchChecklistCacheInvalidationScopes(['checklists-list', 'checklists-summary'], 'checklist-draft-save');
         existing = result && result.item ? result.item : (getChecklist(data.id) || data);
         debugFlow('checklist', 'draft saved', { id: data.id, unit: data.unit, status: data.status });
         updateChecklistDraftStatus(existing);
@@ -1643,6 +1677,7 @@
           return;
         }
         const result = await submitChecklistForm(data);
+        dispatchChecklistCacheInvalidationScopes(['checklists-list', 'checklists-summary'], 'checklist-submit');
         existing = result && result.item ? result.item : (getChecklist(data.id) || data);
         debugFlow('checklist', 'submit success', { id: data.id, unit: data.unit, status: data.status });
         updateChecklistDraftStatus(existing);
@@ -1890,6 +1925,18 @@
     return prefix + (max + 1);
   }
 
+  function saveChecklistSectionsAndInvalidate(sections, reason) {
+    const result = saveChecklistSections(sections);
+    dispatchChecklistCacheInvalidationScopes(['checklists-template', 'checklists-list', 'checklists-summary'], reason || 'checklist-template-save');
+    return result;
+  }
+
+  function resetChecklistSectionsAndInvalidate(reason) {
+    const result = resetChecklistSections();
+    dispatchChecklistCacheInvalidationScopes(['checklists-template', 'checklists-list', 'checklists-summary'], reason || 'checklist-template-reset');
+    return result;
+  }
+
   function cmAddSection() {
     _cmModal('新增章節', `
       <div class="form-group">
@@ -1900,7 +1947,7 @@
       if (!name) return;
       const secs = getChecklistSections();
       secs.push({ section: name, items: [] });
-      saveChecklistSections(secs);
+      saveChecklistSectionsAndInvalidate(secs, 'checklist-template-add-section');
       toast('章節已新增');
     });
   };
@@ -1917,7 +1964,7 @@
       if (!name) return;
       const s2 = getChecklistSections();
       s2[si].section = name;
-      saveChecklistSections(s2);
+      saveChecklistSectionsAndInvalidate(s2, 'checklist-template-edit-section');
       toast('章節名稱已更新');
     });
   };
@@ -1927,7 +1974,7 @@
     const confirmed = await openConfirmDialog('確認要刪除章節嗎？此操作會一併刪除相關檢核項目。', { title: '確認刪除章節', confirmText: '確認刪除', cancelText: '取消' });
     if (!confirmed) return;
     secs.splice(si, 1);
-    saveChecklistSections(secs);
+    saveChecklistSectionsAndInvalidate(secs, 'checklist-template-delete-section');
     toast('章節已刪除', 'info');
     _cmRefreshSections();
   };
@@ -1958,7 +2005,7 @@
       const allIds = secs.flatMap(s => s.items.map(it => it.id));
       if (allIds.includes(id)) { toast(`項目編號 ${id} 已存在，請改用其他編號。`, 'error'); return; }
       secs[si].items.push({ id, text, hint });
-      saveChecklistSections(secs);
+      saveChecklistSectionsAndInvalidate(secs, 'checklist-template-add-item');
       toast('項目已新增');
     });
   };
@@ -1989,7 +2036,7 @@
       const allIds = s2.flatMap((sec, sIdx) => sec.items.map((it, iIdx) => ({ id: it.id, si: sIdx, ii: iIdx }))).filter(x => !(x.si === si && x.ii === ii)).map(x => x.id);
       if (allIds.includes(newId)) { toast(`項目編號 ${newId} 已存在，請改用其他編號。`, 'error'); return; }
       s2[si].items[ii] = { id: newId, text, hint };
-      saveChecklistSections(s2);
+      saveChecklistSectionsAndInvalidate(s2, 'checklist-template-edit-item');
       toast('項目已更新');
     });
   };
@@ -2000,7 +2047,7 @@
     const confirmed = await openConfirmDialog('確認要刪除項目 ' + esc(item.id) + ' 嗎？', { title: '確認刪除項目', confirmText: '確認刪除', cancelText: '取消' });
     if (!confirmed) return;
     secs[si].items.splice(ii, 1);
-    saveChecklistSections(secs);
+    saveChecklistSectionsAndInvalidate(secs, 'checklist-template-delete-item');
     toast('項目已刪除', 'info');
     _cmRefreshSections();
   };
@@ -2008,7 +2055,7 @@
   async function cmResetDefault() {
     const confirmed = await openConfirmDialog('確認要還原成預設題庫？這會覆蓋目前自訂的章節與項目內容。', { title: '確認還原題庫', confirmText: '確認還原', cancelText: '取消' });
     if (!confirmed) return;
-    resetChecklistSections();
+    resetChecklistSectionsAndInvalidate('checklist-template-reset-default');
     toast('已還原成預設題庫', 'info');
     _cmRefreshSections();
   };
@@ -2029,6 +2076,7 @@
     await runWithBusyState('正在刪除 ' + label + ' 資料…', async () => {
       const result = await deleteChecklistsByYear(targetYear);
       const deletedCount = Number(result && result.deletedCount || 0);
+      dispatchChecklistCacheInvalidationScopes(['checklists-list', 'checklists-summary'], 'checklist-delete-year');
       toast(deletedCount ? ('已刪除 ' + label + ' 資料，共 ' + deletedCount + ' 筆') : (label + ' 沒有可刪除的資料'), deletedCount ? 'success' : 'info');
       await renderChecklistList({ skipSync: true });
     });

@@ -1432,6 +1432,7 @@
       history: [...(form.history || []), { time: now, action: '管理者退回更正：' + trimmed, user: currentUser().name }]
     });
     showTrainingRepositoryFallback(result, '已退回 ' + id + ' 供單位管理員更正');
+    dispatchTrainingCacheInvalidationScopes(['training-forms', 'training-summary', 'training-dashboard'], 'training-return');
     const route = getRoute();
     if (route.page === 'training-detail') renderTrainingDetail(id); else renderTraining();
   }
@@ -1453,6 +1454,7 @@
         actorUsername: currentUser()?.username || ''
       });
       clearTrainingRosterRemotePageCache();
+      dispatchTrainingCacheInvalidation('training-rosters', 'training-roster-delete');
       const restoreFocusState = focusState || (lastTrainingRosterFocusState ? { ...lastTrainingRosterFocusState } : null);
       try {
         await renderTrainingRoster({
@@ -2043,6 +2045,7 @@
           throw new Error('教育訓練名單已送出，但後端同步結果未返回，請重新整理後確認。');
         }
         clearTrainingRosterRemotePageCache();
+        dispatchTrainingCacheInvalidation('training-rosters', 'training-roster-manual-upsert');
         const nextManualRow = normalizeTrainingRecordRow({
           ...syncedRoster,
           rosterId: syncedRoster.id,
@@ -2331,6 +2334,7 @@
       const result = targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF
         ? await submitTrainingStepOne(payload)
         : await submitTrainingDraft(payload);
+      dispatchTrainingCacheInvalidationScopes(['training-forms', 'training-summary', 'training-dashboard'], targetStatus === TRAINING_STATUSES.PENDING_SIGNOFF ? 'training-step-one-submit' : 'training-draft-save');
       existing = (result && result.item) || getTrainingForm(formId) || existing;
       updateTrainingDraftStatus(existing);
       clearUnsavedChangesGuard();
@@ -2638,6 +2642,7 @@
           };
           try {
             const result = await submitTrainingMarkPrinted(payload);
+            dispatchTrainingCacheInvalidationScopes(['training-forms', 'training-summary', 'training-dashboard'], 'training-mark-printed');
             const nextForm = (result && result.item) || getTrainingForm(form.id) || payload;
             showTrainingRepositoryFallback(result, '已記錄簽核表列印時間');
             form.printedAt = nextForm.printedAt || now;
@@ -2694,6 +2699,7 @@
             updatedAt: now,
             history: [...(latestForm.history || []), { time: now, action: '\u4e0a\u50b3\u7c3d\u6838\u6383\u63cf\u6a94\u4e26\u5b8c\u6210\u6574\u9ad4\u586b\u5831', user: currentUser().name }]
           });
+          dispatchTrainingCacheInvalidationScopes(['training-forms', 'training-summary', 'training-dashboard'], 'training-finalize');
           showTrainingRepositoryFallback(result, '\u5df2\u5b8c\u6210\u6d41\u7a0b\u4e09\uff0c\u6574\u9ad4\u586b\u5831\u7d50\u675f');
           renderTrainingDetail(form.id);
         });
@@ -3273,6 +3279,7 @@
           console.warn('training roster delete post-sync failed', error);
         }
         clearTrainingRosterRemotePageCache();
+        dispatchTrainingCacheInvalidation('training-rosters', 'training-roster-batch-delete');
         selectedRosterIds.clear();
         await renderTrainingRoster({
           skipSync: true,
@@ -3549,6 +3556,7 @@
       } catch (error) {
         console.warn('training roster import post-sync failed', error);
       }
+      dispatchTrainingCacheInvalidation('training-rosters', 'training-roster-import');
       clearTrainingRosterRemotePageCache();
       await renderTrainingRoster({
         skipSync: true,

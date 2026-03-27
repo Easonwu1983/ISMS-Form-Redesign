@@ -26,7 +26,7 @@
    - `curl http://140.112.97.150/unit-contact-authorization-template.pdf -I`
    - `node scripts/vm-entry-smoke.cjs`
    - `ISMS_LIVE_BASE=http://140.112.97.150 node scripts/campus-live-regression-smoke.cjs`
-   - `ISMS_LIVE_BASE=http://140.112.97.150 ISMS_CLOUDFLARE_PAGES_BASE=https://isms-campus-portal.pages.dev ISMS_VERSION_BASES=http://140.112.97.150,https://isms-campus-portal.pages.dev node scripts/version-governance-smoke.cjs`
+   - Pages 同步後再跑：`node scripts/formal-production-smoke.cjs`
 
 ## 完成條件
 

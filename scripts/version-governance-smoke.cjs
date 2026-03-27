@@ -18,13 +18,15 @@ const BROWSER_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
 ];
-const BASE_URLS = Array.from(new Set([
-  String(process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/').trim(),
-  String(process.env.ISMS_CLOUDFLARE_PAGES_BASE || 'https://isms-campus-portal.pages.dev/').trim(),
-  ...(process.env.ISMS_VERSION_BASES
-    ? String(process.env.ISMS_VERSION_BASES).split(',').map((value) => String(value || '').trim())
-    : [])
-].filter(Boolean))).map((value) => value.replace(/\/+$/, ''));
+const EXPLICIT_VERSION_BASES = process.env.ISMS_VERSION_BASES
+  ? String(process.env.ISMS_VERSION_BASES).split(',').map((value) => String(value || '').trim()).filter(Boolean)
+  : [];
+const BASE_URLS = Array.from(new Set((EXPLICIT_VERSION_BASES.length
+  ? EXPLICIT_VERSION_BASES
+  : [
+      String(process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/').trim(),
+      String(process.env.ISMS_CLOUDFLARE_PAGES_BASE || 'https://isms-campus-portal.pages.dev/').trim()
+    ]).filter(Boolean))).map((value) => value.replace(/\/+$/, ''));
 
 function runGit(args) {
   try {
