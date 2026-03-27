@@ -9,7 +9,7 @@
    - `ISMS_LIVE_BASE=http://140.112.97.150 node scripts/campus-live-regression-smoke.cjs`
 4. 校內 VM 綠燈後，再發布 Pages 備援頁
 5. 最後跑：
-   - `ISMS_VERSION_BASES=http://140.112.97.150,https://isms-campus-portal.pages.dev node scripts/version-governance-smoke.cjs`
+   - `ISMS_LIVE_BASE=http://140.112.97.150 ISMS_CLOUDFLARE_PAGES_BASE=https://isms-campus-portal.pages.dev ISMS_VERSION_BASES=http://140.112.97.150,https://isms-campus-portal.pages.dev node scripts/version-governance-smoke.cjs`
    - `node scripts/cloudflare-live-health-check.cjs`
 
 ## 校內 VM 同步
