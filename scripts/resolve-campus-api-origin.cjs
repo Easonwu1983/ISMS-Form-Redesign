@@ -2,7 +2,6 @@ const http = require('http');
 const https = require('https');
 
 const DEFAULT_CANDIDATES = [
-  'http://127.0.0.1:18080',
   'http://140.112.97.150'
 ];
 

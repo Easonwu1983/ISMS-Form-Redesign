@@ -286,24 +286,11 @@
     });
   }
   function navigate(h, options) {
-    const opts = options || {};
-    if (!opts.allowDirtyNavigation && hasUnsavedChangesGuard()) {
-      if (!confirmDiscardUnsavedChanges(opts.unsavedMessage)) return;
-    }
-    const target = '#' + String(h || '').replace(/^#/, '');
-    if (window.location.hash === target) {
-      if (opts.replace && window.history && typeof window.history.replaceState === 'function') {
-        window.history.replaceState(null, '', target);
-      }
-      handleRoute();
-      return;
-    }
-    if (opts.replace && window.history && typeof window.history.replaceState === 'function') {
-      window.history.replaceState(null, '', target);
-      handleRoute();
-      return;
-    }
-    window.location.hash = target;
+    return getAppRouterModule().navigate({
+      hasUnsavedChangesGuard,
+      confirmDiscardUnsavedChanges,
+      handleRoute
+    }, h, options);
   }
   function normalizeRouteParamValue(value) {
     const raw = String(value || '').trim();
@@ -870,6 +857,7 @@
   }
   let m365ApiClientApi = null;
   let serviceRegistryModuleApi = null;
+  let appRouterModuleApi = null;
   let appBootstrapModuleApi = null;
   function getServiceRegistryModule() {
     if (serviceRegistryModuleApi) return serviceRegistryModuleApi;
@@ -894,6 +882,21 @@
       readyStep: 'app-bootstrap-ready'
     });
     return appBootstrapModuleApi;
+  }
+  function getAppRouterModule() {
+    if (appRouterModuleApi) return appRouterModuleApi;
+    appRouterModuleApi = resolveFactoryService('appRouterModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAppRouterModule !== 'function') {
+          recordBootstrapStep('app-router-missing-factory', 'createAppRouterModule unavailable');
+          throw new Error('app-router-module.js not loaded');
+        }
+        return window.createAppRouterModule();
+      },
+      globalSlot: '_appRouterModule',
+      readyStep: 'app-router-ready'
+    });
+    return appRouterModuleApi;
   }
   function getBootstrapCoordinator() {
     return getServiceRegistryModule().getBootstrapState();
@@ -4218,52 +4221,30 @@
   let lastStableHash = '';
   function setLastStableHash(value) {
     lastStableHash = String(value || '').trim() || '#dashboard';
+    return getAppRouterModule().setLastStableHash(lastStableHash);
   }
   function handleHashChange() {
-    const nextHash = window.location.hash || '#dashboard';
-    if (nextHash !== lastStableHash && hasUnsavedChangesGuard()) {
-      const ok = confirmDiscardUnsavedChanges('變更尚未儲存，確定要離開目前頁面嗎？');
-      if (!ok) {
-        window.history.replaceState(null, '', lastStableHash || '#dashboard');
-        return;
-      }
-    }
-    handleRoute();
-    setLastStableHash(window.location.hash || '#dashboard');
+    return getAppRouterModule().handleHashChange({
+      hasUnsavedChangesGuard,
+      confirmDiscardUnsavedChanges,
+      handleRoute
+    });
   }
 
   let appEventListenersInstalled = false;
-  function handleWindowResize() {
-    if (!isMobileViewport()) closeSidebar();
-  }
-  function handleWindowLoad() {
-    refreshIcons();
-  }
-  function handleWindowFocus() {
-    runSessionHeartbeat().catch(function (error) {
-      console.warn('session heartbeat failed', error);
-    });
-  }
-  function handleDocumentVisibilityChange() {
-    if (document.visibilityState === 'visible') {
-      runSessionHeartbeat().catch(function (error) {
-        console.warn('session heartbeat failed', error);
-      });
-    }
-  }
-  function handleStorageWarningEvent(event) {
-    const message = String(event && event.detail && event.detail.message || '').trim();
-    if (message) toast(message, 'error');
-  }
   function installAppEventListeners() {
     if (appEventListenersInstalled) return;
     appEventListenersInstalled = true;
-    window.addEventListener('hashchange', handleHashChange);
-    window.addEventListener('resize', handleWindowResize);
-    window.addEventListener('load', handleWindowLoad);
-    window.addEventListener('focus', handleWindowFocus);
-    document.addEventListener('visibilitychange', handleDocumentVisibilityChange);
-    window.addEventListener('isms:storage-warning', handleStorageWarningEvent);
+    getAppRouterModule().installAppEventListeners({
+      handleRoute,
+      hasUnsavedChangesGuard,
+      confirmDiscardUnsavedChanges,
+      isMobileViewport,
+      closeSidebar,
+      refreshIcons,
+      runSessionHeartbeat,
+      toast
+    });
   }
   function initializeCoreServices(reason) {
     const label = String(reason || 'bootstrap').trim() || 'bootstrap';

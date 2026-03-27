@@ -21,6 +21,7 @@
     'm365-api-client.js',
     'shell-module.js',
     'service-registry-module.js',
+    'app-router-module.js',
     'app-bootstrap-module.js',
     'case-module.js',
     'admin-module.js',
