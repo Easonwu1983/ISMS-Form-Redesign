@@ -483,8 +483,21 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-03e', 'Admin', 'Unit contact review pager and filters work', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
-      await gotoHash(page, 'unit-contact-review');
-      await page.waitForSelector('#unit-contact-review-status');
+      let reviewReady = false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await gotoHash(page, 'unit-contact-review');
+        try {
+          await page.waitForSelector('#unit-contact-review-status', { timeout: 15000 });
+          reviewReady = true;
+          break;
+        } catch (error) {
+          if (attempt === 1) throw error;
+          await page.waitForTimeout(250);
+        }
+      }
+      if (!reviewReady) {
+        throw new Error('unit contact review page did not render');
+      }
       const initial = await page.evaluate(() => ({
         status: Boolean(document.querySelector('#unit-contact-review-status')),
         email: Boolean(document.querySelector('#unit-contact-review-email')),
