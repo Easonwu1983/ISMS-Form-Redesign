@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   window.createAdminModule = function createAdminModule(deps) {
     const {
       ROLES,
@@ -3296,4 +3296,3 @@
     };
   };
 })();
-
