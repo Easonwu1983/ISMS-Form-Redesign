@@ -12,6 +12,7 @@
     }
 
     function handleActionClick(deps, event, actionEl) {
+      if (!actionEl) return false;
       const handler = globalActionHandlers[actionEl.dataset.action];
       if (typeof handler !== 'function') return false;
       event.preventDefault();
