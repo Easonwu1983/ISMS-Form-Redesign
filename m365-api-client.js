@@ -955,6 +955,32 @@
       };
     }
 
+    function buildPagedCollectionResult(body, query, items, options) {
+      const opts = options && typeof options === 'object' ? options : {};
+      const list = Array.isArray(items) ? items : [];
+      const total = Math.max(
+        0,
+        Number(body && body.total) || 0,
+        opts.fallbackTotalFromItems === false ? 0 : list.length
+      );
+      const summary = body && body.summary && typeof body.summary === 'object'
+        ? (typeof opts.normalizeSummary === 'function' ? opts.normalizeSummary(body.summary, body, list, total) : body.summary)
+        : (typeof opts.buildSummary === 'function' ? opts.buildSummary(list, body, total) : null);
+      return {
+        ok: !!(body && body.ok !== false),
+        mode: opts.mode || '',
+        items: list,
+        total,
+        summary,
+        page: body && body.page && typeof body.page === 'object' ? body.page : null,
+        filters: body && body.filters && typeof body.filters === 'object'
+          ? body.filters
+          : ((query && typeof query === 'object') ? { ...query } : {}),
+        generatedAt: cleanText(body && body.generatedAt),
+        raw: body
+      };
+    }
+
     function normalizeTrainingAttachments(value) {
       const list = parseJsonValue(value, function () { return []; });
       return Array.isArray(list) ? list.map(normalizeTrainingAttachment) : [];
@@ -1167,33 +1193,24 @@
         sharedHeaders: getConfig().unitContactSharedHeaders || {}
       });
       const items = normalizeRemoteApplications({ applications: body && body.items ? body.items : [] });
-      const total = Math.max(0, Number(body && body.total) || items.length || 0);
-      const summary = body && body.summary && typeof body.summary === 'object'
-        ? body.summary
-        : {
+      return buildPagedCollectionResult(body, query, items, {
+        buildSummary: function (list, _body, total) {
+          return {
             total,
-            pendingReview: items.filter((item) => String(item && item.status || '').trim() === 'pending_review').length,
-            approved: items.filter((item) => String(item && item.status || '').trim() === 'approved').length,
-            activationPending: items.filter((item) => String(item && item.status || '').trim() === 'activation_pending').length,
-            active: items.filter((item) => String(item && item.status || '').trim() === 'active').length,
-            returned: items.filter((item) => String(item && item.status || '').trim() === 'returned').length,
-            rejected: items.filter((item) => String(item && item.status || '').trim() === 'rejected').length
+            pendingReview: list.filter((item) => String(item && item.status || '').trim() === 'pending_review').length,
+            approved: list.filter((item) => String(item && item.status || '').trim() === 'approved').length,
+            activationPending: list.filter((item) => String(item && item.status || '').trim() === 'activation_pending').length,
+            active: list.filter((item) => String(item && item.status || '').trim() === 'active').length,
+            returned: list.filter((item) => String(item && item.status || '').trim() === 'returned').length,
+            rejected: list.filter((item) => String(item && item.status || '').trim() === 'rejected').length
           };
-      return {
-        ok: !!(body && body.ok !== false),
-        items,
-        total,
-        summary,
-        page: body && body.page ? body.page : null,
-        filters: body && body.filters ? body.filters : { ...query },
-        generatedAt: cleanText(body && body.generatedAt),
-        raw: body
-      };
+        }
+      });
     }
 
     async function listSystemUsersPaged(filters) {
       const endpoint = getConfig().systemUsersEndpoint;
-      if (!endpoint) throw new Error('未設定 systemUsersEndpoint');
+      if (!endpoint) throw new Error('\u672a\u8a2d\u5b9a systemUsersEndpoint');
       const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
       const query = filters && typeof filters === 'object' ? filters : {};
       Object.keys(query).forEach(function (key) {
@@ -1208,23 +1225,16 @@
       const items = Array.isArray(body && body.items)
         ? body.items
         : (Array.isArray(body && body.value) ? body.value : []);
-      return {
-        ok: !!(body && body.ok !== false),
-        items,
-        total: Math.max(0, Number(body && body.total) || items.length || 0),
-        summary: body && body.summary && typeof body.summary === 'object'
-          ? body.summary
-          : {
-              total: items.length,
-              admin: items.filter((item) => cleanText(item && item.role) === '最高管理員').length,
-              unitAdmin: items.filter((item) => cleanText(item && item.role) === '單位管理員').length,
-              securityWindow: items.filter((item) => Array.isArray(item && item.securityRoles) && item.securityRoles.filter(Boolean).length > 0).length
-            },
-        page: body && body.page ? body.page : null,
-        filters: body && body.filters ? body.filters : { ...query },
-        generatedAt: cleanText(body && body.generatedAt),
-        raw: body
-      };
+      return buildPagedCollectionResult(body, query, items, {
+        buildSummary: function (list) {
+          return {
+            total: list.length,
+            admin: list.filter((item) => cleanText(item && item.role) === '\u6700\u9ad8\u7ba1\u7406\u8005').length,
+            unitAdmin: list.filter((item) => cleanText(item && item.role) === '\u55ae\u4f4d\u7ba1\u7406\u8005').length,
+            securityWindow: list.filter((item) => Array.isArray(item && item.securityRoles) && item.securityRoles.filter(Boolean).length > 0).length
+          };
+        }
+      });
     }
 
     async function reviewUnitContactApplication(payload) {
@@ -1275,17 +1285,11 @@
         method: 'GET',
         contractVersion: CONTRACT_VERSION
       });
-      return {
-        ok: !!(body && body.ok !== false),
-        items: Array.isArray(body && body.items) ? body.items : [],
-        summary: body && body.summary && typeof body.summary === 'object' ? body.summary : null,
-        categorySummaries: body && body.categorySummaries && typeof body.categorySummaries === 'object' ? body.categorySummaries : null,
-        page: body && body.page && typeof body.page === 'object' ? body.page : null,
-        filters: body && body.filters && typeof body.filters === 'object' ? body.filters : null,
-        total: Math.max(0, Number(body && body.total) || 0),
-        generatedAt: cleanText(body && body.generatedAt),
-        raw: body
-      };
+      const result = buildPagedCollectionResult(body, filters, Array.isArray(body && body.items) ? body.items : [], {
+        fallbackTotalFromItems: false
+      });
+      result.categorySummaries = body && body.categorySummaries && typeof body.categorySummaries === 'object' ? body.categorySummaries : null;
+      return result;
     }
 
     async function upsertUnitGovernanceEntry(payload) {
@@ -1528,22 +1532,18 @@
         contractVersion: CHECKLISTS_CONTRACT_VERSION,
         sharedHeaders: getChecklistSharedHeaders()
       });
-      return {
-        ok: !!(body && body.ok !== false),
+      return buildPagedCollectionResult(body, filters, normalizeRemoteChecklists(body), {
         mode: getChecklistMode(),
-        items: normalizeRemoteChecklists(body),
-        total: Number(body && body.total || 0),
-        summary: body && body.summary && typeof body.summary === 'object'
-          ? {
-              total: Number(body.summary.total || 0),
-              editing: Number(body.summary.editing || 0),
-              pendingExport: Number(body.summary.pendingExport || 0),
-              closed: Number(body.summary.closed || 0)
-            }
-          : null,
-        page: body && body.page && typeof body.page === 'object' ? body.page : null,
-        raw: body
-      };
+        fallbackTotalFromItems: false,
+        normalizeSummary: function (summary) {
+          return {
+            total: Number(summary.total || 0),
+            editing: Number(summary.editing || 0),
+            pendingExport: Number(summary.pendingExport || 0),
+            closed: Number(summary.closed || 0)
+          };
+        }
+      });
     }
 
     async function getChecklistListSummary(query) {
@@ -1706,14 +1706,13 @@
         contractVersion: TRAINING_CONTRACT_VERSION,
         sharedHeaders: getTrainingSharedHeaders()
       });
-      return {
-        ok: !!(body && body.ok !== false),
+      return buildPagedCollectionResult(body, filters, normalizeRemoteTrainingForms(body), {
         mode: getTrainingMode(),
-        items: normalizeRemoteTrainingForms(body),
-        summary: normalizeTrainingListSummary(body && body.summary),
-        total: Math.max(0, Number(body && body.total) || 0),
-        raw: body
-      };
+        fallbackTotalFromItems: false,
+        normalizeSummary: function (summary) {
+          return normalizeTrainingListSummary(summary);
+        }
+      });
     }
 
     async function getTrainingFormsSummary(query) {
@@ -1845,14 +1844,10 @@
         contractVersion: TRAINING_CONTRACT_VERSION,
         sharedHeaders: getTrainingSharedHeaders()
       });
-      return {
-        ok: !!(body && body.ok !== false),
+      return buildPagedCollectionResult(body, filters, normalizeRemoteTrainingRosters(body), {
         mode: getTrainingMode(),
-        items: normalizeRemoteTrainingRosters(body),
-        total: Number(body && body.total || 0),
-        page: body && body.page && typeof body.page === 'object' ? body.page : null,
-        raw: body
-      };
+        fallbackTotalFromItems: false
+      });
     }
 
     async function upsertTrainingRoster(payload) {

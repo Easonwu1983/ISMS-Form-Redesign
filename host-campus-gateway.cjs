@@ -7,6 +7,8 @@ const { getBuildInfo } = require('./scripts/build-version-info.cjs');
 const LISTEN_PORT = Number(process.env.ISMS_GATEWAY_PORT || 8088);
 const UPSTREAM_HOST = process.env.ISMS_UPSTREAM_HOST || '127.0.0.1';
 const UPSTREAM_PORT = Number(process.env.ISMS_UPSTREAM_PORT || 18080);
+const DEFAULT_API_UPSTREAM = `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`;
+const API_UPSTREAMS = parseUpstreamList(process.env.ISMS_API_UPSTREAMS || DEFAULT_API_UPSTREAM);
 const FRONTEND_BASE = String(
   process.env.ISMS_FRONTEND_BASE
   || process.env.ISMS_CAMPUS_FRONTEND_BASE
@@ -21,6 +23,22 @@ const ALLOWED_IPV6_PREFIXES = [
   '2001:288:'
 ];
 const buildInfo = getBuildInfo('campus-gateway', process.cwd());
+
+function parseUpstreamList(rawValue) {
+  const list = String(rawValue || '')
+    .split(/[\r\n,;]+/)
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .map((value) => {
+      try {
+        return new URL(value).origin;
+      } catch (_) {
+        return '';
+      }
+    })
+    .filter(Boolean);
+  return list.length ? Array.from(new Set(list)) : [DEFAULT_API_UPSTREAM];
+}
 
 function buildSecurityHeaders(pathname) {
   const path = String(pathname || '');
@@ -186,7 +204,7 @@ function writeDeployManifest(res) {
     versionKey: buildInfo.versionKey,
     buildInfo,
     platform: 'campus-gateway',
-    backendBase: `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`,
+    backendBase: API_UPSTREAMS[0],
     assetIntegrity: {}
   }, null, 2);
   res.writeHead(200, {
@@ -261,11 +279,38 @@ function writeForbidden(req, res, ip) {
   writeForbiddenJson(res, ip);
 }
 
-function proxyRequest(req, res, remoteAddress) {
-  const targetUrl = new URL(normalizeRequestTarget(req.url), `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
-  const isApiRoute = targetUrl.pathname === '/deploy-manifest.json' || targetUrl.pathname.startsWith('/api/');
-  const upstreamBase = isApiRoute ? `http://${UPSTREAM_HOST}:${UPSTREAM_PORT}` : FRONTEND_BASE;
-  const upstreamUrl = new URL(`${targetUrl.pathname}${targetUrl.search}`, upstreamBase);
+function shouldRetryApiStatus(statusCode) {
+  return statusCode === 404 || statusCode === 502 || statusCode === 503 || statusCode === 504;
+}
+
+function buildProxyHeaders(req, remoteAddress, upstreamUrl) {
+  return {
+    ...req.headers,
+    host: upstreamUrl.host,
+    'x-forwarded-for': remoteAddress,
+    'x-forwarded-proto': upstreamUrl.protocol === 'https:' ? 'https' : 'http'
+  };
+}
+
+function writeBadGateway(res, error) {
+  const payload = JSON.stringify({
+    ok: false,
+    error: 'bad_gateway',
+    message: error && error.message ? error.message : String(error || 'bad gateway')
+  });
+  if (!res.headersSent) {
+    res.writeHead(502, {
+      ...buildSecurityHeaders('/api/bad-gateway'),
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Length': Buffer.byteLength(payload)
+    });
+  }
+  res.end(payload);
+}
+
+function proxyFrontendRequest(req, res, remoteAddress, requestTarget) {
+  const targetUrl = new URL(requestTarget, DEFAULT_API_UPSTREAM);
+  const upstreamUrl = new URL(`${targetUrl.pathname}${targetUrl.search}`, FRONTEND_BASE);
   const transport = upstreamUrl.protocol === 'https:' ? https : http;
   const upstream = transport.request({
     protocol: upstreamUrl.protocol,
@@ -273,37 +318,97 @@ function proxyRequest(req, res, remoteAddress) {
     port: upstreamUrl.port,
     method: req.method,
     path: `${upstreamUrl.pathname}${upstreamUrl.search}`,
-    headers: {
-      ...req.headers,
-      host: upstreamUrl.host,
-      'x-forwarded-for': remoteAddress,
-      'x-forwarded-proto': upstreamUrl.protocol === 'https:' ? 'https' : 'http'
-    }
+    headers: buildProxyHeaders(req, remoteAddress, upstreamUrl)
   }, (upstreamRes) => {
     res.writeHead(upstreamRes.statusCode || 502, {
       ...upstreamRes.headers,
-      ...buildSecurityHeaders(targetUrl.pathname)
+      ...buildSecurityHeaders(upstreamUrl.pathname)
     });
     upstreamRes.pipe(res);
   });
 
   upstream.on('error', (error) => {
-    const payload = JSON.stringify({
-      ok: false,
-      error: 'bad_gateway',
-      message: error.message
-    });
-    if (!res.headersSent) {
-      res.writeHead(502, {
-        ...buildSecurityHeaders('/api/bad-gateway'),
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Length': Buffer.byteLength(payload)
-      });
-    }
-    res.end(payload);
+    writeBadGateway(res, error);
   });
 
   req.pipe(upstream);
+}
+
+function proxyApiRequest(req, res, remoteAddress, requestTarget, upstreamBase) {
+  const upstreamUrl = new URL(requestTarget, upstreamBase);
+  const transport = upstreamUrl.protocol === 'https:' ? https : http;
+  const upstream = transport.request({
+    protocol: upstreamUrl.protocol,
+    hostname: upstreamUrl.hostname,
+    port: upstreamUrl.port,
+    method: req.method,
+    path: `${upstreamUrl.pathname}${upstreamUrl.search}`,
+    headers: buildProxyHeaders(req, remoteAddress, upstreamUrl)
+  }, (upstreamRes) => {
+    res.writeHead(upstreamRes.statusCode || 502, {
+      ...upstreamRes.headers,
+      ...buildSecurityHeaders(upstreamUrl.pathname)
+    });
+    upstreamRes.pipe(res);
+  });
+
+  upstream.on('error', (error) => {
+    writeBadGateway(res, error);
+  });
+
+  req.pipe(upstream);
+}
+
+function proxyApiReadWithFallback(req, res, remoteAddress, requestTarget, index) {
+  const upstreamBase = API_UPSTREAMS[index] || API_UPSTREAMS[0] || DEFAULT_API_UPSTREAM;
+  const upstreamUrl = new URL(requestTarget, upstreamBase);
+  const transport = upstreamUrl.protocol === 'https:' ? https : http;
+  const upstream = transport.request({
+    protocol: upstreamUrl.protocol,
+    hostname: upstreamUrl.hostname,
+    port: upstreamUrl.port,
+    method: req.method,
+    path: `${upstreamUrl.pathname}${upstreamUrl.search}`,
+    headers: buildProxyHeaders(req, remoteAddress, upstreamUrl)
+  }, (upstreamRes) => {
+    const statusCode = Number(upstreamRes.statusCode) || 0;
+    if (shouldRetryApiStatus(statusCode) && index < (API_UPSTREAMS.length - 1)) {
+      upstreamRes.resume();
+      proxyApiReadWithFallback(req, res, remoteAddress, requestTarget, index + 1);
+      return;
+    }
+    res.writeHead(statusCode || 502, {
+      ...upstreamRes.headers,
+      ...buildSecurityHeaders(upstreamUrl.pathname)
+    });
+    upstreamRes.pipe(res);
+  });
+
+  upstream.on('error', (error) => {
+    if (index < (API_UPSTREAMS.length - 1)) {
+      proxyApiReadWithFallback(req, res, remoteAddress, requestTarget, index + 1);
+      return;
+    }
+    writeBadGateway(res, error);
+  });
+
+  upstream.end();
+}
+
+function proxyRequest(req, res, remoteAddress) {
+  const requestTarget = normalizeRequestTarget(req.url);
+  const targetUrl = new URL(requestTarget, DEFAULT_API_UPSTREAM);
+  const isApiRoute = targetUrl.pathname === '/deploy-manifest.json' || targetUrl.pathname.startsWith('/api/');
+  if (!isApiRoute) {
+    proxyFrontendRequest(req, res, remoteAddress, requestTarget);
+    return;
+  }
+  const method = String(req.method || 'GET').trim().toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    proxyApiReadWithFallback(req, res, remoteAddress, requestTarget, 0);
+    return;
+  }
+  proxyApiRequest(req, res, remoteAddress, requestTarget, API_UPSTREAMS[0] || DEFAULT_API_UPSTREAM);
 }
 
 const server = http.createServer((req, res) => {
@@ -328,5 +433,6 @@ const server = http.createServer((req, res) => {
 
 server.listen(LISTEN_PORT, '0.0.0.0', () => {
   console.log(`[gateway] listening on http://0.0.0.0:${LISTEN_PORT}`);
-  console.log(`[gateway] upstream http://${UPSTREAM_HOST}:${UPSTREAM_PORT}`);
+  console.log(`[gateway] api upstreams ${API_UPSTREAMS.join(', ')}`);
+  console.log(`[gateway] frontend base ${FRONTEND_BASE}`);
 });

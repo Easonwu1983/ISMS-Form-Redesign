@@ -46,6 +46,7 @@
     const REVIEW_UNITS_CACHE = new Map();
     const USER_RECORD_CACHE = new Map();
     const ACCESS_PROFILE_CACHE = new Map();
+    let accessProfileCacheListenerInstalled = false;
     const STORE_VERSIONS = {
       [DATA_KEY]: 1,
       [CHECKLIST_KEY]: 1,
@@ -143,6 +144,30 @@
       const cleanKey = String(key || '').trim();
       if (!cleanKey) return;
       STORE_TOUCH_TOKENS[cleanKey] = (Number(STORE_TOUCH_TOKENS[cleanKey]) || 0) + 1;
+      if (cleanKey === AUTH_KEY || cleanKey === DATA_KEY || cleanKey === UNIT_REVIEW_KEY) {
+        invalidateAccessProfileCaches();
+      }
+    }
+
+    function invalidateAccessProfileCaches() {
+      AUTHORIZED_UNITS_CACHE.clear();
+      REVIEW_UNITS_CACHE.clear();
+      USER_RECORD_CACHE.clear();
+      ACCESS_PROFILE_CACHE.clear();
+    }
+
+    function installAccessProfileCacheInvalidation() {
+      if (accessProfileCacheListenerInstalled || typeof window === 'undefined' || !window.addEventListener) return;
+      window.addEventListener('isms:access-profile-changed', function () {
+        invalidateAccessProfileCaches();
+      });
+      window.addEventListener('isms:cache-invalidate', function (event) {
+        const scope = String(event && event.detail && event.detail.scope || '').trim().toLowerCase();
+        if (!scope || scope === 'all' || scope === 'access-profile') {
+          invalidateAccessProfileCaches();
+        }
+      });
+      accessProfileCacheListenerInstalled = true;
     }
 
     function hasQuotaExceededError(error) {
@@ -764,6 +789,7 @@
     }
 
     function getAuthorizedUnits(user) {
+      installAccessProfileCacheInvalidation();
       const units = normalizeAuthorizedUnits(user);
       if (units.length) return units;
       const unit = String(user?.unit || '').trim();
@@ -771,6 +797,7 @@
     }
 
     function getReviewUnits(user) {
+      installAccessProfileCacheInvalidation();
       const cacheKey = buildUserCacheKey(user, ['reviewUnits', 'reviewScopes', 'reviewScopeUnits']);
       return getCachedUserList(REVIEW_UNITS_CACHE, cacheKey, function () {
         return parseUserUnits(user?.reviewUnits || user?.reviewScopes || user?.reviewScopeUnits);
@@ -785,6 +812,7 @@
     }
 
     function getAccessProfile(user) {
+      installAccessProfileCacheInvalidation();
       const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email']);
       return getCachedUserList(ACCESS_PROFILE_CACHE, cacheKey, function () {
         const role = normalizeUserRole(user?.role);
@@ -830,6 +858,7 @@
     }
 
     function normalizeUserRecord(user) {
+      installAccessProfileCacheInvalidation();
       const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email']);
       return getCachedUserList(USER_RECORD_CACHE, cacheKey, function () {
         return getAccessProfile(user);
@@ -1677,6 +1706,7 @@
       getActiveUnit,
       getAccessProfile,
       getAccessProfileSignature,
+      invalidateAccessProfileCaches,
       normalizeUserRecord,
       loadData,
       saveData,

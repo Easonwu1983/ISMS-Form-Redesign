@@ -7,48 +7,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function Test-OriginRoute {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Url
-    )
-
-    try {
-        Invoke-WebRequest -Uri $Url -Method Get -UseBasicParsing -TimeoutSec 8 | Out-Null
-        return $true
-    } catch {
-        $statusCode = 0
-        try {
-            $statusCode = [int]$_.Exception.Response.StatusCode.value__
-        } catch {
-            $statusCode = 0
-        }
-        return $statusCode -eq 200 -or $statusCode -eq 401
-    }
-}
-
 function Resolve-OriginUrl {
     param(
         [string]$RequestedOriginUrl
     )
 
     $explicitOrigin = ($RequestedOriginUrl | Out-String).Trim()
-    if ($explicitOrigin) {
-        return $explicitOrigin
+    $nodeExe = (Get-Command node -ErrorAction Stop).Source
+    $resolverScript = Join-Path $PSScriptRoot 'resolve-campus-api-origin.cjs'
+    $resultJson = if ($explicitOrigin) {
+        & $nodeExe $resolverScript $explicitOrigin
+    } else {
+        & $nodeExe $resolverScript
     }
-
-    $candidates = @(
-        @{ OriginUrl = 'http://127.0.0.1:18080'; ProbeUrl = 'http://127.0.0.1:18080/api/unit-governance?limit=1' },
-        @{ OriginUrl = 'http://140.112.97.150'; ProbeUrl = 'http://140.112.97.150/api/unit-governance?limit=1' }
-    )
-
-    foreach ($candidate in $candidates) {
-        if (Test-OriginRoute -Url $candidate.ProbeUrl) {
-            return $candidate.OriginUrl
-        }
+    $result = $resultJson | ConvertFrom-Json
+    $resolvedOrigin = (($result.origin | Out-String).Trim())
+    if (-not $resolvedOrigin) {
+        throw "Failed to resolve origin URL via $resolverScript"
     }
-
-    return 'http://127.0.0.1:18080'
+    return $resolvedOrigin
 }
 
 function Find-Cloudflared {
@@ -91,7 +68,19 @@ if (Test-Path $pidPath) {
             }
             if ($existingTunnelUrl) {
                 $probeUrl = ('{0}/api/unit-governance?limit=1' -f $existingTunnelUrl.TrimEnd('/'))
-                if (Test-OriginRoute -Url $probeUrl) {
+                try {
+                    Invoke-WebRequest -Uri $probeUrl -Method Get -UseBasicParsing -TimeoutSec 8 | Out-Null
+                    $probeOk = $true
+                } catch {
+                    $statusCode = 0
+                    try {
+                        $statusCode = [int]$_.Exception.Response.StatusCode.value__
+                    } catch {
+                        $statusCode = 0
+                    }
+                    $probeOk = $statusCode -eq 200 -or $statusCode -eq 401
+                }
+                if ($probeOk) {
                     Write-Host "Cloudflare quick tunnel already running. PID: $existingPid"
                     Write-Host "Quick tunnel URL: $existingTunnelUrl"
                     exit 0

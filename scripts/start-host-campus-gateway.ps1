@@ -3,30 +3,11 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $nodeExe = 'C:\Program Files\nodejs\node.exe'
 $gatewayScript = Join-Path $projectRoot 'host-campus-gateway.cjs'
+$resolverScript = Join-Path $projectRoot 'scripts\resolve-campus-api-origin.cjs'
 $runtimeDir = Join-Path $projectRoot '.runtime'
 $pidFile = Join-Path $runtimeDir 'host-campus-gateway.pid'
 $logFile = Join-Path $runtimeDir 'host-campus-gateway.log'
 $errFile = Join-Path $runtimeDir 'host-campus-gateway.err.log'
-
-function Test-UpstreamRoute {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Url
-  )
-
-  try {
-    Invoke-WebRequest -Uri $Url -Method Get -UseBasicParsing -TimeoutSec 5 | Out-Null
-    return $true
-  } catch {
-    $statusCode = 0
-    try {
-      $statusCode = [int]$_.Exception.Response.StatusCode.value__
-    } catch {
-      $statusCode = 0
-    }
-    return $statusCode -eq 200 -or $statusCode -eq 401
-  }
-}
 
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 
@@ -42,16 +23,35 @@ if (Test-Path $pidFile) {
   Remove-Item $pidFile -ErrorAction SilentlyContinue
 }
 
-$upstreamHost = '127.0.0.1'
-$upstreamPort = 18080
-$routeProbeUrl = 'http://127.0.0.1:18080/api/unit-governance?limit=1'
-if (-not (Test-UpstreamRoute -Url $routeProbeUrl)) {
-  $upstreamHost = '140.112.97.150'
-  $upstreamPort = 80
+$resolverResult = & $nodeExe $resolverScript | ConvertFrom-Json
+$resolvedOrigin = (($resolverResult.origin | Out-String).Trim())
+if (-not $resolvedOrigin) {
+  throw "Failed to resolve campus API origin via $resolverScript"
+}
+$apiUpstreams = @()
+if ($resolverResult.candidates) {
+    foreach ($candidate in $resolverResult.candidates) {
+        $originValue = (($candidate.origin | Out-String).Trim())
+        if ($originValue) {
+            $apiUpstreams += $originValue
+        }
+    }
+}
+if (-not $apiUpstreams.Count) {
+    $apiUpstreams = @($resolvedOrigin)
+}
+$apiUpstreams = @($resolvedOrigin) + @($apiUpstreams | Where-Object { $_ -and $_ -ne $resolvedOrigin })
+$resolvedUri = [System.Uri]$resolvedOrigin
+$upstreamHost = $resolvedUri.Host
+$upstreamPort = if ($resolvedUri.IsDefaultPort) {
+  if ($resolvedUri.Scheme -eq 'https') { 443 } else { 80 }
+} else {
+  $resolvedUri.Port
 }
 
 $env:ISMS_UPSTREAM_HOST = $upstreamHost
 $env:ISMS_UPSTREAM_PORT = [string]$upstreamPort
+$env:ISMS_API_UPSTREAMS = ($apiUpstreams -join ',')
 
 $process = Start-Process -FilePath $nodeExe `
   -ArgumentList $gatewayScript `
@@ -61,4 +61,4 @@ $process = Start-Process -FilePath $nodeExe `
   -PassThru
 
 $process.Id | Set-Content -Path $pidFile -Encoding ascii
-Write-Output "Gateway started. PID=$($process.Id) upstream=$upstreamHost`:$upstreamPort"
+Write-Output "Gateway started. PID=$($process.Id) upstream=$resolvedOrigin apiUpstreams=$($env:ISMS_API_UPSTREAMS)"

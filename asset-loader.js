@@ -20,6 +20,7 @@
     'workflow-support-module.js',
     'm365-api-client.js',
     'shell-module.js',
+    'service-registry-module.js',
     'case-module.js',
     'admin-module.js',
     'checklist-module.js',

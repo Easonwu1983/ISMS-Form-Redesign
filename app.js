@@ -322,39 +322,47 @@
   let unitModuleApi = null;
   function getUnitModule() {
     if (unitModuleApi) return unitModuleApi;
-    if (typeof window === 'undefined' || typeof window.createUnitModule !== 'function') {
-      throw new Error('unit-module.js not loaded');
-    }
-    unitModuleApi = window.createUnitModule({
-      UNIT_CUSTOM_VALUE,
-      UNIT_CUSTOM_LABEL,
-      UNIT_ADMIN_PRIMARY_WHITELIST,
-      UNIT_ACADEMIC_PRIMARY_WHITELIST,
-      loadData: function () { return getDataModule().loadData(); },
-      saveData: function (data) { return getDataModule().saveData(data); },
-      loadChecklists: function () { return getDataModule().loadChecklists(); },
-      saveChecklists: function (store) { return getDataModule().saveChecklists(store); },
-      loadTrainingStore: function () { return getDataModule().loadTrainingStore(); },
-      saveTrainingStore: function (store) { return getDataModule().saveTrainingStore(store); },
-      loadUnitReviewStore: function () { return getDataModule().loadUnitReviewStore(); },
-      saveUnitReviewStore: function (store) { return getDataModule().saveUnitReviewStore(store); },
-      getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
-      syncSessionUnit: function (sourceUnit, targetUnit) { return getAuthModule().syncSessionUnit(sourceUnit, targetUnit); },
-      isAdmin: function () { return getPolicyModule().isAdmin(); },
-      esc: function (value) { return getUiModule().esc(value); }
+    unitModuleApi = resolveFactoryService('unitModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createUnitModule !== 'function') {
+          throw new Error('unit-module.js not loaded');
+        }
+        return window.createUnitModule({
+          UNIT_CUSTOM_VALUE,
+          UNIT_CUSTOM_LABEL,
+          UNIT_ADMIN_PRIMARY_WHITELIST,
+          UNIT_ACADEMIC_PRIMARY_WHITELIST,
+          loadData: function () { return getDataModule().loadData(); },
+          saveData: function (data) { return getDataModule().saveData(data); },
+          loadChecklists: function () { return getDataModule().loadChecklists(); },
+          saveChecklists: function (store) { return getDataModule().saveChecklists(store); },
+          loadTrainingStore: function () { return getDataModule().loadTrainingStore(); },
+          saveTrainingStore: function (store) { return getDataModule().saveTrainingStore(store); },
+          loadUnitReviewStore: function () { return getDataModule().loadUnitReviewStore(); },
+          saveUnitReviewStore: function (store) { return getDataModule().saveUnitReviewStore(store); },
+          getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
+          syncSessionUnit: function (sourceUnit, targetUnit) { return getAuthModule().syncSessionUnit(sourceUnit, targetUnit); },
+          isAdmin: function () { return getPolicyModule().isAdmin(); },
+          esc: function (value) { return getUiModule().esc(value); }
+        });
+      },
+      globalSlot: '_unitModule'
     });
-    window._unitModule = unitModuleApi;
     return unitModuleApi;
   }
 
   let uiModuleApi = null;
   function getUiModule() {
     if (uiModuleApi) return uiModuleApi;
-    if (typeof window === 'undefined' || typeof window.createUiModule !== 'function') {
-      throw new Error('ui-module.js not loaded');
-    }
-    uiModuleApi = window.createUiModule();
-    window._uiModule = uiModuleApi;
+    uiModuleApi = resolveFactoryService('uiModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createUiModule !== 'function') {
+          throw new Error('ui-module.js not loaded');
+        }
+        return window.createUiModule();
+      },
+      globalSlot: '_uiModule'
+    });
     return uiModuleApi;
   }
 
@@ -378,28 +386,34 @@
   let policyModuleApi = null;
   function getPolicyModule() {
     if (policyModuleApi) return policyModuleApi;
-    if (typeof window === 'undefined' || typeof window.createPolicyModule !== 'function') {
-      throw new Error('policy-module.js not loaded');
-    }
-      policyModuleApi = window.createPolicyModule({
-        ROLES,
-        STATUSES,
-        TRAINING_STATUSES,
-        TRAINING_UNDO_WINDOW_MINUTES,
-        currentUser: function () { return getAuthModule().currentUser(); },
-        getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
-        getReviewUnits: function (user) { return getDataModule().getReviewUnits(user); },
-        getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
-        getStoreTouchToken: function (key) { return getDataModule().getStoreTouchToken(key); },
-        getUnitGovernanceMode: function (unit) { return getDataModule().getUnitGovernanceMode(unit); },
-        splitUnitValue: function (value) { return getUnitModule().splitUnitValue(value); },
-        getAllItems: function () { return getDataModule().getAllItems(); },
-        getAllChecklists: function () { return getDataModule().getAllChecklists(); },
-        getAllTrainingForms: function () { return getDataModule().getAllTrainingForms(); },
-      isChecklistDraftStatus: function (status) { return getDataModule().isChecklistDraftStatus(status); },
-      isReviewScopeEnforced: function () { return getReviewScopeRepositoryState().ready === true && getReviewScopesMode() === 'm365-api'; }
+    policyModuleApi = resolveFactoryService('policyModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createPolicyModule !== 'function') {
+          throw new Error('policy-module.js not loaded');
+        }
+        return window.createPolicyModule({
+          ROLES,
+          STATUSES,
+          TRAINING_STATUSES,
+          TRAINING_UNDO_WINDOW_MINUTES,
+          currentUser: function () { return getAuthModule().currentUser(); },
+          getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
+          getReviewUnits: function (user) { return getDataModule().getReviewUnits(user); },
+          getAccessProfile: function (user) { return getDataModule().getAccessProfile(user); },
+          getAccessProfileSignature: function (user) { return getDataModule().getAccessProfileSignature(user); },
+          getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
+          getStoreTouchToken: function (key) { return getDataModule().getStoreTouchToken(key); },
+          getUnitGovernanceMode: function (unit) { return getDataModule().getUnitGovernanceMode(unit); },
+          splitUnitValue: function (value) { return getUnitModule().splitUnitValue(value); },
+          getAllItems: function () { return getDataModule().getAllItems(); },
+          getAllChecklists: function () { return getDataModule().getAllChecklists(); },
+          getAllTrainingForms: function () { return getDataModule().getAllTrainingForms(); },
+          isChecklistDraftStatus: function (status) { return getDataModule().isChecklistDraftStatus(status); },
+          isReviewScopeEnforced: function () { return getReviewScopeRepositoryState().ready === true && getReviewScopesMode() === 'm365-api'; }
+        });
+      },
+      globalSlot: '_policyModule'
     });
-    window._policyModule = policyModuleApi;
     return policyModuleApi;
   }
 
@@ -440,76 +454,84 @@
   let dataModuleApi = null;
   function getDataModule() {
     if (dataModuleApi) return dataModuleApi;
-    if (typeof window === 'undefined' || typeof window.createDataModule !== 'function') {
-      throw new Error('data-module.js not loaded');
-    }
-    dataModuleApi = window.createDataModule({
-      DATA_KEY,
-      AUTH_KEY,
-      CHECKLIST_KEY,
-      TEMPLATE_KEY,
-      TRAINING_KEY,
-      LOGIN_LOG_KEY,
-      UNIT_REVIEW_KEY,
-      UNIT_CONTACT_APP_KEY,
-      DEFAULT_USERS,
-      DEFAULT_CHECKLIST_SECTIONS,
-      ROLES,
-      CHECKLIST_STATUS_DRAFT,
-      CHECKLIST_STATUS_SUBMITTED,
-      TRAINING_STATUSES,
-      TRAINING_EMPLOYEE_STATUS,
-      getUnitCode,
-      buildCorrectionDocumentNo,
-      parseCorrectionAutoId,
-      getNextCorrectionSequence,
-      buildAutoCarIdByDocument,
-      buildChecklistDocumentNo,
-      parseChecklistId,
-      buildChecklistIdByDocument,
-      getNextChecklistSequence,
-      getTrainingStatsUnit,
-      getTrainingJobUnit,
-      hasTrainingValue,
-      isTrainingBooleanValue,
-      normalizeTrainingProfessionalValue,
-      computeTrainingSummary,
-      buildTrainingFormDocumentNo,
-      parseTrainingFormId,
-      buildTrainingFormIdByDocument,
-      getNextTrainingFormSequence
+    dataModuleApi = resolveFactoryService('dataModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createDataModule !== 'function') {
+          throw new Error('data-module.js not loaded');
+        }
+        return window.createDataModule({
+          DATA_KEY,
+          AUTH_KEY,
+          CHECKLIST_KEY,
+          TEMPLATE_KEY,
+          TRAINING_KEY,
+          LOGIN_LOG_KEY,
+          UNIT_REVIEW_KEY,
+          UNIT_CONTACT_APP_KEY,
+          DEFAULT_USERS,
+          DEFAULT_CHECKLIST_SECTIONS,
+          ROLES,
+          CHECKLIST_STATUS_DRAFT,
+          CHECKLIST_STATUS_SUBMITTED,
+          TRAINING_STATUSES,
+          TRAINING_EMPLOYEE_STATUS,
+          getUnitCode,
+          buildCorrectionDocumentNo,
+          parseCorrectionAutoId,
+          getNextCorrectionSequence,
+          buildAutoCarIdByDocument,
+          buildChecklistDocumentNo,
+          parseChecklistId,
+          buildChecklistIdByDocument,
+          getNextChecklistSequence,
+          getTrainingStatsUnit,
+          getTrainingJobUnit,
+          hasTrainingValue,
+          isTrainingBooleanValue,
+          normalizeTrainingProfessionalValue,
+          computeTrainingSummary,
+          buildTrainingFormDocumentNo,
+          parseTrainingFormId,
+          buildTrainingFormIdByDocument,
+          getNextTrainingFormSequence
+        });
+      },
+      globalSlot: '_dataModule'
     });
-    window._dataModule = dataModuleApi;
     return dataModuleApi;
   }
   let authModuleApi = null;
   function getAuthModule() {
     if (authModuleApi) return authModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAuthModule !== 'function') {
-      throw new Error('auth-module.js not loaded');
-    }
-    authModuleApi = window.createAuthModule({
-      AUTH_KEY,
-      DATA_KEY,
-      ROLES,
-      DEFAULT_USERS,
-      loadData: function () { return getDataModule().loadData(); },
-      saveData: function (data) { return getDataModule().saveData(data); },
-      getStoreTouchToken: function (key) { return getDataModule().getStoreTouchToken(key); },
-      getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
-      getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
-      normalizeUserRecord: function (user) { return getDataModule().normalizeUserRecord(user); },
-      findUser: function (username) { return getDataModule().findUser(username); },
-      findUserByEmail: function (email) { return getDataModule().findUserByEmail(email); },
-      updateUser: function (username, updates) { return getDataModule().updateUser(username, updates); },
-      addLoginLog: function (username, user, success) { return getDataModule().addLoginLog(username, user, success); },
-      loginWithBackend: submitBackendLogin,
-      logoutWithBackend: submitAuthLogout,
-      resetPasswordWithBackend: submitAuthResetPasswordByEmail,
-      redeemResetPasswordWithBackend: submitAuthRedeemResetPassword,
-      changePasswordWithBackend: submitAuthChangePassword
+    authModuleApi = resolveFactoryService('authModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAuthModule !== 'function') {
+          throw new Error('auth-module.js not loaded');
+        }
+        return window.createAuthModule({
+          AUTH_KEY,
+          DATA_KEY,
+          ROLES,
+          DEFAULT_USERS,
+          loadData: function () { return getDataModule().loadData(); },
+          saveData: function (data) { return getDataModule().saveData(data); },
+          getStoreTouchToken: function (key) { return getDataModule().getStoreTouchToken(key); },
+          getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
+          getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
+          normalizeUserRecord: function (user) { return getDataModule().normalizeUserRecord(user); },
+          findUser: function (username) { return getDataModule().findUser(username); },
+          findUserByEmail: function (email) { return getDataModule().findUserByEmail(email); },
+          updateUser: function (username, updates) { return getDataModule().updateUser(username, updates); },
+          addLoginLog: function (username, user, success) { return getDataModule().addLoginLog(username, user, success); },
+          loginWithBackend: submitBackendLogin,
+          logoutWithBackend: submitAuthLogout,
+          resetPasswordWithBackend: submitAuthResetPasswordByEmail,
+          redeemResetPasswordWithBackend: submitAuthRedeemResetPassword,
+          changePasswordWithBackend: submitAuthChangePassword
+        });
+      },
+      globalSlot: '_authModule'
     });
-    window._authModule = authModuleApi;
     return authModuleApi;
   }
   let adminModuleApi = null;
@@ -847,66 +869,56 @@
     return trainingModuleApi;
   }
   let m365ApiClientApi = null;
+  let serviceRegistryModuleApi = null;
+  function getServiceRegistryModule() {
+    if (serviceRegistryModuleApi) return serviceRegistryModuleApi;
+    if (typeof window === 'undefined' || typeof window.createServiceRegistryModule !== 'function') {
+      throw new Error('service-registry-module.js not loaded');
+    }
+    serviceRegistryModuleApi = window.createServiceRegistryModule();
+    window._serviceRegistryModule = serviceRegistryModuleApi;
+    return serviceRegistryModuleApi;
+  }
   function getBootstrapCoordinator() {
-    if (typeof window === 'undefined') return null;
-    const existing = window.__ISMS_BOOTSTRAP__;
-    if (existing && typeof existing === 'object') return existing;
-    const created = {
-      services: {},
-      steps: [],
-      record(step, detail) {
-        const safeStep = String(step || '').trim();
-        if (!safeStep) return;
-        const entry = {
-          step: safeStep,
-          detail: detail == null ? '' : String(detail),
-          at: new Date().toISOString()
-        };
-        this.steps.push(entry);
-        while (this.steps.length > 50) this.steps.shift();
-        console.info('[ISMS:bootstrap]', safeStep, entry.detail || '');
-      }
-    };
-    window.__ISMS_BOOTSTRAP__ = created;
-    return created;
+    return getServiceRegistryModule().getBootstrapState();
   }
   function recordBootstrapStep(step, detail) {
-    const coordinator = getBootstrapCoordinator();
-    if (coordinator && typeof coordinator.record === 'function') {
-      coordinator.record(step, detail);
-    }
+    getServiceRegistryModule().record(step, detail);
   }
   function registerCoreService(name, resolver) {
-    const safeName = String(name || '').trim();
-    if (!safeName || typeof resolver !== 'function') return;
-    const coordinator = getBootstrapCoordinator();
-    if (!coordinator) return;
-    coordinator.services[safeName] = resolver;
-    if (safeName === 'm365ApiClient') coordinator.resolveM365ApiClient = resolver;
-    if (safeName === 'shellModule') coordinator.resolveShellModule = resolver;
+    getServiceRegistryModule().register(name, resolver, {
+      aliases: name === 'm365ApiClient'
+        ? ['resolveM365ApiClient']
+        : (name === 'shellModule' ? ['resolveShellModule'] : [])
+    });
+  }
+  function resolveFactoryService(name, options) {
+    return getServiceRegistryModule().resolve(name, options || {});
   }
   function getM365ApiClient() {
     if (m365ApiClientApi) return m365ApiClientApi;
-    if (typeof window === 'undefined' || typeof window.createM365ApiClient !== 'function') {
-      recordBootstrapStep('m365-client-missing-factory', 'createM365ApiClient unavailable');
-      throw new Error('m365-api-client.js not loaded');
-    }
-    m365ApiClientApi = window.createM365ApiClient({
-      UNIT_CONTACT_APPLICATION_STATUSES,
-      createUnitContactApplication,
-      updateUnitContactApplication,
-      getUnitContactApplication,
-      getAllUnitContactApplications,
-      findUnitContactApplicationsByEmail,
-      getOfficialUnitMeta,
-      getSessionAuthHeaders
+    m365ApiClientApi = resolveFactoryService('m365ApiClient', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createM365ApiClient !== 'function') {
+          recordBootstrapStep('m365-client-missing-factory', 'createM365ApiClient unavailable');
+          throw new Error('m365-api-client.js not loaded');
+        }
+        return window.createM365ApiClient({
+          UNIT_CONTACT_APPLICATION_STATUSES,
+          createUnitContactApplication,
+          updateUnitContactApplication,
+          getUnitContactApplication,
+          getAllUnitContactApplications,
+          findUnitContactApplicationsByEmail,
+          getOfficialUnitMeta,
+          getSessionAuthHeaders
+        });
+      },
+      globalSlot: '_m365ApiClient',
+      globalGetter: 'getM365ApiClient',
+      aliases: ['resolveM365ApiClient'],
+      readyStep: 'm365-client-ready'
     });
-    window._m365ApiClient = m365ApiClientApi;
-    if (typeof window !== 'undefined') {
-      window.getM365ApiClient = getM365ApiClient;
-    }
-    registerCoreService('m365ApiClient', getM365ApiClient);
-    recordBootstrapStep('m365-client-ready', 'created');
     return m365ApiClientApi;
   }
   const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
@@ -3502,57 +3514,59 @@
   let shellModuleApi = null;
   function getShellModule() {
     if (shellModuleApi) return shellModuleApi;
-    if (typeof window === 'undefined' || typeof window.createShellModule !== 'function') {
-      recordBootstrapStep('shell-module-missing-factory', 'createShellModule unavailable');
-      throw new Error('shell-module.js not loaded');
-    }
-    shellModuleApi = window.createShellModule({
-      ROUTE_WHITELIST,
-      ROLE_BADGE,
-      STATUSES,
-      currentUser,
-      login,
-      logout,
-      getAuthMode,
-      hasLocalUsers: function () { return getAuthModule().hasLocalUsers(); },
-      bootstrapLocalAdminAccount: function (input) { return getAuthModule().bootstrapLocalAdminAccount(input); },
-      resetPasswordByEmail,
-      redeemResetPassword,
-      changePassword,
-      getVisibleItems,
-      isOverdue,
-      getRoute,
-      getRouteMeta,
-      getRouteTitle,
-      canAccessRoute,
-      getRouteFallback,
-      navigate,
-      toast,
-      refreshIcons,
-      markAuthenticatedBootstrapReady,
-      esc,
-      ic,
-      ntuLogo,
-      canCreateCAR,
-      canFillChecklist,
-      canManageUsers,
-      isAdmin,
-      canSwitchAuthorizedUnit,
-      getAuthorizedUnits,
-      getScopedUnit,
-      switchCurrentUserUnit,
-      ensureAuthenticatedRemoteBootstrap,
-      isAuthenticatedRemoteBootstrapPending,
-      hasUnsavedChangesGuard,
-      confirmDiscardUnsavedChanges,
-      registerActionHandlers
+    shellModuleApi = resolveFactoryService('shellModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createShellModule !== 'function') {
+          recordBootstrapStep('shell-module-missing-factory', 'createShellModule unavailable');
+          throw new Error('shell-module.js not loaded');
+        }
+        return window.createShellModule({
+          ROUTE_WHITELIST,
+          ROLE_BADGE,
+          STATUSES,
+          currentUser,
+          login,
+          logout,
+          getAuthMode,
+          hasLocalUsers: function () { return getAuthModule().hasLocalUsers(); },
+          bootstrapLocalAdminAccount: function (input) { return getAuthModule().bootstrapLocalAdminAccount(input); },
+          resetPasswordByEmail,
+          redeemResetPassword,
+          changePassword,
+          getVisibleItems,
+          isOverdue,
+          getRoute,
+          getRouteMeta,
+          getRouteTitle,
+          canAccessRoute,
+          getRouteFallback,
+          navigate,
+          toast,
+          refreshIcons,
+          markAuthenticatedBootstrapReady,
+          esc,
+          ic,
+          ntuLogo,
+          canCreateCAR,
+          canFillChecklist,
+          canManageUsers,
+          isAdmin,
+          canSwitchAuthorizedUnit,
+          getAuthorizedUnits,
+          getScopedUnit,
+          switchCurrentUserUnit,
+          ensureAuthenticatedRemoteBootstrap,
+          isAuthenticatedRemoteBootstrapPending,
+          hasUnsavedChangesGuard,
+          confirmDiscardUnsavedChanges,
+          registerActionHandlers
+        });
+      },
+      globalSlot: '_shellModule',
+      globalGetter: 'getShellModule',
+      aliases: ['resolveShellModule'],
+      readyStep: 'shell-module-ready'
     });
-    window._shellModule = shellModuleApi;
-    if (typeof window !== 'undefined') {
-      window.getShellModule = getShellModule;
-    }
-    registerCoreService('shellModule', getShellModule);
-    recordBootstrapStep('shell-module-ready', 'created');
     return shellModuleApi;
   }
   const ROUTE_WHITELIST = {
