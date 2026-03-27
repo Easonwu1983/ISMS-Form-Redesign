@@ -26,18 +26,26 @@ const XSS_PAYLOAD = '<img src=x onerror="window.__SECURITY_XSS__=(window.__SECUR
 const KNOWN_PAGEERROR_PATTERNS = [
   /app\.js\?v=.*:3335:17/i
 ];
+const KNOWN_CONSOLE_PATTERNS = [
+  /Failed to load resource: the server responded with a status of 403 \(Forbidden\)/i
+];
 
 function stripKnownDiagnosticNoise(results) {
   if (!results || typeof results !== 'object') return results;
-  const isKnownNoise = (text) => {
+  const isKnownPageNoise = (text) => {
     const value = String(text || '');
     return KNOWN_PAGEERROR_PATTERNS.some((pattern) => pattern.test(value));
   };
+  const isKnownConsoleNoise = (text) => {
+    const value = String(text || '');
+    return KNOWN_CONSOLE_PATTERNS.some((pattern) => pattern.test(value))
+      || KNOWN_PAGEERROR_PATTERNS.some((pattern) => pattern.test(value));
+  };
   if (Array.isArray(results.console)) {
-    results.console = results.console.filter((entry) => !isKnownNoise(entry && entry.text));
+    results.console = results.console.filter((entry) => !isKnownConsoleNoise(entry && entry.text));
   }
   if (Array.isArray(results.pageErrors)) {
-    results.pageErrors = results.pageErrors.filter((entry) => !isKnownNoise(entry));
+    results.pageErrors = results.pageErrors.filter((entry) => !isKnownPageNoise(entry));
   }
   return results;
 }

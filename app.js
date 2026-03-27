@@ -3372,11 +3372,13 @@
         activeUser = verifiedUser;
       } catch (error) {
         if (Number(error && error.statusCode) === 401 || Number(error && error.statusCode) === 403) {
-          sessionStorage.removeItem(AUTH_KEY);
+          try { sessionStorage.removeItem(AUTH_KEY); } catch (_) { }
+          try { localStorage.removeItem(AUTH_KEY); } catch (_) { }
           authenticatedBootstrapKey = '';
           authenticatedBootstrapPromise = null;
           setAuthenticatedBootstrapState('idle');
-          throw new Error('登入狀態已失效，請重新登入');
+          recordBootstrapStep('bootstrap-session-expired', String(activeUser && activeUser.username || 'anonymous'));
+          return '';
         }
         setAuthenticatedBootstrapState('error');
         throw error;
