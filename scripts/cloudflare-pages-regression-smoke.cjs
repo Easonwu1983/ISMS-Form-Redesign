@@ -883,6 +883,31 @@ async function run() {
       throw new Error('users page contains placeholder question marks');
     }
     pushStep('users:loaded', true, 'account table ready');
+    await page.waitForSelector('#system-users-page-limit', { timeout: 15000 });
+    const usersPagerState = await page.evaluate(() => ({
+      role: Boolean(document.querySelector('#system-users-role')),
+      unit: Boolean(document.querySelector('#system-users-unit')),
+      pageNumber: Boolean(document.querySelector('#system-users-page-number')),
+      nextEnabled: !!(document.querySelector('#system-users-next-page') && !document.querySelector('#system-users-next-page').disabled)
+    }));
+    if (!usersPagerState.role || !usersPagerState.unit || !usersPagerState.pageNumber) {
+      throw new Error('users pager or filters missing');
+    }
+    await page.selectOption('#system-users-page-limit', '5');
+    await page.waitForFunction(() => {
+      const limit = document.querySelector('#system-users-page-limit');
+      const app = document.getElementById('app');
+      return limit && String(limit.value || '') === '5' && /顯示 1-5 \//.test(String(app && app.innerText || ''));
+    }, undefined, { timeout: 15000 });
+    if (usersPagerState.nextEnabled) {
+      await page.click('#system-users-next-page');
+      await page.waitForFunction(() => {
+        const input = document.querySelector('#system-users-page-number');
+        const app = document.getElementById('app');
+        return input && String(input.value || '') === '2' && /顯示 6-10 \//.test(String(app && app.innerText || ''));
+      }, undefined, { timeout: 15000 });
+    }
+    pushStep('users:pager', true, 'account pager works');
 
     await ensureAdminSession(page);
     await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -934,6 +959,33 @@ async function run() {
       throw new Error('unit contact review contains placeholder question marks');
     }
     pushStep('unit-contact-review:loaded', true, 'unit contact review page ready');
+    await page.waitForSelector('#unit-contact-review-page-limit', { timeout: 15000 });
+    const unitContactPagerState = await page.evaluate(() => ({
+      status: Boolean(document.querySelector('#unit-contact-review-status')),
+      email: Boolean(document.querySelector('#unit-contact-review-email')),
+      keyword: Boolean(document.querySelector('#unit-contact-review-keyword')),
+      filterLimit: Boolean(document.querySelector('#unit-contact-review-limit')),
+      pageNumber: Boolean(document.querySelector('#unit-contact-review-page-number')),
+      nextEnabled: !!(document.querySelector('#unit-contact-review-next-page') && !document.querySelector('#unit-contact-review-next-page').disabled)
+    }));
+    if (!unitContactPagerState.status || !unitContactPagerState.email || !unitContactPagerState.keyword || !unitContactPagerState.filterLimit || !unitContactPagerState.pageNumber) {
+      throw new Error('unit contact review pager or filters missing');
+    }
+    await page.selectOption('#unit-contact-review-page-limit', '5');
+    await page.waitForFunction(() => {
+      const limit = document.querySelector('#unit-contact-review-page-limit');
+      const app = document.getElementById('app');
+      return limit && String(limit.value || '') === '5' && /顯示 \d+-\d+ \/ \d+ 筆/.test(String(app && app.innerText || ''));
+    }, undefined, { timeout: 15000 });
+    if (unitContactPagerState.nextEnabled) {
+      await page.click('#unit-contact-review-next-page');
+      await page.waitForFunction(() => {
+        const input = document.querySelector('#unit-contact-review-page-number');
+        const app = document.getElementById('app');
+        return input && String(input.value || '') === '2' && /顯示 \d+-\d+ \/ \d+ 筆/.test(String(app && app.innerText || ''));
+      }, undefined, { timeout: 15000 });
+    }
+    pushStep('unit-contact-review:pager', true, 'unit contact review pager works');
 
     await ensureAdminSession(page);
     let unitReviewReady = false;

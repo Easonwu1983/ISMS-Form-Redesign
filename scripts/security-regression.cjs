@@ -448,6 +448,80 @@ async function assertNoXssExecution(page, label) {
       return 'security window and unit governance remained protected';
     });
 
+    await runStep(results, 'SEC-03d', 'Admin', 'Users page pager and filters work', async () => {
+      await login(page, 'easonwu', '2wsx#EDC');
+      await gotoHash(page, 'users');
+      await page.waitForSelector('#system-users-page-limit');
+      const initial = await page.evaluate(() => ({
+        role: Boolean(document.querySelector('#system-users-role')),
+        unit: Boolean(document.querySelector('#system-users-unit')),
+        pageNumber: Boolean(document.querySelector('#system-users-page-number')),
+        nextEnabled: !!(document.querySelector('#system-users-next-page') && !document.querySelector('#system-users-next-page').disabled)
+      }));
+      if (!initial.role) throw new Error('users role filter missing');
+      if (!initial.unit) throw new Error('users unit filter missing');
+      if (!initial.pageNumber) throw new Error('users pager missing');
+      await page.selectOption('#system-users-page-limit', '5');
+      await page.waitForFunction(() => {
+        const limit = document.querySelector('#system-users-page-limit');
+        const app = document.getElementById('app');
+        return limit && String(limit.value || '') === '5' && /顯示 1-5 \//.test(String(app && app.innerText || ''));
+      }, undefined, { timeout: 15000 });
+      if (initial.nextEnabled) {
+        await page.click('#system-users-next-page');
+        await page.waitForFunction(() => {
+          const input = document.querySelector('#system-users-page-number');
+          const app = document.getElementById('app');
+          return input && String(input.value || '') === '2' && /顯示 6-10 \//.test(String(app && app.innerText || ''));
+        }, undefined, { timeout: 15000 });
+      }
+      const state = await page.evaluate(() => ({
+        currentPage: document.querySelector('#system-users-page-number') ? String(document.querySelector('#system-users-page-number').value || '') : ''
+      }));
+      return `users page=${state.currentPage || '1'}`;
+    });
+
+    await runStep(results, 'SEC-03e', 'Admin', 'Unit contact review pager and filters work', async () => {
+      await login(page, 'easonwu', '2wsx#EDC');
+      await gotoHash(page, 'unit-contact-review');
+      await page.waitForSelector('#unit-contact-review-status');
+      const initial = await page.evaluate(() => ({
+        status: Boolean(document.querySelector('#unit-contact-review-status')),
+        email: Boolean(document.querySelector('#unit-contact-review-email')),
+        keyword: Boolean(document.querySelector('#unit-contact-review-keyword')),
+        filterLimit: Boolean(document.querySelector('#unit-contact-review-limit')),
+        pagerLimit: Boolean(document.querySelector('#unit-contact-review-page-limit')),
+        pageNumber: Boolean(document.querySelector('#unit-contact-review-page-number')),
+        nextEnabled: !!(document.querySelector('#unit-contact-review-next-page') && !document.querySelector('#unit-contact-review-next-page').disabled)
+      }));
+      if (!initial.status) throw new Error('unit contact review status filter missing');
+      if (!initial.email) throw new Error('unit contact review email filter missing');
+      if (!initial.keyword) throw new Error('unit contact review keyword filter missing');
+      if (!initial.filterLimit) throw new Error('unit contact review filter limit missing');
+      if (!initial.pagerLimit) throw new Error('unit contact review pager limit missing');
+      if (!initial.pageNumber) throw new Error('unit contact review pager missing');
+      await page.selectOption('#unit-contact-review-page-limit', '5');
+      await page.waitForFunction(() => {
+        const limit = document.querySelector('#unit-contact-review-page-limit');
+        const app = document.getElementById('app');
+        const summary = String(app && app.innerText || '');
+        return limit && String(limit.value || '') === '5' && summary.includes('顯示 ') && summary.includes(' 筆');
+      }, undefined, { timeout: 15000 });
+      if (initial.nextEnabled) {
+        await page.click('#unit-contact-review-next-page');
+        await page.waitForFunction(() => {
+          const input = document.querySelector('#unit-contact-review-page-number');
+          const app = document.getElementById('app');
+          const summary = String(app && app.innerText || '');
+          return input && String(input.value || '') === '2' && summary.includes('顯示 ') && summary.includes(' 筆');
+        }, undefined, { timeout: 15000 });
+      }
+      const state = await page.evaluate(() => ({
+        currentPage: document.querySelector('#unit-contact-review-page-number') ? String(document.querySelector('#unit-contact-review-page-number').value || '') : ''
+      }));
+      return `unit-contact-review page=${state.currentPage || '1'}`;
+    });
+
     await runStep(results, 'SEC-04', 'Admin', 'Case detail escapes XSS payloads', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
