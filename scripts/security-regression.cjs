@@ -483,11 +483,10 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03e', 'Admin', 'Unit contact review pager and filters work', async () => {
-      await login(page, 'easonwu', '2wsx#EDC');
       let reviewReady = false;
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await page.waitForTimeout(1200);
+        await gotoHash(page, 'unit-contact-review');
+        await page.waitForTimeout(400);
         try {
           await page.waitForSelector('#unit-contact-review-status', { timeout: 15000 });
           reviewReady = true;
