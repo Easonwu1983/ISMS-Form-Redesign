@@ -294,20 +294,43 @@
       window.__ISMS_BOOTSTRAP__.record(step, detail);
     }
 
-    function resetAdminRemoteCaches(reason) {
-      const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
+    function resetSystemUsersRemoteState() {
       systemUsersState.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
       systemUsersState.items = [];
       systemUsersState.summary = { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 };
       systemUsersState.page = { offset: 0, limit: 20, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
       systemUsersState.loading = false;
       systemUsersState.lastLoadedAt = '';
+      if (renderUsers._remoteViewCache) {
+        renderUsers._remoteViewCache.items = [];
+        renderUsers._remoteViewCache.summary = null;
+        renderUsers._remoteViewCache.page = null;
+        renderUsers._remoteViewCache.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
+        renderUsers._remoteViewCache.signature = '';
+        renderUsers._remoteViewCache.fetchedAt = 0;
+        renderUsers._remoteViewCache.promise = null;
+      }
+    }
+
+    function resetUnitContactReviewRemoteState() {
       unitContactReviewState.filters = { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS };
       unitContactReviewState.items = [];
       unitContactReviewState.summary = { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 };
       unitContactReviewState.page = { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
       unitContactReviewState.loading = false;
       unitContactReviewState.lastLoadedAt = '';
+      if (renderUnitContactReview._remoteViewCache) {
+        renderUnitContactReview._remoteViewCache.items = [];
+        renderUnitContactReview._remoteViewCache.summary = null;
+        renderUnitContactReview._remoteViewCache.page = null;
+        renderUnitContactReview._remoteViewCache.filters = { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS };
+        renderUnitContactReview._remoteViewCache.signature = '';
+        renderUnitContactReview._remoteViewCache.fetchedAt = 0;
+        renderUnitContactReview._remoteViewCache.promise = null;
+      }
+    }
+
+    function resetAuditTrailRemoteState() {
       auditTrailState.filters = { ...DEFAULT_AUDIT_FILTERS };
       auditTrailState.items = [];
       auditTrailState.summary = { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] };
@@ -324,6 +347,9 @@
       auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
       auditTrailRenderCache = { signature: '', filterSignature: '' };
       auditTrailMarkupCache = { signature: '', html: '' };
+    }
+
+    function resetGovernanceRemoteState() {
       unitGovernanceState.filters = { ...DEFAULT_GOVERNANCE_FILTERS };
       unitGovernanceState.items = [];
       unitGovernanceState.summary = { total: 0, consolidated: 0, independent: 0, children: 0 };
@@ -345,38 +371,69 @@
       unitGovernanceFilteredCache = { signature: '', value: [] };
       unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
       securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
-      if (renderUsers._remoteViewCache) {
-        renderUsers._remoteViewCache.items = [];
-        renderUsers._remoteViewCache.summary = null;
-        renderUsers._remoteViewCache.page = null;
-        renderUsers._remoteViewCache.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
-        renderUsers._remoteViewCache.signature = '';
-        renderUsers._remoteViewCache.fetchedAt = 0;
-        renderUsers._remoteViewCache.promise = null;
+    }
+
+    function resetAdminRemoteCaches(reason, scope) {
+      const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
+      const safeScope = String(scope || 'all').trim().toLowerCase() || 'all';
+      if (safeScope === 'all' || safeScope === 'access-profile' || safeScope === 'admin') {
+        resetSystemUsersRemoteState();
+        resetUnitContactReviewRemoteState();
+        resetAuditTrailRemoteState();
+        resetGovernanceRemoteState();
+        recordAdminBootstrapStep('admin-cache-reset', safeReason + ':all');
+        return;
       }
-      if (renderUnitContactReview._remoteViewCache) {
-        renderUnitContactReview._remoteViewCache.items = [];
-        renderUnitContactReview._remoteViewCache.summary = null;
-        renderUnitContactReview._remoteViewCache.page = null;
-        renderUnitContactReview._remoteViewCache.filters = { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS };
-        renderUnitContactReview._remoteViewCache.signature = '';
-        renderUnitContactReview._remoteViewCache.fetchedAt = 0;
-        renderUnitContactReview._remoteViewCache.promise = null;
+      if (safeScope === 'system-users') {
+        resetSystemUsersRemoteState();
+      } else if (safeScope === 'unit-contact-review') {
+        resetUnitContactReviewRemoteState();
+      } else if (safeScope === 'audit-trail') {
+        resetAuditTrailRemoteState();
+      } else if (safeScope === 'unit-governance' || safeScope === 'security-window' || safeScope === 'governance-security') {
+        resetGovernanceRemoteState();
+      } else {
+        resetSystemUsersRemoteState();
+        resetUnitContactReviewRemoteState();
+        resetAuditTrailRemoteState();
+        resetGovernanceRemoteState();
       }
-      recordAdminBootstrapStep('admin-cache-reset', safeReason);
+      recordAdminBootstrapStep('admin-cache-reset', safeReason + ':' + safeScope);
+    }
+
+    function dispatchAdminCacheInvalidation(scope, reason) {
+      if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+      const detail = {
+        scope: String(scope || '').trim() || 'admin',
+        reason: String(reason || '').trim() || 'admin-change'
+      };
+      try {
+        window.dispatchEvent(new CustomEvent('isms:cache-invalidate', { detail }));
+      } catch (_) {}
+    }
+
+    function dispatchAdminCacheInvalidationScopes(scopes, reason) {
+      const uniqueScopes = Array.from(new Set((Array.isArray(scopes) ? scopes : [scopes]).map((scope) => String(scope || '').trim()).filter(Boolean)));
+      uniqueScopes.forEach((scope) => dispatchAdminCacheInvalidation(scope, reason));
     }
 
     function installAdminAccessProfileListener() {
       if (adminAccessProfileListenerInstalled || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
       window.addEventListener('isms:access-profile-changed', function (event) {
         const detail = event && event.detail ? event.detail : {};
-        resetAdminRemoteCaches(detail.reason || 'profile-changed');
+        resetAdminRemoteCaches(detail.reason || 'profile-changed', 'access-profile');
       });
       window.addEventListener('isms:cache-invalidate', function (event) {
         const detail = event && event.detail ? event.detail : {};
         const scope = String(detail.scope || '').trim().toLowerCase();
-        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'admin') {
-          resetAdminRemoteCaches(detail.reason || 'cache-invalidated');
+        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'admin'
+          || scope === 'system-users'
+          || scope === 'unit-contact-review'
+          || scope === 'audit-trail'
+          || scope === 'unit-governance'
+          || scope === 'security-window'
+          || scope === 'governance-security') {
+          resetAdminRemoteCaches(detail.reason || 'cache-invalidated', scope);
         }
       });
       adminAccessProfileListenerInstalled = true;
@@ -2394,22 +2451,15 @@
     const label = `${user.name || user.username || cleanUsername}（${cleanUsername}）`;
     if (!window.confirm(`確定要刪除 ${label} 嗎？此操作無法復原。`)) return;
     try {
+      const currentFilters = { ...systemUsersState.filters };
       await submitUserDelete(cleanUsername, { username: cleanUsername });
       if (typeof syncUsersFromM365 === 'function') {
         await syncUsersFromM365({ silent: true, force: true }).catch(function (error) {
           console.warn('system users sync after delete failed', error);
         });
       }
-      if (renderUsers._remoteViewCache) {
-        renderUsers._remoteViewCache.items = [];
-        renderUsers._remoteViewCache.summary = null;
-        renderUsers._remoteViewCache.page = null;
-        renderUsers._remoteViewCache.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
-        renderUsers._remoteViewCache.signature = '';
-        renderUsers._remoteViewCache.fetchedAt = 0;
-        renderUsers._remoteViewCache.promise = null;
-      }
-      await renderUsers({ filters: { ...systemUsersState.filters }, forceRemote: true });
+      dispatchAdminCacheInvalidationScopes(['system-users', 'audit-trail'], 'user-deleted');
+      await renderUsers({ filters: currentFilters, forceRemote: true });
       toast(`已刪除 ${label}`);
     } catch (error) {
       toast(String(error && error.message || error || '刪除失敗'), 'error');
@@ -2523,6 +2573,7 @@
       if (pw) payload.password = pw;
       try {
         if (!isE && findUser(un)) { toast('帳號已存在', 'error'); return; }
+        const currentFilters = { ...systemUsersState.filters };
         await submitUserUpsert({ username: un, ...payload });
         await syncUsersFromM365({ silent: true });
         if (rl === ROLES.UNIT_ADMIN) {
@@ -2535,7 +2586,10 @@
           await syncReviewScopesFromM365({ silent: true });
         }
         toast(isE ? '使用者已更新' : '使用者已新增');
-        closeModalRoot(); renderUsers(); refreshIcons();
+        dispatchAdminCacheInvalidationScopes(['system-users', 'audit-trail'], isE ? 'user-updated' : 'user-created');
+        closeModalRoot();
+        renderUsers({ filters: currentFilters, forceRemote: true });
+        refreshIcons();
       } catch (error) {
         toast(String(error && error.message || error || '使用者儲存失敗'), 'error');
       }
@@ -2760,6 +2814,7 @@
       saveGovernanceMode: function ({ dataset }) {
         const unit = String(dataset && dataset.unit || '').trim();
         if (!unit) return;
+        const currentFilters = { ...unitGovernanceState.filters };
         const modeEl = document.querySelector(`[data-governance-unit-mode="${CSS.escape(unit)}"]`);
         const noteEl = document.querySelector(`[data-governance-unit-note="${CSS.escape(unit)}"]`);
         const mode = modeEl ? modeEl.value : 'independent';
@@ -2767,7 +2822,8 @@
         saveGovernanceModeForAdmin(unit, mode, note)
           .then((result) => {
             toast(result && result.mode === 'consolidated' ? `${unit} 已設定為合併填報` : `${unit} 已設定為獨立填報`);
-            renderUnitReview(unitGovernanceState.filters);
+            dispatchAdminCacheInvalidationScopes(['unit-governance', 'security-window', 'audit-trail'], 'governance-updated');
+            renderUnitReview(currentFilters);
           })
           .catch((error) => {
             toast(String(error && error.message || error || '儲存單位治理設定失敗'), 'error');
@@ -3296,13 +3352,15 @@
     unitContactApprove: function ({ dataset }) {
       promptReviewComment('審核通過並直接啟用', '可補充首次登入提醒或處理說明。', '確認通過', async function (reviewComment) {
         try {
+          const currentFilters = { ...unitContactReviewState.filters };
           const result = await reviewUnitContactApplication({
             id: dataset.id,
             status: 'approved',
             reviewComment
           });
           toast(result && result.delivery && result.delivery.sent ? '已通過、帳號已啟用並寄送登入資訊' : '已通過，帳號已直接啟用');
-          renderUnitContactReview(unitContactReviewState.filters, { forceRemote: true });
+          dispatchAdminCacheInvalidationScopes(['unit-contact-review', 'audit-trail'], 'unit-contact-reviewed');
+          renderUnitContactReview(currentFilters, { forceRemote: true });
         } catch (error) {
           toast(String(error && error.message || error || '審核失敗'), 'error');
         }
@@ -3311,13 +3369,15 @@
     unitContactReturn: function ({ dataset }) {
       promptReviewComment('退回補件', '請填寫需要補充或修正的內容。', '確認退回', async function (reviewComment) {
         try {
+          const currentFilters = { ...unitContactReviewState.filters };
           const result = await reviewUnitContactApplication({
             id: dataset.id,
             status: 'returned',
             reviewComment
           });
           toast(result && result.delivery && result.delivery.sent ? '已退回並寄送通知' : '已退回補件');
-          renderUnitContactReview(unitContactReviewState.filters, { forceRemote: true });
+          dispatchAdminCacheInvalidationScopes(['unit-contact-review', 'audit-trail'], 'unit-contact-reviewed');
+          renderUnitContactReview(currentFilters, { forceRemote: true });
         } catch (error) {
           toast(String(error && error.message || error || '退回失敗'), 'error');
         }
@@ -3326,13 +3386,15 @@
     unitContactReject: function ({ dataset }) {
       promptReviewComment('未核准', '請填寫未核准原因。', '確認未核准', async function (reviewComment) {
         try {
+          const currentFilters = { ...unitContactReviewState.filters };
           const result = await reviewUnitContactApplication({
             id: dataset.id,
             status: 'rejected',
             reviewComment
           });
           toast(result && result.delivery && result.delivery.sent ? '已拒絕並寄送通知' : '已標記未核准');
-          renderUnitContactReview(unitContactReviewState.filters, { forceRemote: true });
+          dispatchAdminCacheInvalidationScopes(['unit-contact-review', 'audit-trail'], 'unit-contact-reviewed');
+          renderUnitContactReview(currentFilters, { forceRemote: true });
         } catch (error) {
           toast(String(error && error.message || error || '未核准操作失敗'), 'error');
         }
