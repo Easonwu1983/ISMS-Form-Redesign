@@ -5,9 +5,7 @@ const STEPS = [
   { label: 'cloudflare-live-health-check', script: 'scripts/cloudflare-live-health-check.cjs' }
 ];
 
-try {
-  runLayer('health', STEPS);
-} catch (error) {
+runLayer('health', STEPS).catch((error) => {
   console.error('formal production health smoke failed:', error && error.stack ? error.stack : String(error));
   process.exit(1);
-}
+});

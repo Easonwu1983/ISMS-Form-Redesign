@@ -445,15 +445,21 @@
       recordAdminBootstrapStep('admin-cache-reset', safeReason + ':' + safeScope);
     }
 
+    function getAdminCacheInvalidationModule() {
+      if (typeof window === 'undefined') return null;
+      if (window.__ISMS_CACHE_INVALIDATION__ && typeof window.__ISMS_CACHE_INVALIDATION__ === 'object') {
+        return window.__ISMS_CACHE_INVALIDATION__;
+      }
+      if (typeof window.createCacheInvalidationModule === 'function') {
+        window.__ISMS_CACHE_INVALIDATION__ = window.createCacheInvalidationModule();
+        return window.__ISMS_CACHE_INVALIDATION__;
+      }
+      return null;
+    }
     function dispatchAdminCacheInvalidation(scope, reason) {
-      if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
-      const detail = {
-        scope: String(scope || '').trim() || 'admin',
-        reason: String(reason || '').trim() || 'admin-change'
-      };
-      try {
-        window.dispatchEvent(new CustomEvent('isms:cache-invalidate', { detail }));
-      } catch (_) {}
+      const moduleApi = getAdminCacheInvalidationModule();
+      if (!moduleApi || typeof moduleApi.dispatch !== 'function') return;
+      moduleApi.dispatch(scope || 'admin', reason || 'admin-change');
     }
 
     function dispatchAdminCacheInvalidationScopes(scopes, reason) {
@@ -469,14 +475,15 @@
       });
       window.addEventListener('isms:cache-invalidate', function (event) {
         const detail = event && event.detail ? event.detail : {};
-        const scope = String(detail.scope || '').trim().toLowerCase();
-        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'admin'
-          || scope === 'system-users'
-          || scope === 'unit-contact-review'
-          || scope === 'audit-trail'
-          || scope === 'unit-governance'
-          || scope === 'security-window'
-          || scope === 'governance-security') {
+        const moduleApi = getAdminCacheInvalidationModule();
+        const scope = moduleApi && typeof moduleApi.normalizeScope === 'function'
+          ? moduleApi.normalizeScope(detail.scope, '')
+          : String(detail.scope || '').trim().toLowerCase();
+        const acceptedScopes = ['all', 'access-profile', 'admin', 'system-users', 'unit-contact-review', 'audit-trail', 'unit-governance', 'security-window', 'governance-security'];
+        const shouldReset = moduleApi && typeof moduleApi.matchesScope === 'function'
+          ? moduleApi.matchesScope(scope, acceptedScopes)
+          : (!scope || acceptedScopes.includes(scope));
+        if (shouldReset) {
           resetAdminRemoteCaches(detail.reason || 'cache-invalidated', scope);
         }
       });

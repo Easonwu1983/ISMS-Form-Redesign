@@ -4,9 +4,7 @@ const STEPS = [
   { label: 'cloudflare-pages-regression-smoke', script: 'scripts/cloudflare-pages-regression-smoke.cjs', attempts: 2 }
 ];
 
-try {
-  runLayer('visual', STEPS);
-} catch (error) {
+runLayer('visual', STEPS).catch((error) => {
   console.error('formal production visual smoke failed:', error && error.stack ? error.stack : String(error));
   process.exit(1);
-}
+});

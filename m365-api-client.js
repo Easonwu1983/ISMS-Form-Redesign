@@ -44,6 +44,7 @@
     let requestCounter = 0;
     let cachedConfig = null;
     let cachedRuntimeConfigSource = null;
+    let collectionContractModuleApi = null;
     const DEFAULT_CONFIG = {
       unitContactMode: 'local-emulator',
       unitContactSubmitEndpoint: '',
@@ -250,6 +251,16 @@
     function getTrainingMode() {
       const config = getConfig();
       return String(config.trainingMode || '').trim() || (getMode() === 'm365-api' ? 'm365-api' : 'local-emulator');
+    }
+
+    function getCollectionContractModule() {
+      if (collectionContractModuleApi) return collectionContractModuleApi;
+      if (typeof window === 'undefined' || typeof window.createCollectionContractModule !== 'function') {
+        throw new Error('collection-contract-module.js not loaded');
+      }
+      collectionContractModuleApi = window.createCollectionContractModule();
+      window._collectionContractModule = collectionContractModuleApi;
+      return collectionContractModuleApi;
     }
 
     function getModeLabel() {
@@ -956,29 +967,7 @@
     }
 
     function buildPagedCollectionResult(body, query, items, options) {
-      const opts = options && typeof options === 'object' ? options : {};
-      const list = Array.isArray(items) ? items : [];
-      const total = Math.max(
-        0,
-        Number(body && body.total) || 0,
-        opts.fallbackTotalFromItems === false ? 0 : list.length
-      );
-      const summary = body && body.summary && typeof body.summary === 'object'
-        ? (typeof opts.normalizeSummary === 'function' ? opts.normalizeSummary(body.summary, body, list, total) : body.summary)
-        : (typeof opts.buildSummary === 'function' ? opts.buildSummary(list, body, total) : null);
-      return {
-        ok: !!(body && body.ok !== false),
-        mode: opts.mode || '',
-        items: list,
-        total,
-        summary,
-        page: body && body.page && typeof body.page === 'object' ? body.page : null,
-        filters: body && body.filters && typeof body.filters === 'object'
-          ? body.filters
-          : ((query && typeof query === 'object') ? { ...query } : {}),
-        generatedAt: cleanText(body && body.generatedAt),
-        raw: body
-      };
+      return getCollectionContractModule().buildPagedCollectionResult(body, query, items, options);
     }
 
     function normalizeTrainingAttachments(value) {
@@ -1547,8 +1536,7 @@
     }
 
     async function getChecklistListSummary(query) {
-      const filters = query && typeof query === 'object' ? { ...query } : {};
-      filters.summaryOnly = '1';
+      const filters = getCollectionContractModule().withSummaryOnly(query);
       const response = await listChecklists(filters);
       return {
         ok: !!response.ok,
@@ -1716,8 +1704,7 @@
     }
 
     async function getTrainingFormsSummary(query) {
-      const filters = query && typeof query === 'object' ? { ...query } : {};
-      filters.summaryOnly = '1';
+      const filters = getCollectionContractModule().withSummaryOnly(query);
       const response = await listTrainingForms(filters);
       return {
         ok: !!response.ok,

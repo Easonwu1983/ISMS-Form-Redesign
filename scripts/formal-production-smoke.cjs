@@ -7,9 +7,7 @@ const STEPS = [
   { label: 'formal-production-visual-smoke', script: 'scripts/formal-production-visual-smoke.cjs' }
 ];
 
-try {
-  runLayer('full', STEPS);
-} catch (error) {
+runLayer('full', STEPS).catch((error) => {
   console.error('formal production smoke failed:', error && error.stack ? error.stack : String(error));
   process.exit(1);
-}
+});

@@ -302,7 +302,17 @@
       if (typeof window === 'undefined' || !window.__ISMS_BOOTSTRAP__ || typeof window.__ISMS_BOOTSTRAP__.record !== 'function') return;
       window.__ISMS_BOOTSTRAP__.record(step, detail);
     }
-
+    function getTrainingCacheInvalidationModule() {
+      if (typeof window === 'undefined') return null;
+      if (window.__ISMS_CACHE_INVALIDATION__ && typeof window.__ISMS_CACHE_INVALIDATION__ === 'object') {
+        return window.__ISMS_CACHE_INVALIDATION__;
+      }
+      if (typeof window.createCacheInvalidationModule === 'function') {
+        window.__ISMS_CACHE_INVALIDATION__ = window.createCacheInvalidationModule();
+        return window.__ISMS_CACHE_INVALIDATION__;
+      }
+      return null;
+    }
     function resetTrainingRemoteCaches(reason) {
       const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
       clearTrainingRosterRemotePageCache();
@@ -357,8 +367,15 @@
       });
       window.addEventListener('isms:cache-invalidate', function (event) {
         const detail = event && event.detail ? event.detail : {};
-        const scope = String(detail.scope || '').trim().toLowerCase();
-        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'training') {
+        const moduleApi = getTrainingCacheInvalidationModule();
+        const scope = moduleApi && typeof moduleApi.normalizeScope === 'function'
+          ? moduleApi.normalizeScope(detail.scope, '')
+          : String(detail.scope || '').trim().toLowerCase();
+        const acceptedScopes = ['all', 'access-profile', 'training'];
+        const shouldReset = moduleApi && typeof moduleApi.matchesScope === 'function'
+          ? moduleApi.matchesScope(scope, acceptedScopes)
+          : (!scope || acceptedScopes.includes(scope));
+        if (shouldReset) {
           resetTrainingRemoteCaches(detail.reason || 'cache-invalidated');
         }
       });

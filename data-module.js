@@ -162,8 +162,14 @@
         invalidateAccessProfileCaches();
       });
       window.addEventListener('isms:cache-invalidate', function (event) {
-        const scope = String(event && event.detail && event.detail.scope || '').trim().toLowerCase();
-        if (!scope || scope === 'all' || scope === 'access-profile') {
+        const cacheInvalidation = typeof window !== 'undefined' && window.__ISMS_CACHE_INVALIDATION__;
+        const scope = cacheInvalidation && typeof cacheInvalidation.normalizeScope === 'function'
+          ? cacheInvalidation.normalizeScope(event && event.detail && event.detail.scope)
+          : String(event && event.detail && event.detail.scope || '').trim().toLowerCase();
+        const matchesAccessProfile = cacheInvalidation && typeof cacheInvalidation.matchesScope === 'function'
+          ? cacheInvalidation.matchesScope(scope, ['all', 'access-profile'])
+          : (!scope || scope === 'all' || scope === 'access-profile');
+        if (matchesAccessProfile) {
           invalidateAccessProfileCaches();
         }
       });

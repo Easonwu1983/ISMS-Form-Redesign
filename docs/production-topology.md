@@ -21,3 +21,4 @@
 - `browser`：`node scripts/formal-production-browser-smoke.cjs`
 - `visual`：`node scripts/formal-production-visual-smoke.cjs`
 - 完整整輪：`node scripts/formal-production-smoke.cjs`
+- 報告輸出：`logs/formal-production/latest-*.json`

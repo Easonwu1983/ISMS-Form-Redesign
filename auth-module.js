@@ -121,21 +121,25 @@
       }
     }
 
+    function getCacheInvalidationModule() {
+      if (typeof window === 'undefined') return null;
+      if (window.__ISMS_CACHE_INVALIDATION__ && typeof window.__ISMS_CACHE_INVALIDATION__ === 'object') {
+        return window.__ISMS_CACHE_INVALIDATION__;
+      }
+      if (typeof window.createCacheInvalidationModule === 'function') {
+        window.__ISMS_CACHE_INVALIDATION__ = window.createCacheInvalidationModule();
+        return window.__ISMS_CACHE_INVALIDATION__;
+      }
+      return null;
+    }
     function notifyCacheInvalidation(scope, reason, user) {
-      if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
-      const detail = {
-        scope: String(scope || 'access-profile').trim() || 'access-profile',
-        reason: String(reason || 'session-updated').trim() || 'session-updated',
+      const moduleApi = getCacheInvalidationModule();
+      if (!moduleApi || typeof moduleApi.dispatch !== 'function') return;
+      moduleApi.dispatch(scope || 'access-profile', reason || 'session-updated', {
         username: user && user.username ? String(user.username) : '',
         role: user && user.role ? String(user.role) : '',
-        activeUnit: user && user.activeUnit ? String(user.activeUnit) : '',
-        at: new Date().toISOString()
-      };
-      try {
-        window.dispatchEvent(new CustomEvent('isms:cache-invalidate', { detail }));
-      } catch (_) {
-        // Ignore event dispatch failures.
-      }
+        activeUnit: user && user.activeUnit ? String(user.activeUnit) : ''
+      });
     }
 
     function clearAuthSessionStorage(options) {

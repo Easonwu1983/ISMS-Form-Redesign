@@ -5,9 +5,7 @@ const STEPS = [
   { label: 'version-governance-smoke', script: 'scripts/version-governance-smoke.cjs' }
 ];
 
-try {
-  runLayer('api', STEPS);
-} catch (error) {
+runLayer('api', STEPS).catch((error) => {
   console.error('formal production api smoke failed:', error && error.stack ? error.stack : String(error));
   process.exit(1);
-}
+});

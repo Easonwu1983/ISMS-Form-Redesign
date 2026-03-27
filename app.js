@@ -229,13 +229,8 @@
   function hasUnsavedChangesGuard() { return getUiModule().hasUnsavedChangesGuard(); }
   function confirmDiscardUnsavedChanges(message, clearOnConfirm) { return getUiModule().confirmDiscardUnsavedChanges(message, clearOnConfirm); }
   function downloadJson(filename, payload) { return getUiModule().downloadJson(filename, payload); }
-  const GLOBAL_ACTION_HANDLERS = Object.create(null);
   function registerActionHandlers(namespace, handlers) {
-    const prefix = String(namespace || '').trim();
-    Object.entries(handlers || {}).forEach(([name, handler]) => {
-      if (typeof handler !== 'function') return;
-      GLOBAL_ACTION_HANDLERS[prefix ? (prefix + '.' + name) : name] = handler;
-    });
+    return getAppActionModule().registerActionHandlers(namespace, handlers);
   }
   function closeModalRoot() { return getUiModule().closeModal(); }
   function openConfirmDialog(message, options) { return getUiModule().openConfirmDialog(message, options); }
@@ -243,46 +238,11 @@
   function showBusyState(message) { return getUiModule().showBusyState(message); }
   function hideBusyState() { return getUiModule().hideBusyState(); }
   function runWithBusyState(message, task) { return getUiModule().runWithBusyState(message, task); }
-  let globalDelegationInstalled = false;
   function installGlobalDelegation() {
-    if (globalDelegationInstalled || typeof document === 'undefined') return;
-    globalDelegationInstalled = true;
-    document.addEventListener('click', function (event) {
-      const actionEl = event.target.closest('[data-action]');
-      if (actionEl) {
-        const handler = GLOBAL_ACTION_HANDLERS[actionEl.dataset.action];
-        if (typeof handler === 'function') {
-          event.preventDefault();
-          const result = handler({
-            event,
-            element: actionEl,
-            dataset: { ...actionEl.dataset }
-          });
-          if (result && typeof result.then === 'function') {
-            result.catch(function (error) {
-              console.error(error && error.stack ? error.stack : String(error));
-              toast(String(error && error.message || error || '操作失敗'), 'error');
-            });
-          }
-          return;
-        }
-      }
-      const dismissEl = event.target.closest('[data-dismiss-modal]');
-      if (dismissEl) {
-        event.preventDefault();
-        closeModalRoot();
-        return;
-      }
-      const routeEl = event.target.closest('[data-route]');
-      if (routeEl) {
-        const interactive = event.target.closest('a,button,input,select,textarea,label');
-        if (interactive && interactive !== routeEl) return;
-        const route = String(routeEl.dataset.route || '').trim();
-        if (route) {
-          event.preventDefault();
-          navigate(route);
-        }
-      }
+    return getAppActionModule().installGlobalDelegation({
+      closeModalRoot,
+      navigate,
+      toast
     });
   }
   function navigate(h, options) {
@@ -849,6 +809,7 @@
   let appRouteModuleApi = null;
   let appPageOrchestrationModuleApi = null;
   let appVisibilityModuleApi = null;
+  let appActionModuleApi = null;
   let appShellOrchestrationModuleApi = null;
   let appEntryModuleApi = null;
   let appAuthSessionModuleApi = null;
@@ -940,6 +901,21 @@
       readyStep: 'app-visibility-ready'
     });
     return appVisibilityModuleApi;
+  }
+  function getAppActionModule() {
+    if (appActionModuleApi) return appActionModuleApi;
+    appActionModuleApi = resolveFactoryService('appActionModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAppActionModule !== 'function') {
+          recordBootstrapStep('app-action-missing-factory', 'createAppActionModule unavailable');
+          throw new Error('app-action-module.js not loaded');
+        }
+        return window.createAppActionModule();
+      },
+      globalSlot: '_appActionModule',
+      readyStep: 'app-action-ready'
+    });
+    return appActionModuleApi;
   }
   function getAppShellOrchestrationModule() {
     if (appShellOrchestrationModuleApi) return appShellOrchestrationModuleApi;

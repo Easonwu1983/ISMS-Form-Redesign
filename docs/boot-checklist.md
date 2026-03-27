@@ -7,11 +7,16 @@
    - `curl http://140.112.97.150/deploy-manifest.json`
    - `curl https://isms-campus-portal.pages.dev/deploy-manifest.json`
    - `node scripts/formal-production-smoke.cjs`
+   - 看報告：`logs/formal-production/latest-full.json`
    - 需要分層定位時再跑：
      - `node scripts/formal-production-health-smoke.cjs`
+     - `logs/formal-production/latest-health.json`
      - `node scripts/formal-production-api-smoke.cjs`
+     - `logs/formal-production/latest-api.json`
      - `node scripts/formal-production-browser-smoke.cjs`
+     - `logs/formal-production/latest-browser.json`
      - `node scripts/formal-production-visual-smoke.cjs`
+     - `logs/formal-production/latest-visual.json`
 4. 只有做本機開發驗證時，才啟動本機 stack：`node m365/campus-backend/service-host.cjs .runtime/runtime.local.host.json`
 5. 只有做本機開發驗證時，才啟動 gateway：`powershell -ExecutionPolicy Bypass -File scripts/start-host-campus-gateway.ps1`
 

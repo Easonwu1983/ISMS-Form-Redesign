@@ -313,20 +313,28 @@
       window.__ISMS_BOOTSTRAP__.record(step, detail);
     }
 
-    function normalizeChecklistCacheScope(scope) {
-      return String(scope || '').trim().toLowerCase();
+    function getChecklistCacheInvalidationModule() {
+      if (typeof window === 'undefined') return null;
+      if (window.__ISMS_CACHE_INVALIDATION__ && typeof window.__ISMS_CACHE_INVALIDATION__ === 'object') {
+        return window.__ISMS_CACHE_INVALIDATION__;
+      }
+      if (typeof window.createCacheInvalidationModule === 'function') {
+        window.__ISMS_CACHE_INVALIDATION__ = window.createCacheInvalidationModule();
+        return window.__ISMS_CACHE_INVALIDATION__;
+      }
+      return null;
     }
-
+    function normalizeChecklistCacheScope(scope) {
+      const moduleApi = getChecklistCacheInvalidationModule();
+      return moduleApi && typeof moduleApi.normalizeScope === 'function'
+        ? moduleApi.normalizeScope(scope, '')
+        : String(scope || '').trim().toLowerCase();
+    }
     function dispatchChecklistCacheInvalidation(scope, reason) {
-      if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
       const normalizedScope = normalizeChecklistCacheScope(scope);
-      if (!normalizedScope) return;
-      window.dispatchEvent(new CustomEvent('isms:cache-invalidate', {
-        detail: {
-          scope: normalizedScope,
-          reason: String(reason || 'checklist-cache-invalidated').trim() || 'checklist-cache-invalidated'
-        }
-      }));
+      const moduleApi = getChecklistCacheInvalidationModule();
+      if (!normalizedScope || !moduleApi || typeof moduleApi.dispatch !== 'function') return;
+      moduleApi.dispatch(normalizedScope, reason || 'checklist-cache-invalidated');
     }
 
     function dispatchChecklistCacheInvalidationScopes(scopes, reason) {
@@ -389,8 +397,12 @@
       window.addEventListener('isms:cache-invalidate', function (event) {
         const detail = event && event.detail ? event.detail : {};
         const scope = normalizeChecklistCacheScope(detail.scope);
-        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'checklists'
-          || scope === 'checklists-list' || scope === 'checklists-summary' || scope === 'checklists-template') {
+        const moduleApi = getChecklistCacheInvalidationModule();
+        const acceptedScopes = ['all', 'access-profile', 'checklists', 'checklists-list', 'checklists-summary', 'checklists-template'];
+        const shouldReset = moduleApi && typeof moduleApi.matchesScope === 'function'
+          ? moduleApi.matchesScope(scope, acceptedScopes)
+          : (!scope || acceptedScopes.includes(scope));
+        if (shouldReset) {
           resetChecklistRemoteCaches(detail.reason || 'cache-invalidated', scope);
         }
       });
