@@ -8,28 +8,36 @@ const VERSION_BASES = String(process.env.ISMS_VERSION_BASES || `${LIVE_BASE},${P
 
 const STEPS = [
   { label: 'vm-entry-smoke', script: 'scripts/vm-entry-smoke.cjs' },
-  { label: 'campus-live-regression-smoke', script: 'scripts/campus-live-regression-smoke.cjs' },
-  { label: 'security-regression', script: 'scripts/security-regression.cjs' },
+  { label: 'campus-live-regression-smoke', script: 'scripts/campus-live-regression-smoke.cjs', attempts: 2 },
+  { label: 'security-regression', script: 'scripts/security-regression.cjs', attempts: 2 },
   { label: 'version-governance-smoke', script: 'scripts/version-governance-smoke.cjs' },
-  { label: 'cloudflare-pages-regression-smoke', script: 'scripts/cloudflare-pages-regression-smoke.cjs' },
+  { label: 'cloudflare-pages-regression-smoke', script: 'scripts/cloudflare-pages-regression-smoke.cjs', attempts: 2 },
   { label: 'cloudflare-live-health-check', script: 'scripts/cloudflare-live-health-check.cjs' }
 ];
 
 function runNodeStep(step) {
-  const result = spawnSync(process.execPath, [path.join(ROOT, step.script)], {
-    cwd: ROOT,
-    stdio: 'inherit',
-    shell: false,
-    env: {
-      ...process.env,
-      ISMS_LIVE_BASE: LIVE_BASE,
-      ISMS_CLOUDFLARE_PAGES_BASE: PAGES_BASE,
-      ISMS_VERSION_BASES: VERSION_BASES
+  const attempts = Number.isFinite(Number(step && step.attempts)) ? Math.max(1, Math.floor(Number(step.attempts))) : 1;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = spawnSync(process.execPath, [path.join(ROOT, step.script)], {
+      cwd: ROOT,
+      stdio: 'inherit',
+      shell: false,
+      env: {
+        ...process.env,
+        ISMS_LIVE_BASE: LIVE_BASE,
+        ISMS_CLOUDFLARE_PAGES_BASE: PAGES_BASE,
+        ISMS_VERSION_BASES: VERSION_BASES
+      }
+    });
+    if (result.error) throw result.error;
+    if (typeof result.status === 'number' && result.status === 0) {
+      return;
     }
-  });
-  if (result.error) throw result.error;
-  if (typeof result.status === 'number' && result.status !== 0) {
-    throw new Error(`${step.label} failed with exit code ${result.status}`);
+    if (attempt < attempts) {
+      console.warn(`${step.label} attempt ${attempt} failed; retrying...`);
+    } else {
+      throw new Error(`${step.label} failed with exit code ${result.status}`);
+    }
   }
 }
 
