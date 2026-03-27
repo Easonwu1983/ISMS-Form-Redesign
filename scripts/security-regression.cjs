@@ -556,12 +556,25 @@ async function assertNoXssExecution(page, label) {
       await login(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
       await gotoHash(page, 'detail/' + CASE_ID);
-      await page.waitForSelector('.detail-title');
+      let caseDetailReady = false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          await page.waitForSelector('.detail-title', { timeout: 15000 });
+          caseDetailReady = true;
+          break;
+        } catch (error) {
+          if (attempt === 1) throw error;
+          await page.waitForTimeout(500);
+          await gotoHash(page, 'detail/' + CASE_ID);
+        }
+      }
+      if (!caseDetailReady) throw new Error('case detail did not render');
       await resetXssFlag(page);
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 30000 });
+      await login(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'detail/' + CASE_ID);
-      await page.waitForSelector('.detail-title');
+      await page.waitForSelector('.detail-title', { timeout: 30000 });
       await assertNoXssExecution(page, 'case detail');
       return 'case detail payload rendered safely';
     });
@@ -592,6 +605,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-06', 'Admin', 'Training detail escapes XSS payloads', async () => {
+      await login(page, 'easonwu', '2wsx#EDC');
       await resetXssFlag(page);
       const trainingDetailIds = await page.evaluate(({ trainingId, payload }) => {
         const module = window._dataModule;
@@ -611,7 +625,19 @@ async function assertNoXssExecution(page, label) {
         return 'training detail skipped (no existing forms)';
       }
       await gotoHash(page, 'training-detail/' + trainingDetailIds[0]);
-      await page.waitForSelector('.detail-title', { timeout: 60000 });
+      let trainingDetailReady = false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          await page.waitForSelector('.detail-title', { timeout: 30000 });
+          trainingDetailReady = true;
+          break;
+        } catch (error) {
+          if (attempt === 1) throw error;
+          await page.waitForTimeout(500);
+          await gotoHash(page, 'training-detail/' + trainingDetailIds[0]);
+        }
+      }
+      if (!trainingDetailReady) throw new Error('training detail did not render');
       await assertNoXssExecution(page, 'training detail');
       return `training detail payload rendered safely (${trainingDetailIds[0]})`;
     });
