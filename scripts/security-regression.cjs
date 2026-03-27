@@ -450,7 +450,8 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-03d', 'Admin', 'Users page pager and filters work', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
-      await gotoHash(page, 'users');
+      await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForTimeout(1200);
       await page.waitForSelector('#system-users-page-limit');
       const initial = await page.evaluate(() => ({
         role: Boolean(document.querySelector('#system-users-role')),
@@ -485,7 +486,8 @@ async function assertNoXssExecution(page, label) {
       await login(page, 'easonwu', '2wsx#EDC');
       let reviewReady = false;
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        await gotoHash(page, 'unit-contact-review');
+        await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await page.waitForTimeout(1200);
         try {
           await page.waitForSelector('#unit-contact-review-status', { timeout: 15000 });
           reviewReady = true;
