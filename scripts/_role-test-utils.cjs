@@ -201,6 +201,7 @@ async function resetApp(page) {
     }
   })();
   await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
+  await page.context().clearCookies();
   await page.evaluate(async () => {
     localStorage.clear();
     sessionStorage.clear();

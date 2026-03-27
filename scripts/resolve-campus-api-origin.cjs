@@ -27,7 +27,14 @@ function parseCandidateOrigins(rawValue) {
   return Array.from(new Set(list));
 }
 
-function probeOrigin(origin, probePath, timeoutMs) {
+function matchesExpectedContentType(response, expectedContentType) {
+  const expected = String(expectedContentType || '').trim().toLowerCase();
+  if (!expected) return true;
+  const headerValue = String(response.headers['content-type'] || '').trim().toLowerCase();
+  return headerValue.includes(expected);
+}
+
+function probeOrigin(origin, probePath, timeoutMs, expectedContentType) {
   return new Promise((resolve) => {
     const startedAt = Date.now();
     const base = normalizeOrigin(origin);
@@ -46,13 +53,14 @@ function probeOrigin(origin, probePath, timeoutMs) {
       timeout: Number(timeoutMs) || 4000
     }, (response) => {
       const status = Number(response.statusCode) || 0;
+      const contentTypeOk = matchesExpectedContentType(response, expectedContentType);
       response.resume();
       resolve({
         origin: base,
-        ok: status === 200 || status === 401,
+        ok: expectedContentType ? status === 200 && contentTypeOk : status === 200 || status === 401,
         status,
         durationMs: Date.now() - startedAt,
-        error: ''
+        error: contentTypeOk ? '' : `unexpected-content-type:${String(response.headers['content-type'] || '').trim()}`
       });
     });
     request.on('timeout', function () {
@@ -79,10 +87,11 @@ async function resolveCampusApiOrigin(options) {
     ? [explicitOrigin].concat(candidateOrigins.filter((origin) => origin !== explicitOrigin))
     : candidateOrigins;
   const probePath = String(opts.probePath || '/api/unit-governance?limit=1').trim() || '/api/unit-governance?limit=1';
+  const expectedContentType = String(opts.expectedContentType || '').trim().toLowerCase();
   const timeoutMs = Number(opts.timeoutMs) || 4000;
   const results = [];
   for (const origin of orderedOrigins) {
-    const result = await probeOrigin(origin, probePath, timeoutMs);
+    const result = await probeOrigin(origin, probePath, timeoutMs, expectedContentType);
     results.push(result);
     if (result.ok) {
       return {
@@ -94,14 +103,16 @@ async function resolveCampusApiOrigin(options) {
           durationMs: 0,
           error: 'not-probed'
         }))),
-        probePath
+        probePath,
+        expectedContentType
       };
     }
   }
   return {
     origin: orderedOrigins[0] || DEFAULT_CANDIDATES[0],
     candidates: results,
-    probePath
+    probePath,
+    expectedContentType
   };
 }
 
@@ -109,6 +120,7 @@ module.exports = {
   DEFAULT_CANDIDATES,
   normalizeOrigin,
   parseCandidateOrigins,
+  matchesExpectedContentType,
   probeOrigin,
   resolveCampusApiOrigin
 };
@@ -116,7 +128,8 @@ module.exports = {
 if (require.main === module) {
   const requestedOrigin = String(process.argv[2] || '').trim();
   const probePath = String(process.argv[3] || '/api/unit-governance?limit=1').trim() || '/api/unit-governance?limit=1';
-  resolveCampusApiOrigin({ requestedOrigin, probePath }).then((result) => {
+  const expectedContentType = String(process.argv[4] || '').trim();
+  resolveCampusApiOrigin({ requestedOrigin, probePath, expectedContentType }).then((result) => {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   }).catch((error) => {
     process.stderr.write(`${error && error.stack ? error.stack : String(error)}\n`);

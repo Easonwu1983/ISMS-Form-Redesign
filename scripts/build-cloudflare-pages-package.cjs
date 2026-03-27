@@ -26,6 +26,7 @@ const filesToCopy = [
   'favicon.svg',
   'favicon.ico',
   'asset-loader.js',
+  'service-registry-module.js',
   'units.js',
   'units-data.json',
   'm365-config.js',
