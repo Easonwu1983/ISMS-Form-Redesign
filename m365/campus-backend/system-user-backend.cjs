@@ -75,6 +75,7 @@ function createSystemUserRouter(deps) {
     usersCache: null,
     usersCacheAt: 0,
     usersCachePromise: null,
+    usersQueryCache: new Map(),
     legacyPasswordMigrationPromise: null,
     legacyPasswordMigrationDone: false,
     legacyPasswordMigrationCount: 0
@@ -118,6 +119,11 @@ function createSystemUserRouter(deps) {
   function getUsersCacheTtlMs() {
     const raw = Number(process.env.SYSTEM_USERS_CACHE_TTL_MS || '');
     return Number.isFinite(raw) && raw >= 0 ? raw : (5 * 60 * 1000);
+  }
+
+  function getUsersQueryCacheTtlMs() {
+    const raw = Number(process.env.SYSTEM_USERS_QUERY_CACHE_TTL_MS || '');
+    return Number.isFinite(raw) && raw >= 0 ? raw : 30000;
   }
 
   function isTrustedProxyAddress(address) {
@@ -192,6 +198,7 @@ function createSystemUserRouter(deps) {
     state.usersCache = null;
     state.usersCacheAt = 0;
     state.usersCachePromise = null;
+    state.usersQueryCache.clear();
   }
 
   function cloneUserRows(rows) {
@@ -220,6 +227,7 @@ function createSystemUserRouter(deps) {
       state.usersCache.push({ listItemId: cleanListItemId, item: cleanNextItem });
     }
     state.usersCacheAt = now;
+    state.usersQueryCache.clear();
   }
 
   function removeUsersCache(listItemId) {
@@ -227,6 +235,77 @@ function createSystemUserRouter(deps) {
     if (!cleanListItemId || !Array.isArray(state.usersCache) || !state.usersCache.length) return;
     state.usersCache = state.usersCache.filter((entry) => cleanText(entry && entry.listItemId) !== cleanListItemId);
     state.usersCacheAt = Date.now();
+    state.usersQueryCache.clear();
+  }
+
+  function readUsersListFilters(url) {
+    const source = url && url.searchParams ? url.searchParams : new URLSearchParams();
+    const limit = Math.max(1, Math.min(200, Number(source.get('limit')) || 20));
+    const offset = Math.max(0, Number(source.get('offset')) || 0);
+    return {
+      role: cleanText(source.get('role')),
+      unit: cleanText(source.get('unit')),
+      q: cleanText(source.get('q')),
+      summaryOnly: cleanText(source.get('summaryOnly')) === '1',
+      limit,
+      offset
+    };
+  }
+
+  function getUsersListQuerySignature(filters) {
+    const next = filters && typeof filters === 'object' ? filters : {};
+    return [
+      cleanText(next.role),
+      cleanText(next.unit),
+      cleanText(next.q).toLowerCase(),
+      next.summaryOnly ? '1' : '0',
+      String(Math.max(1, Number(next.limit) || 20)),
+      String(Math.max(0, Number(next.offset) || 0))
+    ].join('|');
+  }
+
+  function buildUsersListPage(filters, total) {
+    const next = filters && typeof filters === 'object' ? filters : {};
+    const safeTotal = Math.max(0, Number(total) || 0);
+    const limit = Math.max(1, Math.min(200, Number(next.limit) || 20));
+    const pageCount = safeTotal > 0 ? Math.max(1, Math.ceil(safeTotal / limit)) : 0;
+    const safeOffset = safeTotal > 0
+      ? Math.min(Math.max(0, Number(next.offset) || 0), Math.max(0, (pageCount - 1) * limit))
+      : 0;
+    const currentPage = safeTotal > 0 ? Math.floor(safeOffset / limit) + 1 : 0;
+    const hasPrev = safeOffset > 0;
+    const hasNext = safeTotal > 0 && (safeOffset + limit) < safeTotal;
+    return {
+      offset: safeOffset,
+      limit,
+      total: safeTotal,
+      pageCount,
+      currentPage,
+      hasPrev,
+      hasNext,
+      prevOffset: hasPrev ? Math.max(0, safeOffset - limit) : 0,
+      nextOffset: hasNext ? safeOffset + limit : safeOffset,
+      pageStart: safeTotal > 0 ? safeOffset + 1 : 0,
+      pageEnd: safeTotal > 0 ? Math.min(safeOffset + limit, safeTotal) : 0
+    };
+  }
+
+  function summarizeUsers(items) {
+    const rows = Array.isArray(items) ? items : [];
+    const summary = {
+      total: rows.length,
+      admin: 0,
+      unitAdmin: 0,
+      securityWindow: 0
+    };
+    rows.forEach((entry) => {
+      const role = cleanText(entry && entry.role);
+      if (role === ROLES.ADMIN) summary.admin += 1;
+      if (role === ROLES.UNIT_ADMIN) summary.unitAdmin += 1;
+      const securityRoles = Array.isArray(entry && entry.securityRoles) ? entry.securityRoles.filter(Boolean) : [];
+      if (securityRoles.length) summary.securityWindow += 1;
+    });
+    return summary;
   }
 
   function buildResetRequestKey(username, email, clientAddress) {
@@ -685,10 +764,11 @@ function createSystemUserRouter(deps) {
     }
   }
 
-  function filterUsers(items, url) {
-    const role = cleanText(url.searchParams.get('role'));
-    const unit = cleanText(url.searchParams.get('unit'));
-    const query = cleanText(url.searchParams.get('q')).toLowerCase();
+  function filterUsers(items, filters) {
+    const next = filters && typeof filters === 'object' ? filters : {};
+    const role = cleanText(next.role);
+    const unit = cleanText(next.unit);
+    const query = cleanText(next.q).toLowerCase();
     return items.filter((entry) => {
       if (role && entry.role !== role) return false;
       if (unit && entry.unit !== unit && !(Array.isArray(entry.units) && entry.units.includes(unit))) return false;
@@ -760,13 +840,43 @@ function createSystemUserRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, 'Only admin can list system users');
       await upgradeLegacyPasswordStorage();
+      const filters = readUsersListFilters(url);
+      const signature = getUsersListQuerySignature(filters);
+      const cached = state.usersQueryCache.get(signature);
+      if (cached && (Date.now() - Number(cached.createdAt || 0)) < getUsersQueryCacheTtlMs()) {
+        await writeJson(res, buildJsonResponse(200, cached.value), origin);
+        return;
+      }
       const rows = await listAllUsers();
-      const items = filterUsers(rows.map((entry) => entry.item), url);
-      await writeJson(res, buildJsonResponse(200, {
+      const filteredItems = filterUsers(rows.map((entry) => entry.item), filters);
+      const summary = summarizeUsers(filteredItems);
+      const page = buildUsersListPage(filters, filteredItems.length);
+      const payload = {
         ok: true,
-        items: items.map(sanitizeUserForClient),
+        items: filters.summaryOnly
+          ? []
+          : filteredItems.slice(page.offset, page.offset + page.limit).map(sanitizeUserForClient),
+        total: filteredItems.length,
+        summary,
+        page: filters.summaryOnly
+          ? { ...page, returned: 0, pageStart: 0, pageEnd: 0 }
+          : { ...page, returned: Math.max(0, Math.min(page.limit, filteredItems.length - page.offset)) },
+        filters: {
+          role: filters.role,
+          unit: filters.unit,
+          q: filters.q,
+          limit: String(page.limit),
+          offset: String(page.offset),
+          summaryOnly: filters.summaryOnly ? '1' : ''
+        },
+        generatedAt: new Date().toISOString(),
         contractVersion: CONTRACT_VERSION
-      }), origin);
+      };
+      state.usersQueryCache.set(signature, {
+        createdAt: Date.now(),
+        value: payload
+      });
+      await writeJson(res, buildJsonResponse(200, payload), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to list system users.', 500), origin);
     }

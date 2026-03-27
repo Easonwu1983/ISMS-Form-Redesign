@@ -77,8 +77,14 @@ const state = {
   actor: null,
   token: null,
   tokenExp: 0,
-  tokenMode: ''
+  tokenMode: '',
+  applicationsCache: null,
+  applicationsCacheAt: 0,
+  applicationsCachePromise: null,
+  applicationQueryCache: new Map()
 };
+const APPLICATIONS_CACHE_TTL_MS = Number(process.env.UNIT_CONTACT_APPLICATIONS_CACHE_MS || 30000);
+const APPLICATIONS_QUERY_CACHE_TTL_MS = Number(process.env.UNIT_CONTACT_APPLICATIONS_QUERY_CACHE_MS || 15000);
 const MAX_JSON_BODY_BYTES = Number(process.env.UNIT_CONTACT_MAX_JSON_BODY_BYTES || 1024 * 1024);
 const APPLY_RATE_LIMIT_WINDOW_MS = Number(process.env.UNIT_CONTACT_APPLY_WINDOW_MS || 15 * 60 * 1000);
 const APPLY_RATE_LIMIT_MAX_REQUESTS = Number(process.env.UNIT_CONTACT_APPLY_MAX_REQUESTS || 5);
@@ -460,28 +466,130 @@ function filterFieldsForExistingColumns(fields, existingNames) {
   }, {});
 }
 
+function cloneApplicationEntries(entries) {
+  return Array.isArray(entries) ? JSON.parse(JSON.stringify(entries)) : [];
+}
+
+function invalidateApplicationCaches() {
+  state.applicationsCache = null;
+  state.applicationsCacheAt = 0;
+  state.applicationsCachePromise = null;
+  state.applicationQueryCache.clear();
+}
+
+function readAdminApplicationFilters(filters) {
+  const source = filters && typeof filters === 'object' ? filters : {};
+  const limit = Math.max(1, Math.min(200, Number(source.limit) || 50));
+  const offset = Math.max(0, Number(source.offset) || 0);
+  return {
+    status: cleanText(source.status),
+    email: cleanText(source.email),
+    keyword: cleanText(source.keyword),
+    limit,
+    offset
+  };
+}
+
+function buildAdminApplicationPage(filters, total) {
+  const nextFilters = readAdminApplicationFilters(filters);
+  const safeTotal = Math.max(0, Number(total) || 0);
+  const limit = nextFilters.limit;
+  const pageCount = safeTotal > 0 ? Math.max(1, Math.ceil(safeTotal / limit)) : 0;
+  const safeOffset = safeTotal > 0
+    ? Math.min(Math.max(0, nextFilters.offset), Math.max(0, (pageCount - 1) * limit))
+    : 0;
+  const currentPage = safeTotal > 0 ? Math.floor(safeOffset / limit) + 1 : 0;
+  const hasPrev = safeOffset > 0;
+  const hasNext = safeTotal > 0 && (safeOffset + limit) < safeTotal;
+  return {
+    offset: safeOffset,
+    limit,
+    total: safeTotal,
+    pageCount,
+    currentPage,
+    hasPrev,
+    hasNext,
+    prevOffset: hasPrev ? Math.max(0, safeOffset - limit) : 0,
+    nextOffset: hasNext ? safeOffset + limit : safeOffset,
+    pageStart: safeTotal > 0 ? safeOffset + 1 : 0,
+    pageEnd: safeTotal > 0 ? Math.min(safeOffset + limit, safeTotal) : 0
+  };
+}
+
+function summarizeAdminApplications(items) {
+  const rows = Array.isArray(items) ? items : [];
+  const summary = {
+    total: rows.length,
+    pendingReview: 0,
+    approved: 0,
+    activationPending: 0,
+    active: 0,
+    returned: 0,
+    rejected: 0
+  };
+  rows.forEach((item) => {
+    const status = cleanText(item && item.status);
+    if (status === STATUSES.PENDING_REVIEW) summary.pendingReview += 1;
+    if (status === STATUSES.APPROVED) summary.approved += 1;
+    if (status === STATUSES.ACTIVATION_PENDING) summary.activationPending += 1;
+    if (status === STATUSES.ACTIVE) summary.active += 1;
+    if (status === STATUSES.RETURNED) summary.returned += 1;
+    if (status === STATUSES.REJECTED) summary.rejected += 1;
+  });
+  return summary;
+}
+
+function getAdminApplicationQuerySignature(filters) {
+  const nextFilters = readAdminApplicationFilters(filters);
+  return [
+    nextFilters.status,
+    nextFilters.email.toLowerCase(),
+    nextFilters.keyword.toLowerCase(),
+    String(nextFilters.limit),
+    String(nextFilters.offset)
+  ].join('|');
+}
+
 async function listAllApplications() {
-  const siteId = await resolveSiteId();
-  const lists = await resolveLists();
-  const items = [];
-  let nextUrl = `${GRAPH_ROOT}/sites/${siteId}/lists/${lists.applications.id}/items?$expand=fields&$top=200`;
-
-  while (nextUrl) {
-    const body = await graphRequest('GET', nextUrl);
-    items.push(...(Array.isArray(body && body.value) ? body.value : []));
-    nextUrl = cleanText(body && body['@odata.nextLink']);
+  const now = Date.now();
+  if (Array.isArray(state.applicationsCache) && state.applicationsCache.length && now - state.applicationsCacheAt < APPLICATIONS_CACHE_TTL_MS) {
+    return cloneApplicationEntries(state.applicationsCache);
   }
+  if (state.applicationsCachePromise) {
+    return cloneApplicationEntries(await state.applicationsCachePromise);
+  }
+  state.applicationsCachePromise = (async () => {
+    const siteId = await resolveSiteId();
+    const lists = await resolveLists();
+    const items = [];
+    let nextUrl = `${GRAPH_ROOT}/sites/${siteId}/lists/${lists.applications.id}/items?$expand=fields&$top=200`;
 
-  return items
-    .map((entry) => entry && entry.fields ? {
-      listItemId: cleanText(entry.id),
-      application: mapGraphFieldsToApplication({
-        ...entry.fields,
-        Created: entry.createdDateTime,
-        Modified: entry.lastModifiedDateTime
-      })
-    } : null)
-    .filter(Boolean);
+    while (nextUrl) {
+      const body = await graphRequest('GET', nextUrl);
+      items.push(...(Array.isArray(body && body.value) ? body.value : []));
+      nextUrl = cleanText(body && body['@odata.nextLink']);
+    }
+
+    const rows = items
+      .map((entry) => entry && entry.fields ? {
+        listItemId: cleanText(entry.id),
+        application: mapGraphFieldsToApplication({
+          ...entry.fields,
+          Created: entry.createdDateTime,
+          Modified: entry.lastModifiedDateTime
+        })
+      } : null)
+      .filter(Boolean);
+    state.applicationsCache = rows;
+    state.applicationsCacheAt = Date.now();
+    return rows;
+  })().catch((error) => {
+    invalidateApplicationCaches();
+    throw error;
+  }).finally(() => {
+    state.applicationsCachePromise = null;
+  });
+  return cloneApplicationEntries(await state.applicationsCachePromise);
 }
 
 function parseSequenceFromId(id, year) {
@@ -903,6 +1011,7 @@ async function createApplication(payload) {
     fields: filterFieldsForExistingColumns(mapApplicationToGraphFields(application), columnNames)
   });
   const mapped = created && created.fields ? mapGraphFieldsToApplication(created.fields) : application;
+  invalidateApplicationCaches();
 
   await tryCreateAuditRow({
     eventType: 'unit_contact.application_submitted',
@@ -942,13 +1051,37 @@ function matchesListFilter(application, filters) {
 }
 
 async function listApplicationsForAdmin(filters) {
+  const nextFilters = readAdminApplicationFilters(filters);
+  const signature = getAdminApplicationQuerySignature(nextFilters);
+  const cached = state.applicationQueryCache.get(signature);
+  if (cached && (Date.now() - Number(cached.createdAt || 0)) < APPLICATIONS_QUERY_CACHE_TTL_MS) {
+    return JSON.parse(JSON.stringify(cached.value));
+  }
   const applications = await listAllApplications();
-  const limit = Math.max(1, Math.min(200, Number(filters && filters.limit) || 50));
-  return applications
+  const items = applications
     .map((entry) => entry.application)
-    .filter((application) => matchesListFilter(application, filters))
-    .sort((left, right) => String(right.updatedAt || right.submittedAt).localeCompare(String(left.updatedAt || left.submittedAt)))
-    .slice(0, limit);
+    .filter((application) => matchesListFilter(application, nextFilters))
+    .sort((left, right) => String(right.updatedAt || right.submittedAt).localeCompare(String(left.updatedAt || left.submittedAt)));
+  const page = buildAdminApplicationPage(nextFilters, items.length);
+  const result = {
+    items: items.slice(page.offset, page.offset + page.limit),
+    total: items.length,
+    summary: summarizeAdminApplications(items),
+    page,
+    filters: {
+      status: nextFilters.status,
+      email: nextFilters.email,
+      keyword: nextFilters.keyword,
+      limit: String(page.limit),
+      offset: String(page.offset)
+    },
+    generatedAt: new Date().toISOString()
+  };
+  state.applicationQueryCache.set(signature, {
+    createdAt: Date.now(),
+    value: result
+  });
+  return JSON.parse(JSON.stringify(result));
 }
 
 async function updateApplicationRecord(applicationId, updates) {
@@ -968,6 +1101,7 @@ async function updateApplicationRecord(applicationId, updates) {
   };
   const fields = filterFieldsForExistingColumns(mapApplicationToGraphFields(nextRecord), columnNames);
   await graphRequest('PATCH', `/sites/${siteId}/lists/${lists.applications.id}/items/${entry.listItemId}/fields`, fields);
+  invalidateApplicationCaches();
   return {
     before: entry.application,
     after: mapGraphFieldsToApplication(fields)
@@ -1125,15 +1259,21 @@ async function handleAdminList(req, res, origin, url) {
   try {
     const authz = await requestAuthz.requireAuthenticatedUser(req);
     requestAuthz.requireAdmin(authz, '僅最高管理員可檢視申請清單');
-    const items = await listApplicationsForAdmin({
+    const result = await listApplicationsForAdmin({
       status: url.searchParams.get('status'),
       email: url.searchParams.get('email'),
       keyword: url.searchParams.get('keyword'),
-      limit: url.searchParams.get('limit')
+      limit: url.searchParams.get('limit'),
+      offset: url.searchParams.get('offset')
     });
     return writeJson(res, buildJsonResponse(200, {
       ok: true,
-      items: items.map(mapApplicationForClient),
+      items: Array.isArray(result && result.items) ? result.items.map(mapApplicationForClient) : [],
+      total: Math.max(0, Number(result && result.total) || 0),
+      summary: result && result.summary ? result.summary : summarizeAdminApplications([]),
+      page: result && result.page ? result.page : buildAdminApplicationPage({}, 0),
+      filters: result && result.filters ? result.filters : readAdminApplicationFilters({}),
+      generatedAt: String(result && result.generatedAt || '').trim() || new Date().toISOString(),
       contractVersion: CONTRACT_VERSION
     }), origin);
   } catch (error) {

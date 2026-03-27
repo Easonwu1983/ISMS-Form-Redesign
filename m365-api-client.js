@@ -1152,6 +1152,81 @@
       return normalizeRemoteApplications({ applications: body && body.items ? body.items : [] });
     }
 
+    async function listUnitContactApplicationsPaged(filters) {
+      const endpoint = getUnitContactApplicationsEndpoint();
+      if (!endpoint) throw new Error('未設定 unit-contact applications endpoint');
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const query = filters && typeof filters === 'object' ? filters : {};
+      Object.keys(query).forEach(function (key) {
+        const value = cleanText(query[key]);
+        if (value) url.searchParams.set(key, value);
+      });
+      const body = await requestJson(url.toString(), {
+        method: 'GET',
+        contractVersion: CONTRACT_VERSION,
+        sharedHeaders: getConfig().unitContactSharedHeaders || {}
+      });
+      const items = normalizeRemoteApplications({ applications: body && body.items ? body.items : [] });
+      const total = Math.max(0, Number(body && body.total) || items.length || 0);
+      const summary = body && body.summary && typeof body.summary === 'object'
+        ? body.summary
+        : {
+            total,
+            pendingReview: items.filter((item) => String(item && item.status || '').trim() === 'pending_review').length,
+            approved: items.filter((item) => String(item && item.status || '').trim() === 'approved').length,
+            activationPending: items.filter((item) => String(item && item.status || '').trim() === 'activation_pending').length,
+            active: items.filter((item) => String(item && item.status || '').trim() === 'active').length,
+            returned: items.filter((item) => String(item && item.status || '').trim() === 'returned').length,
+            rejected: items.filter((item) => String(item && item.status || '').trim() === 'rejected').length
+          };
+      return {
+        ok: !!(body && body.ok !== false),
+        items,
+        total,
+        summary,
+        page: body && body.page ? body.page : null,
+        filters: body && body.filters ? body.filters : { ...query },
+        generatedAt: cleanText(body && body.generatedAt),
+        raw: body
+      };
+    }
+
+    async function listSystemUsersPaged(filters) {
+      const endpoint = getConfig().systemUsersEndpoint;
+      if (!endpoint) throw new Error('未設定 systemUsersEndpoint');
+      const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.href : undefined);
+      const query = filters && typeof filters === 'object' ? filters : {};
+      Object.keys(query).forEach(function (key) {
+        const value = cleanText(query[key]);
+        if (value) url.searchParams.set(key, value);
+      });
+      const body = await requestJson(url.toString(), {
+        method: 'GET',
+        contractVersion: CONTRACT_VERSION,
+        sharedHeaders: getConfig().systemUsersSharedHeaders || {}
+      });
+      const items = Array.isArray(body && body.items)
+        ? body.items
+        : (Array.isArray(body && body.value) ? body.value : []);
+      return {
+        ok: !!(body && body.ok !== false),
+        items,
+        total: Math.max(0, Number(body && body.total) || items.length || 0),
+        summary: body && body.summary && typeof body.summary === 'object'
+          ? body.summary
+          : {
+              total: items.length,
+              admin: items.filter((item) => cleanText(item && item.role) === '最高管理員').length,
+              unitAdmin: items.filter((item) => cleanText(item && item.role) === '單位管理員').length,
+              securityWindow: items.filter((item) => Array.isArray(item && item.securityRoles) && item.securityRoles.filter(Boolean).length > 0).length
+            },
+        page: body && body.page ? body.page : null,
+        filters: body && body.filters ? body.filters : { ...query },
+        generatedAt: cleanText(body && body.generatedAt),
+        raw: body
+      };
+    }
+
     async function reviewUnitContactApplication(payload) {
       const endpoint = getUnitContactReviewEndpoint();
       if (!endpoint) throw new Error('未設定 unit-contact review endpoint');
@@ -1949,8 +2024,10 @@
       submitUnitContactApplication,
       lookupUnitContactApplicationsByEmail,
       listUnitContactApplications,
+      listUnitContactApplicationsPaged,
       reviewUnitContactApplication,
       activateUnitContactApplication,
+      listSystemUsersPaged,
       listUnitGovernanceEntries,
       upsertUnitGovernanceEntry,
       getSecurityWindowInventory,

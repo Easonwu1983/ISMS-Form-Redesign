@@ -35,8 +35,10 @@
       fetchAuditTrailEntries,
       fetchAuditTrailHealth,
       listUnitContactApplications,
+      listUnitContactApplicationsPaged,
       reviewUnitContactApplication,
       activateUnitContactApplication,
+      listSystemUsersPaged,
       getSchemaHealth,
       migrateAllStores,
       exportManagedStoreSnapshot,
@@ -138,14 +140,33 @@
       signature: '',
       html: ''
     };
-    const unitContactReviewState = {
-      filters: {
-        status: 'pending_review',
-        keyword: '',
-        email: '',
-        limit: '50'
-      },
+    const DEFAULT_SYSTEM_USERS_FILTERS = Object.freeze({
+      q: '',
+      role: '',
+      unit: '',
+      limit: '20',
+      offset: '0'
+    });
+    const systemUsersState = {
+      filters: { ...DEFAULT_SYSTEM_USERS_FILTERS },
       items: [],
+      summary: { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 },
+      page: { offset: 0, limit: 20, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
+      loading: false,
+      lastLoadedAt: ''
+    };
+    const DEFAULT_UNIT_CONTACT_REVIEW_FILTERS = Object.freeze({
+      status: 'pending_review',
+      keyword: '',
+      email: '',
+      limit: '50',
+      offset: '0'
+    });
+    const unitContactReviewState = {
+      filters: { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS },
+      items: [],
+      summary: { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 },
+      page: { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       loading: false,
       lastLoadedAt: ''
     };
@@ -312,6 +333,45 @@
         pageStart: returned > 0 ? offset + 1 : 0,
         pageEnd: returned > 0 ? offset + returned : 0
       };
+    }
+
+    function normalizeSystemUsersSummary(summary, fallbackTotal) {
+      const source = summary && typeof summary === 'object' ? summary : {};
+      return {
+        total: Math.max(0, Number(source.total) || Number(fallbackTotal) || 0),
+        admin: Math.max(0, Number(source.admin) || 0),
+        unitAdmin: Math.max(0, Number(source.unitAdmin) || 0),
+        securityWindow: Math.max(0, Number(source.securityWindow) || 0)
+      };
+    }
+
+    function normalizeUnitContactReviewSummary(summary, fallbackTotal) {
+      const source = summary && typeof summary === 'object' ? summary : {};
+      return {
+        total: Math.max(0, Number(source.total) || Number(fallbackTotal) || 0),
+        pendingReview: Math.max(0, Number(source.pendingReview) || Number(source.pending_review) || 0),
+        approved: Math.max(0, Number(source.approved) || 0),
+        activationPending: Math.max(0, Number(source.activationPending) || Number(source.activation_pending) || 0),
+        active: Math.max(0, Number(source.active) || 0),
+        returned: Math.max(0, Number(source.returned) || 0),
+        rejected: Math.max(0, Number(source.rejected) || 0)
+      };
+    }
+
+    function getSystemUsersPagedClient() {
+      if (typeof listSystemUsersPaged === 'function') return listSystemUsersPaged;
+      const client = getAdminApiClient();
+      return client && typeof client.listSystemUsersPaged === 'function'
+        ? client.listSystemUsersPaged.bind(client)
+        : null;
+    }
+
+    function getUnitContactApplicationsPagedClient() {
+      if (typeof listUnitContactApplicationsPaged === 'function') return listUnitContactApplicationsPaged;
+      const client = getAdminApiClient();
+      return client && typeof client.listUnitContactApplicationsPaged === 'function'
+        ? client.listUnitContactApplicationsPaged.bind(client)
+        : null;
     }
 
     function getSharedPagerModule() {
@@ -1906,6 +1966,26 @@
       };
     }
 
+    function getSystemUsersFiltersFromDom() {
+      return {
+        q: document.getElementById('system-users-keyword') ? document.getElementById('system-users-keyword').value.trim() : '',
+        role: document.getElementById('system-users-role') ? document.getElementById('system-users-role').value.trim() : '',
+        unit: document.getElementById('system-users-unit') ? document.getElementById('system-users-unit').value.trim() : '',
+        limit: document.getElementById('system-users-page-limit') ? document.getElementById('system-users-page-limit').value.trim() : String(DEFAULT_SYSTEM_USERS_FILTERS.limit),
+        offset: '0'
+      };
+    }
+
+    function getUnitContactReviewFiltersFromDom() {
+      return {
+        status: document.getElementById('unit-contact-review-status') ? document.getElementById('unit-contact-review-status').value.trim() : DEFAULT_UNIT_CONTACT_REVIEW_FILTERS.status,
+        email: document.getElementById('unit-contact-review-email') ? document.getElementById('unit-contact-review-email').value.trim() : '',
+        keyword: document.getElementById('unit-contact-review-keyword') ? document.getElementById('unit-contact-review-keyword').value.trim() : '',
+        limit: document.getElementById('unit-contact-review-limit') ? document.getElementById('unit-contact-review-limit').value.trim() : String(DEFAULT_UNIT_CONTACT_REVIEW_FILTERS.limit),
+        offset: '0'
+      };
+    }
+
 
     const SECURITY_ROLE_OPTIONS = ['一級單位資安窗口', '二級單位資安窗口'];
     const UNIT_SEARCH_ENTRIES = typeof getUnitSearchEntries === 'function'
@@ -2074,61 +2154,51 @@
     const visibleUsersCache = renderUsers._remoteViewCache || (renderUsers._remoteViewCache = {
       items: [],
       fetchedAt: 0,
-      promise: null
+      promise: null,
+      summary: null,
+      page: null,
+      filters: { ...DEFAULT_SYSTEM_USERS_FILTERS }
     });
-
-    function getSystemUsersEndpointForAdmin() {
-      const runtimeConfig = typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__
-        ? window.__M365_UNIT_CONTACT_CONFIG__
-        : null;
-      const endpoint = runtimeConfig && typeof runtimeConfig.systemUsersEndpoint === 'string'
-        ? runtimeConfig.systemUsersEndpoint
-        : '/api/system-users';
-      return String(endpoint || '/api/system-users').trim() || '/api/system-users';
-    }
-
-    function getVisibleUsers() {
-      const localUsers = Array.isArray(getUsers()) ? getUsers() : [];
-      return localUsers.length ? localUsers : (Array.isArray(visibleUsersCache.items) ? visibleUsersCache.items : []);
-    }
-
-    function clearVisibleUsersCache() {
-      visibleUsersCache.items = [];
-      visibleUsersCache.fetchedAt = 0;
-      visibleUsersCache.promise = null;
-    }
+    systemUsersState.filters = normalizePagedFilters({ ...systemUsersState.filters, ...(opts.filters || opts) }, DEFAULT_SYSTEM_USERS_FILTERS);
+    systemUsersState.loading = true;
+    app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取系統帳號清單...</div></div>`;
+    refreshIcons();
 
     async function fetchUsersForAdminView(fetchOptions) {
       const remoteOpts = fetchOptions || {};
-      const activeUser = currentUser && currentUser();
-      const sessionToken = String(activeUser && activeUser.sessionToken || '').trim();
-      if (!sessionToken) return [];
+      const client = getSystemUsersPagedClient();
+      const signature = JSON.stringify(systemUsersState.filters);
       const now = Date.now();
-      if (!remoteOpts.force && visibleUsersCache.items.length && (now - Number(visibleUsersCache.fetchedAt || 0)) < 30000) {
-        return visibleUsersCache.items.slice();
+      if (!remoteOpts.force && visibleUsersCache.items.length && visibleUsersCache.signature === signature && (now - Number(visibleUsersCache.fetchedAt || 0)) < 30000) {
+        return {
+          items: visibleUsersCache.items.slice(),
+          summary: visibleUsersCache.summary || normalizeSystemUsersSummary(null, visibleUsersCache.items.length),
+          page: visibleUsersCache.page || buildAdminCollectionPage(systemUsersState.filters, visibleUsersCache.items.length, 20, 200),
+          filters: visibleUsersCache.filters || { ...systemUsersState.filters },
+          generatedAt: systemUsersState.lastLoadedAt || new Date().toISOString()
+        };
       }
-      if (!remoteOpts.force && visibleUsersCache.promise) {
-        return visibleUsersCache.promise;
-      }
-      const endpoint = getSystemUsersEndpointForAdmin();
-      const requestUrl = new URL(endpoint, window.location.href);
-      const pending = fetch(requestUrl.toString(), {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${sessionToken}`,
-          Accept: 'application/json'
-        }
-      }).then(async (response) => {
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok || body && body.ok === false) {
-          throw new Error(String(body && body.error || `系統帳號清單讀取失敗 (${response.status})`));
-        }
-        const items = Array.isArray(body && body.items)
-          ? body.items
-          : (Array.isArray(body && body.value) ? body.value : []);
-        visibleUsersCache.items = Array.isArray(items) ? items.slice() : [];
+      if (!remoteOpts.force && visibleUsersCache.promise) return visibleUsersCache.promise;
+      const pending = (client
+        ? client(systemUsersState.filters)
+        : Promise.reject(new Error('system users paged client unavailable'))
+      ).then((response) => {
+        const items = Array.isArray(response && response.items) ? response.items : [];
+        const summary = normalizeSystemUsersSummary(response && response.summary, response && response.total);
+        const page = response && response.page ? response.page : buildAdminCollectionPage(systemUsersState.filters, response && response.total, 20, 200);
+        visibleUsersCache.signature = signature;
+        visibleUsersCache.items = items.slice();
+        visibleUsersCache.summary = summary;
+        visibleUsersCache.page = page;
+        visibleUsersCache.filters = { ...systemUsersState.filters, ...(response && response.filters ? response.filters : {}) };
         visibleUsersCache.fetchedAt = Date.now();
-        return visibleUsersCache.items.slice();
+        return {
+          items,
+          summary,
+          page,
+          filters: visibleUsersCache.filters,
+          generatedAt: String(response && response.generatedAt || '').trim() || new Date().toISOString()
+        };
       }).finally(() => {
         visibleUsersCache.promise = null;
       });
@@ -2136,57 +2206,22 @@
       return pending;
     }
 
-    if (!opts.skipSync && typeof syncUsersFromM365 === 'function') {
-      const existingUsers = getVisibleUsers();
-      if (!existingUsers.length) {
-        app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">正在同步正式帳號清單...</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取最高管理者與單位管理者帳號資料...</div></div>`;
-        refreshIcons();
-        try {
-          await syncUsersFromM365({ silent: true, force: true });
-        } catch (error) {
-          console.warn('system users initial sync failed', error);
-        }
-        if (!getUsers().length) {
-          try {
-            await fetchUsersForAdminView({ force: true });
-          } catch (error) {
-            console.warn('system users direct fetch failed', error);
-          }
-        } else {
-          clearVisibleUsersCache();
-        }
-        return renderUsers({ skipSync: true });
-      }
-      syncUsersFromM365({ silent: true }).then(function () {
-        clearVisibleUsersCache();
-        if (window.location.hash === '#users') {
-          renderUsers({ skipSync: true }).catch(function (error) {
-            console.warn('system users background rerender failed', error);
-          });
-        }
-      }).catch(function (error) {
-        console.warn('system users background sync failed', error);
-        fetchUsersForAdminView().then(function () {
-          if (window.location.hash === '#users') {
-            renderUsers({ skipSync: true }).catch(function (rerenderError) {
-              console.warn('system users direct rerender failed', rerenderError);
-            });
-          }
-        }).catch(function (fetchError) {
-          console.warn('system users direct fetch failed', fetchError);
-        });
-      });
-    } else if (!opts.skipSync && !getUsers().length) {
-      app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">正在同步正式帳號清單...</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取最高管理者與單位管理者帳號資料...</div></div>`;
+    try {
+      const result = await fetchUsersForAdminView({ force: !!opts.forceRemote });
+      systemUsersState.items = Array.isArray(result && result.items) ? result.items : [];
+      systemUsersState.summary = normalizeSystemUsersSummary(result && result.summary, systemUsersState.items.length);
+      systemUsersState.page = result && result.page ? result.page : buildAdminCollectionPage(systemUsersState.filters, systemUsersState.items.length, 20, 200);
+      systemUsersState.filters = normalizePagedFilters(result && result.filters ? result.filters : systemUsersState.filters, DEFAULT_SYSTEM_USERS_FILTERS);
+      systemUsersState.lastLoadedAt = String(result && result.generatedAt || '').trim() || new Date().toISOString();
+      systemUsersState.loading = false;
+    } catch (error) {
+      systemUsersState.loading = false;
+      app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">無法讀取系統帳號清單。</p></div><button class="btn btn-secondary" data-action="admin.refreshUsers">${ic('refresh-cw', 'icon-sm')} 重試</button></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('users')}</div><div class="empty-state-title">系統帳號後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
-      try {
-        await fetchUsersForAdminView({ force: true });
-      } catch (error) {
-        console.warn('system users direct fetch failed', error);
-      }
-      return renderUsers({ skipSync: true });
+      return;
     }
-    const users = getVisibleUsers();
+
+    const users = Array.isArray(systemUsersState.items) ? systemUsersState.items : [];
     const rows = users.length ? users.map((u) => {
       const primaryUnit = getPrimaryAuthorizedUnit(u) || '未指定';
       const isProtectedUser = String(u.username || '').trim() === 'admin' || String(u.role || '').trim() === ROLES.ADMIN;
@@ -2197,9 +2232,26 @@
         actionButtons.push(`<button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>`);
       }
       return `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${getRoleBadgeClass(u.role)}">${getRoleLabel(u.role)}</span></td><td>${esc(formatSecurityRolesSummary(u.securityRoles))}</td><td>${esc(primaryUnit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${actionButtons.join('')}</div></td></tr>`;
-    }).join('') : `<tr><td colspan="9"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('users')}</div><div class="empty-state-title">目前沒有可顯示的帳號資料</div><div class="empty-state-desc">系統會先同步正式帳號清單；若仍為空白，請重新整理或檢查系統帳號後端。</div></div></td></tr>`;
+    }).join('') : `<tr><td colspan="9"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('users')}</div><div class="empty-state-title">目前沒有符合條件的帳號</div><div class="empty-state-desc">請調整篩選條件，或確認系統帳號後端是否已同步資料。</div></div></td></tr>`;
+    const pager = renderAdminCollectionPager({
+      idPrefix: 'system-users',
+      actionPrefix: 'admin.user',
+      page: systemUsersState.page,
+      summary: formatAdminCollectionSummary(systemUsersState.page, '目前沒有符合條件的帳號'),
+      defaultLimit: 20,
+      limitOptions: ['20', '50', '100']
+    });
     app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
-      <div class="card" style="padding:0;overflow:hidden"><div class="table-wrapper"><table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要歸屬單位</th><th>額外授權範圍</th><th>審核範圍</th><th>電子郵件</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+      <div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${systemUsersState.summary.total || 0}</div><div class="stat-label">符合條件帳號</div></div><div class="stat-card closed"><div class="stat-icon">${ic('shield-check')}</div><div class="stat-value">${systemUsersState.summary.admin || 0}</div><div class="stat-label">最高管理者</div></div><div class="stat-card pending"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${systemUsersState.summary.unitAdmin || 0}</div><div class="stat-label">單位管理者</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${systemUsersState.summary.securityWindow || 0}</div><div class="stat-label">具資安窗口</div></div></div>
+      <div class="card review-table-card"><div class="card-header"><span class="card-title">帳號清單</span><span class="review-card-subtitle">可依角色、單位與關鍵字查找帳號</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="system-users-keyword" value="${esc(systemUsersState.filters.q)}" placeholder="帳號、姓名、電子郵件"></div><div class="form-group"><label class="form-label">角色</label><select class="form-select" id="system-users-role"><option value="" ${!systemUsersState.filters.role ? 'selected' : ''}>全部</option><option value="${esc(ROLES.ADMIN)}" ${systemUsersState.filters.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option><option value="${esc(ROLES.UNIT_ADMIN)}" ${systemUsersState.filters.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option></select></div><div class="form-group"><label class="form-label">單位</label><input class="form-input" id="system-users-unit" value="${esc(systemUsersState.filters.unit)}" placeholder="主要或授權單位"></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUserFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUserFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('system-users-table', '<th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要歸屬單位</th><th>額外授權範圍</th><th>審核範圍</th><th>電子郵件</th><th>操作</th>', rows, { toolbarSubtitle: `最後更新：${fmtTime(systemUsersState.lastLoadedAt)}` })}</div></div>`;
+    bindAdminCollectionPager({
+      idPrefix: 'system-users',
+      actionPrefix: 'admin.user',
+      page: systemUsersState.page,
+      defaultLimit: 20,
+      limitOptions: ['20', '50', '100'],
+      onChange: (patch) => renderUsers({ ...systemUsersState.filters, ...patch }, { skipSync: true, forceRemote: true })
+    });
     refreshIcons();
   }
 
@@ -2230,12 +2282,15 @@
         });
       }
       if (renderUsers._remoteViewCache) {
-        renderUsers._remoteViewCache.items = Array.isArray(renderUsers._remoteViewCache.items)
-          ? renderUsers._remoteViewCache.items.filter((item) => String(item && item.username || '').trim() !== cleanUsername)
-          : [];
-        renderUsers._remoteViewCache.fetchedAt = Date.now();
+        renderUsers._remoteViewCache.items = [];
+        renderUsers._remoteViewCache.summary = null;
+        renderUsers._remoteViewCache.page = null;
+        renderUsers._remoteViewCache.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
+        renderUsers._remoteViewCache.signature = '';
+        renderUsers._remoteViewCache.fetchedAt = 0;
+        renderUsers._remoteViewCache.promise = null;
       }
-      await renderUsers({ skipSync: true });
+      await renderUsers({ filters: { ...systemUsersState.filters }, forceRemote: true });
       toast(`已刪除 ${label}`);
     } catch (error) {
       toast(String(error && error.message || error || '刪除失敗'), 'error');
@@ -2411,29 +2466,97 @@
     }).join('');
   }
 
-  async function renderUnitContactReview(nextFilters) {
+  async function renderUnitContactReview(nextFilters, options) {
     if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可審核單位管理人申請', 'error'); return; }
-    unitContactReviewState.filters = { ...unitContactReviewState.filters, ...(nextFilters || {}) };
+    const opts = options || {};
+    const visibleApplicationsCache = renderUnitContactReview._remoteViewCache || (renderUnitContactReview._remoteViewCache = {
+      items: [],
+      fetchedAt: 0,
+      promise: null,
+      summary: null,
+      page: null,
+      filters: { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS },
+      signature: ''
+    });
+    unitContactReviewState.filters = normalizePagedFilters({ ...unitContactReviewState.filters, ...(nextFilters || {}) }, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
     unitContactReviewState.loading = true;
     const app = document.getElementById('app');
     app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">集中處理單位管理人申請，通過後會直接啟用帳號並寄送登入資訊。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取申請資料...</div></div>`;
     refreshIcons();
+    async function fetchApplicationsForAdminView(fetchOptions) {
+      const remoteOpts = fetchOptions || {};
+      const client = getUnitContactApplicationsPagedClient();
+      const signature = JSON.stringify(unitContactReviewState.filters);
+      const now = Date.now();
+      if (!remoteOpts.force && visibleApplicationsCache.items.length && visibleApplicationsCache.signature === signature && (now - Number(visibleApplicationsCache.fetchedAt || 0)) < 30000) {
+        return {
+          items: visibleApplicationsCache.items.slice(),
+          summary: visibleApplicationsCache.summary || normalizeUnitContactReviewSummary(null, visibleApplicationsCache.items.length),
+          page: visibleApplicationsCache.page || buildAdminCollectionPage(unitContactReviewState.filters, visibleApplicationsCache.items.length, 50, 100),
+          filters: visibleApplicationsCache.filters || { ...unitContactReviewState.filters },
+          generatedAt: unitContactReviewState.lastLoadedAt || new Date().toISOString()
+        };
+      }
+      if (!remoteOpts.force && visibleApplicationsCache.promise) return visibleApplicationsCache.promise;
+      const pending = (client
+        ? client(unitContactReviewState.filters)
+        : Promise.reject(new Error('unit contact applications paged client unavailable'))
+      ).then((response) => {
+        const items = Array.isArray(response && response.items) ? response.items : [];
+        const summary = normalizeUnitContactReviewSummary(response && response.summary, response && response.total);
+        const page = response && response.page ? response.page : buildAdminCollectionPage(unitContactReviewState.filters, response && response.total, 50, 100);
+        visibleApplicationsCache.signature = signature;
+        visibleApplicationsCache.items = items.slice();
+        visibleApplicationsCache.summary = summary;
+        visibleApplicationsCache.page = page;
+        visibleApplicationsCache.filters = normalizePagedFilters(response && response.filters ? response.filters : unitContactReviewState.filters, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
+        visibleApplicationsCache.fetchedAt = Date.now();
+        return {
+          items,
+          summary,
+          page,
+          filters: visibleApplicationsCache.filters,
+          generatedAt: String(response && response.generatedAt || '').trim() || new Date().toISOString()
+        };
+      }).finally(() => {
+        visibleApplicationsCache.promise = null;
+      });
+      visibleApplicationsCache.promise = pending;
+      return pending;
+    }
     try {
-      const items = await listUnitContactApplications(unitContactReviewState.filters);
-      unitContactReviewState.items = Array.isArray(items) ? items : [];
-      unitContactReviewState.lastLoadedAt = new Date().toISOString();
+      const result = await fetchApplicationsForAdminView({ force: !!opts.forceRemote });
+      unitContactReviewState.items = Array.isArray(result && result.items) ? result.items : [];
+      unitContactReviewState.summary = normalizeUnitContactReviewSummary(result && result.summary, unitContactReviewState.items.length);
+      unitContactReviewState.page = result && result.page ? result.page : buildAdminCollectionPage(unitContactReviewState.filters, unitContactReviewState.items.length, 50, 100);
+      unitContactReviewState.filters = normalizePagedFilters(result && result.filters ? result.filters : unitContactReviewState.filters, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
+      unitContactReviewState.lastLoadedAt = String(result && result.generatedAt || '').trim() || new Date().toISOString();
+      unitContactReviewState.loading = false;
     } catch (error) {
+      unitContactReviewState.loading = false;
       app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">無法讀取申請清單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">申請後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
       return;
     }
 
-    const counts = unitContactReviewState.items.reduce((result, item) => {
-      const key = String(item && item.status || 'unknown').trim() || 'unknown';
-      result[key] = Number(result[key] || 0) + 1;
-      return result;
-    }, {});
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">最後更新：${esc(fmtTime(unitContactReviewState.lastLoadedAt))}</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('mail-plus')}</div><div class="stat-value">${unitContactReviewState.items.length}</div><div class="stat-label">目前清單筆數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${counts.pending_review || 0}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${(counts.approved || 0) + (counts.activation_pending || 0) + (counts.active || 0)}</div><div class="stat-label">已處理</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('key-round')}</div><div class="stat-value">${counts.active || 0}</div><div class="stat-label">已啟用</div></div></div><div class="card review-table-card"><div class="card-header"><span class="card-title">申請清單</span><span class="review-card-subtitle">可依狀態、電子郵件與關鍵字過濾</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">狀態</label><select class="form-select" id="unit-contact-review-status"><option value="" ${!unitContactReviewState.filters.status ? 'selected' : ''}>全部</option><option value="pending_review" ${unitContactReviewState.filters.status === 'pending_review' ? 'selected' : ''}>待審核</option><option value="approved" ${unitContactReviewState.filters.status === 'approved' ? 'selected' : ''}>已通過（舊資料）</option><option value="returned" ${unitContactReviewState.filters.status === 'returned' ? 'selected' : ''}>退回補件</option><option value="rejected" ${unitContactReviewState.filters.status === 'rejected' ? 'selected' : ''}>未核准</option><option value="active" ${unitContactReviewState.filters.status === 'active' ? 'selected' : ''}>已啟用</option></select></div><div class="form-group"><label class="form-label">申請電子郵件</label><input class="form-input" id="unit-contact-review-email" value="${esc(unitContactReviewState.filters.email)}" placeholder="例如 ntu.edu.tw 或 Gmail"></div><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="unit-contact-review-keyword" value="${esc(unitContactReviewState.filters.keyword)}" placeholder="單位、申請人、編號"></div><div class="form-group"><label class="form-label">筆數</label><select class="form-select" id="unit-contact-review-limit"><option value="20" ${unitContactReviewState.filters.limit === '20' ? 'selected' : ''}>20</option><option value="50" ${unitContactReviewState.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${unitContactReviewState.filters.limit === '100' ? 'selected' : ''}>100</option></select></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUnitContactFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUnitContactFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${buildReviewTableShell('unit-contact-review-table', '<th>申請編號 / 單位</th><th>申請人</th><th>分機</th><th>狀態</th><th>處理說明</th><th>最後更新</th><th>操作</th>', renderUnitContactReviewRows(unitContactReviewState.items), { toolbarSubtitle: '通過後會直接啟用帳號並寄送登入資訊；已啟用案件可補寄登入資訊。' })}</div></div>`;
+    const counts = unitContactReviewState.summary || normalizeUnitContactReviewSummary(null, unitContactReviewState.items.length);
+    const pager = renderAdminCollectionPager({
+      idPrefix: 'unit-contact-review',
+      actionPrefix: 'admin.unitContactReview',
+      page: unitContactReviewState.page,
+      summary: formatAdminCollectionSummary(unitContactReviewState.page, '目前沒有符合條件的申請'),
+      defaultLimit: 50,
+      limitOptions: ['20', '50', '100']
+    });
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">最後更新：${esc(fmtTime(unitContactReviewState.lastLoadedAt))}</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('mail-plus')}</div><div class="stat-value">${counts.total || 0}</div><div class="stat-label">符合條件申請</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${counts.pendingReview || 0}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${(counts.approved || 0) + (counts.activationPending || 0) + (counts.active || 0)}</div><div class="stat-label">已處理</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('key-round')}</div><div class="stat-value">${counts.active || 0}</div><div class="stat-label">已啟用</div></div></div><div class="card review-table-card"><div class="card-header"><span class="card-title">申請清單</span><span class="review-card-subtitle">可依狀態、電子郵件與關鍵字過濾</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">狀態</label><select class="form-select" id="unit-contact-review-status"><option value="" ${!unitContactReviewState.filters.status ? 'selected' : ''}>全部</option><option value="pending_review" ${unitContactReviewState.filters.status === 'pending_review' ? 'selected' : ''}>待審核</option><option value="approved" ${unitContactReviewState.filters.status === 'approved' ? 'selected' : ''}>已通過（舊資料）</option><option value="returned" ${unitContactReviewState.filters.status === 'returned' ? 'selected' : ''}>退回補件</option><option value="rejected" ${unitContactReviewState.filters.status === 'rejected' ? 'selected' : ''}>未核准</option><option value="active" ${unitContactReviewState.filters.status === 'active' ? 'selected' : ''}>已啟用</option></select></div><div class="form-group"><label class="form-label">申請電子郵件</label><input class="form-input" id="unit-contact-review-email" value="${esc(unitContactReviewState.filters.email)}" placeholder="例如 ntu.edu.tw 或 Gmail"></div><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="unit-contact-review-keyword" value="${esc(unitContactReviewState.filters.keyword)}" placeholder="單位、申請人、編號"></div><div class="form-group"><label class="form-label">筆數</label><select class="form-select" id="unit-contact-review-limit"><option value="20" ${unitContactReviewState.filters.limit === '20' ? 'selected' : ''}>20</option><option value="50" ${unitContactReviewState.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${unitContactReviewState.filters.limit === '100' ? 'selected' : ''}>100</option></select></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUnitContactFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUnitContactFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('unit-contact-review-table', '<th>申請編號 / 單位</th><th>申請人</th><th>分機</th><th>狀態</th><th>處理說明</th><th>最後更新</th><th>操作</th>', renderUnitContactReviewRows(unitContactReviewState.items), { toolbarSubtitle: '通過後會直接啟用帳號並寄送登入資訊；已啟用案件可補寄登入資訊。' })}</div></div>`;
+    bindAdminCollectionPager({
+      idPrefix: 'unit-contact-review',
+      actionPrefix: 'admin.unitContactReview',
+      page: unitContactReviewState.page,
+      defaultLimit: 50,
+      limitOptions: ['20', '50', '100'],
+      onChange: (patch) => renderUnitContactReview({ ...unitContactReviewState.filters, ...patch }, { forceRemote: true })
+    });
     wireReviewTableScrollers(app);
     refreshIcons();
   }
@@ -2994,6 +3117,15 @@
     addUser: function () {
       showUserModal(null);
     },
+    refreshUsers: function () {
+      renderUsers({ filters: { ...systemUsersState.filters }, forceRemote: true });
+    },
+    applyUserFilters: function () {
+      renderUsers({ filters: getSystemUsersFiltersFromDom(), forceRemote: true });
+    },
+    resetUserFilters: function () {
+      renderUsers({ filters: { ...DEFAULT_SYSTEM_USERS_FILTERS }, forceRemote: true });
+    },
     editUser: function ({ dataset }) {
       const visibleUsersCache = renderUsers._remoteViewCache || { items: [] };
       const user = findUser(dataset.username)
@@ -3034,18 +3166,13 @@
       handleExportSecurityWindow();
     },
     refreshUnitContactReview: function () {
-      renderUnitContactReview(unitContactReviewState.filters);
+      renderUnitContactReview(unitContactReviewState.filters, { forceRemote: true });
     },
     applyUnitContactFilters: function () {
-      renderUnitContactReview(getUnitContactReviewFiltersFromDom());
+      renderUnitContactReview(getUnitContactReviewFiltersFromDom(), { forceRemote: true });
     },
     resetUnitContactFilters: function () {
-      renderUnitContactReview({
-        status: 'pending_review',
-        keyword: '',
-        email: '',
-        limit: '50'
-      });
+      renderUnitContactReview({ ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS }, { forceRemote: true });
     },
     unitContactApprove: function ({ dataset }) {
       promptReviewComment('審核通過並直接啟用', '可補充首次登入提醒或處理說明。', '確認通過', async function (reviewComment) {
@@ -3056,7 +3183,7 @@
             reviewComment
           });
           toast(result && result.delivery && result.delivery.sent ? '已通過、帳號已啟用並寄送登入資訊' : '已通過，帳號已直接啟用');
-          renderUnitContactReview(unitContactReviewState.filters);
+          renderUnitContactReview(unitContactReviewState.filters, { forceRemote: true });
         } catch (error) {
           toast(String(error && error.message || error || '審核失敗'), 'error');
         }
@@ -3071,7 +3198,7 @@
             reviewComment
           });
           toast(result && result.delivery && result.delivery.sent ? '已退回並寄送通知' : '已退回補件');
-          renderUnitContactReview(unitContactReviewState.filters);
+          renderUnitContactReview(unitContactReviewState.filters, { forceRemote: true });
         } catch (error) {
           toast(String(error && error.message || error || '退回失敗'), 'error');
         }
@@ -3086,7 +3213,7 @@
             reviewComment
           });
           toast(result && result.delivery && result.delivery.sent ? '已拒絕並寄送通知' : '已標記未核准');
-          renderUnitContactReview(unitContactReviewState.filters);
+          renderUnitContactReview(unitContactReviewState.filters, { forceRemote: true });
         } catch (error) {
           toast(String(error && error.message || error || '未核准操作失敗'), 'error');
         }
