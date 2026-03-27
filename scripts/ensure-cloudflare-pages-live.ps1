@@ -41,11 +41,11 @@ function Wait-ForCloudflareHealth {
 }
 
 if (Wait-ForCloudflareHealth -Attempts 2 -DelaySeconds 5) {
-    Write-Host 'Cloudflare Pages live health is already green.'
+    Write-Host 'Cloudflare Pages backup health is already green.'
     exit 0
 }
 
-Write-Warning 'Cloudflare Pages live health check failed. Running bootstrap recovery.'
+Write-Warning 'Cloudflare Pages backup health check failed. Running bootstrap recovery.'
 $bootstrapArgs = @(
     '-NoProfile',
     '-ExecutionPolicy', 'Bypass',
@@ -60,7 +60,7 @@ if (($OriginUrl | Out-String).Trim()) {
 powershell @bootstrapArgs
 
 if (-not (Wait-ForCloudflareHealth)) {
-    throw 'Cloudflare Pages live health is still failing after bootstrap recovery.'
+    throw 'Cloudflare Pages backup health is still failing after bootstrap recovery.'
 }
 
-Write-Host 'Cloudflare Pages live health recovered successfully.'
+Write-Host 'Cloudflare Pages backup health recovered successfully.'

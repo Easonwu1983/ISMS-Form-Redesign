@@ -1,5 +1,12 @@
 ﻿# 校內 VM 維運
 
+## 正式角色
+
+- 正式主站前端：校內 VM `http://140.112.97.150/`
+- 正式後端：校內 VM `/api/*`
+- Cloudflare Pages：備援頁，同版但不是第一判準
+- 本機 `8088`：只在開發驗證時使用
+
 ## 目標主機
 
 - IP：`140.112.97.150`
@@ -18,12 +25,14 @@
    - `curl http://140.112.97.150/deploy-manifest.json`
    - `curl http://140.112.97.150/unit-contact-authorization-template.pdf -I`
    - `node scripts/vm-entry-smoke.cjs`
+   - `ISMS_LIVE_BASE=http://140.112.97.150 node scripts/campus-live-regression-smoke.cjs`
 
 ## 完成條件
 
 - `/api/unit-contact/health` 為 `ready:true`
 - root `deploy-manifest.json` 的 `versionKey` 與 VM `git rev-parse --short=12 HEAD` 一致
 - `vm-entry-smoke` 通過
+- `campus-live-regression-smoke` 以校內 VM 為 base 通過
 
 ## 補充
 

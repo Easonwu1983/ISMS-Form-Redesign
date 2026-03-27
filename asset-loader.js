@@ -22,6 +22,7 @@
     'shell-module.js',
     'service-registry-module.js',
     'app-route-module.js',
+    'app-page-orchestration-module.js',
     'app-entry-module.js',
     'app-auth-session-module.js',
     'app-router-module.js',

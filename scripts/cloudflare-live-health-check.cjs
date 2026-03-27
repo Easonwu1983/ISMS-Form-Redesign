@@ -30,6 +30,7 @@ async function run() {
   const report = {
     startedAt: new Date().toISOString(),
     pagesBase: PAGES_BASE,
+    deploymentRole: 'backup-frontend',
     tunnelUrlPath: TUNNEL_URL_PATH,
     checks: []
   };

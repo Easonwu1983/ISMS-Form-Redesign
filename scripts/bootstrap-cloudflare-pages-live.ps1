@@ -33,11 +33,11 @@ if (-not $quickTunnelUrl) {
     throw "Quick tunnel URL file was empty: $urlPath"
 }
 
-Write-Host "Publishing Cloudflare Pages full-proxy against $quickTunnelUrl"
+Write-Host "Publishing Cloudflare Pages backup entry against $quickTunnelUrl"
 powershell -NoProfile -ExecutionPolicy Bypass -File $refreshScript `
     -ProjectName $ProjectName `
     -Branch $Branch
 
-Write-Host 'Cloudflare Pages live bootstrap completed.'
+Write-Host 'Cloudflare Pages backup bootstrap completed.'
 Write-Host "Pages URL: https://$ProjectName.pages.dev/"
 Write-Host "Backend URL: $quickTunnelUrl"
