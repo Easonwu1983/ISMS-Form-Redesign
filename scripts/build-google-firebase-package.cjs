@@ -25,6 +25,7 @@ const filesToCopy = [
   'asset-loader.js',
   'collection-cache-module.js',
   'service-registry-module.js',
+  'app-core-service-module.js',
   'app-bootstrap-state-module.js',
   'app-service-access-module.js',
   'app-route-module.js',

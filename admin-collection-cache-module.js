@@ -21,6 +21,10 @@
       return getBaseModule().createPage(limit);
     }
 
+    function createRemoteCollectionState(options) {
+      return getBaseModule().createRemoteCollectionState(options);
+    }
+
     function createRenderCache() {
       return getBaseModule().createRenderCache({ filterSignature: '' });
     }
@@ -52,6 +56,7 @@
     return {
       cloneObject,
       createPage,
+      createRemoteCollectionState,
       createRenderCache,
       createMarkupCache,
       resetRemoteViewCache,

@@ -21,6 +21,25 @@
       };
     }
 
+    function createRemoteCollectionState(options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      const summary = settings.summary && typeof settings.summary === 'object' ? settings.summary : {};
+      const filters = settings.filters && typeof settings.filters === 'object' ? settings.filters : {};
+      const state = {
+        filters: cloneObject(filters),
+        items: Array.isArray(settings.items) ? settings.items.slice() : [],
+        summary: cloneObject(summary),
+        page: createPage(settings.limit),
+        total: Math.max(0, Number(settings.total) || 0),
+        signature: String(settings.signature || '')
+      };
+      if (Object.prototype.hasOwnProperty.call(settings, 'loading')) state.loading = !!settings.loading;
+      if (Object.prototype.hasOwnProperty.call(settings, 'lastLoadedAt')) state.lastLoadedAt = String(settings.lastLoadedAt || '');
+      if (Object.prototype.hasOwnProperty.call(settings, 'filterSignature')) state.filterSignature = String(settings.filterSignature || '');
+      if (settings.extra && typeof settings.extra === 'object') Object.assign(state, settings.extra);
+      return state;
+    }
+
     function createRenderCache(extra) {
       return {
         signature: '',
@@ -99,6 +118,7 @@
     return {
       cloneObject: cloneObject,
       createPage: createPage,
+      createRemoteCollectionState: createRemoteCollectionState,
       createRenderCache: createRenderCache,
       createMarkupCache: createMarkupCache,
       resetRemoteViewCache: resetRemoteViewCache,

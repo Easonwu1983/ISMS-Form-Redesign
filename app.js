@@ -808,23 +808,30 @@
   let serviceRegistryModuleApi = null;
   let appServiceAccessModuleApi = null;
   let appBootstrapStateModuleApi = null;
-  function getServiceRegistryModule() {
-    if (serviceRegistryModuleApi) return serviceRegistryModuleApi;
-    if (typeof window === 'undefined' || typeof window.createServiceRegistryModule !== 'function') {
-      throw new Error('service-registry-module.js not loaded');
+  let appCoreServiceModuleApi = null;
+  const appCoreServiceState = {
+    serviceRegistryModuleApi: null,
+    appServiceAccessModuleApi: null
+  };
+  function getAppCoreServiceModule() {
+    if (appCoreServiceModuleApi) return appCoreServiceModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppCoreServiceModule !== 'function') {
+      throw new Error('app-core-service-module.js not loaded');
     }
-    serviceRegistryModuleApi = window.createServiceRegistryModule();
-    window._serviceRegistryModule = serviceRegistryModuleApi;
+    appCoreServiceModuleApi = window.createAppCoreServiceModule();
+    window._appCoreServiceModule = appCoreServiceModuleApi;
+    return appCoreServiceModuleApi;
+  }
+  function getServiceRegistryModule() {
+    serviceRegistryModuleApi = getAppCoreServiceModule().getServiceRegistryModule(appCoreServiceState, {});
+    appCoreServiceState.serviceRegistryModuleApi = serviceRegistryModuleApi;
     return serviceRegistryModuleApi;
   }
   function getAppServiceAccessModule() {
-    if (appServiceAccessModuleApi) return appServiceAccessModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppServiceAccessModule !== 'function') {
-      recordBootstrapStep('app-service-access-missing-factory', 'createAppServiceAccessModule unavailable');
-      throw new Error('app-service-access-module.js not loaded');
-    }
-    appServiceAccessModuleApi = window.createAppServiceAccessModule();
-    window._appServiceAccessModule = appServiceAccessModuleApi;
+    appServiceAccessModuleApi = getAppCoreServiceModule().getAppServiceAccessModule(appCoreServiceState, {
+      recordBootstrapStep
+    });
+    appCoreServiceState.appServiceAccessModuleApi = appServiceAccessModuleApi;
     return appServiceAccessModuleApi;
   }
   function getAppBootstrapModule() {
@@ -873,14 +880,12 @@
     }, step, detail);
   }
   function registerCoreService(name, resolver) {
-    getServiceRegistryModule().register(name, resolver, {
-      aliases: name === 'm365ApiClient'
-        ? ['resolveM365ApiClient']
-        : (name === 'shellModule' ? ['resolveShellModule'] : [])
-    });
+    appCoreServiceState.serviceRegistryModuleApi = serviceRegistryModuleApi || appCoreServiceState.serviceRegistryModuleApi;
+    return getAppCoreServiceModule().registerCoreService(appCoreServiceState, {}, name, resolver);
   }
   function resolveFactoryService(name, options) {
-    return getServiceRegistryModule().resolve(name, options || {});
+    appCoreServiceState.serviceRegistryModuleApi = serviceRegistryModuleApi || appCoreServiceState.serviceRegistryModuleApi;
+    return getAppCoreServiceModule().resolveFactoryService(appCoreServiceState, {}, name, options || {});
   }
   function getM365ApiClient() {
     if (m365ApiClientApi) return m365ApiClientApi;

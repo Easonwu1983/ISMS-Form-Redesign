@@ -102,16 +102,17 @@
       limit: '50',
       offset: '0'
     });
-    const auditTrailState = {
-      filters: { ...DEFAULT_AUDIT_FILTERS },
-      items: [],
+    const auditTrailState = createAdminRemoteCollectionState({
+      filters: DEFAULT_AUDIT_FILTERS,
       summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
-      page: createAdminCollectionPage(50),
-      health: null,
-      lastLoadedAt: '',
-      filterSignature: '',
-      loading: false
-    };
+      limit: 50,
+      extra: {
+        health: null,
+        lastLoadedAt: '',
+        filterSignature: '',
+        loading: false
+      }
+    });
     const AUDIT_TRAIL_SYNC_FRESHNESS_MS = 30000;
     const AUDIT_TRAIL_HEALTH_CACHE_MS = 30000;
     const AUDIT_TRAIL_QUERY_CACHE_MS = 30000;
@@ -141,14 +142,15 @@
       limit: '20',
       offset: '0'
     });
-    const systemUsersState = {
-      filters: { ...DEFAULT_SYSTEM_USERS_FILTERS },
-      items: [],
+    const systemUsersState = createAdminRemoteCollectionState({
+      filters: DEFAULT_SYSTEM_USERS_FILTERS,
       summary: { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 },
-      page: createAdminCollectionPage(20),
-      loading: false,
-      lastLoadedAt: ''
-    };
+      limit: 20,
+      extra: {
+        loading: false,
+        lastLoadedAt: ''
+      }
+    });
     let systemUsersRenderCache = createAdminRenderCache();
     let systemUsersMarkupCache = createAdminMarkupCache();
     const DEFAULT_UNIT_CONTACT_REVIEW_FILTERS = Object.freeze({
@@ -158,14 +160,15 @@
       limit: '50',
       offset: '0'
     });
-    const unitContactReviewState = {
-      filters: { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS },
-      items: [],
+    const unitContactReviewState = createAdminRemoteCollectionState({
+      filters: DEFAULT_UNIT_CONTACT_REVIEW_FILTERS,
       summary: { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 },
-      page: createAdminCollectionPage(50),
-      loading: false,
-      lastLoadedAt: ''
-    };
+      limit: 50,
+      extra: {
+        loading: false,
+        lastLoadedAt: ''
+      }
+    });
     let unitContactReviewRenderCache = createAdminRenderCache();
     let unitContactReviewMarkupCache = createAdminMarkupCache();
     const DEFAULT_GOVERNANCE_FILTERS = Object.freeze({
@@ -251,6 +254,23 @@
       }
       const safeLimit = Math.max(1, Number(limit) || 20);
       return { offset: 0, limit: safeLimit, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
+    }
+
+    function createAdminRemoteCollectionState(options) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createRemoteCollectionState === 'function') {
+        return moduleApi.createRemoteCollectionState(options);
+      }
+      const settings = options && typeof options === 'object' ? options : {};
+      return {
+        filters: { ...(settings.filters || {}) },
+        items: Array.isArray(settings.items) ? settings.items.slice() : [],
+        summary: { ...(settings.summary || {}) },
+        page: createAdminCollectionPage(settings.limit),
+        total: Math.max(0, Number(settings.total) || 0),
+        signature: String(settings.signature || ''),
+        ...(settings.extra && typeof settings.extra === 'object' ? settings.extra : {})
+      };
     }
 
     function createAdminRenderCache() {
