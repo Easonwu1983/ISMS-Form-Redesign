@@ -30,13 +30,16 @@ function pickExecutablePath() {
 
 async function login(page, username = 'easonwu', password = '2wsx#EDC') {
   await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
-  await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
-  await page.fill('[data-testid="login-user"]', username);
-  await page.fill('[data-testid="login-pass"]', password);
-  await Promise.all([
-    page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
-    page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
-  ]);
+  const alreadyAuthenticated = await page.locator('.btn-logout').count();
+  if (!alreadyAuthenticated) {
+    await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
+    await page.fill('[data-testid="login-user"]', username);
+    await page.fill('[data-testid="login-pass"]', password);
+    await Promise.all([
+      page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
+      page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
+    ]);
+  }
   await waitForRemoteBootstrap(page);
   await page.waitForSelector('.sidebar-footer [data-testid="app-version-chip"]', { timeout: 30000 });
   const sidebarVersion = await page.locator('.sidebar-footer [data-testid="app-version-chip"]').first().textContent();
@@ -152,6 +155,23 @@ async function ensureAdminSession(page) {
   if (!authState || !authState.ok) {
     await login(page);
   }
+}
+
+async function gotoHashRoute(page, hash, options = {}) {
+  const target = '#' + String(hash || '').replace(/^#/, '');
+  await ensureAdminSession(page);
+  await page.evaluate((value) => {
+    if (window.location.hash !== value) {
+      window.location.hash = value;
+      return;
+    }
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  }, target);
+  await page.waitForFunction((value) => String(window.location.hash || '') === value, target, {
+    timeout: options.timeout || 15000
+  });
+  await page.waitForTimeout(options.settleMs || 250);
+  await waitForRemoteBootstrap(page).catch(() => {});
 }
 
 async function runPublicVisualBaselineChecks(browser, pushStep) {
@@ -909,9 +929,7 @@ async function run() {
     }
     pushStep('users:pager', true, 'account pager works');
 
-    await ensureAdminSession(page);
-    await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
+    await gotoHashRoute(page, 'security-window', { settleMs: 1200, timeout: 20000 });
     let securityWindowReady = false;
     for (let attempt = 0; attempt < 2 && !securityWindowReady; attempt += 1) {
       try {
@@ -919,8 +937,8 @@ async function run() {
         securityWindowReady = true;
       } catch (error) {
         if (attempt >= 1) throw error;
-        await page.goto(`${BASE_URL}/#security-window`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await page.waitForTimeout(1200);
+        await login(page);
+        await gotoHashRoute(page, 'security-window', { settleMs: 1200, timeout: 20000 });
       }
     }
     const securityWindowText = await page.locator('#app').innerText();
@@ -947,9 +965,7 @@ async function run() {
     }
     pushStep('security-window:loaded', true, 'security window page ready');
 
-    await ensureAdminSession(page);
-    await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
+    await gotoHashRoute(page, 'unit-contact-review', { settleMs: 1200, timeout: 20000 });
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
       return app && /申請審核與登入資訊追蹤/.test(app.textContent || '');
@@ -987,18 +1003,16 @@ async function run() {
     }
     pushStep('unit-contact-review:pager', true, 'unit contact review pager works');
 
-    await ensureAdminSession(page);
     let unitReviewReady = false;
     for (let attempt = 0; attempt < 2 && !unitReviewReady; attempt += 1) {
-      await page.goto(`${BASE_URL}/#unit-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.waitForTimeout(1200);
+      await gotoHashRoute(page, 'unit-review', { settleMs: 1200, timeout: 20000 });
       try {
         await page.waitForSelector('.review-table-card, .empty-state', { timeout: 15000 });
         await page.waitForFunction(() => !!document.querySelector('.governance-category-stack .governance-category-card'), undefined, { timeout: 15000 });
         unitReviewReady = true;
       } catch (error) {
         if (attempt >= 1) throw error;
-        await ensureAdminSession(page);
+        await login(page);
         await page.waitForTimeout(250);
       }
     }

@@ -1,11 +1,55 @@
 param(
-    [string]$OriginUrl = 'http://127.0.0.1:18080',
+    [string]$OriginUrl = '',
     [int]$WaitSeconds = 45,
     [ValidateSet('auto', 'quic', 'http2')]
     [string]$Protocol = 'http2'
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Test-OriginRoute {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url
+    )
+
+    try {
+        Invoke-WebRequest -Uri $Url -Method Get -UseBasicParsing -TimeoutSec 8 | Out-Null
+        return $true
+    } catch {
+        $statusCode = 0
+        try {
+            $statusCode = [int]$_.Exception.Response.StatusCode.value__
+        } catch {
+            $statusCode = 0
+        }
+        return $statusCode -eq 200 -or $statusCode -eq 401
+    }
+}
+
+function Resolve-OriginUrl {
+    param(
+        [string]$RequestedOriginUrl
+    )
+
+    $explicitOrigin = ($RequestedOriginUrl | Out-String).Trim()
+    if ($explicitOrigin) {
+        return $explicitOrigin
+    }
+
+    $candidates = @(
+        @{ OriginUrl = 'http://127.0.0.1:18080'; ProbeUrl = 'http://127.0.0.1:18080/api/unit-governance?limit=1' },
+        @{ OriginUrl = 'http://140.112.97.150'; ProbeUrl = 'http://140.112.97.150/api/unit-governance?limit=1' }
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-OriginRoute -Url $candidate.ProbeUrl) {
+            return $candidate.OriginUrl
+        }
+    }
+
+    return 'http://127.0.0.1:18080'
+}
 
 function Find-Cloudflared {
     $command = Get-Command cloudflared -ErrorAction SilentlyContinue
@@ -41,17 +85,30 @@ if (Test-Path $pidPath) {
     if ($existingPid) {
         $process = Get-Process -Id $existingPid -ErrorAction SilentlyContinue
         if ($process) {
-            Write-Host "Cloudflare quick tunnel already running. PID: $existingPid"
+            $existingTunnelUrl = ''
             if (Test-Path $urlPath) {
-                Write-Host "Quick tunnel URL: $((Get-Content $urlPath | Select-Object -First 1).Trim())"
+                $existingTunnelUrl = ((Get-Content $urlPath -ErrorAction SilentlyContinue | Select-Object -First 1) | Out-String).Trim()
             }
-            exit 0
+            if ($existingTunnelUrl) {
+                $probeUrl = ('{0}/api/unit-governance?limit=1' -f $existingTunnelUrl.TrimEnd('/'))
+                if (Test-OriginRoute -Url $probeUrl) {
+                    Write-Host "Cloudflare quick tunnel already running. PID: $existingPid"
+                    Write-Host "Quick tunnel URL: $existingTunnelUrl"
+                    exit 0
+                }
+            }
+
+            Write-Warning "Existing quick tunnel is stale. Restarting. PID: $existingPid"
+            Stop-Process -Id $existingPid -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
         }
     }
 }
 
+$resolvedOriginUrl = Resolve-OriginUrl -RequestedOriginUrl $OriginUrl
+
 $cloudflared = Find-Cloudflared
-$arguments = @('tunnel', '--url', $OriginUrl, '--protocol', $Protocol, '--no-autoupdate')
+$arguments = @('tunnel', '--url', $resolvedOriginUrl, '--protocol', $Protocol, '--no-autoupdate')
 $process = Start-Process -FilePath $cloudflared -ArgumentList $arguments -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru -WindowStyle Hidden
 Set-Content -Path $pidPath -Value $process.Id -Encoding ASCII
 
@@ -84,5 +141,5 @@ if (-not $quickTunnelUrl) {
 Set-Content -Path $urlPath -Value $quickTunnelUrl -Encoding ASCII
 Write-Host "Cloudflare quick tunnel started. PID: $($process.Id)"
 Write-Host "Quick tunnel URL: $quickTunnelUrl"
-Write-Host "Origin URL: $OriginUrl"
+Write-Host "Origin URL: $resolvedOriginUrl"
 Write-Host "Protocol: $Protocol"

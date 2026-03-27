@@ -1,7 +1,7 @@
 param(
     [string]$ProjectName = 'isms-campus-portal',
     [string]$Branch = 'main',
-    [string]$OriginUrl = 'http://127.0.0.1:18080',
+    [string]$OriginUrl = '',
     [ValidateSet('auto', 'quic', 'http2')]
     [string]$Protocol = 'http2'
 )
