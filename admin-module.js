@@ -106,7 +106,7 @@
       filters: { ...DEFAULT_AUDIT_FILTERS },
       items: [],
       summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
-      page: { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
+      page: createAdminCollectionPage(50),
       health: null,
       lastLoadedAt: '',
       filterSignature: '',
@@ -132,14 +132,8 @@
       promise: null
     };
     let auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
-    let auditTrailRenderCache = {
-      signature: '',
-      filterSignature: ''
-    };
-    let auditTrailMarkupCache = {
-      signature: '',
-      html: ''
-    };
+    let auditTrailRenderCache = createAdminRenderCache();
+    let auditTrailMarkupCache = createAdminMarkupCache();
     const DEFAULT_SYSTEM_USERS_FILTERS = Object.freeze({
       q: '',
       role: '',
@@ -151,18 +145,12 @@
       filters: { ...DEFAULT_SYSTEM_USERS_FILTERS },
       items: [],
       summary: { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 },
-      page: { offset: 0, limit: 20, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
+      page: createAdminCollectionPage(20),
       loading: false,
       lastLoadedAt: ''
     };
-    let systemUsersRenderCache = {
-      signature: '',
-      filterSignature: ''
-    };
-    let systemUsersMarkupCache = {
-      signature: '',
-      html: ''
-    };
+    let systemUsersRenderCache = createAdminRenderCache();
+    let systemUsersMarkupCache = createAdminMarkupCache();
     const DEFAULT_UNIT_CONTACT_REVIEW_FILTERS = Object.freeze({
       status: 'pending_review',
       keyword: '',
@@ -174,18 +162,12 @@
       filters: { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS },
       items: [],
       summary: { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 },
-      page: { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
+      page: createAdminCollectionPage(50),
       loading: false,
       lastLoadedAt: ''
     };
-    let unitContactReviewRenderCache = {
-      signature: '',
-      filterSignature: ''
-    };
-    let unitContactReviewMarkupCache = {
-      signature: '',
-      html: ''
-    };
+    let unitContactReviewRenderCache = createAdminRenderCache();
+    let unitContactReviewMarkupCache = createAdminMarkupCache();
     const DEFAULT_GOVERNANCE_FILTERS = Object.freeze({
       keyword: '',
       mode: 'all',
@@ -250,6 +232,120 @@
     };
     let adminAccessProfileListenerInstalled = false;
 
+    function getAdminCollectionCacheModule() {
+      if (typeof window === 'undefined') return null;
+      if (window.__ISMS_ADMIN_COLLECTION_CACHE__ && typeof window.__ISMS_ADMIN_COLLECTION_CACHE__ === 'object') {
+        return window.__ISMS_ADMIN_COLLECTION_CACHE__;
+      }
+      if (typeof window.createAdminCollectionCacheModule === 'function') {
+        window.__ISMS_ADMIN_COLLECTION_CACHE__ = window.createAdminCollectionCacheModule();
+        return window.__ISMS_ADMIN_COLLECTION_CACHE__;
+      }
+      return null;
+    }
+
+    function createAdminCollectionPage(limit) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createPage === 'function') {
+        return moduleApi.createPage(limit);
+      }
+      const safeLimit = Math.max(1, Number(limit) || 20);
+      return { offset: 0, limit: safeLimit, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
+    }
+
+    function createAdminRenderCache() {
+      const moduleApi = getAdminCollectionCacheModule();
+      return moduleApi && typeof moduleApi.createRenderCache === 'function'
+        ? moduleApi.createRenderCache()
+        : { signature: '', filterSignature: '' };
+    }
+
+    function createAdminMarkupCache() {
+      const moduleApi = getAdminCollectionCacheModule();
+      return moduleApi && typeof moduleApi.createMarkupCache === 'function'
+        ? moduleApi.createMarkupCache()
+        : { signature: '', html: '' };
+    }
+
+    function resetAdminRemoteViewCache(cache, filters) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.resetRemoteViewCache === 'function') {
+        moduleApi.resetRemoteViewCache(cache, filters);
+        return;
+      }
+      if (!cache || typeof cache !== 'object') return;
+      cache.items = [];
+      cache.summary = null;
+      cache.page = null;
+      cache.filters = { ...(filters || {}) };
+      cache.signature = '';
+      cache.fetchedAt = 0;
+      cache.promise = null;
+    }
+
+    function resetAdminSummaryState(state, summary, remoteViewCache) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.resetSummaryState === 'function') {
+        moduleApi.resetSummaryState(state, summary, remoteViewCache);
+        return;
+      }
+      if (state && typeof state === 'object') state.summary = { ...(summary || {}) };
+      if (remoteViewCache && typeof remoteViewCache === 'object') remoteViewCache.summary = null;
+    }
+
+    function resetAdminRenderCaches(renderCacheRef, markupCacheRef) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.resetRenderCaches === 'function') {
+        moduleApi.resetRenderCaches(renderCacheRef, markupCacheRef);
+        return;
+      }
+      if (renderCacheRef && typeof renderCacheRef === 'object') {
+        renderCacheRef.signature = '';
+        if (Object.prototype.hasOwnProperty.call(renderCacheRef, 'filterSignature')) renderCacheRef.filterSignature = '';
+      }
+      if (markupCacheRef && typeof markupCacheRef === 'object') {
+        markupCacheRef.signature = '';
+        markupCacheRef.html = '';
+      }
+    }
+
+    function resetAdminPagedCollectionState(state, options) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.resetPagedCollectionState === 'function') {
+        moduleApi.resetPagedCollectionState(state, options);
+        return;
+      }
+      const settings = options && typeof options === 'object' ? options : {};
+      state.filters = { ...(settings.filters || {}) };
+      state.items = [];
+      state.summary = { ...(settings.summary || {}) };
+      state.page = createAdminCollectionPage(settings.limit);
+      if (Object.prototype.hasOwnProperty.call(state, 'loading')) state.loading = false;
+      if (Object.prototype.hasOwnProperty.call(state, 'lastLoadedAt')) state.lastLoadedAt = '';
+      if (Object.prototype.hasOwnProperty.call(state, 'filterSignature')) state.filterSignature = '';
+      if (typeof settings.afterReset === 'function') settings.afterReset(state);
+    }
+
+    function buildAdminCollectionRenderSignature(options) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.buildRenderSignature === 'function') {
+        return moduleApi.buildRenderSignature(options);
+      }
+      const settings = options && typeof options === 'object' ? options : {};
+      const items = Array.isArray(settings.items) ? settings.items : [];
+      const identity = typeof settings.identity === 'function'
+        ? settings.identity
+        : function (item) { return String(item && item.id || item && item.username || ''); };
+      return JSON.stringify({
+        filters: settings.filters || {},
+        page: settings.page || {},
+        summary: settings.summary || {},
+        lastLoadedAt: String(settings.lastLoadedAt || ''),
+        filterSignature: String(settings.filterSignature || ''),
+        ids: items.map(identity)
+      });
+    }
+
     function normalizeAdminUnitList(units) {
       const source = Array.isArray(units) ? units : [];
       return Array.from(new Set(source.map((unit) => String(unit || '').trim()).filter(Boolean)));
@@ -311,85 +407,96 @@
     }
 
     function resetSystemUsersRemoteState() {
-      systemUsersState.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
-      systemUsersState.items = [];
-      systemUsersState.summary = { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 };
-      systemUsersState.page = { offset: 0, limit: 20, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
-      systemUsersState.loading = false;
-      systemUsersState.lastLoadedAt = '';
-      if (renderUsers._remoteViewCache) {
-        renderUsers._remoteViewCache.items = [];
-        renderUsers._remoteViewCache.summary = null;
-        renderUsers._remoteViewCache.page = null;
-        renderUsers._remoteViewCache.filters = { ...DEFAULT_SYSTEM_USERS_FILTERS };
-        renderUsers._remoteViewCache.signature = '';
-        renderUsers._remoteViewCache.fetchedAt = 0;
-        renderUsers._remoteViewCache.promise = null;
-      }
-      systemUsersRenderCache = { signature: '', filterSignature: '' };
-      systemUsersMarkupCache = { signature: '', html: '' };
+      resetAdminPagedCollectionState(systemUsersState, {
+        filters: DEFAULT_SYSTEM_USERS_FILTERS,
+        summary: { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 },
+        limit: 20
+      });
+      resetAdminRemoteViewCache(renderUsers._remoteViewCache, DEFAULT_SYSTEM_USERS_FILTERS);
+      systemUsersRenderCache = createAdminRenderCache();
+      systemUsersMarkupCache = createAdminMarkupCache();
     }
 
     function resetUnitContactReviewRemoteState() {
-      unitContactReviewState.filters = { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS };
-      unitContactReviewState.items = [];
-      unitContactReviewState.summary = { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 };
-      unitContactReviewState.page = { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
-      unitContactReviewState.loading = false;
-      unitContactReviewState.lastLoadedAt = '';
-      if (renderUnitContactReview._remoteViewCache) {
-        renderUnitContactReview._remoteViewCache.items = [];
-        renderUnitContactReview._remoteViewCache.summary = null;
-        renderUnitContactReview._remoteViewCache.page = null;
-        renderUnitContactReview._remoteViewCache.filters = { ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS };
-        renderUnitContactReview._remoteViewCache.signature = '';
-        renderUnitContactReview._remoteViewCache.fetchedAt = 0;
-        renderUnitContactReview._remoteViewCache.promise = null;
-      }
-      unitContactReviewRenderCache = { signature: '', filterSignature: '' };
-      unitContactReviewMarkupCache = { signature: '', html: '' };
+      resetAdminPagedCollectionState(unitContactReviewState, {
+        filters: DEFAULT_UNIT_CONTACT_REVIEW_FILTERS,
+        summary: { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 },
+        limit: 50
+      });
+      resetAdminRemoteViewCache(renderUnitContactReview._remoteViewCache, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
+      unitContactReviewRenderCache = createAdminRenderCache();
+      unitContactReviewMarkupCache = createAdminMarkupCache();
     }
 
     function resetAuditTrailRemoteState() {
-      auditTrailState.filters = { ...DEFAULT_AUDIT_FILTERS };
-      auditTrailState.items = [];
-      auditTrailState.summary = { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] };
-      auditTrailState.page = { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 };
-      auditTrailState.health = null;
-      auditTrailState.lastLoadedAt = '';
-      auditTrailState.filterSignature = '';
-      auditTrailState.loading = false;
+      resetAdminPagedCollectionState(auditTrailState, {
+        filters: DEFAULT_AUDIT_FILTERS,
+        summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
+        limit: 50,
+        afterReset: function (state) { state.health = null; }
+      });
       auditTrailQueryCache.clear();
       auditTrailLoadPromiseMap.clear();
       auditTrailHealthLoadPromise = null;
       auditTrailHealthCache = { value: null, loadedAt: 0 };
       auditTrailSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
       auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
-      auditTrailRenderCache = { signature: '', filterSignature: '' };
-      auditTrailMarkupCache = { signature: '', html: '' };
+      auditTrailRenderCache = createAdminRenderCache();
+      auditTrailMarkupCache = createAdminMarkupCache();
+    }
+
+    function resetSystemUsersSummaryState() {
+      resetAdminSummaryState(systemUsersState, { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 }, renderUsers._remoteViewCache);
+      resetAdminRenderCaches(systemUsersRenderCache, systemUsersMarkupCache);
+    }
+
+    function resetUnitContactReviewSummaryState() {
+      resetAdminSummaryState(unitContactReviewState, { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 }, renderUnitContactReview._remoteViewCache);
+      resetAdminRenderCaches(unitContactReviewRenderCache, unitContactReviewMarkupCache);
+    }
+
+    function resetAuditTrailSummaryState() {
+      resetAdminSummaryState(auditTrailState, { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] }, null);
+      auditTrailSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+      auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
+      resetAdminRenderCaches(auditTrailRenderCache, auditTrailMarkupCache);
+    }
+
+    function resetSystemUsersRenderState() {
+      resetAdminRenderCaches(systemUsersRenderCache, systemUsersMarkupCache);
+    }
+
+    function resetUnitContactReviewRenderState() {
+      resetAdminRenderCaches(unitContactReviewRenderCache, unitContactReviewMarkupCache);
+    }
+
+    function resetAuditTrailRenderState() {
+      resetAdminRenderCaches(auditTrailRenderCache, auditTrailMarkupCache);
     }
 
     function getSystemUsersRenderSignature() {
-      return JSON.stringify({
+      return buildAdminCollectionRenderSignature({
         filters: systemUsersState.filters,
         page: systemUsersState.page,
         summary: systemUsersState.summary,
         lastLoadedAt: systemUsersState.lastLoadedAt,
-        usernames: Array.isArray(systemUsersState.items)
-          ? systemUsersState.items.map((item) => String(item && item.username || '').trim())
-          : []
+        items: systemUsersState.items,
+        identity: function (item) {
+          return String(item && item.username || '').trim();
+        }
       });
     }
 
     function getUnitContactReviewRenderSignature() {
-      return JSON.stringify({
+      return buildAdminCollectionRenderSignature({
         filters: unitContactReviewState.filters,
         page: unitContactReviewState.page,
         summary: unitContactReviewState.summary,
         lastLoadedAt: unitContactReviewState.lastLoadedAt,
-        ids: Array.isArray(unitContactReviewState.items)
-          ? unitContactReviewState.items.map((item) => String(item && item.id || '').trim())
-          : []
+        items: unitContactReviewState.items,
+        identity: function (item) {
+          return String(item && item.id || '').trim();
+        }
       });
     }
 
@@ -430,10 +537,22 @@
       }
       if (safeScope === 'system-users') {
         resetSystemUsersRemoteState();
+      } else if (safeScope === 'system-users-summary') {
+        resetSystemUsersSummaryState();
+      } else if (safeScope === 'system-users-render') {
+        resetSystemUsersRenderState();
       } else if (safeScope === 'unit-contact-review') {
         resetUnitContactReviewRemoteState();
+      } else if (safeScope === 'unit-contact-review-summary') {
+        resetUnitContactReviewSummaryState();
+      } else if (safeScope === 'unit-contact-review-render') {
+        resetUnitContactReviewRenderState();
       } else if (safeScope === 'audit-trail') {
         resetAuditTrailRemoteState();
+      } else if (safeScope === 'audit-trail-summary') {
+        resetAuditTrailSummaryState();
+      } else if (safeScope === 'audit-trail-render') {
+        resetAuditTrailRenderState();
       } else if (safeScope === 'unit-governance' || safeScope === 'security-window' || safeScope === 'governance-security') {
         resetGovernanceRemoteState();
       } else {
@@ -1371,22 +1490,20 @@
     }
 
     function getAuditTrailRenderSignature(state, health) {
-      const items = Array.isArray(state && state.items) ? state.items : [];
-      const first = items.length ? items[0] : null;
-      const last = items.length ? items[items.length - 1] : null;
-      return [
-        String(state && state.filterSignature || ''),
-        String(state && state.summary && state.summary.total || 0),
-        String(state && state.summary && state.summary.actorCount || 0),
-        String(state && state.summary && state.summary.latestOccurredAt || ''),
-        String(state && state.page && state.page.offset || 0),
-        String(state && state.page && state.page.limit || 0),
-        String(state && state.page && state.page.total || 0),
-        String(state && state.page && state.page.pageCount || 0),
-        String(health && health.ready ? '1' : '0'),
-        String(first && (first.listItemId || first.recordId || first.occurredAt) || ''),
-        String(last && (last.listItemId || last.recordId || last.occurredAt) || '')
-      ].join('::');
+      return buildAdminCollectionRenderSignature({
+        filters: state && state.filters,
+        filterSignature: state && state.filterSignature,
+        page: state && state.page,
+        summary: {
+          ...(state && state.summary ? state.summary : {}),
+          healthReady: !!(health && health.ready)
+        },
+        lastLoadedAt: state && state.lastLoadedAt,
+        items: state && state.items,
+        identity: function (item) {
+          return String(item && (item.listItemId || item.recordId || item.occurredAt) || '');
+        }
+      });
     }
 
     function getGovernanceTopLevelUnitsSourceSignature() {

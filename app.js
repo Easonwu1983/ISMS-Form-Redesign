@@ -1,4 +1,4 @@
-// =============================================
+﻿// =============================================
 // ISMS Internal Audit Tracking System - v4
 // =============================================
 (function () {
@@ -806,15 +806,7 @@
   }
   let m365ApiClientApi = null;
   let serviceRegistryModuleApi = null;
-  let appRouteModuleApi = null;
-  let appPageOrchestrationModuleApi = null;
-  let appVisibilityModuleApi = null;
-  let appActionModuleApi = null;
-  let appShellOrchestrationModuleApi = null;
-  let appEntryModuleApi = null;
-  let appAuthSessionModuleApi = null;
-  let appRouterModuleApi = null;
-  let appBootstrapModuleApi = null;
+  let appServiceAccessModuleApi = null;
   function getServiceRegistryModule() {
     if (serviceRegistryModuleApi) return serviceRegistryModuleApi;
     if (typeof window === 'undefined' || typeof window.createServiceRegistryModule !== 'function') {
@@ -824,143 +816,42 @@
     window._serviceRegistryModule = serviceRegistryModuleApi;
     return serviceRegistryModuleApi;
   }
+  function getAppServiceAccessModule() {
+    if (appServiceAccessModuleApi) return appServiceAccessModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppServiceAccessModule !== 'function') {
+      recordBootstrapStep('app-service-access-missing-factory', 'createAppServiceAccessModule unavailable');
+      throw new Error('app-service-access-module.js not loaded');
+    }
+    appServiceAccessModuleApi = window.createAppServiceAccessModule();
+    window._appServiceAccessModule = appServiceAccessModuleApi;
+    return appServiceAccessModuleApi;
+  }
   function getAppBootstrapModule() {
-    if (appBootstrapModuleApi) return appBootstrapModuleApi;
-    appBootstrapModuleApi = resolveFactoryService('appBootstrapModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppBootstrapModule !== 'function') {
-          recordBootstrapStep('app-bootstrap-missing-factory', 'createAppBootstrapModule unavailable');
-          throw new Error('app-bootstrap-module.js not loaded');
-        }
-        return window.createAppBootstrapModule();
-      },
-      globalSlot: '_appBootstrapModule',
-      readyStep: 'app-bootstrap-ready'
-    });
-    return appBootstrapModuleApi;
+    return getAppServiceAccessModule().getAppBootstrapModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getAppEntryModule() {
-    if (appEntryModuleApi) return appEntryModuleApi;
-    appEntryModuleApi = resolveFactoryService('appEntryModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppEntryModule !== 'function') {
-          recordBootstrapStep('app-entry-missing-factory', 'createAppEntryModule unavailable');
-          throw new Error('app-entry-module.js not loaded');
-        }
-        return window.createAppEntryModule();
-      },
-      globalSlot: '_appEntryModule',
-      readyStep: 'app-entry-ready'
-    });
-    return appEntryModuleApi;
+    return getAppServiceAccessModule().getAppEntryModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getAppRouteModule() {
-    if (appRouteModuleApi) return appRouteModuleApi;
-    appRouteModuleApi = resolveFactoryService('appRouteModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppRouteModule !== 'function') {
-          recordBootstrapStep('app-route-missing-factory', 'createAppRouteModule unavailable');
-          throw new Error('app-route-module.js not loaded');
-        }
-        return window.createAppRouteModule({
-          ROUTE_WHITELIST,
-          defaultTitle: '內部稽核管考追蹤系統'
-        });
-      },
-      globalSlot: '_appRouteModule',
-      readyStep: 'app-route-ready'
-    });
-    return appRouteModuleApi;
+    return getAppServiceAccessModule().getAppRouteModule({ resolveFactoryService, recordBootstrapStep, routeWhitelist: ROUTE_WHITELIST, defaultTitle: 'ISMS 管考與追蹤平台' });
   }
   function getAppPageOrchestrationModule() {
-    if (appPageOrchestrationModuleApi) return appPageOrchestrationModuleApi;
-    appPageOrchestrationModuleApi = resolveFactoryService('appPageOrchestrationModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppPageOrchestrationModule !== 'function') {
-          recordBootstrapStep('app-page-orchestration-missing-factory', 'createAppPageOrchestrationModule unavailable');
-          throw new Error('app-page-orchestration-module.js not loaded');
-        }
-        return window.createAppPageOrchestrationModule();
-      },
-      globalSlot: '_appPageOrchestrationModule',
-      readyStep: 'app-page-orchestration-ready'
-    });
-    return appPageOrchestrationModuleApi;
+    return getAppServiceAccessModule().getAppPageOrchestrationModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getAppVisibilityModule() {
-    if (appVisibilityModuleApi) return appVisibilityModuleApi;
-    appVisibilityModuleApi = resolveFactoryService('appVisibilityModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppVisibilityModule !== 'function') {
-          recordBootstrapStep('app-visibility-missing-factory', 'createAppVisibilityModule unavailable');
-          throw new Error('app-visibility-module.js not loaded');
-        }
-        return window.createAppVisibilityModule();
-      },
-      globalSlot: '_appVisibilityModule',
-      readyStep: 'app-visibility-ready'
-    });
-    return appVisibilityModuleApi;
+    return getAppServiceAccessModule().getAppVisibilityModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getAppActionModule() {
-    if (appActionModuleApi) return appActionModuleApi;
-    appActionModuleApi = resolveFactoryService('appActionModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppActionModule !== 'function') {
-          recordBootstrapStep('app-action-missing-factory', 'createAppActionModule unavailable');
-          throw new Error('app-action-module.js not loaded');
-        }
-        return window.createAppActionModule();
-      },
-      globalSlot: '_appActionModule',
-      readyStep: 'app-action-ready'
-    });
-    return appActionModuleApi;
+    return getAppServiceAccessModule().getAppActionModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getAppShellOrchestrationModule() {
-    if (appShellOrchestrationModuleApi) return appShellOrchestrationModuleApi;
-    appShellOrchestrationModuleApi = resolveFactoryService('appShellOrchestrationModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppShellOrchestrationModule !== 'function') {
-          recordBootstrapStep('app-shell-orchestration-missing-factory', 'createAppShellOrchestrationModule unavailable');
-          throw new Error('app-shell-orchestration-module.js not loaded');
-        }
-        return window.createAppShellOrchestrationModule();
-      },
-      globalSlot: '_appShellOrchestrationModule',
-      readyStep: 'app-shell-orchestration-ready'
-    });
-    return appShellOrchestrationModuleApi;
+    return getAppServiceAccessModule().getAppShellOrchestrationModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getAppAuthSessionModule() {
-    if (appAuthSessionModuleApi) return appAuthSessionModuleApi;
-    appAuthSessionModuleApi = resolveFactoryService('appAuthSessionModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppAuthSessionModule !== 'function') {
-          recordBootstrapStep('app-auth-session-missing-factory', 'createAppAuthSessionModule unavailable');
-          throw new Error('app-auth-session-module.js not loaded');
-        }
-        return window.createAppAuthSessionModule();
-      },
-      globalSlot: '_appAuthSessionModule',
-      readyStep: 'app-auth-session-ready'
-    });
-    return appAuthSessionModuleApi;
+    return getAppServiceAccessModule().getAppAuthSessionModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getAppRouterModule() {
-    if (appRouterModuleApi) return appRouterModuleApi;
-    appRouterModuleApi = resolveFactoryService('appRouterModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAppRouterModule !== 'function') {
-          recordBootstrapStep('app-router-missing-factory', 'createAppRouterModule unavailable');
-          throw new Error('app-router-module.js not loaded');
-        }
-        return window.createAppRouterModule();
-      },
-      globalSlot: '_appRouterModule',
-      readyStep: 'app-router-ready'
-    });
-    return appRouterModuleApi;
+    return getAppServiceAccessModule().getAppRouterModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getBootstrapCoordinator() {
     return getServiceRegistryModule().getBootstrapState();
