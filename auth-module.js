@@ -121,6 +121,23 @@
       }
     }
 
+    function notifyCacheInvalidation(scope, reason, user) {
+      if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+      const detail = {
+        scope: String(scope || 'access-profile').trim() || 'access-profile',
+        reason: String(reason || 'session-updated').trim() || 'session-updated',
+        username: user && user.username ? String(user.username) : '',
+        role: user && user.role ? String(user.role) : '',
+        activeUnit: user && user.activeUnit ? String(user.activeUnit) : '',
+        at: new Date().toISOString()
+      };
+      try {
+        window.dispatchEvent(new CustomEvent('isms:cache-invalidate', { detail }));
+      } catch (_) {
+        // Ignore event dispatch failures.
+      }
+    }
+
     function clearAuthSessionStorage(options) {
       const opts = options && typeof options === 'object' ? options : {};
       const previousUser = opts.previousUser || readAuthSession();
@@ -135,6 +152,7 @@
       currentUserCacheValue = null;
       if (opts.notify) {
         notifyAccessProfileChanged(opts.reason || 'session-cleared', previousUser);
+        notifyCacheInvalidation('access-profile', opts.reason || 'session-cleared', previousUser);
       }
     }
 
@@ -157,6 +175,7 @@
       currentUserCacheValue = null;
       if (opts.notify) {
         notifyAccessProfileChanged(opts.reason || 'session-updated', normalized);
+        notifyCacheInvalidation('access-profile', opts.reason || 'session-updated', normalized);
       }
       return normalized;
     }

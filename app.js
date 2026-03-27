@@ -857,6 +857,7 @@
   }
   let m365ApiClientApi = null;
   let serviceRegistryModuleApi = null;
+  let appEntryModuleApi = null;
   let appAuthSessionModuleApi = null;
   let appRouterModuleApi = null;
   let appBootstrapModuleApi = null;
@@ -883,6 +884,21 @@
       readyStep: 'app-bootstrap-ready'
     });
     return appBootstrapModuleApi;
+  }
+  function getAppEntryModule() {
+    if (appEntryModuleApi) return appEntryModuleApi;
+    appEntryModuleApi = resolveFactoryService('appEntryModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAppEntryModule !== 'function') {
+          recordBootstrapStep('app-entry-missing-factory', 'createAppEntryModule unavailable');
+          throw new Error('app-entry-module.js not loaded');
+        }
+        return window.createAppEntryModule();
+      },
+      globalSlot: '_appEntryModule',
+      readyStep: 'app-entry-ready'
+    });
+    return appEntryModuleApi;
   }
   function getAppAuthSessionModule() {
     if (appAuthSessionModuleApi) return appAuthSessionModuleApi;
@@ -4021,31 +4037,15 @@
       toast
     });
   }
-  function initializeCoreServices(reason) {
-    const label = String(reason || 'bootstrap').trim() || 'bootstrap';
-    getBootstrapCoordinator();
-    try {
-      getM365ApiClient();
-      recordBootstrapStep('core-service-ready', 'm365ApiClient:' + label);
-    } catch (error) {
-      recordBootstrapStep('core-service-failed', 'm365ApiClient:' + String(error && error.message || error || 'unknown'));
-      throw error;
-    }
-    try {
-      getShellModule();
-      recordBootstrapStep('core-service-ready', 'shellModule:' + label);
-    } catch (error) {
-      recordBootstrapStep('core-service-failed', 'shellModule:' + String(error && error.message || error || 'unknown'));
-      throw error;
-    }
-  }
-
-  async function initApp() {
-    return getAppBootstrapModule().initApp({
+  function getAppEntryDeps() {
+    return {
+      getBootstrapCoordinator,
+      getM365ApiClient,
+      getShellModule,
+      getAppBootstrapModule,
       recordBootstrapStep,
       installGlobalDelegation,
       installAppEventListeners,
-      initializeCoreServices,
       renderApp,
       ensureAuthenticatedRemoteBootstrap,
       getAuthMode,
@@ -4055,18 +4055,19 @@
       migrateAttachmentStores,
       getDataModule,
       setLastStableHash,
-      refreshIcons
-    });
+      refreshIcons,
+      ic,
+      esc
+    };
+  }
+  function initializeCoreServices(reason) {
+    return getAppEntryModule().initializeCoreServices(getAppEntryDeps(), reason);
   }
 
-  // ─── Init ──────────────────────────────────
-  initApp().catch(function (error) {
-    recordBootstrapStep('app-init-failed', String(error && error.message || error || 'unknown'));
-    console.error(error && error.stack ? error.stack : String(error));
-    document.getElementById('app').innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">系統初始化失敗</div><div class="empty-state-desc">' + esc(String(error && error.message || error || '未知錯誤')) + '</div></div>';
-    if (typeof window !== 'undefined') {
-      window.__APP_READY__ = true;
-    }
-  });
+  async function initApp() {
+    return getAppEntryModule().initApp(getAppEntryDeps());
+  }
+
+  getAppEntryModule().startApp(getAppEntryDeps());
 
 })();
