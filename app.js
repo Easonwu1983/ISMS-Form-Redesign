@@ -848,6 +848,7 @@
   let serviceRegistryModuleApi = null;
   let appRouteModuleApi = null;
   let appPageOrchestrationModuleApi = null;
+  let appVisibilityModuleApi = null;
   let appShellOrchestrationModuleApi = null;
   let appEntryModuleApi = null;
   let appAuthSessionModuleApi = null;
@@ -924,6 +925,21 @@
       readyStep: 'app-page-orchestration-ready'
     });
     return appPageOrchestrationModuleApi;
+  }
+  function getAppVisibilityModule() {
+    if (appVisibilityModuleApi) return appVisibilityModuleApi;
+    appVisibilityModuleApi = resolveFactoryService('appVisibilityModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAppVisibilityModule !== 'function') {
+          recordBootstrapStep('app-visibility-missing-factory', 'createAppVisibilityModule unavailable');
+          throw new Error('app-visibility-module.js not loaded');
+        }
+        return window.createAppVisibilityModule();
+      },
+      globalSlot: '_appVisibilityModule',
+      readyStep: 'app-visibility-ready'
+    });
+    return appVisibilityModuleApi;
   }
   function getAppShellOrchestrationModule() {
     if (appShellOrchestrationModuleApi) return appShellOrchestrationModuleApi;
@@ -3443,7 +3459,7 @@
   };
   function refreshIcons() { return getUiModule().refreshIcons(); }
   function getVisibleItems(user = currentUser()) {
-    return getAppPageOrchestrationModule().getVisibleItems({
+    return getAppVisibilityModule().getVisibleItems({
       DATA_KEY,
       currentUser,
       getDataModule,
@@ -3451,16 +3467,16 @@
     }, user);
   }
   function canAccessItem(item, user = currentUser()) {
-    return getAppPageOrchestrationModule().canAccessItem({ currentUser, getPolicyModule }, item, user);
+    return getAppVisibilityModule().canAccessItem({ currentUser, getPolicyModule }, item, user);
   }
   function isItemHandler(item, user = currentUser()) {
-    return getAppPageOrchestrationModule().isItemHandler({ currentUser, getPolicyModule }, item, user);
+    return getAppVisibilityModule().isItemHandler({ currentUser, getPolicyModule }, item, user);
   }
   function canRespondItem(item, user = currentUser()) {
-    return getAppPageOrchestrationModule().canRespondItem({ currentUser, getPolicyModule }, item, user);
+    return getAppVisibilityModule().canRespondItem({ currentUser, getPolicyModule }, item, user);
   }
   function canSubmitTracking(item, user = currentUser()) {
-    return getAppPageOrchestrationModule().canSubmitTracking({ currentUser, getPolicyModule }, item, user);
+    return getAppVisibilityModule().canSubmitTracking({ currentUser, getPolicyModule }, item, user);
   }
   function toTestIdFragment(value) { return getUiModule().toTestIdFragment(value); }
 

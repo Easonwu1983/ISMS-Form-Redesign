@@ -13,3 +13,11 @@
 3. Pages 必須可用，但不再作為主站 parity 的第一判準。
 4. 本機鏈只在開發或回歸定位時使用。
 5. 正式 smoke 只跑：`node scripts/formal-production-smoke.cjs`
+
+## 正式 smoke 分層
+
+- `health`：`node scripts/formal-production-health-smoke.cjs`
+- `api`：`node scripts/formal-production-api-smoke.cjs`
+- `browser`：`node scripts/formal-production-browser-smoke.cjs`
+- `visual`：`node scripts/formal-production-visual-smoke.cjs`
+- 完整整輪：`node scripts/formal-production-smoke.cjs`

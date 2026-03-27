@@ -23,6 +23,7 @@
     'service-registry-module.js',
     'app-route-module.js',
     'app-page-orchestration-module.js',
+    'app-visibility-module.js',
     'app-shell-orchestration-module.js',
     'app-entry-module.js',
     'app-auth-session-module.js',

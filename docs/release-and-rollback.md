@@ -10,6 +10,11 @@
 4. 校內 VM 綠燈後，再發布 Pages 備援頁
 5. 最後跑：
    - `node scripts/formal-production-smoke.cjs`
+   - 若要分層定位：
+     - `node scripts/formal-production-health-smoke.cjs`
+     - `node scripts/formal-production-api-smoke.cjs`
+     - `node scripts/formal-production-browser-smoke.cjs`
+     - `node scripts/formal-production-visual-smoke.cjs`
 
 ## 校內 VM 同步
 

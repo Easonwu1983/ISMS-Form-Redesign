@@ -155,6 +155,14 @@
       loading: false,
       lastLoadedAt: ''
     };
+    let systemUsersRenderCache = {
+      signature: '',
+      filterSignature: ''
+    };
+    let systemUsersMarkupCache = {
+      signature: '',
+      html: ''
+    };
     const DEFAULT_UNIT_CONTACT_REVIEW_FILTERS = Object.freeze({
       status: 'pending_review',
       keyword: '',
@@ -169,6 +177,14 @@
       page: { offset: 0, limit: 50, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       loading: false,
       lastLoadedAt: ''
+    };
+    let unitContactReviewRenderCache = {
+      signature: '',
+      filterSignature: ''
+    };
+    let unitContactReviewMarkupCache = {
+      signature: '',
+      html: ''
     };
     const DEFAULT_GOVERNANCE_FILTERS = Object.freeze({
       keyword: '',
@@ -310,6 +326,8 @@
         renderUsers._remoteViewCache.fetchedAt = 0;
         renderUsers._remoteViewCache.promise = null;
       }
+      systemUsersRenderCache = { signature: '', filterSignature: '' };
+      systemUsersMarkupCache = { signature: '', html: '' };
     }
 
     function resetUnitContactReviewRemoteState() {
@@ -328,6 +346,8 @@
         renderUnitContactReview._remoteViewCache.fetchedAt = 0;
         renderUnitContactReview._remoteViewCache.promise = null;
       }
+      unitContactReviewRenderCache = { signature: '', filterSignature: '' };
+      unitContactReviewMarkupCache = { signature: '', html: '' };
     }
 
     function resetAuditTrailRemoteState() {
@@ -347,6 +367,30 @@
       auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
       auditTrailRenderCache = { signature: '', filterSignature: '' };
       auditTrailMarkupCache = { signature: '', html: '' };
+    }
+
+    function getSystemUsersRenderSignature() {
+      return JSON.stringify({
+        filters: systemUsersState.filters,
+        page: systemUsersState.page,
+        summary: systemUsersState.summary,
+        lastLoadedAt: systemUsersState.lastLoadedAt,
+        usernames: Array.isArray(systemUsersState.items)
+          ? systemUsersState.items.map((item) => String(item && item.username || '').trim())
+          : []
+      });
+    }
+
+    function getUnitContactReviewRenderSignature() {
+      return JSON.stringify({
+        filters: unitContactReviewState.filters,
+        page: unitContactReviewState.page,
+        summary: unitContactReviewState.summary,
+        lastLoadedAt: unitContactReviewState.lastLoadedAt,
+        ids: Array.isArray(unitContactReviewState.items)
+          ? unitContactReviewState.items.map((item) => String(item && item.id || '').trim())
+          : []
+      });
     }
 
     function resetGovernanceRemoteState() {
@@ -2397,6 +2441,10 @@
       return;
     }
 
+    const renderSignature = getSystemUsersRenderSignature();
+    if (!(systemUsersRenderCache.signature === renderSignature && app && app.dataset.systemUsersRenderSignature === renderSignature)) {
+      let pageHtml = systemUsersMarkupCache.signature === renderSignature ? systemUsersMarkupCache.html : '';
+      if (!pageHtml) {
     const users = Array.isArray(systemUsersState.items) ? systemUsersState.items : [];
     const rows = users.length ? users.map((u) => {
       const primaryUnit = getPrimaryAuthorizedUnit(u) || '未指定';
@@ -2417,9 +2465,15 @@
       defaultLimit: 20,
       limitOptions: ['5', '20', '50', '100']
     });
-    app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
+    pageHtml = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
       <div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${systemUsersState.summary.total || 0}</div><div class="stat-label">符合條件帳號</div></div><div class="stat-card closed"><div class="stat-icon">${ic('shield-check')}</div><div class="stat-value">${systemUsersState.summary.admin || 0}</div><div class="stat-label">最高管理者</div></div><div class="stat-card pending"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${systemUsersState.summary.unitAdmin || 0}</div><div class="stat-label">單位管理者</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${systemUsersState.summary.securityWindow || 0}</div><div class="stat-label">具資安窗口</div></div></div>
       <div class="card review-table-card"><div class="card-header"><span class="card-title">帳號清單</span><span class="review-card-subtitle">可依角色、單位與關鍵字查找帳號</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="system-users-keyword" value="${esc(systemUsersState.filters.q)}" placeholder="帳號、姓名、電子郵件"></div><div class="form-group"><label class="form-label">角色</label><select class="form-select" id="system-users-role"><option value="" ${!systemUsersState.filters.role ? 'selected' : ''}>全部</option><option value="${esc(ROLES.ADMIN)}" ${systemUsersState.filters.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option><option value="${esc(ROLES.UNIT_ADMIN)}" ${systemUsersState.filters.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option></select></div><div class="form-group"><label class="form-label">單位</label><input class="form-input" id="system-users-unit" value="${esc(systemUsersState.filters.unit)}" placeholder="主要或授權單位"></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUserFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUserFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('system-users-table', '<th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要歸屬單位</th><th>額外授權範圍</th><th>審核範圍</th><th>電子郵件</th><th>操作</th>', rows, { toolbarSubtitle: `最後更新：${fmtTime(systemUsersState.lastLoadedAt)}` })}</div></div>`;
+        systemUsersMarkupCache = { signature: renderSignature, html: pageHtml };
+      }
+      app.innerHTML = pageHtml;
+      systemUsersRenderCache = { signature: renderSignature, filterSignature: JSON.stringify(systemUsersState.filters) };
+      if (app) app.dataset.systemUsersRenderSignature = renderSignature;
+    }
     bindAdminCollectionPager({
       idPrefix: 'system-users',
       actionPrefix: 'admin.user',
@@ -2712,6 +2766,10 @@
       return;
     }
 
+    const renderUnitContactReviewSignature = getUnitContactReviewRenderSignature();
+    if (!(unitContactReviewRenderCache.signature === renderUnitContactReviewSignature && app && app.dataset.unitContactReviewRenderSignature === renderUnitContactReviewSignature)) {
+      let unitContactReviewPageHtml = unitContactReviewMarkupCache.signature === renderUnitContactReviewSignature ? unitContactReviewMarkupCache.html : '';
+      if (!unitContactReviewPageHtml) {
     const counts = unitContactReviewState.summary || normalizeUnitContactReviewSummary(null, unitContactReviewState.items.length);
     const pager = renderAdminCollectionPager({
       idPrefix: 'unit-contact-review',
@@ -2721,7 +2779,13 @@
       defaultLimit: 50,
       limitOptions: ['5', '20', '50', '100']
     });
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">最後更新：${esc(fmtTime(unitContactReviewState.lastLoadedAt))}</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('mail-plus')}</div><div class="stat-value">${counts.total || 0}</div><div class="stat-label">符合條件申請</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${counts.pendingReview || 0}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${(counts.approved || 0) + (counts.activationPending || 0) + (counts.active || 0)}</div><div class="stat-label">已處理</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('key-round')}</div><div class="stat-value">${counts.active || 0}</div><div class="stat-label">已啟用</div></div></div><div class="card review-table-card"><div class="card-header"><span class="card-title">申請清單</span><span class="review-card-subtitle">可依狀態、電子郵件與關鍵字過濾</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">狀態</label><select class="form-select" id="unit-contact-review-status"><option value="" ${!unitContactReviewState.filters.status ? 'selected' : ''}>全部</option><option value="pending_review" ${unitContactReviewState.filters.status === 'pending_review' ? 'selected' : ''}>待審核</option><option value="approved" ${unitContactReviewState.filters.status === 'approved' ? 'selected' : ''}>已通過（舊資料）</option><option value="returned" ${unitContactReviewState.filters.status === 'returned' ? 'selected' : ''}>退回補件</option><option value="rejected" ${unitContactReviewState.filters.status === 'rejected' ? 'selected' : ''}>未核准</option><option value="active" ${unitContactReviewState.filters.status === 'active' ? 'selected' : ''}>已啟用</option></select></div><div class="form-group"><label class="form-label">申請電子郵件</label><input class="form-input" id="unit-contact-review-email" value="${esc(unitContactReviewState.filters.email)}" placeholder="例如 ntu.edu.tw 或 Gmail"></div><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="unit-contact-review-keyword" value="${esc(unitContactReviewState.filters.keyword)}" placeholder="單位、申請人、編號"></div><div class="form-group"><label class="form-label">筆數</label><select class="form-select" id="unit-contact-review-limit"><option value="5" ${unitContactReviewState.filters.limit === '5' ? 'selected' : ''}>5</option><option value="20" ${unitContactReviewState.filters.limit === '20' ? 'selected' : ''}>20</option><option value="50" ${unitContactReviewState.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${unitContactReviewState.filters.limit === '100' ? 'selected' : ''}>100</option></select></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUnitContactFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUnitContactFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('unit-contact-review-table', '<th>申請編號 / 單位</th><th>申請人</th><th>分機</th><th>狀態</th><th>處理說明</th><th>最後更新</th><th>操作</th>', renderUnitContactReviewRows(unitContactReviewState.items), { toolbarSubtitle: '通過後會直接啟用帳號並寄送登入資訊；已啟用案件可補寄登入資訊。' })}</div></div>`;
+    unitContactReviewPageHtml = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">最後更新：${esc(fmtTime(unitContactReviewState.lastLoadedAt))}</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('mail-plus')}</div><div class="stat-value">${counts.total || 0}</div><div class="stat-label">符合條件申請</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${counts.pendingReview || 0}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${(counts.approved || 0) + (counts.activationPending || 0) + (counts.active || 0)}</div><div class="stat-label">已處理</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('key-round')}</div><div class="stat-value">${counts.active || 0}</div><div class="stat-label">已啟用</div></div></div><div class="card review-table-card"><div class="card-header"><span class="card-title">申請清單</span><span class="review-card-subtitle">可依狀態、電子郵件與關鍵字過濾</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">狀態</label><select class="form-select" id="unit-contact-review-status"><option value="" ${!unitContactReviewState.filters.status ? 'selected' : ''}>全部</option><option value="pending_review" ${unitContactReviewState.filters.status === 'pending_review' ? 'selected' : ''}>待審核</option><option value="approved" ${unitContactReviewState.filters.status === 'approved' ? 'selected' : ''}>已通過（舊資料）</option><option value="returned" ${unitContactReviewState.filters.status === 'returned' ? 'selected' : ''}>退回補件</option><option value="rejected" ${unitContactReviewState.filters.status === 'rejected' ? 'selected' : ''}>未核准</option><option value="active" ${unitContactReviewState.filters.status === 'active' ? 'selected' : ''}>已啟用</option></select></div><div class="form-group"><label class="form-label">申請電子郵件</label><input class="form-input" id="unit-contact-review-email" value="${esc(unitContactReviewState.filters.email)}" placeholder="例如 ntu.edu.tw 或 Gmail"></div><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="unit-contact-review-keyword" value="${esc(unitContactReviewState.filters.keyword)}" placeholder="單位、申請人、編號"></div><div class="form-group"><label class="form-label">筆數</label><select class="form-select" id="unit-contact-review-limit"><option value="5" ${unitContactReviewState.filters.limit === '5' ? 'selected' : ''}>5</option><option value="20" ${unitContactReviewState.filters.limit === '20' ? 'selected' : ''}>20</option><option value="50" ${unitContactReviewState.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${unitContactReviewState.filters.limit === '100' ? 'selected' : ''}>100</option></select></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUnitContactFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUnitContactFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('unit-contact-review-table', '<th>申請編號 / 單位</th><th>申請人</th><th>分機</th><th>狀態</th><th>處理說明</th><th>最後更新</th><th>操作</th>', renderUnitContactReviewRows(unitContactReviewState.items), { toolbarSubtitle: '通過後會直接啟用帳號並寄送登入資訊；已啟用案件可補寄登入資訊。' })}</div></div>`;
+        unitContactReviewMarkupCache = { signature: renderUnitContactReviewSignature, html: unitContactReviewPageHtml };
+      }
+      app.innerHTML = unitContactReviewPageHtml;
+      unitContactReviewRenderCache = { signature: renderUnitContactReviewSignature, filterSignature: JSON.stringify(unitContactReviewState.filters) };
+      if (app) app.dataset.unitContactReviewRenderSignature = renderUnitContactReviewSignature;
+    }
     bindAdminCollectionPager({
       idPrefix: 'unit-contact-review',
       actionPrefix: 'admin.unitContactReview',
