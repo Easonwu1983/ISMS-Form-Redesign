@@ -292,19 +292,8 @@
       handleRoute
     }, h, options);
   }
-  function normalizeRouteParamValue(value) {
-    const raw = String(value || '').trim();
-    if (!raw || raw === 'undefined' || raw === 'null') return '';
-    return raw;
-  }
   function getRoute() {
-    const h = window.location.hash.slice(1) || 'dashboard';
-    const p = h.split('/');
-    let param = normalizeRouteParamValue(p[1]);
-    if (param) {
-      try { param = normalizeRouteParamValue(decodeURIComponent(param)); } catch (_) { param = ''; }
-    }
-    return { page: p[0], param };
+    return getAppRouteModule().getRoute();
   }
   let unitModuleApi = null;
   function getUnitModule() {
@@ -857,6 +846,7 @@
   }
   let m365ApiClientApi = null;
   let serviceRegistryModuleApi = null;
+  let appRouteModuleApi = null;
   let appEntryModuleApi = null;
   let appAuthSessionModuleApi = null;
   let appRouterModuleApi = null;
@@ -899,6 +889,24 @@
       readyStep: 'app-entry-ready'
     });
     return appEntryModuleApi;
+  }
+  function getAppRouteModule() {
+    if (appRouteModuleApi) return appRouteModuleApi;
+    appRouteModuleApi = resolveFactoryService('appRouteModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAppRouteModule !== 'function') {
+          recordBootstrapStep('app-route-missing-factory', 'createAppRouteModule unavailable');
+          throw new Error('app-route-module.js not loaded');
+        }
+        return window.createAppRouteModule({
+          ROUTE_WHITELIST,
+          defaultTitle: '內部稽核管考追蹤系統'
+        });
+      },
+      globalSlot: '_appRouteModule',
+      readyStep: 'app-route-ready'
+    });
+    return appRouteModuleApi;
   }
   function getAppAuthSessionModule() {
     if (appAuthSessionModuleApi) return appAuthSessionModuleApi;
@@ -3406,26 +3414,14 @@
     'training-detail': { title: '\u8cc7\u5b89\u6559\u80b2\u8a13\u7df4\u7d71\u8a08\u8a73\u60c5', allow: () => !!currentUser(), requiresParam: true, render: (param) => getTrainingModule().renderTrainingDetail(param) },
     'training-roster': { title: '\u6559\u80b2\u8a13\u7df4\u540d\u55ae\u7ba1\u7406', allow: () => isAdmin(), fallback: 'training', deniedMessage: '\u50c5\u6700\u9ad8\u7ba1\u7406\u8005\u53ef\u7ba1\u7406\u6559\u80b2\u8a13\u7df4\u540d\u55ae', render: () => getTrainingModule().renderTrainingRoster() }
   };
-  function getRouteMeta(page) { return ROUTE_WHITELIST[page] || ROUTE_WHITELIST.dashboard; }
-  function getRouteTitle(page) { return getRouteMeta(page).title || '\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71'; }
+  function getRouteMeta(page) { return getAppRouteModule().getRouteMeta(page); }
+  function getRouteTitle(page) { return getAppRouteModule().getRouteTitle(page); }
   function canAccessRoute(page, routeParam) {
-    const meta = getRouteMeta(page);
-    if (!meta || typeof meta.allow !== 'function') return true;
-    if (meta.requiresParam && !normalizeRouteParamValue(routeParam)) return false;
-    try { return !!meta.allow(); } catch (_) { return false; }
+    return getAppRouteModule().canAccessRoute(page, routeParam);
   }
-  function getRouteFallback(page) {
-    const meta = getRouteMeta(page);
-    return meta && meta.fallback ? meta.fallback : 'dashboard';
-  }
+  function getRouteFallback(page) { return getAppRouteModule().getRouteFallback(page); }
   window._routeWhitelist = function () {
-    return Object.keys(ROUTE_WHITELIST).reduce((acc, page) => {
-      acc[page] = {
-        title: ROUTE_WHITELIST[page].title,
-        fallback: ROUTE_WHITELIST[page].fallback || null
-      };
-      return acc;
-    }, {});
+    return getAppRouteModule().getRouteManifest();
   };
   function refreshIcons() { return getUiModule().refreshIcons(); }
   let visibleItemsCacheKey = '';

@@ -354,6 +354,13 @@
         const detail = event && event.detail ? event.detail : {};
         resetChecklistRemoteCaches(detail.reason || 'profile-changed');
       });
+      window.addEventListener('isms:cache-invalidate', function (event) {
+        const detail = event && event.detail ? event.detail : {};
+        const scope = String(detail.scope || '').trim().toLowerCase();
+        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'checklists') {
+          resetChecklistRemoteCaches(detail.reason || 'cache-invalidated');
+        }
+      });
       checklistAccessProfileListenerInstalled = true;
     }
 

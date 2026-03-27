@@ -355,6 +355,13 @@
         const detail = event && event.detail ? event.detail : {};
         resetTrainingRemoteCaches(detail.reason || 'profile-changed');
       });
+      window.addEventListener('isms:cache-invalidate', function (event) {
+        const detail = event && event.detail ? event.detail : {};
+        const scope = String(detail.scope || '').trim().toLowerCase();
+        if (!scope || scope === 'all' || scope === 'access-profile' || scope === 'training') {
+          resetTrainingRemoteCaches(detail.reason || 'cache-invalidated');
+        }
+      });
       trainingAccessProfileListenerInstalled = true;
     }
 
