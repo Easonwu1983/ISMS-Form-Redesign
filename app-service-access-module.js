@@ -38,6 +38,16 @@
       ));
     }
 
+    function getAppBootstrapStateModule(deps) {
+      return resolve(deps, 'appBootstrapStateModule', requireFactory(
+        'createAppBootstrapStateModule',
+        'app-bootstrap-state-module.js',
+        'app-bootstrap-state-ready',
+        'createAppBootstrapStateModule unavailable',
+        { recordBootstrapStep: deps.recordBootstrapStep, globalSlot: '_appBootstrapStateModule' }
+      ));
+    }
+
     function getAppEntryModule(deps) {
       return resolve(deps, 'appEntryModule', requireFactory(
         'createAppEntryModule',
@@ -127,6 +137,7 @@
 
     return {
       getAppBootstrapModule,
+      getAppBootstrapStateModule,
       getAppEntryModule,
       getAppRouteModule,
       getAppPageOrchestrationModule,

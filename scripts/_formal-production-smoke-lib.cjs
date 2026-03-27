@@ -80,6 +80,68 @@ function writeLayerReport(layerName, report) {
   return filePath;
 }
 
+function buildLayerSummary(report) {
+  const manifests = Array.isArray(report && report.manifests) ? report.manifests : [];
+  const versions = manifests.map((entry) => ({
+    base: entry.base || '',
+    ok: !!entry.ok,
+    versionKey: entry.versionKey || '',
+    commit: entry.commit || '',
+    status: entry.status || null,
+    error: entry.error || ''
+  }));
+  return {
+    layer: String(report && report.layer || '').trim(),
+    ok: !!(report && report.ok),
+    startedAt: report && report.startedAt || '',
+    finishedAt: report && report.finishedAt || '',
+    durationMs: Number(report && report.durationMs || 0),
+    liveBase: report && report.liveBase || LIVE_BASE,
+    pagesBase: report && report.pagesBase || PAGES_BASE,
+    versions,
+    steps: Array.isArray(report && report.steps)
+      ? report.steps.map((step) => ({
+        label: step.label || '',
+        ok: !!step.ok,
+        attempts: Number(step.attempts || 1),
+        durationMs: Number(step.durationMs || 0),
+        error: step.error || ''
+      }))
+      : []
+  };
+}
+
+function writeLayerSummary(layerName, report) {
+  ensureFormalLogDir();
+  const summary = buildLayerSummary(report);
+  const jsonPath = path.join(FORMAL_LOG_DIR, `latest-${layerName}-summary.json`);
+  const mdPath = path.join(FORMAL_LOG_DIR, `latest-${layerName}-summary.md`);
+  fs.writeFileSync(jsonPath, JSON.stringify(summary, null, 2));
+  const lines = [
+    `# Formal Production ${layerName} Summary`,
+    '',
+    `- status: ${summary.ok ? 'passed' : 'failed'}`,
+    `- startedAt: ${summary.startedAt}`,
+    `- finishedAt: ${summary.finishedAt}`,
+    `- durationMs: ${summary.durationMs}`,
+    `- liveBase: ${summary.liveBase}`,
+    `- pagesBase: ${summary.pagesBase}`,
+    '',
+    '## Versions',
+    ''
+  ];
+  summary.versions.forEach((entry) => {
+    lines.push(`- ${entry.base}: ${entry.ok ? (entry.versionKey || 'ok') : `error (${entry.status || entry.error || 'unknown'})`}`);
+  });
+  lines.push('', '## Steps', '');
+  summary.steps.forEach((step) => {
+    lines.push(`- ${step.label}: ${step.ok ? 'passed' : 'failed'} (${step.durationMs} ms, attempts=${step.attempts})${step.error ? ` - ${step.error}` : ''}`);
+  });
+  lines.push('');
+  fs.writeFileSync(mdPath, lines.join('\n'));
+  return { jsonPath, mdPath };
+}
+
 function runNodeStep(step) {
   const attempts = Number.isFinite(Number(step && step.attempts)) ? Math.max(1, Math.floor(Number(step.attempts))) : 1;
   const attemptResults = [];
@@ -167,7 +229,9 @@ async function runLayer(layerName, steps) {
     steps: stepResults
   };
   const reportPath = writeLayerReport(layerName, report);
+  const summaryPaths = writeLayerSummary(layerName, report);
   console.log(`formal production ${layerName} report: ${path.relative(ROOT, reportPath)}`);
+  console.log(`formal production ${layerName} summary: ${path.relative(ROOT, summaryPaths.jsonPath)}`);
   if (failure) throw failure;
   console.log(`formal production ${layerName} smoke passed.`);
 }

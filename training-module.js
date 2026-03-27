@@ -106,9 +106,9 @@
     let trainingRosterFocusTrackerInstalled = false;
     let trainingRosterGroupingCache = { token: '', groups: null };
     let trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
-    let trainingRosterRenderCache = { signature: '', selectedSignature: '', defer: false };
-    let trainingRosterGroupMarkupCache = { signature: '', html: '' };
-    let trainingRosterPageShellCache = { signature: '', html: '' };
+    let trainingRosterRenderCache = createTrainingRenderCache({ selectedSignature: '', defer: false });
+    let trainingRosterGroupMarkupCache = createTrainingMarkupCache();
+    let trainingRosterPageShellCache = createTrainingMarkupCache();
     let trainingDashboardUnitsCache = { signature: '', units: [] };
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
     let trainingRemoteListSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
@@ -122,19 +122,7 @@
     const trainingRosterRemotePageCache = new Map();
     let trainingRosterRemotePageState = {
       filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
-      page: {
-        offset: 0,
-        limit: Number(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-        total: 0,
-        pageCount: 0,
-        currentPage: 0,
-        hasPrev: false,
-        hasNext: false,
-        prevOffset: 0,
-        nextOffset: 0,
-        pageStart: 0,
-        pageEnd: 0
-      },
+      page: createTrainingCollectionPage(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
       items: [],
       total: 0,
       signature: ''
@@ -313,24 +301,64 @@
       }
       return null;
     }
+    function getTrainingCollectionCacheModule() {
+      if (typeof window === 'undefined') return null;
+      if (window.__ISMS_COLLECTION_CACHE__ && typeof window.__ISMS_COLLECTION_CACHE__ === 'object') {
+        return window.__ISMS_COLLECTION_CACHE__;
+      }
+      if (typeof window.createCollectionCacheModule === 'function') {
+        window.__ISMS_COLLECTION_CACHE__ = window.createCollectionCacheModule();
+        return window.__ISMS_COLLECTION_CACHE__;
+      }
+      return null;
+    }
+    function createTrainingCollectionPage(limit) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createPage === 'function') return moduleApi.createPage(limit);
+      const safeLimit = Math.max(1, Number(limit) || 200);
+      return {
+        offset: 0,
+        limit: safeLimit,
+        total: 0,
+        pageCount: 0,
+        currentPage: 0,
+        hasPrev: false,
+        hasNext: false,
+        prevOffset: 0,
+        nextOffset: 0,
+        pageStart: 0,
+        pageEnd: 0
+      };
+    }
+    function createTrainingRenderCache(extra) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createRenderCache === 'function') return moduleApi.createRenderCache(extra);
+      return { signature: '', ...(extra && typeof extra === 'object' ? extra : {}) };
+    }
+    function createTrainingMarkupCache(extra) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createMarkupCache === 'function') return moduleApi.createMarkupCache(extra);
+      return { signature: '', html: '', ...(extra && typeof extra === 'object' ? extra : {}) };
+    }
+    function resetTrainingRenderCaches() {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.resetRenderCaches === 'function') {
+        return moduleApi.resetRenderCaches.apply(null, arguments);
+      }
+      Array.from(arguments).forEach((cache) => {
+        if (!cache || typeof cache !== 'object') return;
+        cache.signature = '';
+        if (Object.prototype.hasOwnProperty.call(cache, 'html')) cache.html = '';
+        if (Object.prototype.hasOwnProperty.call(cache, 'selectedSignature')) cache.selectedSignature = '';
+        if (Object.prototype.hasOwnProperty.call(cache, 'defer')) cache.defer = false;
+      });
+    }
     function resetTrainingRemoteCaches(reason) {
       const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
       clearTrainingRosterRemotePageCache();
       trainingRosterRemotePageState = {
         filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
-        page: {
-          offset: 0,
-          limit: Number(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-          total: 0,
-          pageCount: 0,
-          currentPage: 0,
-          hasPrev: false,
-          hasNext: false,
-          prevOffset: 0,
-          nextOffset: 0,
-          pageStart: 0,
-          pageEnd: 0
-        },
+        page: createTrainingCollectionPage(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
         items: [],
         total: 0,
         signature: ''
@@ -339,9 +367,9 @@
       resetTrainingRemoteListSummaryBootstrapState();
       trainingRosterGroupingCache = { token: '', groups: null };
       trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
-      trainingRosterRenderCache = { signature: '', selectedSignature: '', defer: false };
-      trainingRosterGroupMarkupCache = { signature: '', html: '' };
-      trainingRosterPageShellCache = { signature: '', html: '' };
+      trainingRosterRenderCache = createTrainingRenderCache({ selectedSignature: '', defer: false });
+      trainingRosterGroupMarkupCache = createTrainingMarkupCache();
+      trainingRosterPageShellCache = createTrainingMarkupCache();
       trainingDashboardUnitsCache = { signature: '', units: [] };
       trainingListViewCache = { signature: '', visibleForms: [], summary: null };
       trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
@@ -356,6 +384,7 @@
       } catch (_) {
         // Ignore draft storage cleanup failures.
       }
+      resetTrainingRenderCaches(trainingRosterRenderCache, trainingRosterGroupMarkupCache, trainingRosterPageShellCache);
       recordTrainingBootstrapStep('training-cache-reset', safeReason);
     }
 

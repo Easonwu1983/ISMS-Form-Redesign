@@ -102,7 +102,7 @@
       status: 'all',
       keyword: ''
     };
-    let checklistListRenderCache = { signature: '', html: '' };
+    let checklistListRenderCache = createChecklistMarkupCache();
     let checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
     let checklistListViewCache = { signature: '', filtered: [], grouped: [] };
     let checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
@@ -116,24 +116,12 @@
     const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
     let checklistRemotePageState = {
       filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
-      page: {
-        offset: 0,
-        limit: Number(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+        page: createChecklistCollectionPage(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
+        items: [],
+        summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
         total: 0,
-        pageCount: 0,
-        currentPage: 0,
-        hasPrev: false,
-        hasNext: false,
-        prevOffset: 0,
-        nextOffset: 0,
-        pageStart: 0,
-        pageEnd: 0
-      },
-      items: [],
-      summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
-      total: 0,
-      signature: ''
-    };
+        signature: ''
+      };
     let checklistAccessProfileListenerInstalled = false;
 
     function serializeChecklistRemoteSummary(summary) {
@@ -324,6 +312,40 @@
       }
       return null;
     }
+    function getChecklistCollectionCacheModule() {
+      if (typeof window === 'undefined') return null;
+      if (window.__ISMS_COLLECTION_CACHE__ && typeof window.__ISMS_COLLECTION_CACHE__ === 'object') {
+        return window.__ISMS_COLLECTION_CACHE__;
+      }
+      if (typeof window.createCollectionCacheModule === 'function') {
+        window.__ISMS_COLLECTION_CACHE__ = window.createCollectionCacheModule();
+        return window.__ISMS_COLLECTION_CACHE__;
+      }
+      return null;
+    }
+    function createChecklistCollectionPage(limit) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createPage === 'function') return moduleApi.createPage(limit);
+      const safeLimit = Math.max(1, Number(limit) || 50);
+      return {
+        offset: 0,
+        limit: safeLimit,
+        total: 0,
+        pageCount: 0,
+        currentPage: 0,
+        hasPrev: false,
+        hasNext: false,
+        prevOffset: 0,
+        nextOffset: 0,
+        pageStart: 0,
+        pageEnd: 0
+      };
+    }
+    function createChecklistMarkupCache(extra) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createMarkupCache === 'function') return moduleApi.createMarkupCache(extra);
+      return { signature: '', html: '', ...(extra && typeof extra === 'object' ? extra : {}) };
+    }
     function normalizeChecklistCacheScope(scope) {
       const moduleApi = getChecklistCacheInvalidationModule();
       return moduleApi && typeof moduleApi.normalizeScope === 'function'
@@ -356,19 +378,7 @@
         resetChecklistRemoteSummaryBootstrapState();
         checklistRemotePageState = {
           filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
-          page: {
-            offset: 0,
-            limit: Number(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
-            total: 0,
-            pageCount: 0,
-            currentPage: 0,
-            hasPrev: false,
-            hasNext: false,
-            prevOffset: 0,
-            nextOffset: 0,
-            pageStart: 0,
-            pageEnd: 0
-          },
+          page: createChecklistCollectionPage(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
           items: [],
           summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
           total: 0,
@@ -377,7 +387,7 @@
         checklistBrowseState.keyword = '';
         checklistBrowseState.selectedYear = '';
         checklistBrowseState.status = 'all';
-        checklistListRenderCache = { signature: '', html: '' };
+        checklistListRenderCache = createChecklistMarkupCache();
         checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
         checklistListViewCache = { signature: '', filtered: [], grouped: [] };
         checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };

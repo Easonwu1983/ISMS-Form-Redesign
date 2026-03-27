@@ -807,6 +807,7 @@
   let m365ApiClientApi = null;
   let serviceRegistryModuleApi = null;
   let appServiceAccessModuleApi = null;
+  let appBootstrapStateModuleApi = null;
   function getServiceRegistryModule() {
     if (serviceRegistryModuleApi) return serviceRegistryModuleApi;
     if (typeof window === 'undefined' || typeof window.createServiceRegistryModule !== 'function') {
@@ -828,6 +829,14 @@
   }
   function getAppBootstrapModule() {
     return getAppServiceAccessModule().getAppBootstrapModule({ resolveFactoryService, recordBootstrapStep });
+  }
+  function getAppBootstrapStateModule() {
+    if (appBootstrapStateModuleApi) return appBootstrapStateModuleApi;
+    appBootstrapStateModuleApi = getAppServiceAccessModule().getAppBootstrapStateModule({
+      resolveFactoryService,
+      recordBootstrapStep
+    });
+    return appBootstrapStateModuleApi;
   }
   function getAppEntryModule() {
     return getAppServiceAccessModule().getAppEntryModule({ resolveFactoryService, recordBootstrapStep });
@@ -854,10 +863,14 @@
     return getAppServiceAccessModule().getAppRouterModule({ resolveFactoryService, recordBootstrapStep });
   }
   function getBootstrapCoordinator() {
-    return getServiceRegistryModule().getBootstrapState();
+    return getAppBootstrapStateModule().getBootstrapCoordinator({
+      getServiceRegistryModule
+    });
   }
   function recordBootstrapStep(step, detail) {
-    getServiceRegistryModule().record(step, detail);
+    return getAppBootstrapStateModule().recordBootstrapStep({
+      getServiceRegistryModule
+    }, step, detail);
   }
   function registerCoreService(name, resolver) {
     getServiceRegistryModule().register(name, resolver, {
