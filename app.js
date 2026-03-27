@@ -857,6 +857,7 @@
   }
   let m365ApiClientApi = null;
   let serviceRegistryModuleApi = null;
+  let appAuthSessionModuleApi = null;
   let appRouterModuleApi = null;
   let appBootstrapModuleApi = null;
   function getServiceRegistryModule() {
@@ -882,6 +883,21 @@
       readyStep: 'app-bootstrap-ready'
     });
     return appBootstrapModuleApi;
+  }
+  function getAppAuthSessionModule() {
+    if (appAuthSessionModuleApi) return appAuthSessionModuleApi;
+    appAuthSessionModuleApi = resolveFactoryService('appAuthSessionModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAppAuthSessionModule !== 'function') {
+          recordBootstrapStep('app-auth-session-missing-factory', 'createAppAuthSessionModule unavailable');
+          throw new Error('app-auth-session-module.js not loaded');
+        }
+        return window.createAppAuthSessionModule();
+      },
+      globalSlot: '_appAuthSessionModule',
+      readyStep: 'app-auth-session-ready'
+    });
+    return appAuthSessionModuleApi;
   }
   function getAppRouterModule() {
     if (appRouterModuleApi) return appRouterModuleApi;
@@ -2066,49 +2082,14 @@
     }
   }
   async function verifyCurrentSessionWithBackend() {
-    if (getAuthMode() !== 'm365-api') return currentUser();
-    const user = currentUser();
-    if (!user || !String(user.sessionToken || '').trim()) return null;
-    const cacheKey = [
-      String(user.username || '').trim().toLowerCase(),
-      String(user.sessionToken || '').trim()
-    ].join('::');
-    const cachedVerifyRaw = (() => {
-      try {
-        return String(sessionStorage.getItem('__AUTH_VERIFY_CACHE__') || '');
-      } catch (_) {
-        return '';
-      }
-    })();
-    if (cachedVerifyRaw) {
-      try {
-        const cachedVerify = JSON.parse(cachedVerifyRaw);
-        if (cachedVerify
-          && String(cachedVerify.key || '') === cacheKey
-          && Number(cachedVerify.expiresAt || 0) > Date.now()
-          && cachedVerify.user
-        ) {
-          return normalizeUserRecord(cachedVerify.user);
-        }
-      } catch (_) { }
-    }
-    const body = await requestAuthJson('/verify', { method: 'GET' });
-    const item = normalizeRemoteSystemUsers(body)[0];
-    if (!item) return null;
-    const normalized = normalizeUserRecord({
-      ...item,
-      sessionToken: String(body && body.session && body.session.token || user.sessionToken || '').trim(),
-      sessionExpiresAt: String(body && body.session && body.session.expiresAt || user.sessionExpiresAt || '').trim(),
-      mustChangePassword: body && body.mustChangePassword === true
+    return getAppAuthSessionModule().verifyCurrentSessionWithBackend({
+      AUTH_KEY,
+      getAuthMode,
+      currentUser,
+      normalizeUserRecord,
+      normalizeRemoteSystemUsers,
+      requestAuthJson
     });
-    try {
-      sessionStorage.setItem('__AUTH_VERIFY_CACHE__', JSON.stringify({
-        key: cacheKey,
-        expiresAt: Date.now() + (30 * 1000),
-        user: normalized
-      }));
-    } catch (_) { }
-    return normalized;
   }
   async function submitAuthLogout(payload) {
     const input = payload && typeof payload === 'object' ? payload : {};
@@ -3282,253 +3263,47 @@
     return unitContactApplicationModuleApi;
   }
 
-  let authenticatedBootstrapKey = '';
-  let authenticatedBootstrapPromise = null;
-  let authenticatedBootstrapState = 'idle';
-  let sessionHeartbeatTimer = null;
-  let sessionHeartbeatKey = '';
-  let sessionExpiryReminderKey = '';
-  const SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
-  const SESSION_EXPIRY_WARNING_MS = 10 * 60 * 1000;
-  function setAuthenticatedBootstrapState(nextState) {
-    authenticatedBootstrapState = String(nextState || 'idle').trim() || 'idle';
-    if (typeof window !== 'undefined') {
-      window.__REMOTE_BOOTSTRAP_STATE__ = authenticatedBootstrapState;
-      window.__REMOTE_BOOTSTRAP_KEY__ = authenticatedBootstrapKey || '';
-    }
-    return authenticatedBootstrapState;
-  }
-  function buildAuthenticatedBootstrapKey(user) {
-    if (!user) return '';
-    return [
-      String(user.username || '').trim(),
-      String(user.activeUnit || '').trim(),
-      String(user.sessionToken || '').trim(),
-      String(user.sessionExpiresAt || '').trim()
-    ].join('|');
+  function getAppAuthSessionDeps() {
+    return {
+      AUTH_KEY,
+      ROLES,
+      getAuthMode,
+      currentUser,
+      normalizeUserRecord,
+      normalizeRemoteSystemUsers,
+      requestAuthJson,
+      toast,
+      logout,
+      canManageUsers,
+      recordBootstrapStep,
+      syncTrainingFormsFromM365,
+      syncTrainingRostersFromM365,
+      syncChecklistsFromM365,
+      syncCorrectiveActionsFromM365,
+      syncUsersFromM365,
+      syncReviewScopesFromM365
+    };
   }
   function markAuthenticatedBootstrapReady(user) {
-    const activeUser = user || currentUser();
-    if (!activeUser) return '';
-    authenticatedBootstrapKey = buildAuthenticatedBootstrapKey(activeUser);
-    authenticatedBootstrapPromise = Promise.resolve(authenticatedBootstrapKey);
-    setAuthenticatedBootstrapState('ready');
-    return authenticatedBootstrapPromise;
+    return getAppAuthSessionModule().markAuthenticatedBootstrapReady({
+      ...getAppAuthSessionDeps(),
+      user
+    });
   }
-
-  function scheduleAuthenticatedBootstrapWarmup(taskFactory, labels) {
-    const run = function () {
-      let tasks = [];
-      try {
-        tasks = typeof taskFactory === 'function' ? (taskFactory() || []) : [];
-      } catch (error) {
-        console.warn('authenticated bootstrap warmup setup failed', error);
-        return;
-      }
-      Promise.allSettled(tasks).then((results) => {
-        const fallbackLabels = Array.isArray(labels) ? labels : [];
-        results.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            console.warn(fallbackLabels[index] || 'authenticated bootstrap warmup failed', result.reason);
-          }
-        });
-      });
-    };
-    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(run, { timeout: 2500 });
-      return;
-    }
-    if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-      window.setTimeout(run, 120);
-      return;
-    }
-    run();
-  }
-
   async function ensureAuthenticatedRemoteBootstrap() {
-    const user = currentUser();
-    if (!user) {
-      authenticatedBootstrapKey = '';
-      authenticatedBootstrapPromise = null;
-      setAuthenticatedBootstrapState('idle');
-      return '';
-    }
-    const nextKey = buildAuthenticatedBootstrapKey(user);
-    if (authenticatedBootstrapPromise && authenticatedBootstrapKey === nextKey) {
-      return authenticatedBootstrapPromise;
-    }
-    const freshLoginBootstrap = (() => {
-      try {
-        return typeof window !== 'undefined'
-          && window.sessionStorage
-          && String(window.sessionStorage.getItem('__AUTH_BOOTSTRAP_FRESH__') || '').trim() === '1';
-      } catch (_) {
-        return false;
-      }
-    })();
-    if (freshLoginBootstrap) {
-      try { window.sessionStorage.removeItem('__AUTH_BOOTSTRAP_FRESH__'); } catch (_) { }
-      authenticatedBootstrapKey = nextKey;
-      authenticatedBootstrapPromise = Promise.resolve(nextKey);
-      setAuthenticatedBootstrapState('ready');
-      scheduleAuthenticatedBootstrapWarmup(function () {
-        return [
-          syncTrainingFormsFromM365({ silent: true }),
-          syncTrainingRostersFromM365({ silent: true }),
-          syncChecklistsFromM365({ silent: true }),
-          syncCorrectiveActionsFromM365({ silent: true })
-        ];
-      }, [
-        'training bootstrap warmup failed',
-        'training roster bootstrap warmup failed',
-        'checklist bootstrap warmup failed',
-        'corrective action bootstrap warmup failed'
-      ]);
-      return authenticatedBootstrapPromise;
-    }
-    authenticatedBootstrapKey = nextKey;
-    setAuthenticatedBootstrapState('pending');
-    authenticatedBootstrapPromise = (async function () {
-      let activeUser = user;
-      try {
-        const verifiedUser = await verifyCurrentSessionWithBackend();
-        if (!verifiedUser) {
-          sessionStorage.removeItem(AUTH_KEY);
-          authenticatedBootstrapKey = '';
-          authenticatedBootstrapPromise = null;
-          setAuthenticatedBootstrapState('idle');
-          return '';
-        }
-        sessionStorage.setItem(AUTH_KEY, JSON.stringify(verifiedUser));
-        activeUser = verifiedUser;
-      } catch (error) {
-        if (Number(error && error.statusCode) === 401 || Number(error && error.statusCode) === 403) {
-          try { sessionStorage.removeItem(AUTH_KEY); } catch (_) { }
-          try { localStorage.removeItem(AUTH_KEY); } catch (_) { }
-          authenticatedBootstrapKey = '';
-          authenticatedBootstrapPromise = null;
-          setAuthenticatedBootstrapState('idle');
-          recordBootstrapStep('bootstrap-session-expired', String(activeUser && activeUser.username || 'anonymous'));
-          return '';
-        }
-        setAuthenticatedBootstrapState('error');
-        throw error;
-      }
-      setAuthenticatedBootstrapState('ready');
-      scheduleAuthenticatedBootstrapWarmup(function () {
-        const syncTasks = [
-          syncTrainingFormsFromM365({ silent: true }),
-          syncTrainingRostersFromM365({ silent: true }),
-          syncChecklistsFromM365({ silent: true }),
-          syncCorrectiveActionsFromM365({ silent: true })
-        ];
-        if (canManageUsers(activeUser)) syncTasks.push(syncUsersFromM365({ silent: true }));
-        if (activeUser.role === ROLES.ADMIN || activeUser.role === ROLES.UNIT_ADMIN) {
-          syncTasks.push(syncReviewScopesFromM365({ silent: true }));
-        }
-        return syncTasks;
-      }, [
-        'training bootstrap warmup failed',
-        'training roster bootstrap warmup failed',
-        'checklist bootstrap warmup failed',
-        'corrective action bootstrap warmup failed',
-        'user bootstrap warmup failed',
-        'review scope bootstrap warmup failed'
-      ]);
-      return nextKey;
-    })();
-    return authenticatedBootstrapPromise;
+    return getAppAuthSessionModule().ensureAuthenticatedRemoteBootstrap(getAppAuthSessionDeps());
   }
   function isAuthenticatedRemoteBootstrapPending() {
-    const user = currentUser();
-    if (!user) return false;
-    const nextKey = buildAuthenticatedBootstrapKey(user);
-    return authenticatedBootstrapState === 'pending' && authenticatedBootstrapKey === nextKey;
+    return getAppAuthSessionModule().isAuthenticatedRemoteBootstrapPending(getAppAuthSessionDeps());
   }
   function clearSessionHeartbeat() {
-    if (sessionHeartbeatTimer && typeof window !== 'undefined' && typeof window.clearInterval === 'function') {
-      window.clearInterval(sessionHeartbeatTimer);
-    }
-    sessionHeartbeatTimer = null;
-    sessionHeartbeatKey = '';
-  }
-  function getSessionExpiresAtMs(user) {
-    const value = Date.parse(String(user && user.sessionExpiresAt || '').trim());
-    return Number.isFinite(value) ? value : 0;
-  }
-  function maybeWarnSessionExpiry(user) {
-    const expiresAt = getSessionExpiresAtMs(user);
-    if (!expiresAt) return;
-    const remainingMs = expiresAt - Date.now();
-    if (remainingMs > SESSION_EXPIRY_WARNING_MS) return;
-    const reminderKey = [
-      String(user && user.username || '').trim(),
-      String(user && user.sessionToken || '').trim(),
-      String(expiresAt)
-    ].join('|');
-    if (!reminderKey || sessionExpiryReminderKey === reminderKey) return;
-    sessionExpiryReminderKey = reminderKey;
-    toast('登入狀態將於 10 分鐘內到期，請先完成手上的操作。', 'info');
+    return getAppAuthSessionModule().clearSessionHeartbeat();
   }
   async function runSessionHeartbeat() {
-    if (getAuthMode() !== 'm365-api') return;
-    const user = currentUser();
-    if (!user || !String(user.sessionToken || '').trim()) {
-      clearSessionHeartbeat();
-      sessionExpiryReminderKey = '';
-      return;
-    }
-    try {
-      const verifiedUser = await verifyCurrentSessionWithBackend();
-      if (!verifiedUser) {
-        sessionStorage.removeItem(AUTH_KEY);
-        sessionExpiryReminderKey = '';
-        toast('登入狀態已失效，請重新登入', 'error');
-        await logout();
-        return;
-      }
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify(verifiedUser));
-      maybeWarnSessionExpiry(verifiedUser);
-    } catch (error) {
-      const statusCode = Number(error && error.statusCode || 0);
-      const message = String(error && error.message || error || '').trim();
-      if (statusCode === 401 || statusCode === 403 || message === '登入狀態已失效，請重新登入') {
-        sessionStorage.removeItem(AUTH_KEY);
-        sessionExpiryReminderKey = '';
-        toast('登入狀態已失效，請重新登入', 'error');
-        await logout();
-        return;
-      }
-      console.warn('session heartbeat failed', error);
-    }
+    return getAppAuthSessionModule().runSessionHeartbeat(getAppAuthSessionDeps());
   }
   function ensureSessionHeartbeat() {
-    if (typeof window === 'undefined') return;
-    if (getAuthMode() !== 'm365-api') return;
-    const user = currentUser();
-    const heartbeatKey = user
-      ? [
-        String(user.username || '').trim().toLowerCase(),
-        String(user.activeUnit || '').trim(),
-        String(user.sessionToken || '').trim(),
-        String(user.sessionExpiresAt || '').trim()
-      ].join('|')
-      : '';
-    if (!user || !String(user.sessionToken || '').trim()) {
-      clearSessionHeartbeat();
-      sessionExpiryReminderKey = '';
-      return;
-    }
-    if (sessionHeartbeatTimer && sessionHeartbeatKey === heartbeatKey) return;
-    clearSessionHeartbeat();
-    sessionExpiryReminderKey = '';
-    maybeWarnSessionExpiry(user);
-    sessionHeartbeatKey = heartbeatKey;
-    sessionHeartbeatTimer = window.setInterval(function () {
-      runSessionHeartbeat().catch(function (error) {
-        console.warn('session heartbeat failed', error);
-      });
-    }, SESSION_HEARTBEAT_INTERVAL_MS);
+    return getAppAuthSessionModule().ensureSessionHeartbeat(getAppAuthSessionDeps());
   }
   let shellModuleApi = null;
   function getShellModule() {

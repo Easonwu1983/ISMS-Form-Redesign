@@ -28,6 +28,7 @@ const filesToCopy = [
   'favicon.ico',
   'asset-loader.js',
   'service-registry-module.js',
+  'app-auth-session-module.js',
   'app-router-module.js',
   'app-bootstrap-module.js',
   'units.js',
