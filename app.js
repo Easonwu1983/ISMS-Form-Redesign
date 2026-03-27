@@ -870,6 +870,7 @@
   }
   let m365ApiClientApi = null;
   let serviceRegistryModuleApi = null;
+  let appBootstrapModuleApi = null;
   function getServiceRegistryModule() {
     if (serviceRegistryModuleApi) return serviceRegistryModuleApi;
     if (typeof window === 'undefined' || typeof window.createServiceRegistryModule !== 'function') {
@@ -878,6 +879,21 @@
     serviceRegistryModuleApi = window.createServiceRegistryModule();
     window._serviceRegistryModule = serviceRegistryModuleApi;
     return serviceRegistryModuleApi;
+  }
+  function getAppBootstrapModule() {
+    if (appBootstrapModuleApi) return appBootstrapModuleApi;
+    appBootstrapModuleApi = resolveFactoryService('appBootstrapModule', {
+      factory: function () {
+        if (typeof window === 'undefined' || typeof window.createAppBootstrapModule !== 'function') {
+          recordBootstrapStep('app-bootstrap-missing-factory', 'createAppBootstrapModule unavailable');
+          throw new Error('app-bootstrap-module.js not loaded');
+        }
+        return window.createAppBootstrapModule();
+      },
+      globalSlot: '_appBootstrapModule',
+      readyStep: 'app-bootstrap-ready'
+    });
+    return appBootstrapModuleApi;
   }
   function getBootstrapCoordinator() {
     return getServiceRegistryModule().getBootstrapState();
@@ -4200,6 +4216,9 @@
   }
 
   let lastStableHash = '';
+  function setLastStableHash(value) {
+    lastStableHash = String(value || '').trim() || '#dashboard';
+  }
   function handleHashChange() {
     const nextHash = window.location.hash || '#dashboard';
     if (nextHash !== lastStableHash && hasUnsavedChangesGuard()) {
@@ -4210,7 +4229,7 @@
       }
     }
     handleRoute();
-    lastStableHash = window.location.hash || '#dashboard';
+    setLastStableHash(window.location.hash || '#dashboard');
   }
 
   let appEventListenersInstalled = false;
@@ -4266,84 +4285,22 @@
   }
 
   async function initApp() {
-    recordBootstrapStep('app-init-start', window.location.hash || '#dashboard');
-    installGlobalDelegation();
-    installAppEventListeners();
-    initializeCoreServices('initApp');
-    renderApp();
-    void ensureAuthenticatedRemoteBootstrap();
-    const scheduleStoreMigration = function () {
-      const run = function () {
-        try {
-          getDataModule().migrateAllStores();
-        } catch (error) {
-          console.warn('store migration failed', error);
-        }
-      };
-      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(run, { timeout: 2000 });
-        return;
-      }
-      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-        window.setTimeout(run, 0);
-        return;
-      }
-      run();
-    };
-    const scheduleLocalWarmup = function () {
-      if (getAuthMode() === 'm365-api') return;
-      const run = function () {
-        try {
-          seedData();
-        } catch (error) {
-          console.warn('seed data warmup failed', error);
-        }
-        try {
-          ensurePrimaryAdminProfile();
-        } catch (error) {
-          console.warn('primary admin warmup failed', error);
-        }
-        try {
-          getTrainingModule().seedTrainingData();
-        } catch (error) {
-          console.warn('training seed warmup failed', error);
-        }
-      };
-      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(run, { timeout: 2000 });
-        return;
-      }
-      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-        window.setTimeout(run, 0);
-        return;
-      }
-      run();
-    };
-    scheduleLocalWarmup();
-    const scheduleAttachmentMigration = function () {
-      const run = function () {
-        void migrateAttachmentStores().catch(function (error) {
-          console.warn('attachment migration failed', error);
-        });
-      };
-      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(run, { timeout: 2000 });
-        return;
-      }
-      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-        window.setTimeout(run, 0);
-        return;
-      }
-      run();
-    };
-    scheduleAttachmentMigration();
-    scheduleStoreMigration();
-    lastStableHash = window.location.hash || '#dashboard';
-    refreshIcons();
-    if (typeof window !== 'undefined') {
-      window.__APP_READY__ = true;
-    }
-    recordBootstrapStep('app-ready', window.location.hash || '#dashboard');
+    return getAppBootstrapModule().initApp({
+      recordBootstrapStep,
+      installGlobalDelegation,
+      installAppEventListeners,
+      initializeCoreServices,
+      renderApp,
+      ensureAuthenticatedRemoteBootstrap,
+      getAuthMode,
+      seedData,
+      ensurePrimaryAdminProfile,
+      getTrainingModule,
+      migrateAttachmentStores,
+      getDataModule,
+      setLastStableHash,
+      refreshIcons
+    });
   }
 
   // ─── Init ──────────────────────────────────

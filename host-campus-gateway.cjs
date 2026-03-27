@@ -205,6 +205,7 @@ function writeDeployManifest(res) {
     buildInfo,
     platform: 'campus-gateway',
     backendBase: API_UPSTREAMS[0],
+    frontendBase: FRONTEND_BASE,
     assetIntegrity: {}
   }, null, 2);
   res.writeHead(200, {

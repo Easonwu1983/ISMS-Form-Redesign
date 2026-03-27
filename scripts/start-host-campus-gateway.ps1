@@ -28,11 +28,6 @@ $resolvedOrigin = (($resolverResult.origin | Out-String).Trim())
 if (-not $resolvedOrigin) {
   throw "Failed to resolve campus API origin via $resolverScript"
 }
-$frontendResolverResult = & $nodeExe $resolverScript 'auto' '/service-registry-module.js' 'javascript' | ConvertFrom-Json
-$resolvedFrontendOrigin = (($frontendResolverResult.origin | Out-String).Trim())
-if (-not $resolvedFrontendOrigin) {
-  $resolvedFrontendOrigin = $resolvedOrigin
-}
 $apiUpstreams = @()
 if ($resolverResult.candidates) {
     foreach ($candidate in $resolverResult.candidates) {
@@ -57,7 +52,7 @@ $upstreamPort = if ($resolvedUri.IsDefaultPort) {
 $env:ISMS_UPSTREAM_HOST = $upstreamHost
 $env:ISMS_UPSTREAM_PORT = [string]$upstreamPort
 $env:ISMS_API_UPSTREAMS = ($apiUpstreams -join ',')
-$env:ISMS_FRONTEND_BASE = $resolvedFrontendOrigin
+$env:ISMS_FRONTEND_BASE = $resolvedOrigin
 
 $process = Start-Process -FilePath $nodeExe `
   -ArgumentList $gatewayScript `
@@ -67,4 +62,4 @@ $process = Start-Process -FilePath $nodeExe `
   -PassThru
 
 $process.Id | Set-Content -Path $pidFile -Encoding ascii
-Write-Output "Gateway started. PID=$($process.Id) upstream=$resolvedOrigin frontend=$resolvedFrontendOrigin apiUpstreams=$($env:ISMS_API_UPSTREAMS)"
+Write-Output "Gateway started. PID=$($process.Id) upstream=$resolvedOrigin frontend=$resolvedOrigin apiUpstreams=$($env:ISMS_API_UPSTREAMS)"
