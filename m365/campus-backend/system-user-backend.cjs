@@ -300,8 +300,8 @@ function createSystemUserRouter(deps) {
     };
     rows.forEach((entry) => {
       const role = cleanText(entry && entry.role);
-      if (role === ROLES.ADMIN) summary.admin += 1;
-      if (role === ROLES.UNIT_ADMIN) summary.unitAdmin += 1;
+      if (role === USER_ROLES.ADMIN) summary.admin += 1;
+      if (role === USER_ROLES.UNIT_ADMIN) summary.unitAdmin += 1;
       const securityRoles = Array.isArray(entry && entry.securityRoles) ? entry.securityRoles.filter(Boolean) : [];
       if (securityRoles.length) summary.securityWindow += 1;
     });
