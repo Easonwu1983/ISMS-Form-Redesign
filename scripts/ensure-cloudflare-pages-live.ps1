@@ -46,11 +46,18 @@ if (Wait-ForCloudflareHealth -Attempts 2 -DelaySeconds 5) {
 }
 
 Write-Warning 'Cloudflare Pages live health check failed. Running bootstrap recovery.'
-powershell -NoProfile -ExecutionPolicy Bypass -File $bootstrapScript `
-    -ProjectName $ProjectName `
-    -Branch $Branch `
-    -OriginUrl $OriginUrl `
-    -Protocol $Protocol
+$bootstrapArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', $bootstrapScript,
+    '-ProjectName', $ProjectName,
+    '-Branch', $Branch,
+    '-Protocol', $Protocol
+)
+if (($OriginUrl | Out-String).Trim()) {
+    $bootstrapArgs += @('-OriginUrl', $OriginUrl)
+}
+powershell @bootstrapArgs
 
 if (-not (Wait-ForCloudflareHealth)) {
     throw 'Cloudflare Pages live health is still failing after bootstrap recovery.'

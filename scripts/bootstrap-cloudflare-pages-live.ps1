@@ -13,9 +13,16 @@ $startScript = Join-Path $PSScriptRoot 'start-cloudflare-quick-tunnel.ps1'
 $refreshScript = Join-Path $PSScriptRoot 'refresh-cloudflare-quick-pages-entry.ps1'
 $urlPath = Join-Path $repoRoot '.runtime\cloudflare-quick-tunnel.url'
 
-powershell -NoProfile -ExecutionPolicy Bypass -File $startScript `
-    -OriginUrl $OriginUrl `
-    -Protocol $Protocol
+$startArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', $startScript,
+    '-Protocol', $Protocol
+)
+if (($OriginUrl | Out-String).Trim()) {
+    $startArgs += @('-OriginUrl', $OriginUrl)
+}
+powershell @startArgs
 
 if (-not (Test-Path $urlPath)) {
     throw "Quick tunnel URL file not found after startup: $urlPath"
