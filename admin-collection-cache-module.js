@@ -25,6 +25,14 @@
       return getBaseModule().createRemoteCollectionState(options);
     }
 
+    function createRemoteViewCache(filters, extra) {
+      return getBaseModule().createRemoteViewCache(filters, extra);
+    }
+
+    function createSummaryCache(extra) {
+      return getBaseModule().createSummaryCache(extra);
+    }
+
     function createRenderCache() {
       return getBaseModule().createRenderCache({ filterSignature: '' });
     }
@@ -39,6 +47,10 @@
 
     function resetSummaryState(state, summary, remoteViewCache) {
       return getBaseModule().resetSummaryState(state, summary, remoteViewCache);
+    }
+
+    function resetSummaryCache(cache) {
+      return getBaseModule().resetSummaryCache(cache);
     }
 
     function resetRenderCaches(renderCache, markupCache) {
@@ -57,10 +69,13 @@
       cloneObject,
       createPage,
       createRemoteCollectionState,
+      createRemoteViewCache,
+      createSummaryCache,
       createRenderCache,
       createMarkupCache,
       resetRemoteViewCache,
       resetSummaryState,
+      resetSummaryCache,
       resetRenderCaches,
       resetPagedCollectionState,
       buildRenderSignature

@@ -40,6 +40,29 @@
       return state;
     }
 
+    function createRemoteViewCache(filters, extra) {
+      return {
+        items: [],
+        summary: null,
+        page: null,
+        filters: cloneObject(filters),
+        signature: '',
+        fetchedAt: 0,
+        promise: null,
+        ...(extra && typeof extra === 'object' ? extra : {})
+      };
+    }
+
+    function createSummaryCache(extra) {
+      return {
+        signature: '',
+        summary: null,
+        fetchedAt: 0,
+        promise: null,
+        ...(extra && typeof extra === 'object' ? extra : {})
+      };
+    }
+
     function createRenderCache(extra) {
       return {
         signature: '',
@@ -71,6 +94,14 @@
       if (remoteViewCache && typeof remoteViewCache === 'object') {
         remoteViewCache.summary = null;
       }
+    }
+
+    function resetSummaryCache(cache) {
+      if (!cache || typeof cache !== 'object') return;
+      cache.signature = '';
+      cache.summary = null;
+      cache.fetchedAt = 0;
+      cache.promise = null;
     }
 
     function resetRenderCaches() {
@@ -119,10 +150,13 @@
       cloneObject: cloneObject,
       createPage: createPage,
       createRemoteCollectionState: createRemoteCollectionState,
+      createRemoteViewCache: createRemoteViewCache,
+      createSummaryCache: createSummaryCache,
       createRenderCache: createRenderCache,
       createMarkupCache: createMarkupCache,
       resetRemoteViewCache: resetRemoteViewCache,
       resetSummaryState: resetSummaryState,
+      resetSummaryCache: resetSummaryCache,
       resetRenderCaches: resetRenderCaches,
       resetPagedCollectionState: resetPagedCollectionState,
       buildRenderSignature: buildRenderSignature

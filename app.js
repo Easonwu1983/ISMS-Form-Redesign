@@ -804,11 +804,11 @@
     window._trainingModule = trainingModuleApi;
     return trainingModuleApi;
   }
-  let m365ApiClientApi = null;
   let serviceRegistryModuleApi = null;
   let appServiceAccessModuleApi = null;
   let appBootstrapStateModuleApi = null;
   let appCoreServiceModuleApi = null;
+  let appBootstrapAccessModuleApi = null;
   const appCoreServiceState = {
     serviceRegistryModuleApi: null,
     appServiceAccessModuleApi: null
@@ -821,6 +821,15 @@
     appCoreServiceModuleApi = window.createAppCoreServiceModule();
     window._appCoreServiceModule = appCoreServiceModuleApi;
     return appCoreServiceModuleApi;
+  }
+  function getAppBootstrapAccessModule() {
+    if (appBootstrapAccessModuleApi) return appBootstrapAccessModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppBootstrapAccessModule !== 'function') {
+      throw new Error('app-bootstrap-access-module.js not loaded');
+    }
+    appBootstrapAccessModuleApi = window.createAppBootstrapAccessModule();
+    window._appBootstrapAccessModule = appBootstrapAccessModuleApi;
+    return appBootstrapAccessModuleApi;
   }
   function getServiceRegistryModule() {
     serviceRegistryModuleApi = getAppCoreServiceModule().getServiceRegistryModule(appCoreServiceState, {});
@@ -835,7 +844,11 @@
     return appServiceAccessModuleApi;
   }
   function getAppBootstrapModule() {
-    return getAppServiceAccessModule().getAppBootstrapModule({ resolveFactoryService, recordBootstrapStep });
+    return getAppBootstrapAccessModule().getAppBootstrapModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep
+    });
   }
   function getAppBootstrapStateModule() {
     if (appBootstrapStateModuleApi) return appBootstrapStateModuleApi;
@@ -846,28 +859,62 @@
     return appBootstrapStateModuleApi;
   }
   function getAppEntryModule() {
-    return getAppServiceAccessModule().getAppEntryModule({ resolveFactoryService, recordBootstrapStep });
+    return getAppBootstrapAccessModule().getAppEntryModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep
+    });
   }
   function getAppRouteModule() {
-    return getAppServiceAccessModule().getAppRouteModule({ resolveFactoryService, recordBootstrapStep, routeWhitelist: ROUTE_WHITELIST, defaultTitle: 'ISMS 管考與追蹤平台' });
+    return getAppBootstrapAccessModule().getAppRouteModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep,
+      routeWhitelist: ROUTE_WHITELIST,
+      defaultTitle: 'ISMS 管考與追蹤平台'
+    });
   }
   function getAppPageOrchestrationModule() {
-    return getAppServiceAccessModule().getAppPageOrchestrationModule({ resolveFactoryService, recordBootstrapStep });
+    return getAppBootstrapAccessModule().getAppPageOrchestrationModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep
+    });
   }
   function getAppVisibilityModule() {
-    return getAppServiceAccessModule().getAppVisibilityModule({ resolveFactoryService, recordBootstrapStep });
+    return getAppBootstrapAccessModule().getAppVisibilityModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep
+    });
   }
   function getAppActionModule() {
-    return getAppServiceAccessModule().getAppActionModule({ resolveFactoryService, recordBootstrapStep });
+    return getAppBootstrapAccessModule().getAppActionModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep
+    });
   }
   function getAppShellOrchestrationModule() {
-    return getAppServiceAccessModule().getAppShellOrchestrationModule({ resolveFactoryService, recordBootstrapStep });
+    return getAppBootstrapAccessModule().getAppShellOrchestrationModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep
+    });
   }
   function getAppAuthSessionModule() {
-    return getAppServiceAccessModule().getAppAuthSessionModule({ resolveFactoryService, recordBootstrapStep });
+    return getAppBootstrapAccessModule().getAppAuthSessionModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep
+    });
   }
   function getAppRouterModule() {
-    return getAppServiceAccessModule().getAppRouterModule({ resolveFactoryService, recordBootstrapStep });
+    return getAppBootstrapAccessModule().getAppRouterModule({
+      getAppServiceAccessModule,
+      resolveFactoryService,
+      recordBootstrapStep
+    });
   }
   function getBootstrapCoordinator() {
     return getAppBootstrapStateModule().getBootstrapCoordinator({
@@ -888,30 +935,20 @@
     return getAppCoreServiceModule().resolveFactoryService(appCoreServiceState, {}, name, options || {});
   }
   function getM365ApiClient() {
-    if (m365ApiClientApi) return m365ApiClientApi;
-    m365ApiClientApi = resolveFactoryService('m365ApiClient', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createM365ApiClient !== 'function') {
-          recordBootstrapStep('m365-client-missing-factory', 'createM365ApiClient unavailable');
-          throw new Error('m365-api-client.js not loaded');
-        }
-        return window.createM365ApiClient({
-          UNIT_CONTACT_APPLICATION_STATUSES,
-          createUnitContactApplication,
-          updateUnitContactApplication,
-          getUnitContactApplication,
-          getAllUnitContactApplications,
-          findUnitContactApplicationsByEmail,
-          getOfficialUnitMeta,
-          getSessionAuthHeaders
-        });
-      },
-      globalSlot: '_m365ApiClient',
-      globalGetter: 'getM365ApiClient',
-      aliases: ['resolveM365ApiClient'],
-      readyStep: 'm365-client-ready'
+    return getAppBootstrapAccessModule().getM365ApiClient({
+      resolveFactoryService,
+      recordBootstrapStep,
+      clientArgs: {
+        UNIT_CONTACT_APPLICATION_STATUSES,
+        createUnitContactApplication,
+        updateUnitContactApplication,
+        getUnitContactApplication,
+        getAllUnitContactApplications,
+        findUnitContactApplicationsByEmail,
+        getOfficialUnitMeta,
+        getSessionAuthHeaders
+      }
     });
-    return m365ApiClientApi;
   }
   const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
   const REVIEW_SCOPE_CONTRACT_VERSION = '2026-03-13';

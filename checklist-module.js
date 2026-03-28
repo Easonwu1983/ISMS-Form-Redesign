@@ -110,18 +110,15 @@
     const CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT = '50';
     const CHECKLIST_REMOTE_PAGE_CACHE_MAX = 12;
     const checklistRemotePageCache = new Map();
-    let checklistRemoteSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+    let checklistRemoteSummaryCache = createChecklistSummaryCache();
     let checklistRemoteSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     const CHECKLIST_REMOTE_SUMMARY_TTL_MS = 15000;
     const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
-    let checklistRemotePageState = {
+    let checklistRemotePageState = createChecklistRemoteCollectionState({
       filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
-        page: createChecklistCollectionPage(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
-        items: [],
-        summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
-        total: 0,
-        signature: ''
-      };
+      summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
+      limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT
+    });
     let checklistAccessProfileListenerInstalled = false;
 
     function serializeChecklistRemoteSummary(summary) {
@@ -341,6 +338,25 @@
         pageEnd: 0
       };
     }
+    function createChecklistRemoteCollectionState(options) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createRemoteCollectionState === 'function') return moduleApi.createRemoteCollectionState(options);
+      const settings = options && typeof options === 'object' ? options : {};
+      return {
+        filters: { ...(settings.filters || {}) },
+        items: Array.isArray(settings.items) ? settings.items.slice() : [],
+        summary: { ...(settings.summary || {}) },
+        page: createChecklistCollectionPage(settings.limit),
+        total: Math.max(0, Number(settings.total) || 0),
+        signature: String(settings.signature || ''),
+        ...(settings.extra && typeof settings.extra === 'object' ? settings.extra : {})
+      };
+    }
+    function createChecklistSummaryCache(extra) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createSummaryCache === 'function') return moduleApi.createSummaryCache(extra);
+      return { signature: '', summary: null, fetchedAt: 0, promise: null, ...(extra && typeof extra === 'object' ? extra : {}) };
+    }
     function createChecklistMarkupCache(extra) {
       const moduleApi = getChecklistCollectionCacheModule();
       if (moduleApi && typeof moduleApi.createMarkupCache === 'function') return moduleApi.createMarkupCache(extra);
@@ -374,16 +390,13 @@
       const resetTemplate = resetAll || normalizedScope === 'checklists-template';
       if (resetListSummary) {
         checklistRemotePageCache.clear();
-        checklistRemoteSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+        checklistRemoteSummaryCache = createChecklistSummaryCache();
         resetChecklistRemoteSummaryBootstrapState();
-        checklistRemotePageState = {
+        checklistRemotePageState = createChecklistRemoteCollectionState({
           filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
-          page: createChecklistCollectionPage(CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT),
-          items: [],
           summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
-          total: 0,
-          signature: ''
-        };
+          limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT
+        });
         checklistBrowseState.keyword = '';
         checklistBrowseState.selectedYear = '';
         checklistBrowseState.status = 'all';

@@ -111,7 +111,7 @@
     let trainingRosterPageShellCache = createTrainingMarkupCache();
     let trainingDashboardUnitsCache = { signature: '', units: [] };
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
-    let trainingRemoteListSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+    let trainingRemoteListSummaryCache = createTrainingSummaryCache();
     let trainingRemoteListSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
     const TRAINING_REMOTE_LIST_SUMMARY_TTL_MS = 15000;
@@ -120,13 +120,10 @@
     const TRAINING_ROSTER_DEFAULT_PAGE_LIMIT = '200';
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
     const trainingRosterRemotePageCache = new Map();
-    let trainingRosterRemotePageState = {
+    let trainingRosterRemotePageState = createTrainingRemoteCollectionState({
       filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
-      page: createTrainingCollectionPage(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-      items: [],
-      total: 0,
-      signature: ''
-    };
+      limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT
+    });
     let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
       let trainingAccessProfileListenerInstalled = false;
       let trainingRowsStateVersion = 0;
@@ -330,6 +327,25 @@
         pageEnd: 0
       };
     }
+    function createTrainingRemoteCollectionState(options) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createRemoteCollectionState === 'function') return moduleApi.createRemoteCollectionState(options);
+      const settings = options && typeof options === 'object' ? options : {};
+      return {
+        filters: { ...(settings.filters || {}) },
+        items: Array.isArray(settings.items) ? settings.items.slice() : [],
+        summary: { ...(settings.summary || {}) },
+        page: createTrainingCollectionPage(settings.limit),
+        total: Math.max(0, Number(settings.total) || 0),
+        signature: String(settings.signature || ''),
+        ...(settings.extra && typeof settings.extra === 'object' ? settings.extra : {})
+      };
+    }
+    function createTrainingSummaryCache(extra) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createSummaryCache === 'function') return moduleApi.createSummaryCache(extra);
+      return { signature: '', summary: null, fetchedAt: 0, promise: null, ...(extra && typeof extra === 'object' ? extra : {}) };
+    }
     function createTrainingRenderCache(extra) {
       const moduleApi = getTrainingCollectionCacheModule();
       if (moduleApi && typeof moduleApi.createRenderCache === 'function') return moduleApi.createRenderCache(extra);
@@ -356,14 +372,11 @@
     function resetTrainingRemoteCaches(reason) {
       const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
       clearTrainingRosterRemotePageCache();
-      trainingRosterRemotePageState = {
+      trainingRosterRemotePageState = createTrainingRemoteCollectionState({
         filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
-        page: createTrainingCollectionPage(TRAINING_ROSTER_DEFAULT_PAGE_LIMIT),
-        items: [],
-        total: 0,
-        signature: ''
-      };
-      trainingRemoteListSummaryCache = { signature: '', summary: null, fetchedAt: 0, promise: null };
+        limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT
+      });
+      trainingRemoteListSummaryCache = createTrainingSummaryCache();
       resetTrainingRemoteListSummaryBootstrapState();
       trainingRosterGroupingCache = { token: '', groups: null };
       trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };

@@ -10,9 +10,10 @@ const STEPS = [
 runLayer('full', STEPS)
   .then((report) => {
     const releaseReportPaths = writeReleaseReport(report);
-    console.log(`formal production release report: ${releaseReportPaths.jsonPath}`);
+    console.log(`formal production release report json: ${releaseReportPaths.jsonPath}`);
+    console.log(`formal production release report md: ${releaseReportPaths.mdPath}`);
   })
   .catch((error) => {
-    console.error('formal production smoke failed:', error && error.stack ? error.stack : String(error));
+    console.error('formal production release report failed:', error && error.stack ? error.stack : String(error));
     process.exit(1);
   });
