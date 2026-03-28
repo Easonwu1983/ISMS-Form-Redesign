@@ -17,14 +17,14 @@ const DESKTOP_VISUAL_SPECS = [
   {
     slug: 'unit-review',
     hash: '#unit-review',
-    clip: { x: 260, y: 64, width: 1180, height: 1080 }
+    selector: '#visual-unit-review-shell'
   }
 ];
 
 const MOBILE_VISUAL_SPECS = [
   { slug: 'dashboard', hash: '#dashboard' },
   { slug: 'training', hash: '#training' },
-  { slug: 'unit-review', hash: '#unit-review', clip: { x: 0, y: 0, width: 390, height: 980 } }
+  { slug: 'unit-review', hash: '#unit-review', selector: '#visual-unit-review-shell' }
 ];
 
 const PUBLIC_DESKTOP_VISUAL_SPECS = [
@@ -54,7 +54,7 @@ async function seedSyntheticUnitContactSuccess(page) {
       id: 'UCA-SMOKE-SUCCESS-001',
       unitValue: '計算機及資訊網路中心／資訊網路組',
       unitCode: 'A.B',
-      unitCategory: '行政單位',
+      unitCategory: '中心 / 研究單位',
       primaryUnit: '計算機及資訊網路中心',
       secondaryUnit: '資訊網路組',
       applicantName: '王小明',
@@ -64,7 +64,7 @@ async function seedSyntheticUnitContactSuccess(page) {
       status: 'pending_review',
       statusLabel: '待審核',
       statusTone: 'pending',
-      statusDetail: '申請已送出，等待管理者審核。',
+      statusDetail: '資料已送出，系統正在等待管理者審核。',
       submittedAt: '2026-03-15T08:00:00.000Z',
       updatedAt: '2026-03-15T08:00:00.000Z'
     };
@@ -94,70 +94,77 @@ async function seedSyntheticUnitContactSuccess(page) {
 
 async function seedSyntheticUnitReview(page) {
   await page.waitForFunction(() => {
-    const tableCard = document.querySelector('.review-table-card');
-    const historyCard = document.querySelector('.review-history-card');
-    return !!tableCard && !!historyCard;
+    const tableCard = document.querySelector('.governance-table-card, .review-table-card');
+    return !!tableCard;
   }, { timeout: 10000 }).catch(() => null);
 
   await page.evaluate(() => {
-    const tableBody = document.querySelector('.review-table-card table tbody');
-    if (tableBody) {
-      tableBody.innerHTML = `
-        <tr>
-          <td colspan="5">
-            <div class="empty-state review-empty">
-              <div class="empty-state-icon" aria-hidden="true">○</div>
-              <div class="empty-state-title">目前沒有待治理的自訂單位</div>
-              <div class="empty-state-desc">所有單位都已符合正式名錄，或已由最高管理員審核完成。</div>
-            </div>
-          </td>
-        </tr>
-      `;
-    }
-
-    const history = document.querySelector('.review-history-card .review-history-list');
-    if (history) {
-      history.innerHTML = '<div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">尚無治理紀錄</div></div>';
-    }
-
-    const governanceStack = document.querySelector('.governance-category-stack');
-    if (governanceStack) {
-      governanceStack.innerHTML = `
+    const hostCard = document.querySelector('.governance-table-card, .review-table-card');
+    if (!hostCard) return;
+    hostCard.id = 'visual-unit-review-shell';
+    hostCard.classList.add('visual-unit-review-shell');
+    hostCard.innerHTML = `
+      <div class="card-header">
+        <span class="card-title">治理分類清單</span>
+        <span class="review-card-subtitle">Synthetic focused baseline</span>
+      </div>
+      <div class="review-toolbar visual-unit-review-toolbar">
+        <div class="review-toolbar-main">
+          <div class="form-group">
+            <label class="form-label">關鍵字</label>
+            <div class="form-input visual-smoke-mask-value">keyword</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">填報模式</label>
+            <div class="form-input visual-smoke-mask-value">mode</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">分類</label>
+            <div class="form-input visual-smoke-mask-value">category</div>
+          </div>
+        </div>
+        <div class="review-toolbar-actions">
+          <button type="button" class="btn btn-primary visual-smoke-mask-value">套用篩選</button>
+        </div>
+      </div>
+      <div class="governance-category-stack visual-unit-review-stack">
         <details class="governance-category-card" open>
           <summary class="governance-category-summary">
             <div>
-              <strong>?? / ????</strong>
+              <strong>行政單位</strong>
               <div class="review-card-subtitle">Synthetic focused baseline</div>
             </div>
             <div class="review-chip-row">
-              <span class="review-count-chip">??? 4</span>
-              <span class="review-count-chip">?? 2</span>
-              <span class="review-count-chip">?? 2</span>
+              <span class="review-count-chip">單位 4</span>
+              <span class="review-count-chip">獨立 2</span>
+              <span class="review-count-chip">合併 2</span>
             </div>
           </summary>
-          <div class="review-card-body" style="padding-top:12px">
-            <div class="review-history-item" style="min-height:84px"></div>
-            <div class="review-history-item" style="min-height:84px"></div>
+          <div class="review-card-body">
+            <div class="review-history-item" style="min-height:72px"></div>
+            <div class="review-history-item" style="min-height:72px"></div>
           </div>
         </details>
         <details class="governance-category-card">
           <summary class="governance-category-summary">
             <div>
-              <strong>????</strong>
+              <strong>學術單位</strong>
               <div class="review-card-subtitle">Synthetic focused baseline</div>
             </div>
             <div class="review-chip-row">
-              <span class="review-count-chip">??? 3</span>
-              <span class="review-count-chip">?? 1</span>
-              <span class="review-count-chip">?? 2</span>
+              <span class="review-count-chip">單位 3</span>
+              <span class="review-count-chip">獨立 1</span>
+              <span class="review-count-chip">合併 2</span>
             </div>
           </summary>
-          <div class="review-card-body" style="padding-top:12px">
-            <div class="review-history-item" style="min-height:72px"></div>
+          <div class="review-card-body">
+            <div class="review-history-item" style="min-height:60px"></div>
           </div>
         </details>
-      `;
-    }
+      </div>
+    `;
+    const historyCard = document.querySelector('.review-history-card');
+    if (historyCard) historyCard.classList.add('visual-smoke-hide');
   });
 
   await page.waitForTimeout(150);
@@ -243,6 +250,31 @@ function getVisualSmokeStyles(slug, mode) {
 
   if (slug === 'unit-review') {
     return common + `
+      #visual-unit-review-shell {
+        max-width: ${mode === 'mobile' ? '360px' : '760px'} !important;
+        margin: 0 auto !important;
+      }
+      #visual-unit-review-shell .visual-unit-review-toolbar {
+        padding-top: 6px;
+      }
+      #visual-unit-review-shell .review-toolbar-main {
+        gap: 12px !important;
+      }
+      #visual-unit-review-shell .form-group {
+        min-width: 0 !important;
+        flex: 1 1 0 !important;
+      }
+      #visual-unit-review-shell .form-input {
+        min-height: 42px !important;
+        display: flex !important;
+        align-items: center !important;
+      }
+      #visual-unit-review-shell .governance-category-stack {
+        gap: 12px !important;
+      }
+      #visual-unit-review-shell .review-card-body {
+        padding-top: 12px !important;
+      }
       .review-count-chip,
       .review-status-badge,
       .review-history-badge,
@@ -345,6 +377,14 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'unit-review') {
     await seedSyntheticUnitReview(page);
+  }
+  if (spec && spec.selector) {
+    await page.waitForSelector(spec.selector, { timeout: 5000 });
+    await page.locator(spec.selector).first().screenshot({
+      path: outputPath,
+      animations: 'disabled'
+    });
+    return;
   }
   const options = spec.clip
     ? { path: outputPath, clip: spec.clip }

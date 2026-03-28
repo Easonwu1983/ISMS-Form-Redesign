@@ -1,4 +1,4 @@
-﻿// =============================================
+// =============================================
 // ISMS Internal Audit Tracking System - v4
 // =============================================
 (function () {
@@ -821,6 +821,16 @@
     window._appSupportBridgeModule = appSupportBridgeModuleApi;
     return appSupportBridgeModuleApi;
   }
+  let appRemoteBridgeModuleApi = null;
+  function getAppRemoteBridgeModule() {
+    if (appRemoteBridgeModuleApi) return appRemoteBridgeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppRemoteBridgeModule !== 'function') {
+      throw new Error('app-remote-bridge-module.js not loaded');
+    }
+    appRemoteBridgeModuleApi = window.createAppRemoteBridgeModule();
+    window._appRemoteBridgeModule = appRemoteBridgeModuleApi;
+    return appRemoteBridgeModuleApi;
+  }
   const appRemoteRuntime = getAppRemoteRuntimeModule().createAccess({
     updateUser
   });
@@ -984,322 +994,49 @@
     if (activeUnit) headers['X-ISMS-Active-Unit'] = encodeURIComponent(activeUnit);
     return headers;
   }
-  async function requestSystemUserJson(url, options) {
-    const requestOptions = options || {};
-    const config = getRuntimeM365Config();
-    const safeUrl = normalizeRequestUrl(url);
-    if (!safeUrl) throw new Error('未設定或無效的請求端點');
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutMs = Number(config.unitContactRequestTimeoutMs || 15000);
-    let timeoutId = null;
-    if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
-    try {
-      const response = await fetch(safeUrl, {
-        method: requestOptions.method || 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-ISMS-Contract-Version': SYSTEM_USERS_CONTRACT_VERSION,
-          ...getSystemUsersSharedHeaders(),
-          ...getSessionAuthHeaders(),
-          ...(requestOptions.headers || {})
-        },
-        body: requestOptions.body ? JSON.stringify(requestOptions.body) : undefined,
-        signal: controller ? controller.signal : undefined
-      });
-      const rawText = await response.text();
-      let parsed = null;
-      if (rawText) {
-        try {
-          parsed = JSON.parse(rawText);
-        } catch (_) {
-          parsed = { ok: false, message: rawText };
-        }
-      }
-      if (!response.ok) {
-        const error = new Error(String(parsed && (parsed.message || parsed.error || parsed.detail) || ('HTTP ' + response.status)).trim());
-        error.statusCode = response.status;
-        throw error;
-      }
-      return parsed || { ok: true };
-    } catch (error) {
-      if (error && error.name === 'AbortError') throw new Error('連線逾時，請稍後再試');
-      throw error;
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
+  const appRemoteBridge = getAppRemoteBridgeModule().createAccess({
+    getRuntimeM365Config,
+    normalizeRequestUrl,
+    getSystemUsersSharedHeaders,
+    getSessionAuthHeaders,
+    getAuthEndpoint,
+    getAuthSharedHeaders,
+    getReviewScopesEndpoint,
+    getReviewScopesSharedHeaders,
+    getAuditTrailEndpoint,
+    getAuditTrailSharedHeaders,
+    getAttachmentsEndpoint,
+    getAttachmentsSharedHeaders,
+    getAttachmentModule,
+    getFileExtension,
+    buildUploadSignature,
+    contracts: {
+      systemUsers: SYSTEM_USERS_CONTRACT_VERSION,
+      auth: AUTH_CONTRACT_VERSION,
+      reviewScopes: REVIEW_SCOPE_CONTRACT_VERSION,
+      auditTrail: AUDIT_TRAIL_CONTRACT_VERSION,
+      attachments: ATTACHMENT_CONTRACT_VERSION
+    },
+    actions: {
+      upload: ATTACHMENT_ACTIONS.UPLOAD
     }
-  }
-  async function requestAuthJson(path, options) {
-    const endpoint = getAuthEndpoint();
-    if (!endpoint) throw new Error('未設定 authEndpoint');
-    const suffix = String(path || '').trim();
-    const url = suffix ? (endpoint + suffix) : endpoint;
-    return requestSystemUserJson(url, {
-      ...(options || {}),
-      headers: {
-        'X-ISMS-Contract-Version': AUTH_CONTRACT_VERSION,
-        ...getAuthSharedHeaders(),
-        ...((options && options.headers) || {})
-      }
-    });
-  }
-  async function requestReviewScopeJson(path, options) {
-    const endpoint = getReviewScopesEndpoint();
-    if (!endpoint) throw new Error('未設定 reviewScopesEndpoint');
-    const suffix = String(path || '').trim();
-    const url = suffix
-      ? (/^https?:\/\//i.test(suffix) ? suffix : (endpoint + suffix))
-      : endpoint;
-    return requestSystemUserJson(url, {
-      ...(options || {}),
-      headers: {
-        'X-ISMS-Contract-Version': REVIEW_SCOPE_CONTRACT_VERSION,
-        ...getReviewScopesSharedHeaders(),
-        ...((options && options.headers) || {})
-      }
-    });
-  }
-  async function requestAuditTrailJson(path, options) {
-    const endpoint = getAuditTrailEndpoint();
-    if (!endpoint) throw new Error('未設定 auditTrailEndpoint');
-    const suffix = String(path || '').trim();
-    const url = suffix
-      ? (/^https?:\/\//i.test(suffix) ? suffix : (endpoint + suffix))
-      : endpoint;
-    return requestSystemUserJson(url, {
-      ...(options || {}),
-      headers: {
-        'X-ISMS-Contract-Version': AUDIT_TRAIL_CONTRACT_VERSION,
-        ...getAuditTrailSharedHeaders(),
-        ...((options && options.headers) || {})
-      }
-    });
-  }
-  async function requestAttachmentJson(path, options) {
-    const endpoint = getAttachmentsEndpoint();
-    if (!endpoint) throw new Error('未設定 attachmentsEndpoint');
-    const suffix = String(path || '').trim();
-    const url = suffix ? (endpoint + suffix) : endpoint;
-    return requestSystemUserJson(url, {
-      ...(options || {}),
-      headers: {
-        'X-ISMS-Contract-Version': ATTACHMENT_CONTRACT_VERSION,
-        ...getAttachmentsSharedHeaders(),
-        ...((options && options.headers) || {})
-      }
-    });
-  }
-  async function requestAttachmentBlob(path, options) {
-    const endpoint = getAttachmentsEndpoint();
-    if (!endpoint) throw new Error('未設定 attachmentsEndpoint');
-    const suffix = String(path || '').trim();
-    const url = normalizeRequestUrl(suffix ? (endpoint + suffix) : endpoint);
-    if (!url) throw new Error('未設定或無效的附件端點');
-    const requestOptions = options || {};
-    const config = getRuntimeM365Config();
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutMs = Number(config.attachmentsRequestTimeoutMs || config.apiReadTimeoutMs || config.unitContactRequestTimeoutMs || 15000);
-    let timeoutId = null;
-    if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
-    try {
-      const response = await fetch(url, {
-        method: requestOptions.method || 'GET',
-        headers: {
-          'X-ISMS-Contract-Version': ATTACHMENT_CONTRACT_VERSION,
-          ...getAttachmentsSharedHeaders(),
-          ...getSessionAuthHeaders(),
-          ...(requestOptions.headers || {})
-        },
-        signal: controller ? controller.signal : undefined
-      });
-      if (!response.ok) {
-        const rawText = await response.text();
-        let parsed = null;
-        try {
-          parsed = rawText ? JSON.parse(rawText) : null;
-        } catch (_) {
-          parsed = { ok: false, message: rawText };
-        }
-        const error = new Error(String(parsed && (parsed.message || parsed.error || parsed.detail) || ('HTTP ' + response.status)).trim());
-        error.statusCode = response.status;
-        throw error;
-      }
-      return {
-        response,
-        blob: await response.blob()
-      };
-    } catch (error) {
-      if (error && error.name === 'AbortError') throw new Error('連線逾時，請稍後再試');
-      throw error;
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-    }
-  }
-  async function requestSameOriginBlob(url, options) {
-    const requestOptions = options || {};
-    const safeUrl = normalizeRequestUrl(url);
-    if (!safeUrl) throw new Error('Invalid request endpoint');
-    const config = getRuntimeM365Config();
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutMs = Number(requestOptions.timeoutMs || config.unitContactRequestTimeoutMs || config.apiReadTimeoutMs || 15000);
-    let timeoutId = null;
-    if (controller && timeoutMs > 0) timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
-    try {
-      const response = await fetch(safeUrl, {
-        method: requestOptions.method || 'GET',
-        headers: {
-          ...getSessionAuthHeaders(),
-          ...(requestOptions.headers || {})
-        },
-        signal: controller ? controller.signal : undefined
-      });
-      if (!response.ok) {
-        const rawText = await response.text();
-        let parsed = null;
-        try {
-          parsed = rawText ? JSON.parse(rawText) : null;
-        } catch (_) {
-          parsed = { ok: false, message: rawText };
-        }
-        const error = new Error(String(parsed && (parsed.message || parsed.error || parsed.detail) || ('HTTP ' + response.status)).trim());
-        error.statusCode = response.status;
-        throw error;
-      }
-      return {
-        response,
-        blob: await response.blob()
-      };
-    } catch (error) {
-      if (error && error.name === 'AbortError') throw new Error('連線逾時，請稍後再試');
-      throw error;
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-    }
-  }  function readBlobAsDataUrl(blob) {
-    return new Promise(function (resolve, reject) {
-      if (!(blob instanceof Blob)) {
-        reject(new Error('缺少附件內容'));
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = function () { resolve(String(reader.result || '')); };
-      reader.onerror = function () { reject(reader.error || new Error('無法讀取附件內容')); };
-      reader.readAsDataURL(blob);
-    });
-  }
-  async function resolveAttachmentBlob(entry) {
-    if (entry && entry.file instanceof Blob) return entry.file;
-    if (entry && typeof entry.data === 'string' && entry.data.startsWith('data:')) {
-      const match = entry.data.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
-      if (!match) throw new Error('附件資料格式不正確');
-      const mime = String(match[1] || entry.type || 'application/octet-stream').trim();
-      const raw = match[2] ? atob(match[3] || '') : decodeURIComponent(match[3] || '');
-      const bytes = new Uint8Array(raw.length);
-      for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
-      return new Blob([bytes], { type: mime });
-    }
-    if (entry && entry.attachmentId && !entry.driveItemId) {
-      const blob = await getAttachmentModule().readStoredBlob(entry.attachmentId);
-      if (blob) return blob;
-    }
-    return null;
-  }
-  function normalizeLegacyAttachmentName(name) {
-    const clean = String(name || '').replace(/^\uFEFF/, '').trim();
-    if (!clean) return '';
-    return clean
-      .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
-      .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
-      .trim() || clean;
-  }
-  function normalizeRemoteAttachmentDescriptor(item, fallback) {
-    const source = item && typeof item === 'object' ? item : {};
-    const base = fallback && typeof fallback === 'object' ? fallback : {};
-    const scope = String(source.scope || base.scope || '').trim();
-    const name = normalizeLegacyAttachmentName(
-      scope === 'training-signoff' && String(base.name || '').trim()
-        ? String(base.name || '').trim()
-        : String(source.name || base.name || '').trim()
-    );
-    const contentType = String(source.contentType || source.type || base.contentType || base.type || '').trim();
-    const size = Number(source.size || base.size || 0);
-    return {
-      attachmentId: String(source.attachmentId || base.attachmentId || '').trim(),
-      driveItemId: String(source.driveItemId || base.driveItemId || '').trim(),
-      name: name,
-      type: contentType,
-      contentType: contentType,
-      size: size,
-      extension: String(source.extension || base.extension || getFileExtension(name)).trim().toLowerCase(),
-      signature: String(base.signature || buildUploadSignature({ name: name, type: contentType, size: size })).trim(),
-      storedAt: String(source.uploadedAt || source.storedAt || base.storedAt || new Date().toISOString()).trim(),
-      uploadedAt: String(source.uploadedAt || source.storedAt || base.storedAt || new Date().toISOString()).trim(),
-      scope: scope,
-      ownerId: String(source.ownerId || base.ownerId || '').trim(),
-      recordType: String(source.recordType || base.recordType || base.scope || '').trim(),
-      webUrl: String(source.webUrl || base.webUrl || '').trim(),
-      downloadUrl: String(source.downloadUrl || base.downloadUrl || '').trim(),
-      path: String(source.path || base.path || '').trim(),
-      storage: 'm365'
-    };
-  }
-  async function fetchRemoteAttachmentDetail(entry) {
-    const descriptor = entry && typeof entry === 'object' ? entry : {};
-    const driveItemId = String(descriptor.driveItemId || '').trim();
-    if (!driveItemId) return descriptor;
-    const body = await requestAttachmentJson('/' + encodeURIComponent(driveItemId), { method: 'GET' });
-    return normalizeRemoteAttachmentDescriptor(body && body.item || {}, descriptor);
-  }
-  async function fetchRemoteAttachmentBlob(entry) {
-    const descriptor = entry && typeof entry === 'object' ? entry : {};
-    const driveItemId = String(descriptor.driveItemId || '').trim();
-    if (!driveItemId) return null;
-    const result = await requestAttachmentBlob('/' + encodeURIComponent(driveItemId) + '/content', { method: 'GET' });
-    return {
-      blob: result.blob,
-      contentType: String(result.response.headers.get('content-type') || descriptor.contentType || descriptor.type || '').trim()
-    };
-  }
-  async function submitAttachmentUpload(entry, options) {
-    const blob = await resolveAttachmentBlob(entry);
-    if (!blob) throw new Error('找不到附件內容，無法上傳到正式後端');
-    const dataUrl = await readBlobAsDataUrl(blob);
-    const contentBase64 = String(dataUrl.split(',')[1] || '').trim();
-    if (!contentBase64) throw new Error('附件內容轉換失敗');
-    const descriptor = entry && typeof entry === 'object' ? entry : {};
-    const opts = options && typeof options === 'object' ? options : {};
-    const resolvedFileName = (() => {
-      if (typeof opts.buildFileName === 'function') {
-        const built = String(opts.buildFileName(descriptor, entry, blob) || '').trim();
-        if (built) return built;
-      }
-      if (opts.fileName) {
-        const explicit = String(opts.fileName || '').trim();
-        if (explicit) return explicit;
-      }
-      return String(descriptor.name || (entry && entry.file && entry.file.name) || 'attachment.bin').trim();
-    })();
-    const body = await requestAttachmentJson('/upload', {
-      method: 'POST',
-      body: {
-        action: ATTACHMENT_ACTIONS.UPLOAD,
-        payload: {
-          attachmentId: String(descriptor.attachmentId || '').trim(),
-          fileName: resolvedFileName,
-          contentType: String(descriptor.type || descriptor.contentType || blob.type || 'application/octet-stream').trim(),
-          contentBase64: contentBase64,
-          scope: String(opts.scope || descriptor.scope || '').trim(),
-          ownerId: String(opts.ownerId || descriptor.ownerId || '').trim(),
-          recordType: String(opts.recordType || descriptor.recordType || opts.scope || descriptor.scope || '').trim()
-        }
-      }
-    });
-    return normalizeRemoteAttachmentDescriptor(body && body.item || {}, {
-      ...descriptor,
-      scope: String(opts.scope || descriptor.scope || '').trim(),
-      ownerId: String(opts.ownerId || descriptor.ownerId || '').trim(),
-      recordType: String(opts.recordType || descriptor.recordType || opts.scope || descriptor.scope || '').trim()
-    });
-  }
+  });
+  const {
+    requestSystemUserJson,
+    requestAuthJson,
+    requestReviewScopeJson,
+    requestAuditTrailJson,
+    requestAttachmentJson,
+    requestAttachmentBlob,
+    requestSameOriginBlob,
+    readBlobAsDataUrl,
+    resolveAttachmentBlob,
+    normalizeLegacyAttachmentName,
+    normalizeRemoteAttachmentDescriptor,
+    fetchRemoteAttachmentDetail,
+    fetchRemoteAttachmentBlob,
+    submitAttachmentUpload
+  } = appRemoteBridge;
   function mergeRemoteUsersIntoStore(items, options) {
     const strict = !!(options && options.strict);
     const data = loadData();

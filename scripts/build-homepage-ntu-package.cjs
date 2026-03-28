@@ -1,4 +1,4 @@
-﻿const fs = require('fs');
+const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
 const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
@@ -54,6 +54,7 @@ const filesToCopy = [
   'app-bootstrap-module.js',
   'app-core-module-access-module.js',
   'app-support-bridge-module.js',
+  'app-remote-bridge-module.js',
   'admin-collection-cache-module.js',
   'units.js',
   'm365-config.js',

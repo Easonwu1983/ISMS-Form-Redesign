@@ -1,4 +1,4 @@
-﻿const crypto = require('crypto');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
@@ -53,6 +53,7 @@ const filesToCopy = [
   'app-bootstrap-module.js',
   'app-core-module-access-module.js',
   'app-support-bridge-module.js',
+  'app-remote-bridge-module.js',
   'admin-collection-cache-module.js',
   'units.js',
   'units-data.json',

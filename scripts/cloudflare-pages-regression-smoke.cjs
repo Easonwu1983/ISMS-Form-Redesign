@@ -1,4 +1,4 @@
-﻿const fs = require('fs');
+const fs = require('fs');
 const path = require('path');
 const { chromium } = require('./_playwright.cjs');
 const {
@@ -283,8 +283,7 @@ async function runVisualBaselineChecks(browser, pushStep) {
       await captureVisualSpec(desktopPage, BASE_URL, spec, actualPath, 'desktop');
       const maxDiffRatio = spec.slug === 'dashboard' ? 0.08 : spec.slug === 'training' ? 0.12 : (spec.slug === 'unit-review' ? 0.08 : 0.06);
         const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, {
-          maxDiffRatio,
-          sampleScale: spec.slug === 'unit-review' ? 0.35 : 1
+          maxDiffRatio
         });
       if (!result.ok) throw new Error(`desktop visual drift: ${spec.slug} (${JSON.stringify(result)})`);
       pushStep(`visual:desktop:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
@@ -301,8 +300,7 @@ async function runVisualBaselineChecks(browser, pushStep) {
         ? 0.3
         : (spec.slug === 'training' ? 0.16 : 0.08);
         const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, {
-          maxDiffRatio,
-          sampleScale: spec.slug === 'unit-review' ? 0.28 : 1
+          maxDiffRatio
         });
       if (!result.ok) throw new Error(`mobile visual drift: ${spec.slug} (${JSON.stringify(result)})`);
       pushStep(`visual:mobile:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);

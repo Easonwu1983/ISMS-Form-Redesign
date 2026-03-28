@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   var initialBuildInfo = window.__APP_BUILD_INFO__ && typeof window.__APP_BUILD_INFO__ === 'object'
     ? window.__APP_BUILD_INFO__
     : {};
@@ -49,6 +49,7 @@
     'app-bootstrap-module.js',
     'app-core-module-access-module.js',
     'app-support-bridge-module.js',
+  'app-remote-bridge-module.js',
     'case-module.js',
     'admin-collection-cache-module.js',
     'admin-module.js',
