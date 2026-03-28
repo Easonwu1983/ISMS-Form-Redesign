@@ -102,17 +102,6 @@
       limit: '50',
       offset: '0'
     });
-    const auditTrailState = createAdminRemoteCollectionState({
-      filters: DEFAULT_AUDIT_FILTERS,
-      summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
-      limit: 50,
-      extra: {
-        health: null,
-        lastLoadedAt: '',
-        filterSignature: '',
-        loading: false
-      }
-    });
     const AUDIT_TRAIL_SYNC_FRESHNESS_MS = 30000;
     const AUDIT_TRAIL_HEALTH_CACHE_MS = 30000;
     const AUDIT_TRAIL_QUERY_CACHE_MS = 30000;
@@ -126,10 +115,12 @@
     const auditTrailLoadPromiseMap = new Map();
     const AUDIT_TRAIL_SUMMARY_CACHE_MS = 15000;
     const AUDIT_TRAIL_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
-    let auditTrailSummaryCache = createAdminSummaryCache();
+    let auditTrailCollectionBundle = null;
+    let auditTrailState = null;
+    let auditTrailSummaryCache = null;
     let auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
-    let auditTrailRenderCache = createAdminRenderCache();
-    let auditTrailMarkupCache = createAdminMarkupCache();
+    let auditTrailRenderCache = null;
+    let auditTrailMarkupCache = null;
     const DEFAULT_SYSTEM_USERS_FILTERS = Object.freeze({
       q: '',
       role: '',
@@ -137,17 +128,10 @@
       limit: '20',
       offset: '0'
     });
-    const systemUsersState = createAdminRemoteCollectionState({
-      filters: DEFAULT_SYSTEM_USERS_FILTERS,
-      summary: { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 },
-      limit: 20,
-      extra: {
-        loading: false,
-        lastLoadedAt: ''
-      }
-    });
-    let systemUsersRenderCache = createAdminRenderCache();
-    let systemUsersMarkupCache = createAdminMarkupCache();
+    let systemUsersCollectionBundle = null;
+    let systemUsersState = null;
+    let systemUsersRenderCache = null;
+    let systemUsersMarkupCache = null;
     const DEFAULT_UNIT_CONTACT_REVIEW_FILTERS = Object.freeze({
       status: 'pending_review',
       keyword: '',
@@ -155,17 +139,10 @@
       limit: '50',
       offset: '0'
     });
-    const unitContactReviewState = createAdminRemoteCollectionState({
-      filters: DEFAULT_UNIT_CONTACT_REVIEW_FILTERS,
-      summary: { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 },
-      limit: 50,
-      extra: {
-        loading: false,
-        lastLoadedAt: ''
-      }
-    });
-    let unitContactReviewRenderCache = createAdminRenderCache();
-    let unitContactReviewMarkupCache = createAdminMarkupCache();
+    let unitContactReviewCollectionBundle = null;
+    let unitContactReviewState = null;
+    let unitContactReviewRenderCache = null;
+    let unitContactReviewMarkupCache = null;
     const DEFAULT_GOVERNANCE_FILTERS = Object.freeze({
       keyword: '',
       mode: 'all',
@@ -293,6 +270,34 @@
       return { signature: '', summary: null, fetchedAt: 0, promise: null, ...(extra && typeof extra === 'object' ? extra : {}) };
     }
 
+    function replaceAdminCacheState(cache, nextState, defaults) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.replaceCacheState === 'function') {
+        return moduleApi.replaceCacheState(cache, nextState, defaults);
+      }
+      const base = defaults && typeof defaults === 'object' ? { ...defaults } : {};
+      const next = nextState && typeof nextState === 'object' ? nextState : {};
+      if (!cache || typeof cache !== 'object') return { ...base, ...next };
+      Object.keys(cache).forEach((key) => { delete cache[key]; });
+      Object.assign(cache, base, next);
+      return cache;
+    }
+
+    function createAdminRemoteCollectionBundle(options) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') {
+        return moduleApi.createRemoteCollectionBundle(options);
+      }
+      const settings = options && typeof options === 'object' ? options : {};
+      return {
+        state: createAdminRemoteCollectionState(settings),
+        viewCache: createAdminRemoteViewCache(settings.filters, settings.viewCacheExtra),
+        summaryCache: createAdminSummaryCache(settings.summaryCacheExtra),
+        renderCache: createAdminRenderCache(),
+        markupCache: createAdminMarkupCache()
+      };
+    }
+
     function createAdminRenderCache() {
       const moduleApi = getAdminCollectionCacheModule();
       return moduleApi && typeof moduleApi.createRenderCache === 'function'
@@ -379,6 +384,19 @@
       if (typeof settings.afterReset === 'function') settings.afterReset(state);
     }
 
+    function resetAdminRemoteCollectionBundle(bundle, options) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.resetRemoteCollectionBundle === 'function') {
+        moduleApi.resetRemoteCollectionBundle(bundle, options);
+        return;
+      }
+      if (!bundle || typeof bundle !== 'object') return;
+      if (bundle.state) resetAdminPagedCollectionState(bundle.state, options);
+      if (bundle.viewCache) resetAdminRemoteViewCache(bundle.viewCache, options && options.filters);
+      if (bundle.summaryCache) resetAdminSummaryCache(bundle.summaryCache);
+      resetAdminRenderCaches(bundle.renderCache, bundle.markupCache);
+    }
+
     function buildAdminCollectionRenderSignature(options) {
       const moduleApi = getAdminCollectionCacheModule();
       if (moduleApi && typeof moduleApi.buildRenderSignature === 'function') {
@@ -398,6 +416,58 @@
         ids: items.map(identity)
       });
     }
+
+    function buildAuditTrailCollectionBundle() {
+      return createAdminRemoteCollectionBundle({
+        filters: DEFAULT_AUDIT_FILTERS,
+        summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
+        limit: 50,
+        extra: {
+          health: null,
+          lastLoadedAt: '',
+          filterSignature: '',
+          loading: false
+        }
+      });
+    }
+
+    function buildSystemUsersCollectionBundle() {
+      return createAdminRemoteCollectionBundle({
+        filters: DEFAULT_SYSTEM_USERS_FILTERS,
+        summary: { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 },
+        limit: 20,
+        extra: {
+          loading: false,
+          lastLoadedAt: ''
+        }
+      });
+    }
+
+    function buildUnitContactReviewCollectionBundle() {
+      return createAdminRemoteCollectionBundle({
+        filters: DEFAULT_UNIT_CONTACT_REVIEW_FILTERS,
+        summary: { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 },
+        limit: 50,
+        extra: {
+          loading: false,
+          lastLoadedAt: ''
+        }
+      });
+    }
+
+    auditTrailCollectionBundle = buildAuditTrailCollectionBundle();
+    auditTrailState = auditTrailCollectionBundle.state;
+    auditTrailSummaryCache = auditTrailCollectionBundle.summaryCache;
+    auditTrailRenderCache = auditTrailCollectionBundle.renderCache;
+    auditTrailMarkupCache = auditTrailCollectionBundle.markupCache;
+    systemUsersCollectionBundle = buildSystemUsersCollectionBundle();
+    systemUsersState = systemUsersCollectionBundle.state;
+    systemUsersRenderCache = systemUsersCollectionBundle.renderCache;
+    systemUsersMarkupCache = systemUsersCollectionBundle.markupCache;
+    unitContactReviewCollectionBundle = buildUnitContactReviewCollectionBundle();
+    unitContactReviewState = unitContactReviewCollectionBundle.state;
+    unitContactReviewRenderCache = unitContactReviewCollectionBundle.renderCache;
+    unitContactReviewMarkupCache = unitContactReviewCollectionBundle.markupCache;
 
     function normalizeAdminUnitList(units) {
       const source = Array.isArray(units) ? units : [];
@@ -460,29 +530,37 @@
     }
 
     function resetSystemUsersRemoteState() {
-      resetAdminPagedCollectionState(systemUsersState, {
+      resetAdminRemoteCollectionBundle(systemUsersCollectionBundle, {
         filters: DEFAULT_SYSTEM_USERS_FILTERS,
         summary: { total: 0, admin: 0, unitAdmin: 0, securityWindow: 0 },
         limit: 20
       });
-      resetAdminRemoteViewCache(renderUsers._remoteViewCache, DEFAULT_SYSTEM_USERS_FILTERS);
-      systemUsersRenderCache = createAdminRenderCache();
-      systemUsersMarkupCache = createAdminMarkupCache();
+      if (renderUsers._remoteViewCache !== systemUsersCollectionBundle.viewCache) {
+        renderUsers._remoteViewCache = systemUsersCollectionBundle.viewCache;
+      } else {
+        resetAdminRemoteViewCache(renderUsers._remoteViewCache, DEFAULT_SYSTEM_USERS_FILTERS);
+      }
+      systemUsersRenderCache = systemUsersCollectionBundle.renderCache;
+      systemUsersMarkupCache = systemUsersCollectionBundle.markupCache;
     }
 
     function resetUnitContactReviewRemoteState() {
-      resetAdminPagedCollectionState(unitContactReviewState, {
+      resetAdminRemoteCollectionBundle(unitContactReviewCollectionBundle, {
         filters: DEFAULT_UNIT_CONTACT_REVIEW_FILTERS,
         summary: { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 },
         limit: 50
       });
-      resetAdminRemoteViewCache(renderUnitContactReview._remoteViewCache, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
-      unitContactReviewRenderCache = createAdminRenderCache();
-      unitContactReviewMarkupCache = createAdminMarkupCache();
+      if (renderUnitContactReview._remoteViewCache !== unitContactReviewCollectionBundle.viewCache) {
+        renderUnitContactReview._remoteViewCache = unitContactReviewCollectionBundle.viewCache;
+      } else {
+        resetAdminRemoteViewCache(renderUnitContactReview._remoteViewCache, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
+      }
+      unitContactReviewRenderCache = unitContactReviewCollectionBundle.renderCache;
+      unitContactReviewMarkupCache = unitContactReviewCollectionBundle.markupCache;
     }
 
     function resetAuditTrailRemoteState() {
-      resetAdminPagedCollectionState(auditTrailState, {
+      resetAdminRemoteCollectionBundle(auditTrailCollectionBundle, {
         filters: DEFAULT_AUDIT_FILTERS,
         summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
         limit: 50,
@@ -492,10 +570,10 @@
       auditTrailLoadPromiseMap.clear();
       auditTrailHealthLoadPromise = null;
       auditTrailHealthCache = { value: null, loadedAt: 0 };
-      auditTrailSummaryCache = createAdminSummaryCache();
+      auditTrailSummaryCache = auditTrailCollectionBundle.summaryCache;
       auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
-      auditTrailRenderCache = createAdminRenderCache();
-      auditTrailMarkupCache = createAdminMarkupCache();
+      auditTrailRenderCache = auditTrailCollectionBundle.renderCache;
+      auditTrailMarkupCache = auditTrailCollectionBundle.markupCache;
     }
 
     function resetSystemUsersSummaryState() {
@@ -1127,28 +1205,28 @@
       const promise = fetchAuditTrailEntries(summaryFilters).then((response) => {
         const summary = normalizeAuditTrailSummary(response && response.summary);
         if (auditTrailSummaryBootstrapState.signature === signature) resetAuditTrailSummaryBootstrapState();
-        auditTrailSummaryCache = {
+        replaceAdminCacheState(auditTrailSummaryCache, {
           signature,
           summary,
           fetchedAt: Date.now(),
           promise: null
-        };
+        }, { signature: '', summary: null, fetchedAt: 0, promise: null });
         return summary;
       }).catch((error) => {
         if (auditTrailSummaryCache.signature === signature) {
-          auditTrailSummaryCache = {
+          replaceAdminCacheState(auditTrailSummaryCache, {
             ...auditTrailSummaryCache,
             promise: null
-          };
+          }, { signature: '', summary: null, fetchedAt: 0, promise: null });
         }
         throw error;
       });
-      auditTrailSummaryCache = {
+      replaceAdminCacheState(auditTrailSummaryCache, {
         signature,
         summary: auditTrailSummaryCache.signature === signature ? auditTrailSummaryCache.summary : null,
         fetchedAt: auditTrailSummaryCache.signature === signature ? auditTrailSummaryCache.fetchedAt : 0,
         promise
-      };
+      }, { signature: '', summary: null, fetchedAt: 0, promise: null });
       return promise;
     }
 
@@ -2548,7 +2626,7 @@
     if (!canManageUsers()) { navigate('dashboard'); return; }
     const opts = options || {};
     const app = document.getElementById('app');
-    const visibleUsersCache = renderUsers._remoteViewCache || (renderUsers._remoteViewCache = createAdminRemoteViewCache(DEFAULT_SYSTEM_USERS_FILTERS));
+      const visibleUsersCache = renderUsers._remoteViewCache || (renderUsers._remoteViewCache = systemUsersCollectionBundle.viewCache || createAdminRemoteViewCache(DEFAULT_SYSTEM_USERS_FILTERS));
     systemUsersState.filters = normalizePagedFilters({ ...systemUsersState.filters, ...(opts.filters || opts) }, DEFAULT_SYSTEM_USERS_FILTERS);
     systemUsersState.loading = true;
     app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取系統帳號清單...</div></div>`;
@@ -2866,7 +2944,7 @@
   async function renderUnitContactReview(nextFilters, options) {
     if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可審核單位管理人申請', 'error'); return; }
     const opts = options || {};
-    const visibleApplicationsCache = renderUnitContactReview._remoteViewCache || (renderUnitContactReview._remoteViewCache = createAdminRemoteViewCache(DEFAULT_UNIT_CONTACT_REVIEW_FILTERS));
+      const visibleApplicationsCache = renderUnitContactReview._remoteViewCache || (renderUnitContactReview._remoteViewCache = unitContactReviewCollectionBundle.viewCache || createAdminRemoteViewCache(DEFAULT_UNIT_CONTACT_REVIEW_FILTERS));
     unitContactReviewState.filters = normalizePagedFilters({ ...unitContactReviewState.filters, ...(nextFilters || {}) }, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
     unitContactReviewState.loading = true;
     const app = document.getElementById('app');

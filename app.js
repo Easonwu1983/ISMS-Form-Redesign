@@ -809,6 +809,7 @@
   let appBootstrapStateModuleApi = null;
   let appCoreServiceModuleApi = null;
   let appBootstrapAccessModuleApi = null;
+  let appEntryRuntimeModuleApi = null;
   const appCoreServiceState = {
     serviceRegistryModuleApi: null,
     appServiceAccessModuleApi: null
@@ -830,6 +831,15 @@
     appBootstrapAccessModuleApi = window.createAppBootstrapAccessModule();
     window._appBootstrapAccessModule = appBootstrapAccessModuleApi;
     return appBootstrapAccessModuleApi;
+  }
+  function getAppEntryRuntimeModule() {
+    if (appEntryRuntimeModuleApi) return appEntryRuntimeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppEntryRuntimeModule !== 'function') {
+      throw new Error('app-entry-runtime-module.js not loaded');
+    }
+    appEntryRuntimeModuleApi = window.createAppEntryRuntimeModule();
+    window._appEntryRuntimeModule = appEntryRuntimeModuleApi;
+    return appEntryRuntimeModuleApi;
   }
   function getServiceRegistryModule() {
     serviceRegistryModuleApi = getAppCoreServiceModule().getServiceRegistryModule(appCoreServiceState, {});
@@ -3981,37 +3991,26 @@
       toast
     });
   }
-  function getAppEntryDeps() {
-    return {
-      getBootstrapCoordinator,
-      getM365ApiClient,
-      getShellModule,
-      getAppBootstrapModule,
-      recordBootstrapStep,
-      installGlobalDelegation,
-      installAppEventListeners,
-      renderApp,
-      ensureAuthenticatedRemoteBootstrap,
-      getAuthMode,
-      seedData,
-      ensurePrimaryAdminProfile,
-      getTrainingModule,
-      migrateAttachmentStores,
-      getDataModule,
-      setLastStableHash,
-      refreshIcons,
-      ic,
-      esc
-    };
-  }
-  function initializeCoreServices(reason) {
-    return getAppEntryModule().initializeCoreServices(getAppEntryDeps(), reason);
-  }
-
-  async function initApp() {
-    return getAppEntryModule().initApp(getAppEntryDeps());
-  }
-
-  getAppEntryModule().startApp(getAppEntryDeps());
+  getAppEntryRuntimeModule().startApp(getAppEntryModule(), {
+    getBootstrapCoordinator,
+    getM365ApiClient,
+    getShellModule,
+    getAppBootstrapModule,
+    recordBootstrapStep,
+    installGlobalDelegation,
+    installAppEventListeners,
+    renderApp,
+    ensureAuthenticatedRemoteBootstrap,
+    getAuthMode,
+    seedData,
+    ensurePrimaryAdminProfile,
+    getTrainingModule,
+    migrateAttachmentStores,
+    getDataModule,
+    setLastStableHash,
+    refreshIcons,
+    ic,
+    esc
+  });
 
 })();

@@ -33,6 +33,14 @@
       return getBaseModule().createSummaryCache(extra);
     }
 
+    function replaceCacheState(cache, nextState, defaults) {
+      return getBaseModule().replaceCacheState(cache, nextState, defaults);
+    }
+
+    function createRemoteCollectionBundle(options) {
+      return getBaseModule().createRemoteCollectionBundle(options);
+    }
+
     function createRenderCache() {
       return getBaseModule().createRenderCache({ filterSignature: '' });
     }
@@ -61,6 +69,10 @@
       return getBaseModule().resetPagedCollectionState(state, options);
     }
 
+    function resetRemoteCollectionBundle(bundle, options) {
+      return getBaseModule().resetRemoteCollectionBundle(bundle, options);
+    }
+
     function buildRenderSignature(options) {
       return getBaseModule().buildRenderSignature(options);
     }
@@ -71,6 +83,8 @@
       createRemoteCollectionState,
       createRemoteViewCache,
       createSummaryCache,
+      replaceCacheState,
+      createRemoteCollectionBundle,
       createRenderCache,
       createMarkupCache,
       resetRemoteViewCache,
@@ -78,6 +92,7 @@
       resetSummaryCache,
       resetRenderCaches,
       resetPagedCollectionState,
+      resetRemoteCollectionBundle,
       buildRenderSignature
     };
   };

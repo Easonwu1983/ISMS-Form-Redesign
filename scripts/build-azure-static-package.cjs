@@ -35,6 +35,7 @@ const filesToCopy = [
   'app-action-module.js',
   'app-shell-orchestration-module.js',
   'app-entry-module.js',
+  'app-entry-runtime-module.js',
   'app-auth-session-module.js',
   'app-router-module.js',
   'app-bootstrap-module.js',

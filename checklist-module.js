@@ -110,15 +110,12 @@
     const CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT = '50';
     const CHECKLIST_REMOTE_PAGE_CACHE_MAX = 12;
     const checklistRemotePageCache = new Map();
-    let checklistRemoteSummaryCache = createChecklistSummaryCache();
+    let checklistRemoteCollectionBundle = null;
+    let checklistRemoteSummaryCache = null;
     let checklistRemoteSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     const CHECKLIST_REMOTE_SUMMARY_TTL_MS = 15000;
     const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
-    let checklistRemotePageState = createChecklistRemoteCollectionState({
-      filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
-      summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
-      limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT
-    });
+    let checklistRemotePageState = null;
     let checklistAccessProfileListenerInstalled = false;
 
     function serializeChecklistRemoteSummary(summary) {
@@ -188,28 +185,28 @@
       const promise = loadSummary(summaryFilters).then((response) => {
         const summary = normalizeChecklistRemoteSummary(response && response.summary, response && response.total);
         if (checklistRemoteSummaryBootstrapState.signature === signature) resetChecklistRemoteSummaryBootstrapState();
-        checklistRemoteSummaryCache = {
+        replaceChecklistCacheState(checklistRemoteSummaryCache, {
           signature,
           summary,
           fetchedAt: Date.now(),
           promise: null
-        };
+        }, { signature: '', summary: null, fetchedAt: 0, promise: null });
         return summary;
       }).catch((error) => {
         if (checklistRemoteSummaryCache.signature === signature) {
-          checklistRemoteSummaryCache = {
+          replaceChecklistCacheState(checklistRemoteSummaryCache, {
             ...checklistRemoteSummaryCache,
             promise: null
-          };
+          }, { signature: '', summary: null, fetchedAt: 0, promise: null });
         }
         throw error;
       });
-      checklistRemoteSummaryCache = {
+      replaceChecklistCacheState(checklistRemoteSummaryCache, {
         signature,
         summary: checklistRemoteSummaryCache.signature === signature ? checklistRemoteSummaryCache.summary : null,
         fetchedAt: checklistRemoteSummaryCache.signature === signature ? checklistRemoteSummaryCache.fetchedAt : 0,
         promise
-      };
+      }, { signature: '', summary: null, fetchedAt: 0, promise: null });
       return promise;
     }
 
@@ -357,11 +354,38 @@
       if (moduleApi && typeof moduleApi.createSummaryCache === 'function') return moduleApi.createSummaryCache(extra);
       return { signature: '', summary: null, fetchedAt: 0, promise: null, ...(extra && typeof extra === 'object' ? extra : {}) };
     }
+    function replaceChecklistCacheState(cache, nextState, defaults) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.replaceCacheState === 'function') return moduleApi.replaceCacheState(cache, nextState, defaults);
+      const base = defaults && typeof defaults === 'object' ? { ...defaults } : {};
+      const next = nextState && typeof nextState === 'object' ? nextState : {};
+      if (!cache || typeof cache !== 'object') return { ...base, ...next };
+      Object.keys(cache).forEach((key) => { delete cache[key]; });
+      Object.assign(cache, base, next);
+      return cache;
+    }
+    function createChecklistRemoteCollectionBundle(options) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') return moduleApi.createRemoteCollectionBundle(options);
+      const settings = options && typeof options === 'object' ? options : {};
+      return {
+        state: createChecklistRemoteCollectionState(settings),
+        summaryCache: createChecklistSummaryCache(settings.summaryCacheExtra),
+        markupCache: createChecklistMarkupCache(settings.markupCacheExtra)
+      };
+    }
     function createChecklistMarkupCache(extra) {
       const moduleApi = getChecklistCollectionCacheModule();
       if (moduleApi && typeof moduleApi.createMarkupCache === 'function') return moduleApi.createMarkupCache(extra);
       return { signature: '', html: '', ...(extra && typeof extra === 'object' ? extra : {}) };
     }
+    checklistRemoteCollectionBundle = createChecklistRemoteCollectionBundle({
+      filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
+      summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
+      limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT
+    });
+    checklistRemoteSummaryCache = checklistRemoteCollectionBundle.summaryCache;
+    checklistRemotePageState = checklistRemoteCollectionBundle.state;
     function normalizeChecklistCacheScope(scope) {
       const moduleApi = getChecklistCacheInvalidationModule();
       return moduleApi && typeof moduleApi.normalizeScope === 'function'
@@ -390,13 +414,14 @@
       const resetTemplate = resetAll || normalizedScope === 'checklists-template';
       if (resetListSummary) {
         checklistRemotePageCache.clear();
-        checklistRemoteSummaryCache = createChecklistSummaryCache();
-        resetChecklistRemoteSummaryBootstrapState();
-        checklistRemotePageState = createChecklistRemoteCollectionState({
+        checklistRemoteCollectionBundle = createChecklistRemoteCollectionBundle({
           filters: { limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT, offset: '0', auditYear: '', statusBucket: 'all', q: '' },
           summary: { total: 0, editing: 0, pendingExport: 0, closed: 0 },
           limit: CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT
         });
+        checklistRemoteSummaryCache = checklistRemoteCollectionBundle.summaryCache;
+        resetChecklistRemoteSummaryBootstrapState();
+        checklistRemotePageState = checklistRemoteCollectionBundle.state;
         checklistBrowseState.keyword = '';
         checklistBrowseState.selectedYear = '';
         checklistBrowseState.status = 'all';

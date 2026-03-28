@@ -111,7 +111,8 @@
     let trainingRosterPageShellCache = createTrainingMarkupCache();
     let trainingDashboardUnitsCache = { signature: '', units: [] };
     let trainingListViewCache = { signature: '', visibleForms: [], summary: null };
-    let trainingRemoteListSummaryCache = createTrainingSummaryCache();
+    let trainingRemoteCollectionBundle = null;
+    let trainingRemoteListSummaryCache = null;
     let trainingRemoteListSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
     const TRAINING_REMOTE_LIST_SUMMARY_TTL_MS = 15000;
@@ -120,10 +121,7 @@
     const TRAINING_ROSTER_DEFAULT_PAGE_LIMIT = '200';
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
     const trainingRosterRemotePageCache = new Map();
-    let trainingRosterRemotePageState = createTrainingRemoteCollectionState({
-      filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
-      limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT
-    });
+    let trainingRosterRemotePageState = null;
     let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
       let trainingAccessProfileListenerInstalled = false;
       let trainingRowsStateVersion = 0;
@@ -346,6 +344,27 @@
       if (moduleApi && typeof moduleApi.createSummaryCache === 'function') return moduleApi.createSummaryCache(extra);
       return { signature: '', summary: null, fetchedAt: 0, promise: null, ...(extra && typeof extra === 'object' ? extra : {}) };
     }
+    function replaceTrainingCacheState(cache, nextState, defaults) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.replaceCacheState === 'function') return moduleApi.replaceCacheState(cache, nextState, defaults);
+      const base = defaults && typeof defaults === 'object' ? { ...defaults } : {};
+      const next = nextState && typeof nextState === 'object' ? nextState : {};
+      if (!cache || typeof cache !== 'object') return { ...base, ...next };
+      Object.keys(cache).forEach((key) => { delete cache[key]; });
+      Object.assign(cache, base, next);
+      return cache;
+    }
+    function createTrainingRemoteCollectionBundle(options) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') return moduleApi.createRemoteCollectionBundle(options);
+      const settings = options && typeof options === 'object' ? options : {};
+      return {
+        state: createTrainingRemoteCollectionState(settings),
+        summaryCache: createTrainingSummaryCache(settings.summaryCacheExtra),
+        renderCache: createTrainingRenderCache(settings.renderCacheExtra),
+        markupCache: createTrainingMarkupCache(settings.markupCacheExtra)
+      };
+    }
     function createTrainingRenderCache(extra) {
       const moduleApi = getTrainingCollectionCacheModule();
       if (moduleApi && typeof moduleApi.createRenderCache === 'function') return moduleApi.createRenderCache(extra);
@@ -356,6 +375,15 @@
       if (moduleApi && typeof moduleApi.createMarkupCache === 'function') return moduleApi.createMarkupCache(extra);
       return { signature: '', html: '', ...(extra && typeof extra === 'object' ? extra : {}) };
     }
+    trainingRemoteCollectionBundle = createTrainingRemoteCollectionBundle({
+      filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
+      limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT,
+      renderCacheExtra: { selectedSignature: '', defer: false }
+    });
+    trainingRemoteListSummaryCache = trainingRemoteCollectionBundle.summaryCache;
+    trainingRosterRemotePageState = trainingRemoteCollectionBundle.state;
+    trainingRosterRenderCache = trainingRemoteCollectionBundle.renderCache;
+    trainingRosterGroupMarkupCache = trainingRemoteCollectionBundle.markupCache;
     function resetTrainingRenderCaches() {
       const moduleApi = getTrainingCollectionCacheModule();
       if (moduleApi && typeof moduleApi.resetRenderCaches === 'function') {
@@ -372,16 +400,18 @@
     function resetTrainingRemoteCaches(reason) {
       const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
       clearTrainingRosterRemotePageCache();
-      trainingRosterRemotePageState = createTrainingRemoteCollectionState({
+      trainingRemoteCollectionBundle = createTrainingRemoteCollectionBundle({
         filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
-        limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT
+        limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT,
+        renderCacheExtra: { selectedSignature: '', defer: false }
       });
-      trainingRemoteListSummaryCache = createTrainingSummaryCache();
+      trainingRosterRemotePageState = trainingRemoteCollectionBundle.state;
+      trainingRemoteListSummaryCache = trainingRemoteCollectionBundle.summaryCache;
       resetTrainingRemoteListSummaryBootstrapState();
       trainingRosterGroupingCache = { token: '', groups: null };
       trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
-      trainingRosterRenderCache = createTrainingRenderCache({ selectedSignature: '', defer: false });
-      trainingRosterGroupMarkupCache = createTrainingMarkupCache();
+      trainingRosterRenderCache = trainingRemoteCollectionBundle.renderCache;
+      trainingRosterGroupMarkupCache = trainingRemoteCollectionBundle.markupCache;
       trainingRosterPageShellCache = createTrainingMarkupCache();
       trainingDashboardUnitsCache = { signature: '', units: [] };
       trainingListViewCache = { signature: '', visibleForms: [], summary: null };
@@ -804,28 +834,28 @@
       const promise = loadSummary().then((response) => {
         const summary = normalizeTrainingListCounts(response && response.summary);
         if (trainingRemoteListSummaryBootstrapState.signature === signature) resetTrainingRemoteListSummaryBootstrapState();
-        trainingRemoteListSummaryCache = {
+        replaceTrainingCacheState(trainingRemoteListSummaryCache, {
           signature,
           summary,
           fetchedAt: Date.now(),
           promise: null
-        };
+        }, { signature: '', summary: null, fetchedAt: 0, promise: null });
         return summary;
       }).catch((error) => {
         if (trainingRemoteListSummaryCache.signature === signature) {
-          trainingRemoteListSummaryCache = {
+          replaceTrainingCacheState(trainingRemoteListSummaryCache, {
             ...trainingRemoteListSummaryCache,
             promise: null
-          };
+          }, { signature: '', summary: null, fetchedAt: 0, promise: null });
         }
         throw error;
       });
-      trainingRemoteListSummaryCache = {
+      replaceTrainingCacheState(trainingRemoteListSummaryCache, {
         signature,
         summary: trainingRemoteListSummaryCache.signature === signature ? trainingRemoteListSummaryCache.summary : null,
         fetchedAt: trainingRemoteListSummaryCache.signature === signature ? trainingRemoteListSummaryCache.fetchedAt : 0,
         promise
-      };
+      }, { signature: '', summary: null, fetchedAt: 0, promise: null });
       return promise;
     }
 

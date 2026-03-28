@@ -78,6 +78,28 @@
       };
     }
 
+    function replaceCacheState(cache, nextState, defaults) {
+      const base = defaults && typeof defaults === 'object' ? { ...defaults } : {};
+      const next = nextState && typeof nextState === 'object' ? { ...nextState } : {};
+      if (!cache || typeof cache !== 'object') return { ...base, ...next };
+      Object.keys(cache).forEach(function (key) {
+        delete cache[key];
+      });
+      Object.assign(cache, base, next);
+      return cache;
+    }
+
+    function createRemoteCollectionBundle(options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      return {
+        state: createRemoteCollectionState(settings),
+        viewCache: createRemoteViewCache(settings.filters, settings.viewCacheExtra),
+        summaryCache: createSummaryCache(settings.summaryCacheExtra),
+        renderCache: createRenderCache(settings.renderCacheExtra),
+        markupCache: createMarkupCache(settings.markupCacheExtra)
+      };
+    }
+
     function resetRemoteViewCache(cache, filters) {
       if (!cache || typeof cache !== 'object') return;
       cache.items = [];
@@ -130,6 +152,21 @@
       if (typeof settings.afterReset === 'function') settings.afterReset(state);
     }
 
+    function resetRemoteCollectionBundle(bundle, options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      if (!bundle || typeof bundle !== 'object') return;
+      if (bundle.state && typeof bundle.state === 'object') {
+        resetPagedCollectionState(bundle.state, settings);
+      }
+      if (bundle.viewCache && typeof bundle.viewCache === 'object') {
+        resetRemoteViewCache(bundle.viewCache, settings.filters);
+      }
+      if (bundle.summaryCache && typeof bundle.summaryCache === 'object') {
+        resetSummaryCache(bundle.summaryCache);
+      }
+      resetRenderCaches(bundle.renderCache, bundle.markupCache);
+    }
+
     function buildRenderSignature(options) {
       const settings = options && typeof options === 'object' ? options : {};
       const items = Array.isArray(settings.items) ? settings.items : [];
@@ -154,11 +191,14 @@
       createSummaryCache: createSummaryCache,
       createRenderCache: createRenderCache,
       createMarkupCache: createMarkupCache,
+      replaceCacheState: replaceCacheState,
+      createRemoteCollectionBundle: createRemoteCollectionBundle,
       resetRemoteViewCache: resetRemoteViewCache,
       resetSummaryState: resetSummaryState,
       resetSummaryCache: resetSummaryCache,
       resetRenderCaches: resetRenderCaches,
       resetPagedCollectionState: resetPagedCollectionState,
+      resetRemoteCollectionBundle: resetRemoteCollectionBundle,
       buildRenderSignature: buildRenderSignature
     };
   };

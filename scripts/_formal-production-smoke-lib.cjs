@@ -82,6 +82,20 @@ function writeLayerReport(layerName, report) {
 
 function buildLayerSummary(report) {
   const manifests = Array.isArray(report && report.manifests) ? report.manifests : [];
+  const steps = Array.isArray(report && report.steps)
+    ? report.steps.map((step) => ({
+      label: step.label || '',
+      ok: !!step.ok,
+      attempts: Number(step.attempts || 1),
+      durationMs: Number(step.durationMs || 0),
+      error: step.error || ''
+    }))
+    : [];
+  const retryCount = steps.reduce((sum, step) => sum + Math.max(0, Number(step.attempts || 1) - 1), 0);
+  const slowestStep = steps.reduce((current, step) => {
+    if (!current || step.durationMs > current.durationMs) return step;
+    return current;
+  }, null);
   const versions = manifests.map((entry) => ({
     base: entry.base || '',
     ok: !!entry.ok,
@@ -96,18 +110,15 @@ function buildLayerSummary(report) {
     startedAt: report && report.startedAt || '',
     finishedAt: report && report.finishedAt || '',
     durationMs: Number(report && report.durationMs || 0),
+    retryCount,
+    slowestStep: slowestStep ? {
+      label: slowestStep.label,
+      durationMs: Number(slowestStep.durationMs || 0)
+    } : null,
     liveBase: report && report.liveBase || LIVE_BASE,
     pagesBase: report && report.pagesBase || PAGES_BASE,
     versions,
-    steps: Array.isArray(report && report.steps)
-      ? report.steps.map((step) => ({
-        label: step.label || '',
-        ok: !!step.ok,
-        attempts: Number(step.attempts || 1),
-        durationMs: Number(step.durationMs || 0),
-        error: step.error || ''
-      }))
-      : []
+    steps
   };
 }
 
@@ -124,6 +135,7 @@ function writeLayerSummary(layerName, report) {
     `- startedAt: ${summary.startedAt}`,
     `- finishedAt: ${summary.finishedAt}`,
     `- durationMs: ${summary.durationMs}`,
+    `- retryCount: ${summary.retryCount || 0}`,
     `- liveBase: ${summary.liveBase}`,
     `- pagesBase: ${summary.pagesBase}`,
     '',
@@ -137,6 +149,9 @@ function writeLayerSummary(layerName, report) {
   summary.steps.forEach((step) => {
     lines.push(`- ${step.label}: ${step.ok ? 'passed' : 'failed'} (${step.durationMs} ms, attempts=${step.attempts})${step.error ? ` - ${step.error}` : ''}`);
   });
+  if (summary.slowestStep) {
+    lines.push('', `- slowestStep: ${summary.slowestStep.label} (${summary.slowestStep.durationMs} ms)`);
+  }
   lines.push('');
   fs.writeFileSync(mdPath, lines.join('\n'));
   return { jsonPath, mdPath };
@@ -163,6 +178,7 @@ function buildReleaseReport(report) {
     throw new Error('latest full summary unavailable');
   }
   const versions = Array.isArray(fullSummary && fullSummary.versions) ? fullSummary.versions : [];
+  const metrics = buildReleaseMetrics(layers, versions);
   return {
     generatedAt: new Date().toISOString(),
     ok: !!(fullSummary && fullSummary.ok),
@@ -170,7 +186,59 @@ function buildReleaseReport(report) {
     pagesBase: fullSummary && fullSummary.pagesBase || PAGES_BASE,
     versionKeys: Array.from(new Set(versions.map((entry) => String(entry && entry.versionKey || '').trim()).filter(Boolean))),
     versions,
-    layers
+    layers,
+    metrics
+  };
+}
+
+function buildReleaseMetrics(layers, versions) {
+  const layerEntries = ['health', 'api', 'browser', 'visual', 'full']
+    .map((name) => ({ name, summary: layers && layers[name] }))
+    .filter((entry) => entry.summary && typeof entry.summary === 'object');
+  const comparableLayers = layerEntries.filter((entry) => entry.name !== 'full');
+  const slowestLayer = comparableLayers.reduce((current, entry) => {
+    const durationMs = Number(entry.summary && entry.summary.durationMs || 0);
+    if (!current || durationMs > current.durationMs) {
+      return { name: entry.name, durationMs };
+    }
+    return current;
+  }, null);
+  const layerDurations = {};
+  let totalRetryCount = 0;
+  let totalStepCount = 0;
+  const unstableSteps = [];
+  layerEntries.forEach((entry) => {
+    const summary = entry.summary || {};
+    layerDurations[entry.name] = Number(summary.durationMs || 0);
+    const steps = Array.isArray(summary.steps) ? summary.steps : [];
+    steps.forEach((step) => {
+      const attempts = Math.max(1, Number(step && step.attempts || 1));
+      const retries = Math.max(0, attempts - 1);
+      totalRetryCount += retries;
+      totalStepCount += 1;
+      if (retries > 0 || !step.ok) {
+        unstableSteps.push({
+          layer: entry.name,
+          label: String(step && step.label || '').trim(),
+          ok: !!(step && step.ok),
+          retries,
+          durationMs: Number(step && step.durationMs || 0)
+        });
+      }
+    });
+  });
+  const okVersions = versions.filter((entry) => entry && entry.ok);
+  const uniqueVersionKeys = Array.from(new Set(okVersions.map((entry) => String(entry && entry.versionKey || '').trim()).filter(Boolean)));
+  return {
+    totalDurationMs: Number(layers && layers.full && layers.full.durationMs || 0),
+    layerDurations,
+    slowestLayer,
+    totalRetryCount,
+    totalStepCount,
+    unstableSteps,
+    versionConsistent: versions.every((entry) => entry && entry.ok) && uniqueVersionKeys.length <= 1,
+    versionEndpointCount: versions.length,
+    versionKeyCount: uniqueVersionKeys.length
   };
 }
 
@@ -189,6 +257,14 @@ function writeReleaseReport(report) {
     `- pagesBase: ${releaseReport.pagesBase}`,
     `- versionKeys: ${releaseReport.versionKeys.join(', ') || 'n/a'}`,
     '',
+    '## Metrics',
+    '',
+    `- totalDurationMs: ${releaseReport.metrics && releaseReport.metrics.totalDurationMs || 0}`,
+    `- totalStepCount: ${releaseReport.metrics && releaseReport.metrics.totalStepCount || 0}`,
+    `- totalRetryCount: ${releaseReport.metrics && releaseReport.metrics.totalRetryCount || 0}`,
+    `- versionConsistent: ${releaseReport.metrics && releaseReport.metrics.versionConsistent ? 'yes' : 'no'}`,
+    `- slowestLayer: ${releaseReport.metrics && releaseReport.metrics.slowestLayer ? `${releaseReport.metrics.slowestLayer.name} (${releaseReport.metrics.slowestLayer.durationMs} ms)` : 'n/a'}`,
+    '',
     '## Versions',
     ''
   ];
@@ -202,8 +278,14 @@ function writeReleaseReport(report) {
       lines.push(`- ${layerName}: missing`);
       return;
     }
-    lines.push(`- ${layerName}: ${summary.ok ? 'passed' : 'failed'} (${summary.durationMs} ms)`);
+    lines.push(`- ${layerName}: ${summary.ok ? 'passed' : 'failed'} (${summary.durationMs} ms, retries=${summary.retryCount || 0})`);
   });
+  if (releaseReport.metrics && Array.isArray(releaseReport.metrics.unstableSteps) && releaseReport.metrics.unstableSteps.length) {
+    lines.push('', '## Unstable Steps', '');
+    releaseReport.metrics.unstableSteps.forEach((step) => {
+      lines.push(`- ${step.layer}/${step.label}: ${step.ok ? 'passed' : 'failed'} (${step.durationMs} ms, retries=${step.retries})`);
+    });
+  }
   lines.push('');
   fs.writeFileSync(mdPath, lines.join('\n'));
   return { jsonPath, mdPath };
