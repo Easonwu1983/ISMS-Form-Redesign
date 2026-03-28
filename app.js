@@ -781,143 +781,16 @@
   };
   const SYSTEM_USERS_SYNC_FRESHNESS_MS = 30000;
   let systemUsersSyncCachePromise = null;
-  let appRemoteRuntimeModuleApi = null;
-  function getAppRemoteRuntimeModule() {
-    if (appRemoteRuntimeModuleApi) return appRemoteRuntimeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppRemoteRuntimeModule !== 'function') {
-      throw new Error('app-remote-runtime-module.js not loaded');
+  let appBridgeRuntimeModuleApi = null;
+  function getAppBridgeRuntimeModule() {
+    if (appBridgeRuntimeModuleApi) return appBridgeRuntimeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppBridgeRuntimeModule !== 'function') {
+      throw new Error('app-bridge-runtime-module.js not loaded');
     }
-    appRemoteRuntimeModuleApi = window.createAppRemoteRuntimeModule();
-    window._appRemoteRuntimeModule = appRemoteRuntimeModuleApi;
-    return appRemoteRuntimeModuleApi;
+    appBridgeRuntimeModuleApi = window.createAppBridgeRuntimeModule();
+    window._appBridgeRuntimeModule = appBridgeRuntimeModuleApi;
+    return appBridgeRuntimeModuleApi;
   }
-  let appStartRuntimeModuleApi = null;
-  function getAppStartRuntimeModule() {
-    if (appStartRuntimeModuleApi) return appStartRuntimeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppStartRuntimeModule !== 'function') {
-      throw new Error('app-start-runtime-module.js not loaded');
-    }
-    appStartRuntimeModuleApi = window.createAppStartRuntimeModule();
-    window._appStartRuntimeModule = appStartRuntimeModuleApi;
-    return appStartRuntimeModuleApi;
-  }
-  let appAttachmentMigrationModuleApi = null;
-  function getAppAttachmentMigrationModule() {
-    if (appAttachmentMigrationModuleApi) return appAttachmentMigrationModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppAttachmentMigrationModule !== 'function') {
-      throw new Error('app-attachment-migration-module.js not loaded');
-    }
-    appAttachmentMigrationModuleApi = window.createAppAttachmentMigrationModule();
-    window._appAttachmentMigrationModule = appAttachmentMigrationModuleApi;
-    return appAttachmentMigrationModuleApi;
-  }
-  let appSupportBridgeModuleApi = null;
-  function getAppSupportBridgeModule() {
-    if (appSupportBridgeModuleApi) return appSupportBridgeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppSupportBridgeModule !== 'function') {
-      throw new Error('app-support-bridge-module.js not loaded');
-    }
-    appSupportBridgeModuleApi = window.createAppSupportBridgeModule();
-    window._appSupportBridgeModule = appSupportBridgeModuleApi;
-    return appSupportBridgeModuleApi;
-  }
-  let appRemoteBridgeModuleApi = null;
-  function getAppRemoteBridgeModule() {
-    if (appRemoteBridgeModuleApi) return appRemoteBridgeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppRemoteBridgeModule !== 'function') {
-      throw new Error('app-remote-bridge-module.js not loaded');
-    }
-    appRemoteBridgeModuleApi = window.createAppRemoteBridgeModule();
-    window._appRemoteBridgeModule = appRemoteBridgeModuleApi;
-    return appRemoteBridgeModuleApi;
-  }
-  let appAuthRemoteModuleApi = null;
-  function getAppAuthRemoteModule() {
-    if (appAuthRemoteModuleApi) return appAuthRemoteModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppAuthRemoteModule !== 'function') {
-      throw new Error('app-auth-remote-module.js not loaded');
-    }
-    appAuthRemoteModuleApi = window.createAppAuthRemoteModule();
-    window._appAuthRemoteModule = appAuthRemoteModuleApi;
-    return appAuthRemoteModuleApi;
-  }
-  const appRemoteRuntime = getAppRemoteRuntimeModule().createAccess({
-    updateUser
-  });
-  const {
-    getRuntimeM365Config,
-    isStrictRemoteDataMode,
-    buildStrictRemoteError,
-    getSystemUsersMode,
-    getSystemUsersEndpoint,
-    getSystemUsersHealthEndpoint,
-    getSystemUsersSharedHeaders,
-    getReviewScopesMode,
-    getReviewScopesEndpoint,
-    getReviewScopesHealthEndpoint,
-    getReviewScopesSharedHeaders,
-    getAuditTrailMode,
-    getAuditTrailEndpoint,
-    getAuditTrailHealthEndpoint,
-    getAuditTrailSharedHeaders,
-    getAuthMode,
-    getAuthEndpoint,
-    getAuthHealthEndpoint,
-    getAuthSharedHeaders,
-    getAttachmentsMode,
-    getAttachmentsEndpoint,
-    getAttachmentsHealthEndpoint,
-    getAttachmentsSharedHeaders,
-    normalizeRequestUrl,
-    hashLocalPasswordValue,
-    verifyLocalPasswordValue
-  } = appRemoteRuntime;
-  const appAttachmentMigration = getAppAttachmentMigrationModule().createAccess({
-    loadData,
-    saveData,
-    loadTrainingStore,
-    saveTrainingStore,
-    migrateStoredAttachments
-  });
-  const {
-    migrateAttachmentStores
-  } = appAttachmentMigration;
-  const appSupportBridge = getAppSupportBridgeModule().createAccess({
-    getAttachmentModule,
-    getWorkflowSupportModule,
-    getDataModule,
-    loadData,
-    loadTrainingStore
-  });
-  const {
-    getFileExtension,
-    buildUploadSignature,
-    validateUploadFile,
-    prepareUploadBatch,
-    createTransientUploadEntry,
-    revokeTransientUploadEntry,
-    renderAttachmentList,
-    cleanupRenderedAttachmentUrls,
-    getAttachmentHealth,
-    pruneOrphanAttachments,
-    exportSupportBundle,
-    csvCell,
-    downloadWorkbook,
-    exportTrainingSummaryCsv,
-    exportTrainingDetailCsv,
-    getRocDateParts,
-    buildTrainingPrintHtml,
-    printTrainingSheet,
-    sortTrainingRosterEntries,
-    normalizeTrainingImportHeader,
-    buildTrainingRosterHeaderMap,
-    resolveTrainingImportTargetUnit,
-    parseTrainingRosterCells,
-    parseTrainingRosterImport,
-    parseTrainingRosterWorkbook,
-    mergeTrainingRows,
-    seedData
-  } = appSupportBridge;
   function setSystemUserRepositoryState(patch) {
     Object.assign(systemUserRepositoryState, patch || {});
     return { ...systemUserRepositoryState };
@@ -1004,22 +877,26 @@
     if (activeUnit) headers['X-ISMS-Active-Unit'] = encodeURIComponent(activeUnit);
     return headers;
   }
-  const appRemoteBridge = getAppRemoteBridgeModule().createAccess({
-    getRuntimeM365Config,
-    normalizeRequestUrl,
-    getSystemUsersSharedHeaders,
-    getSessionAuthHeaders,
-    getAuthEndpoint,
-    getAuthSharedHeaders,
-    getReviewScopesEndpoint,
-    getReviewScopesSharedHeaders,
-    getAuditTrailEndpoint,
-    getAuditTrailSharedHeaders,
-    getAttachmentsEndpoint,
-    getAttachmentsSharedHeaders,
+  const appBridgeRuntime = getAppBridgeRuntimeModule().createAccess({
+    updateUser,
+    loadData,
+    saveData,
+    loadTrainingStore,
+    saveTrainingStore,
+    migrateStoredAttachments,
     getAttachmentModule,
-    getFileExtension,
-    buildUploadSignature,
+    getWorkflowSupportModule,
+    getDataModule,
+    getSessionAuthHeaders,
+    AUTH_KEY,
+    AUTH_ACTIONS,
+    normalizeRemoteSystemUsers,
+    normalizeUserRecord,
+    findUser,
+    upsertSystemUserInStore,
+    submitUserResetPassword,
+    getAppAuthSessionModule,
+    currentUser,
     contracts: {
       systemUsers: SYSTEM_USERS_CONTRACT_VERSION,
       auth: AUTH_CONTRACT_VERSION,
@@ -1032,6 +909,67 @@
     }
   });
   const {
+    getAppRemoteRuntimeModule,
+    getAppStartRuntimeModule,
+    getAppAttachmentMigrationModule,
+    getAppSupportBridgeModule,
+    getAppRemoteBridgeModule,
+    getAppAuthRemoteModule,
+    getAppAuthRemote,
+    getRuntimeM365Config,
+    isStrictRemoteDataMode,
+    buildStrictRemoteError,
+    getSystemUsersMode,
+    getSystemUsersEndpoint,
+    getSystemUsersHealthEndpoint,
+    getSystemUsersSharedHeaders,
+    getReviewScopesMode,
+    getReviewScopesEndpoint,
+    getReviewScopesHealthEndpoint,
+    getReviewScopesSharedHeaders,
+    getAuditTrailMode,
+    getAuditTrailEndpoint,
+    getAuditTrailHealthEndpoint,
+    getAuditTrailSharedHeaders,
+    getAuthMode,
+    getAuthEndpoint,
+    getAuthHealthEndpoint,
+    getAuthSharedHeaders,
+    getAttachmentsMode,
+    getAttachmentsEndpoint,
+    getAttachmentsHealthEndpoint,
+    getAttachmentsSharedHeaders,
+    normalizeRequestUrl,
+    hashLocalPasswordValue,
+    verifyLocalPasswordValue,
+    migrateAttachmentStores,
+    getFileExtension,
+    buildUploadSignature,
+    validateUploadFile,
+    prepareUploadBatch,
+    createTransientUploadEntry,
+    revokeTransientUploadEntry,
+    renderAttachmentList,
+    cleanupRenderedAttachmentUrls,
+    getAttachmentHealth,
+    pruneOrphanAttachments,
+    exportSupportBundle,
+    csvCell,
+    downloadWorkbook,
+    exportTrainingSummaryCsv,
+    exportTrainingDetailCsv,
+    getRocDateParts,
+    buildTrainingPrintHtml,
+    printTrainingSheet,
+    sortTrainingRosterEntries,
+    normalizeTrainingImportHeader,
+    buildTrainingRosterHeaderMap,
+    resolveTrainingImportTargetUnit,
+    parseTrainingRosterCells,
+    parseTrainingRosterImport,
+    parseTrainingRosterWorkbook,
+    mergeTrainingRows,
+    seedData,
     requestSystemUserJson,
     requestAuthJson,
     requestReviewScopeJson,
@@ -1046,27 +984,7 @@
     fetchRemoteAttachmentDetail,
     fetchRemoteAttachmentBlob,
     submitAttachmentUpload
-  } = appRemoteBridge;
-  let appAuthRemoteApi = null;
-  function getAppAuthRemote() {
-    if (appAuthRemoteApi) return appAuthRemoteApi;
-    appAuthRemoteApi = getAppAuthRemoteModule().createAccess({
-      AUTH_KEY,
-      AUTH_ACTIONS,
-      getAuthMode,
-      getAuthHealthEndpoint,
-      requestAuthJson,
-      normalizeRemoteSystemUsers,
-      normalizeUserRecord,
-      findUser,
-      verifyLocalPasswordValue,
-      upsertSystemUserInStore,
-      submitUserResetPassword,
-      getAppAuthSessionModule,
-      currentUser
-    });
-    return appAuthRemoteApi;
-  }
+  } = appBridgeRuntime;
   function mergeRemoteUsersIntoStore(items, options) {
     const strict = !!(options && options.strict);
     const data = loadData();

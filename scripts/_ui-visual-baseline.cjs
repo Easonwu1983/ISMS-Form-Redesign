@@ -28,14 +28,14 @@ const MOBILE_VISUAL_SPECS = [
 ];
 
 const PUBLIC_DESKTOP_VISUAL_SPECS = [
-  { slug: 'unit-contact-apply', hash: '#apply-unit-contact' },
+  { slug: 'unit-contact-apply', hash: '#apply-unit-contact', selector: '#visual-unit-contact-apply-shell' },
   { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' },
   { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' },
   { slug: 'unit-contact-activate', hash: '#activate-unit-contact/UCA-SMOKE-SUCCESS-001' }
 ];
 
 const PUBLIC_MOBILE_VISUAL_SPECS = [
-  { slug: 'unit-contact-apply', hash: '#apply-unit-contact' },
+  { slug: 'unit-contact-apply', hash: '#apply-unit-contact', selector: '#visual-unit-contact-apply-shell' },
   { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' },
   { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' },
   { slug: 'unit-contact-activate', hash: '#activate-unit-contact/UCA-SMOKE-SUCCESS-001' }
@@ -257,6 +257,80 @@ async function seedSyntheticDashboard(page) {
   await page.waitForTimeout(120);
 }
 
+async function seedSyntheticUnitContactApply(page) {
+  await page.waitForFunction(() => {
+    return !!document.querySelector('.unit-contact-shell, .unit-contact-mode-card, .card, .empty-state');
+  }, { timeout: 10000 }).catch(() => null);
+
+  await page.evaluate(() => {
+    const app = document.getElementById('app');
+    if (!app) return;
+    const existing = document.getElementById('visual-unit-contact-apply-shell');
+    if (existing) existing.remove();
+    const shell = document.createElement('section');
+    shell.id = 'visual-unit-contact-apply-shell';
+    shell.className = 'unit-contact-shell visual-unit-contact-apply-shell card';
+    shell.innerHTML = `
+      <div class="card-header">
+        <div>
+          <div class="page-eyebrow">Public Apply</div>
+          <span class="card-title">申請單位管理員</span>
+        </div>
+        <span class="review-card-subtitle">Synthetic focused baseline</span>
+      </div>
+      <div class="visual-unit-contact-hero">
+        <div class="visual-unit-contact-copy">
+          <div class="unit-contact-mode-title">校內正式主站由 VM 提供，這裡保留公開申請入口。</div>
+          <div class="unit-contact-mode-text">Synthetic focused baseline</div>
+        </div>
+        <div class="visual-unit-contact-badges">
+          <span class="review-count-chip">申請表單</span>
+          <span class="review-count-chip">授權文件</span>
+          <span class="review-count-chip">啟用流程</span>
+        </div>
+      </div>
+      <div class="visual-unit-contact-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">申請資料</span>
+          </div>
+          <div class="visual-unit-contact-field-grid">
+            <div class="form-group"><label class="form-label">申請單位</label><div class="form-input visual-smoke-mask-value">unit</div></div>
+            <div class="form-group"><label class="form-label">申請人</label><div class="form-input visual-smoke-mask-value">name</div></div>
+            <div class="form-group"><label class="form-label">電子郵件</label><div class="form-input visual-smoke-mask-value">mail</div></div>
+            <div class="form-group"><label class="form-label">分機</label><div class="form-input visual-smoke-mask-value">61234</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">流程說明</span>
+          </div>
+          <div class="visual-unit-contact-step-stack">
+            <div class="unit-contact-step-card">
+              <strong>1. 填寫申請</strong>
+              <div class="unit-contact-step-card-text">Synthetic focused baseline</div>
+            </div>
+            <div class="unit-contact-step-card">
+              <strong>2. 下載授權文件</strong>
+              <div class="unit-contact-step-card-text">Synthetic focused baseline</div>
+            </div>
+            <div class="unit-contact-step-card">
+              <strong>3. 啟用帳號</strong>
+              <div class="unit-contact-step-card-text">Synthetic focused baseline</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    app.appendChild(shell);
+    document.querySelectorAll('.unit-contact-shell .card, .unit-contact-shell form, .unit-contact-shell .unit-contact-stepper, .unit-contact-shell .unit-contact-mode-card').forEach((node) => {
+      if (node !== shell && !shell.contains(node)) node.classList.add('visual-smoke-hide');
+    });
+  });
+
+  await page.waitForTimeout(120);
+}
+
 function getVisualSmokeStyles(slug, mode) {
   const common = `
     .visual-smoke-mask-value,
@@ -272,13 +346,13 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'dashboard') {
     return common + `
       #visual-dashboard-shell {
-        max-width: ${mode === 'mobile' ? '360px' : '900px'} !important;
+        max-width: ${mode === 'mobile' ? '340px' : '760px'} !important;
         margin: 0 auto !important;
-        padding: 20px !important;
+        padding: ${mode === 'mobile' ? '16px' : '18px'} !important;
       }
       #visual-dashboard-shell .visual-dashboard-grid {
         grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.05fr 1fr'} !important;
-        gap: 18px !important;
+        gap: 14px !important;
       }
       #visual-dashboard-shell .visual-dashboard-pill-row {
         margin-bottom: 18px !important;
@@ -410,7 +484,52 @@ function getVisualSmokeStyles(slug, mode) {
     `;
   }
 
-  if (slug === 'unit-contact-apply' || slug === 'unit-contact-status' || slug === 'unit-contact-success' || slug === 'unit-contact-activate') {
+  if (slug === 'unit-contact-apply') {
+    return common + `
+      #visual-unit-contact-apply-shell {
+        max-width: ${mode === 'mobile' ? '340px' : '760px'} !important;
+        margin: 0 auto !important;
+        padding: ${mode === 'mobile' ? '16px' : '18px'} !important;
+      }
+      #visual-unit-contact-apply-shell .visual-unit-contact-grid {
+        display: grid !important;
+        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.1fr 0.9fr'} !important;
+        gap: 14px !important;
+      }
+      #visual-unit-contact-apply-shell .visual-unit-contact-hero {
+        display: grid !important;
+        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.2fr auto'} !important;
+        gap: 12px !important;
+        margin-bottom: 16px !important;
+      }
+      #visual-unit-contact-apply-shell .visual-unit-contact-badges {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        align-items: flex-start !important;
+      }
+      #visual-unit-contact-apply-shell .visual-unit-contact-field-grid {
+        display: grid !important;
+        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1fr 1fr'} !important;
+        gap: 12px !important;
+      }
+      #visual-unit-contact-apply-shell .visual-unit-contact-step-stack {
+        display: grid !important;
+        gap: 10px !important;
+      }
+      #visual-unit-contact-apply-shell .unit-contact-step-card {
+        min-height: 84px !important;
+      }
+      #visual-unit-contact-apply-shell .form-input,
+      #visual-unit-contact-apply-shell .unit-contact-step-card-text,
+      #visual-unit-contact-apply-shell .unit-contact-mode-text {
+        color: transparent !important;
+        text-shadow: none !important;
+      }
+    `;
+  }
+
+  if (slug === 'unit-contact-status' || slug === 'unit-contact-success' || slug === 'unit-contact-activate') {
     return common + `
       .unit-contact-mode-title,
       .unit-contact-mode-text,
@@ -478,13 +597,16 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await page.waitForTimeout(600);
     await seedSyntheticUnitContactSuccess(page);
   }
-  const waitUntil = spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard') ? 'domcontentloaded' : 'networkidle';
+  const waitUntil = spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard' || spec.slug === 'unit-contact-apply') ? 'domcontentloaded' : 'networkidle';
   await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
   await waitForVisualRouteReady(page, spec);
-  await page.waitForTimeout(spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard') ? 120 : 900);
+  await page.waitForTimeout(spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard' || spec.slug === 'unit-contact-apply') ? 120 : 900);
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'dashboard') {
     await seedSyntheticDashboard(page);
+  }
+  if (spec && spec.slug === 'unit-contact-apply') {
+    await seedSyntheticUnitContactApply(page);
   }
   if (spec && spec.slug === 'unit-review') {
     await seedSyntheticUnitReview(page);
@@ -589,6 +711,7 @@ module.exports = {
   PUBLIC_MOBILE_VISUAL_SPECS,
   seedSyntheticUnitContactSuccess,
   seedSyntheticDashboard,
+  seedSyntheticUnitContactApply,
   captureVisualSpec,
   compareAgainstBaseline
 };
