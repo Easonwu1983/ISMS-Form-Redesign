@@ -118,6 +118,17 @@ async function waitForAppReady(page, timeout = 45000) {
   }, { timeout });
 }
 
+async function clearAuthClientState(page) {
+  await page.evaluate(() => {
+    const keys = ['cats_auth', '__AUTH_VERIFY_CACHE__', '__AUTH_BOOTSTRAP_FRESH__'];
+    keys.forEach((key) => {
+      try { localStorage.removeItem(key); } catch (_) {}
+      try { sessionStorage.removeItem(key); } catch (_) {}
+    });
+  }).catch(() => {});
+  await page.context().clearCookies().catch(() => {});
+}
+
 async function login(page, username, password) {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => {
@@ -130,9 +141,29 @@ async function login(page, username, password) {
     return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
   }, { timeout: 45000 });
   if (await page.locator('.btn-logout').count()) {
-    await acceptNextDialog(page, 'accept');
-    await page.click('.btn-logout');
-    await page.waitForSelector('[data-testid="login-form"]');
+    const loggedOutViaAuthModule = await page.evaluate(async () => {
+      try {
+        const auth = window._authModule;
+        if (!auth || typeof auth.logout !== 'function') return false;
+        await auth.logout();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }).catch(() => false);
+    if (!loggedOutViaAuthModule) {
+      await acceptNextDialog(page, 'accept');
+      await page.click('.btn-logout');
+    }
+    await clearAuthClientState(page);
+    try {
+      await page.waitForSelector('[data-testid="login-form"]', { timeout: 5000 });
+    } catch (_) {
+      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+      await clearAuthClientState(page);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('[data-testid="login-form"]', { timeout: 15000 });
+    }
   }
   const loginResult = await page.evaluate(async ({ username, password }) => {
     const auth = window._authModule;

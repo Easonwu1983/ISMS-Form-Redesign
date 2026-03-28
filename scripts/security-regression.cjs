@@ -54,22 +54,10 @@ async function seedSecurityFixtures(page) {
   await page.evaluate(({ caseId, checklistId, trainingId, unit, statsUnit, payload }) => {
     const now = new Date().toISOString();
     const today = now.slice(0, 10);
+    const dataModule = window._dataModule || null;
+    const cacheInvalidation = window.__ISMS_CACHE_INVALIDATION__ || null;
 
-    function parseStore(key, fallback) {
-      const raw = JSON.parse(localStorage.getItem(key) || 'null');
-      if (raw && typeof raw === 'object' && Number.isFinite(Number(raw.version)) && Object.prototype.hasOwnProperty.call(raw, 'payload')) {
-        return raw.payload;
-      }
-      return raw || fallback;
-    }
-
-    function writeStore(key, value) {
-      localStorage.setItem(key, JSON.stringify({ version: 1, payload: value }));
-    }
-
-    const dataStore = parseStore('cats_data', { items: [], users: [], nextId: 1 });
-    dataStore.items = Array.isArray(dataStore.items) ? dataStore.items.filter((item) => item.id !== caseId) : [];
-    dataStore.items.push({
+    const caseItem = {
       id: caseId,
       documentNo: 'CAR-114-022',
       caseSeq: 1,
@@ -111,12 +99,16 @@ async function seedSecurityFixtures(page) {
       closedDate: null,
       evidence: [],
       history: [{ time: now, action: payload, user: payload }]
-    });
-    writeStore('cats_data', dataStore);
+    };
+    if (dataModule && typeof dataModule.getItem === 'function') {
+      if (dataModule.getItem(caseId) && typeof dataModule.updateItem === 'function') {
+        dataModule.updateItem(caseId, caseItem);
+      } else if (typeof dataModule.addItem === 'function') {
+        dataModule.addItem(caseItem);
+      }
+    }
 
-    const checklistStore = parseStore('cats_checklists', { items: [], nextId: 1 });
-    checklistStore.items = Array.isArray(checklistStore.items) ? checklistStore.items.filter((item) => item.id !== checklistId) : [];
-    checklistStore.items.push({
+    const checklistItem = {
       id: checklistId,
       unit,
       fillerName: '測試填報人',
@@ -136,12 +128,16 @@ async function seedSecurityFixtures(page) {
       status: '已送出',
       createdAt: now,
       updatedAt: now
-    });
-    writeStore('cats_checklists', checklistStore);
+    };
+    if (dataModule && typeof dataModule.getChecklist === 'function') {
+      if (dataModule.getChecklist(checklistId) && typeof dataModule.updateChecklist === 'function') {
+        dataModule.updateChecklist(checklistId, checklistItem);
+      } else if (typeof dataModule.addChecklist === 'function') {
+        dataModule.addChecklist(checklistItem);
+      }
+    }
 
-    const trainingStore = parseStore('cats_training_hours', { forms: [], rosters: [], nextFormId: 1, nextRosterId: 1 });
-    trainingStore.forms = Array.isArray(trainingStore.forms) ? trainingStore.forms.filter((item) => item.id !== trainingId) : [];
-    trainingStore.forms.push({
+    const trainingForm = {
       id: trainingId,
       unit,
       statsUnit,
@@ -183,8 +179,14 @@ async function seedSecurityFixtures(page) {
       signoffUploadedAt: now,
       submittedAt: now,
       history: [{ time: now, action: payload, user: payload }]
-    });
-    writeStore('cats_training_hours', trainingStore);
+    };
+    if (dataModule && typeof dataModule.upsertTrainingForm === 'function') {
+      dataModule.upsertTrainingForm(trainingForm);
+    }
+
+    if (cacheInvalidation && typeof cacheInvalidation.dispatch === 'function') {
+      cacheInvalidation.dispatch('all', 'security-fixture-seed');
+    }
   }, {
     caseId: CASE_ID,
     checklistId: CHECKLIST_ID,
@@ -573,6 +575,7 @@ async function assertNoXssExecution(page, label) {
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 30000 });
       await login(page, 'easonwu', '2wsx#EDC');
+      await seedSecurityFixtures(page);
       await gotoHash(page, 'detail/' + CASE_ID);
       await page.waitForSelector('.detail-title', { timeout: 30000 });
       await assertNoXssExecution(page, 'case detail');
@@ -580,6 +583,8 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-05', 'Admin', 'Checklist detail escapes XSS payloads', async () => {
+      await login(page, 'easonwu', '2wsx#EDC');
+      await seedSecurityFixtures(page);
       await resetXssFlag(page);
       const checklistDetailIds = await page.evaluate(({ checklistId, payload }) => {
         const module = window._dataModule;
@@ -599,13 +604,14 @@ async function assertNoXssExecution(page, label) {
         return 'checklist detail skipped (no existing forms)';
       }
       await gotoHash(page, 'checklist-detail/' + checklistDetailIds[0]);
-      await page.waitForSelector('.detail-title');
+      await page.waitForSelector('.detail-title', { timeout: 30000 });
       await assertNoXssExecution(page, 'checklist detail');
       return `checklist detail payload rendered safely (${checklistDetailIds[0]})`;
     });
 
     await runStep(results, 'SEC-06', 'Admin', 'Training detail escapes XSS payloads', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
+      await seedSecurityFixtures(page);
       await resetXssFlag(page);
       const trainingDetailIds = await page.evaluate(({ trainingId, payload }) => {
         const module = window._dataModule;

@@ -514,7 +514,23 @@ function runNodeStep(step) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
-    const result = spawnSync(process.execPath, [path.join(ROOT, step.script)], {
+    const scriptPath = path.join(ROOT, step.script);
+    const childConfig = process.platform === 'win32'
+      ? {
+        command: 'powershell.exe',
+        args: [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          `& '${process.execPath.replace(/'/g, "''")}' '${scriptPath.replace(/'/g, "''")}'`
+        ]
+      }
+      : {
+        command: process.execPath,
+        args: [scriptPath]
+      };
+    const result = spawnSync(childConfig.command, childConfig.args, {
       cwd: ROOT,
       stdio: 'pipe',
       shell: false,
