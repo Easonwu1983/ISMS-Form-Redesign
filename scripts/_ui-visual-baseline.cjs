@@ -356,7 +356,7 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
   const settings = options || {};
   const baselineBuffer = fs.readFileSync(baselinePath);
   const actualBuffer = fs.readFileSync(actualPath);
-  return page.evaluate(async ({ baseline, actual, diffThreshold, maxDiffRatio }) => {
+  return page.evaluate(async ({ baseline, actual, diffThreshold, maxDiffRatio, sampleScale }) => {
     function loadImage(src) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -366,13 +366,20 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
       });
     }
 
-    function drawToCanvas(image) {
+    function drawToCanvas(image, scale) {
+      const safeScale = Number.isFinite(scale) && scale > 0 && scale < 1 ? scale : 1;
+      const width = Math.max(1, Math.round(image.width * safeScale));
+      const height = Math.max(1, Math.round(image.height * safeScale));
       const canvas = document.createElement('canvas');
-      canvas.width = image.width;
-      canvas.height = image.height;
+      canvas.width = width;
+      canvas.height = height;
       const context = canvas.getContext('2d', { willReadFrequently: true });
-      context.drawImage(image, 0, 0);
-      return context.getImageData(0, 0, image.width, image.height).data;
+      context.drawImage(image, 0, 0, width, height);
+      return {
+        width,
+        height,
+        data: context.getImageData(0, 0, width, height).data
+      };
     }
 
     const baselineImg = await loadImage('data:image/png;base64,' + baseline);
@@ -388,8 +395,10 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
       };
     }
 
-    const baselineData = drawToCanvas(baselineImg);
-    const actualData = drawToCanvas(actualImg);
+    const baselineFrame = drawToCanvas(baselineImg, sampleScale);
+    const actualFrame = drawToCanvas(actualImg, sampleScale);
+    const baselineData = baselineFrame.data;
+    const actualData = actualFrame.data;
     let diffPixels = 0;
     let maxChannelDelta = 0;
     for (let index = 0; index < baselineData.length; index += 4) {
@@ -401,12 +410,12 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
       if (delta > diffThreshold) diffPixels += 1;
       if (delta > maxChannelDelta) maxChannelDelta = delta;
     }
-    const totalPixels = baselineImg.width * baselineImg.height;
+    const totalPixels = baselineFrame.width * baselineFrame.height;
     const diffRatio = totalPixels ? diffPixels / totalPixels : 0;
     return {
       ok: diffRatio <= maxDiffRatio,
-      baselineWidth: baselineImg.width,
-      baselineHeight: baselineImg.height,
+      baselineWidth: baselineFrame.width,
+      baselineHeight: baselineFrame.height,
       totalPixels,
       diffPixels,
       diffRatio,
@@ -416,7 +425,8 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
     baseline: baselineBuffer.toString('base64'),
     actual: actualBuffer.toString('base64'),
     diffThreshold: Number.isFinite(settings.diffThreshold) ? settings.diffThreshold : 48,
-    maxDiffRatio: Number.isFinite(settings.maxDiffRatio) ? settings.maxDiffRatio : 0.02
+    maxDiffRatio: Number.isFinite(settings.maxDiffRatio) ? settings.maxDiffRatio : 0.02,
+    sampleScale: Number.isFinite(settings.sampleScale) ? settings.sampleScale : 1
   });
 }
 

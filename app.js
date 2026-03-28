@@ -811,6 +811,16 @@
     window._appAttachmentMigrationModule = appAttachmentMigrationModuleApi;
     return appAttachmentMigrationModuleApi;
   }
+  let appSupportBridgeModuleApi = null;
+  function getAppSupportBridgeModule() {
+    if (appSupportBridgeModuleApi) return appSupportBridgeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppSupportBridgeModule !== 'function') {
+      throw new Error('app-support-bridge-module.js not loaded');
+    }
+    appSupportBridgeModuleApi = window.createAppSupportBridgeModule();
+    window._appSupportBridgeModule = appSupportBridgeModuleApi;
+    return appSupportBridgeModuleApi;
+  }
   const appRemoteRuntime = getAppRemoteRuntimeModule().createAccess({
     updateUser
   });
@@ -852,6 +862,42 @@
   const {
     migrateAttachmentStores
   } = appAttachmentMigration;
+  const appSupportBridge = getAppSupportBridgeModule().createAccess({
+    getAttachmentModule,
+    getWorkflowSupportModule,
+    getDataModule,
+    loadData,
+    loadTrainingStore
+  });
+  const {
+    getFileExtension,
+    buildUploadSignature,
+    validateUploadFile,
+    prepareUploadBatch,
+    createTransientUploadEntry,
+    revokeTransientUploadEntry,
+    renderAttachmentList,
+    cleanupRenderedAttachmentUrls,
+    getAttachmentHealth,
+    pruneOrphanAttachments,
+    exportSupportBundle,
+    csvCell,
+    downloadWorkbook,
+    exportTrainingSummaryCsv,
+    exportTrainingDetailCsv,
+    getRocDateParts,
+    buildTrainingPrintHtml,
+    printTrainingSheet,
+    sortTrainingRosterEntries,
+    normalizeTrainingImportHeader,
+    buildTrainingRosterHeaderMap,
+    resolveTrainingImportTargetUnit,
+    parseTrainingRosterCells,
+    parseTrainingRosterImport,
+    parseTrainingRosterWorkbook,
+    mergeTrainingRows,
+    seedData
+  } = appSupportBridge;
   function setSystemUserRepositoryState(patch) {
     Object.assign(systemUserRepositoryState, patch || {});
     return { ...systemUserRepositoryState };
@@ -3427,12 +3473,6 @@
     return base + options.map((option) => '<option value="' + esc(option) + '" ' + (selected === option ? 'selected' : '') + '>' + esc(option) + '</option>').join('');
   }
 
-  function getFileExtension(name) { return getWorkflowSupportModule().getFileExtension(name); }
-  function buildUploadSignature(meta) { return getWorkflowSupportModule().buildUploadSignature(meta); }
-  function validateUploadFile(file, options) { return getWorkflowSupportModule().validateUploadFile(file, options); }
-  function prepareUploadBatch(existingFiles, incomingFiles, options) { return getWorkflowSupportModule().prepareUploadBatch(existingFiles, incomingFiles, options); }
-  function createTransientUploadEntry(file, meta, options) { return getAttachmentModule().createTransientUploadEntry(file, meta, options); }
-  function revokeTransientUploadEntry(entry) { return getAttachmentModule().revokeTransientUploadEntry(entry); }
   async function persistUploadedEntries(entries, options) {
     if (getAttachmentsMode() !== 'm365-api') return getAttachmentModule().persistUploadedEntries(entries, options);
     const list = Array.isArray(entries) ? entries : [];
@@ -3485,59 +3525,7 @@
     }
     return { files: files, changed: changed, errors: errors };
   }
-  function renderAttachmentList(target, files, options) { return getAttachmentModule().renderAttachmentList(target, files, options); }
-  function cleanupRenderedAttachmentUrls() { return getAttachmentModule().cleanupRenderedAttachmentUrls(); }
-  function collectReferencedAttachmentIds() {
-    const ids = new Set();
-    const pushFiles = function (files) {
-      (Array.isArray(files) ? files : []).forEach(function (file) {
-        const attachmentId = String(file && file.attachmentId || '').trim();
-        if (attachmentId) ids.add(attachmentId);
-      });
-    };
-    const data = loadData();
-    (data.items || []).forEach(function (item) {
-      pushFiles(item && item.evidence);
-      pushFiles(item && item.pendingTracking && item.pendingTracking.evidence);
-      (item && item.trackings || []).forEach(function (tracking) {
-        pushFiles(tracking && tracking.evidence);
-      });
-    });
-    const trainingStore = loadTrainingStore();
-    (trainingStore.forms || []).forEach(function (form) {
-      pushFiles(form && form.signedFiles);
-    });
-    return Array.from(ids);
-  }
-  function getAttachmentHealth() { return getAttachmentModule().getAttachmentHealth(collectReferencedAttachmentIds()); }
-  function pruneOrphanAttachments() { return getAttachmentModule().pruneUnusedAttachments(collectReferencedAttachmentIds()); }
-  async function exportSupportBundle() {
-    return {
-      generatedAt: new Date().toISOString(),
-      schemaHealth: getDataModule().getSchemaHealth(),
-      attachmentHealth: await getAttachmentHealth(),
-      stores: getDataModule().exportManagedStoreSnapshot()
-    };
-  }
-  function csvCell(value) { return getWorkflowSupportModule().csvCell(value); }
-  function downloadWorkbook(filename, sheets) { return getWorkflowSupportModule().downloadWorkbook(filename, sheets); }
-  function exportTrainingSummaryCsv(forms, filename) { return getWorkflowSupportModule().exportTrainingSummaryCsv(forms, filename); }
-  function exportTrainingDetailCsv(form) { return getWorkflowSupportModule().exportTrainingDetailCsv(form); }
-  function getRocDateParts(value) { return getWorkflowSupportModule().getRocDateParts(value); }
-  function buildTrainingPrintHtml(payload) { return getWorkflowSupportModule().buildTrainingPrintHtml(payload); }
-  function printTrainingSheet(payload) { return getWorkflowSupportModule().printTrainingSheet(payload); }
-  function sortTrainingRosterEntries(rows) { return getWorkflowSupportModule().sortTrainingRosterEntries(rows); }
-  function normalizeTrainingImportHeader(value) { return getWorkflowSupportModule().normalizeTrainingImportHeader(value); }
-  function buildTrainingRosterHeaderMap(cells) { return getWorkflowSupportModule().buildTrainingRosterHeaderMap(cells); }
-  function resolveTrainingImportTargetUnit(defaultUnit, rawUnit, rawStatsUnit) { return getWorkflowSupportModule().resolveTrainingImportTargetUnit(defaultUnit, rawUnit, rawStatsUnit); }
-  function parseTrainingRosterCells(cells, unit, headerMap) { return getWorkflowSupportModule().parseTrainingRosterCells(cells, unit, headerMap); }
-  function parseTrainingRosterImport(text, unit) { return getWorkflowSupportModule().parseTrainingRosterImport(text, unit); }
-  function parseTrainingRosterWorkbook(file, unit) { return getWorkflowSupportModule().parseTrainingRosterWorkbook(file, unit); }
-  function mergeTrainingRows(targetUnit, carryRows) { return getWorkflowSupportModule().mergeTrainingRows(targetUnit, carryRows); }
-
-
   // ─── Seed Data ─────────────────────────────
-  function seedData() { return getWorkflowSupportModule().seedData(); }
   const appStartRuntime = getAppStartRuntimeModule().createAccess({
     getAppRouterRuntimeModule,
     getAppRouterModule,
