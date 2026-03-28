@@ -328,12 +328,18 @@ function buildCacheSignals() {
     return value === 'hit' || value === 'cached-unfiltered' || value === 'fast-path';
   });
   const apiCacheMissStates = apiSummaryOnlyChecks.filter((entry) => String(entry && entry.value && entry.value.cacheState || '').trim() === 'computed');
+  const apiCacheMissReasons = apiCacheMissStates.reduce((accumulator, entry) => {
+    const reason = String(entry && entry.value && entry.value.cacheReason || '').trim() || 'unknown';
+    accumulator[reason] = Number(accumulator[reason] || 0) + 1;
+    return accumulator;
+  }, {});
   return {
     apiSummaryChecks: apiSummaryChecks.length,
     apiSummaryOnlyChecks: apiSummaryOnlyChecks.length,
     apiSummaryFailed: apiSummaryChecks.filter((entry) => !(entry && entry.ok)).length,
     apiCacheHits: apiCacheHitStates.length,
     apiCacheMisses: apiCacheMissStates.length,
+    apiCacheMissReasons,
     pagesPagerSteps: pagesPagerSteps.length,
     pagesPagerFailed: pagesPagerSteps.filter((entry) => !(entry && entry.ok)).length,
     pagesSummarySteps: pagesSummarySteps.length,
@@ -437,19 +443,27 @@ function writeReleaseReport(report) {
     '',
     `- apiSummaryChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryChecks || 0}`,
     `- apiSummaryOnlyChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryOnlyChecks || 0}`,
-    `- apiSummaryFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryFailed || 0}`,
-    `- apiCacheHits: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiCacheHits || 0}`,
-    `- apiCacheMisses: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiCacheMisses || 0}`,
-    `- pagesPagerSteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerSteps || 0}`,
-    `- pagesPagerFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerFailed || 0}`,
+      `- apiSummaryFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryFailed || 0}`,
+      `- apiCacheHits: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiCacheHits || 0}`,
+      `- apiCacheMisses: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiCacheMisses || 0}`,
+      `- pagesPagerSteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerSteps || 0}`,
+      `- pagesPagerFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerFailed || 0}`,
     `- pagesSummarySteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesSummarySteps || 0}`,
     `- warmStateChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateChecks || 0}`,
-    `- warmStateImproved: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateImproved || 0}`,
-    `- warmStateCacheHits: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateCacheHits || 0}`,
-    `- warmStateFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateFailed || 0}`,
-    '',
-    '### Warm State',
-    '',
+      `- warmStateImproved: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateImproved || 0}`,
+      `- warmStateCacheHits: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateCacheHits || 0}`,
+      `- warmStateFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateFailed || 0}`,
+      '',
+      '### Cache Miss Reasons',
+      '',
+      ...(releaseReport.cacheSignals && releaseReport.cacheSignals.apiCacheMissReasons && Object.keys(releaseReport.cacheSignals.apiCacheMissReasons).length
+        ? Object.entries(releaseReport.cacheSignals.apiCacheMissReasons)
+          .sort((left, right) => Number(right[1] || 0) - Number(left[1] || 0))
+          .map(([reason, count]) => `- ${reason}: ${count}`)
+        : ['- n/a']),
+      '',
+      '### Warm State',
+      '',
     ...(Array.isArray(releaseReport.cacheSignals && releaseReport.cacheSignals.warmPairs) && releaseReport.cacheSignals.warmPairs.length
       ? releaseReport.cacheSignals.warmPairs.map((entry) => `- ${entry.label}: cold=${entry.coldMs} ms (${entry.coldCache || 'n/a'}), warm=${entry.warmMs} ms (${entry.warmCache || 'n/a'}), delta=${entry.deltaMs} ms, improved=${entry.improved ? 'yes' : 'no'}, status=${entry.ok ? 'passed' : 'failed'}`)
       : ['- n/a']),

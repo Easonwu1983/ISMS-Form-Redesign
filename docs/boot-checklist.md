@@ -7,7 +7,7 @@
    - `curl http://140.112.97.150/deploy-manifest.json`
    - `curl https://isms-campus-portal.pages.dev/deploy-manifest.json`
    - `node scripts/formal-production-smoke.cjs`
-   - 先看單一報告：`logs/formal-production/latest-release-report.md`（先看 `Metrics / Coverage / Cache Signals / Warm State / Latency Hotspots / Layers / Unstable Steps`；`Cache Signals` 裡重點看 `apiCacheHits / apiCacheMisses`）
+   - 先看單一報告：`logs/formal-production/latest-release-report.md`（先看 `Metrics / Coverage / Cache Signals / Cache Miss Reasons / Warm State / Latency Hotspots / Layers / Unstable Steps`；`Cache Signals` 裡重點看 `apiCacheHits / apiCacheMisses`）
    - 需要分層定位時再跑：
      - `node scripts/formal-production-health-smoke.cjs`
      - `logs/formal-production/latest-health.json`

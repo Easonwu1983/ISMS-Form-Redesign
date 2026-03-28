@@ -437,8 +437,6 @@ function createTrainingRouter(deps) {
       String(state.formsCacheAt || 0).trim(),
       String(safeAuthz.username || '').trim(),
       String(safeAuthz.role || '').trim(),
-      String(safeAuthz.primaryUnit || '').trim(),
-      String(safeAuthz.activeUnit || '').trim(),
       authorizedUnits.join('|'),
       String(params.get('status') || '').trim(),
       String(params.get('unit') || '').trim(),
@@ -451,14 +449,28 @@ function createTrainingRouter(deps) {
   }
 
   function readFormsQueryCache(cacheKey) {
-    if (!(state.formsQueryCache instanceof Map) || !cacheKey || !state.formsQueryCache.has(cacheKey)) return null;
+    if (!(state.formsQueryCache instanceof Map)) return { body: null, reason: 'disabled' };
+    if (!cacheKey) return { body: null, reason: 'empty-key' };
+    if (!state.formsQueryCache.has(cacheKey)) return { body: null, reason: 'missing' };
     const cached = state.formsQueryCache.get(cacheKey);
-    if (!cached || typeof cached !== 'object' || !cached.body) return null;
-    if (Number(cached.cacheAt || 0) !== Number(state.formsCacheAt || 0)) return null;
-    if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_FORMS_QUERY_CACHE_MS) return null;
+    if (!cached || typeof cached !== 'object' || !cached.body) {
+      state.formsQueryCache.delete(cacheKey);
+      return { body: null, reason: 'invalid' };
+    }
+    if (Number(cached.cacheAt || 0) !== Number(state.formsCacheAt || 0)) {
+      state.formsQueryCache.delete(cacheKey);
+      return { body: null, reason: 'cache-version-mismatch' };
+    }
+    if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_FORMS_QUERY_CACHE_MS) {
+      state.formsQueryCache.delete(cacheKey);
+      return { body: null, reason: 'expired' };
+    }
     state.formsQueryCache.delete(cacheKey);
     state.formsQueryCache.set(cacheKey, cached);
-    return cloneJson(cached.body);
+    return {
+      body: cloneJson(cached.body),
+      reason: 'hit'
+    };
   }
 
   function writeFormsQueryCache(cacheKey, body) {
@@ -979,7 +991,8 @@ function createTrainingRouter(deps) {
       const rows = await listAllForms();
       const summaryOnly = String(url.searchParams.get('summaryOnly') || '').trim() === '1';
       const cacheKey = buildFormQuerySignature(authz, url);
-      const cached = readFormsQueryCache(cacheKey);
+      const cacheLookup = readFormsQueryCache(cacheKey);
+      const cached = cacheLookup && cacheLookup.body;
       if (cached) {
         logTrainingForms('query cache hit', {
           username: authz.username,
@@ -992,11 +1005,20 @@ function createTrainingRouter(deps) {
           ...cached,
           cache: {
             query: 'hit',
-            summaryOnly
+            summaryOnly,
+            reason: 'hit'
           }
         }), origin);
         return;
       }
+      logTrainingForms('query cache miss', {
+        username: authz.username,
+        totalRows: rows.length,
+        summaryOnly,
+        cacheReason: cacheLookup && cacheLookup.reason || 'unknown',
+        cacheSize: state.formsQueryCache instanceof Map ? state.formsQueryCache.size : 0,
+        durationMs: Date.now() - startedAt
+      });
       const items = filterForms(rows.map((entry) => entry.item), url)
         .filter((entry) => requestAuthz.canAccessTrainingForm(authz, entry));
       const summary = summarizeTrainingForms(items);
@@ -1007,7 +1029,8 @@ function createTrainingRouter(deps) {
         total: items.length,
         cache: {
           query: 'computed',
-          summaryOnly
+          summaryOnly,
+          reason: cacheLookup && cacheLookup.reason || 'computed'
         },
         contractVersion: CONTRACT_VERSION
       };
