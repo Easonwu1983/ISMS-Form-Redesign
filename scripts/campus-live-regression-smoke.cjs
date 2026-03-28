@@ -407,7 +407,7 @@ async function run() {
     const pendingExport = Number(summary.pendingExport || 0);
     const closed = Number(summary.closed || 0);
     if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary-only warm bucket mismatch');
-    return { total, pendingExport, closed };
+    return { total, pendingExport, closed, cacheState: String(json && json.cache && json.cache.query || '') };
   }, { critical: true });
 
   await step('training-rosters ids unique', async () => {

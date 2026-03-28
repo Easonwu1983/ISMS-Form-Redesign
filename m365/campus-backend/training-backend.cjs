@@ -429,7 +429,9 @@ function createTrainingRouter(deps) {
 
   function buildFormQuerySignature(authz, url) {
     const safeAuthz = authz && typeof authz === 'object' ? authz : {};
-    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits) ? safeAuthz.authorizedUnits : [];
+    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
+      ? safeAuthz.authorizedUnits.map((value) => cleanText(value)).filter(Boolean).sort()
+      : [];
     const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
     return [
       String(state.formsCacheAt || 0).trim(),
