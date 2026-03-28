@@ -831,6 +831,16 @@
     window._appRemoteBridgeModule = appRemoteBridgeModuleApi;
     return appRemoteBridgeModuleApi;
   }
+  let appAuthRemoteModuleApi = null;
+  function getAppAuthRemoteModule() {
+    if (appAuthRemoteModuleApi) return appAuthRemoteModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppAuthRemoteModule !== 'function') {
+      throw new Error('app-auth-remote-module.js not loaded');
+    }
+    appAuthRemoteModuleApi = window.createAppAuthRemoteModule();
+    window._appAuthRemoteModule = appAuthRemoteModuleApi;
+    return appAuthRemoteModuleApi;
+  }
   const appRemoteRuntime = getAppRemoteRuntimeModule().createAccess({
     updateUser
   });
@@ -1037,6 +1047,26 @@
     fetchRemoteAttachmentBlob,
     submitAttachmentUpload
   } = appRemoteBridge;
+  let appAuthRemoteApi = null;
+  function getAppAuthRemote() {
+    if (appAuthRemoteApi) return appAuthRemoteApi;
+    appAuthRemoteApi = getAppAuthRemoteModule().createAccess({
+      AUTH_KEY,
+      AUTH_ACTIONS,
+      getAuthMode,
+      getAuthHealthEndpoint,
+      requestAuthJson,
+      normalizeRemoteSystemUsers,
+      normalizeUserRecord,
+      findUser,
+      verifyLocalPasswordValue,
+      upsertSystemUserInStore,
+      submitUserResetPassword,
+      getAppAuthSessionModule,
+      currentUser
+    });
+    return appAuthRemoteApi;
+  }
   function mergeRemoteUsersIntoStore(items, options) {
     const strict = !!(options && options.strict);
     const data = loadData();
@@ -1480,165 +1510,23 @@
       return { user: normalizeUserRecord(findUser(username) || matchedUser), password: fallbackPassword, source: 'local-fallback', warning: buildSystemUserFallbackWarning(error) };
     }
   }
-  async function submitBackendLogin(username, password) {
-    const cleanUsername = String(username || '').trim();
-    const cleanPassword = String(password || '').trim();
-    if (!cleanUsername || !cleanPassword) return null;
-
-    if (getAuthMode() !== 'm365-api') {
-      const localUser = findUser(cleanUsername);
-      if (!localUser || !(await verifyLocalPasswordValue(localUser, cleanPassword))) return null;
-      return normalizeUserRecord(localUser);
-    }
-
-    const healthEndpoint = getAuthHealthEndpoint();
-    if (healthEndpoint) {
-      const health = await requestAuthJson('/health', { method: 'GET' });
-      if (health && health.ready === false) {
-        throw new Error(String(health.message || '正式登入後端尚未就緒').trim());
-      }
-    }
-
-    try {
-      const body = await requestAuthJson('/login', {
-        method: 'POST',
-        body: {
-          action: AUTH_ACTIONS.LOGIN,
-          payload: {
-            username: cleanUsername,
-            password: cleanPassword
-          }
-        }
-      });
-      const item = normalizeRemoteSystemUsers(body)[0];
-      if (!item) return null;
-      return normalizeUserRecord({
-        ...item,
-        sessionToken: String(body && body.session && body.session.token || '').trim(),
-        sessionExpiresAt: String(body && body.session && body.session.expiresAt || '').trim(),
-        mustChangePassword: body && body.mustChangePassword === true
-      });
-    } catch (error) {
-      const message = String(error && error.message || error || '').trim();
-      if (message === 'Invalid username or password') return null;
-      throw error;
-    }
+  function submitBackendLogin(username, password) {
+    return getAppAuthRemote().submitBackendLogin(username, password);
   }
-  async function verifyCurrentSessionWithBackend() {
-    return getAppAuthSessionModule().verifyCurrentSessionWithBackend({
-      AUTH_KEY,
-      getAuthMode,
-      currentUser,
-      normalizeUserRecord,
-      normalizeRemoteSystemUsers,
-      requestAuthJson
-    });
+  function verifyCurrentSessionWithBackend() {
+    return getAppAuthRemote().verifyCurrentSessionWithBackend();
   }
-  async function submitAuthLogout(payload) {
-    const input = payload && typeof payload === 'object' ? payload : {};
-    if (getAuthMode() !== 'm365-api') return { ok: true, source: 'local' };
-    return requestAuthJson('/logout', {
-      method: 'POST',
-      body: {
-        action: AUTH_ACTIONS.LOGOUT,
-        payload: {
-          username: String(input.username || '').trim(),
-          sessionToken: String(input.sessionToken || '').trim()
-        }
-      }
-    });
+  function submitAuthLogout(payload) {
+    return getAppAuthRemote().submitAuthLogout(payload);
   }
-  async function submitAuthResetPasswordByEmail(email) {
-    const input = email && typeof email === 'object' ? email : { email: email };
-    const cleanMail = String(input.email || '').trim().toLowerCase();
-    const cleanUsername = String(input.username || '').trim();
-    if (!cleanMail || !cleanUsername) return null;
-
-    if (getAuthMode() !== 'm365-api') {
-      return submitUserResetPassword({ email: cleanMail });
-    }
-
-    const healthEndpoint = getAuthHealthEndpoint();
-    if (healthEndpoint) {
-      const health = await requestAuthJson('/health', { method: 'GET' });
-      if (health && health.ready === false) {
-        throw new Error(String(health.message || '正式登入後端尚未就緒').trim());
-      }
-    }
-
-    try {
-      const body = await requestAuthJson('/request-reset', {
-        method: 'POST',
-        body: {
-          action: AUTH_ACTIONS.REQUEST_RESET,
-          payload: {
-            username: cleanUsername,
-            email: cleanMail
-          }
-        }
-      });
-      const item = normalizeRemoteSystemUsers(body)[0] || { email: cleanMail, username: cleanUsername };
-      const stored = upsertSystemUserInStore(item);
-      return {
-        user: stored,
-        resetTokenExpiresAt: String(body && body.resetTokenExpiresAt || '').trim(),
-        delivery: body && body.delivery ? body.delivery : null,
-        source: 'remote'
-      };
-    } catch (error) {
-      const message = String(error && error.message || error || '').trim();
-      if (message === 'System user not found') return null;
-      throw error;
-    }
+  function submitAuthResetPasswordByEmail(email) {
+    return getAppAuthRemote().submitAuthResetPasswordByEmail(email);
   }
-  async function submitAuthRedeemResetPassword(payload) {
-    const input = payload && typeof payload === 'object' ? payload : {};
-    const username = String(input.username || '').trim();
-    const token = String(input.token || '').trim();
-    const newPassword = String(input.newPassword || '').trim();
-    if (!username || !token || !newPassword) return null;
-    const body = await requestAuthJson('/redeem-reset', {
-      method: 'POST',
-      body: {
-        action: AUTH_ACTIONS.REDEEM_RESET,
-        payload: { username: username, token: token, newPassword: newPassword }
-      }
-    });
-    const item = normalizeRemoteSystemUsers(body)[0];
-    if (!item) return null;
-    return normalizeUserRecord({
-      ...item,
-      sessionToken: String(body && body.session && body.session.token || '').trim(),
-      sessionExpiresAt: String(body && body.session && body.session.expiresAt || '').trim(),
-      mustChangePassword: body && body.mustChangePassword === true
-    });
+  function submitAuthRedeemResetPassword(payload) {
+    return getAppAuthRemote().submitAuthRedeemResetPassword(payload);
   }
-  async function submitAuthChangePassword(payload) {
-    const input = payload && typeof payload === 'object' ? payload : {};
-    const username = String(input.username || '').trim();
-    const currentPassword = String(input.currentPassword || '').trim();
-    const newPassword = String(input.newPassword || '').trim();
-    if (!username || !currentPassword || !newPassword) return null;
-    const body = await requestAuthJson('/change-password', {
-      method: 'POST',
-      body: {
-        action: AUTH_ACTIONS.CHANGE_PASSWORD,
-        payload: {
-          username: username,
-          currentPassword: currentPassword,
-          newPassword: newPassword,
-          sessionToken: String(input.sessionToken || '').trim()
-        }
-      }
-    });
-    const item = normalizeRemoteSystemUsers(body)[0];
-    if (!item) return null;
-    return normalizeUserRecord({
-      ...item,
-      sessionToken: String(body && body.session && body.session.token || '').trim(),
-      sessionExpiresAt: String(body && body.session && body.session.expiresAt || '').trim(),
-      mustChangePassword: body && body.mustChangePassword === true
-    });
+  function submitAuthChangePassword(payload) {
+    return getAppAuthRemote().submitAuthChangePassword(payload);
   }
   const correctiveActionRepositoryState = {
     mode: 'local-emulator',

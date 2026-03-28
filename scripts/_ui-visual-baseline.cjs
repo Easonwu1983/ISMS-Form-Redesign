@@ -7,7 +7,7 @@ const DESKTOP_VISUAL_SPECS = [
   {
     slug: 'dashboard',
     hash: '#dashboard',
-    clip: { x: 260, y: 64, width: 1180, height: 1260 }
+    selector: '#visual-dashboard-shell'
   },
   {
     slug: 'training',
@@ -22,7 +22,7 @@ const DESKTOP_VISUAL_SPECS = [
 ];
 
 const MOBILE_VISUAL_SPECS = [
-  { slug: 'dashboard', hash: '#dashboard' },
+  { slug: 'dashboard', hash: '#dashboard', selector: '#visual-dashboard-shell' },
   { slug: 'training', hash: '#training' },
   { slug: 'unit-review', hash: '#unit-review', selector: '#visual-unit-review-shell' }
 ];
@@ -170,6 +170,93 @@ async function seedSyntheticUnitReview(page) {
   await page.waitForTimeout(150);
 }
 
+async function seedSyntheticDashboard(page) {
+  await page.waitForFunction(() => {
+    return !!document.querySelector('.dashboard-hero, .dashboard-grid, .stats-grid, .empty-state');
+  }, { timeout: 10000 }).catch(() => null);
+
+  await page.evaluate(() => {
+    const app = document.getElementById('app');
+    if (!app) return;
+    const existing = document.getElementById('visual-dashboard-shell');
+    if (existing) existing.remove();
+    const shell = document.createElement('section');
+    shell.id = 'visual-dashboard-shell';
+    shell.className = 'dashboard-shell visual-dashboard-shell card';
+    shell.innerHTML = `
+      <div class="card-header">
+        <div>
+          <div class="page-eyebrow">Dashboard Overview</div>
+          <span class="card-title">儀表板</span>
+        </div>
+        <span class="review-card-subtitle">Synthetic focused baseline</span>
+      </div>
+      <div class="dashboard-meta-row visual-dashboard-pill-row">
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">總數</span><strong class="dashboard-panel-pill-value visual-smoke-mask-value">16</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待矯正</span><strong class="dashboard-panel-pill-value visual-smoke-mask-value">4</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已逾期</span><strong class="dashboard-panel-pill-value visual-smoke-mask-value">1</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">本月結案</span><strong class="dashboard-panel-pill-value visual-smoke-mask-value">6</strong></div>
+      </div>
+      <div class="dashboard-grid visual-dashboard-grid">
+        <div class="card dashboard-panel dashboard-chart-panel">
+          <div class="card-header">
+            <span class="card-title">狀態分布</span>
+            <span class="review-card-subtitle">Synthetic focused baseline</span>
+          </div>
+          <div class="donut-chart-container visual-dashboard-chart">
+            <svg viewBox="0 0 160 160" class="donut-chart" aria-hidden="true">
+              <circle r="60" cx="80" cy="80" fill="none" stroke="#e2e8f0" stroke-width="20"></circle>
+              <circle r="60" cx="80" cy="80" fill="none" stroke="#3b82f6" stroke-width="20" stroke-dasharray="120 257" stroke-dashoffset="0"></circle>
+              <circle r="60" cx="80" cy="80" fill="none" stroke="#f59e0b" stroke-width="20" stroke-dasharray="68 309" stroke-dashoffset="-120"></circle>
+              <circle r="60" cx="80" cy="80" fill="none" stroke="#22c55e" stroke-width="20" stroke-dasharray="94 283" stroke-dashoffset="-188"></circle>
+            </svg>
+            <div class="donut-legend">
+              <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span><span>建立</span><span class="legend-count visual-smoke-mask-value">5</span></div>
+              <div class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span><span>待矯正</span><span class="legend-count visual-smoke-mask-value">4</span></div>
+              <div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span><span>結案</span><span class="legend-count visual-smoke-mask-value">6</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card dashboard-panel dashboard-table-panel">
+          <div class="card-header">
+            <span class="card-title">最近矯正單</span>
+            <span class="review-card-subtitle">Synthetic focused baseline</span>
+          </div>
+          <div class="dashboard-recent-table-wrapper">
+            <table class="dashboard-recent-table">
+              <thead>
+                <tr>
+                  <th>單號</th>
+                  <th>說明</th>
+                  <th>狀態</th>
+                  <th>最後活動</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="visual-smoke-mask-value">CAR-001</td>
+                  <td class="visual-smoke-mask-value">Synthetic item</td>
+                  <td><span class="badge">追蹤中</span></td>
+                  <td class="visual-smoke-mask-value">2026-03-28</td>
+                </tr>
+                <tr>
+                  <td class="visual-smoke-mask-value">CAR-002</td>
+                  <td class="visual-smoke-mask-value">Synthetic item</td>
+                  <td><span class="badge">待矯正</span></td>
+                  <td class="visual-smoke-mask-value">2026-03-27</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+    app.appendChild(shell);
+  });
+
+  await page.waitForTimeout(120);
+}
+
 function getVisualSmokeStyles(slug, mode) {
   const common = `
     .visual-smoke-mask-value,
@@ -184,6 +271,27 @@ function getVisualSmokeStyles(slug, mode) {
 
   if (slug === 'dashboard') {
     return common + `
+      #visual-dashboard-shell {
+        max-width: ${mode === 'mobile' ? '360px' : '900px'} !important;
+        margin: 0 auto !important;
+        padding: 20px !important;
+      }
+      #visual-dashboard-shell .visual-dashboard-grid {
+        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.05fr 1fr'} !important;
+        gap: 18px !important;
+      }
+      #visual-dashboard-shell .visual-dashboard-pill-row {
+        margin-bottom: 18px !important;
+      }
+      #visual-dashboard-shell .visual-dashboard-chart {
+        min-height: ${mode === 'mobile' ? '220px' : '240px'} !important;
+      }
+      #visual-dashboard-shell .dashboard-recent-table tbody {
+        display: table-row-group !important;
+      }
+      #visual-dashboard-shell .dashboard-recent-table-wrapper {
+        max-height: none !important;
+      }
       .dashboard-meta-value,
       .dashboard-panel-pill-value,
       .legend-count,
@@ -370,11 +478,14 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await page.waitForTimeout(600);
     await seedSyntheticUnitContactSuccess(page);
   }
-  const waitUntil = spec && spec.slug === 'unit-review' ? 'domcontentloaded' : 'networkidle';
+  const waitUntil = spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard') ? 'domcontentloaded' : 'networkidle';
   await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
   await waitForVisualRouteReady(page, spec);
-  await page.waitForTimeout(spec && spec.slug === 'unit-review' ? 120 : 900);
+  await page.waitForTimeout(spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard') ? 120 : 900);
   await stabilizeVisualRoute(page, spec.slug, mode);
+  if (spec && spec.slug === 'dashboard') {
+    await seedSyntheticDashboard(page);
+  }
   if (spec && spec.slug === 'unit-review') {
     await seedSyntheticUnitReview(page);
   }
@@ -477,6 +588,7 @@ module.exports = {
   PUBLIC_DESKTOP_VISUAL_SPECS,
   PUBLIC_MOBILE_VISUAL_SPECS,
   seedSyntheticUnitContactSuccess,
+  seedSyntheticDashboard,
   captureVisualSpec,
   compareAgainstBaseline
 };

@@ -433,6 +433,62 @@ function createTrainingRouter(deps) {
     return summary;
   }
 
+  function readTrainingFormFilters(url) {
+    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
+    return {
+      status: cleanText(params.get('status')),
+      unit: cleanText(params.get('unit')),
+      statsUnit: cleanText(params.get('statsUnit')),
+      trainingYear: cleanText(params.get('trainingYear')),
+      fillerUsername: cleanText(params.get('fillerUsername')),
+      q: cleanText(params.get('q')).toLowerCase()
+    };
+  }
+
+  function matchesTrainingFormFilters(entry, filters) {
+    const item = entry && typeof entry === 'object' ? entry : {};
+    const activeFilters = filters && typeof filters === 'object' ? filters : {};
+    if (activeFilters.status && item.status !== activeFilters.status) return false;
+    if (activeFilters.unit && item.unit !== activeFilters.unit) return false;
+    if (activeFilters.statsUnit && item.statsUnit !== activeFilters.statsUnit) return false;
+    if (activeFilters.trainingYear && item.trainingYear !== activeFilters.trainingYear) return false;
+    if (activeFilters.fillerUsername && item.fillerUsername !== activeFilters.fillerUsername) return false;
+    if (activeFilters.q) {
+      const haystack = [
+        item.id,
+        item.unit,
+        item.statsUnit,
+        item.fillerName,
+        item.fillerUsername,
+        item.trainingYear
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(activeFilters.q)) return false;
+    }
+    return true;
+  }
+
+  function summarizeTrainingFormRows(rows, authz, filters) {
+    const summary = {
+      total: 0,
+      draft: 0,
+      pending: 0,
+      submitted: 0,
+      returned: 0
+    };
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const item = row && row.item;
+      if (!item) return;
+      if (!matchesTrainingFormFilters(item, filters)) return;
+      if (!requestAuthz.canAccessTrainingForm(authz, item)) return;
+      summary.total += 1;
+      if (item.status === FORM_STATUSES.DRAFT) summary.draft += 1;
+      if (item.status === FORM_STATUSES.PENDING_SIGNOFF) summary.pending += 1;
+      if (item.status === FORM_STATUSES.SUBMITTED) summary.submitted += 1;
+      if (item.status === FORM_STATUSES.RETURNED) summary.returned += 1;
+    });
+    return summary;
+  }
+
   function buildFormQuerySignature(authz, url) {
     const safeAuthz = authz && typeof authz === 'object' ? authz : {};
     const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
@@ -829,32 +885,12 @@ function createTrainingRouter(deps) {
     });
   }
 
-  function filterForms(items, url) {
-    const status = cleanText(url.searchParams.get('status'));
-    const unit = cleanText(url.searchParams.get('unit'));
-    const statsUnit = cleanText(url.searchParams.get('statsUnit'));
-    const trainingYear = cleanText(url.searchParams.get('trainingYear'));
-    const fillerUsername = cleanText(url.searchParams.get('fillerUsername'));
-    const query = cleanText(url.searchParams.get('q')).toLowerCase();
-    return items.filter((entry) => {
-      if (status && entry.status !== status) return false;
-      if (unit && entry.unit !== unit) return false;
-      if (statsUnit && entry.statsUnit !== statsUnit) return false;
-      if (trainingYear && entry.trainingYear !== trainingYear) return false;
-      if (fillerUsername && entry.fillerUsername !== fillerUsername) return false;
-      if (query) {
-        const haystack = [
-          entry.id,
-          entry.unit,
-          entry.statsUnit,
-          entry.fillerName,
-          entry.fillerUsername,
-          entry.trainingYear
-        ].join(' ').toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-      return true;
-    }).sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
+  function filterForms(items, filtersOrUrl) {
+    const filters = filtersOrUrl && typeof filtersOrUrl === 'object' && filtersOrUrl.searchParams
+      ? readTrainingFormFilters(filtersOrUrl)
+      : (filtersOrUrl && typeof filtersOrUrl === 'object' ? filtersOrUrl : {});
+    return items.filter((entry) => matchesTrainingFormFilters(entry, filters))
+      .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
   }
 
   function filterRosters(items, url) {
@@ -995,6 +1031,7 @@ function createTrainingRouter(deps) {
       const startedAt = Date.now();
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = String(url.searchParams.get('summaryOnly') || '').trim() === '1';
+      const filters = readTrainingFormFilters(url);
       const cacheKey = buildFormQuerySignature(authz, url);
       const cacheLookup = readFormsQueryCache(cacheKey);
       const cached = cacheLookup && cacheLookup.body;
@@ -1024,14 +1061,24 @@ function createTrainingRouter(deps) {
         cacheSize: state.formsQueryCache instanceof Map ? state.formsQueryCache.size : 0,
         durationMs: Date.now() - startedAt
       });
-      const items = filterForms(rows.map((entry) => entry.item), url)
-        .filter((entry) => requestAuthz.canAccessTrainingForm(authz, entry));
-      const summary = summarizeTrainingForms(items);
+      const generatedAt = new Date().toISOString();
+      const items = summaryOnly
+        ? []
+        : filterForms(rows.map((entry) => entry.item), filters)
+          .filter((entry) => requestAuthz.canAccessTrainingForm(authz, entry));
+      const summary = summaryOnly
+        ? summarizeTrainingFormRows(rows, authz, filters)
+        : summarizeTrainingForms(items);
       const responseBody = {
         ok: true,
-        items: summaryOnly ? [] : items.map(mapTrainingFormForClient),
-        summary,
-        total: items.length,
+        items: items.map(mapTrainingFormForClient),
+        summary: summary,
+        total: Number(summary && summary.total || items.length || 0),
+        filters: {
+          ...filters,
+          summaryOnly: summaryOnly ? '1' : ''
+        },
+        generatedAt: generatedAt,
         cache: {
           query: 'computed',
           summaryOnly,
@@ -1044,8 +1091,8 @@ function createTrainingRouter(deps) {
         username: authz.username,
         totalRows: rows.length,
         visibleRows: items.length,
-        submitted: summary.submitted,
-        pending: summary.pending,
+        submitted: summary && summary.submitted,
+        pending: summary && summary.pending,
         summaryOnly,
         durationMs: Date.now() - startedAt
       });

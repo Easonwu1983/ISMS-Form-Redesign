@@ -450,33 +450,44 @@ function createChecklistRouter(deps) {
   }
 
   function filterItems(items, url) {
-    const status = cleanText(url.searchParams.get('status'));
-    const statusBucket = cleanText(url.searchParams.get('statusBucket'));
-    const unit = cleanText(url.searchParams.get('unit'));
-    const auditYear = cleanText(url.searchParams.get('auditYear'));
-    const fillerUsername = cleanText(url.searchParams.get('fillerUsername'));
-    const query = cleanText(url.searchParams.get('q')).toLowerCase();
-    return items.filter((entry) => {
-      if (status && entry.status !== status) return false;
-      if (statusBucket) {
-        const derivedBucket = getChecklistStatusBucketKey(entry);
-        if (derivedBucket !== statusBucket) return false;
-      }
-      if (unit && entry.unit !== unit) return false;
-      if (auditYear && entry.auditYear !== auditYear) return false;
-      if (fillerUsername && entry.fillerUsername !== fillerUsername) return false;
-      if (query) {
-        const haystack = [
-          entry.id,
-          entry.unit,
-          entry.fillerName,
-          entry.fillerUsername,
-          entry.auditYear
-        ].join(' ').toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-      return true;
-    });
+    const filters = readChecklistFilters(url);
+    return items.filter((entry) => matchesChecklistFilters(entry, filters));
+  }
+
+  function readChecklistFilters(url) {
+    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
+    return {
+      status: cleanText(params.get('status')),
+      statusBucket: cleanText(params.get('statusBucket')),
+      unit: cleanText(params.get('unit')),
+      auditYear: cleanText(params.get('auditYear')),
+      fillerUsername: cleanText(params.get('fillerUsername')),
+      q: cleanText(params.get('q')).toLowerCase()
+    };
+  }
+
+  function matchesChecklistFilters(entry, filters) {
+    const item = entry && typeof entry === 'object' ? entry : {};
+    const activeFilters = filters && typeof filters === 'object' ? filters : {};
+    if (activeFilters.status && item.status !== activeFilters.status) return false;
+    if (activeFilters.statusBucket) {
+      const derivedBucket = getChecklistStatusBucketKey(item);
+      if (derivedBucket !== activeFilters.statusBucket) return false;
+    }
+    if (activeFilters.unit && item.unit !== activeFilters.unit) return false;
+    if (activeFilters.auditYear && item.auditYear !== activeFilters.auditYear) return false;
+    if (activeFilters.fillerUsername && item.fillerUsername !== activeFilters.fillerUsername) return false;
+    if (activeFilters.q) {
+      const haystack = [
+        item.id,
+        item.unit,
+        item.fillerName,
+        item.fillerUsername,
+        item.auditYear
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(activeFilters.q)) return false;
+    }
+    return true;
   }
 
   function getChecklistStatusBucketKey(entry) {
@@ -496,6 +507,26 @@ function createChecklistRouter(deps) {
     return (Array.isArray(items) ? items : []).reduce((result, entry) => {
       result.total += 1;
       const bucket = getChecklistStatusBucketKey(entry);
+      if (bucket === 'closed') result.closed += 1;
+      else if (bucket === 'pending_export') result.pendingExport += 1;
+      else result.editing += 1;
+      return result;
+    }, {
+      total: 0,
+      editing: 0,
+      pendingExport: 0,
+      closed: 0
+    });
+  }
+
+  function summarizeChecklistRows(rows, authz, filters) {
+    return (Array.isArray(rows) ? rows : []).reduce((result, row) => {
+      const item = row && row.item;
+      if (!item) return result;
+      if (!matchesChecklistFilters(item, filters)) return result;
+      if (!requestAuthz.canAccessChecklist(authz, item)) return result;
+      result.total += 1;
+      const bucket = getChecklistStatusBucketKey(item);
       if (bucket === 'closed') result.closed += 1;
       else if (bucket === 'pending_export') result.pendingExport += 1;
       else result.editing += 1;
@@ -560,8 +591,9 @@ function createChecklistRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
-        const cacheKey = buildChecklistQueryCacheKey(authz, url, state.cacheVersion || 0);
-        const cacheLookup = readQueryCache(state.queryCache, cacheKey);
+      const filters = readChecklistFilters(url);
+      const cacheKey = buildChecklistQueryCacheKey(authz, url, state.cacheVersion || 0);
+      const cacheLookup = readQueryCache(state.queryCache, cacheKey);
       const cached = cacheLookup && cacheLookup.body;
       if (cached) {
         logChecklistCache('query cache hit', {
@@ -581,13 +613,19 @@ function createChecklistRouter(deps) {
           }
         }), origin);
         return;
-        }
-        const rows = await listAllEntries();
-        const versionKey = state.cacheVersion || 0;
-        const resolvedCacheKey = buildChecklistQueryCacheKey(authz, url, versionKey);
-      const items = filterItems(rows.map((entry) => entry.item), url)
+      }
+      const rows = await listAllEntries();
+      const versionKey = state.cacheVersion || 0;
+      const resolvedCacheKey = buildChecklistQueryCacheKey(authz, url, versionKey);
+      const items = summaryOnly
+        ? []
+        : filterItems(rows.map((entry) => entry.item), filters)
         .filter((entry) => requestAuthz.canAccessChecklist(authz, entry));
-      const page = buildChecklistPageMeta(url, items.length);
+      const summary = summaryOnly
+        ? summarizeChecklistRows(rows, authz, filters)
+        : summarizeChecklistItems(items);
+      const total = Number(summary && summary.total || items.length || 0);
+      const page = buildChecklistPageMeta(url, total);
       const visibleItems = page.paged
         ? items.slice(page.offset, page.offset + page.limit)
         : items;
@@ -602,9 +640,14 @@ function createChecklistRouter(deps) {
       const responseBody = {
         ok: true,
         items: summaryOnly ? [] : visibleItems.map(mapChecklistForClient),
-        total: items.length,
-        summary: summarizeChecklistItems(items),
+        total: total,
+        summary: summary,
         page: responsePage,
+        filters: {
+          ...filters,
+          summaryOnly: summaryOnly ? '1' : ''
+        },
+        generatedAt: new Date().toISOString(),
         cache: {
           query: 'computed',
           summaryOnly,
@@ -616,7 +659,7 @@ function createChecklistRouter(deps) {
       logChecklistCache('list served', {
         username: authz.username,
         totalRows: rows.length,
-        visibleRows: items.length,
+        visibleRows: total,
         returnedRows: visibleItems.length,
         paged: page.paged,
         limit: page.limit,

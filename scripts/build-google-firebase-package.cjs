@@ -51,6 +51,7 @@ const filesToCopy = [
   'app-core-module-access-module.js',
   'app-support-bridge-module.js',
   'app-remote-bridge-module.js',
+  'app-auth-remote-module.js',
   'admin-collection-cache-module.js',
   'units.js',
   'm365-config.js',
