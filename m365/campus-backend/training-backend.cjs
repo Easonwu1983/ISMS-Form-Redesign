@@ -234,9 +234,15 @@ function createTrainingRouter(deps) {
     return path.join(process.cwd(), 'logs', 'campus-backend', 'training-rosters-cache.json');
   }
 
+  function readNonNegativeEnvNumber(name, fallback) {
+    const raw = cleanText(process.env[name]);
+    if (!raw) return fallback;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  }
+
   function getTrainingListCacheTtlMs() {
-    const raw = Number(process.env.TRAINING_LIST_CACHE_TTL_MS || '');
-    return Number.isFinite(raw) && raw >= 0 ? raw : (30 * 1000);
+    return readNonNegativeEnvNumber('TRAINING_LIST_CACHE_TTL_MS', 30 * 1000);
   }
 
   function getTrainingListCacheHit(cacheAt) {

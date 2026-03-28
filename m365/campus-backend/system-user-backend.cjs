@@ -91,6 +91,13 @@ function createSystemUserRouter(deps) {
     throw new Error('AUTH_SESSION_SECRET is required for system user router.');
   }
 
+  function readNonNegativeEnvNumber(name, fallback) {
+    const raw = cleanText(process.env[name]);
+    if (!raw) return fallback;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  }
+
   function getSessionTtlMs() {
     const raw = Number(process.env.AUTH_SESSION_TTL_MS || '');
     return Number.isFinite(raw) && raw > 0 ? raw : (8 * 60 * 60 * 1000);
@@ -117,13 +124,11 @@ function createSystemUserRouter(deps) {
   }
 
   function getUsersCacheTtlMs() {
-    const raw = Number(process.env.SYSTEM_USERS_CACHE_TTL_MS || '');
-    return Number.isFinite(raw) && raw >= 0 ? raw : (5 * 60 * 1000);
+    return readNonNegativeEnvNumber('SYSTEM_USERS_CACHE_TTL_MS', 5 * 60 * 1000);
   }
 
   function getUsersQueryCacheTtlMs() {
-    const raw = Number(process.env.SYSTEM_USERS_QUERY_CACHE_TTL_MS || '');
-    return Number.isFinite(raw) && raw >= 0 ? raw : 30000;
+    return readNonNegativeEnvNumber('SYSTEM_USERS_QUERY_CACHE_TTL_MS', 30000);
   }
 
   function isTrustedProxyAddress(address) {
