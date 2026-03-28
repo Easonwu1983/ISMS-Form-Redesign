@@ -175,39 +175,22 @@
       if (!client) return Promise.resolve(null);
       const summaryFilters = getChecklistRemoteSummaryFilters(filters);
       const signature = getChecklistRemoteSummarySignature(summaryFilters);
-      const force = !!(options && options.force);
-      if (!force && checklistRemoteSummaryCache.signature === signature && checklistRemoteSummaryCache.promise) {
-        return checklistRemoteSummaryCache.promise;
-      }
       const loadSummary = typeof client.getChecklistListSummary === 'function'
         ? client.getChecklistListSummary.bind(client)
         : client.listChecklists.bind(client);
-      const promise = loadSummary(summaryFilters).then((response) => {
-        const summary = normalizeChecklistRemoteSummary(response && response.summary, response && response.total);
-        if (checklistRemoteSummaryBootstrapState.signature === signature) resetChecklistRemoteSummaryBootstrapState();
-        replaceChecklistCacheState(checklistRemoteSummaryCache, {
-          signature,
-          summary,
-          fetchedAt: Date.now(),
-          promise: null
-        }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-        return summary;
-      }).catch((error) => {
-        if (checklistRemoteSummaryCache.signature === signature) {
-          replaceChecklistCacheState(checklistRemoteSummaryCache, {
-            ...checklistRemoteSummaryCache,
-            promise: null
-          }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-        }
-        throw error;
-      });
-      replaceChecklistCacheState(checklistRemoteSummaryCache, {
+      return primeChecklistSummaryCache(checklistRemoteSummaryCache, {
         signature,
-        summary: checklistRemoteSummaryCache.signature === signature ? checklistRemoteSummaryCache.summary : null,
-        fetchedAt: checklistRemoteSummaryCache.signature === signature ? checklistRemoteSummaryCache.fetchedAt : 0,
-        promise
-      }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-      return promise;
+        force: !!(options && options.force),
+        replaceState: replaceChecklistCacheState,
+        defaults: { signature: '', summary: null, fetchedAt: 0, promise: null },
+        load: function () { return loadSummary(summaryFilters); },
+        normalize: function (response) {
+          return normalizeChecklistRemoteSummary(response && response.summary, response && response.total);
+        },
+        onSuccess: function () {
+          if (checklistRemoteSummaryBootstrapState.signature === signature) resetChecklistRemoteSummaryBootstrapState();
+        }
+      });
     }
 
     function queueChecklistRemoteSummaryBootstrap(filters) {
@@ -353,6 +336,11 @@
       const moduleApi = getChecklistCollectionCacheModule();
       if (moduleApi && typeof moduleApi.createSummaryCache === 'function') return moduleApi.createSummaryCache(extra);
       return { signature: '', summary: null, fetchedAt: 0, promise: null, ...(extra && typeof extra === 'object' ? extra : {}) };
+    }
+    function primeChecklistSummaryCache(cache, options) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.primeSummaryCache === 'function') return moduleApi.primeSummaryCache(cache, options);
+      return Promise.resolve(null);
     }
     function replaceChecklistCacheState(cache, nextState, defaults) {
       const moduleApi = getChecklistCollectionCacheModule();

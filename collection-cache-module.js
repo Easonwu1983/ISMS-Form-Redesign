@@ -167,6 +167,49 @@
       resetRenderCaches(bundle.renderCache, bundle.markupCache);
     }
 
+    function primeSummaryCache(cache, options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      const signature = String(settings.signature || '').trim();
+      const defaults = settings.defaults && typeof settings.defaults === 'object'
+        ? settings.defaults
+        : { signature: '', summary: null, fetchedAt: 0, promise: null };
+      const replace = typeof settings.replaceState === 'function' ? settings.replaceState : replaceCacheState;
+      const load = typeof settings.load === 'function' ? settings.load : null;
+      const normalize = typeof settings.normalize === 'function' ? settings.normalize : function (value) { return value; };
+      if (!cache || typeof cache !== 'object' || !signature || !load) return Promise.resolve(null);
+      if (!settings.force && cache.signature === signature && cache.promise) return cache.promise;
+      const promise = Promise.resolve()
+        .then(load)
+        .then(function (response) {
+          const summary = normalize(response);
+          if (typeof settings.onSuccess === 'function') settings.onSuccess(summary, response);
+          replace(cache, {
+            signature: signature,
+            summary: summary,
+            fetchedAt: Date.now(),
+            promise: null
+          }, defaults);
+          return summary;
+        })
+        .catch(function (error) {
+          if (cache.signature === signature) {
+            replace(cache, {
+              ...cache,
+              promise: null
+            }, defaults);
+          }
+          if (typeof settings.onError === 'function') settings.onError(error);
+          throw error;
+        });
+      replace(cache, {
+        signature: signature,
+        summary: cache.signature === signature ? cache.summary : null,
+        fetchedAt: cache.signature === signature ? cache.fetchedAt : 0,
+        promise: promise
+      }, defaults);
+      return promise;
+    }
+
     function buildRenderSignature(options) {
       const settings = options && typeof options === 'object' ? options : {};
       const items = Array.isArray(settings.items) ? settings.items : [];
@@ -199,6 +242,7 @@
       resetRenderCaches: resetRenderCaches,
       resetPagedCollectionState: resetPagedCollectionState,
       resetRemoteCollectionBundle: resetRemoteCollectionBundle,
+      primeSummaryCache: primeSummaryCache,
       buildRenderSignature: buildRenderSignature
     };
   };

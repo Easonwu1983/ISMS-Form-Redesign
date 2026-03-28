@@ -73,6 +73,10 @@
       return getBaseModule().resetRemoteCollectionBundle(bundle, options);
     }
 
+    function primeSummaryCache(cache, options) {
+      return getBaseModule().primeSummaryCache(cache, options);
+    }
+
     function buildRenderSignature(options) {
       return getBaseModule().buildRenderSignature(options);
     }
@@ -93,6 +97,7 @@
       resetRenderCaches,
       resetPagedCollectionState,
       resetRemoteCollectionBundle,
+      primeSummaryCache,
       buildRenderSignature
     };
   };

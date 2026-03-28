@@ -804,74 +804,43 @@
     window._trainingModule = trainingModuleApi;
     return trainingModuleApi;
   }
-  let serviceRegistryModuleApi = null;
-  let appServiceAccessModuleApi = null;
-  let appBootstrapStateModuleApi = null;
-  let appCoreServiceModuleApi = null;
-  let appBootstrapAccessModuleApi = null;
-  let appEntryRuntimeModuleApi = null;
-  let appShellRuntimeModuleApi = null;
-  let appAuthSessionRuntimeModuleApi = null;
-  const appCoreServiceState = {
-    serviceRegistryModuleApi: null,
-    appServiceAccessModuleApi: null
-  };
-  function getAppCoreServiceModule() {
-    if (appCoreServiceModuleApi) return appCoreServiceModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppCoreServiceModule !== 'function') {
-      throw new Error('app-core-service-module.js not loaded');
+  let appRuntimeServiceModuleApi = null;
+  const appRuntimeServiceState = getAppRuntimeServiceModule().createState();
+  function getAppRuntimeServiceModule() {
+    if (appRuntimeServiceModuleApi) return appRuntimeServiceModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppRuntimeServiceModule !== 'function') {
+      throw new Error('app-runtime-service-module.js not loaded');
     }
-    appCoreServiceModuleApi = window.createAppCoreServiceModule();
-    window._appCoreServiceModule = appCoreServiceModuleApi;
-    return appCoreServiceModuleApi;
+    appRuntimeServiceModuleApi = window.createAppRuntimeServiceModule();
+    window._appRuntimeServiceModule = appRuntimeServiceModuleApi;
+    return appRuntimeServiceModuleApi;
+  }
+  function getAppCoreServiceModule() {
+    return getAppRuntimeServiceModule().getAppCoreServiceModule(appRuntimeServiceState);
   }
   function getAppBootstrapAccessModule() {
-    if (appBootstrapAccessModuleApi) return appBootstrapAccessModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppBootstrapAccessModule !== 'function') {
-      throw new Error('app-bootstrap-access-module.js not loaded');
-    }
-    appBootstrapAccessModuleApi = window.createAppBootstrapAccessModule();
-    window._appBootstrapAccessModule = appBootstrapAccessModuleApi;
-    return appBootstrapAccessModuleApi;
+    return getAppRuntimeServiceModule().getAppBootstrapAccessModule(appRuntimeServiceState);
   }
   function getAppEntryRuntimeModule() {
-    if (appEntryRuntimeModuleApi) return appEntryRuntimeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppEntryRuntimeModule !== 'function') {
-      throw new Error('app-entry-runtime-module.js not loaded');
-    }
-    appEntryRuntimeModuleApi = window.createAppEntryRuntimeModule();
-    window._appEntryRuntimeModule = appEntryRuntimeModuleApi;
-    return appEntryRuntimeModuleApi;
+    return getAppRuntimeServiceModule().getAppEntryRuntimeModule(appRuntimeServiceState);
   }
   function getAppShellRuntimeModule() {
-    if (appShellRuntimeModuleApi) return appShellRuntimeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppShellRuntimeModule !== 'function') {
-      throw new Error('app-shell-runtime-module.js not loaded');
-    }
-    appShellRuntimeModuleApi = window.createAppShellRuntimeModule();
-    window._appShellRuntimeModule = appShellRuntimeModuleApi;
-    return appShellRuntimeModuleApi;
+    return getAppRuntimeServiceModule().getAppShellRuntimeModule(appRuntimeServiceState);
   }
   function getAppAuthSessionRuntimeModule() {
-    if (appAuthSessionRuntimeModuleApi) return appAuthSessionRuntimeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppAuthSessionRuntimeModule !== 'function') {
-      throw new Error('app-auth-session-runtime-module.js not loaded');
-    }
-    appAuthSessionRuntimeModuleApi = window.createAppAuthSessionRuntimeModule();
-    window._appAuthSessionRuntimeModule = appAuthSessionRuntimeModuleApi;
-    return appAuthSessionRuntimeModuleApi;
+    return getAppRuntimeServiceModule().getAppAuthSessionRuntimeModule(appRuntimeServiceState);
   }
   function getServiceRegistryModule() {
-    serviceRegistryModuleApi = getAppCoreServiceModule().getServiceRegistryModule(appCoreServiceState, {});
-    appCoreServiceState.serviceRegistryModuleApi = serviceRegistryModuleApi;
-    return serviceRegistryModuleApi;
+    appRuntimeServiceState.serviceRegistryModuleApi = getAppCoreServiceModule().getServiceRegistryModule(appRuntimeServiceState.appCoreServiceState, {});
+    appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi = appRuntimeServiceState.serviceRegistryModuleApi;
+    return appRuntimeServiceState.serviceRegistryModuleApi;
   }
   function getAppServiceAccessModule() {
-    appServiceAccessModuleApi = getAppCoreServiceModule().getAppServiceAccessModule(appCoreServiceState, {
+    appRuntimeServiceState.appServiceAccessModuleApi = getAppCoreServiceModule().getAppServiceAccessModule(appRuntimeServiceState.appCoreServiceState, {
       recordBootstrapStep
     });
-    appCoreServiceState.appServiceAccessModuleApi = appServiceAccessModuleApi;
-    return appServiceAccessModuleApi;
+    appRuntimeServiceState.appCoreServiceState.appServiceAccessModuleApi = appRuntimeServiceState.appServiceAccessModuleApi;
+    return appRuntimeServiceState.appServiceAccessModuleApi;
   }
   function getAppBootstrapModule() {
     return getAppBootstrapAccessModule().getAppBootstrapModule({
@@ -881,12 +850,12 @@
     });
   }
   function getAppBootstrapStateModule() {
-    if (appBootstrapStateModuleApi) return appBootstrapStateModuleApi;
-    appBootstrapStateModuleApi = getAppServiceAccessModule().getAppBootstrapStateModule({
+    if (appRuntimeServiceState.appBootstrapStateModuleApi) return appRuntimeServiceState.appBootstrapStateModuleApi;
+    appRuntimeServiceState.appBootstrapStateModuleApi = getAppServiceAccessModule().getAppBootstrapStateModule({
       resolveFactoryService,
       recordBootstrapStep
     });
-    return appBootstrapStateModuleApi;
+    return appRuntimeServiceState.appBootstrapStateModuleApi;
   }
   function getAppEntryModule() {
     return getAppBootstrapAccessModule().getAppEntryModule({
@@ -957,12 +926,12 @@
     }, step, detail);
   }
   function registerCoreService(name, resolver) {
-    appCoreServiceState.serviceRegistryModuleApi = serviceRegistryModuleApi || appCoreServiceState.serviceRegistryModuleApi;
-    return getAppCoreServiceModule().registerCoreService(appCoreServiceState, {}, name, resolver);
+    appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi = appRuntimeServiceState.serviceRegistryModuleApi || appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi;
+    return getAppCoreServiceModule().registerCoreService(appRuntimeServiceState.appCoreServiceState, {}, name, resolver);
   }
   function resolveFactoryService(name, options) {
-    appCoreServiceState.serviceRegistryModuleApi = serviceRegistryModuleApi || appCoreServiceState.serviceRegistryModuleApi;
-    return getAppCoreServiceModule().resolveFactoryService(appCoreServiceState, {}, name, options || {});
+    appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi = appRuntimeServiceState.serviceRegistryModuleApi || appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi;
+    return getAppCoreServiceModule().resolveFactoryService(appRuntimeServiceState.appCoreServiceState, {}, name, options || {});
   }
   function getM365ApiClient() {
     return getAppBootstrapAccessModule().getM365ApiClient({

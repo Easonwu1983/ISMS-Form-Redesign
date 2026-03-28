@@ -270,6 +270,14 @@
       return { signature: '', summary: null, fetchedAt: 0, promise: null, ...(extra && typeof extra === 'object' ? extra : {}) };
     }
 
+    function primeAdminSummaryCache(cache, options) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.primeSummaryCache === 'function') {
+        return moduleApi.primeSummaryCache(cache, options);
+      }
+      return Promise.resolve(null);
+    }
+
     function replaceAdminCacheState(cache, nextState, defaults) {
       const moduleApi = getAdminCollectionCacheModule();
       if (moduleApi && typeof moduleApi.replaceCacheState === 'function') {
@@ -1198,36 +1206,19 @@
     function primeAuditTrailSummary(filters, options) {
       const summaryFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}), summaryOnly: '1', limit: '50', offset: '0' };
       const signature = getAuditTrailSummarySignature(summaryFilters);
-      const force = !!(options && options.force);
-      if (!force && auditTrailSummaryCache.signature === signature && auditTrailSummaryCache.promise) {
-        return auditTrailSummaryCache.promise;
-      }
-      const promise = fetchAuditTrailEntries(summaryFilters).then((response) => {
-        const summary = normalizeAuditTrailSummary(response && response.summary);
-        if (auditTrailSummaryBootstrapState.signature === signature) resetAuditTrailSummaryBootstrapState();
-        replaceAdminCacheState(auditTrailSummaryCache, {
-          signature,
-          summary,
-          fetchedAt: Date.now(),
-          promise: null
-        }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-        return summary;
-      }).catch((error) => {
-        if (auditTrailSummaryCache.signature === signature) {
-          replaceAdminCacheState(auditTrailSummaryCache, {
-            ...auditTrailSummaryCache,
-            promise: null
-          }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-        }
-        throw error;
-      });
-      replaceAdminCacheState(auditTrailSummaryCache, {
+      return primeAdminSummaryCache(auditTrailSummaryCache, {
         signature,
-        summary: auditTrailSummaryCache.signature === signature ? auditTrailSummaryCache.summary : null,
-        fetchedAt: auditTrailSummaryCache.signature === signature ? auditTrailSummaryCache.fetchedAt : 0,
-        promise
-      }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-      return promise;
+        force: !!(options && options.force),
+        replaceState: replaceAdminCacheState,
+        defaults: { signature: '', summary: null, fetchedAt: 0, promise: null },
+        load: function () { return fetchAuditTrailEntries(summaryFilters); },
+        normalize: function (response) {
+          return normalizeAuditTrailSummary(response && response.summary);
+        },
+        onSuccess: function () {
+          if (auditTrailSummaryBootstrapState.signature === signature) resetAuditTrailSummaryBootstrapState();
+        }
+      });
     }
 
     function queueAuditTrailSummaryBootstrap(filters) {

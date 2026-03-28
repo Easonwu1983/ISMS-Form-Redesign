@@ -191,6 +191,7 @@ function buildReleaseReport(report) {
   const versions = Array.isArray(fullSummary && fullSummary.versions) ? fullSummary.versions : [];
   const metrics = buildReleaseMetrics(layers, versions);
   const coverage = buildReleaseCoverage();
+  const latencyHighlights = buildLatencyHighlights();
   return {
     generatedAt: new Date().toISOString(),
     ok: !!(fullSummary && fullSummary.ok),
@@ -200,7 +201,8 @@ function buildReleaseReport(report) {
     versions,
     layers,
     metrics,
-    coverage
+    coverage,
+    latencyHighlights
   };
 }
 
@@ -264,6 +266,26 @@ function buildReleaseCoverage() {
   return {
     api: buildCoverageBuckets(campusLiveReport && campusLiveReport.checks, classifyApiCheckName),
     pages: buildCoverageBuckets(pagesReport && pagesReport.steps, classifyPagesStepName)
+  };
+}
+
+function buildLatencyHighlights() {
+  const campusLiveReport = readJsonIfExists(CAMPUS_LIVE_REPORT_PATH);
+  const pagesReport = readJsonIfExists(PAGES_REPORT_PATH);
+  const toEntries = function (items, labelKey) {
+    return (Array.isArray(items) ? items : [])
+      .map((entry) => ({
+        label: String(entry && entry[labelKey] || '').trim(),
+        durationMs: Math.max(0, Number(entry && entry.durationMs || 0)),
+        ok: !!(entry && entry.ok)
+      }))
+      .filter((entry) => entry.label)
+      .sort((left, right) => right.durationMs - left.durationMs)
+      .slice(0, 5);
+  };
+  return {
+    apiChecks: toEntries(campusLiveReport && campusLiveReport.checks, 'name'),
+    pagesSteps: toEntries(pagesReport && pagesReport.steps, 'label')
   };
 }
 
@@ -353,6 +375,20 @@ function writeReleaseReport(report) {
     '',
     ...(Array.isArray(releaseReport.coverage && releaseReport.coverage.pages) && releaseReport.coverage.pages.length
       ? releaseReport.coverage.pages.map((entry) => `- ${entry.module}: total=${entry.total}, failed=${entry.failed}`)
+      : ['- n/a']),
+    '',
+    '## Latency Hotspots',
+    '',
+    '### API Checks',
+    '',
+    ...(Array.isArray(releaseReport.latencyHighlights && releaseReport.latencyHighlights.apiChecks) && releaseReport.latencyHighlights.apiChecks.length
+      ? releaseReport.latencyHighlights.apiChecks.map((entry) => `- ${entry.label}: ${entry.durationMs} ms (${entry.ok ? 'passed' : 'failed'})`)
+      : ['- n/a']),
+    '',
+    '### Pages Steps',
+    '',
+    ...(Array.isArray(releaseReport.latencyHighlights && releaseReport.latencyHighlights.pagesSteps) && releaseReport.latencyHighlights.pagesSteps.length
+      ? releaseReport.latencyHighlights.pagesSteps.map((entry) => `- ${entry.label}: ${entry.durationMs} ms (${entry.ok ? 'passed' : 'failed'})`)
       : ['- n/a']),
     '',
     '## Versions',

@@ -344,6 +344,11 @@
       if (moduleApi && typeof moduleApi.createSummaryCache === 'function') return moduleApi.createSummaryCache(extra);
       return { signature: '', summary: null, fetchedAt: 0, promise: null, ...(extra && typeof extra === 'object' ? extra : {}) };
     }
+    function primeTrainingSummaryCache(cache, options) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.primeSummaryCache === 'function') return moduleApi.primeSummaryCache(cache, options);
+      return Promise.resolve(null);
+    }
     function replaceTrainingCacheState(cache, nextState, defaults) {
       const moduleApi = getTrainingCollectionCacheModule();
       if (moduleApi && typeof moduleApi.replaceCacheState === 'function') return moduleApi.replaceCacheState(cache, nextState, defaults);
@@ -823,40 +828,20 @@
       const client = getTrainingRemoteListSummaryClient();
       const signature = getTrainingRemoteListSummarySignature(user);
       if (!client || !signature) return Promise.resolve(null);
-      if (!opts.force
-        && trainingRemoteListSummaryCache.signature === signature
-        && trainingRemoteListSummaryCache.promise) {
-        return trainingRemoteListSummaryCache.promise;
-      }
       const loadSummary = typeof client.getTrainingFormsSummary === 'function'
         ? client.getTrainingFormsSummary.bind(client)
         : client.listTrainingForms.bind(client);
-      const promise = loadSummary().then((response) => {
-        const summary = normalizeTrainingListCounts(response && response.summary);
-        if (trainingRemoteListSummaryBootstrapState.signature === signature) resetTrainingRemoteListSummaryBootstrapState();
-        replaceTrainingCacheState(trainingRemoteListSummaryCache, {
-          signature,
-          summary,
-          fetchedAt: Date.now(),
-          promise: null
-        }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-        return summary;
-      }).catch((error) => {
-        if (trainingRemoteListSummaryCache.signature === signature) {
-          replaceTrainingCacheState(trainingRemoteListSummaryCache, {
-            ...trainingRemoteListSummaryCache,
-            promise: null
-          }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-        }
-        throw error;
-      });
-      replaceTrainingCacheState(trainingRemoteListSummaryCache, {
+      return primeTrainingSummaryCache(trainingRemoteListSummaryCache, {
         signature,
-        summary: trainingRemoteListSummaryCache.signature === signature ? trainingRemoteListSummaryCache.summary : null,
-        fetchedAt: trainingRemoteListSummaryCache.signature === signature ? trainingRemoteListSummaryCache.fetchedAt : 0,
-        promise
-      }, { signature: '', summary: null, fetchedAt: 0, promise: null });
-      return promise;
+        force: opts.force,
+        replaceState: replaceTrainingCacheState,
+        defaults: { signature: '', summary: null, fetchedAt: 0, promise: null },
+        load: function () { return loadSummary(); },
+        normalize: function (response) { return normalizeTrainingListCounts(response && response.summary); },
+        onSuccess: function () {
+          if (trainingRemoteListSummaryBootstrapState.signature === signature) resetTrainingRemoteListSummaryBootstrapState();
+        }
+      });
     }
 
     function getTrainingListSnapshot(user) {
