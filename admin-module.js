@@ -294,7 +294,18 @@
     function createAdminRemoteCollectionBundle(options) {
       const moduleApi = getAdminCollectionCacheModule();
       if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') {
-        return moduleApi.createRemoteCollectionBundle(options);
+        const settings = options && typeof options === 'object' ? options : {};
+        return moduleApi.createRemoteCollectionBundle({
+          ...settings,
+          includeViewCache: true,
+          includeSummaryCache: true,
+          includeRenderCache: true,
+          includeMarkupCache: true,
+          renderCacheExtra: {
+            filterSignature: '',
+            ...(settings.renderCacheExtra && typeof settings.renderCacheExtra === 'object' ? settings.renderCacheExtra : {})
+          }
+        });
       }
       const settings = options && typeof options === 'object' ? options : {};
       return {

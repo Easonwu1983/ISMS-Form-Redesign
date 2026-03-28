@@ -192,6 +192,7 @@ function buildReleaseReport(report) {
   const metrics = buildReleaseMetrics(layers, versions);
   const coverage = buildReleaseCoverage();
   const latencyHighlights = buildLatencyHighlights();
+  const cacheSignals = buildCacheSignals();
   return {
     generatedAt: new Date().toISOString(),
     ok: !!(fullSummary && fullSummary.ok),
@@ -202,7 +203,8 @@ function buildReleaseReport(report) {
     layers,
     metrics,
     coverage,
-    latencyHighlights
+    latencyHighlights,
+    cacheSignals
   };
 }
 
@@ -285,7 +287,26 @@ function buildLatencyHighlights() {
   };
   return {
     apiChecks: toEntries(campusLiveReport && campusLiveReport.checks, 'name'),
-    pagesSteps: toEntries(pagesReport && pagesReport.steps, 'label')
+    pagesSteps: toEntries(pagesReport && pagesReport.steps, 'name')
+  };
+}
+
+function buildCacheSignals() {
+  const campusLiveReport = readJsonIfExists(CAMPUS_LIVE_REPORT_PATH);
+  const pagesReport = readJsonIfExists(PAGES_REPORT_PATH);
+  const apiChecks = Array.isArray(campusLiveReport && campusLiveReport.checks) ? campusLiveReport.checks : [];
+  const pagesSteps = Array.isArray(pagesReport && pagesReport.steps) ? pagesReport.steps : [];
+  const apiSummaryChecks = apiChecks.filter((entry) => /summary/i.test(String(entry && entry.name || '')));
+  const apiSummaryOnlyChecks = apiChecks.filter((entry) => /summary-only/i.test(String(entry && entry.name || '')));
+  const pagesPagerSteps = pagesSteps.filter((entry) => /pager/i.test(String(entry && entry.name || '')));
+  const pagesSummarySteps = pagesSteps.filter((entry) => /summary/i.test(String(entry && entry.name || '')));
+  return {
+    apiSummaryChecks: apiSummaryChecks.length,
+    apiSummaryOnlyChecks: apiSummaryOnlyChecks.length,
+    apiSummaryFailed: apiSummaryChecks.filter((entry) => !(entry && entry.ok)).length,
+    pagesPagerSteps: pagesPagerSteps.length,
+    pagesPagerFailed: pagesPagerSteps.filter((entry) => !(entry && entry.ok)).length,
+    pagesSummarySteps: pagesSummarySteps.length
   };
 }
 
@@ -374,8 +395,17 @@ function writeReleaseReport(report) {
     '### Pages Modules',
     '',
     ...(Array.isArray(releaseReport.coverage && releaseReport.coverage.pages) && releaseReport.coverage.pages.length
-      ? releaseReport.coverage.pages.map((entry) => `- ${entry.module}: total=${entry.total}, failed=${entry.failed}`)
+      ? releaseReport.coverage.pages.map((entry) => `- ${entry.module}: total=${entry.total}, failed=${entry.failed}, totalDurationMs=${entry.totalDurationMs}, slowest=${entry.slowestName || 'n/a'} (${entry.slowestDurationMs || 0} ms)`)
       : ['- n/a']),
+    '',
+    '## Cache Signals',
+    '',
+    `- apiSummaryChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryChecks || 0}`,
+    `- apiSummaryOnlyChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryOnlyChecks || 0}`,
+    `- apiSummaryFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryFailed || 0}`,
+    `- pagesPagerSteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerSteps || 0}`,
+    `- pagesPagerFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerFailed || 0}`,
+    `- pagesSummarySteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesSummarySteps || 0}`,
     '',
     '## Latency Hotspots',
     '',

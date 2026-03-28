@@ -361,7 +361,15 @@
     }
     function createTrainingRemoteCollectionBundle(options) {
       const moduleApi = getTrainingCollectionCacheModule();
-      if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') return moduleApi.createRemoteCollectionBundle(options);
+      if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') {
+        return moduleApi.createRemoteCollectionBundle({
+          ...(options && typeof options === 'object' ? options : {}),
+          includeViewCache: false,
+          includeSummaryCache: true,
+          includeRenderCache: true,
+          includeMarkupCache: true
+        });
+      }
       const settings = options && typeof options === 'object' ? options : {};
       return {
         state: createTrainingRemoteCollectionState(settings),

@@ -10,6 +10,7 @@
         appEntryRuntimeModuleApi: null,
         appShellRuntimeModuleApi: null,
         appAuthSessionRuntimeModuleApi: null,
+        appRouterRuntimeModuleApi: null,
         appCoreServiceState: {
           serviceRegistryModuleApi: null,
           appServiceAccessModuleApi: null
@@ -47,13 +48,18 @@
       return getModuleFactory('createAppAuthSessionRuntimeModule', 'app-auth-session-runtime-module.js', state, 'appAuthSessionRuntimeModuleApi', '_appAuthSessionRuntimeModule');
     }
 
+    function getAppRouterRuntimeModule(state) {
+      return getModuleFactory('createAppRouterRuntimeModule', 'app-router-runtime-module.js', state, 'appRouterRuntimeModuleApi', '_appRouterRuntimeModule');
+    }
+
     return {
       createState: createState,
       getAppCoreServiceModule: getAppCoreServiceModule,
       getAppBootstrapAccessModule: getAppBootstrapAccessModule,
       getAppEntryRuntimeModule: getAppEntryRuntimeModule,
       getAppShellRuntimeModule: getAppShellRuntimeModule,
-      getAppAuthSessionRuntimeModule: getAppAuthSessionRuntimeModule
+      getAppAuthSessionRuntimeModule: getAppAuthSessionRuntimeModule,
+      getAppRouterRuntimeModule: getAppRouterRuntimeModule
     };
   };
 })();

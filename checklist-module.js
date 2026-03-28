@@ -354,7 +354,15 @@
     }
     function createChecklistRemoteCollectionBundle(options) {
       const moduleApi = getChecklistCollectionCacheModule();
-      if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') return moduleApi.createRemoteCollectionBundle(options);
+      if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') {
+        return moduleApi.createRemoteCollectionBundle({
+          ...(options && typeof options === 'object' ? options : {}),
+          includeViewCache: false,
+          includeSummaryCache: true,
+          includeRenderCache: false,
+          includeMarkupCache: true
+        });
+      }
       const settings = options && typeof options === 'object' ? options : {};
       return {
         state: createChecklistRemoteCollectionState(settings),

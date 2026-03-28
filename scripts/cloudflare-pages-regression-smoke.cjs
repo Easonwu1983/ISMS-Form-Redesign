@@ -314,9 +314,20 @@ async function run() {
     baseUrl: BASE_URL,
     steps: []
   };
+  const runStartedMs = Date.now();
+  let lastStepRecordedMs = runStartedMs;
 
-  function pushStep(name, ok, detail) {
-    report.steps.push({ name, ok, detail });
+  function pushStep(name, ok, detail, extra) {
+    const now = Date.now();
+    report.steps.push({
+      name,
+      ok,
+      detail,
+      durationMs: Math.max(0, now - lastStepRecordedMs),
+      elapsedMs: Math.max(0, now - runStartedMs),
+      ...(extra && typeof extra === 'object' ? extra : {})
+    });
+    lastStepRecordedMs = now;
   }
 
   const executablePath = pickExecutablePath();

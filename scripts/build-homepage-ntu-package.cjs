@@ -45,6 +45,7 @@ const filesToCopy = [
   'app-auth-session-module.js',
   'app-auth-session-runtime-module.js',
   'app-router-module.js',
+  'app-router-runtime-module.js',
   'app-bootstrap-module.js',
   'admin-collection-cache-module.js',
   'units.js',

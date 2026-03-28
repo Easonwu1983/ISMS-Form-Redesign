@@ -91,12 +91,16 @@
 
     function createRemoteCollectionBundle(options) {
       const settings = options && typeof options === 'object' ? options : {};
+      const includeViewCache = settings.includeViewCache !== false;
+      const includeSummaryCache = settings.includeSummaryCache !== false;
+      const includeRenderCache = settings.includeRenderCache !== false;
+      const includeMarkupCache = settings.includeMarkupCache !== false;
       return {
         state: createRemoteCollectionState(settings),
-        viewCache: createRemoteViewCache(settings.filters, settings.viewCacheExtra),
-        summaryCache: createSummaryCache(settings.summaryCacheExtra),
-        renderCache: createRenderCache(settings.renderCacheExtra),
-        markupCache: createMarkupCache(settings.markupCacheExtra)
+        ...(includeViewCache ? { viewCache: createRemoteViewCache(settings.filters, settings.viewCacheExtra) } : {}),
+        ...(includeSummaryCache ? { summaryCache: createSummaryCache(settings.summaryCacheExtra) } : {}),
+        ...(includeRenderCache ? { renderCache: createRenderCache(settings.renderCacheExtra) } : {}),
+        ...(includeMarkupCache ? { markupCache: createMarkupCache(settings.markupCacheExtra) } : {})
       };
     }
 

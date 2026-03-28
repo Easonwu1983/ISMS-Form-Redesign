@@ -830,6 +830,9 @@
   function getAppAuthSessionRuntimeModule() {
     return getAppRuntimeServiceModule().getAppAuthSessionRuntimeModule(appRuntimeServiceState);
   }
+  function getAppRouterRuntimeModule() {
+    return getAppRuntimeServiceModule().getAppRouterRuntimeModule(appRuntimeServiceState);
+  }
   function getServiceRegistryModule() {
     appRuntimeServiceState.serviceRegistryModuleApi = getAppCoreServiceModule().getServiceRegistryModule(appRuntimeServiceState.appCoreServiceState, {});
     appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi = appRuntimeServiceState.serviceRegistryModuleApi;
@@ -3869,7 +3872,12 @@
   function mergeTrainingRows(targetUnit, carryRows) { return getWorkflowSupportModule().mergeTrainingRows(targetUnit, carryRows); }
 
 
-  function handleRoute() { return getAppShellOrchestrationModule().handleRoute({ getShellModule }); }
+  function handleRoute() {
+    return getAppRouterRuntimeModule().handleRoute({
+      getAppShellOrchestrationModule,
+      getShellModule
+    });
+  }
 
   // ─── Seed Data ─────────────────────────────
   function seedData() { return getWorkflowSupportModule().seedData(); }
@@ -3940,24 +3948,19 @@
     }
   }
 
-  let lastStableHash = '';
   function setLastStableHash(value) {
-    lastStableHash = String(value || '').trim() || '#dashboard';
-    return getAppRouterModule().setLastStableHash(lastStableHash);
+    return getAppRouterRuntimeModule().setLastStableHash(getAppRouterModule(), value);
   }
   function handleHashChange() {
-    return getAppRouterModule().handleHashChange({
+    return getAppRouterRuntimeModule().handleHashChange(getAppRouterModule(), {
       hasUnsavedChangesGuard,
       confirmDiscardUnsavedChanges,
       handleRoute
     });
   }
 
-  let appEventListenersInstalled = false;
   function installAppEventListeners() {
-    if (appEventListenersInstalled) return;
-    appEventListenersInstalled = true;
-    getAppRouterModule().installAppEventListeners({
+    return getAppRouterRuntimeModule().installAppEventListeners(getAppRouterModule(), {
       handleRoute,
       hasUnsavedChangesGuard,
       confirmDiscardUnsavedChanges,
