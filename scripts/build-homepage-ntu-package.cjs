@@ -50,6 +50,7 @@ const filesToCopy = [
   'app-router-module.js',
   'app-router-runtime-module.js',
   'app-bootstrap-module.js',
+  'app-core-module-access-module.js',
   'admin-collection-cache-module.js',
   'units.js',
   'm365-config.js',

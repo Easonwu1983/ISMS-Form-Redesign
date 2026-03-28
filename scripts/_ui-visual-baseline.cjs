@@ -17,14 +17,14 @@ const DESKTOP_VISUAL_SPECS = [
   {
     slug: 'unit-review',
     hash: '#unit-review',
-    clip: { x: 260, y: 64, width: 1180, height: 1420 }
+    clip: { x: 260, y: 64, width: 1180, height: 1080 }
   }
 ];
 
 const MOBILE_VISUAL_SPECS = [
   { slug: 'dashboard', hash: '#dashboard' },
   { slug: 'training', hash: '#training' },
-  { slug: 'unit-review', hash: '#unit-review' }
+  { slug: 'unit-review', hash: '#unit-review', clip: { x: 0, y: 0, width: 390, height: 980 } }
 ];
 
 const PUBLIC_DESKTOP_VISUAL_SPECS = [
@@ -118,6 +118,45 @@ async function seedSyntheticUnitReview(page) {
     const history = document.querySelector('.review-history-card .review-history-list');
     if (history) {
       history.innerHTML = '<div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">尚無治理紀錄</div></div>';
+    }
+
+    const governanceStack = document.querySelector('.governance-category-stack');
+    if (governanceStack) {
+      governanceStack.innerHTML = `
+        <details class="governance-category-card" open>
+          <summary class="governance-category-summary">
+            <div>
+              <strong>?? / ????</strong>
+              <div class="review-card-subtitle">Synthetic focused baseline</div>
+            </div>
+            <div class="review-chip-row">
+              <span class="review-count-chip">??? 4</span>
+              <span class="review-count-chip">?? 2</span>
+              <span class="review-count-chip">?? 2</span>
+            </div>
+          </summary>
+          <div class="review-card-body" style="padding-top:12px">
+            <div class="review-history-item" style="min-height:84px"></div>
+            <div class="review-history-item" style="min-height:84px"></div>
+          </div>
+        </details>
+        <details class="governance-category-card">
+          <summary class="governance-category-summary">
+            <div>
+              <strong>????</strong>
+              <div class="review-card-subtitle">Synthetic focused baseline</div>
+            </div>
+            <div class="review-chip-row">
+              <span class="review-count-chip">??? 3</span>
+              <span class="review-count-chip">?? 1</span>
+              <span class="review-count-chip">?? 2</span>
+            </div>
+          </summary>
+          <div class="review-card-body" style="padding-top:12px">
+            <div class="review-history-item" style="min-height:72px"></div>
+          </div>
+        </details>
+      `;
     }
   });
 

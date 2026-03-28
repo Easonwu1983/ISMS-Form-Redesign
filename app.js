@@ -255,220 +255,15 @@
   function getRoute() {
     return getAppRouteModule().getRoute();
   }
-  let unitModuleApi = null;
-  function getUnitModule() {
-    if (unitModuleApi) return unitModuleApi;
-    unitModuleApi = resolveFactoryService('unitModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createUnitModule !== 'function') {
-          throw new Error('unit-module.js not loaded');
-        }
-        return window.createUnitModule({
-          UNIT_CUSTOM_VALUE,
-          UNIT_CUSTOM_LABEL,
-          UNIT_ADMIN_PRIMARY_WHITELIST,
-          UNIT_ACADEMIC_PRIMARY_WHITELIST,
-          loadData: function () { return getDataModule().loadData(); },
-          saveData: function (data) { return getDataModule().saveData(data); },
-          loadChecklists: function () { return getDataModule().loadChecklists(); },
-          saveChecklists: function (store) { return getDataModule().saveChecklists(store); },
-          loadTrainingStore: function () { return getDataModule().loadTrainingStore(); },
-          saveTrainingStore: function (store) { return getDataModule().saveTrainingStore(store); },
-          loadUnitReviewStore: function () { return getDataModule().loadUnitReviewStore(); },
-          saveUnitReviewStore: function (store) { return getDataModule().saveUnitReviewStore(store); },
-          getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
-          syncSessionUnit: function (sourceUnit, targetUnit) { return getAuthModule().syncSessionUnit(sourceUnit, targetUnit); },
-          isAdmin: function () { return getPolicyModule().isAdmin(); },
-          esc: function (value) { return getUiModule().esc(value); }
-        });
-      },
-      globalSlot: '_unitModule'
-    });
-    return unitModuleApi;
-  }
-
-  let uiModuleApi = null;
-  function getUiModule() {
-    if (uiModuleApi) return uiModuleApi;
-    uiModuleApi = resolveFactoryService('uiModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createUiModule !== 'function') {
-          throw new Error('ui-module.js not loaded');
-        }
-        return window.createUiModule();
-      },
-      globalSlot: '_uiModule'
-    });
-    return uiModuleApi;
-  }
-
-  let attachmentModuleApi = null;
-  function getAttachmentModule() {
-    if (attachmentModuleApi) return attachmentModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAttachmentModule !== 'function') {
-      throw new Error('attachment-module.js not loaded');
+  let appCoreModuleAccessModuleApi = null;
+  function getAppCoreModuleAccessModule() {
+    if (appCoreModuleAccessModuleApi) return appCoreModuleAccessModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppCoreModuleAccessModule !== 'function') {
+      throw new Error('app-core-module-access-module.js not loaded');
     }
-    attachmentModuleApi = window.createAttachmentModule({
-      esc: function (value) { return getUiModule().esc(value); },
-      toast: function (message, type) { return getUiModule().toast(message, type); },
-      getBackendMode: function () { return getAttachmentsMode(); },
-      fetchRemoteAttachmentDetail: function (entry) { return fetchRemoteAttachmentDetail(entry); },
-      fetchRemoteAttachmentBlob: function (entry) { return fetchRemoteAttachmentBlob(entry); }
-    });
-    window._attachmentModule = attachmentModuleApi;
-    return attachmentModuleApi;
-  }
-
-  let policyModuleApi = null;
-  function getPolicyModule() {
-    if (policyModuleApi) return policyModuleApi;
-    policyModuleApi = resolveFactoryService('policyModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createPolicyModule !== 'function') {
-          throw new Error('policy-module.js not loaded');
-        }
-        return window.createPolicyModule({
-          ROLES,
-          STATUSES,
-          TRAINING_STATUSES,
-          TRAINING_UNDO_WINDOW_MINUTES,
-          currentUser: function () { return getAuthModule().currentUser(); },
-          getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
-          getReviewUnits: function (user) { return getDataModule().getReviewUnits(user); },
-          getAccessProfile: function (user) { return getDataModule().getAccessProfile(user); },
-          getAccessProfileSignature: function (user) { return getDataModule().getAccessProfileSignature(user); },
-          getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
-          getStoreTouchToken: function (key) { return getDataModule().getStoreTouchToken(key); },
-          getUnitGovernanceMode: function (unit) { return getDataModule().getUnitGovernanceMode(unit); },
-          splitUnitValue: function (value) { return getUnitModule().splitUnitValue(value); },
-          getAllItems: function () { return getDataModule().getAllItems(); },
-          getAllChecklists: function () { return getDataModule().getAllChecklists(); },
-          getAllTrainingForms: function () { return getDataModule().getAllTrainingForms(); },
-          isChecklistDraftStatus: function (status) { return getDataModule().isChecklistDraftStatus(status); },
-          isReviewScopeEnforced: function () { return getReviewScopeRepositoryState().ready === true && getReviewScopesMode() === 'm365-api'; }
-        });
-      },
-      globalSlot: '_policyModule'
-    });
-    return policyModuleApi;
-  }
-
-  let workflowSupportModuleApi = null;
-  function getWorkflowSupportModule() {
-    if (workflowSupportModuleApi) return workflowSupportModuleApi;
-    if (typeof window === 'undefined' || typeof window.createWorkflowSupportModule !== 'function') {
-      throw new Error('workflow-support-module.js not loaded');
-    }
-    workflowSupportModuleApi = window.createWorkflowSupportModule({
-      DEFAULT_USERS,
-      STATUSES,
-      TRAINING_GENERAL_LABEL,
-      TRAINING_INFO_STAFF_LABEL,
-      TRAINING_PROFESSIONAL_LABEL,
-      getUnitCode,
-      getOfficialUnitMeta,
-      getApprovedCustomUnits: function () { return loadUnitReviewStore().approvedUnits.map((entry) => String(entry && entry.unit || '').trim()).filter(Boolean); },
-      composeUnitValue,
-      loadData,
-      saveData,
-      getTrainingRosterByUnit,
-      normalizeTrainingRecordRow,
-      computeTrainingSummary,
-      getTrainingStatsUnit,
-      getTrainingJobUnit,
-      getTrainingProfessionalDisplay,
-      getTrainingRecordHint,
-      fmt,
-      fmtTime,
-      toast,
-      esc
-    });
-    window._workflowSupportModule = workflowSupportModuleApi;
-    return workflowSupportModuleApi;
-  }
-
-  let dataModuleApi = null;
-  function getDataModule() {
-    if (dataModuleApi) return dataModuleApi;
-    dataModuleApi = resolveFactoryService('dataModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createDataModule !== 'function') {
-          throw new Error('data-module.js not loaded');
-        }
-        return window.createDataModule({
-          DATA_KEY,
-          AUTH_KEY,
-          CHECKLIST_KEY,
-          TEMPLATE_KEY,
-          TRAINING_KEY,
-          LOGIN_LOG_KEY,
-          UNIT_REVIEW_KEY,
-          UNIT_CONTACT_APP_KEY,
-          DEFAULT_USERS,
-          DEFAULT_CHECKLIST_SECTIONS,
-          ROLES,
-          CHECKLIST_STATUS_DRAFT,
-          CHECKLIST_STATUS_SUBMITTED,
-          TRAINING_STATUSES,
-          TRAINING_EMPLOYEE_STATUS,
-          getUnitCode,
-          buildCorrectionDocumentNo,
-          parseCorrectionAutoId,
-          getNextCorrectionSequence,
-          buildAutoCarIdByDocument,
-          buildChecklistDocumentNo,
-          parseChecklistId,
-          buildChecklistIdByDocument,
-          getNextChecklistSequence,
-          getTrainingStatsUnit,
-          getTrainingJobUnit,
-          hasTrainingValue,
-          isTrainingBooleanValue,
-          normalizeTrainingProfessionalValue,
-          computeTrainingSummary,
-          buildTrainingFormDocumentNo,
-          parseTrainingFormId,
-          buildTrainingFormIdByDocument,
-          getNextTrainingFormSequence
-        });
-      },
-      globalSlot: '_dataModule'
-    });
-    return dataModuleApi;
-  }
-  let authModuleApi = null;
-  function getAuthModule() {
-    if (authModuleApi) return authModuleApi;
-    authModuleApi = resolveFactoryService('authModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createAuthModule !== 'function') {
-          throw new Error('auth-module.js not loaded');
-        }
-        return window.createAuthModule({
-          AUTH_KEY,
-          DATA_KEY,
-          ROLES,
-          DEFAULT_USERS,
-          loadData: function () { return getDataModule().loadData(); },
-          saveData: function (data) { return getDataModule().saveData(data); },
-          getStoreTouchToken: function (key) { return getDataModule().getStoreTouchToken(key); },
-          getAuthorizedUnits: function (user) { return getDataModule().getAuthorizedUnits(user); },
-          getActiveUnit: function (user) { return getDataModule().getActiveUnit(user); },
-          normalizeUserRecord: function (user) { return getDataModule().normalizeUserRecord(user); },
-          findUser: function (username) { return getDataModule().findUser(username); },
-          findUserByEmail: function (email) { return getDataModule().findUserByEmail(email); },
-          updateUser: function (username, updates) { return getDataModule().updateUser(username, updates); },
-          addLoginLog: function (username, user, success) { return getDataModule().addLoginLog(username, user, success); },
-          loginWithBackend: submitBackendLogin,
-          logoutWithBackend: submitAuthLogout,
-          resetPasswordWithBackend: submitAuthResetPasswordByEmail,
-          redeemResetPasswordWithBackend: submitAuthRedeemResetPassword,
-          changePasswordWithBackend: submitAuthChangePassword
-        });
-      },
-      globalSlot: '_authModule'
-    });
-    return authModuleApi;
+    appCoreModuleAccessModuleApi = window.createAppCoreModuleAccessModule();
+    window._appCoreModuleAccessModule = appCoreModuleAccessModuleApi;
+    return appCoreModuleAccessModuleApi;
   }
   let adminModuleApi = null;
   function getAdminModule() {
@@ -868,6 +663,89 @@
     resolveFactoryService,
     getM365ApiClient
   } = appBootstrapWiring;
+  const appCoreModuleAccess = getAppCoreModuleAccessModule().createAccess({
+    resolveFactoryService,
+    UNIT_CUSTOM_VALUE,
+    UNIT_CUSTOM_LABEL,
+    UNIT_ADMIN_PRIMARY_WHITELIST,
+    UNIT_ACADEMIC_PRIMARY_WHITELIST,
+    ROLES,
+    STATUSES,
+    TRAINING_STATUSES,
+    TRAINING_UNDO_WINDOW_MINUTES,
+    DEFAULT_USERS,
+    TRAINING_GENERAL_LABEL,
+    TRAINING_INFO_STAFF_LABEL,
+    TRAINING_PROFESSIONAL_LABEL,
+    DATA_KEY,
+    AUTH_KEY,
+    CHECKLIST_KEY,
+    TEMPLATE_KEY,
+    TRAINING_KEY,
+    LOGIN_LOG_KEY,
+    UNIT_REVIEW_KEY,
+    UNIT_CONTACT_APP_KEY,
+    DEFAULT_CHECKLIST_SECTIONS,
+    CHECKLIST_STATUS_DRAFT,
+    CHECKLIST_STATUS_SUBMITTED,
+    TRAINING_EMPLOYEE_STATUS,
+    getAttachmentsMode: function () { return getAttachmentsMode(); },
+    fetchRemoteAttachmentDetail,
+    fetchRemoteAttachmentBlob,
+    getReviewScopeRepositoryState,
+    getReviewScopesMode: function () { return getReviewScopesMode(); },
+    getUnitCode,
+    getOfficialUnitMeta,
+    loadUnitReviewStore,
+    composeUnitValue,
+    loadData,
+    saveData,
+    getTrainingRosterByUnit,
+    normalizeTrainingRecordRow,
+    computeTrainingSummary,
+    getTrainingStatsUnit,
+    getTrainingJobUnit,
+    getTrainingProfessionalDisplay,
+    getTrainingRecordHint,
+    fmt,
+    fmtTime,
+    toast,
+    esc,
+    buildCorrectionDocumentNo,
+    parseCorrectionAutoId,
+    getNextCorrectionSequence,
+    buildAutoCarIdByDocument,
+    buildChecklistDocumentNo,
+    parseChecklistId,
+    buildChecklistIdByDocument,
+    getNextChecklistSequence,
+    hasTrainingValue,
+    isTrainingBooleanValue,
+    normalizeTrainingProfessionalValue,
+    buildTrainingFormDocumentNo,
+    parseTrainingFormId,
+    buildTrainingFormIdByDocument,
+    getNextTrainingFormSequence,
+    submitBackendLogin,
+    submitAuthLogout,
+    submitAuthResetPasswordByEmail,
+    submitAuthRedeemResetPassword,
+    submitAuthChangePassword,
+    getDataModule: function () { return getDataModule(); },
+    getAuthModule: function () { return getAuthModule(); },
+    getPolicyModule: function () { return getPolicyModule(); },
+    getUnitModule: function () { return getUnitModule(); },
+    getUiModule: function () { return getUiModule(); }
+  });
+  const {
+    getUnitModule,
+    getUiModule,
+    getAttachmentModule,
+    getPolicyModule,
+    getWorkflowSupportModule,
+    getDataModule,
+    getAuthModule
+  } = appCoreModuleAccess;
   const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
   const REVIEW_SCOPE_CONTRACT_VERSION = '2026-03-13';
   const AUDIT_TRAIL_CONTRACT_VERSION = '2026-03-14';

@@ -45,6 +45,7 @@
     'app-router-module.js',
     'app-router-runtime-module.js',
     'app-bootstrap-module.js',
+    'app-core-module-access-module.js',
     'case-module.js',
     'admin-collection-cache-module.js',
     'admin-module.js',
