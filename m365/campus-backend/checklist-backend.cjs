@@ -37,6 +37,7 @@ function createChecklistRouter(deps) {
     listMap: null,
     entriesCache: null,
     entriesCacheAt: 0,
+    cacheVersion: 0,
     entriesPromise: null,
     entriesPrewarmQueued: false,
     queryCache: new Map()
@@ -333,6 +334,7 @@ function createChecklistRouter(deps) {
     state.entriesCache = null;
     state.entriesCacheAt = 0;
     state.entriesPromise = null;
+    state.cacheVersion += 1;
     state.queryCache.clear();
   }
 
@@ -558,8 +560,8 @@ function createChecklistRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
-      const cacheKey = buildChecklistQueryCacheKey(authz, url, state.entriesCacheAt || 0);
-      const cacheLookup = readQueryCache(state.queryCache, cacheKey);
+        const cacheKey = buildChecklistQueryCacheKey(authz, url, state.cacheVersion || 0);
+        const cacheLookup = readQueryCache(state.queryCache, cacheKey);
       const cached = cacheLookup && cacheLookup.body;
       if (cached) {
         logChecklistCache('query cache hit', {
@@ -579,10 +581,10 @@ function createChecklistRouter(deps) {
           }
         }), origin);
         return;
-      }
-      const rows = await listAllEntries();
-      const versionKey = state.entriesCacheAt || rows.length;
-      const resolvedCacheKey = buildChecklistQueryCacheKey(authz, url, versionKey);
+        }
+        const rows = await listAllEntries();
+        const versionKey = state.cacheVersion || 0;
+        const resolvedCacheKey = buildChecklistQueryCacheKey(authz, url, versionKey);
       const items = filterItems(rows.map((entry) => entry.item), url)
         .filter((entry) => requestAuthz.canAccessChecklist(authz, entry));
       const page = buildChecklistPageMeta(url, items.length);

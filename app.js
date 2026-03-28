@@ -791,6 +791,26 @@
     window._appRemoteRuntimeModule = appRemoteRuntimeModuleApi;
     return appRemoteRuntimeModuleApi;
   }
+  let appStartRuntimeModuleApi = null;
+  function getAppStartRuntimeModule() {
+    if (appStartRuntimeModuleApi) return appStartRuntimeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppStartRuntimeModule !== 'function') {
+      throw new Error('app-start-runtime-module.js not loaded');
+    }
+    appStartRuntimeModuleApi = window.createAppStartRuntimeModule();
+    window._appStartRuntimeModule = appStartRuntimeModuleApi;
+    return appStartRuntimeModuleApi;
+  }
+  let appAttachmentMigrationModuleApi = null;
+  function getAppAttachmentMigrationModule() {
+    if (appAttachmentMigrationModuleApi) return appAttachmentMigrationModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppAttachmentMigrationModule !== 'function') {
+      throw new Error('app-attachment-migration-module.js not loaded');
+    }
+    appAttachmentMigrationModuleApi = window.createAppAttachmentMigrationModule();
+    window._appAttachmentMigrationModule = appAttachmentMigrationModuleApi;
+    return appAttachmentMigrationModuleApi;
+  }
   const appRemoteRuntime = getAppRemoteRuntimeModule().createAccess({
     updateUser
   });
@@ -822,6 +842,16 @@
     hashLocalPasswordValue,
     verifyLocalPasswordValue
   } = appRemoteRuntime;
+  const appAttachmentMigration = getAppAttachmentMigrationModule().createAccess({
+    loadData,
+    saveData,
+    loadTrainingStore,
+    saveTrainingStore,
+    migrateStoredAttachments
+  });
+  const {
+    migrateAttachmentStores
+  } = appAttachmentMigration;
   function setSystemUserRepositoryState(patch) {
     Object.assign(systemUserRepositoryState, patch || {});
     return { ...systemUserRepositoryState };
@@ -3506,113 +3536,27 @@
   function mergeTrainingRows(targetUnit, carryRows) { return getWorkflowSupportModule().mergeTrainingRows(targetUnit, carryRows); }
 
 
-  function handleRoute() {
-    return getAppRouterRuntimeModule().handleRoute({
-      getAppShellOrchestrationModule,
-      getShellModule
-    });
-  }
-
   // ─── Seed Data ─────────────────────────────
   function seedData() { return getWorkflowSupportModule().seedData(); }
-
-  async function migrateCaseAttachmentTree(item) {
-    if (!item || typeof item !== 'object') return { changed: false, errors: [] };
-    let changed = false;
-    const errors = [];
-    const caseEvidence = await migrateStoredAttachments(item.evidence || [], { prefix: 'car', scope: 'case-evidence', ownerId: item.id });
-    if (caseEvidence.changed) {
-      item.evidence = caseEvidence.files;
-      changed = true;
-    }
-    if (Array.isArray(caseEvidence.errors) && caseEvidence.errors.length) errors.push.apply(errors, caseEvidence.errors);
-    if (item.pendingTracking && typeof item.pendingTracking === 'object') {
-      const pendingEvidence = await migrateStoredAttachments(item.pendingTracking.evidence || [], { prefix: 'trk', scope: 'tracking-evidence', ownerId: item.id });
-      if (pendingEvidence.changed) {
-        item.pendingTracking = { ...item.pendingTracking, evidence: pendingEvidence.files };
-        changed = true;
-      }
-      if (Array.isArray(pendingEvidence.errors) && pendingEvidence.errors.length) errors.push.apply(errors, pendingEvidence.errors);
-    }
-    if (Array.isArray(item.trackings)) {
-      const nextTrackings = [];
-      let trackingsChanged = false;
-      for (const tracking of item.trackings) {
-        const migrated = await migrateStoredAttachments(tracking && tracking.evidence || [], { prefix: 'trk', scope: 'tracking-evidence', ownerId: item.id });
-        if (migrated.changed) {
-          nextTrackings.push({ ...tracking, evidence: migrated.files });
-          trackingsChanged = true;
-        } else {
-          nextTrackings.push(tracking);
-        }
-        if (Array.isArray(migrated.errors) && migrated.errors.length) errors.push.apply(errors, migrated.errors);
-      }
-      if (trackingsChanged) {
-        item.trackings = nextTrackings;
-        changed = true;
-      }
-    }
-    return { changed, errors };
-  }
-
-  async function migrateAttachmentStores() {
-    let dataChanged = false;
-    const migrationErrors = [];
-    const data = loadData();
-    for (const item of data.items || []) {
-      const migratedItem = await migrateCaseAttachmentTree(item);
-      if (migratedItem.changed) dataChanged = true;
-      if (Array.isArray(migratedItem.errors) && migratedItem.errors.length) migrationErrors.push.apply(migrationErrors, migratedItem.errors);
-    }
-    if (dataChanged) saveData(data);
-
-    let trainingChanged = false;
-    const trainingStore = loadTrainingStore();
-    for (const form of trainingStore.forms || []) {
-      const migrated = await migrateStoredAttachments(form && form.signedFiles || [], { prefix: 'trn', scope: 'training-signoff', ownerId: form.id });
-      if (migrated.changed) {
-        form.signedFiles = migrated.files;
-        trainingChanged = true;
-      }
-      if (Array.isArray(migrated.errors) && migrated.errors.length) migrationErrors.push.apply(migrationErrors, migrated.errors);
-    }
-    if (trainingChanged) saveTrainingStore(trainingStore);
-    if (typeof window !== 'undefined') {
-      window.__ATTACHMENT_MIGRATION_ERRORS__ = migrationErrors;
-    }
-  }
-
-  function setLastStableHash(value) {
-    return getAppRouterRuntimeModule().setLastStableHash(getAppRouterModule(), value);
-  }
-  function handleHashChange() {
-    return getAppRouterRuntimeModule().handleHashChange(getAppRouterModule(), {
-      hasUnsavedChangesGuard,
-      confirmDiscardUnsavedChanges,
-      handleRoute
-    });
-  }
-
-  function installAppEventListeners() {
-    return getAppRouterRuntimeModule().installAppEventListeners(getAppRouterModule(), {
-      handleRoute,
-      hasUnsavedChangesGuard,
-      confirmDiscardUnsavedChanges,
-      isMobileViewport,
-      closeSidebar,
-      refreshIcons,
-      runSessionHeartbeat,
-      toast
-    });
-  }
-  getAppEntryRuntimeModule().startApp(getAppEntryModule(), {
+  const appStartRuntime = getAppStartRuntimeModule().createAccess({
+    getAppRouterRuntimeModule,
+    getAppRouterModule,
+    getAppShellOrchestrationModule,
+    getShellModule,
+    hasUnsavedChangesGuard,
+    confirmDiscardUnsavedChanges,
+    isMobileViewport,
+    closeSidebar,
+    refreshIcons,
+    runSessionHeartbeat,
+    toast,
+    getAppEntryRuntimeModule,
+    getAppEntryModule,
     getBootstrapCoordinator,
     getM365ApiClient,
-    getShellModule,
     getAppBootstrapModule,
     recordBootstrapStep,
     installGlobalDelegation,
-    installAppEventListeners,
     renderApp,
     ensureAuthenticatedRemoteBootstrap,
     getAuthMode,
@@ -3621,10 +3565,16 @@
     getTrainingModule,
     migrateAttachmentStores,
     getDataModule,
-    setLastStableHash,
-    refreshIcons,
     ic,
     esc
   });
+  const {
+    handleRoute,
+    setLastStableHash,
+    handleHashChange,
+    installAppEventListeners,
+    startApp
+  } = appStartRuntime;
+  startApp();
 
 })();

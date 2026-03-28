@@ -313,14 +313,35 @@ async function stabilizeVisualRoute(page, slug, mode) {
   await page.waitForTimeout(slug === 'unit-review' ? 180 : 350);
 }
 
+async function waitForVisualRouteReady(page, spec) {
+  const slug = spec && spec.slug;
+  if (slug === 'unit-review') {
+    await page.waitForSelector('.review-page-header, .review-table-card, .governance-category-stack, .empty-state', { timeout: 15000 });
+    return;
+  }
+  if (slug === 'training') {
+    await page.waitForSelector('.training-table-card, .training-group-card, .empty-state', { timeout: 15000 });
+    return;
+  }
+  if (slug === 'dashboard') {
+    await page.waitForSelector('.dashboard-shell, .dashboard-grid, .empty-state', { timeout: 15000 });
+    return;
+  }
+  if (slug && slug.indexOf('unit-contact-') === 0) {
+    await page.waitForSelector('.unit-contact-shell, .card, .empty-state', { timeout: 15000 });
+  }
+}
+
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
   if (spec && (spec.slug === 'unit-contact-success' || spec.slug === 'unit-contact-activate')) {
     await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForTimeout(600);
     await seedSyntheticUnitContactSuccess(page);
   }
-  await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil: 'networkidle', timeout: 45000 });
-  await page.waitForTimeout(spec && spec.slug === 'unit-review' ? 450 : 900);
+  const waitUntil = spec && spec.slug === 'unit-review' ? 'domcontentloaded' : 'networkidle';
+  await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
+  await waitForVisualRouteReady(page, spec);
+  await page.waitForTimeout(spec && spec.slug === 'unit-review' ? 120 : 900);
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'unit-review') {
     await seedSyntheticUnitReview(page);
