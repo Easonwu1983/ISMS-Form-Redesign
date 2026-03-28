@@ -87,11 +87,12 @@ async function run() {
 
   async function step(name, fn, options) {
     const opts = options || {};
+    const startedMs = Date.now();
     try {
       const value = await fn();
-      report.checks.push({ name, ok: true, critical: !!opts.critical, value });
+      report.checks.push({ name, ok: true, critical: !!opts.critical, durationMs: Date.now() - startedMs, value });
     } catch (error) {
-      report.checks.push({ name, ok: false, critical: !!opts.critical, error: String(error && error.message || error || 'check failed') });
+      report.checks.push({ name, ok: false, critical: !!opts.critical, durationMs: Date.now() - startedMs, error: String(error && error.message || error || 'check failed') });
       if (opts.critical) throw error;
     }
   }

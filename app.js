@@ -810,6 +810,8 @@
   let appCoreServiceModuleApi = null;
   let appBootstrapAccessModuleApi = null;
   let appEntryRuntimeModuleApi = null;
+  let appShellRuntimeModuleApi = null;
+  let appAuthSessionRuntimeModuleApi = null;
   const appCoreServiceState = {
     serviceRegistryModuleApi: null,
     appServiceAccessModuleApi: null
@@ -840,6 +842,24 @@
     appEntryRuntimeModuleApi = window.createAppEntryRuntimeModule();
     window._appEntryRuntimeModule = appEntryRuntimeModuleApi;
     return appEntryRuntimeModuleApi;
+  }
+  function getAppShellRuntimeModule() {
+    if (appShellRuntimeModuleApi) return appShellRuntimeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppShellRuntimeModule !== 'function') {
+      throw new Error('app-shell-runtime-module.js not loaded');
+    }
+    appShellRuntimeModuleApi = window.createAppShellRuntimeModule();
+    window._appShellRuntimeModule = appShellRuntimeModuleApi;
+    return appShellRuntimeModuleApi;
+  }
+  function getAppAuthSessionRuntimeModule() {
+    if (appAuthSessionRuntimeModuleApi) return appAuthSessionRuntimeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppAuthSessionRuntimeModule !== 'function') {
+      throw new Error('app-auth-session-runtime-module.js not loaded');
+    }
+    appAuthSessionRuntimeModuleApi = window.createAppAuthSessionRuntimeModule();
+    window._appAuthSessionRuntimeModule = appAuthSessionRuntimeModuleApi;
+    return appAuthSessionRuntimeModuleApi;
   }
   function getServiceRegistryModule() {
     serviceRegistryModuleApi = getAppCoreServiceModule().getServiceRegistryModule(appCoreServiceState, {});
@@ -3267,7 +3287,10 @@
     return unitContactApplicationModuleApi;
   }
 
-  function getAppAuthSessionDeps() {
+  function markAuthenticatedBootstrapReady(user) {
+    return getAppAuthSessionRuntimeModule().markAuthenticatedBootstrapReady(buildAppAuthSessionRuntimeDeps(), user);
+  }
+  function buildAppAuthSessionRuntimeDeps() {
     return {
       AUTH_KEY,
       ROLES,
@@ -3285,85 +3308,70 @@
       syncChecklistsFromM365,
       syncCorrectiveActionsFromM365,
       syncUsersFromM365,
-      syncReviewScopesFromM365
+      syncReviewScopesFromM365,
+      getAppAuthSessionModule
     };
   }
-  function markAuthenticatedBootstrapReady(user) {
-    return getAppAuthSessionModule().markAuthenticatedBootstrapReady({
-      ...getAppAuthSessionDeps(),
-      user
-    });
-  }
   async function ensureAuthenticatedRemoteBootstrap() {
-    return getAppAuthSessionModule().ensureAuthenticatedRemoteBootstrap(getAppAuthSessionDeps());
+    return getAppAuthSessionRuntimeModule().ensureAuthenticatedRemoteBootstrap(buildAppAuthSessionRuntimeDeps());
   }
   function isAuthenticatedRemoteBootstrapPending() {
-    return getAppAuthSessionModule().isAuthenticatedRemoteBootstrapPending(getAppAuthSessionDeps());
+    return getAppAuthSessionRuntimeModule().isAuthenticatedRemoteBootstrapPending(buildAppAuthSessionRuntimeDeps());
   }
   function clearSessionHeartbeat() {
-    return getAppAuthSessionModule().clearSessionHeartbeat();
+    return getAppAuthSessionRuntimeModule().clearSessionHeartbeat(buildAppAuthSessionRuntimeDeps());
   }
   async function runSessionHeartbeat() {
-    return getAppAuthSessionModule().runSessionHeartbeat(getAppAuthSessionDeps());
+    return getAppAuthSessionRuntimeModule().runSessionHeartbeat(buildAppAuthSessionRuntimeDeps());
   }
   function ensureSessionHeartbeat() {
-    return getAppAuthSessionModule().ensureSessionHeartbeat(getAppAuthSessionDeps());
+    return getAppAuthSessionRuntimeModule().ensureSessionHeartbeat(buildAppAuthSessionRuntimeDeps());
   }
   let shellModuleApi = null;
   function getShellModule() {
-    if (shellModuleApi) return shellModuleApi;
-    shellModuleApi = resolveFactoryService('shellModule', {
-      factory: function () {
-        if (typeof window === 'undefined' || typeof window.createShellModule !== 'function') {
-          recordBootstrapStep('shell-module-missing-factory', 'createShellModule unavailable');
-          throw new Error('shell-module.js not loaded');
-        }
-        return window.createShellModule(getAppShellOrchestrationModule().buildShellModuleDeps({
-          ROUTE_WHITELIST,
-          ROLE_BADGE,
-          STATUSES,
-          currentUser,
-          login,
-          logout,
-          getAuthMode,
-          hasLocalUsers: function () { return getAuthModule().hasLocalUsers(); },
-          bootstrapLocalAdminAccount: function (input) { return getAuthModule().bootstrapLocalAdminAccount(input); },
-          resetPasswordByEmail,
-          redeemResetPassword,
-          changePassword,
-          getVisibleItems,
-          isOverdue,
-          getRoute,
-          getRouteMeta,
-          getRouteTitle,
-          canAccessRoute,
-          getRouteFallback,
-          navigate,
-          toast,
-          refreshIcons,
-          markAuthenticatedBootstrapReady,
-          esc,
-          ic,
-          ntuLogo,
-          canCreateCAR,
-          canFillChecklist,
-          canManageUsers,
-          isAdmin,
-          canSwitchAuthorizedUnit,
-          getAuthorizedUnits,
-          getScopedUnit,
-          switchCurrentUserUnit,
-          ensureAuthenticatedRemoteBootstrap,
-          isAuthenticatedRemoteBootstrapPending,
-          hasUnsavedChangesGuard,
-          confirmDiscardUnsavedChanges,
-          registerActionHandlers
-        }));
-      },
-      globalSlot: '_shellModule',
-      globalGetter: 'getShellModule',
-      aliases: ['resolveShellModule'],
-      readyStep: 'shell-module-ready'
+    shellModuleApi = getAppShellRuntimeModule().getShellModule(shellModuleApi, {
+      resolveFactoryService,
+      recordBootstrapStep,
+      getAppShellOrchestrationModule,
+      ROUTE_WHITELIST,
+      ROLE_BADGE,
+      STATUSES,
+      currentUser,
+      login,
+      logout,
+      getAuthMode,
+      hasLocalUsers: function () { return getAuthModule().hasLocalUsers(); },
+      bootstrapLocalAdminAccount: function (input) { return getAuthModule().bootstrapLocalAdminAccount(input); },
+      resetPasswordByEmail,
+      redeemResetPassword,
+      changePassword,
+      getVisibleItems,
+      isOverdue,
+      getRoute,
+      getRouteMeta,
+      getRouteTitle,
+      canAccessRoute,
+      getRouteFallback,
+      navigate,
+      toast,
+      refreshIcons,
+      markAuthenticatedBootstrapReady,
+      esc,
+      ic,
+      ntuLogo,
+      canCreateCAR,
+      canFillChecklist,
+      canManageUsers,
+      isAdmin,
+      canSwitchAuthorizedUnit,
+      getAuthorizedUnits,
+      getScopedUnit,
+      switchCurrentUserUnit,
+      ensureAuthenticatedRemoteBootstrap,
+      isAuthenticatedRemoteBootstrapPending,
+      hasUnsavedChangesGuard,
+      confirmDiscardUnsavedChanges,
+      registerActionHandlers
     });
     return shellModuleApi;
   }

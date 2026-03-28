@@ -7,6 +7,8 @@ const LIVE_BASE = String(process.env.ISMS_LIVE_BASE || 'http://140.112.97.150').
 const PAGES_BASE = String(process.env.ISMS_CLOUDFLARE_PAGES_BASE || 'https://isms-campus-portal.pages.dev').trim().replace(/\/+$/, '');
 const VERSION_BASES = String(process.env.ISMS_VERSION_BASES || `${LIVE_BASE},${PAGES_BASE}`).trim();
 const FORMAL_LOG_DIR = path.join(ROOT, 'logs', 'formal-production');
+const CAMPUS_LIVE_REPORT_PATH = path.join(ROOT, 'logs', 'campus-live-regression-smoke.json');
+const PAGES_REPORT_PATH = path.join(ROOT, 'logs', 'cloudflare-pages-regression-smoke.json');
 
 function buildFormalEnv() {
   return {
@@ -19,6 +21,15 @@ function buildFormalEnv() {
 
 function ensureFormalLogDir() {
   fs.mkdirSync(FORMAL_LOG_DIR, { recursive: true });
+}
+
+function readJsonIfExists(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (_) {
+    return null;
+  }
 }
 
 function buildManifestUrl(base) {
@@ -179,6 +190,7 @@ function buildReleaseReport(report) {
   }
   const versions = Array.isArray(fullSummary && fullSummary.versions) ? fullSummary.versions : [];
   const metrics = buildReleaseMetrics(layers, versions);
+  const coverage = buildReleaseCoverage();
   return {
     generatedAt: new Date().toISOString(),
     ok: !!(fullSummary && fullSummary.ok),
@@ -187,7 +199,71 @@ function buildReleaseReport(report) {
     versionKeys: Array.from(new Set(versions.map((entry) => String(entry && entry.versionKey || '').trim()).filter(Boolean))),
     versions,
     layers,
-    metrics
+    metrics,
+    coverage
+  };
+}
+
+function classifyApiCheckName(name) {
+  const value = String(name || '').trim().toLowerCase();
+  if (!value) return 'other';
+  if (value.startsWith('health:')) return 'health';
+  if (value.startsWith('asset:')) return 'assets';
+  if (value.startsWith('auth ') || value.startsWith('unit admin login')) return 'auth';
+  if (value.includes('system-user')) return 'system-users';
+  if (value.includes('review-scopes')) return 'review-scopes';
+  if (value.includes('unit-contact')) return 'unit-contact';
+  if (value.startsWith('audit-trail')) return 'audit-trail';
+  if (value.startsWith('unit-governance')) return 'unit-governance';
+  if (value.startsWith('security-window')) return 'security-window';
+  if (value.startsWith('checklists')) return 'checklists';
+  if (value.startsWith('training-')) return 'training';
+  if (value.startsWith('homepage') || value.startsWith('m365 override') || value.startsWith('deploy manifest')) return 'frontend';
+  return 'other';
+}
+
+function classifyPagesStepName(name) {
+  const value = String(name || '').trim().toLowerCase();
+  if (!value) return 'other';
+  const prefix = value.split(':')[0];
+  return prefix || 'other';
+}
+
+function buildCoverageBuckets(entries, classifier) {
+  const bucketMap = new Map();
+  (Array.isArray(entries) ? entries : []).forEach((entry) => {
+    const name = String(entry && entry.name || '').trim();
+    const key = classifier(name);
+    const current = bucketMap.get(key) || {
+      module: key,
+      total: 0,
+      failed: 0,
+      totalDurationMs: 0,
+      slowestName: '',
+      slowestDurationMs: 0
+    };
+    current.total += 1;
+    if (!(entry && entry.ok)) current.failed += 1;
+    const durationMs = Math.max(0, Number(entry && entry.durationMs || 0));
+    current.totalDurationMs += durationMs;
+    if (durationMs >= current.slowestDurationMs) {
+      current.slowestDurationMs = durationMs;
+      current.slowestName = name;
+    }
+    bucketMap.set(key, current);
+  });
+  return Array.from(bucketMap.values()).sort((left, right) => {
+    if (right.total !== left.total) return right.total - left.total;
+    return left.module.localeCompare(right.module);
+  });
+}
+
+function buildReleaseCoverage() {
+  const campusLiveReport = readJsonIfExists(CAMPUS_LIVE_REPORT_PATH);
+  const pagesReport = readJsonIfExists(PAGES_REPORT_PATH);
+  return {
+    api: buildCoverageBuckets(campusLiveReport && campusLiveReport.checks, classifyApiCheckName),
+    pages: buildCoverageBuckets(pagesReport && pagesReport.steps, classifyPagesStepName)
   };
 }
 
@@ -264,6 +340,20 @@ function writeReleaseReport(report) {
     `- totalRetryCount: ${releaseReport.metrics && releaseReport.metrics.totalRetryCount || 0}`,
     `- versionConsistent: ${releaseReport.metrics && releaseReport.metrics.versionConsistent ? 'yes' : 'no'}`,
     `- slowestLayer: ${releaseReport.metrics && releaseReport.metrics.slowestLayer ? `${releaseReport.metrics.slowestLayer.name} (${releaseReport.metrics.slowestLayer.durationMs} ms)` : 'n/a'}`,
+    '',
+    '## Coverage',
+    '',
+    '### API Modules',
+    '',
+    ...(Array.isArray(releaseReport.coverage && releaseReport.coverage.api) && releaseReport.coverage.api.length
+      ? releaseReport.coverage.api.map((entry) => `- ${entry.module}: total=${entry.total}, failed=${entry.failed}, totalDurationMs=${entry.totalDurationMs}, slowest=${entry.slowestName || 'n/a'} (${entry.slowestDurationMs || 0} ms)`)
+      : ['- n/a']),
+    '',
+    '### Pages Modules',
+    '',
+    ...(Array.isArray(releaseReport.coverage && releaseReport.coverage.pages) && releaseReport.coverage.pages.length
+      ? releaseReport.coverage.pages.map((entry) => `- ${entry.module}: total=${entry.total}, failed=${entry.failed}`)
+      : ['- n/a']),
     '',
     '## Versions',
     ''
