@@ -24,7 +24,7 @@ const EXPLICIT_VERSION_BASES = process.env.ISMS_VERSION_BASES
 const BASE_URLS = Array.from(new Set((EXPLICIT_VERSION_BASES.length
   ? EXPLICIT_VERSION_BASES
   : [
-      String(process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/').trim(),
+      String(process.env.ISMS_LIVE_BASE || 'http://140.112.97.150/').trim(),
       String(process.env.ISMS_CLOUDFLARE_PAGES_BASE || 'https://isms-campus-portal.pages.dev/').trim()
     ]).filter(Boolean))).map((value) => value.replace(/\/+$/, ''));
 
