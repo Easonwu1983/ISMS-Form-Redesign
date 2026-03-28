@@ -158,7 +158,10 @@ function buildReleaseReport(report) {
   layerNames.forEach((layerName) => {
     layers[layerName] = readLatestSummary(layerName);
   });
-  const fullSummary = layers.full || buildLayerSummary(report);
+  const fullSummary = layers.full || (report ? buildLayerSummary(report) : null);
+  if (!fullSummary) {
+    throw new Error('latest full summary unavailable');
+  }
   const versions = Array.isArray(fullSummary && fullSummary.versions) ? fullSummary.versions : [];
   return {
     generatedAt: new Date().toISOString(),
