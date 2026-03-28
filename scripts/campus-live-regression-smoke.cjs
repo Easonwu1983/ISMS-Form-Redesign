@@ -323,7 +323,8 @@ async function run() {
     return {
       total: Number(summary.total || 0),
       latestOccurredAt: String(summary.latestOccurredAt || ''),
-      cacheState: String(json && json.cache && json.cache.query || '')
+      cacheState: String(json && json.cache && json.cache.query || ''),
+      cacheReason: String(json && json.cache && json.cache.reason || '')
     };
   }, { critical: true });
 
@@ -337,7 +338,8 @@ async function run() {
     return {
       total: Number(summary.total || 0),
       latestOccurredAt: String(summary.latestOccurredAt || ''),
-      cacheState: String(json && json.cache && json.cache.query || '')
+      cacheState: String(json && json.cache && json.cache.query || ''),
+      cacheReason: String(json && json.cache && json.cache.reason || '')
     };
   }, { critical: true });
 
@@ -377,7 +379,13 @@ async function run() {
     const closed = Number(summary.closed || 0);
     if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary bucket mismatch');
     if (total !== Number(json && json.total || 0)) throw new Error('checklists summary total mismatch');
-    return { total, pendingExport, closed, cacheState: String(json && json.cache && json.cache.query || '') };
+    return {
+      total,
+      pendingExport,
+      closed,
+      cacheState: String(json && json.cache && json.cache.query || ''),
+      cacheReason: String(json && json.cache && json.cache.reason || '')
+    };
   }, { critical: true });
 
   await step('checklists summary-only present', async () => {
@@ -392,7 +400,13 @@ async function run() {
     const pendingExport = Number(summary.pendingExport || 0);
     const closed = Number(summary.closed || 0);
     if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary-only bucket mismatch');
-    return { total, pendingExport, closed, cacheState: String(json && json.cache && json.cache.query || '') };
+    return {
+      total,
+      pendingExport,
+      closed,
+      cacheState: String(json && json.cache && json.cache.query || ''),
+      cacheReason: String(json && json.cache && json.cache.reason || '')
+    };
   }, { critical: true });
 
   await step('checklists summary-only warm', async () => {

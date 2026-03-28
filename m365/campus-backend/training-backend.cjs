@@ -994,7 +994,6 @@ function createTrainingRouter(deps) {
     try {
       const startedAt = Date.now();
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const rows = await listAllForms();
       const summaryOnly = String(url.searchParams.get('summaryOnly') || '').trim() === '1';
       const cacheKey = buildFormQuerySignature(authz, url);
       const cacheLookup = readFormsQueryCache(cacheKey);
@@ -1002,7 +1001,6 @@ function createTrainingRouter(deps) {
       if (cached) {
         logTrainingForms('query cache hit', {
           username: authz.username,
-          totalRows: rows.length,
           total: cached.total,
           summaryOnly,
           durationMs: Date.now() - startedAt
@@ -1017,6 +1015,7 @@ function createTrainingRouter(deps) {
         }), origin);
         return;
       }
+      const rows = await listAllForms();
       logTrainingForms('query cache miss', {
         username: authz.username,
         totalRows: rows.length,

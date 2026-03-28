@@ -296,6 +296,18 @@ function buildCacheSignals() {
   const pagesReport = readJsonIfExists(PAGES_REPORT_PATH);
   const apiChecks = Array.isArray(campusLiveReport && campusLiveReport.checks) ? campusLiveReport.checks : [];
   const pagesSteps = Array.isArray(pagesReport && pagesReport.steps) ? pagesReport.steps : [];
+  const getCacheState = (entry) => String(entry && entry.value && entry.value.cacheState || '').trim();
+  const getCacheReason = (entry) => String(entry && entry.value && entry.value.cacheReason || '').trim() || 'unknown';
+  const isCacheHitState = (value) => {
+    return value === 'hit' || value === 'cached-unfiltered' || value === 'fast-path';
+  };
+  const getSummaryModule = (entry) => {
+    const name = String(entry && entry.name || '').trim().toLowerCase();
+    if (name.startsWith('audit-trail summary-only')) return 'audit-trail';
+    if (name.startsWith('checklists summary-only')) return 'checklists';
+    if (name.startsWith('training-forms summary-only')) return 'training-forms';
+    return '';
+  };
   const apiSummaryChecks = apiChecks.filter((entry) => /summary/i.test(String(entry && entry.name || '')));
   const apiSummaryOnlyChecks = apiChecks.filter((entry) => /summary-only/i.test(String(entry && entry.name || '')));
   const pagesPagerSteps = pagesSteps.filter((entry) => /pager/i.test(String(entry && entry.name || '')));
@@ -323,16 +335,39 @@ function buildCacheSignals() {
       warmCache: warmCache
     };
   }).filter(Boolean);
-  const apiCacheHitStates = apiSummaryOnlyChecks.filter((entry) => {
-    const value = String(entry && entry.value && entry.value.cacheState || '').trim();
-    return value === 'hit' || value === 'cached-unfiltered' || value === 'fast-path';
-  });
-  const apiCacheMissStates = apiSummaryOnlyChecks.filter((entry) => String(entry && entry.value && entry.value.cacheState || '').trim() === 'computed');
+  const apiCacheHitStates = apiSummaryOnlyChecks.filter((entry) => isCacheHitState(getCacheState(entry)));
+  const apiCacheMissStates = apiSummaryOnlyChecks.filter((entry) => getCacheState(entry) === 'computed');
   const apiCacheMissReasons = apiCacheMissStates.reduce((accumulator, entry) => {
-    const reason = String(entry && entry.value && entry.value.cacheReason || '').trim() || 'unknown';
+    const reason = getCacheReason(entry);
     accumulator[reason] = Number(accumulator[reason] || 0) + 1;
     return accumulator;
   }, {});
+  const apiModuleSignals = Array.from(new Set(apiSummaryOnlyChecks
+    .map((entry) => getSummaryModule(entry))
+    .filter(Boolean)))
+    .sort()
+    .map((moduleName) => {
+      const entries = apiSummaryOnlyChecks.filter((entry) => getSummaryModule(entry) === moduleName);
+      const hitCount = entries.filter((entry) => isCacheHitState(getCacheState(entry))).length;
+      const missEntries = entries.filter((entry) => getCacheState(entry) === 'computed');
+      const missReasons = missEntries.reduce((accumulator, entry) => {
+        const reason = getCacheReason(entry);
+        accumulator[reason] = Number(accumulator[reason] || 0) + 1;
+        return accumulator;
+      }, {});
+      const warmState = warmPairs.find((entry) => entry.label === `${moduleName} summary-only`) || null;
+      return {
+        module: moduleName,
+        totalChecks: entries.length,
+        hits: hitCount,
+        misses: missEntries.length,
+        missReasons,
+        warmImproved: !!(warmState && warmState.improved),
+        warmCache: warmState && warmState.warmCache || '',
+        coldMs: warmState && warmState.coldMs || 0,
+        warmMs: warmState && warmState.warmMs || 0
+      };
+    });
   return {
     apiSummaryChecks: apiSummaryChecks.length,
     apiSummaryOnlyChecks: apiSummaryOnlyChecks.length,
@@ -340,12 +375,13 @@ function buildCacheSignals() {
     apiCacheHits: apiCacheHitStates.length,
     apiCacheMisses: apiCacheMissStates.length,
     apiCacheMissReasons,
+    apiModuleSignals,
     pagesPagerSteps: pagesPagerSteps.length,
     pagesPagerFailed: pagesPagerSteps.filter((entry) => !(entry && entry.ok)).length,
     pagesSummarySteps: pagesSummarySteps.length,
     warmStateChecks: warmPairs.length,
     warmStateImproved: warmPairs.filter((entry) => entry.improved).length,
-    warmStateCacheHits: warmPairs.filter((entry) => entry.warmCache === 'hit' || entry.warmCache === 'cached-unfiltered' || entry.warmCache === 'fast-path').length,
+    warmStateCacheHits: warmPairs.filter((entry) => isCacheHitState(entry.warmCache)).length,
     warmStateFailed: warmPairs.filter((entry) => !entry.ok).length,
     warmPairs: warmPairs
   };
@@ -460,6 +496,21 @@ function writeReleaseReport(report) {
         ? Object.entries(releaseReport.cacheSignals.apiCacheMissReasons)
           .sort((left, right) => Number(right[1] || 0) - Number(left[1] || 0))
           .map(([reason, count]) => `- ${reason}: ${count}`)
+        : ['- n/a']),
+      '',
+      '### API Summary Cache By Module',
+      '',
+      ...(Array.isArray(releaseReport.cacheSignals && releaseReport.cacheSignals.apiModuleSignals) && releaseReport.cacheSignals.apiModuleSignals.length
+        ? releaseReport.cacheSignals.apiModuleSignals
+          .map((entry) => {
+            const missReasons = entry && entry.missReasons && Object.keys(entry.missReasons).length
+              ? Object.entries(entry.missReasons)
+                .sort((left, right) => Number(right[1] || 0) - Number(left[1] || 0))
+                .map(([reason, count]) => `${reason}:${count}`)
+                .join(', ')
+              : 'n/a';
+            return `- ${entry.module}: checks=${entry.totalChecks || 0}, hits=${entry.hits || 0}, misses=${entry.misses || 0}, warmImproved=${entry.warmImproved ? 'yes' : 'no'}, warmCache=${entry.warmCache || 'n/a'}, cold=${entry.coldMs || 0} ms, warm=${entry.warmMs || 0} ms, missReasons=${missReasons}`;
+          })
         : ['- n/a']),
       '',
       '### Warm State',
