@@ -32,6 +32,15 @@
       return query && typeof query === 'object' ? { ...query } : {};
     }
 
+    function normalizeCache(cache) {
+      const source = cache && typeof cache === 'object' ? cache : {};
+      return {
+        query: cleanText(source.query),
+        reason: cleanText(source.reason),
+        summaryOnly: String(source.summaryOnly || '').trim() === '1' || source.summaryOnly === true
+      };
+    }
+
     function withSummaryOnly(query) {
       const filters = query && typeof query === 'object' ? { ...query } : {};
       filters.summaryOnly = '1';
@@ -57,6 +66,7 @@
         summary: summary,
         page: normalizePage(body && body.page, total, query, opts.defaultLimit),
         filters: normalizeFilters(body && body.filters, query),
+        cache: normalizeCache(body && body.cache),
         generatedAt: cleanText(body && body.generatedAt),
         raw: body
       };
@@ -65,6 +75,7 @@
     return {
       normalizePage: normalizePage,
       normalizeFilters: normalizeFilters,
+      normalizeCache: normalizeCache,
       withSummaryOnly: withSummaryOnly,
       buildPagedCollectionResult: buildPagedCollectionResult
     };

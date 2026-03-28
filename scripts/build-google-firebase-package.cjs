@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
 const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
@@ -42,6 +42,7 @@ const filesToCopy = [
   'app-entry-runtime-module.js',
   'app-auth-session-module.js',
   'app-auth-session-runtime-module.js',
+  'app-remote-runtime-module.js',
   'app-router-module.js',
   'app-router-runtime-module.js',
   'app-bootstrap-module.js',
@@ -186,3 +187,4 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+

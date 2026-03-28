@@ -166,11 +166,15 @@ function createChecklistRouter(deps) {
   }
 
   function readQueryCache(cache, cacheKey) {
-    if (!(cache instanceof Map) || !cacheKey || !cache.has(cacheKey)) return null;
+    if (!(cache instanceof Map)) return { body: null, reason: 'disabled' };
+    if (!cacheKey || !cache.has(cacheKey)) return { body: null, reason: 'missing' };
     const cached = cache.get(cacheKey);
     cache.delete(cacheKey);
     cache.set(cacheKey, cached);
-    return cloneJson(cached);
+    return {
+      body: cloneJson(cached),
+      reason: 'hit'
+    };
   }
 
   function writeQueryCache(cache, cacheKey, value, maxEntries) {
@@ -554,13 +558,12 @@ function createChecklistRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
-      const rows = await listAllEntries();
-      const cacheKey = buildChecklistQueryCacheKey(authz, url, state.entriesCacheAt || rows.length);
-      const cached = readQueryCache(state.queryCache, cacheKey);
+      const cacheKey = buildChecklistQueryCacheKey(authz, url, state.entriesCacheAt || 0);
+      const cacheLookup = readQueryCache(state.queryCache, cacheKey);
+      const cached = cacheLookup && cacheLookup.body;
       if (cached) {
         logChecklistCache('query cache hit', {
           username: authz.username,
-          totalRows: rows.length,
           total: cached.total,
           returnedRows: cached.page && cached.page.returned,
           limit: cached.page && cached.page.limit,
@@ -571,11 +574,15 @@ function createChecklistRouter(deps) {
           ...cached,
           cache: {
             query: 'hit',
-            summaryOnly
+            summaryOnly,
+            reason: 'hit'
           }
         }), origin);
         return;
       }
+      const rows = await listAllEntries();
+      const versionKey = state.entriesCacheAt || rows.length;
+      const resolvedCacheKey = buildChecklistQueryCacheKey(authz, url, versionKey);
       const items = filterItems(rows.map((entry) => entry.item), url)
         .filter((entry) => requestAuthz.canAccessChecklist(authz, entry));
       const page = buildChecklistPageMeta(url, items.length);
@@ -598,11 +605,12 @@ function createChecklistRouter(deps) {
         page: responsePage,
         cache: {
           query: 'computed',
-          summaryOnly
+          summaryOnly,
+          reason: cacheLookup && cacheLookup.reason || 'computed'
         },
         contractVersion: CONTRACT_VERSION
       };
-      const cachedBody = writeQueryCache(state.queryCache, cacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);
+      const cachedBody = writeQueryCache(state.queryCache, resolvedCacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);
       logChecklistCache('list served', {
         username: authz.username,
         totalRows: rows.length,

@@ -352,6 +352,15 @@
       Object.assign(cache, base, next);
       return cache;
     }
+    function resetChecklistSummaryCache(cache) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.resetSummaryCache === 'function') return moduleApi.resetSummaryCache(cache);
+      if (!cache || typeof cache !== 'object') return;
+      cache.signature = '';
+      cache.summary = null;
+      cache.fetchedAt = 0;
+      cache.promise = null;
+    }
     function createChecklistRemoteCollectionBundle(options) {
       const moduleApi = getChecklistCollectionCacheModule();
       if (moduleApi && typeof moduleApi.createRemoteCollectionBundle === 'function') {
@@ -406,7 +415,9 @@
       const normalizedScope = normalizeChecklistCacheScope(scope);
       const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
       const resetAll = !normalizedScope || normalizedScope === 'all' || normalizedScope === 'access-profile' || normalizedScope === 'checklists';
-      const resetListSummary = resetAll || normalizedScope === 'checklists-list' || normalizedScope === 'checklists-summary';
+      const resetListSummary = resetAll || normalizedScope === 'checklists-list' || normalizedScope === 'checklists-query';
+      const resetSummaryOnly = resetAll || normalizedScope === 'checklists-summary';
+      const resetRenderOnly = resetAll || normalizedScope === 'checklists-render';
       const resetTemplate = resetAll || normalizedScope === 'checklists-template';
       if (resetListSummary) {
         checklistRemotePageCache.clear();
@@ -425,6 +436,17 @@
         checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
         checklistListViewCache = { signature: '', filtered: [], grouped: [] };
         checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
+      } else {
+        if (resetSummaryOnly) {
+          resetChecklistSummaryCache(checklistRemoteSummaryCache);
+          resetChecklistRemoteSummaryBootstrapState();
+          checklistRemotePageState.summary = normalizeChecklistRemoteSummary(null, 0);
+        }
+        if (resetRenderOnly || resetSummaryOnly) {
+          checklistListRenderCache = createChecklistMarkupCache();
+          checklistListViewCache = { signature: '', filtered: [], grouped: [] };
+          checklistListDomCache = { signature: '', appliedSignature: '', rows: [], units: [], years: [], emptyState: null, contentEl: null, searchTexts: [], rowUnitKeys: [], rowYearKeys: [] };
+        }
       }
       if (resetTemplate) {
         checklistListSnapshotCache = { token: '', length: 0, items: [], years: [] };
@@ -442,7 +464,7 @@
         const detail = event && event.detail ? event.detail : {};
         const scope = normalizeChecklistCacheScope(detail.scope);
         const moduleApi = getChecklistCacheInvalidationModule();
-        const acceptedScopes = ['all', 'access-profile', 'checklists', 'checklists-list', 'checklists-summary', 'checklists-template'];
+        const acceptedScopes = ['all', 'access-profile', 'checklists', 'checklists-list', 'checklists-query', 'checklists-summary', 'checklists-render', 'checklists-template'];
         const shouldReset = moduleApi && typeof moduleApi.matchesScope === 'function'
           ? moduleApi.matchesScope(scope, acceptedScopes)
           : (!scope || acceptedScopes.includes(scope));

@@ -410,8 +410,21 @@
         if (Object.prototype.hasOwnProperty.call(cache, 'defer')) cache.defer = false;
       });
     }
-    function resetTrainingRemoteCaches(reason) {
-      const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
+    function resetTrainingFormsRemoteState() {
+      trainingRemoteListSummaryCache = createTrainingSummaryCache();
+      resetTrainingRemoteListSummaryBootstrapState();
+      trainingListViewCache = { signature: '', visibleForms: [], summary: null };
+      trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
+      resetTrainingRenderCaches(trainingRosterPageShellCache);
+    }
+
+    function resetTrainingRenderState() {
+      trainingListViewCache = { signature: '', visibleForms: [], summary: null };
+      trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
+      resetTrainingRenderCaches(trainingRosterRenderCache, trainingRosterGroupMarkupCache, trainingRosterPageShellCache);
+    }
+
+    function resetTrainingRostersRemoteState() {
       clearTrainingRosterRemotePageCache();
       trainingRemoteCollectionBundle = createTrainingRemoteCollectionBundle({
         filters: { limit: TRAINING_ROSTER_DEFAULT_PAGE_LIMIT, offset: '0', q: '', source: '', unit: '', statsUnit: '' },
@@ -419,16 +432,11 @@
         renderCacheExtra: { selectedSignature: '', defer: false }
       });
       trainingRosterRemotePageState = trainingRemoteCollectionBundle.state;
-      trainingRemoteListSummaryCache = trainingRemoteCollectionBundle.summaryCache;
-      resetTrainingRemoteListSummaryBootstrapState();
-      trainingRosterGroupingCache = { token: '', groups: null };
-      trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
       trainingRosterRenderCache = trainingRemoteCollectionBundle.renderCache;
       trainingRosterGroupMarkupCache = trainingRemoteCollectionBundle.markupCache;
       trainingRosterPageShellCache = createTrainingMarkupCache();
-      trainingDashboardUnitsCache = { signature: '', units: [] };
-      trainingListViewCache = { signature: '', visibleForms: [], summary: null };
-      trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
+      trainingRosterGroupingCache = { token: '', groups: null };
+      trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
       trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
       trainingRowsFilterCache = { signature: '', rows: [] };
       lastTrainingRosterFocusState = null;
@@ -441,7 +449,23 @@
         // Ignore draft storage cleanup failures.
       }
       resetTrainingRenderCaches(trainingRosterRenderCache, trainingRosterGroupMarkupCache, trainingRosterPageShellCache);
-      recordTrainingBootstrapStep('training-cache-reset', safeReason);
+    }
+
+    function resetTrainingRemoteCaches(reason, scope) {
+      const normalizedScope = String(scope || '').trim().toLowerCase();
+      const safeReason = String(reason || 'profile-changed').trim() || 'profile-changed';
+      const resetAll = !normalizedScope || normalizedScope === 'all' || normalizedScope === 'access-profile' || normalizedScope === 'training';
+      if (resetAll || normalizedScope === 'training-forms' || normalizedScope === 'training-forms-query' || normalizedScope === 'training-summary' || normalizedScope === 'training-dashboard') {
+        resetTrainingFormsRemoteState();
+      }
+      if (resetAll || normalizedScope === 'training-render') {
+        resetTrainingRenderState();
+      }
+      if (resetAll || normalizedScope === 'training-rosters' || normalizedScope === 'training-signoff') {
+        resetTrainingRostersRemoteState();
+      }
+      trainingDashboardUnitsCache = { signature: '', units: [] };
+      recordTrainingBootstrapStep('training-cache-reset', safeReason + (normalizedScope ? ':' + normalizedScope : ''));
     }
 
     function installTrainingAccessProfileListener() {
@@ -456,12 +480,12 @@
         const scope = moduleApi && typeof moduleApi.normalizeScope === 'function'
           ? moduleApi.normalizeScope(detail.scope, '')
           : String(detail.scope || '').trim().toLowerCase();
-        const acceptedScopes = ['all', 'access-profile', 'training'];
+        const acceptedScopes = ['all', 'access-profile', 'training', 'training-forms', 'training-forms-query', 'training-summary', 'training-render', 'training-dashboard', 'training-rosters', 'training-signoff'];
         const shouldReset = moduleApi && typeof moduleApi.matchesScope === 'function'
           ? moduleApi.matchesScope(scope, acceptedScopes)
           : (!scope || acceptedScopes.includes(scope));
         if (shouldReset) {
-          resetTrainingRemoteCaches(detail.reason || 'cache-invalidated');
+          resetTrainingRemoteCaches(detail.reason || 'cache-invalidated', scope);
         }
       });
       trainingAccessProfileListenerInstalled = true;

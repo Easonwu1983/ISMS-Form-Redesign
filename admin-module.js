@@ -199,6 +199,10 @@
       signature: '',
       cardsHtml: ''
     };
+    let unitGovernanceDeferredBodiesCache = {
+      signature: '',
+      htmlByCategory: {}
+    };
     let securityWindowRenderCache = {
       unitCardsSignature: '',
       unitCardsHtml: '',
@@ -671,6 +675,28 @@
       unitGovernanceTopLevelCache = { signature: '', value: [], filteredSignature: '', filteredValue: [] };
       unitGovernanceFilteredCache = { signature: '', value: [] };
       unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
+      unitGovernanceDeferredBodiesCache = { signature: '', htmlByCategory: {} };
+      securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
+    }
+
+    function resetUnitGovernanceSummaryState() {
+      unitGovernanceState.summary = { total: 0, consolidated: 0, independent: 0, children: 0 };
+      unitGovernanceState.categorySummaries = {};
+      unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
+      unitGovernanceDeferredBodiesCache = { signature: '', htmlByCategory: {} };
+    }
+
+    function resetUnitGovernanceRenderState() {
+      unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
+      unitGovernanceDeferredBodiesCache = { signature: '', htmlByCategory: {} };
+    }
+
+    function resetSecurityWindowSummaryState() {
+      securityWindowState.categorySummaries = {};
+      securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
+    }
+
+    function resetSecurityWindowRenderState() {
       securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
     }
 
@@ -703,7 +729,19 @@
         resetAuditTrailSummaryState();
       } else if (safeScope === 'audit-trail-render') {
         resetAuditTrailRenderState();
-      } else if (safeScope === 'unit-governance' || safeScope === 'security-window' || safeScope === 'governance-security') {
+      } else if (safeScope === 'unit-governance' || safeScope === 'unit-governance-query') {
+        resetGovernanceRemoteState();
+      } else if (safeScope === 'unit-governance-summary') {
+        resetUnitGovernanceSummaryState();
+      } else if (safeScope === 'unit-governance-render') {
+        resetUnitGovernanceRenderState();
+      } else if (safeScope === 'security-window' || safeScope === 'security-window-query') {
+        resetGovernanceRemoteState();
+      } else if (safeScope === 'security-window-summary') {
+        resetSecurityWindowSummaryState();
+      } else if (safeScope === 'security-window-render') {
+        resetSecurityWindowRenderState();
+      } else if (safeScope === 'governance-security') {
         resetGovernanceRemoteState();
       } else {
         resetSystemUsersRemoteState();
@@ -748,7 +786,7 @@
         const scope = moduleApi && typeof moduleApi.normalizeScope === 'function'
           ? moduleApi.normalizeScope(detail.scope, '')
           : String(detail.scope || '').trim().toLowerCase();
-        const acceptedScopes = ['all', 'access-profile', 'admin', 'system-users', 'unit-contact-review', 'audit-trail', 'unit-governance', 'security-window', 'governance-security'];
+        const acceptedScopes = ['all', 'access-profile', 'admin', 'system-users', 'system-users-summary', 'system-users-render', 'unit-contact-review', 'unit-contact-review-summary', 'unit-contact-review-render', 'audit-trail', 'audit-trail-summary', 'audit-trail-render', 'unit-governance', 'unit-governance-query', 'unit-governance-summary', 'unit-governance-render', 'security-window', 'security-window-query', 'security-window-summary', 'security-window-render', 'governance-security'];
         const shouldReset = moduleApi && typeof moduleApi.matchesScope === 'function'
           ? moduleApi.matchesScope(scope, acceptedScopes)
           : (!scope || acceptedScopes.includes(scope));
@@ -1793,9 +1831,50 @@
       </div>`;
     }
 
-    function renderGovernanceCategoryCard(group, index, categorySummaries) {
+    function buildGovernanceCategoryBodyHtml(items) {
+      const units = Array.isArray(items) ? items : [];
+      return `<div class="security-window-group-stack security-window-group-stack--nested governance-group-stack governance-group-stack--nested">${units.map((unit) => buildGovernanceUnitCard(unit)).join('')}</div>`;
+    }
+
+    function getDeferredGovernanceCategoryBody(category) {
+      const key = String(category || '').trim();
+      const bodies = unitGovernanceDeferredBodiesCache && unitGovernanceDeferredBodiesCache.htmlByCategory;
+      if (!key || !bodies || typeof bodies !== 'object') return '';
+      return String(bodies[key] || '');
+    }
+
+    function hydrateGovernanceCategoryCard(detailsEl) {
+      if (!detailsEl || !detailsEl.open) return;
+      const body = detailsEl.querySelector('[data-governance-category-body]');
+      if (!body || body.dataset.governanceLoaded === 'true') return;
+      const category = String(detailsEl.dataset.governanceCategory || '').trim();
+      const bodyHtml = getDeferredGovernanceCategoryBody(category);
+      body.innerHTML = bodyHtml || '<div class="review-card-subtitle">目前沒有可顯示的治理設定。</div>';
+      body.dataset.governanceLoaded = 'true';
+      refreshIcons();
+      if (typeof bindCopyButtons === 'function') bindCopyButtons(body);
+      else if (window && typeof window.bindCopyButtons === 'function') window.bindCopyButtons(body);
+    }
+
+    function wireGovernanceCategoryCards(root) {
+      const host = root && typeof root.querySelectorAll === 'function' ? root : document;
+      host.querySelectorAll('[data-governance-category]').forEach((detailsEl) => {
+        if (detailsEl.dataset.governanceToggleReady === 'true') {
+          if (detailsEl.open) hydrateGovernanceCategoryCard(detailsEl);
+          return;
+        }
+        detailsEl.dataset.governanceToggleReady = 'true';
+        detailsEl.addEventListener('toggle', function () {
+          if (detailsEl.open) hydrateGovernanceCategoryCard(detailsEl);
+        });
+        if (detailsEl.open) hydrateGovernanceCategoryCard(detailsEl);
+      });
+    }
+
+    function renderGovernanceCategoryCard(group, index, categorySummaries, options) {
       const items = Array.isArray(group && group.items) ? group.items : [];
       const category = String(group && group.category || '').trim() || '中心 / 研究單位';
+      const deferBody = !(options && options.deferBody === false);
       const summary = categorySummaries && categorySummaries[category]
         ? categorySummaries[category]
         : summarizeGovernanceCategoryItems(items, category);
@@ -1809,10 +1888,11 @@
         ['獨立填報', independentCount],
         ['轄下二級單位', childCount]
       ];
-      const openAttr = index === 0 ? ' open' : '';
       const subtitle = `${category} · ${unitCount} 個一級單位`;
-      const bodyHtml = `<div class="security-window-group-stack security-window-group-stack--nested governance-group-stack governance-group-stack--nested">${items.map((unit) => buildGovernanceUnitCard(unit)).join('')}</div>`;
-      return `<details class="training-group-card security-window-category-card governance-category-card"${openAttr} data-governance-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary governance-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid governance-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip governance-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag governance-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body governance-category-body">${bodyHtml}</div></details>`;
+      const bodyHtml = deferBody
+        ? '<div class="review-card-subtitle">展開後載入治理設定與轄下單位。</div>'
+        : buildGovernanceCategoryBodyHtml(items);
+      return `<details class="training-group-card security-window-category-card governance-category-card" data-governance-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary governance-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid governance-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip governance-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag governance-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body governance-category-body" data-governance-category-body="${esc(category)}" data-governance-loaded="${deferBody ? 'false' : 'true'}">${bodyHtml}</div></details>`;
     }
 
     function getSecurityWindowFilterSignature(filters) {
@@ -2271,8 +2351,16 @@
         return unitGovernanceRenderCache.cardsHtml;
       }
       const groupedItems = groupGovernanceUnitsByCategory(items);
+      unitGovernanceDeferredBodiesCache = {
+        signature,
+        htmlByCategory: groupedItems.reduce((result, group) => {
+          const key = String(group && group.category || '').trim();
+          if (key) result[key] = buildGovernanceCategoryBodyHtml(group && group.items);
+          return result;
+        }, {})
+      };
       const cardsHtml = groupedItems.length
-        ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index, categorySummaries)).join('')
+        ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index, categorySummaries, { deferBody: true })).join('')
         : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
       unitGovernanceRenderCache = {
         signature,
@@ -3108,6 +3196,7 @@
         renderUnitReview({ ...unitGovernanceState.filters, ...(delta || {}) });
       }
     });
+    wireGovernanceCategoryCards(app);
     if (typeof bindCopyButtons === 'function') bindCopyButtons();
     else if (window && typeof window.bindCopyButtons === 'function') window.bindCopyButtons();
     registerActionHandlers('admin', {

@@ -1541,6 +1541,7 @@
       return {
         ok: !!response.ok,
         mode: response.mode,
+        cache: response.cache && typeof response.cache === 'object' ? response.cache : { query: '', reason: '', summaryOnly: true },
         summary: response.summary && typeof response.summary === 'object'
           ? {
               total: Number(response.summary.total || 0),
@@ -1550,6 +1551,8 @@
             }
           : { total: 0, editing: 0, pendingExport: 0, closed: 0 },
         total: Math.max(0, Number(response.total) || 0),
+        filters: response.filters && typeof response.filters === 'object' ? response.filters : filters,
+        generatedAt: String(response.generatedAt || '').trim(),
         raw: response.raw
       };
     }
@@ -1709,8 +1712,11 @@
       return {
         ok: !!response.ok,
         mode: response.mode,
+        cache: response.cache && typeof response.cache === 'object' ? response.cache : { query: '', reason: '', summaryOnly: true },
         summary: normalizeTrainingListSummary(response.summary),
         total: Math.max(0, Number(response.total) || 0),
+        filters: response.filters && typeof response.filters === 'object' ? response.filters : filters,
+        generatedAt: String(response.generatedAt || '').trim(),
         raw: response.raw
       };
     }

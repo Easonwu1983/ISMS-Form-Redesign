@@ -265,8 +265,13 @@ async function stabilizeVisualRoute(page, slug, mode) {
         card.open = index < 2;
       });
     }
+    if (slug === 'unit-review') {
+      document.querySelectorAll('.governance-category-card').forEach((card) => {
+        card.open = false;
+      });
+    }
   }, { slug });
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(slug === 'unit-review' ? 180 : 350);
 }
 
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
@@ -276,7 +281,7 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await seedSyntheticUnitContactSuccess(page);
   }
   await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil: 'networkidle', timeout: 45000 });
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(spec && spec.slug === 'unit-review' ? 450 : 900);
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'unit-review') {
     await seedSyntheticUnitReview(page);
