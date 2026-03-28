@@ -300,13 +300,36 @@ function buildCacheSignals() {
   const apiSummaryOnlyChecks = apiChecks.filter((entry) => /summary-only/i.test(String(entry && entry.name || '')));
   const pagesPagerSteps = pagesSteps.filter((entry) => /pager/i.test(String(entry && entry.name || '')));
   const pagesSummarySteps = pagesSteps.filter((entry) => /summary/i.test(String(entry && entry.name || '')));
+  const warmPairs = [
+    { label: 'audit-trail summary-only', cold: 'audit-trail summary-only present', warm: 'audit-trail summary-only warm' },
+    { label: 'checklists summary-only', cold: 'checklists summary-only present', warm: 'checklists summary-only warm' },
+    { label: 'training-forms summary-only', cold: 'training-forms summary-only present', warm: 'training-forms summary-only warm' }
+  ].map((pair) => {
+    const coldEntry = apiChecks.find((entry) => String(entry && entry.name || '').trim() === pair.cold);
+    const warmEntry = apiChecks.find((entry) => String(entry && entry.name || '').trim() === pair.warm);
+    if (!coldEntry || !warmEntry) return null;
+    const coldMs = Math.max(0, Number(coldEntry && coldEntry.durationMs || 0));
+    const warmMs = Math.max(0, Number(warmEntry && warmEntry.durationMs || 0));
+    return {
+      label: pair.label,
+      coldMs: coldMs,
+      warmMs: warmMs,
+      deltaMs: coldMs - warmMs,
+      improved: warmMs < coldMs,
+      ok: !!(coldEntry && coldEntry.ok) && !!(warmEntry && warmEntry.ok)
+    };
+  }).filter(Boolean);
   return {
     apiSummaryChecks: apiSummaryChecks.length,
     apiSummaryOnlyChecks: apiSummaryOnlyChecks.length,
     apiSummaryFailed: apiSummaryChecks.filter((entry) => !(entry && entry.ok)).length,
     pagesPagerSteps: pagesPagerSteps.length,
     pagesPagerFailed: pagesPagerSteps.filter((entry) => !(entry && entry.ok)).length,
-    pagesSummarySteps: pagesSummarySteps.length
+    pagesSummarySteps: pagesSummarySteps.length,
+    warmStateChecks: warmPairs.length,
+    warmStateImproved: warmPairs.filter((entry) => entry.improved).length,
+    warmStateFailed: warmPairs.filter((entry) => !entry.ok).length,
+    warmPairs: warmPairs
   };
 }
 
@@ -406,6 +429,15 @@ function writeReleaseReport(report) {
     `- pagesPagerSteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerSteps || 0}`,
     `- pagesPagerFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerFailed || 0}`,
     `- pagesSummarySteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesSummarySteps || 0}`,
+    `- warmStateChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateChecks || 0}`,
+    `- warmStateImproved: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateImproved || 0}`,
+    `- warmStateFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateFailed || 0}`,
+    '',
+    '### Warm State',
+    '',
+    ...(Array.isArray(releaseReport.cacheSignals && releaseReport.cacheSignals.warmPairs) && releaseReport.cacheSignals.warmPairs.length
+      ? releaseReport.cacheSignals.warmPairs.map((entry) => `- ${entry.label}: cold=${entry.coldMs} ms, warm=${entry.warmMs} ms, delta=${entry.deltaMs} ms, improved=${entry.improved ? 'yes' : 'no'}, status=${entry.ok ? 'passed' : 'failed'}`)
+      : ['- n/a']),
     '',
     '## Latency Hotspots',
     '',

@@ -326,6 +326,19 @@ async function run() {
     };
   }, { critical: true });
 
+  await step('audit-trail summary-only warm', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/audit-trail?summaryOnly=1&limit=20`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const summary = json && json.summary && typeof json.summary === 'object' ? json.summary : null;
+    if (!summary) throw new Error('audit trail summary-only warm summary missing');
+    if (items.length !== 0) throw new Error(`audit trail summary-only warm should not return items, got ${items.length}`);
+    return {
+      total: Number(summary.total || 0),
+      latestOccurredAt: String(summary.latestOccurredAt || '')
+    };
+  }, { critical: true });
+
   await step('unit-governance paged query authorized', async () => {
     const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/unit-governance?limit=10&category=${encodeURIComponent('行政單位')}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -377,6 +390,21 @@ async function run() {
     const pendingExport = Number(summary.pendingExport || 0);
     const closed = Number(summary.closed || 0);
     if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary-only bucket mismatch');
+    return { total, pendingExport, closed };
+  }, { critical: true });
+
+  await step('checklists summary-only warm', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/checklists?summaryOnly=1&limit=5`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const summary = json && json.summary && typeof json.summary === 'object' ? json.summary : null;
+    if (!summary) throw new Error('checklists summary-only warm summary missing');
+    if (items.length !== 0) throw new Error(`checklists summary-only warm should not return items, got ${items.length}`);
+    const total = Number(summary.total || 0);
+    const editing = Number(summary.editing || 0);
+    const pendingExport = Number(summary.pendingExport || 0);
+    const closed = Number(summary.closed || 0);
+    if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary-only warm bucket mismatch');
     return { total, pendingExport, closed };
   }, { critical: true });
 
@@ -448,6 +476,22 @@ async function run() {
     const submitted = Number(summary.submitted || 0);
     const returned = Number(summary.returned || 0);
     if ((draft + pending + submitted + returned) !== total) throw new Error('training forms summary-only bucket mismatch');
+    return { total, pending, submitted };
+  }, { critical: true });
+
+  await step('training-forms summary-only warm', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/training/forms?summaryOnly=1`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const summary = json && json.summary && typeof json.summary === 'object' ? json.summary : null;
+    if (!summary) throw new Error('training forms summary-only warm summary missing');
+    if (items.length !== 0) throw new Error(`training forms summary-only warm should not return items, got ${items.length}`);
+    const total = Number(summary.total || 0);
+    const draft = Number(summary.draft || 0);
+    const pending = Number(summary.pending || 0);
+    const submitted = Number(summary.submitted || 0);
+    const returned = Number(summary.returned || 0);
+    if ((draft + pending + submitted + returned) !== total) throw new Error('training forms summary-only warm bucket mismatch');
     return { total, pending, submitted };
   }, { critical: true });
 

@@ -833,114 +833,16 @@
   function getAppRouterRuntimeModule() {
     return getAppRuntimeServiceModule().getAppRouterRuntimeModule(appRuntimeServiceState);
   }
-  function getServiceRegistryModule() {
-    appRuntimeServiceState.serviceRegistryModuleApi = getAppCoreServiceModule().getServiceRegistryModule(appRuntimeServiceState.appCoreServiceState, {});
-    appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi = appRuntimeServiceState.serviceRegistryModuleApi;
-    return appRuntimeServiceState.serviceRegistryModuleApi;
+  function getAppBootstrapWiringModule() {
+    return getAppRuntimeServiceModule().getAppBootstrapWiringModule(appRuntimeServiceState);
   }
-  function getAppServiceAccessModule() {
-    appRuntimeServiceState.appServiceAccessModuleApi = getAppCoreServiceModule().getAppServiceAccessModule(appRuntimeServiceState.appCoreServiceState, {
-      recordBootstrapStep
-    });
-    appRuntimeServiceState.appCoreServiceState.appServiceAccessModuleApi = appRuntimeServiceState.appServiceAccessModuleApi;
-    return appRuntimeServiceState.appServiceAccessModuleApi;
-  }
-  function getAppBootstrapModule() {
-    return getAppBootstrapAccessModule().getAppBootstrapModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-  }
-  function getAppBootstrapStateModule() {
-    if (appRuntimeServiceState.appBootstrapStateModuleApi) return appRuntimeServiceState.appBootstrapStateModuleApi;
-    appRuntimeServiceState.appBootstrapStateModuleApi = getAppServiceAccessModule().getAppBootstrapStateModule({
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-    return appRuntimeServiceState.appBootstrapStateModuleApi;
-  }
-  function getAppEntryModule() {
-    return getAppBootstrapAccessModule().getAppEntryModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-  }
-  function getAppRouteModule() {
-    return getAppBootstrapAccessModule().getAppRouteModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep,
-      routeWhitelist: ROUTE_WHITELIST,
-      defaultTitle: 'ISMS 管考與追蹤平台'
-    });
-  }
-  function getAppPageOrchestrationModule() {
-    return getAppBootstrapAccessModule().getAppPageOrchestrationModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-  }
-  function getAppVisibilityModule() {
-    return getAppBootstrapAccessModule().getAppVisibilityModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-  }
-  function getAppActionModule() {
-    return getAppBootstrapAccessModule().getAppActionModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-  }
-  function getAppShellOrchestrationModule() {
-    return getAppBootstrapAccessModule().getAppShellOrchestrationModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-  }
-  function getAppAuthSessionModule() {
-    return getAppBootstrapAccessModule().getAppAuthSessionModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-  }
-  function getAppRouterModule() {
-    return getAppBootstrapAccessModule().getAppRouterModule({
-      getAppServiceAccessModule,
-      resolveFactoryService,
-      recordBootstrapStep
-    });
-  }
-  function getBootstrapCoordinator() {
-    return getAppBootstrapStateModule().getBootstrapCoordinator({
-      getServiceRegistryModule
-    });
-  }
-  function recordBootstrapStep(step, detail) {
-    return getAppBootstrapStateModule().recordBootstrapStep({
-      getServiceRegistryModule
-    }, step, detail);
-  }
-  function registerCoreService(name, resolver) {
-    appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi = appRuntimeServiceState.serviceRegistryModuleApi || appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi;
-    return getAppCoreServiceModule().registerCoreService(appRuntimeServiceState.appCoreServiceState, {}, name, resolver);
-  }
-  function resolveFactoryService(name, options) {
-    appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi = appRuntimeServiceState.serviceRegistryModuleApi || appRuntimeServiceState.appCoreServiceState.serviceRegistryModuleApi;
-    return getAppCoreServiceModule().resolveFactoryService(appRuntimeServiceState.appCoreServiceState, {}, name, options || {});
-  }
-  function getM365ApiClient() {
-    return getAppBootstrapAccessModule().getM365ApiClient({
-      resolveFactoryService,
-      recordBootstrapStep,
-      clientArgs: {
+  const appBootstrapWiring = getAppBootstrapWiringModule().createWiring({
+    getAppRuntimeServiceModule,
+    appRuntimeServiceState,
+    getRouteWhitelist: function () { return ROUTE_WHITELIST; },
+    defaultTitle: 'ISMS 管考與追蹤平台',
+    getClientArgs: function () {
+      return {
         UNIT_CONTACT_APPLICATION_STATUSES,
         createUnitContactApplication,
         updateUnitContactApplication,
@@ -949,9 +851,28 @@
         findUnitContactApplicationsByEmail,
         getOfficialUnitMeta,
         getSessionAuthHeaders
-      }
-    });
-  }
+      };
+    }
+  });
+  const {
+    getServiceRegistryModule,
+    getAppServiceAccessModule,
+    getAppBootstrapModule,
+    getAppBootstrapStateModule,
+    getAppEntryModule,
+    getAppRouteModule,
+    getAppPageOrchestrationModule,
+    getAppVisibilityModule,
+    getAppActionModule,
+    getAppShellOrchestrationModule,
+    getAppAuthSessionModule,
+    getAppRouterModule,
+    getBootstrapCoordinator,
+    recordBootstrapStep,
+    registerCoreService,
+    resolveFactoryService,
+    getM365ApiClient
+  } = appBootstrapWiring;
   const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
   const REVIEW_SCOPE_CONTRACT_VERSION = '2026-03-13';
   const AUDIT_TRAIL_CONTRACT_VERSION = '2026-03-14';

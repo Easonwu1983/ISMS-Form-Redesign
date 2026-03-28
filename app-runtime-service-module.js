@@ -7,6 +7,7 @@
         appBootstrapStateModuleApi: null,
         appCoreServiceModuleApi: null,
         appBootstrapAccessModuleApi: null,
+        appBootstrapWiringModuleApi: null,
         appEntryRuntimeModuleApi: null,
         appShellRuntimeModuleApi: null,
         appAuthSessionRuntimeModuleApi: null,
@@ -36,6 +37,10 @@
       return getModuleFactory('createAppBootstrapAccessModule', 'app-bootstrap-access-module.js', state, 'appBootstrapAccessModuleApi', '_appBootstrapAccessModule');
     }
 
+    function getAppBootstrapWiringModule(state) {
+      return getModuleFactory('createAppBootstrapWiringModule', 'app-bootstrap-wiring-module.js', state, 'appBootstrapWiringModuleApi', '_appBootstrapWiringModule');
+    }
+
     function getAppEntryRuntimeModule(state) {
       return getModuleFactory('createAppEntryRuntimeModule', 'app-entry-runtime-module.js', state, 'appEntryRuntimeModuleApi', '_appEntryRuntimeModule');
     }
@@ -56,6 +61,7 @@
       createState: createState,
       getAppCoreServiceModule: getAppCoreServiceModule,
       getAppBootstrapAccessModule: getAppBootstrapAccessModule,
+      getAppBootstrapWiringModule: getAppBootstrapWiringModule,
       getAppEntryRuntimeModule: getAppEntryRuntimeModule,
       getAppShellRuntimeModule: getAppShellRuntimeModule,
       getAppAuthSessionRuntimeModule: getAppAuthSessionRuntimeModule,
