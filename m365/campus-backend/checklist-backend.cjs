@@ -563,7 +563,13 @@ function createChecklistRouter(deps) {
           offset: cached.page && cached.page.offset,
           durationMs: Date.now() - startedAt
         });
-        await writeJson(res, buildJsonResponse(200, cached), origin);
+        await writeJson(res, buildJsonResponse(200, {
+          ...cached,
+          cache: {
+            query: 'hit',
+            summaryOnly
+          }
+        }), origin);
         return;
       }
       const items = filterItems(rows.map((entry) => entry.item), url)
@@ -586,6 +592,10 @@ function createChecklistRouter(deps) {
         total: items.length,
         summary: summarizeChecklistItems(items),
         page: responsePage,
+        cache: {
+          query: 'computed',
+          summaryOnly
+        },
         contractVersion: CONTRACT_VERSION
       };
       const cachedBody = writeQueryCache(state.queryCache, cacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);

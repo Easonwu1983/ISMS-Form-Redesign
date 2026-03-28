@@ -815,27 +815,22 @@
     window._appRuntimeServiceModule = appRuntimeServiceModuleApi;
     return appRuntimeServiceModuleApi;
   }
-  function getAppCoreServiceModule() {
-    return getAppRuntimeServiceModule().getAppCoreServiceModule(appRuntimeServiceState);
+  function getAppRuntimeAccessModule() {
+    return getAppRuntimeServiceModule().getAppRuntimeAccessModule(appRuntimeServiceState);
   }
-  function getAppBootstrapAccessModule() {
-    return getAppRuntimeServiceModule().getAppBootstrapAccessModule(appRuntimeServiceState);
-  }
-  function getAppEntryRuntimeModule() {
-    return getAppRuntimeServiceModule().getAppEntryRuntimeModule(appRuntimeServiceState);
-  }
-  function getAppShellRuntimeModule() {
-    return getAppRuntimeServiceModule().getAppShellRuntimeModule(appRuntimeServiceState);
-  }
-  function getAppAuthSessionRuntimeModule() {
-    return getAppRuntimeServiceModule().getAppAuthSessionRuntimeModule(appRuntimeServiceState);
-  }
-  function getAppRouterRuntimeModule() {
-    return getAppRuntimeServiceModule().getAppRouterRuntimeModule(appRuntimeServiceState);
-  }
-  function getAppBootstrapWiringModule() {
-    return getAppRuntimeServiceModule().getAppBootstrapWiringModule(appRuntimeServiceState);
-  }
+  const appRuntimeAccess = getAppRuntimeAccessModule().createAccess({
+    getAppRuntimeServiceModule,
+    appRuntimeServiceState
+  });
+  const {
+    getAppCoreServiceModule,
+    getAppBootstrapAccessModule,
+    getAppEntryRuntimeModule,
+    getAppShellRuntimeModule,
+    getAppAuthSessionRuntimeModule,
+    getAppRouterRuntimeModule,
+    getAppBootstrapWiringModule
+  } = appRuntimeAccess;
   const appBootstrapWiring = getAppBootstrapWiringModule().createWiring({
     getAppRuntimeServiceModule,
     appRuntimeServiceState,

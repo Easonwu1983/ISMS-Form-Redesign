@@ -310,24 +310,36 @@ function buildCacheSignals() {
     if (!coldEntry || !warmEntry) return null;
     const coldMs = Math.max(0, Number(coldEntry && coldEntry.durationMs || 0));
     const warmMs = Math.max(0, Number(warmEntry && warmEntry.durationMs || 0));
+    const coldCache = String(coldEntry && coldEntry.value && coldEntry.value.cacheState || '').trim();
+    const warmCache = String(warmEntry && warmEntry.value && warmEntry.value.cacheState || '').trim();
     return {
       label: pair.label,
       coldMs: coldMs,
       warmMs: warmMs,
       deltaMs: coldMs - warmMs,
       improved: warmMs < coldMs,
-      ok: !!(coldEntry && coldEntry.ok) && !!(warmEntry && warmEntry.ok)
+      ok: !!(coldEntry && coldEntry.ok) && !!(warmEntry && warmEntry.ok),
+      coldCache: coldCache,
+      warmCache: warmCache
     };
   }).filter(Boolean);
+  const apiCacheHitStates = apiSummaryOnlyChecks.filter((entry) => {
+    const value = String(entry && entry.value && entry.value.cacheState || '').trim();
+    return value === 'hit' || value === 'cached-unfiltered' || value === 'fast-path';
+  });
+  const apiCacheMissStates = apiSummaryOnlyChecks.filter((entry) => String(entry && entry.value && entry.value.cacheState || '').trim() === 'computed');
   return {
     apiSummaryChecks: apiSummaryChecks.length,
     apiSummaryOnlyChecks: apiSummaryOnlyChecks.length,
     apiSummaryFailed: apiSummaryChecks.filter((entry) => !(entry && entry.ok)).length,
+    apiCacheHits: apiCacheHitStates.length,
+    apiCacheMisses: apiCacheMissStates.length,
     pagesPagerSteps: pagesPagerSteps.length,
     pagesPagerFailed: pagesPagerSteps.filter((entry) => !(entry && entry.ok)).length,
     pagesSummarySteps: pagesSummarySteps.length,
     warmStateChecks: warmPairs.length,
     warmStateImproved: warmPairs.filter((entry) => entry.improved).length,
+    warmStateCacheHits: warmPairs.filter((entry) => entry.warmCache === 'hit' || entry.warmCache === 'cached-unfiltered' || entry.warmCache === 'fast-path').length,
     warmStateFailed: warmPairs.filter((entry) => !entry.ok).length,
     warmPairs: warmPairs
   };
@@ -426,17 +438,20 @@ function writeReleaseReport(report) {
     `- apiSummaryChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryChecks || 0}`,
     `- apiSummaryOnlyChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryOnlyChecks || 0}`,
     `- apiSummaryFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiSummaryFailed || 0}`,
+    `- apiCacheHits: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiCacheHits || 0}`,
+    `- apiCacheMisses: ${releaseReport.cacheSignals && releaseReport.cacheSignals.apiCacheMisses || 0}`,
     `- pagesPagerSteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerSteps || 0}`,
     `- pagesPagerFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesPagerFailed || 0}`,
     `- pagesSummarySteps: ${releaseReport.cacheSignals && releaseReport.cacheSignals.pagesSummarySteps || 0}`,
     `- warmStateChecks: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateChecks || 0}`,
     `- warmStateImproved: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateImproved || 0}`,
+    `- warmStateCacheHits: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateCacheHits || 0}`,
     `- warmStateFailed: ${releaseReport.cacheSignals && releaseReport.cacheSignals.warmStateFailed || 0}`,
     '',
     '### Warm State',
     '',
     ...(Array.isArray(releaseReport.cacheSignals && releaseReport.cacheSignals.warmPairs) && releaseReport.cacheSignals.warmPairs.length
-      ? releaseReport.cacheSignals.warmPairs.map((entry) => `- ${entry.label}: cold=${entry.coldMs} ms, warm=${entry.warmMs} ms, delta=${entry.deltaMs} ms, improved=${entry.improved ? 'yes' : 'no'}, status=${entry.ok ? 'passed' : 'failed'}`)
+      ? releaseReport.cacheSignals.warmPairs.map((entry) => `- ${entry.label}: cold=${entry.coldMs} ms (${entry.coldCache || 'n/a'}), warm=${entry.warmMs} ms (${entry.warmCache || 'n/a'}), delta=${entry.deltaMs} ms, improved=${entry.improved ? 'yes' : 'no'}, status=${entry.ok ? 'passed' : 'failed'}`)
       : ['- n/a']),
     '',
     '## Latency Hotspots',

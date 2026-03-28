@@ -569,6 +569,10 @@ function createAuditTrailRouter(deps) {
               }
             : cachedUnfiltered.page,
           summary: cachedUnfiltered.summary,
+          cache: {
+            query: 'cached-unfiltered',
+            summaryOnly
+          },
           contractVersion: CONTRACT_VERSION
         }), origin);
         return;
@@ -613,6 +617,10 @@ function createAuditTrailRouter(deps) {
                 }
               : fastResult.page,
             summary: fastResult.summary,
+            cache: {
+              query: 'fast-path',
+              summaryOnly
+            },
             contractVersion: CONTRACT_VERSION
           }), origin);
           return;
@@ -650,6 +658,10 @@ function createAuditTrailRouter(deps) {
               }
             : cachedQuery.page,
           summary: cachedQuery.summary,
+          cache: {
+            query: 'hit',
+            summaryOnly
+          },
           contractVersion: CONTRACT_VERSION
         }), origin);
         return;
@@ -677,6 +689,10 @@ function createAuditTrailRouter(deps) {
             }
           : filtered.page,
         summary: filtered.summary,
+        cache: {
+          query: 'computed',
+          summaryOnly
+        },
         contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {

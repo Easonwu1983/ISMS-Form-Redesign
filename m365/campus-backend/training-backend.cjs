@@ -986,7 +986,13 @@ function createTrainingRouter(deps) {
           summaryOnly,
           durationMs: Date.now() - startedAt
         });
-        await writeJson(res, buildJsonResponse(200, cached), origin);
+        await writeJson(res, buildJsonResponse(200, {
+          ...cached,
+          cache: {
+            query: 'hit',
+            summaryOnly
+          }
+        }), origin);
         return;
       }
       const items = filterForms(rows.map((entry) => entry.item), url)
@@ -997,6 +1003,10 @@ function createTrainingRouter(deps) {
         items: summaryOnly ? [] : items.map(mapTrainingFormForClient),
         summary,
         total: items.length,
+        cache: {
+          query: 'computed',
+          summaryOnly
+        },
         contractVersion: CONTRACT_VERSION
       };
       const cachedBody = writeFormsQueryCache(cacheKey, responseBody);

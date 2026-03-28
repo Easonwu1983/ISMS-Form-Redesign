@@ -31,6 +31,7 @@ const filesToCopy = [
   'service-registry-module.js',
   'app-core-service-module.js',
   'app-runtime-service-module.js',
+  'app-runtime-access-module.js',
   'app-bootstrap-access-module.js',
   'app-bootstrap-wiring-module.js',
   'app-bootstrap-state-module.js',

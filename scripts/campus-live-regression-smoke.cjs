@@ -322,7 +322,8 @@ async function run() {
     if (items.length !== 0) throw new Error(`audit trail summary-only should not return items, got ${items.length}`);
     return {
       total: Number(summary.total || 0),
-      latestOccurredAt: String(summary.latestOccurredAt || '')
+      latestOccurredAt: String(summary.latestOccurredAt || ''),
+      cacheState: String(json && json.cache && json.cache.query || '')
     };
   }, { critical: true });
 
@@ -335,7 +336,8 @@ async function run() {
     if (items.length !== 0) throw new Error(`audit trail summary-only warm should not return items, got ${items.length}`);
     return {
       total: Number(summary.total || 0),
-      latestOccurredAt: String(summary.latestOccurredAt || '')
+      latestOccurredAt: String(summary.latestOccurredAt || ''),
+      cacheState: String(json && json.cache && json.cache.query || '')
     };
   }, { critical: true });
 
@@ -375,7 +377,7 @@ async function run() {
     const closed = Number(summary.closed || 0);
     if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary bucket mismatch');
     if (total !== Number(json && json.total || 0)) throw new Error('checklists summary total mismatch');
-    return { total, pendingExport, closed };
+    return { total, pendingExport, closed, cacheState: String(json && json.cache && json.cache.query || '') };
   }, { critical: true });
 
   await step('checklists summary-only present', async () => {
@@ -390,7 +392,7 @@ async function run() {
     const pendingExport = Number(summary.pendingExport || 0);
     const closed = Number(summary.closed || 0);
     if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary-only bucket mismatch');
-    return { total, pendingExport, closed };
+    return { total, pendingExport, closed, cacheState: String(json && json.cache && json.cache.query || '') };
   }, { critical: true });
 
   await step('checklists summary-only warm', async () => {
@@ -476,7 +478,7 @@ async function run() {
     const submitted = Number(summary.submitted || 0);
     const returned = Number(summary.returned || 0);
     if ((draft + pending + submitted + returned) !== total) throw new Error('training forms summary-only bucket mismatch');
-    return { total, pending, submitted };
+    return { total, pending, submitted, cacheState: String(json && json.cache && json.cache.query || '') };
   }, { critical: true });
 
   await step('training-forms summary-only warm', async () => {
@@ -492,7 +494,7 @@ async function run() {
     const submitted = Number(summary.submitted || 0);
     const returned = Number(summary.returned || 0);
     if ((draft + pending + submitted + returned) !== total) throw new Error('training forms summary-only warm bucket mismatch');
-    return { total, pending, submitted };
+    return { total, pending, submitted, cacheState: String(json && json.cache && json.cache.query || '') };
   }, { critical: true });
 
   await step('auth verify authorized', async () => {

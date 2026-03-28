@@ -10,7 +10,7 @@
 4. 校內 VM 綠燈後，再發布 Pages 備援頁
 5. 最後跑：
    - `node scripts/formal-production-smoke.cjs`
-   - 讀 `logs/formal-production/latest-release-report.md` 的 `Metrics / Coverage / Cache Signals / Warm State / Latency Hotspots / Layers / Unstable Steps`
+   - 讀 `logs/formal-production/latest-release-report.md` 的 `Metrics / Coverage / Cache Signals / Warm State / Latency Hotspots / Layers / Unstable Steps`，其中 `Cache Signals` 先看 `apiCacheHits / apiCacheMisses`
    - 若要分層定位：
      - `node scripts/formal-production-health-smoke.cjs`
      - `node scripts/formal-production-api-smoke.cjs`
