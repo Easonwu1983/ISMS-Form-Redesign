@@ -2870,6 +2870,11 @@
     computeTrainingSummary
   } = appTrainingChecklistBridge;
 
+  function trainingDecisionBadge(record) {
+    const meta = getTrainingDecisionMeta(record);
+    return '<span class="training-judgement training-judgement--' + meta.tone + '">' + esc(meta.label) + '</span>';
+  }
+
   function trainingStatusBadge(status) {
     const cls = status === TRAINING_STATUSES.SUBMITTED
       ? 'badge-closed'
