@@ -37,12 +37,12 @@
       getNextTrainingFormSequence
     } = deps;
 
+    let collectionCacheModuleApi = null;
     const STORAGE_CACHE = createManagedMemoryCacheStore({ maxEntries: 32, defaultTtlMs: 2 * 60 * 1000 });
     const STORE_TOUCH_TOKENS = Object.create(null);
     const STORE_LOCKS = Object.create(null);
     let storageListenerInstalled = false;
     const STORAGE_WARNING_KEYS = Object.create(null);
-    let collectionCacheModuleApi = null;
     const AUTHORIZED_UNITS_CACHE = createManagedMemoryCacheStore({ maxEntries: 96, defaultTtlMs: 5 * 60 * 1000 });
     const REVIEW_UNITS_CACHE = createManagedMemoryCacheStore({ maxEntries: 96, defaultTtlMs: 5 * 60 * 1000 });
     const USER_RECORD_CACHE = createManagedMemoryCacheStore({ maxEntries: 128, defaultTtlMs: 5 * 60 * 1000 });
