@@ -2825,6 +2825,11 @@
     return value !== undefined && value !== null && String(value).trim() !== '';
   }
 
+  function isTrainingBooleanValue(value) {
+    const normalized = String(value || '').trim();
+    return normalized === '是' || normalized === '否';
+  }
+
   function normalizeTrainingRosterRow(row, fallbackUnit) { return getDataModule().normalizeTrainingRosterRow(row, fallbackUnit); }
   function normalizeTrainingRecordState(record) { return getDataModule().normalizeTrainingRecordState(record); }
   function normalizeTrainingRecordRow(row, fallbackUnit) { return getDataModule().normalizeTrainingRecordRow(row, fallbackUnit); }
