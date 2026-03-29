@@ -1853,7 +1853,7 @@
       + '<div class="training-bulk-bar"><div class="training-bulk-count" id="training-selected-count">尚未選取人員</div><div class="training-bulk-controls"><select class="form-select" id="training-bulk-status"><option value="">套用在職狀態</option>' + TRAINING_EMPLOYEE_STATUS.map((status) => '<option value="' + esc(status) + '">' + esc(status) + '</option>').join('') + '</select><div class="training-bulk-general"><span>' + TRAINING_GENERAL_LABEL + '</span><div class="training-binary-group"><button type="button" class="training-binary-btn" data-bulk-general="是">✓</button><button type="button" class="training-binary-btn" data-bulk-general="否">✕</button></div></div><button type="button" class="btn btn-secondary" id="training-apply-bulk">' + ic('check-circle-2', 'icon-sm') + ' 套用到所選人員</button></div></div>'
       + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
       + '<div class="training-editor-note" style="margin-top:-4px">草稿或退回更正狀態下，可刪除自己手動新增的人員；正式名單與他人新增資料仍會保留。</div>'
-      + '<div class="training-record-table-wrap">' + buildTrainingTableMarkup('<th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th><th style="width:120px">操作</th>', '', { tbodyId: 'training-rows-body' }) + '</div>'
+      + '<div class="training-record-table-wrap" id="training-record-table-wrap">' + buildTrainingTableMarkup('<th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th><th style="width:120px">操作</th>', '', { tbodyId: 'training-rows-body' }) + '</div>'
       + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary" data-testid="training-submit">' + ic('lock', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
       + '</form></div>'
       + '</div>'
@@ -1882,6 +1882,10 @@
     let trainingRosterHydrating = false;
     let trainingRowsRenderToken = 0;
     let trainingRowsDelegatesInstalled = false;
+    const TRAINING_VIRTUAL_ROW_HEIGHT = 86;
+    const TRAINING_VIRTUAL_ROW_OVERSCAN = 8;
+    const TRAINING_VIRTUAL_ROW_THRESHOLD = 140;
+    const trainingTableViewport = document.getElementById('training-record-table-wrap');
     function hasTemporaryTrainingRows() {
       return Array.isArray(rowsState) && rowsState.some((row) => String(row && row.rosterId || row && row.id || "").trim().toUpperCase().startsWith("TMP-"));
     }
@@ -2306,6 +2310,52 @@
       return result;
     }
 
+    function buildTrainingVirtualSpacer(height) {
+      if (height <= 0) return '';
+      return '<tr class="training-virtual-spacer" aria-hidden="true"><td class="training-virtual-spacer-cell" colspan="13" style="height:' + Math.max(0, Math.round(height)) + 'px"></td></tr>';
+    }
+
+    function getTrainingVirtualWindow(totalRows) {
+      if (!trainingTableViewport || totalRows <= TRAINING_VIRTUAL_ROW_THRESHOLD) {
+        return {
+          enabled: false,
+          start: 0,
+          end: totalRows,
+          padTop: 0,
+          padBottom: 0
+        };
+      }
+      const viewportHeight = Math.max(320, Number(trainingTableViewport.clientHeight) || 0);
+      const scrollTop = Math.max(0, Number(trainingTableViewport.scrollTop) || 0);
+      const start = Math.max(0, Math.floor(scrollTop / TRAINING_VIRTUAL_ROW_HEIGHT) - TRAINING_VIRTUAL_ROW_OVERSCAN);
+      const visibleCount = Math.ceil(viewportHeight / TRAINING_VIRTUAL_ROW_HEIGHT) + (TRAINING_VIRTUAL_ROW_OVERSCAN * 2);
+      const end = Math.min(totalRows, start + visibleCount);
+      return {
+        enabled: true,
+        start,
+        end,
+        padTop: start * TRAINING_VIRTUAL_ROW_HEIGHT,
+        padBottom: Math.max(0, (totalRows - end) * TRAINING_VIRTUAL_ROW_HEIGHT)
+      };
+    }
+
+    let trainingVirtualRowsRenderPending = false;
+    function scheduleTrainingVirtualRowsRender() {
+      if (trainingVirtualRowsRenderPending) return;
+      trainingVirtualRowsRenderPending = true;
+      const run = function () {
+        trainingVirtualRowsRenderPending = false;
+        if (String(window.location.hash || '').indexOf('#training-fill') !== 0) return;
+        if (!document.getElementById('training-rows-body')) return;
+        renderRows();
+      };
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(run);
+      } else {
+        window.setTimeout(run, 0);
+      }
+    }
+
     function renderRows() {
       const body = document.getElementById('training-rows-body');
       pruneTrainingManualRosterDraftsAgainstRows(rowsState);
@@ -2342,19 +2392,27 @@
       document.getElementById('training-select-all').checked = !!allVisibleSelected;
       renderSummary();
       updateBulkSelectionText();
-      const token = ++trainingRowsRenderToken;
-      const chunkSize = visibleRows.length <= 400
-        ? Math.max(1, visibleRows.length)
-        : (visibleRows.length > 1500 ? 80 : (visibleRows.length > 600 ? 120 : 180));
-      const renderChunk = (rowsSlice) => rowsSlice.map(({ row, index }, visibleIndex) => buildTrainingFillRow({
+      const renderChunk = (rowsSlice, visibleOffset) => rowsSlice.map(({ row, index }, visibleIndex) => buildTrainingFillRow({
         row,
         index,
-        visibleIndex,
+        visibleIndex: visibleOffset + visibleIndex,
         key: getRowKey(row, index),
         selected: selectedKeys.has(getRowKey(row, index)),
         canDeleteRow: canDeleteTrainingEditableRow(row, existing, user)
       })).join('');
-      body.innerHTML = renderChunk(visibleRows.slice(0, chunkSize));
+      const virtualWindow = getTrainingVirtualWindow(visibleRows.length);
+      if (virtualWindow.enabled) {
+        const windowRows = visibleRows.slice(virtualWindow.start, virtualWindow.end);
+        body.innerHTML = buildTrainingVirtualSpacer(virtualWindow.padTop)
+          + renderChunk(windowRows, virtualWindow.start)
+          + buildTrainingVirtualSpacer(virtualWindow.padBottom);
+        return;
+      }
+      const token = ++trainingRowsRenderToken;
+      const chunkSize = visibleRows.length <= 400
+        ? Math.max(1, visibleRows.length)
+        : (visibleRows.length > 1500 ? 80 : (visibleRows.length > 600 ? 120 : 180));
+      body.innerHTML = renderChunk(visibleRows.slice(0, chunkSize), 0);
       if (visibleRows.length <= chunkSize) return;
       body.insertAdjacentHTML('beforeend', '<tr class="training-rows-loading"><td colspan="13"><div class="empty-state" style="padding:16px"><div class="empty-state-title">正在載入更多名單</div><div class="empty-state-desc">名單筆數較多，系統會分批顯示以維持操作流暢。</div></div></td></tr>');
       const loadingRow = body.querySelector('.training-rows-loading');
@@ -2363,9 +2421,9 @@
           if (token !== trainingRowsRenderToken) return;
           const slice = visibleRows.slice(start, start + chunkSize);
           if (loadingRow && loadingRow.isConnected) {
-            loadingRow.insertAdjacentHTML('beforebegin', renderChunk(slice));
+            loadingRow.insertAdjacentHTML('beforebegin', renderChunk(slice, start));
           } else {
-            body.insertAdjacentHTML('beforeend', renderChunk(slice));
+            body.insertAdjacentHTML('beforeend', renderChunk(slice, start));
           }
           await new Promise((resolve) => {
             if (typeof window.requestAnimationFrame === 'function') {
@@ -2535,6 +2593,10 @@
     };
     bindTrainingPageEvent(document.getElementById('training-search'), 'input', scheduleTrainingSearchRender);
     bindTrainingPageEvent(document.getElementById('training-only-focus'), 'change', renderRows);
+    if (trainingTableViewport) {
+      bindTrainingPageEvent(trainingTableViewport, 'scroll', scheduleTrainingVirtualRowsRender, { passive: true });
+      bindTrainingPageEvent(window, 'resize', scheduleTrainingVirtualRowsRender);
+    }
     bindTrainingPageEvent(trainingForm, 'input', (event) => {
       clearTrainingFeedback();
       if (!shouldIgnoreTrainingDirtyTarget(event.target)) markTrainingDirty();

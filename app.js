@@ -440,10 +440,10 @@
       };
     },
     ensureAdminModuleScript: function () {
-      return ensureFeatureScript(['admin-collection-cache-module.js', 'admin-module.js']);
+      return ensureFeatureBundle('feature-bundles/admin-feature.js', ['admin-collection-cache-module.js', 'admin-module.js']);
     },
     ensureCaseModuleScript: function () {
-      return ensureFeatureScript(['attachment-module.js', 'case-module.js']);
+      return ensureFeatureBundle('feature-bundles/case-feature.js', ['attachment-module.js', 'case-module.js']);
     }
   });
   const {
@@ -462,16 +462,24 @@
     }, Promise.resolve());
   }
 
+  function ensureFeatureBundle(bundlePath, fallbackScripts) {
+    var loader = getRuntimeAssetLoaderModule();
+    return loader.appendScript(bundlePath, { type: 'module' }).catch(function (error) {
+      console.warn('Falling back to legacy feature chain for', bundlePath, error && error.message ? error.message : error);
+      return ensureFeatureScript(fallbackScripts);
+    });
+  }
+
   function ensureChecklistModuleScript() {
-    return ensureFeatureScript(['attachment-module.js', 'checklist-module.js']);
+    return ensureFeatureBundle('feature-bundles/checklist-feature.js', ['attachment-module.js', 'checklist-module.js']);
   }
 
   function ensureTrainingModuleScript() {
-    return ensureFeatureScript(['attachment-module.js', 'training-module.js']);
+    return ensureFeatureBundle('feature-bundles/training-feature.js', ['attachment-module.js', 'training-module.js']);
   }
 
   function ensureUnitContactApplicationModuleScript() {
-    return ensureFeatureScript('unit-contact-application-module.js');
+    return ensureFeatureBundle('feature-bundles/unit-contact-application-feature.js', 'unit-contact-application-module.js');
   }
 
   let checklistModuleApi = null;

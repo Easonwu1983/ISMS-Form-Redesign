@@ -18,13 +18,14 @@ Done:
 - `vendor/lucide.min.js` no longer loads from `asset-loader.js`. Icons are hydrated on demand through the runtime asset loader.
 - `admin-module.js`, `training-module.js`, `checklist-module.js`, `case-module.js`, `attachment-module.js`, and several bridge/runtime modules no longer load on first paint. They are route- or feature-loaded.
 - A generated `app-core.bundle.min.js` now collapses the legacy 49-script core chain into a single minified browser bundle.
+- Generated `feature-bundles/*.js` ESM entry bundles now back the admin, case, checklist, training, and public unit-contact lazy routes, with shared chunks emitted under `feature-bundles/chunks/`.
 - Live and static package builds now use minified CSS through `styles.min.css`.
+- Live and static package builds now prefer `styles.purged.min.css`, with fallback to `styles.min.css` and then raw `styles.css`.
 - Static package builds now minify copied JS and CSS assets.
 - Several heavy visual smoke paths were reduced by switching to focused synthetic captures.
 
 Open:
-- `asset-loader.js` still uses a script-loader bootstrap instead of a bundler-native chunk graph.
-- There is still no bundler-driven tree shaking or true chunk graph; lazy loading is implemented through the runtime asset loader.
+- `asset-loader.js` still uses a script-loader bootstrap for the synchronous core path.
 - `workflow-support-module.js`, `policy-module.js`, `m365-api-client.js`, and several runtime bridge modules still remain on the initial path because startup normalization depends on them.
 
 Next:
@@ -40,11 +41,12 @@ Done:
 - A small a11y utility layer was added, including `.sr-only`.
 - Live and static package builds now load minified CSS assets through `styles.min.css`.
 - Static package builds now minify CSS assets.
+- A PurgeCSS safelist build now emits `styles.purged.min.css` and the live asset loader prefers it by default.
 
 Open:
 - `styles.css` is still large and monolithic.
-- No PurgeCSS or safelist-driven removal is in place.
 - Inline styles still exist inside module `innerHTML` templates.
+- There is still no critical/deferred CSS split; the stylesheet remains a single live bundle even after purge/minification.
 
 Next:
 - Extract repeated inline styles into CSS classes.
@@ -108,12 +110,13 @@ Done:
 - `training`, `checklist`, and `audit-trail` remote page caches now use bounded stores instead of raw unbounded page maps.
 - `admin-module.js` pager controls, governance cards, horizontal review scrollers, and unit-chip picker interactions now use page-scoped listener registration.
 - `unit-contact-application-module.js` now uses page-scoped listener registration for public apply and status flows.
+- `training-module.js` now window-renders the fill table for large rosters instead of painting the entire row set into the DOM at once.
 - Current repo-wide listener ratio is no longer near the old `165:7` report; the tracked source tree is currently around `439 addEventListener` to `114 removeEventListener`.
 
 Open:
 - Many modules still attach listeners directly without page-scoped cleanup.
 - There is still no complete page destroy lifecycle across all major routes.
-- Large tables still render full DOM payloads instead of using virtualization.
+- `audit-trail`, `training roster`, and other large read-heavy tables still render full DOM payloads instead of using virtualization.
 
 Next:
 - Convert admin, training, checklist, and case listeners to page-scoped registration.

@@ -7372,12 +7372,34 @@ tbody tr:hover {
 .training-record-table-wrap {
   border: 1px solid var(--border-color);
   border-radius: 18px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: min(62vh, 920px);
   background: #fff;
+}
+
+.training-record-table-wrap .table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .training-record-table-wrap table {
   min-width: 1900px;
+}
+
+.training-record-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, #fbfdff, #f3f7fb);
+}
+
+.training-virtual-spacer > td,
+.training-virtual-spacer-cell {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .training-row-select,

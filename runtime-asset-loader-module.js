@@ -32,21 +32,39 @@
       return String(integrityMap[normalizeAssetPath(assetPath)] || '').trim();
     }
 
-    function appendScript(assetPath, globalKey) {
+    function normalizeAppendScriptOptions(globalKeyOrOptions) {
+      if (typeof globalKeyOrOptions === 'string') {
+        return {
+          globalKey: globalKeyOrOptions,
+          scriptType: 'classic'
+        };
+      }
+      const options = globalKeyOrOptions && typeof globalKeyOrOptions === 'object' ? globalKeyOrOptions : {};
+      return {
+        globalKey: String(options.globalKey || '').trim(),
+        scriptType: String(options.type || options.scriptType || 'classic').trim().toLowerCase() === 'module' ? 'module' : 'classic'
+      };
+    }
+
+    function appendScript(assetPath, globalKeyOrOptions) {
       if (typeof document === 'undefined') {
         return Promise.reject(new Error('document unavailable'));
       }
       const normalizedPath = normalizeAssetPath(assetPath);
+      const options = normalizeAppendScriptOptions(globalKeyOrOptions);
+      const globalKey = options.globalKey;
+      const scriptType = options.scriptType;
+      const inflightKey = normalizedPath + '::' + scriptType;
       if (!normalizedPath) {
         return Promise.reject(new Error('asset path unavailable'));
       }
       if (globalKey && typeof window !== 'undefined' && window[globalKey]) {
         return Promise.resolve(window[globalKey]);
       }
-      if (inflightScripts.has(normalizedPath)) {
-        return inflightScripts.get(normalizedPath);
+      if (inflightScripts.has(inflightKey)) {
+        return inflightScripts.get(inflightKey);
       }
-      const existing = document.querySelector(`script[data-runtime-asset="${normalizedPath}"]`);
+      const existing = document.querySelector(`script[data-runtime-asset="${normalizedPath}"][data-runtime-type="${scriptType}"]`);
       const promise = new Promise(function (resolve, reject) {
         function markLoaded(scriptNode) {
           if (!scriptNode || !scriptNode.dataset) return;
@@ -103,8 +121,13 @@
         }
 
         const script = document.createElement('script');
-        script.async = true;
-        script.defer = true;
+        script.dataset.runtimeType = scriptType;
+        if (scriptType === 'module') {
+          script.type = 'module';
+        } else {
+          script.async = true;
+          script.defer = true;
+        }
         script.src = buildAssetUrl(normalizedPath);
         script.dataset.runtimeAsset = normalizedPath;
         const integrity = getAssetIntegrity(normalizedPath);
@@ -115,9 +138,9 @@
         attachListeners(script);
         (document.body || document.head || document.documentElement).appendChild(script);
       }).finally(function () {
-        inflightScripts.delete(normalizedPath);
+        inflightScripts.delete(inflightKey);
       });
-      inflightScripts.set(normalizedPath, promise);
+      inflightScripts.set(inflightKey, promise);
       return promise;
     }
 

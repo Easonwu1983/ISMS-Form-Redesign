@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
+const { buildAllCoreAssets } = require('./build-app-core-assets.cjs');
 const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
 const { minifyStaticPackageAssets } = require('./_static-package-minify.cjs');
 
@@ -25,10 +26,12 @@ const filesToCopy = [
   'index.html',
   'styles.css',
   'styles.min.css',
+  'styles.purged.min.css',
   'favicon.svg',
   'favicon.ico',
   'asset-loader.js',
   'app-core.bundle.min.js',
+  'feature-bundles',
   'runtime-asset-loader-module.js',
   'collection-cache-module.js',
   'service-registry-module.js',
@@ -408,6 +411,7 @@ function writeManifest(assetIntegrity) {
 }
 
 async function main() {
+  await buildAllCoreAssets();
   fs.rmSync(outputDir, { recursive: true, force: true });
   ensureDir(outputDir);
   if (mode === 'redirect') {
