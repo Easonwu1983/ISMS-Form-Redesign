@@ -33,6 +33,10 @@
       return getBaseModule().createSummaryCache(extra);
     }
 
+    function createBoundedCacheStore(options) {
+      return getBaseModule().createBoundedCacheStore(options);
+    }
+
     function replaceCacheState(cache, nextState, defaults) {
       return getBaseModule().replaceCacheState(cache, nextState, defaults);
     }
@@ -87,6 +91,7 @@
       createRemoteCollectionState,
       createRemoteViewCache,
       createSummaryCache,
+      createBoundedCacheStore,
       replaceCacheState,
       createRemoteCollectionBundle,
       createRenderCache,

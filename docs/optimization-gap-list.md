@@ -16,14 +16,14 @@ Done:
 - `app.js` has been split across runtime, route, auth, shell, page orchestration, feature, bridge, and bootstrap helper modules.
 - `vendor/xlsx.full.min.js` no longer loads on first paint. It is loaded on demand through the runtime asset loader.
 - `vendor/lucide.min.js` no longer loads from `asset-loader.js`. Icons are hydrated on demand through the runtime asset loader.
-- `admin-module.js`, `training-module.js`, `checklist-module.js`, `case-module.js`, `attachment-module.js`, and `workflow-support-module.js` no longer load on first paint. They are route- or feature-loaded.
+- `admin-module.js`, `training-module.js`, `checklist-module.js`, `case-module.js`, `attachment-module.js`, and several bridge/runtime modules no longer load on first paint. They are route- or feature-loaded.
 - Static package builds now minify copied JS and CSS assets.
 - Several heavy visual smoke paths were reduced by switching to focused synthetic captures.
 
 Open:
 - `asset-loader.js` still synchronously loads about 50 JS files before the app is fully ready.
 - There is still no bundler-driven tree shaking or true chunk graph; lazy loading is implemented through the runtime asset loader.
-- `policy-module.js`, `m365-api-client.js`, and several runtime bridge modules still remain on the initial path.
+- `workflow-support-module.js`, `policy-module.js`, `m365-api-client.js`, and several runtime bridge modules still remain on the initial path because startup normalization depends on them.
 
 Next:
 - Keep shrinking the synchronous core set.
@@ -98,6 +98,7 @@ Done:
 - Client collection caches now have TTL and bounded eviction behavior.
 - `data-module.js` access-profile caches and parsed storage cache now use bounded stores instead of unbounded raw maps.
 - `training`, `checklist`, and `case` now use page-scoped listener registration for their main list and form flows.
+- `training`, `checklist`, and `audit-trail` remote page caches now use bounded stores instead of raw unbounded page maps.
 
 Open:
 - Many modules still attach listeners directly without page-scoped cleanup.

@@ -120,7 +120,10 @@
     const CHECKLIST_REMOTE_PAGE_LIMIT_OPTIONS = ['25', '50', '100'];
     const CHECKLIST_REMOTE_PAGE_DEFAULT_LIMIT = '50';
     const CHECKLIST_REMOTE_PAGE_CACHE_MAX = 12;
-    const checklistRemotePageCache = new Map();
+    const checklistRemotePageCache = createChecklistBoundedCacheStore({
+      maxEntries: CHECKLIST_REMOTE_PAGE_CACHE_MAX,
+      defaultTtlMs: 2 * 60 * 1000
+    });
     let checklistRemoteCollectionBundle = null;
     let checklistRemoteSummaryCache = null;
     let checklistRemoteSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
@@ -327,6 +330,32 @@
         nextOffset: 0,
         pageStart: 0,
         pageEnd: 0
+      };
+    }
+    function createChecklistBoundedCacheStore(options) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createBoundedCacheStore === 'function') {
+        return moduleApi.createBoundedCacheStore(options);
+      }
+      const entries = new Map();
+      return {
+        get: function (key) {
+          if (!entries.has(key)) return null;
+          return { value: entries.get(key) };
+        },
+        set: function (key, value) {
+          entries.set(key, value);
+          return { value: value };
+        },
+        remove: function (key) {
+          return entries.delete(key);
+        },
+        clear: function () {
+          entries.clear();
+        },
+        size: function () {
+          return entries.size;
+        }
       };
     }
 
@@ -681,8 +710,11 @@
       }
       const resolvedFilters = normalizeChecklistRemoteFilters(filters);
       const signature = getChecklistRemoteSignature(resolvedFilters);
-      if (!(options && options.force) && checklistRemotePageCache.has(signature)) {
-        return checklistRemotePageCache.get(signature);
+      const cached = !(options && options.force) && checklistRemotePageCache && typeof checklistRemotePageCache.get === 'function'
+        ? checklistRemotePageCache.get(signature)
+        : null;
+      if (cached && Object.prototype.hasOwnProperty.call(cached, 'value')) {
+        return cached.value;
       }
       const requestQuery = {
         limit: resolvedFilters.limit,
@@ -703,11 +735,6 @@
         raw: response
       };
       checklistRemotePageCache.set(signature, value);
-      while (checklistRemotePageCache.size > CHECKLIST_REMOTE_PAGE_CACHE_MAX) {
-        const oldestKey = checklistRemotePageCache.keys().next().value;
-        if (!oldestKey) break;
-        checklistRemotePageCache.delete(oldestKey);
-      }
       return value;
     }
 

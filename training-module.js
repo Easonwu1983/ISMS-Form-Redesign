@@ -121,7 +121,10 @@
     const TRAINING_ROSTER_PAGE_LIMIT_OPTIONS = ['100', '200', '500'];
     const TRAINING_ROSTER_DEFAULT_PAGE_LIMIT = '200';
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
-    const trainingRosterRemotePageCache = new Map();
+    const trainingRosterRemotePageCache = createTrainingBoundedCacheStore({
+      maxEntries: TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX,
+      defaultTtlMs: 2 * 60 * 1000
+    });
     let trainingRosterRemotePageState = null;
     let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
       let trainingAccessProfileListenerInstalled = false;
@@ -324,6 +327,32 @@
         nextOffset: 0,
         pageStart: 0,
         pageEnd: 0
+      };
+    }
+    function createTrainingBoundedCacheStore(options) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createBoundedCacheStore === 'function') {
+        return moduleApi.createBoundedCacheStore(options);
+      }
+      const entries = new Map();
+      return {
+        get: function (key) {
+          if (!entries.has(key)) return null;
+          return { value: entries.get(key) };
+        },
+        set: function (key, value) {
+          entries.set(key, value);
+          return { value: value };
+        },
+        remove: function (key) {
+          return entries.delete(key);
+        },
+        clear: function () {
+          entries.clear();
+        },
+        size: function () {
+          return entries.size;
+        }
       };
     }
     function createTrainingRemoteCollectionState(options) {
@@ -697,8 +726,11 @@
       }
       const resolvedFilters = normalizeTrainingRosterPageFilters(filters);
       const signature = getTrainingRosterRemoteSignature(resolvedFilters);
-      if (!(options && options.force) && trainingRosterRemotePageCache.has(signature)) {
-        return trainingRosterRemotePageCache.get(signature);
+      const cached = !(options && options.force) && trainingRosterRemotePageCache && typeof trainingRosterRemotePageCache.get === 'function'
+        ? trainingRosterRemotePageCache.get(signature)
+        : null;
+      if (cached && Object.prototype.hasOwnProperty.call(cached, 'value')) {
+        return cached.value;
       }
       const response = await client.listTrainingRosters(resolvedFilters);
       const items = Array.isArray(response && response.items) ? response.items : [];
@@ -711,11 +743,6 @@
         raw: response
       };
       trainingRosterRemotePageCache.set(signature, value);
-      while (trainingRosterRemotePageCache.size > TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX) {
-        const oldestKey = trainingRosterRemotePageCache.keys().next().value;
-        if (!oldestKey) break;
-        trainingRosterRemotePageCache.delete(oldestKey);
-      }
       return value;
     }
 

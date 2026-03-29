@@ -112,7 +112,10 @@
       loadedAt: 0
     };
     const AUDIT_TRAIL_QUERY_CACHE_MAX = 12;
-    const auditTrailQueryCache = new Map();
+    const auditTrailQueryCache = createAdminBoundedCacheStore({
+      maxEntries: AUDIT_TRAIL_QUERY_CACHE_MAX,
+      defaultTtlMs: AUDIT_TRAIL_QUERY_CACHE_MS
+    });
     const auditTrailLoadPromiseMap = new Map();
     const AUDIT_TRAIL_SUMMARY_CACHE_MS = 15000;
     const AUDIT_TRAIL_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
@@ -212,6 +215,19 @@
     };
     let adminAccessProfileListenerInstalled = false;
 
+    function bindAdminPageEvent(target, type, listener, options) {
+      if (!target || typeof target.addEventListener !== 'function' || typeof listener !== 'function') {
+        return function () {};
+      }
+      if (typeof addPageEventListener === 'function') {
+        return addPageEventListener(target, type, listener, options);
+      }
+      target.addEventListener(type, listener, options);
+      return function () {
+        try { target.removeEventListener(type, listener, options); } catch (_) {}
+      };
+    }
+
     function getAdminCollectionCacheModule() {
       if (typeof window === 'undefined') return null;
       if (window.__ISMS_ADMIN_COLLECTION_CACHE__ && typeof window.__ISMS_ADMIN_COLLECTION_CACHE__ === 'object') {
@@ -247,6 +263,33 @@
         total: Math.max(0, Number(settings.total) || 0),
         signature: String(settings.signature || ''),
         ...(settings.extra && typeof settings.extra === 'object' ? settings.extra : {})
+      };
+    }
+
+    function createAdminBoundedCacheStore(options) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createBoundedCacheStore === 'function') {
+        return moduleApi.createBoundedCacheStore(options);
+      }
+      const entries = new Map();
+      return {
+        get: function (key) {
+          if (!entries.has(key)) return null;
+          return { value: entries.get(key) };
+        },
+        set: function (key, value) {
+          entries.set(key, value);
+          return { value: value };
+        },
+        remove: function (key) {
+          return entries.delete(key);
+        },
+        clear: function () {
+          entries.clear();
+        },
+        size: function () {
+          return entries.size;
+        }
       };
     }
 
@@ -1320,7 +1363,8 @@
 
     function getAuditTrailQueryCacheRecord(signature) {
       if (!signature) return null;
-      const cached = auditTrailQueryCache.get(signature);
+      const hit = auditTrailQueryCache.get(signature);
+      const cached = hit && Object.prototype.hasOwnProperty.call(hit, 'value') ? hit.value : hit;
       if (!cached || !cached.value) return null;
       return {
         loadedAt: Number(cached.loadedAt || 0),
@@ -1345,11 +1389,6 @@
         loadedAt: Date.now(),
         value
       });
-      while (auditTrailQueryCache.size > AUDIT_TRAIL_QUERY_CACHE_MAX) {
-        const oldestKey = auditTrailQueryCache.keys().next().value;
-        if (!oldestKey) break;
-        auditTrailQueryCache.delete(oldestKey);
-      }
     }
 
     function getAuditTrailLoadPromise(signature) {
@@ -1478,10 +1517,10 @@
         ['紀錄編號', entry.recordId || '—']
       ].map(([label, value]) => `<div class="audit-modal-field"><div class="audit-modal-label">${esc(label)}</div><div class="audit-modal-value">${esc(value)}</div></div>`).join('');
 
-      mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal" style="max-width:min(96vw,980px);width:min(96vw,980px);max-height:90vh;overflow:auto"><div class="modal-header"><span class="modal-title">操作稽核差異檢視</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><div class="modal-body"><div class="audit-modal-summary">${fieldRows}</div><div class="form-group" style="margin-top:18px"><label class="form-label">內容摘要</label><div class="review-card-subtitle" style="white-space:pre-wrap;line-height:1.6">${esc(entry.payloadPreview || '—')}</div></div><div class="form-group"><label class="form-label">完整內容</label><pre class="audit-modal-pre">${esc(payloadText)}</pre></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss-modal>關閉</button></div></div></div>`;
+      mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="audit-entry-modal-title" aria-describedby="audit-entry-modal-description" style="max-width:min(96vw,980px);width:min(96vw,980px);max-height:90vh;overflow:auto"><div class="modal-header"><span class="modal-title" id="audit-entry-modal-title">操作稽核差異檢視</span><button class="btn btn-ghost btn-icon" data-dismiss-modal aria-label="關閉操作稽核差異檢視">✕</button></div><div class="modal-body"><p class="sr-only" id="audit-entry-modal-description">檢視單筆操作稽核紀錄的摘要與完整內容。</p><div class="audit-modal-summary">${fieldRows}</div><div class="form-group" style="margin-top:18px"><label class="form-label">內容摘要</label><div class="review-card-subtitle" style="white-space:pre-wrap;line-height:1.6">${esc(entry.payloadPreview || '—')}</div></div><div class="form-group"><label class="form-label">完整內容</label><pre class="audit-modal-pre">${esc(payloadText)}</pre></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss-modal>關閉</button></div></div></div>`;
       const backdrop = document.getElementById('modal-bg');
       if (backdrop) {
-        backdrop.addEventListener('click', (event) => {
+        bindAdminPageEvent(backdrop, 'click', (event) => {
           if (event.target === event.currentTarget) closeModalRoot();
         });
       }
@@ -2893,7 +2932,8 @@
     const reviewUnits = profile.reviewUnits;
     const selectedSecurityRoles = profile.securityRoles;
 
-    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal"><div class="modal-header"><span class="modal-title">${esc(title)}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal>✕</button></div><form id="user-form">
+    mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="user-modal-title" aria-describedby="user-modal-description"><div class="modal-header"><span class="modal-title" id="user-modal-title">${esc(title)}</span><button class="btn btn-ghost btn-icon" data-dismiss-modal aria-label="關閉使用者表單">✕</button></div><form id="user-form">
+      <p class="sr-only" id="user-modal-description">設定使用者的帳號、角色、單位與權限範圍。</p>
       <div class="form-group"><label class="form-label form-required">帳號</label><input type="text" class="form-input" id="u-username" value="${isE ? esc(eu.username) : ''}" ${isE ? 'readonly' : ''} required></div>
       <div class="form-group"><label class="form-label form-required">姓名</label><input type="text" class="form-input" id="u-name" value="${isE ? esc(eu.name) : ''}" required></div>
       <div class="form-group"><label class="form-label form-required">電子郵件</label><input type="email" class="form-input" id="u-email" value="${isE ? esc(eu.email || '') : ''}" required></div>
@@ -2949,12 +2989,12 @@
     }
 
     syncRoleFields();
-    roleEl.addEventListener('change', syncRoleFields);
+    bindAdminPageEvent(roleEl, 'change', syncRoleFields);
     document.querySelectorAll('input[name="u-security-roles"]').forEach((input) => {
-      input.addEventListener('change', syncScopedUnits);
+      bindAdminPageEvent(input, 'change', syncScopedUnits);
     });
-    document.getElementById('modal-bg').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalRoot(); });
-    document.getElementById('user-form').addEventListener('submit', async (e) => {
+    bindAdminPageEvent(document.getElementById('modal-bg'), 'click', (e) => { if (e.target === e.currentTarget) closeModalRoot(); });
+    bindAdminPageEvent(document.getElementById('user-form'), 'submit', async (e) => {
       e.preventDefault();
       const un = document.getElementById('u-username').value.trim();
       const nm = document.getElementById('u-name').value.trim();
@@ -3416,7 +3456,7 @@
     </div>`;
     const form = document.getElementById('security-window-filter-form');
     if (form) {
-      form.addEventListener('submit', function (event) {
+      bindAdminPageEvent(form, 'submit', function (event) {
         event.preventDefault();
         renderSecurityWindow(getSecurityWindowFiltersFromDom());
       });
@@ -3558,7 +3598,7 @@
     }
     const form = document.getElementById('audit-filter-form');
     if (form) {
-      form.addEventListener('submit', function (event) {
+      bindAdminPageEvent(form, 'submit', function (event) {
         event.preventDefault();
         renderAuditTrail(getAuditTrailFiltersFromDom());
       });
