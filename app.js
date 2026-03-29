@@ -2830,6 +2830,17 @@
     return normalized === '是' || normalized === '否';
   }
 
+  function isTrainingBooleanCompatibleValue(value) {
+    return TRAINING_BOOLEAN_OPTIONS.includes(String(value || '').trim());
+  }
+
+  function normalizeTrainingProfessionalValue(value) {
+    const normalized = String(value || '').trim();
+    if (!isTrainingBooleanCompatibleValue(normalized)) return '';
+    if (normalized === '無須' || normalized === '不適用') return '不適用';
+    return normalized;
+  }
+
   function normalizeTrainingRosterRow(row, fallbackUnit) { return getDataModule().normalizeTrainingRosterRow(row, fallbackUnit); }
   function normalizeTrainingRecordState(record) { return getDataModule().normalizeTrainingRecordState(record); }
   function normalizeTrainingRecordRow(row, fallbackUnit) { return getDataModule().normalizeTrainingRecordRow(row, fallbackUnit); }
