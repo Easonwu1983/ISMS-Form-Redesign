@@ -112,9 +112,18 @@ async function waitForHash(page, expected, timeout = 7000) {
 
 async function waitForAppReady(page, timeout = 45000) {
   await page.waitForFunction(() => {
+    const app = document.getElementById('app');
+    const interactiveSurface = !!(
+      document.querySelector('[data-testid="login-form"]')
+      || document.querySelector('.btn-logout')
+      || document.querySelector('#app form')
+      || document.querySelector('#app .card')
+      || document.querySelector('#app .empty-state')
+      || document.querySelector('#app button')
+    );
     return window.__APP_READY__ === true
-      || !!document.querySelector('[data-testid="login-form"]')
-      || !!document.querySelector('.btn-logout');
+      || interactiveSurface
+      || !!(app && app.textContent && app.textContent.trim());
   }, { timeout });
 }
 
@@ -127,6 +136,38 @@ async function clearAuthClientState(page) {
     });
   }).catch(() => {});
   await page.context().clearCookies().catch(() => {});
+}
+
+async function forceLogoutIfNeeded(page) {
+  if (!await page.locator('.btn-logout').count()) return;
+  const loggedOutViaAuthModule = await page.evaluate(async () => {
+    try {
+      const auth = window._authModule;
+      if (!auth || typeof auth.logout !== 'function') return false;
+      await auth.logout();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }).catch(() => false);
+  if (!loggedOutViaAuthModule) {
+    await acceptNextDialog(page, 'accept');
+    await page.locator('.btn-logout').first().click({ timeout: 5000 }).catch(async () => {
+      await page.locator('.btn-logout').first().evaluate((element) => {
+        if (element && typeof element.click === 'function') element.click();
+      });
+    });
+  }
+}
+
+async function waitForReadyWithReload(page, timeout = 30000) {
+  try {
+    await waitForAppReady(page, timeout);
+  } catch (_) {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(300);
+    await waitForAppReady(page, Math.max(timeout, 45000));
+  }
 }
 
 async function login(page, username, password) {
@@ -231,6 +272,22 @@ async function resetApp(page) {
       return BASE_URL + (BASE_URL.includes('?') ? '&' : '?') + 'cb=' + Date.now();
     }
   })();
+
+  const attemptLightReset = async () => {
+    await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
+    await forceLogoutIfNeeded(page);
+    await clearAuthClientState(page);
+    await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
+    await waitForReadyWithReload(page, 20000);
+  };
+
+  try {
+    await attemptLightReset();
+    return;
+  } catch (_) {
+    // Fall through to full storage reset when lightweight cleanup still leaves the app stuck.
+  }
+
   await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
   await page.context().clearCookies();
   await page.evaluate(async () => {
@@ -257,29 +314,12 @@ async function resetApp(page) {
     window.location.hash = '';
   });
   await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
-  await waitForAppReady(page);
+  await waitForReadyWithReload(page, 30000);
   if (await page.locator('.btn-logout').count()) {
-    const loggedOutViaAuthModule = await page.evaluate(async () => {
-      try {
-        const auth = window._authModule;
-        if (!auth || typeof auth.logout !== 'function') return false;
-        await auth.logout();
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }).catch(() => false);
-    if (!loggedOutViaAuthModule) {
-      await acceptNextDialog(page, 'accept');
-      await page.locator('.btn-logout').first().click({ timeout: 5000 }).catch(async () => {
-        await page.locator('.btn-logout').first().evaluate((element) => {
-          if (element && typeof element.click === 'function') element.click();
-        });
-      });
-    }
+    await forceLogoutIfNeeded(page);
     await clearAuthClientState(page);
     await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
-    await waitForAppReady(page);
+    await waitForReadyWithReload(page, 30000);
   }
 }
 

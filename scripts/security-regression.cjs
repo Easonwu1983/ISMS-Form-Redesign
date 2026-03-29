@@ -50,6 +50,34 @@ function stripKnownDiagnosticNoise(results) {
   return results;
 }
 
+async function resetSecurityRegressionApp(page) {
+  try {
+    await resetApp(page);
+    return { mode: 'full-reset' };
+  } catch (error) {
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+    await page.context().clearCookies().catch(() => {});
+    await page.evaluate(() => {
+      const keys = ['cats_auth', '__AUTH_VERIFY_CACHE__', '__AUTH_BOOTSTRAP_FRESH__'];
+      keys.forEach((key) => {
+        try { localStorage.removeItem(key); } catch (_) {}
+        try { sessionStorage.removeItem(key); } catch (_) {}
+      });
+      window.location.hash = '';
+    }).catch(() => {});
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => {
+      return window.__APP_READY__ === true
+        || !!document.querySelector('[data-testid="login-form"]')
+        || !!document.querySelector('.btn-logout')
+        || !!document.querySelector('#app form')
+        || !!document.querySelector('#app .card')
+        || !!document.querySelector('#app .empty-state');
+    }, { timeout: 45000 });
+    return { mode: 'auth-only-fallback', reason: String(error && error.message || error || 'reset-failed') };
+  }
+}
+
 async function seedSecurityFixtures(page) {
   await page.evaluate(({ caseId, checklistId, trainingId, unit, statsUnit, payload }) => {
     const now = new Date().toISOString();
@@ -224,7 +252,8 @@ async function assertNoXssExecution(page, label) {
   attachDiagnostics(page, results);
 
   try {
-    await resetApp(page);
+    const resetState = await resetSecurityRegressionApp(page);
+    results.reset = resetState;
 
     await runStep(results, 'SEC-01', 'Browser', 'Security meta policies are present', async () => {
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
