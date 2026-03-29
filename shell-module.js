@@ -23,6 +23,7 @@
       navigate,
       toast,
       refreshIcons,
+      addPageEventListener,
       beginPageRuntime,
       teardownPageRuntime,
       markAuthenticatedBootstrapReady,
@@ -269,6 +270,17 @@
       });
     }
 
+    function bindPageEvent(target, type, listener, options) {
+      if (typeof addPageEventListener === 'function') {
+        return addPageEventListener(target, type, listener, options);
+      }
+      if (!target || typeof target.addEventListener !== 'function') return function () {};
+      target.addEventListener(type, listener, options);
+      return function () {
+        try { target.removeEventListener(type, listener, options); } catch (_) {}
+      };
+    }
+
     function renderLogin() {
       if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
       if (typeof beginPageRuntime === 'function') beginPageRuntime();
@@ -316,7 +328,7 @@
 
       var bootstrapForm = document.getElementById('bootstrap-form');
       if (bootstrapForm) {
-        bootstrapForm.addEventListener('submit', async function (e) {
+        bindPageEvent(bootstrapForm, 'submit', async function (e) {
           e.preventDefault();
           var username = document.getElementById('bootstrap-user').value.trim();
           var password = document.getElementById('bootstrap-pass').value;
@@ -340,7 +352,7 @@
         });
       }
 
-      document.getElementById('login-form').addEventListener('submit', async function (e) {
+      bindPageEvent(document.getElementById('login-form'), 'submit', async function (e) {
         e.preventDefault();
         var u = document.getElementById('login-user').value.trim();
         var p = document.getElementById('login-pass').value;
@@ -376,7 +388,7 @@
         }
       });
 
-      document.getElementById('change-form').addEventListener('submit', async function (e) {
+      bindPageEvent(document.getElementById('change-form'), 'submit', async function (e) {
         e.preventDefault();
         var username = document.getElementById('change-username').value.trim();
         var currentPassword = document.getElementById('change-current-password').value;
@@ -414,22 +426,22 @@
         }
       });
 
-      document.getElementById('forgot-link').addEventListener('click', function (e) {
+      bindPageEvent(document.getElementById('forgot-link'), 'click', function (e) {
         e.preventDefault();
         switchPanel('forgot-panel');
       });
 
-      document.getElementById('back-login-link').addEventListener('click', function (e) {
+      bindPageEvent(document.getElementById('back-login-link'), 'click', function (e) {
         e.preventDefault();
         switchPanel('login-panel');
       });
 
-      document.getElementById('change-back-login-link').addEventListener('click', function (e) {
+      bindPageEvent(document.getElementById('change-back-login-link'), 'click', function (e) {
         e.preventDefault();
         switchPanel('login-panel');
       });
 
-      document.getElementById('forgot-form').addEventListener('submit', async function (e) {
+      bindPageEvent(document.getElementById('forgot-form'), 'submit', async function (e) {
         e.preventDefault();
         var username = document.getElementById('forgot-username').value.trim();
         var email = document.getElementById('forgot-email').value.trim();
@@ -461,7 +473,7 @@
         }
       });
 
-      document.getElementById('redeem-form').addEventListener('submit', async function (e) {
+      bindPageEvent(document.getElementById('redeem-form'), 'submit', async function (e) {
         e.preventDefault();
         var username = document.getElementById('redeem-username').value.trim();
         var token = document.getElementById('redeem-token').value.trim();
@@ -533,7 +545,7 @@
       if (!sidebarEl) return;
       sidebarEl.innerHTML = '<div class="sidebar-logo"><span class="sidebar-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><div class="sidebar-brand-text"><h1>內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span>' + renderVersionChip('sidebar-version-chip') + '</div>';
       sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
-        link.addEventListener('click', function () {
+        bindPageEvent(link, 'click', function () {
           if (isMobileViewport()) closeSidebar();
         });
       });
@@ -558,7 +570,7 @@
 
       var switcher = document.getElementById('header-unit-switch');
       if (switcher) {
-        switcher.addEventListener('change', function (event) {
+        bindPageEvent(switcher, 'change', function (event) {
           if (switchCurrentUserUnit(event.target.value)) handleRoute();
         });
       }
@@ -572,6 +584,13 @@
       if (!appEl) return;
       appEl.innerHTML = '<div class="animate-in"><div class="card"><div class="card-header"><span class="card-title">正在同步系統資料</span></div><p class="page-subtitle" style="margin:0">正在驗證登入狀態並同步矯正單、檢核表與教育訓練資料，完成後會自動載入頁面。</p></div></div>';
       refreshIcons();
+    }
+
+    function setRouteLoadingState(isLoading) {
+      var app = document.getElementById('app');
+      if (!app) return;
+      app.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+      app.classList.toggle('page-loading', !!isLoading);
     }
 
     function handleRoute() {
@@ -604,17 +623,38 @@
       renderSidebar();
       renderHeader();
       closeSidebar();
-      getRouteMeta(page).render(route.param);
-      focusRouteContent();
+      setRouteLoadingState(true);
+      Promise.resolve(getRouteMeta(page).render(route.param))
+        .then(function () {
+          focusRouteContent();
+        })
+        .catch(function (error) {
+          console.error('route render failed:', error);
+          toast('頁面載入失敗，請稍後再試', 'error');
+        })
+        .finally(function () {
+          setRouteLoadingState(false);
+          refreshIcons();
+        });
     }
 
     function renderPublicPage(page, param) {
       if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
       document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>內部稽核管考追蹤系統</strong><span>ISMS 管考與追蹤平台</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">進入系統</a>' : '<a class="btn btn-secondary" href="#">登入系統</a>') + '</div></header><main class="public-main" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div></div>';
       if (typeof beginPageRuntime === 'function') beginPageRuntime();
-      getRouteMeta(page).render(param);
-      refreshIcons();
-      focusRouteContent();
+      setRouteLoadingState(true);
+      Promise.resolve(getRouteMeta(page).render(param))
+        .then(function () {
+          focusRouteContent();
+        })
+        .catch(function (error) {
+          console.error('public route render failed:', error);
+          toast('頁面載入失敗，請稍後再試', 'error');
+        })
+        .finally(function () {
+          setRouteLoadingState(false);
+          refreshIcons();
+        });
     }
 
     function renderApp() {

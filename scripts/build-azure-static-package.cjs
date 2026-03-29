@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
 const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
+const { minifyStaticPackageAssets } = require('./_static-package-minify.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'azure-staticwebapp');
@@ -183,6 +184,7 @@ async function main() {
   await buildAuthorizationTemplatePdf(outputDir, buildInfo);
   rewriteIndex();
   buildOverride();
+  await minifyStaticPackageAssets(outputDir);
   buildStaticWebAppConfig();
   buildReadme();
   buildManifest();

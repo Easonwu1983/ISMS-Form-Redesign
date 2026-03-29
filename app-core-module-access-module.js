@@ -236,6 +236,7 @@
         getUiModule: getUiModule,
         getAttachmentModule: getAttachmentModule,
         getPolicyModule: getPolicyModule,
+        getRuntimeAssetLoaderModule: getRuntimeAssetLoaderModule,
         getWorkflowSupportModule: getWorkflowSupportModule,
         getDataModule: getDataModule,
         getAuthModule: getAuthModule

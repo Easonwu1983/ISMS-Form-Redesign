@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { getBuildInfo } = require('./build-version-info.cjs');
 const { buildAuthorizationTemplatePdf } = require('./build-authorization-template-pdf.cjs');
+const { minifyStaticPackageAssets } = require('./_static-package-minify.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist', 'homepage-ntu');
@@ -330,6 +331,7 @@ async function main() {
     buildHomepageIndex();
   }
   buildHomepageOverride();
+  await minifyStaticPackageAssets(DIST);
   buildReadme();
   buildManifest();
 

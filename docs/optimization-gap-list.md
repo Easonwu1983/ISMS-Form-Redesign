@@ -15,35 +15,36 @@ Status: `partial`
 Done:
 - `app.js` has been split across runtime, route, auth, shell, page orchestration, feature, bridge, and bootstrap helper modules.
 - `vendor/xlsx.full.min.js` no longer loads on first paint. It is loaded on demand through the runtime asset loader.
+- `vendor/lucide.min.js` no longer loads from `asset-loader.js`. Icons are hydrated on demand through the runtime asset loader.
+- `admin-module.js`, `training-module.js`, `checklist-module.js`, `case-module.js`, `attachment-module.js`, and `workflow-support-module.js` no longer load on first paint. They are route- or feature-loaded.
+- Static package builds now minify copied JS and CSS assets.
 - Several heavy visual smoke paths were reduced by switching to focused synthetic captures.
 
 Open:
-- `asset-loader.js` still synchronously loads about 60 JS files before the app is fully ready.
-- `vendor/lucide.min.js` still loads on the initial path instead of route- or feature-level demand loading.
-- `admin-module.js`, `training-module.js`, and `checklist-module.js` are still large first-class modules.
-- No bundler, minification, code splitting, or tree shaking is in place yet.
+- `asset-loader.js` still synchronously loads about 50 JS files before the app is fully ready.
+- There is still no bundler-driven tree shaking or true chunk graph; lazy loading is implemented through the runtime asset loader.
+- `policy-module.js`, `m365-api-client.js`, and several runtime bridge modules still remain on the initial path.
 
 Next:
-- Move `lucide` to delayed or on-demand loading.
-- Introduce route-level lazy loading for admin, training, and checklist.
+- Keep shrinking the synchronous core set.
 - Evaluate a safe bundler migration after the remaining runtime bridges are extracted.
+- Move from script-by-script lazy loading to real bundled chunks only after the runtime surface is stable.
 
 ## 2. CSS Optimization
 
-Status: `open`
+Status: `partial`
 
 Done:
 - A small a11y utility layer was added, including `.sr-only`.
+- Static package builds now minify CSS assets.
 
 Open:
 - `styles.css` is still large and monolithic.
-- No CSS minification is in place.
 - No PurgeCSS or safelist-driven removal is in place.
 - Inline styles still exist inside module `innerHTML` templates.
 
 Next:
 - Extract repeated inline styles into CSS classes.
-- Add CSS minification in the packaging pipeline.
 - Build a PurgeCSS safelist after the templates are stable.
 
 ## 3. API Layer
@@ -73,6 +74,7 @@ Status: `partial`
 Done:
 - `shell-module.js` now includes core shell a11y improvements such as `role="main"`, `aria-live`, and clearer labels.
 - `ui-module.js` now has modal focus trap and focus return handling.
+- Dialogs now expose `aria-describedby` for confirm and prompt flows.
 - First-pass table semantics were added for admin, training, case, and checklist tables using captions and `scope="col"`.
 - `scripts/security-regression.cjs` now checks that key admin/training/checklist/case tables expose captions and scoped headers.
 
@@ -94,6 +96,7 @@ Done:
 - Pager handling now uses root-level delegation instead of one listener per button.
 - A page-runtime teardown path now exists and can scope event listeners to the current page lifetime.
 - Client collection caches now have TTL and bounded eviction behavior.
+- `data-module.js` access-profile caches and parsed storage cache now use bounded stores instead of unbounded raw maps.
 - `training`, `checklist`, and `case` now use page-scoped listener registration for their main list and form flows.
 
 Open:

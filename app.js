@@ -438,13 +438,44 @@
         registerActionHandlers,
         openConfirmDialog
       };
+    },
+    ensureAdminModuleScript: function () {
+      return ensureFeatureScript(['admin-collection-cache-module.js', 'admin-module.js']);
+    },
+    ensureCaseModuleScript: function () {
+      return ensureFeatureScript(['workflow-support-module.js', 'attachment-module.js', 'case-module.js']);
     }
   });
   const {
     getAdminModule,
-    getCaseModule
+    ensureAdminModule,
+    getCaseModule,
+    ensureCaseModule
   } = appFeatureRuntime;
+  function ensureFeatureScript(scriptNames) {
+    var loader = getRuntimeAssetLoaderModule();
+    var scripts = Array.isArray(scriptNames) ? scriptNames : [scriptNames];
+    return scripts.reduce(function (promise, scriptName) {
+      return promise.then(function () {
+        return loader.appendScript(scriptName);
+      });
+    }, Promise.resolve());
+  }
+
+  function ensureChecklistModuleScript() {
+    return ensureFeatureScript(['workflow-support-module.js', 'attachment-module.js', 'checklist-module.js']);
+  }
+
+  function ensureTrainingModuleScript() {
+    return ensureFeatureScript(['workflow-support-module.js', 'training-module.js']);
+  }
+
+  function ensureUnitContactApplicationModuleScript() {
+    return ensureFeatureScript('unit-contact-application-module.js');
+  }
+
   let checklistModuleApi = null;
+  let checklistModulePromise = null;
   function getChecklistModule() {
     if (checklistModuleApi) return checklistModuleApi;
     if (typeof window === 'undefined' || typeof window.createChecklistModule !== 'function') {
@@ -516,7 +547,18 @@
     window._checklistModule = checklistModuleApi;
     return checklistModuleApi;
   }
+  function ensureChecklistModule() {
+    if (checklistModuleApi) return Promise.resolve(checklistModuleApi);
+    if (checklistModulePromise) return checklistModulePromise;
+    checklistModulePromise = ensureChecklistModuleScript().then(function () {
+      return getChecklistModule();
+    }).finally(function () {
+      checklistModulePromise = null;
+    });
+    return checklistModulePromise;
+  }
   let trainingModuleApi = null;
+  let trainingModulePromise = null;
   function getTrainingModule() {
     if (trainingModuleApi) return trainingModuleApi;
     if (typeof window === 'undefined' || typeof window.createTrainingModule !== 'function') {
@@ -626,6 +668,16 @@
     });
     window._trainingModule = trainingModuleApi;
     return trainingModuleApi;
+  }
+  function ensureTrainingModule() {
+    if (trainingModuleApi) return Promise.resolve(trainingModuleApi);
+    if (trainingModulePromise) return trainingModulePromise;
+    trainingModulePromise = ensureTrainingModuleScript().then(function () {
+      return getTrainingModule();
+    }).finally(function () {
+      trainingModulePromise = null;
+    });
+    return trainingModulePromise;
   }
   let appRuntimeServiceModuleApi = null;
   const appRuntimeServiceState = getAppRuntimeServiceModule().createState();
@@ -770,6 +822,7 @@
     getUiModule,
     getAttachmentModule,
     getPolicyModule,
+    getRuntimeAssetLoaderModule,
     getWorkflowSupportModule,
     getDataModule,
     getAuthModule
@@ -2522,6 +2575,7 @@
     }
   }
   let unitContactApplicationModuleApi = null;
+  let unitContactApplicationModulePromise = null;
   function getUnitContactApplicationModule() {
     if (unitContactApplicationModuleApi) return unitContactApplicationModuleApi;
     if (typeof window === 'undefined' || typeof window.createUnitContactApplicationModule !== 'function') {
@@ -2559,6 +2613,16 @@
     });
     window._unitContactApplicationModule = unitContactApplicationModuleApi;
     return unitContactApplicationModuleApi;
+  }
+  function ensureUnitContactApplicationModule() {
+    if (unitContactApplicationModuleApi) return Promise.resolve(unitContactApplicationModuleApi);
+    if (unitContactApplicationModulePromise) return unitContactApplicationModulePromise;
+    unitContactApplicationModulePromise = ensureUnitContactApplicationModuleScript().then(function () {
+      return getUnitContactApplicationModule();
+    }).finally(function () {
+      unitContactApplicationModulePromise = null;
+    });
+    return unitContactApplicationModulePromise;
   }
 
   function markAuthenticatedBootstrapReady(user) {
@@ -2629,6 +2693,7 @@
       navigate,
       toast,
       refreshIcons,
+      addPageEventListener: function (target, type, listener, options) { return getUiModule().addPageEventListener(target, type, listener, options); },
       beginPageRuntime: function () { return getUiModule().beginPageRuntime(); },
       teardownPageRuntime: function () { return getUiModule().teardownPageRuntime(); },
       markAuthenticatedBootstrapReady,
@@ -2660,10 +2725,15 @@
     canFillChecklist,
     canFillTraining,
     getCaseModule,
+    ensureCaseModule,
     getAdminModule,
+    ensureAdminModule,
     getChecklistModule,
+    ensureChecklistModule,
     getTrainingModule,
+    ensureTrainingModule,
     getUnitContactApplicationModule,
+    ensureUnitContactApplicationModule,
     getAppPageOrchestrationModule,
     getAppRouteModule,
     getAppVisibilityModule,

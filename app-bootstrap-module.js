@@ -42,11 +42,6 @@
         } catch (error) {
           console.warn('primary admin warmup failed', error);
         }
-        try {
-          options.getTrainingModule().seedTrainingData();
-        } catch (error) {
-          console.warn('training seed warmup failed', error);
-        }
       });
 
       scheduleIdleTask(function () {

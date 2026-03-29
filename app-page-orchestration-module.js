@@ -2,170 +2,178 @@
   window.createAppPageOrchestrationModule = function createAppPageOrchestrationModule() {
     function buildRouteWhitelist(deps) {
       const d = deps && typeof deps === 'object' ? deps : {};
+
+      function ensureModule(loader, getter) {
+        if (typeof loader === 'function') {
+          return Promise.resolve().then(loader);
+        }
+        return Promise.resolve().then(getter);
+      }
+
       return {
         'apply-unit-contact': {
-          title: '申請單位資安窗口',
+          title: '單位管理人申請',
           public: true,
           allow: () => true,
           fallback: 'apply-unit-contact',
-          render: () => d.getUnitContactApplicationModule().renderApplyForm()
+          render: () => ensureModule(d.ensureUnitContactApplicationModule, d.getUnitContactApplicationModule).then((module) => module.renderApplyForm())
         },
         'apply-unit-contact-success': {
-          title: '申請已送出',
+          title: '申請送出',
           public: true,
           allow: () => true,
           fallback: 'apply-unit-contact',
           requiresParam: true,
-          render: (param) => d.getUnitContactApplicationModule().renderApplySuccess(param)
+          render: (param) => ensureModule(d.ensureUnitContactApplicationModule, d.getUnitContactApplicationModule).then((module) => module.renderApplySuccess(param))
         },
         'apply-unit-contact-status': {
-          title: '查詢申請進度',
+          title: '申請進度查詢',
           public: true,
           allow: () => true,
           fallback: 'apply-unit-contact',
-          render: () => d.getUnitContactApplicationModule().renderApplyStatus()
+          render: () => ensureModule(d.ensureUnitContactApplicationModule, d.getUnitContactApplicationModule).then((module) => module.renderApplyStatus())
         },
         'activate-unit-contact': {
-          title: '窗口帳號開通',
+          title: '帳號啟用',
           public: true,
           allow: () => true,
           fallback: 'apply-unit-contact',
           requiresParam: true,
-          render: (param) => d.getUnitContactApplicationModule().renderActivate(param)
+          render: (param) => ensureModule(d.ensureUnitContactApplicationModule, d.getUnitContactApplicationModule).then((module) => module.renderActivate(param))
         },
         dashboard: {
           title: '儀表板',
           allow: () => !!d.currentUser(),
-          render: () => d.getCaseModule().renderDashboard()
+          render: () => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderDashboard())
         },
         list: {
           title: '矯正單列表',
           allow: () => !!d.currentUser(),
-          render: () => d.getCaseModule().renderList()
+          render: () => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderList())
         },
         create: {
-          title: '開立矯正單',
+          title: '新增矯正單',
           allow: () => d.canCreateCAR(),
           fallback: 'dashboard',
-          deniedMessage: '您沒有開立矯正單權限',
-          render: () => d.getCaseModule().renderCreate()
+          deniedMessage: '目前角色無法新增矯正單',
+          render: () => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderCreate())
         },
         detail: {
           title: '矯正單詳情',
           allow: () => !!d.currentUser(),
           requiresParam: true,
-          render: (param) => d.getCaseModule().renderDetail(param)
+          render: (param) => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderDetail(param))
         },
         respond: {
-          title: '回填矯正措施',
+          title: '矯正單回覆',
           allow: () => !!d.currentUser(),
           requiresParam: true,
-          render: (param) => d.getCaseModule().renderRespond(param)
+          render: (param) => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderRespond(param))
         },
         tracking: {
-          title: '追蹤監控',
+          title: '追蹤管考',
           allow: () => !!d.currentUser(),
           requiresParam: true,
-          render: (param) => d.getCaseModule().renderTracking(param)
+          render: (param) => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderTracking(param))
         },
         users: {
           title: '帳號管理',
           allow: () => d.canManageUsers(),
           fallback: 'dashboard',
-          deniedMessage: '您沒有帳號管理權限',
-          render: () => d.getAdminModule().renderUsers()
+          deniedMessage: '目前角色無法管理帳號',
+          render: () => ensureModule(d.ensureAdminModule, d.getAdminModule).then((module) => module.renderUsers())
         },
         'unit-contact-review': {
-          title: '單位管理人申請',
+          title: '單位管理人申請審核',
           allow: () => d.isAdmin(),
           fallback: 'dashboard',
-          deniedMessage: '僅最高管理員可審核單位管理人申請',
-          render: () => d.getAdminModule().renderUnitContactReview()
+          deniedMessage: '只有最高管理者可以審核單位管理人申請',
+          render: () => ensureModule(d.ensureAdminModule, d.getAdminModule).then((module) => module.renderUnitContactReview())
         },
         'login-log': {
           title: '登入紀錄',
           allow: () => d.canManageUsers(),
           fallback: 'dashboard',
-          deniedMessage: '您沒有檢視登入紀錄權限',
-          render: () => d.getAdminModule().renderLoginLog()
+          deniedMessage: '目前角色無法查看登入紀錄',
+          render: () => ensureModule(d.ensureAdminModule, d.getAdminModule).then((module) => module.renderLoginLog())
         },
         'audit-trail': {
           title: '操作稽核軌跡',
           allow: () => d.isAdmin(),
           fallback: 'dashboard',
-          deniedMessage: '僅最高管理者可檢視操作稽核軌跡',
-          render: () => d.getAdminModule().renderAuditTrail()
+          deniedMessage: '只有最高管理者可以查看操作稽核軌跡',
+          render: () => ensureModule(d.ensureAdminModule, d.getAdminModule).then((module) => module.renderAuditTrail())
         },
         'security-window': {
           title: '資安窗口',
           allow: () => d.isAdmin(),
           fallback: 'dashboard',
-          deniedMessage: '僅最高管理者可檢視資安窗口',
-          render: () => d.getAdminModule().renderSecurityWindow()
+          deniedMessage: '只有最高管理者可以查看資安窗口',
+          render: () => ensureModule(d.ensureAdminModule, d.getAdminModule).then((module) => module.renderSecurityWindow())
         },
         'schema-health': {
-          title: '資料健康檢查',
+          title: '資料健康度',
           allow: () => d.isAdmin(),
           fallback: 'dashboard',
-          deniedMessage: '僅最高管理者可檢視資料健康資訊',
-          render: () => d.getAdminModule().renderSchemaHealth()
+          deniedMessage: '只有最高管理者可以查看資料健康度',
+          render: () => ensureModule(d.ensureAdminModule, d.getAdminModule).then((module) => module.renderSchemaHealth())
         },
         checklist: {
-          title: '內稽檢核表',
+          title: '檢核表',
           allow: () => !!d.currentUser(),
-          render: () => d.getChecklistModule().renderChecklistList()
+          render: () => ensureModule(d.ensureChecklistModule, d.getChecklistModule).then((module) => module.renderChecklistList())
         },
         'checklist-fill': {
-          title: '填報檢核表',
+          title: '填寫檢核表',
           allow: () => d.canFillChecklist(),
           fallback: 'checklist',
-          deniedMessage: '您沒有填報檢核表權限',
-          render: (param) => d.getChecklistModule().renderChecklistFill(param)
+          deniedMessage: '目前角色無法填寫檢核表',
+          render: (param) => ensureModule(d.ensureChecklistModule, d.getChecklistModule).then((module) => module.renderChecklistFill(param))
         },
         'checklist-detail': {
           title: '檢核表詳情',
           allow: () => !!d.currentUser(),
           requiresParam: true,
-          render: (param) => d.getChecklistModule().renderChecklistDetail(param)
+          render: (param) => ensureModule(d.ensureChecklistModule, d.getChecklistModule).then((module) => module.renderChecklistDetail(param))
         },
         'checklist-manage': {
           title: '檢核表管理',
           allow: () => d.isAdmin(),
           fallback: 'dashboard',
-          deniedMessage: '僅最高管理者可管理檢核表',
-          render: () => d.getChecklistModule().renderChecklistManage()
+          deniedMessage: '只有最高管理者可以管理檢核表',
+          render: () => ensureModule(d.ensureChecklistModule, d.getChecklistModule).then((module) => module.renderChecklistManage())
         },
         'unit-review': {
           title: '單位治理',
           allow: () => d.isAdmin(),
           fallback: 'dashboard',
-          deniedMessage: '僅最高管理者可管理單位治理',
-          render: () => d.getAdminModule().renderUnitReview()
+          deniedMessage: '只有最高管理者可以查看單位治理',
+          render: () => ensureModule(d.ensureAdminModule, d.getAdminModule).then((module) => module.renderUnitReview())
         },
         training: {
-          title: '資安教育訓練統計',
+          title: '教育訓練',
           allow: () => !!d.currentUser(),
-          render: () => d.getTrainingModule().renderTraining()
+          render: () => ensureModule(d.ensureTrainingModule, d.getTrainingModule).then((module) => module.renderTraining())
         },
         'training-fill': {
-          title: '填報資安教育訓練統計',
+          title: '填寫教育訓練',
           allow: () => d.canFillTraining(),
           fallback: 'training',
-          deniedMessage: '您沒有填報教育訓練的權限',
-          render: (param) => d.getTrainingModule().renderTrainingFill(param)
+          deniedMessage: '目前角色無法填寫教育訓練',
+          render: (param) => ensureModule(d.ensureTrainingModule, d.getTrainingModule).then((module) => module.renderTrainingFill(param))
         },
         'training-detail': {
-          title: '資安教育訓練統計詳情',
+          title: '教育訓練詳情',
           allow: () => !!d.currentUser(),
           requiresParam: true,
-          render: (param) => d.getTrainingModule().renderTrainingDetail(param)
+          render: (param) => ensureModule(d.ensureTrainingModule, d.getTrainingModule).then((module) => module.renderTrainingDetail(param))
         },
         'training-roster': {
-          title: '教育訓練名單管理',
+          title: '教育訓練名單',
           allow: () => d.isAdmin(),
           fallback: 'training',
-          deniedMessage: '僅最高管理者可管理教育訓練名單',
-          render: () => d.getTrainingModule().renderTrainingRoster()
+          deniedMessage: '只有最高管理者可以查看教育訓練名單',
+          render: () => ensureModule(d.ensureTrainingModule, d.getTrainingModule).then((module) => module.renderTrainingRoster())
         }
       };
     }

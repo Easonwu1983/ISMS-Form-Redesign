@@ -10,10 +10,15 @@
         canFillChecklist: opts.canFillChecklist,
         canFillTraining: opts.canFillTraining,
         getCaseModule: opts.getCaseModule,
+        ensureCaseModule: opts.ensureCaseModule,
         getAdminModule: opts.getAdminModule,
+        ensureAdminModule: opts.ensureAdminModule,
         getChecklistModule: opts.getChecklistModule,
+        ensureChecklistModule: opts.ensureChecklistModule,
         getTrainingModule: opts.getTrainingModule,
-        getUnitContactApplicationModule: opts.getUnitContactApplicationModule
+        ensureTrainingModule: opts.ensureTrainingModule,
+        getUnitContactApplicationModule: opts.getUnitContactApplicationModule,
+        ensureUnitContactApplicationModule: opts.ensureUnitContactApplicationModule
       });
 
       function bindRouteManifest(target) {

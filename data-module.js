@@ -37,15 +37,16 @@
       getNextTrainingFormSequence
     } = deps;
 
-    const STORAGE_CACHE = Object.create(null);
+    const STORAGE_CACHE = createManagedMemoryCacheStore({ maxEntries: 32, defaultTtlMs: 2 * 60 * 1000 });
     const STORE_TOUCH_TOKENS = Object.create(null);
     const STORE_LOCKS = Object.create(null);
     let storageListenerInstalled = false;
     const STORAGE_WARNING_KEYS = Object.create(null);
-    const AUTHORIZED_UNITS_CACHE = new Map();
-    const REVIEW_UNITS_CACHE = new Map();
-    const USER_RECORD_CACHE = new Map();
-    const ACCESS_PROFILE_CACHE = new Map();
+    let collectionCacheModuleApi = null;
+    const AUTHORIZED_UNITS_CACHE = createManagedMemoryCacheStore({ maxEntries: 96, defaultTtlMs: 5 * 60 * 1000 });
+    const REVIEW_UNITS_CACHE = createManagedMemoryCacheStore({ maxEntries: 96, defaultTtlMs: 5 * 60 * 1000 });
+    const USER_RECORD_CACHE = createManagedMemoryCacheStore({ maxEntries: 128, defaultTtlMs: 5 * 60 * 1000 });
+    const ACCESS_PROFILE_CACHE = createManagedMemoryCacheStore({ maxEntries: 128, defaultTtlMs: 5 * 60 * 1000 });
     let accessProfileCacheListenerInstalled = false;
     const STORE_VERSIONS = {
       [DATA_KEY]: 1,
@@ -66,6 +67,64 @@
     };
 
     STORE_LABELS[UNIT_CONTACT_APP_KEY] = '單位資安窗口申請';
+
+    function getCollectionCacheModule() {
+      if (collectionCacheModuleApi) return collectionCacheModuleApi;
+      if (typeof window === 'undefined' || typeof window.createCollectionCacheModule !== 'function') {
+        return null;
+      }
+      collectionCacheModuleApi = window.createCollectionCacheModule();
+      return collectionCacheModuleApi;
+    }
+
+    function createManagedMemoryCacheStore(options) {
+      const cacheModule = getCollectionCacheModule();
+      if (cacheModule && typeof cacheModule.createBoundedCacheStore === 'function') {
+        return cacheModule.createBoundedCacheStore(options);
+      }
+      const entries = new Map();
+      return {
+        get: function (key) {
+          if (!entries.has(key)) return null;
+          return { value: entries.get(key) };
+        },
+        set: function (key, value) {
+          entries.set(key, value);
+          return { value: value };
+        },
+        clear: function () {
+          entries.clear();
+        }
+      };
+    }
+
+    function getStorageCacheEntry(key) {
+      if (!STORAGE_CACHE || typeof STORAGE_CACHE.get !== 'function') return null;
+      const hit = STORAGE_CACHE.get(key);
+      return hit && Object.prototype.hasOwnProperty.call(hit, 'value') ? hit.value : null;
+    }
+
+    function setStorageCacheEntry(key, value) {
+      if (!STORAGE_CACHE || typeof STORAGE_CACHE.set !== 'function') return;
+      STORAGE_CACHE.set(key, value);
+    }
+
+    function removeStorageCacheEntry(key) {
+      if (!STORAGE_CACHE) return;
+      if (typeof STORAGE_CACHE.remove === 'function') {
+        STORAGE_CACHE.remove(key);
+        return;
+      }
+      if (typeof STORAGE_CACHE.delete === 'function') {
+        STORAGE_CACHE.delete(key);
+      }
+    }
+
+    function clearStorageCacheEntries() {
+      if (STORAGE_CACHE && typeof STORAGE_CACHE.clear === 'function') {
+        STORAGE_CACHE.clear();
+      }
+    }
 
     function getStoreVersion(key) {
       return Number(STORE_VERSIONS[key] || 1);
@@ -103,9 +162,10 @@
     function getCachedUserList(cache, key, factory) {
       const cleanKey = String(key || '').trim();
       if (!cleanKey) return factory();
-      if (cache.has(cleanKey)) return cache.get(cleanKey);
+      const hit = cache && typeof cache.get === 'function' ? cache.get(cleanKey) : null;
+      if (hit && Object.prototype.hasOwnProperty.call(hit, 'value')) return hit.value;
       const value = factory();
-      cache.set(cleanKey, value);
+      if (cache && typeof cache.set === 'function') cache.set(cleanKey, value);
       return value;
     }
 
@@ -126,15 +186,13 @@
       if (storageListenerInstalled || typeof window === 'undefined' || !window.addEventListener) return;
       window.addEventListener('storage', function (event) {
         if (!event || !event.key) {
-          Object.keys(STORAGE_CACHE).forEach(function (cacheKey) {
-            delete STORAGE_CACHE[cacheKey];
-          });
+          clearStorageCacheEntries();
           Object.keys(STORE_TOUCH_TOKENS).forEach(function (storeKey) {
             delete STORE_TOUCH_TOKENS[storeKey];
           });
           return;
         }
-        delete STORAGE_CACHE[event.key];
+        removeStorageCacheEntry(event.key);
         touchStore(event.key);
       });
       storageListenerInstalled = true;
@@ -218,22 +276,22 @@
     function readCachedJson(key, fallbackFactory) {
       installStorageCacheInvalidation();
       const raw = localStorage.getItem(key);
-      const hit = STORAGE_CACHE[key];
+      const hit = getStorageCacheEntry(key);
       if (hit && hit.raw === raw) return hit.parsed;
       if (raw !== null && raw !== undefined) {
         try {
           const parsed = JSON.parse(raw);
-          STORAGE_CACHE[key] = { raw, parsed };
+          setStorageCacheEntry(key, { raw, parsed });
           return parsed;
         } catch (_) {
-          delete STORAGE_CACHE[key];
+          removeStorageCacheEntry(key);
           localStorage.removeItem(key);
           touchStore(key);
           emitStorageWarning(key, '\u5075\u6e2c\u5230\u700f\u89bd\u5668\u66ab\u5b58\u8cc7\u6599\u640d\u6bc0\uff0c\u7cfb\u7d71\u5df2\u81ea\u52d5\u6e05\u9664\u4e26\u91cd\u65b0\u8f09\u5165\u3002');
         }
       }
       const fallback = fallbackFactory();
-      STORAGE_CACHE[key] = { raw: JSON.stringify(fallback), parsed: fallback };
+      setStorageCacheEntry(key, { raw: JSON.stringify(fallback), parsed: fallback });
       return fallback;
     }
 
@@ -250,16 +308,16 @@
 
     function writeCachedJson(key, value) {
       const raw = JSON.stringify(value);
-      const previous = STORAGE_CACHE[key];
+      const previous = getStorageCacheEntry(key);
       try {
         localStorage.setItem(key, raw);
-        STORAGE_CACHE[key] = { raw, parsed: value };
+        setStorageCacheEntry(key, { raw, parsed: value });
         touchStore(key);
       } catch (error) {
         if (previous) {
-          STORAGE_CACHE[key] = previous;
+          setStorageCacheEntry(key, previous);
         } else {
-          delete STORAGE_CACHE[key];
+          removeStorageCacheEntry(key);
         }
         throw createStorageWriteError(error);
       }
@@ -267,7 +325,7 @@
 
     function removeCachedJson(key) {
       withStoreLock(key, function () {
-        delete STORAGE_CACHE[key];
+        removeStorageCacheEntry(key);
         localStorage.removeItem(key);
         touchStore(key);
       });

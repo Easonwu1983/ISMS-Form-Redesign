@@ -9,7 +9,6 @@
     'units.js',
     { src: 'm365-config.override.js', optional: true },
     'm365-config.js',
-    'attachment-module.js',
     'data-module.js',
     'collection-cache-module.js',
     'runtime-asset-loader-module.js',
@@ -18,7 +17,6 @@
     'unit-module.js',
     'ui-module.js',
     'policy-module.js',
-    'workflow-support-module.js',
     'collection-contract-module.js',
     'm365-api-client.js',
     'shell-module.js',
@@ -57,12 +55,6 @@
     'app-support-bridge-module.js',
     'app-remote-bridge-module.js',
     'app-auth-remote-module.js',
-    'case-module.js',
-    'admin-collection-cache-module.js',
-    'admin-module.js',
-    'checklist-module.js',
-    'training-module.js',
-    'unit-contact-application-module.js',
     'app.js'
   ];
   var index = 0;

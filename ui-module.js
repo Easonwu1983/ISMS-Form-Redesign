@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   function createPagerModule() {
     function escHtml(value) {
       if (typeof document === 'undefined') return String(value === null || value === undefined ? '' : value);
@@ -54,7 +54,7 @@
 
     function formatPageSummary(page, emptyText, defaultLimit) {
       const normalized = normalizePage(page, defaultLimit);
-      if (!normalized.total) return emptyText || '目前沒有符合條件的資料';
+      if (!normalized.total) return emptyText || '目前沒有資料';
       return `第 ${normalized.currentPage} / ${normalized.pageCount} 頁，顯示 ${normalized.pageStart}-${normalized.pageEnd} / ${normalized.total} 筆`;
     }
 
@@ -76,20 +76,20 @@
         return actionPrefix ? ` data-action="${escAttr(actionPrefix + name)}"` : '';
       };
       const limitHtml = showLimit
-        ? `<label class="form-label" for="${escAttr(idPrefix)}-page-limit" style="margin:0 4px 0 0">每頁</label>`
+        ? `<label class="form-label" for="${escAttr(idPrefix)}-page-limit" style="margin:0 4px 0 0">瘥?</label>`
           + `<select class="form-select" id="${escAttr(idPrefix)}-page-limit" style="min-width:88px">`
           + limitOptions.map((value) => `<option value="${esc(value)}" ${String(page.limit) === value ? 'selected' : ''}>${esc(value)}</option>`).join('')
           + '</select>'
         : '';
       return `${limitHtml}`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button>`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button>`
-        + `<span class="review-card-subtitle" style="margin:0 4px 0 8px">頁次 ${page.currentPage || 0} / ${page.pageCount || 0}</span>`
-        + `<label class="form-label" for="${escAttr(idPrefix)}-page-number" style="margin:0 4px 0 8px">跳至</label>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 擐?</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 銝???/button>`
+        + `<span class="review-card-subtitle" style="margin:0 4px 0 8px">?活 ${page.currentPage || 0} / ${page.pageCount || 0}</span>`
+        + `<label class="form-label" for="${escAttr(idPrefix)}-page-number" style="margin:0 4px 0 8px">頝唾</label>`
         + `<input type="number" class="form-input" id="${escAttr(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px">`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>前往</button>`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button>`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button>`;
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>??</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>銝???${ic('chevron-right', 'icon-sm')}</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>?恍? ${ic('chevrons-right', 'icon-sm')}</button>`;
     }
 
     function renderPagerToolbar(config) {
@@ -98,7 +98,7 @@
       const toolbarClass = String(options.toolbarClass || 'review-toolbar review-toolbar--compact').trim();
       const toolbarStyle = String(options.toolbarStyle || '').trim();
       const idPrefix = String(options.idPrefix || 'pager').trim() || 'pager';
-      const ariaLabel = String(options.ariaLabel || '列表分頁').trim() || '列表分頁';
+      const ariaLabel = String(options.ariaLabel || '?”??').trim() || '?”??';
       const page = normalizePage(options.page, options.defaultLimit);
       const summary = String(options.summary || formatPageSummary(page, options.emptyText, options.defaultLimit)).trim();
       const mainHtml = options.mainHtml
@@ -199,7 +199,7 @@
   }
 
   window.createUiModule = function createUiModule() {
-    const DEFAULT_UNSAVED_MESSAGE = '目前有未儲存的變更，確定要離開此頁嗎？';
+    const DEFAULT_UNSAVED_MESSAGE = '目前有尚未儲存的變更，離開後資料可能遺失。';
     const MODAL_ROOT_ID = 'modal-root';
     const BUSY_ROOT_ID = 'busy-root';
     let iconRetryTimer = null;
@@ -249,16 +249,16 @@
     }
 
     function fmt(value) {
-      if (!value) return '—';
+      if (!value) return '--';
       const parts = getTaipeiDateParts(value);
-      if (!parts) return '—';
+      if (!parts) return '--';
       return [parts.year, parts.month, parts.day].join('/');
     }
 
     function fmtTime(value) {
-      if (!value) return '—';
+      if (!value) return '--';
       const parts = getTaipeiDateParts(value);
-      if (!parts) return '—';
+      if (!parts) return '--';
       return [parts.year, parts.month, parts.day].join('/') + ' ' + [parts.hour, parts.minute].join(':');
     }
 
@@ -407,22 +407,22 @@
     function renderCopyIdButton(value, label) {
       const text = String(value || '').trim();
       if (!text) return '';
-      const safeLabel = String(label || '編號').trim() || '編號';
-      return '<button type="button" class="copy-id-btn" data-copy="' + escAttr(text) + '" data-copy-label="' + escAttr(safeLabel) + '" title="複製' + esc(safeLabel) + '" aria-label="複製' + esc(safeLabel) + '">' + ic('copy', 'icon-xs') + '</button>';
+      const safeLabel = String(label || '蝺刻?').trim() || '蝺刻?';
+      return '<button type="button" class="copy-id-btn" data-copy="' + escAttr(text) + '" data-copy-label="' + escAttr(safeLabel) + '" title="銴ˊ' + esc(safeLabel) + '" aria-label="銴ˊ' + esc(safeLabel) + '">' + ic('copy', 'icon-xs') + '</button>';
     }
 
     function renderCopyIdCell(value, label, strong) {
       const text = String(value || '').trim();
       const classes = ['copy-id-cell'];
       if (strong) classes.push('copy-id-cell--strong');
-      return '<div class="' + classes.join(' ') + '"><span class="copy-id-text">' + esc(text || '—') + '</span>' + renderCopyIdButton(text, label) + '</div>';
+      return '<div class="' + classes.join(' ') + '"><span class="copy-id-text">' + esc(text || '') + '</span>' + renderCopyIdButton(text, label) + '</div>';
     }
 
     function copyTextToClipboard(value, label) {
       const text = String(value || '').trim();
-      const safeLabel = String(label || '編號').trim() || '編號';
+      const safeLabel = String(label || '蝺刻?').trim() || '蝺刻?';
       if (!text) {
-        toast('沒有可複製的' + safeLabel, 'error');
+        toast('瘝??航?鋆賜?' + safeLabel, 'error');
         return Promise.resolve(false);
       }
 
@@ -438,17 +438,17 @@
           const ok = document.execCommand('copy');
           document.body.removeChild(textarea);
           if (!ok) throw new Error('copy command failed');
-          toast(safeLabel + '已複製');
+          toast(safeLabel + ' 已複製');
           return true;
         } catch (_) {
-          toast(safeLabel + '複製失敗', 'error');
+          toast(safeLabel + '銴ˊ憭望?', 'error');
           return false;
         }
       }
 
       if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         return navigator.clipboard.writeText(text).then(function () {
-          toast(safeLabel + '已複製');
+          toast(safeLabel + ' 已複製');
           return true;
         }).catch(function () {
           return fallbackCopy();
@@ -474,7 +474,7 @@
         if (!button || (scope !== document && !scope.contains(button))) return;
         event.preventDefault();
         event.stopPropagation();
-        copyTextToClipboard(button.dataset.copy || '', button.dataset.copyLabel || '編號');
+        copyTextToClipboard(button.dataset.copy || '', button.dataset.copyLabel || '蝺刻?');
       });
     }
 
@@ -616,12 +616,14 @@
 
     function renderDialog(contentHtml, options) {
       const opts = options || {};
+      const titleId = String(opts.titleId || 'modal-title').trim() || 'modal-title';
+      const describedBy = String(opts.describedBy || '').trim();
       const modalRoot = ensureModalRoot();
       const previousActiveElement = document.activeElement && document.activeElement !== document.body
         ? document.activeElement
         : null;
       document.body.classList.add('modal-open');
-      modalRoot.innerHTML = '<div class="modal-backdrop" data-modal-dismiss="1"></div><div class="modal-shell"><div class="modal-card ' + escAttr(opts.className || '') + '" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1"><button type="button" class="modal-close-btn" data-modal-dismiss="1" aria-label="關閉">' + ic('x', 'icon-sm') + '</button>' + contentHtml + '</div></div>';
+      modalRoot.innerHTML = '<div class="modal-backdrop" data-modal-dismiss="1"></div><div class="modal-shell"><div class="modal-card ' + escAttr(opts.className || '') + '" role="dialog" aria-modal="true" aria-labelledby="' + escAttr(titleId) + '"' + (describedBy ? ' aria-describedby="' + escAttr(describedBy) + '"' : '') + ' tabindex="-1"><button type="button" class="modal-close-btn" data-modal-dismiss="1" aria-label="??">' + ic('x', 'icon-sm') + '</button>' + contentHtml + '</div></div>';
       const modalCard = modalRoot.querySelector('.modal-card');
       const cleanup = function () {
         document.removeEventListener('keydown', handleKeydown);
@@ -680,10 +682,10 @@
       const opts = options || {};
       return new Promise(function (resolve) {
         const dialog = renderDialog(
-          '<div class="modal-header"><div class="modal-kicker">' + esc(opts.kicker || '請確認') + '</div><h3 class="modal-title" id="modal-title">' + esc(opts.title || '確認操作') + '</h3></div>'
-          + '<div class="modal-body"><p class="modal-message">' + esc(message || '') + '</p></div>'
-          + '<div class="modal-actions"><button type="button" class="btn btn-secondary" data-modal-cancel="1">' + esc(opts.cancelLabel || '取消') + '</button><button type="button" class="btn ' + escAttr(opts.confirmClass || 'btn-primary') + '" data-modal-confirm="1">' + esc(opts.confirmLabel || '確認') + '</button></div>',
-          { className: 'modal-card--confirm' }
+          '<div class="modal-header"><div class="modal-kicker">' + esc(opts.kicker || '確認') + '</div><h3 class="modal-title" id="modal-title">' + esc(opts.title || '請再次確認') + '</h3></div>'
+          + '<div class="modal-body"><p class="modal-message" id="modal-description">' + esc(message || '') + '</p></div>'
+          + '<div class="modal-actions"><button type="button" class="btn btn-secondary" data-modal-cancel="1">' + esc(opts.cancelLabel || '??') + '</button><button type="button" class="btn ' + escAttr(opts.confirmClass || 'btn-primary') + '" data-modal-confirm="1">' + esc(opts.confirmLabel || '蝣箄?') + '</button></div>',
+          { className: 'modal-card--confirm', describedBy: 'modal-description' }
         );
         const cancel = dialog.root.querySelector('[data-modal-cancel]');
         const confirm = dialog.root.querySelector('[data-modal-confirm]');
@@ -706,9 +708,9 @@
       return new Promise(function (resolve) {
         const inputId = 'modal-prompt-input';
         const dialog = renderDialog(
-          '<div class="modal-header"><div class="modal-kicker">' + esc(opts.kicker || '請輸入') + '</div><h3 class="modal-title" id="modal-title">' + esc(opts.title || '輸入內容') + '</h3></div>'
-          + '<form class="modal-body modal-form" data-modal-form="1"><p class="modal-message">' + esc(message || '') + '</p><div class="form-group"><label class="form-label" for="' + inputId + '">' + esc(opts.label || '內容') + '</label><input type="text" class="form-input" id="' + inputId + '" value="' + escAttr(opts.defaultValue || '') + '" placeholder="' + escAttr(opts.placeholder || '') + '" ' + (opts.required === false ? '' : 'required') + '></div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-modal-cancel="1">' + esc(opts.cancelLabel || '取消') + '</button><button type="submit" class="btn ' + escAttr(opts.confirmClass || 'btn-primary') + '">' + esc(opts.confirmLabel || '確認') + '</button></div></form>',
-          { className: 'modal-card--prompt' }
+          '<div class="modal-header"><div class="modal-kicker">' + esc(opts.kicker || '輸入') + '</div><h3 class="modal-title" id="modal-title">' + esc(opts.title || '請輸入內容') + '</h3></div>'
+          + '<form class="modal-body modal-form" data-modal-form="1"><p class="modal-message" id="modal-description">' + esc(message || '') + '</p><div class="form-group"><label class="form-label" for="' + inputId + '">' + esc(opts.label || '?批捆') + '</label><input type="text" class="form-input" id="' + inputId + '" aria-describedby="modal-description" value="' + escAttr(opts.defaultValue || '') + '" placeholder="' + escAttr(opts.placeholder || '') + '" ' + (opts.required === false ? '' : 'required') + '></div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-modal-cancel="1">' + esc(opts.cancelLabel || '??') + '</button><button type="submit" class="btn ' + escAttr(opts.confirmClass || 'btn-primary') + '">' + esc(opts.confirmLabel || '蝣箄?') + '</button></div></form>',
+          { className: 'modal-card--prompt', describedBy: 'modal-description' }
         );
         const form = dialog.root.querySelector('[data-modal-form]');
         const input = dialog.root.querySelector('#' + inputId);
@@ -805,3 +807,4 @@
     };
   };
 })();
+

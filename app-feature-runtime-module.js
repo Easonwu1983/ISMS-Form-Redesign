@@ -3,7 +3,9 @@
     function createAccess(deps) {
       const state = {
         adminModuleApi: null,
-        caseModuleApi: null
+        caseModuleApi: null,
+        adminModulePromise: null,
+        caseModulePromise: null
       };
 
       function resolveFeature(factoryName, scriptName, stateKey, globalSlot, configBuilder) {
@@ -16,6 +18,20 @@
         return state[stateKey];
       }
 
+      function ensureFeature(factoryName, scriptName, stateKey, promiseKey, globalSlot, configBuilder, loader) {
+        if (state[stateKey]) return Promise.resolve(state[stateKey]);
+        if (state[promiseKey]) return state[promiseKey];
+        const start = typeof loader === 'function'
+          ? Promise.resolve().then(loader)
+          : Promise.resolve();
+        state[promiseKey] = start.then(function () {
+          return resolveFeature(factoryName, scriptName, stateKey, globalSlot, configBuilder);
+        }).finally(function () {
+          state[promiseKey] = null;
+        });
+        return state[promiseKey];
+      }
+
       function getAdminModule() {
         return resolveFeature(
           'createAdminModule',
@@ -23,6 +39,18 @@
           'adminModuleApi',
           '_adminModule',
           deps.getAdminModuleConfig
+        );
+      }
+
+      function ensureAdminModule() {
+        return ensureFeature(
+          'createAdminModule',
+          'admin-module.js',
+          'adminModuleApi',
+          'adminModulePromise',
+          '_adminModule',
+          deps.getAdminModuleConfig,
+          deps.ensureAdminModuleScript
         );
       }
 
@@ -36,9 +64,23 @@
         );
       }
 
+      function ensureCaseModule() {
+        return ensureFeature(
+          'createCaseModule',
+          'case-module.js',
+          'caseModuleApi',
+          'caseModulePromise',
+          '_caseModule',
+          deps.getCaseModuleConfig,
+          deps.ensureCaseModuleScript
+        );
+      }
+
       return {
         getAdminModule: getAdminModule,
-        getCaseModule: getCaseModule
+        ensureAdminModule: ensureAdminModule,
+        getCaseModule: getCaseModule,
+        ensureCaseModule: ensureCaseModule
       };
     }
 
