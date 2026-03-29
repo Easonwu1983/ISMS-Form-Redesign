@@ -1,6 +1,6 @@
 # Optimization Gap List
 
-Updated: 2026-03-29
+Updated: 2026-03-30
 
 This checklist tracks the optimization report against the current repo state. Status values:
 
@@ -81,16 +81,19 @@ Done:
 - First-pass table semantics were added for admin, training, case, and checklist tables using captions and `scope="col"`.
 - `scripts/security-regression.cjs` now checks that key admin/training/checklist/case tables expose captions and scoped headers.
 - `scripts/accessibility-regression.cjs` now provides a dedicated formal a11y smoke pass for shell landmarks, modal keyboard behavior, and table semantics.
+- `scripts/accessibility-axe-regression.cjs` now adds an axe-based formal a11y smoke pass for login, dashboard, public apply, and public status pages.
+- `unit-contact-application-module.js` now exposes accessible names for public apply search/listbox/file-input flows and avoids nested complementary landmarks on the public pages.
+- `unit-module.js` now assigns explicit accessible names to unit cascade search and select controls.
 
 Open:
 - Many `innerHTML` templates still lack ARIA metadata.
 - Keyboard navigation is not systematically tested across key workflows.
-- There is still no axe-based automation; the current a11y smoke is custom DOM and keyboard coverage.
+- There is still no full `axe-core` coverage across every authenticated route; the current axe smoke focuses on shell and public workflows.
 
 Next:
 - Finish table semantics and labels on `dashboard`, `users`, `unit-contact-review`, `training`, and `checklists`.
 - Add keyboard coverage for modal close, filter bars, and main tables.
-- Add a focused a11y smoke pass for the formal chain.
+- Expand the focused axe smoke to more authenticated routes once their page shells are fully stable.
 
 ## 5. Memory and Runtime Stability
 
@@ -104,6 +107,7 @@ Done:
 - `training`, `checklist`, and `case` now use page-scoped listener registration for their main list and form flows.
 - `training`, `checklist`, and `audit-trail` remote page caches now use bounded stores instead of raw unbounded page maps.
 - `admin-module.js` pager controls, governance cards, horizontal review scrollers, and unit-chip picker interactions now use page-scoped listener registration.
+- `unit-contact-application-module.js` now uses page-scoped listener registration for public apply and status flows.
 - Current repo-wide listener ratio is no longer near the old `165:7` report; the tracked source tree is currently around `439 addEventListener` to `114 removeEventListener`.
 
 Open:
