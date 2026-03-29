@@ -25,7 +25,8 @@ function createAuditTrailRouter(deps) {
     entriesCache: null,
     entriesPromise: null,
     queryCache: new Map(),
-    prewarmQueued: false
+    prewarmQueued: false,
+    unfilteredSummary: null
   };
   const AUDIT_TRAIL_CACHE_MS = 300000;
   const AUDIT_TRAIL_QUERY_CACHE_MS = 60000;
@@ -74,6 +75,12 @@ function createAuditTrailRouter(deps) {
     if (state.queryCache instanceof Map) {
       state.queryCache.clear();
     }
+  }
+
+  function rebuildAuditDerivedState(rows) {
+    const items = Array.isArray(rows) ? rows.map((entry) => entry && entry.item).filter(Boolean) : [];
+    state.unfilteredSummary = summarizeAuditEntries(items);
+    return state.unfilteredSummary;
   }
 
   function getAuditFilterSignature(url) {
@@ -254,7 +261,7 @@ function createAuditTrailRouter(deps) {
         nextUrl = cleanText(body && body['@odata.nextLink']);
       }
       rows.sort((left, right) => cleanText(right.item && right.item.occurredAt).localeCompare(cleanText(left.item && left.item.occurredAt), 'zh-Hant'));
-      const summary = summarizeAuditEntries(rows.map((entry) => entry.item));
+      const summary = rebuildAuditDerivedState(rows);
       state.entriesCache = {
         loadedAt: Date.now(),
         rows,
@@ -345,12 +352,14 @@ function createAuditTrailRouter(deps) {
         });
         return false;
       }
+      const derivedSummary = parsed && parsed.summary && typeof parsed.summary === 'object'
+        ? parsed.summary
+        : rebuildAuditDerivedState(rows);
+      state.unfilteredSummary = derivedSummary;
       state.entriesCache = {
         loadedAt,
         rows,
-        summary: parsed && parsed.summary && typeof parsed.summary === 'object'
-          ? parsed.summary
-          : summarizeAuditEntries(rows.map((entry) => entry.item))
+        summary: derivedSummary
       };
       clearAuditQueryCache();
       logAuditTrail('list snapshot restored', {
@@ -544,6 +553,51 @@ function createAuditTrailRouter(deps) {
       });
       const pageMeta = getAuditQueryPageMeta(url);
       const hasDetailedFilters = hasDetailedAuditFilters(url);
+      const canUseSummaryOnlyPath = summaryOnly
+        && !hasDetailedFilters
+        && state.entriesCache
+        && Array.isArray(state.entriesCache.rows)
+        && state.unfilteredSummary
+        && typeof state.unfilteredSummary === 'object';
+      if (canUseSummaryOnlyPath) {
+        const total = Array.isArray(state.entriesCache && state.entriesCache.rows)
+          ? state.entriesCache.rows.length
+          : 0;
+        const summaryPage = buildAuditPageMeta(total, pageMeta.limit, pageMeta.offset, 0);
+        const summaryResult = {
+          items: [],
+          total,
+          summary: state.unfilteredSummary,
+          page: {
+            ...summaryPage,
+            returned: 0,
+            pageStart: 0,
+            pageEnd: 0
+          }
+        };
+        setAuditQueryCache(querySignature, Number(state.entriesCache && state.entriesCache.loadedAt) || 0, summaryResult);
+        logAuditTrail('list cached summary', {
+          requestId,
+          querySignature,
+          total,
+          offset: summaryResult.page && summaryResult.page.offset,
+          limit: summaryResult.page && summaryResult.page.limit,
+          durationMs: Date.now() - startedAt
+        });
+        await writeJson(res, buildJsonResponse(200, {
+          ok: true,
+          items: [],
+          total,
+          page: summaryResult.page,
+          summary: summaryResult.summary,
+          cache: {
+            query: 'cached-summary',
+            summaryOnly: true
+          },
+          contractVersion: CONTRACT_VERSION
+        }), origin);
+        return;
+      }
       const canUseCachedUnfilteredPath = !hasDetailedFilters && state.entriesCache && Array.isArray(state.entriesCache.rows);
       if (canUseCachedUnfilteredPath) {
         const cachedUnfiltered = buildUnfilteredCachedResult(pageMeta);

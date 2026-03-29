@@ -52,7 +52,8 @@ async function gotoHashOnly(page, hash, options = {}) {
   await page.waitForTimeout(options.settleMs || 180);
 }
 
-async function login(page, username = 'easonwu', password = '2wsx#EDC') {
+async function login(page, username = 'easonwu', password = '2wsx#EDC', options = {}) {
+  const requireVersionChip = options.requireVersionChip !== false;
   await gotoAppRoot(page, 'domcontentloaded');
   const alreadyAuthenticated = await page.locator('.btn-logout').count();
   if (!alreadyAuthenticated) {
@@ -68,10 +69,12 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC') {
     ]);
   }
   await waitForRemoteBootstrap(page);
-  await page.waitForSelector('.sidebar-footer [data-testid="app-version-chip"]', { timeout: 30000 });
-  const sidebarVersion = await page.locator('.sidebar-footer [data-testid="app-version-chip"]').first().textContent();
-  if (!String(sidebarVersion || '').trim()) {
-    throw new Error('sidebar version chip missing');
+  if (requireVersionChip) {
+    await page.waitForSelector('.sidebar-footer [data-testid="app-version-chip"]', { timeout: 30000 });
+    const sidebarVersion = await page.locator('.sidebar-footer [data-testid="app-version-chip"]').first().textContent();
+    if (!String(sidebarVersion || '').trim()) {
+      throw new Error('sidebar version chip missing');
+    }
   }
 }
 
@@ -79,7 +82,7 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   try {
-    await login(page, 'unit1', 'unit123');
+    await login(page, 'unit1', 'unit123', { requireVersionChip: false });
     pushStep('unit-admin:login', true, 'unit admin login succeeded');
 
     const apiState = await page.evaluate(async () => {

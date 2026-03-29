@@ -25,6 +25,7 @@
     'shell-module.js',
     'app-ui-bridge-module.js',
     'app-domain-bridge-module.js',
+    'app-training-checklist-bridge-module.js',
     'service-registry-module.js',
     'app-core-service-module.js',
     'app-runtime-service-module.js',
