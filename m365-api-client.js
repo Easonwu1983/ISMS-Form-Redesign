@@ -45,6 +45,9 @@
     let cachedConfig = null;
     let cachedRuntimeConfigSource = null;
     let collectionContractModuleApi = null;
+    let collectionCacheModuleApi = null;
+    let responseCacheStore = null;
+    const inflightGetRequests = new Map();
     const DEFAULT_CONFIG = {
       unitContactMode: 'local-emulator',
       unitContactSubmitEndpoint: '',
@@ -263,6 +266,141 @@
       return collectionContractModuleApi;
     }
 
+    function getCollectionCacheModule() {
+      if (collectionCacheModuleApi) return collectionCacheModuleApi;
+      if (typeof window === 'undefined') {
+        throw new Error('collection-cache-module.js not loaded');
+      }
+      if (window.__ISMS_COLLECTION_CACHE__ && typeof window.__ISMS_COLLECTION_CACHE__ === 'object') {
+        collectionCacheModuleApi = window.__ISMS_COLLECTION_CACHE__;
+        return collectionCacheModuleApi;
+      }
+      if (typeof window.createCollectionCacheModule !== 'function') {
+        throw new Error('collection-cache-module.js not loaded');
+      }
+      collectionCacheModuleApi = window.createCollectionCacheModule();
+      window.__ISMS_COLLECTION_CACHE__ = collectionCacheModuleApi;
+      return collectionCacheModuleApi;
+    }
+
+    function installResponseCacheInvalidationListener() {
+      if (typeof window === 'undefined' || window.__ISMS_API_RESPONSE_CACHE_INVALIDATION__) return;
+      window.addEventListener('isms:cache-invalidate', function () {
+        if (responseCacheStore && typeof responseCacheStore.clear === 'function') {
+          responseCacheStore.clear();
+        }
+        inflightGetRequests.clear();
+      });
+      window.__ISMS_API_RESPONSE_CACHE_INVALIDATION__ = true;
+    }
+
+    function getResponseCacheStore() {
+      if (responseCacheStore) return responseCacheStore;
+      const collectionCache = getCollectionCacheModule();
+      responseCacheStore = collectionCache.createBoundedCacheStore({
+        maxEntries: 96,
+        defaultTtlMs: 1200
+      });
+      installResponseCacheInvalidationListener();
+      return responseCacheStore;
+    }
+
+    function cloneJsonValue(value) {
+      if (value === null || value === undefined) return value;
+      if (typeof structuredClone === 'function') {
+        try {
+          return structuredClone(value);
+        } catch (_) {}
+      }
+      if (Array.isArray(value) || (value && typeof value === 'object')) {
+        try {
+          return JSON.parse(JSON.stringify(value));
+        } catch (_) {}
+      }
+      return value;
+    }
+
+    function buildRequestCacheKey(safeUrl, method, headers, body) {
+      return JSON.stringify({
+        method: String(method || 'GET').toUpperCase(),
+        url: String(safeUrl || ''),
+        headers: headers && typeof headers === 'object' ? headers : {},
+        body: body === undefined ? null : body
+      });
+    }
+
+    function resolveRequestCacheTtlMs(safeUrl, method, options) {
+      if (String(method || '').toUpperCase() !== 'GET') return 0;
+      const requestOptions = options && typeof options === 'object' ? options : {};
+      if (requestOptions.disableCache || requestOptions.skipCache) return 0;
+      if (requestOptions.cacheTtlMs !== undefined) {
+        return Math.max(0, Number(requestOptions.cacheTtlMs) || 0);
+      }
+      try {
+        const resolved = new URL(safeUrl, typeof window !== 'undefined' ? window.location.href : undefined);
+        if (/\/health$/i.test(resolved.pathname)) return 2000;
+        if (resolved.searchParams.get('summaryOnly') === '1') return 2500;
+        if (/\/(checklists|training|audit-trail|system-users|review-scopes|unit-governance)/i.test(resolved.pathname)) return 1500;
+      } catch (_) {}
+      return 1200;
+    }
+
+    function createRequestError(code, message, meta) {
+      const error = new Error(message);
+      error.code = code;
+      if (meta && typeof meta === 'object') {
+        Object.keys(meta).forEach((key) => {
+          error[key] = meta[key];
+        });
+      }
+      return error;
+    }
+
+    function classifyResponseError(status, serverMessage) {
+      const message = cleanText(serverMessage);
+      if (status === 400 || status === 422) {
+        return createRequestError('validation', message || '輸入資料不完整或格式不正確', { status, retryable: false });
+      }
+      if (status === 401) {
+        return createRequestError('unauthorized', '登入狀態已失效，請重新登入', { status, retryable: false });
+      }
+      if (status === 403) {
+        return createRequestError('forbidden', message || '目前帳號沒有執行這個操作的權限', { status, retryable: false });
+      }
+      if (status === 404) {
+        return createRequestError('not-found', message || '找不到對應資料或服務入口', { status, retryable: false });
+      }
+      if (status === 409) {
+        return createRequestError('conflict', message || '資料已變更，請重新整理後再試', { status, retryable: false });
+      }
+      if (status === 429) {
+        return createRequestError('rate-limit', message || '請求過於頻繁，請稍後再試', { status, retryable: true });
+      }
+      if (status >= 500) {
+        return createRequestError('server', message || '服務暫時無法使用，請稍後再試', { status, retryable: true });
+      }
+      return createRequestError('http', message || ('HTTP ' + status), { status, retryable: status >= 500 });
+    }
+
+    function classifyThrownRequestError(error) {
+      if (!error) return createRequestError('unknown', '發生未預期的連線錯誤', { retryable: false });
+      if (error.code) return error;
+      if (error.name === 'AbortError') {
+        return createRequestError('timeout', '連線逾時，請稍後再試', { retryable: true });
+      }
+      if (error instanceof TypeError) {
+        return createRequestError('network', '無法連線到服務，請確認網路或稍後再試', { retryable: true });
+      }
+      return createRequestError('unknown', cleanText(error.message) || '發生未預期的連線錯誤', { retryable: false });
+    }
+
+    function getRetryDelayMs(attempt) {
+      const safeAttempt = Math.max(1, Number(attempt) || 1);
+      const baseDelay = Math.min(1600, 250 * Math.pow(2, safeAttempt - 1));
+      const jitter = Math.floor(Math.random() * 120);
+      return baseDelay + jitter;
+    }
+
     function getModeLabel() {
       const mode = getMode();
       if (mode === 'm365-api') {
@@ -451,57 +589,93 @@
       const safeUrl = resolveRequestUrl(url);
       if (!safeUrl) throw new Error('Invalid request endpoint');
       const method = String(requestOptions.method || 'POST').toUpperCase();
-      const maxAttempts = method === 'GET' ? 2 : 1;
-      let lastError = null;
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        const defaultTimeoutMs = method === 'GET'
-          ? Number(config.apiReadTimeoutMs || config.unitContactRequestTimeoutMs || 15000)
-          : Number(config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 15000);
-        const timeoutMs = Number(requestOptions.timeoutMs || defaultTimeoutMs || 15000);
-        let timeoutId = null;
-        if (controller && timeoutMs > 0) {
-          timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-        }
-        try {
-          const response = await fetch(safeUrl, {
-            method,
-            headers: buildHeaders(requestOptions.headers, {
-              contractVersion: requestOptions.contractVersion,
-              sharedHeaders: requestOptions.sharedHeaders
-            }),
-            body: requestOptions.body ? JSON.stringify(requestOptions.body) : undefined,
-            signal: controller ? controller.signal : undefined
-          });
+      const headers = buildHeaders(requestOptions.headers, {
+        contractVersion: requestOptions.contractVersion,
+        sharedHeaders: requestOptions.sharedHeaders
+      });
+      const requestBody = requestOptions.body ? JSON.stringify(requestOptions.body) : undefined;
+      const cacheTtlMs = resolveRequestCacheTtlMs(safeUrl, method, requestOptions);
+      const cacheKey = buildRequestCacheKey(safeUrl, method, headers, method === 'GET' ? null : requestBody);
+      const useResponseCache = method === 'GET' && cacheTtlMs > 0;
+      if (useResponseCache) {
+        const cachedEntry = getResponseCacheStore().get(cacheKey);
+        if (cachedEntry) return cloneJsonValue(cachedEntry.value);
+      }
+      if (method === 'GET' && requestOptions.dedupe !== false && inflightGetRequests.has(cacheKey)) {
+        return inflightGetRequests.get(cacheKey).then(cloneJsonValue);
+      }
 
-          const rawText = await response.text();
-          let parsed = null;
-          if (rawText) {
-            try {
-              parsed = JSON.parse(rawText);
-            } catch (_) {
-              parsed = { ok: false, message: rawText };
-            }
+      const executeRequest = async function () {
+        const maxAttempts = method === 'GET' ? 3 : 1;
+        let lastError = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const defaultTimeoutMs = method === 'GET'
+            ? Number(config.apiReadTimeoutMs || config.unitContactRequestTimeoutMs || 15000)
+            : Number(config.apiWriteTimeoutMs || config.unitContactRequestTimeoutMs || 15000);
+          const timeoutMs = Number(requestOptions.timeoutMs || defaultTimeoutMs || 15000);
+          let timeoutId = null;
+          if (controller && timeoutMs > 0) {
+            timeoutId = setTimeout(() => controller.abort(), timeoutMs);
           }
-          if (!response.ok) {
-            const serverMessage = cleanText(parsed && (parsed.message || parsed.error || parsed.detail));
-            if (response.status === 401) {
-              throw new Error('\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548\uff0c\u8acb\u91cd\u65b0\u767b\u5165');
+          try {
+            const response = await fetch(safeUrl, {
+              method,
+              headers,
+              body: requestBody,
+              signal: controller ? controller.signal : undefined
+            });
+
+            const rawText = await response.text();
+            let parsed = null;
+            if (rawText) {
+              try {
+                parsed = JSON.parse(rawText);
+              } catch (_) {
+                parsed = { ok: false, message: rawText };
+              }
             }
-            throw new Error(serverMessage || ('HTTP ' + response.status));
+            if (!response.ok) {
+              const serverMessage = cleanText(parsed && (parsed.message || parsed.error || parsed.detail));
+              throw classifyResponseError(response.status, serverMessage);
+            }
+            const payload = parsed || { ok: true };
+            if (method !== 'GET') {
+              getResponseCacheStore().clear();
+              inflightGetRequests.clear();
+            } else if (useResponseCache) {
+              getResponseCacheStore().set(cacheKey, payload, {
+                ttlMs: cacheTtlMs,
+                meta: {
+                  url: safeUrl,
+                  method,
+                  storedAt: Date.now()
+                }
+              });
+            }
+            return payload;
+          } catch (error) {
+            lastError = classifyThrownRequestError(error);
+            if (attempt >= maxAttempts || method !== 'GET' || !lastError.retryable) break;
+            await new Promise((resolve) => setTimeout(resolve, getRetryDelayMs(attempt)));
+          } finally {
+            if (timeoutId) clearTimeout(timeoutId);
           }
-          return parsed || { ok: true };
-        } catch (error) {
-          lastError = error && error.name === 'AbortError'
-            ? new Error('\u9023\u7dda\u903e\u6642\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66')
-            : error;
-          if (attempt >= maxAttempts || method !== 'GET') break;
-          await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
-        } finally {
-          if (timeoutId) clearTimeout(timeoutId);
+        }
+        throw lastError;
+      };
+
+      const requestPromise = executeRequest();
+      if (method === 'GET' && requestOptions.dedupe !== false) {
+        inflightGetRequests.set(cacheKey, requestPromise);
+      }
+      try {
+        return await requestPromise;
+      } finally {
+        if (method === 'GET' && requestOptions.dedupe !== false) {
+          inflightGetRequests.delete(cacheKey);
         }
       }
-      throw lastError;
     }
 
     function buildSubmitEnvelope(payload) {

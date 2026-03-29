@@ -78,6 +78,129 @@
       };
     }
 
+    function createBoundedCacheStore(options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      const maxEntries = Math.max(1, Number(settings.maxEntries) || 50);
+      const defaultTtlMs = Math.max(0, Number(settings.defaultTtlMs) || 0);
+      const entries = new Map();
+
+      function isExpired(entry, now) {
+        if (!entry || !entry.expiresAt) return false;
+        return entry.expiresAt <= now;
+      }
+
+      function cloneValue(value) {
+        if (value === null || value === undefined) return value;
+        if (typeof structuredClone === 'function') {
+          try {
+            return structuredClone(value);
+          } catch (_) {}
+        }
+        if (Array.isArray(value) || (value && typeof value === 'object')) {
+          try {
+            return JSON.parse(JSON.stringify(value));
+          } catch (_) {}
+        }
+        return value;
+      }
+
+      function pruneExpired(now) {
+        const current = Number.isFinite(now) ? now : Date.now();
+        entries.forEach(function (entry, key) {
+          if (isExpired(entry, current)) entries.delete(key);
+        });
+      }
+
+      function evictOverflow() {
+        if (entries.size <= maxEntries) return;
+        const sorted = Array.from(entries.entries()).sort(function (left, right) {
+          return Number(left[1] && left[1].lastAccessedAt || 0) - Number(right[1] && right[1].lastAccessedAt || 0);
+        });
+        while (entries.size > maxEntries && sorted.length) {
+          const oldest = sorted.shift();
+          if (!oldest) break;
+          entries.delete(oldest[0]);
+        }
+      }
+
+      function get(key) {
+        const cacheKey = String(key || '').trim();
+        if (!cacheKey) return null;
+        const entry = entries.get(cacheKey);
+        if (!entry) return null;
+        const now = Date.now();
+        if (isExpired(entry, now)) {
+          entries.delete(cacheKey);
+          return null;
+        }
+        entry.lastAccessedAt = now;
+        return {
+          value: cloneValue(entry.value),
+          meta: cloneObject(entry.meta),
+          storedAt: entry.storedAt,
+          expiresAt: entry.expiresAt,
+          ttlMs: entry.ttlMs
+        };
+      }
+
+      function set(key, value, options) {
+        const cacheKey = String(key || '').trim();
+        if (!cacheKey) return null;
+        const opts = options && typeof options === 'object' ? options : {};
+        const ttlMs = Math.max(0, Number(opts.ttlMs || defaultTtlMs) || 0);
+        const now = Date.now();
+        pruneExpired(now);
+        entries.set(cacheKey, {
+          value: cloneValue(value),
+          meta: cloneObject(opts.meta),
+          storedAt: now,
+          expiresAt: ttlMs > 0 ? now + ttlMs : 0,
+          ttlMs: ttlMs,
+          lastAccessedAt: now
+        });
+        evictOverflow();
+        return get(cacheKey);
+      }
+
+      function remove(key) {
+        const cacheKey = String(key || '').trim();
+        if (!cacheKey) return false;
+        return entries.delete(cacheKey);
+      }
+
+      function clear() {
+        entries.clear();
+      }
+
+      function size() {
+        pruneExpired(Date.now());
+        return entries.size;
+      }
+
+      function snapshot() {
+        pruneExpired(Date.now());
+        return Array.from(entries.entries()).map(function ([key, entry]) {
+          return {
+            key: key,
+            meta: cloneObject(entry.meta),
+            storedAt: entry.storedAt,
+            expiresAt: entry.expiresAt,
+            ttlMs: entry.ttlMs,
+            lastAccessedAt: entry.lastAccessedAt
+          };
+        });
+      }
+
+      return {
+        get: get,
+        set: set,
+        remove: remove,
+        clear: clear,
+        size: size,
+        snapshot: snapshot
+      };
+    }
+
     function replaceCacheState(cache, nextState, defaults) {
       const base = defaults && typeof defaults === 'object' ? { ...defaults } : {};
       const next = nextState && typeof nextState === 'object' ? { ...nextState } : {};
@@ -238,6 +361,7 @@
       createSummaryCache: createSummaryCache,
       createRenderCache: createRenderCache,
       createMarkupCache: createMarkupCache,
+      createBoundedCacheStore: createBoundedCacheStore,
       replaceCacheState: replaceCacheState,
       createRemoteCollectionBundle: createRemoteCollectionBundle,
       resetRemoteViewCache: resetRemoteViewCache,

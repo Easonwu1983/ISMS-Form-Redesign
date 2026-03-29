@@ -97,12 +97,14 @@
       const esc = typeof options.esc === 'function' ? options.esc : escHtml;
       const toolbarClass = String(options.toolbarClass || 'review-toolbar review-toolbar--compact').trim();
       const toolbarStyle = String(options.toolbarStyle || '').trim();
+      const idPrefix = String(options.idPrefix || 'pager').trim() || 'pager';
+      const ariaLabel = String(options.ariaLabel || '列表分頁').trim() || '列表分頁';
       const page = normalizePage(options.page, options.defaultLimit);
       const summary = String(options.summary || formatPageSummary(page, options.emptyText, options.defaultLimit)).trim();
       const mainHtml = options.mainHtml
         || `<span class="review-card-subtitle">${esc(summary)}</span>`;
       const extraActionsHtml = String(options.extraActionsHtml || '').trim();
-      return `<div class="${escAttr(toolbarClass)}"${toolbarStyle ? ` style="${escAttr(toolbarStyle)}"` : ''}>`
+      return `<div class="${escAttr(toolbarClass)}" data-pager-root="${escAttr(idPrefix)}" role="navigation" aria-label="${escAttr(ariaLabel)}"${toolbarStyle ? ` style="${escAttr(toolbarStyle)}"` : ''}>`
         + `<div class="review-toolbar-main">${mainHtml}</div>`
         + `<div class="review-toolbar-actions">${extraActionsHtml}${renderPagerControls(options)}</div>`
         + `</div>`;
@@ -119,68 +121,67 @@
         : function (currentPage, targetPage) {
             return getOffsetByPageNumber(currentPage, targetPage, options.defaultLimit);
           };
-      const actionPrefix = String(options.actionPrefix || '').trim();
-      const queryAction = function (suffix, actionName) {
-        const byId = document.getElementById(`${idPrefix}-${suffix}`);
-        if (byId) return byId;
-        if (!actionPrefix || !document.querySelector) return null;
-        const actionValue = actionPrefix + actionName;
-        if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') {
-          return document.querySelector(`[data-action="${CSS.escape(actionValue)}"]`);
-        }
-        return document.querySelector(`[data-action="${actionValue}"]`);
-      };
-      const limitSelect = document.getElementById(`${idPrefix}-page-limit`);
-      const pageNumberInput = document.getElementById(`${idPrefix}-page-number`);
-      const firstButton = queryAction('first-page', 'FirstPage');
-      const prevButton = queryAction('prev-page', 'PrevPage');
-      const jumpButton = queryAction('jump-page', 'JumpPage');
-      const nextButton = queryAction('next-page', 'NextPage');
-      const lastButton = queryAction('last-page', 'LastPage');
+      const selectorValue = typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function'
+        ? CSS.escape(idPrefix)
+        : idPrefix.replace(/"/g, '\\"');
+      const root = document.querySelector(`[data-pager-root="${selectorValue}"]`);
+      if (!root || root.dataset.pagerBound === '1') return;
+      root.dataset.pagerBound = '1';
 
-      if (limitSelect) {
-        limitSelect.addEventListener('change', function () {
-          onChange({
-            limit: String(limitSelect.value || page.limit || options.defaultLimit || 50),
-            offset: '0'
-          });
-        });
+      function resolveAction(target) {
+        if (!target || typeof target.closest !== 'function') return '';
+        const button = target.closest('button');
+        if (!button || !root.contains(button)) return '';
+        if (button.id === `${idPrefix}-first-page`) return 'first';
+        if (button.id === `${idPrefix}-prev-page`) return 'prev';
+        if (button.id === `${idPrefix}-jump-page`) return 'jump';
+        if (button.id === `${idPrefix}-next-page`) return 'next';
+        if (button.id === `${idPrefix}-last-page`) return 'last';
+        return '';
       }
-      if (pageNumberInput) {
-        pageNumberInput.addEventListener('keydown', function (event) {
-          if (event.key !== 'Enter') return;
-          event.preventDefault();
-          const nextOffset = getOffset(page, pageNumberInput.value || '1');
-          onChange({ offset: String(nextOffset) });
+
+      root.addEventListener('change', function (event) {
+        const target = event.target;
+        if (!target || target.id !== `${idPrefix}-page-limit`) return;
+        onChange({
+          limit: String(target.value || page.limit || options.defaultLimit || 50),
+          offset: '0'
         });
-      }
-      if (jumpButton && pageNumberInput) {
-        jumpButton.addEventListener('click', function () {
-          const nextOffset = getOffset(page, pageNumberInput.value || '1');
-          onChange({ offset: String(nextOffset) });
-        });
-      }
-      if (firstButton) {
-        firstButton.addEventListener('click', function () {
+      });
+
+      root.addEventListener('keydown', function (event) {
+        const target = event.target;
+        if (!target || target.id !== `${idPrefix}-page-number` || event.key !== 'Enter') return;
+        event.preventDefault();
+        const nextOffset = getOffset(page, target.value || '1');
+        onChange({ offset: String(nextOffset) });
+      });
+
+      root.addEventListener('click', function (event) {
+        const action = resolveAction(event.target);
+        if (!action) return;
+        event.preventDefault();
+        if (action === 'first') {
           onChange({ offset: '0' });
-        });
-      }
-      if (prevButton) {
-        prevButton.addEventListener('click', function () {
+          return;
+        }
+        if (action === 'prev') {
           onChange({ offset: String(page.prevOffset || 0) });
-        });
-      }
-      if (nextButton) {
-        nextButton.addEventListener('click', function () {
+          return;
+        }
+        if (action === 'next') {
           onChange({ offset: String(page.nextOffset || 0) });
-        });
-      }
-      if (lastButton) {
-        lastButton.addEventListener('click', function () {
+          return;
+        }
+        if (action === 'last') {
           const nextOffset = getOffset(page, page.pageCount || 1);
           onChange({ offset: String(nextOffset) });
-        });
-      }
+          return;
+        }
+        const pageNumberInput = document.getElementById(`${idPrefix}-page-number`);
+        const nextOffset = getOffset(page, pageNumberInput && pageNumberInput.value || '1');
+        onChange({ offset: String(nextOffset) });
+      });
     }
 
     return {
@@ -464,6 +465,15 @@
       return modalRoot;
     }
 
+    function getFocusableElements(root) {
+      if (!root || typeof root.querySelectorAll !== 'function') return [];
+      return Array.from(root.querySelectorAll(
+        'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      )).filter(function (element) {
+        return !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true';
+      });
+    }
+
     function ensureBusyRoot() {
       let busyRoot = document.getElementById(BUSY_ROOT_ID);
       if (!busyRoot) {
@@ -505,20 +515,49 @@
     function renderDialog(contentHtml, options) {
       const opts = options || {};
       const modalRoot = ensureModalRoot();
+      const previousActiveElement = document.activeElement && document.activeElement !== document.body
+        ? document.activeElement
+        : null;
       document.body.classList.add('modal-open');
-      modalRoot.innerHTML = '<div class="modal-backdrop" data-modal-dismiss="1"></div><div class="modal-shell"><div class="modal-card ' + escAttr(opts.className || '') + '" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button type="button" class="modal-close-btn" data-modal-dismiss="1" aria-label="關閉">' + ic('x', 'icon-sm') + '</button>' + contentHtml + '</div></div>';
+      modalRoot.innerHTML = '<div class="modal-backdrop" data-modal-dismiss="1"></div><div class="modal-shell"><div class="modal-card ' + escAttr(opts.className || '') + '" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1"><button type="button" class="modal-close-btn" data-modal-dismiss="1" aria-label="關閉">' + ic('x', 'icon-sm') + '</button>' + contentHtml + '</div></div>';
+      const modalCard = modalRoot.querySelector('.modal-card');
       const cleanup = function () {
         document.removeEventListener('keydown', handleKeydown);
       };
       const finish = function () {
         cleanup();
         closeModal();
+        if (previousActiveElement && typeof previousActiveElement.focus === 'function' && document.contains(previousActiveElement)) {
+          previousActiveElement.focus({ preventScroll: true });
+        }
       };
       const handleKeydown = function (event) {
         if (event.key === 'Escape') {
           event.preventDefault();
           const cancelButton = modalRoot.querySelector('[data-modal-cancel]');
           if (cancelButton) cancelButton.click(); else finish();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusables = getFocusableElements(modalCard);
+        if (!focusables.length) {
+          event.preventDefault();
+          if (modalCard && typeof modalCard.focus === 'function') modalCard.focus();
+          return;
+        }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        if (event.shiftKey) {
+          if (active === first || active === modalCard) {
+            event.preventDefault();
+            last.focus();
+          }
+          return;
+        }
+        if (active === last) {
+          event.preventDefault();
+          first.focus();
         }
       };
       document.addEventListener('keydown', handleKeydown);
@@ -528,6 +567,9 @@
           finish();
         });
       });
+      if (modalCard && typeof modalCard.focus === 'function') {
+        modalCard.focus({ preventScroll: true });
+      }
       refreshIcons();
       return { root: modalRoot, close: finish };
     }
