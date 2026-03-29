@@ -467,7 +467,7 @@
   }
 
   function ensureTrainingModuleScript() {
-    return ensureFeatureScript('training-module.js');
+    return ensureFeatureScript(['attachment-module.js', 'training-module.js']);
   }
 
   function ensureUnitContactApplicationModuleScript() {
