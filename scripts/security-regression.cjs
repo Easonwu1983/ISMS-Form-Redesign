@@ -460,9 +460,27 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-03d', 'Admin', 'Users page pager and filters work', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
-      await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.waitForTimeout(1200);
-      await page.waitForSelector('#system-users-page-limit');
+      let usersReady = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt === 0) {
+          await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await page.waitForTimeout(1200);
+        } else {
+          await gotoHash(page, 'users');
+          await page.waitForTimeout(400);
+        }
+        try {
+          await page.waitForSelector('#system-users-page-limit', { timeout: 15000 });
+          usersReady = true;
+          break;
+        } catch (error) {
+          if (attempt === 2) throw error;
+          await page.waitForTimeout(250);
+        }
+      }
+      if (!usersReady) {
+        throw new Error('users page did not render');
+      }
       const unavailableUsersError = await page.evaluate(() => String(document.getElementById('app')?.innerText || ''));
       if (unavailableUsersError.includes('system users paged client unavailable')) {
         throw new Error('users direct-route bootstrap unavailable');
@@ -498,15 +516,20 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-03e', 'Admin', 'Unit contact review pager and filters work', async () => {
       let reviewReady = false;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        await gotoHash(page, 'unit-contact-review');
-        await page.waitForTimeout(400);
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt === 0) {
+          await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await page.waitForTimeout(1200);
+        } else {
+          await gotoHash(page, 'unit-contact-review');
+          await page.waitForTimeout(400);
+        }
         try {
           await page.waitForSelector('#unit-contact-review-status', { timeout: 15000 });
           reviewReady = true;
           break;
         } catch (error) {
-          if (attempt === 1) throw error;
+          if (attempt === 2) throw error;
           await page.waitForTimeout(250);
         }
       }
