@@ -5,9 +5,13 @@
   var cacheKey = String(initialBuildInfo.versionKey || initialBuildInfo.shortCommit || Date.now());
   var head = document.head;
   var body = document.body;
+  var coreBundleSrc = 'app-core.bundle.min.js';
+  var minifiedStylesheet = 'styles.min.css';
   var assets = [
-    'units.js',
     { src: 'm365-config.override.js', optional: true },
+    coreBundleSrc
+  ];
+  var fallbackAssets = [
     'm365-config.js',
     'data-module.js',
     'collection-cache-module.js',
@@ -58,6 +62,7 @@
     'app-auth-remote-module.js',
     'app.js'
   ];
+  var coreBundleFallbackActive = false;
   var index = 0;
   var integrityMap = {};
   var manifestPromise = null;
@@ -89,8 +94,34 @@
     var link = document.createElement('link');
     link.rel = rel;
     link.href = href + '?v=' + cacheKey;
-    if (type) link.type = type;
+    if (rel === 'preload') {
+      link.as = type || 'script';
+    } else if (type) {
+      link.type = type;
+    }
     applyIntegrity(link, href);
+    head.appendChild(link);
+  }
+
+  function appendStylesheet(primaryHref, fallbackHref) {
+    var link = document.createElement('link');
+    var primaryLoaded = false;
+    link.rel = 'stylesheet';
+    link.href = primaryHref + '?v=' + cacheKey;
+    applyIntegrity(link, primaryHref);
+    link.onload = function () {
+      primaryLoaded = true;
+    };
+    if (fallbackHref) {
+      link.onerror = function () {
+        if (primaryLoaded) return;
+        var fallback = document.createElement('link');
+        fallback.rel = 'stylesheet';
+        fallback.href = fallbackHref + '?v=' + cacheKey;
+        applyIntegrity(fallback, fallbackHref);
+        head.appendChild(fallback);
+      };
+    }
     head.appendChild(link);
   }
 
@@ -164,6 +195,14 @@
       loadNextScript();
     };
     script.onerror = function () {
+      if (!optional && !coreBundleFallbackActive && assetSrc === coreBundleSrc) {
+        console.warn('Falling back to legacy core asset chain:', script.src);
+        coreBundleFallbackActive = true;
+        assets = fallbackAssets.slice();
+        index = 0;
+        loadNextScript();
+        return;
+      }
       if (!optional) {
         console.error('Failed to load asset:', script.src);
       }
@@ -176,7 +215,9 @@
   async function bootstrap() {
     await loadManifest();
     appendLink('icon', 'favicon.svg', 'image/svg+xml');
-    appendLink('stylesheet', 'styles.css');
+    appendLink('preload', coreBundleSrc, 'script');
+    appendStylesheet(minifiedStylesheet, 'styles.css');
+    assets.unshift('units.js');
     loadNextScript();
   }
 

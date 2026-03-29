@@ -21,9 +21,11 @@ const buildInfo = getBuildInfo('firebase-hosting', ROOT);
 const filesToCopy = [
   'index.html',
   'styles.css',
+  'styles.min.css',
   'favicon.svg',
   'favicon.ico',
   'asset-loader.js',
+  'app-core.bundle.min.js',
   'runtime-asset-loader-module.js',
   'collection-cache-module.js',
   'service-registry-module.js',

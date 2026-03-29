@@ -61,6 +61,7 @@
         "build:google:firebase": "node scripts/build-google-firebase-package.cjs",
         "build:google:cloudrun": "node scripts/build-google-cloudrun-package.cjs",
         "build:cloudflare:pages": "node scripts/build-cloudflare-pages-package.cjs",
+        "build:core:assets": "node scripts/build-app-core-assets.cjs",
         "test:cloudflare:health": "node scripts/cloudflare-live-health-check.cjs",
         "test:cloudflare:smoke": "node scripts/cloudflare-pages-regression-smoke.cjs"
     },

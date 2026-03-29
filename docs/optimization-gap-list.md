@@ -17,11 +17,13 @@ Done:
 - `vendor/xlsx.full.min.js` no longer loads on first paint. It is loaded on demand through the runtime asset loader.
 - `vendor/lucide.min.js` no longer loads from `asset-loader.js`. Icons are hydrated on demand through the runtime asset loader.
 - `admin-module.js`, `training-module.js`, `checklist-module.js`, `case-module.js`, `attachment-module.js`, and several bridge/runtime modules no longer load on first paint. They are route- or feature-loaded.
+- A generated `app-core.bundle.min.js` now collapses the legacy 49-script core chain into a single minified browser bundle.
+- Live and static package builds now use minified CSS through `styles.min.css`.
 - Static package builds now minify copied JS and CSS assets.
 - Several heavy visual smoke paths were reduced by switching to focused synthetic captures.
 
 Open:
-- `asset-loader.js` still synchronously loads about 50 JS files before the app is fully ready.
+- `asset-loader.js` still uses a script-loader bootstrap instead of a bundler-native chunk graph.
 - There is still no bundler-driven tree shaking or true chunk graph; lazy loading is implemented through the runtime asset loader.
 - `workflow-support-module.js`, `policy-module.js`, `m365-api-client.js`, and several runtime bridge modules still remain on the initial path because startup normalization depends on them.
 
@@ -36,6 +38,7 @@ Status: `partial`
 
 Done:
 - A small a11y utility layer was added, including `.sr-only`.
+- Live and static package builds now load minified CSS assets through `styles.min.css`.
 - Static package builds now minify CSS assets.
 
 Open:
@@ -101,6 +104,7 @@ Done:
 - `training`, `checklist`, and `case` now use page-scoped listener registration for their main list and form flows.
 - `training`, `checklist`, and `audit-trail` remote page caches now use bounded stores instead of raw unbounded page maps.
 - `admin-module.js` pager controls, governance cards, horizontal review scrollers, and unit-chip picker interactions now use page-scoped listener registration.
+- Current repo-wide listener ratio is no longer near the old `165:7` report; the tracked source tree is currently around `439 addEventListener` to `114 removeEventListener`.
 
 Open:
 - Many modules still attach listeners directly without page-scoped cleanup.
