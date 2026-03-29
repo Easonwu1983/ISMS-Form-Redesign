@@ -743,7 +743,16 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await seedSyntheticUnitReview(page);
   }
   if (spec && spec.selector) {
-    await page.waitForSelector(spec.selector, { timeout: 5000 });
+    if (spec.slug === 'unit-review') {
+      try {
+        await page.waitForSelector(spec.selector, { timeout: 2500 });
+      } catch (_) {
+        await seedSyntheticUnitReview(page);
+        await page.waitForSelector(spec.selector, { timeout: 5000 });
+      }
+    } else {
+      await page.waitForSelector(spec.selector, { timeout: 5000 });
+    }
     await page.locator(spec.selector).first().screenshot({
       path: outputPath,
       animations: 'disabled'
