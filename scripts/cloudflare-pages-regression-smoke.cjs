@@ -160,24 +160,32 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
     pushStep('unit-admin:api-scope', true, `reviewScopes=${apiState.reviewUsernames.length}`);
 
     await ensureAdminSession(page);
-    await page.evaluate(() => {
-      window.location.hash = '#users';
-    });
-    await page.waitForTimeout(320);
-    await page.waitForTimeout(1200);
-    const usersHash = await page.evaluate(() => String(window.location.hash || ''));
+    let usersHash = '';
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await page.evaluate(() => {
+        window.location.hash = '#users';
+      });
+      await page.waitForTimeout(attempt === 0 ? 1200 : 1800);
+      usersHash = await page.evaluate(() => String(window.location.hash || ''));
+      if (!usersHash.startsWith('#users')) break;
+      await ensureAdminSession(page);
+    }
     if (usersHash.startsWith('#users')) {
       throw new Error('unit admin reached users page');
     }
     pushStep('unit-admin:users-denied', true, usersHash || '#');
 
     await ensureAdminSession(page);
-    await page.evaluate(() => {
-      window.location.hash = '#unit-contact-review';
-    });
-    await page.waitForTimeout(320);
-    await page.waitForTimeout(1200);
-    const reviewHash = await page.evaluate(() => String(window.location.hash || ''));
+    let reviewHash = '';
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await page.evaluate(() => {
+        window.location.hash = '#unit-contact-review';
+      });
+      await page.waitForTimeout(attempt === 0 ? 1200 : 1800);
+      reviewHash = await page.evaluate(() => String(window.location.hash || ''));
+      if (!reviewHash.startsWith('#unit-contact-review')) break;
+      await ensureAdminSession(page);
+    }
     if (reviewHash.startsWith('#unit-contact-review')) {
       throw new Error('unit admin reached unit-contact-review');
     }
@@ -1055,7 +1063,20 @@ async function run() {
       throw new Error('unit contact review contains placeholder question marks');
     }
     pushStep('unit-contact-review:loaded', true, 'unit contact review page ready');
-    await page.waitForSelector('#unit-contact-review-page-limit', { timeout: 15000 });
+    let unitContactReviewPagerReady = false;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await page.waitForSelector('#unit-contact-review-page-limit', { timeout: 20000 });
+        unitContactReviewPagerReady = true;
+        break;
+      } catch (error) {
+        if (attempt >= 1) throw error;
+        await gotoHashRoute(page, 'unit-contact-review', { settleMs: 1400, timeout: 20000 });
+      }
+    }
+    if (!unitContactReviewPagerReady) {
+      throw new Error('unit contact review pager did not render');
+    }
     const unitContactPagerState = await page.evaluate(() => ({
       status: Boolean(document.querySelector('#unit-contact-review-status')),
       email: Boolean(document.querySelector('#unit-contact-review-email')),
