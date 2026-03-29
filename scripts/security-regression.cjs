@@ -600,14 +600,23 @@ async function assertNoXssExecution(page, label) {
     await runStep(results, 'SEC-03f', 'Admin', 'Key tables expose captions and scoped headers', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
       const checks = [
-        { hash: 'users', selector: '#app table', label: 'users' },
-        { hash: 'training-roster', selector: '#app table', label: 'training-roster' },
-        { hash: 'unit-contact-review', selector: '#app table', label: 'unit-contact-review' },
-        { hash: 'list', selector: '#app table', label: 'case-list' }
+        { hash: 'users', selector: '#app table', label: 'users', readySelector: '#system-users-page-limit' },
+        { hash: 'training-roster', selector: '#app table', label: 'training-roster', readySelector: '#training-roster-page-limit' },
+        { hash: 'unit-contact-review', selector: '#app table', label: 'unit-contact-review', readySelector: '#unit-contact-review-status' },
+        { hash: 'list', selector: '#app table', label: 'case-list', readySelector: '#app .page-title', readyText: '矯正單列表' }
       ];
       const findings = [];
       for (const check of checks) {
         await gotoHash(page, check.hash);
+        if (check.readySelector) {
+          await page.waitForSelector(check.readySelector, { timeout: 30000 });
+        }
+        if (check.readyText) {
+          await page.waitForFunction((expectedText) => {
+            const headings = Array.from(document.querySelectorAll('#app .page-title, #app [data-route-heading]'));
+            return headings.some((node) => String(node && node.textContent || '').includes(expectedText));
+          }, check.readyText, { timeout: 30000 });
+        }
         await page.waitForSelector(check.selector, { timeout: 30000 });
         const state = await page.evaluate((label) => {
           const table = document.querySelector('#app table');
