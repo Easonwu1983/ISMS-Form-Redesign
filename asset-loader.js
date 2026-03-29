@@ -7,13 +7,13 @@
   var body = document.body;
   var assets = [
     'vendor/lucide.min.js',
-    'vendor/xlsx.full.min.js',
     'units.js',
     { src: 'm365-config.override.js', optional: true },
     'm365-config.js',
     'attachment-module.js',
     'data-module.js',
     'collection-cache-module.js',
+    'runtime-asset-loader-module.js',
     'cache-invalidation-module.js',
     'auth-module.js',
     'unit-module.js',

@@ -27,6 +27,7 @@ const filesToCopy = [
   'favicon.svg',
   'favicon.ico',
   'asset-loader.js',
+  'runtime-asset-loader-module.js',
   'collection-cache-module.js',
   'service-registry-module.js',
   'app-core-service-module.js',

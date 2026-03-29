@@ -1763,7 +1763,13 @@
       });
     }
 
-    document.getElementById('training-export-all')?.addEventListener('click', () => exportTrainingSummaryCsv(visibleForms));
+    document.getElementById('training-export-all')?.addEventListener('click', async () => {
+      try {
+        await exportTrainingSummaryCsv(visibleForms);
+      } catch (error) {
+        toast(error && error.message ? error.message : '匯出 Excel 失敗', 'error');
+      }
+    });
     document.getElementById('training-expand-groups')?.addEventListener('click', () => {
       document.querySelectorAll('.training-group-card').forEach((element) => { element.open = true; });
     });

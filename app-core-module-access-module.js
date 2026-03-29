@@ -8,6 +8,7 @@
       let workflowSupportModuleApi = null;
       let dataModuleApi = null;
       let authModuleApi = null;
+      let runtimeAssetLoaderModuleApi = null;
 
       function getUnitModule() {
         if (unitModuleApi) return unitModuleApi;
@@ -103,6 +104,16 @@
         return policyModuleApi;
       }
 
+      function getRuntimeAssetLoaderModule() {
+        if (runtimeAssetLoaderModuleApi) return runtimeAssetLoaderModuleApi;
+        if (typeof window === 'undefined' || typeof window.createRuntimeAssetLoaderModule !== 'function') {
+          throw new Error('runtime-asset-loader-module.js not loaded');
+        }
+        runtimeAssetLoaderModuleApi = window.createRuntimeAssetLoaderModule();
+        window._runtimeAssetLoaderModule = runtimeAssetLoaderModuleApi;
+        return runtimeAssetLoaderModuleApi;
+      }
+
       function getWorkflowSupportModule() {
         if (workflowSupportModuleApi) return workflowSupportModuleApi;
         if (typeof window === 'undefined' || typeof window.createWorkflowSupportModule !== 'function') {
@@ -130,7 +141,8 @@
           fmt: deps.fmt,
           fmtTime: deps.fmtTime,
           toast: deps.toast,
-          esc: deps.esc
+          esc: deps.esc,
+          ensureXlsxLoaded: function () { return getRuntimeAssetLoaderModule().ensureXlsxLoaded(); }
         });
         window._workflowSupportModule = workflowSupportModuleApi;
         return workflowSupportModuleApi;

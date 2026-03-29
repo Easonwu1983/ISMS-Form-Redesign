@@ -22,7 +22,8 @@
       fmt,
       fmtTime,
       toast,
-      esc
+      esc,
+      ensureXlsxLoaded
     } = deps;
 
     function getCorrectionYear(dateValue) {
@@ -255,18 +256,34 @@
       return safeText;
     }
 
-    function downloadWorkbook(filename, sheets) {
-      if (typeof window === 'undefined' || !window.XLSX) {
-        toast('Excel 模組尚未載入，請重新整理頁面後再試', 'error');
+    async function ensureXlsxApi() {
+      if (typeof window === 'undefined') {
+        throw new Error('Excel 模組無法在目前環境載入');
+      }
+      if (window.XLSX) return window.XLSX;
+      if (typeof ensureXlsxLoaded === 'function') {
+        const xlsxApi = await ensureXlsxLoaded();
+        if (window.XLSX) return window.XLSX;
+        if (xlsxApi) return xlsxApi;
+      }
+      throw new Error('Excel 模組尚未載入');
+    }
+
+    async function downloadWorkbook(filename, sheets) {
+      let xlsxApi;
+      try {
+        xlsxApi = await ensureXlsxApi();
+      } catch (error) {
+        toast(error && error.message ? error.message : 'Excel 模組尚未載入，請稍後再試', 'error');
         return false;
       }
-      const workbook = window.XLSX.utils.book_new();
+      const workbook = xlsxApi.utils.book_new();
       (Array.isArray(sheets) ? sheets : []).forEach((sheet, index) => {
         const name = String(sheet?.name || `Sheet${index + 1}`).slice(0, 31) || `Sheet${index + 1}`;
-        const worksheet = window.XLSX.utils.aoa_to_sheet(Array.isArray(sheet?.rows) ? sheet.rows : []);
-        window.XLSX.utils.book_append_sheet(workbook, worksheet, name);
+        const worksheet = xlsxApi.utils.aoa_to_sheet(Array.isArray(sheet?.rows) ? sheet.rows : []);
+        xlsxApi.utils.book_append_sheet(workbook, worksheet, name);
       });
-      window.XLSX.writeFile(workbook, filename);
+      xlsxApi.writeFile(workbook, filename);
       return true;
     }
 
@@ -403,7 +420,7 @@
       return String(getTrainingProfessionalDisplay(record) || '').trim();
     }
 
-    function exportTrainingSummaryCsv(forms, filename) {
+    async function exportTrainingSummaryCsv(forms, filename) {
       const rows = forms.map((form) => {
         const summary = form.summary || computeTrainingSummary(form.records || []);
         return [
@@ -425,7 +442,7 @@
           fmtTime(form.updatedAt)
         ];
       });
-      downloadWorkbook(filename || ('\u6559\u80b2\u8a13\u7df4\u7d71\u8a08\u7e3d\u8868_' + new Date().toISOString().slice(0, 10) + '.xlsx'), [{
+      return downloadWorkbook(filename || ('\u6559\u80b2\u8a13\u7df4\u7d71\u8a08\u7e3d\u8868_' + new Date().toISOString().slice(0, 10) + '.xlsx'), [{
         name: '\u6559\u80b2\u8a13\u7df4\u7d71\u8a08',
         rows: [[
           '\u8868\u55ae\u7de8\u865f',
@@ -743,20 +760,20 @@
         const extension = getFileExtension(file.name || '');
         const useDelimitedTextParser = extension === 'csv' || extension === 'tsv';
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
           try {
             if (useDelimitedTextParser) {
               resolve(parseTrainingRosterImport(String(event.target.result || ''), unit));
               return;
             }
-            if (typeof window === 'undefined' || !window.XLSX) throw new Error('\u0045\u0078\u0063\u0065\u006c\u0020\u6a21\u7d44\u5c1a\u672a\u8f09\u5165');
-            const workbook = window.XLSX.read(event.target.result, { type: 'array' });
+            const xlsxApi = await ensureXlsxApi();
+            const workbook = xlsxApi.read(event.target.result, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             if (!firstSheetName) {
               resolve([]);
               return;
             }
-            const rows = window.XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1, raw: false, defval: '' });
+            const rows = xlsxApi.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1, raw: false, defval: '' });
             const { headerMap, dataRows } = resolveTrainingRosterDataRows(rows);
             resolve(dataRows.map((cells) => parseTrainingRosterCells(cells, unit, headerMap)).filter((row) => row && row.name));
           } catch (error) {
