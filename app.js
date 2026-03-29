@@ -214,6 +214,8 @@
   function fmtTime(d) { return getUiModule().fmtTime(d); }
   function isOverdue(item) { return item.status !== STATUSES.CLOSED && item.correctiveDueDate && new Date(item.correctiveDueDate) < new Date(); }
   function ic(n, c = '') { return getUiModule().ic(n, c); }
+  function mkChk(name, opts, selected) { return getUiModule().mkChk(name, opts, selected); }
+  function mkRadio(name, opts, selected) { return getUiModule().mkRadio(name, opts, selected); }
   function ntuLogo(c = '') { return getUiModule().ntuLogo(c); }
   function esc(s) { return getUiModule().esc(s); }
   function toast(msg, type = 'success') { return getUiModule().toast(msg, type); }
@@ -2839,6 +2841,12 @@
     if (!isTrainingBooleanCompatibleValue(normalized)) return '';
     if (normalized === '無須' || normalized === '不適用') return '不適用';
     return normalized;
+  }
+
+  function getStoredTrainingProfessionalValue(record) {
+    if (!record || record.status !== '在職') return '';
+    if (record.isInfoStaff === '否') return '不適用';
+    return isTrainingBooleanValue(record.completedProfessional) ? record.completedProfessional : '';
   }
 
   function normalizeTrainingRosterRow(row, fallbackUnit) { return getDataModule().normalizeTrainingRosterRow(row, fallbackUnit); }
