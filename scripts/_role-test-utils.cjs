@@ -257,10 +257,30 @@ async function resetApp(page) {
     window.location.hash = '';
   });
   await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
-  await waitForAppReady(page).catch(async () => {
-    await page.waitForSelector('[data-testid="login-form"]', { timeout: 15000 });
-  });
-  await page.waitForSelector('[data-testid="login-form"]', { state: 'attached', timeout: 45000 });
+  await waitForAppReady(page);
+  if (await page.locator('.btn-logout').count()) {
+    const loggedOutViaAuthModule = await page.evaluate(async () => {
+      try {
+        const auth = window._authModule;
+        if (!auth || typeof auth.logout !== 'function') return false;
+        await auth.logout();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }).catch(() => false);
+    if (!loggedOutViaAuthModule) {
+      await acceptNextDialog(page, 'accept');
+      await page.locator('.btn-logout').first().click({ timeout: 5000 }).catch(async () => {
+        await page.locator('.btn-logout').first().evaluate((element) => {
+          if (element && typeof element.click === 'function') element.click();
+        });
+      });
+    }
+    await clearAuthClientState(page);
+    await page.goto(freshBaseUrl, { waitUntil: 'domcontentloaded' });
+    await waitForAppReady(page);
+  }
 }
 
 async function readJsonFromStorage(page, key) {
