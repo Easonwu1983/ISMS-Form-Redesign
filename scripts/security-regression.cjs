@@ -78,6 +78,28 @@ async function resetSecurityRegressionApp(page) {
   }
 }
 
+async function ensureAdminRouteReady(page, routeHash, selector, options) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const timeout = Math.max(1000, Number(opts.timeout) || 20000);
+  const waitAfterNavMs = Math.max(0, Number(opts.waitAfterNavMs) || 900);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) {
+      await login(page, 'easonwu', '2wsx#EDC');
+    }
+    await gotoHash(page, routeHash);
+    await page.waitForTimeout(attempt === 0 ? waitAfterNavMs : 400);
+    try {
+      await page.waitForSelector(selector, { timeout });
+      return true;
+    } catch (error) {
+      if (attempt === 2) throw error;
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(300);
+    }
+  }
+  return false;
+}
+
 async function seedSecurityFixtures(page) {
   await page.evaluate(({ caseId, checklistId, trainingId, unit, statsUnit, payload }) => {
     const now = new Date().toISOString();
@@ -489,19 +511,7 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-03d', 'Admin', 'Users page pager and filters work', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
-      let usersReady = false;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        await gotoHash(page, 'users');
-        await page.waitForTimeout(attempt === 0 ? 900 : 400);
-        try {
-          await page.waitForSelector('#system-users-page-limit', { timeout: 20000 });
-          usersReady = true;
-          break;
-        } catch (error) {
-          if (attempt === 2) throw error;
-          await page.waitForTimeout(250);
-        }
-      }
+      const usersReady = await ensureAdminRouteReady(page, 'users', '#system-users-page-limit');
       if (!usersReady) {
         throw new Error('users page did not render');
       }
@@ -540,19 +550,7 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-03e', 'Admin', 'Unit contact review pager and filters work', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
-      let reviewReady = false;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        await gotoHash(page, 'unit-contact-review');
-        await page.waitForTimeout(attempt === 0 ? 900 : 400);
-        try {
-          await page.waitForSelector('#unit-contact-review-status', { timeout: 20000 });
-          reviewReady = true;
-          break;
-        } catch (error) {
-          if (attempt === 2) throw error;
-          await page.waitForTimeout(250);
-        }
-      }
+      const reviewReady = await ensureAdminRouteReady(page, 'unit-contact-review', '#unit-contact-review-status');
       if (!reviewReady) {
         throw new Error('unit contact review page did not render');
       }
@@ -607,10 +605,8 @@ async function assertNoXssExecution(page, label) {
       ];
       const findings = [];
       for (const check of checks) {
-        await gotoHash(page, check.hash);
-        if (check.readySelector) {
-          await page.waitForSelector(check.readySelector, { timeout: 30000 });
-        }
+        const readySelector = check.readySelector || check.selector;
+        await ensureAdminRouteReady(page, check.hash, readySelector, { timeout: 30000 });
         if (check.readyText) {
           await page.waitForFunction((expectedText) => {
             const headings = Array.from(document.querySelectorAll('#app .page-title, #app [data-route-heading]'));
