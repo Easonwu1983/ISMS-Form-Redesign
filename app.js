@@ -63,61 +63,114 @@
     '進修推廣學院'
   ]);
 
-  function getOfficialUnits() { return getUnitModule().getOfficialUnits(); }
-  function getOfficialUnitCatalog() { return getUnitModule().getOfficialUnitCatalog(); }
-  function getOfficialUnitMeta(unitValue) { return getUnitModule().getOfficialUnitMeta(unitValue); }
-  function getUnitCode(unitValue) { return getUnitModule().getUnitCode(unitValue); }
-  function getUnitCodeWithDots(unitValue) { return getUnitModule().getUnitCodeWithDots(unitValue); }
-  function getUnitOptionLabel(unitValue, fallbackText) { return getUnitModule().getUnitOptionLabel(unitValue, fallbackText); }
-
-  function getCorrectionYear(dateValue) { return getWorkflowSupportModule().getCorrectionYear(dateValue); }
-  function normalizeRocYear(value, fallbackDateValue) { return getWorkflowSupportModule().normalizeRocYear(value, fallbackDateValue); }
-  function buildScopedRecordPrefix(prefix, unitValue, yearValue, fallbackDateValue) { return getWorkflowSupportModule().buildScopedRecordPrefix(prefix, unitValue, yearValue, fallbackDateValue); }
-  function parseScopedRecordId(value, prefix) { return getWorkflowSupportModule().parseScopedRecordId(value, prefix); }
-  function buildScopedRecordId(documentNo, sequence) { return getWorkflowSupportModule().buildScopedRecordId(documentNo, sequence); }
-  function getNextScopedRecordSequence(documentNo, items, parser) { return getWorkflowSupportModule().getNextScopedRecordSequence(documentNo, items, parser); }
-  function buildCorrectionDocumentNo(unitValue, dateValue) { return getWorkflowSupportModule().buildCorrectionDocumentNo(unitValue, dateValue); }
-  function parseCorrectionAutoId(value) { return getWorkflowSupportModule().parseCorrectionAutoId(value); }
-  function buildAutoCarIdByDocument(documentNo, sequence) { return getWorkflowSupportModule().buildAutoCarIdByDocument(documentNo, sequence); }
-  function buildAutoCarId(unitValue, sequence, dateValue) { return getWorkflowSupportModule().buildAutoCarId(unitValue, sequence, dateValue); }
-  function getNextCorrectionSequence(documentNo, items) { return getWorkflowSupportModule().getNextCorrectionSequence(documentNo, items); }
-
-  function getSystemUnits() { return getUnitModule().getSystemUnits(); }
-  function isOfficialUnit(unit) { return getUnitModule().isOfficialUnit(unit); }
-
-  function loadUnitReviewStore() { return getDataModule().loadUnitReviewStore(); }
-  function saveUnitReviewStore(store) { return getDataModule().saveUnitReviewStore(store); }
-  function getUnitGovernanceMode(unit) { return getDataModule().getUnitGovernanceMode(unit); }
-  function setUnitGovernanceMode(unit, mode, actor, note) { return getDataModule().setUnitGovernanceMode(unit, mode, actor, note); }
-  function getUnitGovernanceModes() { return getDataModule().getUnitGovernanceModes(); }
-  function loadUnitContactApplicationStore() { return getDataModule().loadUnitContactApplicationStore(); }
-  function saveUnitContactApplicationStore(store) { return getDataModule().saveUnitContactApplicationStore(store); }
-  function getAllUnitContactApplications() { return getDataModule().getAllUnitContactApplications(); }
-  function getUnitContactApplication(id) { return getDataModule().getUnitContactApplication(id); }
-  function createUnitContactApplication(application) { return getDataModule().createUnitContactApplication(application); }
-  function updateUnitContactApplication(id, updates) { return getDataModule().updateUnitContactApplication(id, updates); }
-  function findUnitContactApplicationsByEmail(email) { return getDataModule().findUnitContactApplicationsByEmail(email); }
-
-  function formatUnitScopeSummary(scopes) { return getUnitModule().formatUnitScopeSummary(scopes); }
-  function approveCustomUnit(unit, actor) { return getUnitModule().approveCustomUnit(unit, actor); }
-  function getCustomUnitRegistry() { return getUnitModule().getCustomUnitRegistry(); }
-
-  function syncSessionUnit(sourceUnit, targetUnit) { return getAuthModule().syncSessionUnit(sourceUnit, targetUnit); }
-  function mergeCustomUnit(sourceUnit, targetUnit, actor) { return getUnitModule().mergeCustomUnit(sourceUnit, targetUnit, actor); }
-  function splitUnitValue(unitValue) { return getUnitModule().splitUnitValue(unitValue); }
-  function composeUnitValue(parent, child) { return getUnitModule().composeUnitValue(parent, child); }
-  function categorizeTopLevelUnit(unitValue) { return getUnitModule().categorizeTopLevelUnit(unitValue); }
-  function isTrainingDashboardExcludedUnit(unitValue) { return getUnitModule().isTrainingDashboardExcludedUnit(unitValue); }
-  function getTrainingUnitCategories() { return getUnitModule().getTrainingUnitCategories(); }
-  function getParentsByUnitCategory(parents, category) { return getUnitModule().getParentsByUnitCategory(parents, category); }
-  function buildUnitSearchEntry(unitValue) { return getUnitModule().buildUnitSearchEntry(unitValue); }
-  function getUnitSearchEntries(extraValues) { return getUnitModule().getUnitSearchEntries(extraValues); }
-  function buildUnitCascadeControl(baseId, selectedUnit, disabled, required) { return getUnitModule().buildUnitCascadeControl(baseId, selectedUnit, disabled, required); }
-  function initUnitCascade(baseId, initialValue, options) { return getUnitModule().initUnitCascade(baseId, initialValue, options); }
-
-  function parseUserUnits(value) { return getDataModule().parseUserUnits(value); }
-
-  function normalizeUserRole(role) { return getDataModule().normalizeUserRole(role); }
+  let appDomainBridgeModuleApi = null;
+  function getAppDomainBridgeModule() {
+    if (appDomainBridgeModuleApi) return appDomainBridgeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppDomainBridgeModule !== 'function') {
+      throw new Error('app-domain-bridge-module.js not loaded');
+    }
+    appDomainBridgeModuleApi = window.createAppDomainBridgeModule();
+    window._appDomainBridgeModule = appDomainBridgeModuleApi;
+    return appDomainBridgeModuleApi;
+  }
+  const appDomainBridge = getAppDomainBridgeModule().createAccess({
+    getUnitModule: function () { return getUnitModule(); },
+    getWorkflowSupportModule: function () { return getWorkflowSupportModule(); },
+    getDataModule: function () { return getDataModule(); },
+    getAuthModule: function () { return getAuthModule(); },
+    getPolicyModule: function () { return getPolicyModule(); }
+  });
+  const {
+    getOfficialUnits,
+    getOfficialUnitCatalog,
+    getOfficialUnitMeta,
+    getUnitCode,
+    getUnitCodeWithDots,
+    getUnitOptionLabel,
+    getCorrectionYear,
+    normalizeRocYear,
+    buildScopedRecordPrefix,
+    parseScopedRecordId,
+    buildScopedRecordId,
+    getNextScopedRecordSequence,
+    buildCorrectionDocumentNo,
+    parseCorrectionAutoId,
+    buildAutoCarIdByDocument,
+    buildAutoCarId,
+    getNextCorrectionSequence,
+    getSystemUnits,
+    isOfficialUnit,
+    loadUnitReviewStore,
+    saveUnitReviewStore,
+    getUnitGovernanceMode,
+    setUnitGovernanceMode,
+    getUnitGovernanceModes,
+    loadUnitContactApplicationStore,
+    saveUnitContactApplicationStore,
+    getAllUnitContactApplications,
+    getUnitContactApplication,
+    createUnitContactApplication,
+    updateUnitContactApplication,
+    findUnitContactApplicationsByEmail,
+    formatUnitScopeSummary,
+    approveCustomUnit,
+    getCustomUnitRegistry,
+    syncSessionUnit,
+    mergeCustomUnit,
+    splitUnitValue,
+    composeUnitValue,
+    categorizeTopLevelUnit,
+    isTrainingDashboardExcludedUnit,
+    getTrainingUnitCategories,
+    getParentsByUnitCategory,
+    buildUnitSearchEntry,
+    getUnitSearchEntries,
+    buildUnitCascadeControl,
+    initUnitCascade,
+    parseUserUnits,
+    normalizeUserRole,
+    getAuthorizedUnits,
+    getReviewUnits,
+    getActiveUnit,
+    normalizeUserRecord,
+    hasGlobalReadScope,
+    hasUnitAccess,
+    canSwitchAuthorizedUnit,
+    getScopedUnit,
+    switchCurrentUserUnit,
+    loadData,
+    saveData,
+    getAllItems,
+    getItem,
+    addItem,
+    updateItem,
+    getUsers,
+    addUser,
+    updateUser,
+    deleteUser,
+    findUser,
+    findUserByEmail,
+    ensurePrimaryAdminProfile,
+    generatePassword,
+    resetPasswordByEmail,
+    redeemResetPassword,
+    changePassword,
+    loadLoginLogs,
+    saveLoginLogs,
+    addLoginLog,
+    clearLoginLogs,
+    login,
+    currentUser,
+    isAdmin,
+    isUnitAdmin,
+    isViewer,
+    canCreateCAR,
+    canReview,
+    canReviewItem,
+    canFillChecklist,
+    canFillTraining,
+    canManageUsers
+  } = appDomainBridge;
 
   function parseSecurityRoles(value) {
     const rawValues = Array.isArray(value)
@@ -152,21 +205,6 @@
     if (role !== ROLES.ADMIN && !units.length) throw new Error('???????????');
     if (role === ROLES.UNIT_ADMIN && !securityRoles.length) throw new Error('?????????????');
   }
-  function getAuthorizedUnits(user) { return getDataModule().getAuthorizedUnits(user); }
-  function getReviewUnits(user) { return getDataModule().getReviewUnits(user); }
-  function getActiveUnit(user) { return getDataModule().getActiveUnit(user); }
-  function normalizeUserRecord(user) { return getDataModule().normalizeUserRecord(user); }
-  function hasGlobalReadScope(user = currentUser()) { return getPolicyModule().hasGlobalReadScope(user); }
-  function hasUnitAccess(unit, user = currentUser()) { return getPolicyModule().hasUnitAccess(unit, user); }
-  function canSwitchAuthorizedUnit(user = currentUser()) { return getAuthModule().canSwitchAuthorizedUnit(user); }
-  function getScopedUnit(user = currentUser()) { return getAuthModule().getScopedUnit(user); }
-  function switchCurrentUserUnit(unit) { return getAuthModule().switchCurrentUserUnit(unit); }
-  function loadData() { return getDataModule().loadData(); }
-  function saveData(data) { return getDataModule().saveData(data); }
-  function getAllItems() { return getDataModule().getAllItems(); }
-  function getItem(id) { return getDataModule().getItem(id); }
-  function addItem(item) { return getDataModule().addItem(item); }
-  function updateItem(id, updates) { return getDataModule().updateItem(id, updates); }
   function normalizeCarIdInput(value) { return String(value || '').trim().toUpperCase().replace(/\s+/g, ''); }
   function generateId(unitValue, dateValue) {
     const d = loadData();
@@ -183,33 +221,7 @@
     if (d.items.some((item) => String(item.id || '').toUpperCase() === customId)) throw new Error('矯正單號已存在');
     return customId;
   }
-  function getUsers() { return getDataModule().getUsers(); }
-  function addUser(user) { return getDataModule().addUser(user); }
-  function updateUser(username, updates) { return getDataModule().updateUser(username, updates); }
-  function deleteUser(username) { return getDataModule().deleteUser(username); }
-  function findUser(username) { return getDataModule().findUser(username); }
-  function findUserByEmail(email) { return getDataModule().findUserByEmail(email); }
-  function ensurePrimaryAdminProfile() { return getAuthModule().ensurePrimaryAdminProfile(); }
-  function generatePassword() { return getAuthModule().generatePassword(); }
-  function resetPasswordByEmail(email) { return getAuthModule().resetPasswordByEmail(email); }
-  function redeemResetPassword(payload) { return getAuthModule().redeemResetPassword(payload); }
-  function changePassword(payload) { return getAuthModule().changePassword(payload); }
-  function loadLoginLogs() { return getDataModule().loadLoginLogs(); }
-  function saveLoginLogs(logs) { return getDataModule().saveLoginLogs(logs); }
-  function addLoginLog(username, user, success) { return getDataModule().addLoginLog(username, user, success); }
-  function clearLoginLogs() { return getDataModule().clearLoginLogs(); }
-  function login(un, pw) { return getAuthModule().login(un, pw); }
   async function logout() { await getAuthModule().logout(); renderApp(); }
-  function currentUser() { return getAuthModule().currentUser(); }
-  function isAdmin(user = currentUser()) { return getPolicyModule().isAdmin(user); }
-  function isUnitAdmin(user = currentUser()) { return getPolicyModule().isUnitAdmin(user); }
-  function isViewer(user = currentUser()) { return getPolicyModule().isViewer(user); }
-  function canCreateCAR(user = currentUser()) { return getPolicyModule().canCreateCAR(user); }
-  function canReview(user = currentUser()) { return getPolicyModule().canReview(user); }
-  function canReviewItem(item, user = currentUser()) { return getPolicyModule().canReviewItem(item, user); }
-  function canFillChecklist(user = currentUser()) { return getPolicyModule().canFillChecklist(user); }
-  function canFillTraining(user = currentUser()) { return getPolicyModule().canFillTraining(user); }
-  function canManageUsers(user = currentUser()) { return getPolicyModule().canManageUsers(user); }
   function isOverdue(item) { return item.status !== STATUSES.CLOSED && item.correctiveDueDate && new Date(item.correctiveDueDate) < new Date(); }
   function registerActionHandlers(namespace, handlers) {
     return getAppActionModule().registerActionHandlers(namespace, handlers);

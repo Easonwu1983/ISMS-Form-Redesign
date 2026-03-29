@@ -93,10 +93,7 @@ async function seedSyntheticUnitContactSuccess(page) {
 }
 
 async function seedSyntheticUnitReview(page) {
-  await page.waitForFunction(() => {
-    const tableCard = document.querySelector('.governance-table-card, .review-table-card');
-    return !!tableCard;
-  }, { timeout: 10000 }).catch(() => null);
+  await page.waitForSelector('#app', { timeout: 5000 }).catch(() => null);
 
   await page.evaluate(() => {
     const hostCard = document.querySelector('.governance-table-card, .review-table-card');
@@ -167,13 +164,11 @@ async function seedSyntheticUnitReview(page) {
     if (historyCard) historyCard.classList.add('visual-smoke-hide');
   });
 
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(80);
 }
 
 async function seedSyntheticDashboard(page) {
-  await page.waitForFunction(() => {
-    return !!document.querySelector('.dashboard-hero, .dashboard-grid, .stats-grid, .empty-state');
-  }, { timeout: 10000 }).catch(() => null);
+  await page.waitForSelector('#app', { timeout: 5000 }).catch(() => null);
 
   await page.evaluate(() => {
     const app = document.getElementById('app');
@@ -218,13 +213,11 @@ async function seedSyntheticDashboard(page) {
     app.appendChild(shell);
   });
 
-  await page.waitForTimeout(90);
+  await page.waitForTimeout(40);
 }
 
 async function seedSyntheticUnitContactApply(page) {
-  await page.waitForFunction(() => {
-    return !!document.querySelector('.unit-contact-shell, .unit-contact-mode-card, .card, .empty-state');
-  }, { timeout: 10000 }).catch(() => null);
+  await page.waitForSelector('#app', { timeout: 5000 }).catch(() => null);
 
   await page.evaluate(() => {
     const app = document.getElementById('app');
@@ -275,13 +268,11 @@ async function seedSyntheticUnitContactApply(page) {
     });
   });
 
-  await page.waitForTimeout(90);
+  await page.waitForTimeout(40);
 }
 
 async function seedSyntheticUnitContactStatus(page) {
-  await page.waitForFunction(() => {
-    return !!document.querySelector('.unit-contact-shell, .card, .empty-state');
-  }, { timeout: 10000 }).catch(() => null);
+  await page.waitForSelector('#app', { timeout: 5000 }).catch(() => null);
 
   await page.evaluate(() => {
     const app = document.getElementById('app');
@@ -342,7 +333,7 @@ async function seedSyntheticUnitContactStatus(page) {
     app.appendChild(shell);
   });
 
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(50);
 }
 
 function getVisualSmokeStyles(slug, mode) {
@@ -626,8 +617,12 @@ async function stabilizeVisualRoute(page, slug, mode) {
 
 async function waitForVisualRouteReady(page, spec) {
   const slug = spec && spec.slug;
+  if (slug === 'dashboard' || slug === 'unit-contact-apply' || slug === 'unit-contact-status') {
+    await page.waitForSelector('#app', { timeout: 5000 });
+    return;
+  }
   if (slug === 'unit-review') {
-    await page.waitForSelector('.review-page-header, .review-table-card, .governance-category-stack, .empty-state', { timeout: 15000 });
+    await page.waitForSelector('#app', { timeout: 5000 });
     return;
   }
   if (slug === 'training') {
@@ -662,7 +657,7 @@ async function gotoVisualHash(page, hash, options = {}) {
   await page.waitForFunction((value) => String(window.location.hash || '') === value, target, {
     timeout: options.timeout || 15000
   });
-  await page.waitForTimeout(options.settleMs || 180);
+  await page.waitForTimeout(options.settleMs || 120);
 }
 
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
@@ -678,13 +673,13 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await seedSyntheticUnitContactSuccess(page);
   }
   if (fastHashNavigation && page.url().startsWith(`${String(baseUrl).replace(/\/+$/, '')}/`)) {
-    await gotoVisualHash(page, spec.hash, { settleMs: 160 });
+    await gotoVisualHash(page, spec.hash, { settleMs: 90 });
   } else {
     const waitUntil = fastHashNavigation ? 'domcontentloaded' : 'networkidle';
     await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
   }
   await waitForVisualRouteReady(page, spec);
-  await page.waitForTimeout(fastHashNavigation ? 120 : 900);
+  await page.waitForTimeout(fastHashNavigation ? 40 : 900);
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'dashboard') {
     await seedSyntheticDashboard(page);

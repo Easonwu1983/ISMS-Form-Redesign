@@ -69,6 +69,7 @@ const filesToCopy = [
   'collection-contract-module.js',
   'shell-module.js',
   'app-ui-bridge-module.js',
+  'app-domain-bridge-module.js',
   'case-module.js',
   'admin-module.js',
   'checklist-module.js',

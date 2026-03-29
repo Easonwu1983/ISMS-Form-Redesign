@@ -41,7 +41,8 @@ function createChecklistRouter(deps) {
     entriesPromise: null,
     entriesPrewarmQueued: false,
     queryCache: new Map(),
-    summaryCache: new Map()
+    summaryCache: new Map(),
+    unfilteredSummary: null
   };
   const CHECKLIST_CACHE_TTL_MS = 120000;
   const CHECKLIST_PREWARM_DELAY_MS = 5000;
@@ -155,6 +156,25 @@ function createChecklistRouter(deps) {
     return value && typeof value === 'object'
       ? JSON.parse(JSON.stringify(value))
       : value;
+  }
+
+  function hasActiveChecklistFilters(filters) {
+    const target = filters && typeof filters === 'object' ? filters : {};
+    return !!(
+      cleanText(target.status)
+      || cleanText(target.statusBucket)
+      || cleanText(target.unit)
+      || cleanText(target.auditYear)
+      || cleanText(target.fillerUsername)
+      || cleanText(target.q)
+    );
+  }
+
+  function rebuildChecklistDerivedState(rows) {
+    const items = (Array.isArray(rows) ? rows : [])
+      .map((entry) => entry && entry.item)
+      .filter(Boolean);
+    state.unfilteredSummary = summarizeChecklistItems(items);
   }
 
   function trimQueryCache(cache, maxEntries) {
@@ -300,6 +320,7 @@ function createChecklistRouter(deps) {
       }
       state.entriesCache = sortChecklistRows(rows);
       state.entriesCacheAt = Date.now();
+      rebuildChecklistDerivedState(state.entriesCache);
       logChecklistCache('snapshot restored', {
         rows: state.entriesCache.length,
         ageMs
@@ -365,6 +386,7 @@ function createChecklistRouter(deps) {
     state.cacheVersion += 1;
     state.queryCache.clear();
     state.summaryCache.clear();
+    state.unfilteredSummary = null;
   }
 
   async function listAllEntries(options) {
@@ -394,6 +416,7 @@ function createChecklistRouter(deps) {
       }
       state.entriesCache = sortChecklistRows(rows);
       state.entriesCacheAt = Date.now();
+      rebuildChecklistDerivedState(state.entriesCache);
       persistChecklistCacheSnapshot(state.entriesCache, state.entriesCacheAt).catch((error) => {
         logChecklistCache('snapshot write failed', {
           message: cleanText(error && error.message) || 'unknown error'
@@ -621,6 +644,40 @@ function createChecklistRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
       const filters = readChecklistFilters(url);
+      const canUseUnfilteredSummary = summaryOnly && requestAuthz.isAdmin(authz) && !hasActiveChecklistFilters(filters);
+      if (canUseUnfilteredSummary && state.unfilteredSummary) {
+        const total = Number(state.unfilteredSummary.total || 0);
+        const page = buildChecklistPageMeta(url, total);
+        logChecklistCache('summary fast path hit', {
+          username: authz.username,
+          total,
+          durationMs: Date.now() - startedAt
+        });
+        await writeJson(res, buildJsonResponse(200, {
+          ok: true,
+          items: [],
+          total,
+          summary: cloneJson(state.unfilteredSummary),
+          page: {
+            ...page,
+            returned: 0,
+            pageStart: 0,
+            pageEnd: 0
+          },
+          filters: {
+            ...filters,
+            summaryOnly: '1'
+          },
+          generatedAt: new Date().toISOString(),
+          cache: {
+            query: 'hit',
+            summaryOnly: true,
+            reason: 'unfiltered-summary'
+          },
+          contractVersion: CONTRACT_VERSION
+        }), origin);
+        return;
+      }
       const summaryCacheKey = summaryOnly ? buildChecklistSummaryCacheKey(authz, url, state.cacheVersion || 0) : '';
       if (summaryOnly) {
         const summaryLookup = readQueryCache(state.summaryCache, summaryCacheKey);
