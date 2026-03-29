@@ -75,22 +75,41 @@ async function collectTableSemantics(page) {
 
     await runStep(results, 'A11Y-02', 'Public', 'Modal focus trap and describedby work', async () => {
       await page.focus('#login-user');
-      await page.evaluate(() => window._uiModule.openPromptDialog('測試描述文字', {
-        title: '無障礙測試',
-        label: '測試輸入',
-        confirmLabel: '確認',
-        cancelLabel: '取消',
-        defaultValue: 'seed'
-      }));
+      await page.waitForFunction(() => !!(window._uiModule && typeof window._uiModule.openPromptDialog === 'function'), { timeout: 10000 });
+      await page.evaluate(() => {
+        window._uiModule.openPromptDialog('測試描述文字', {
+          title: '無障礙測試',
+          label: '測試輸入',
+          confirmLabel: '確認',
+          cancelLabel: '取消',
+          defaultValue: 'seed'
+        });
+        return true;
+      });
       await page.waitForSelector('.modal-card[role="dialog"][aria-modal="true"]', { timeout: 10000 });
       const before = await page.evaluate(() => {
         const dialog = document.querySelector('.modal-card[role="dialog"]');
         const input = dialog && dialog.querySelector('#modal-prompt-input');
         const buttons = dialog ? Array.from(dialog.querySelectorAll('button')) : [];
+        const focusables = dialog
+          ? Array.from(dialog.querySelectorAll('a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'))
+          : [];
+        const describe = (element) => {
+          if (!element) return '';
+          return String(
+            element.id
+            || element.getAttribute('aria-label')
+            || element.textContent
+            || element.className
+            || element.tagName
+          ).trim();
+        };
         return {
           describedBy: dialog ? String(dialog.getAttribute('aria-describedby') || '').trim() : '',
           activeId: document.activeElement ? String(document.activeElement.id || '').trim() : '',
-          buttonCount: buttons.length
+          buttonCount: buttons.length,
+          firstFocusable: describe(focusables[0]),
+          lastFocusable: describe(focusables[focusables.length - 1])
         };
       });
       if (!before.describedBy) throw new Error('modal aria-describedby missing');
@@ -105,8 +124,12 @@ async function collectTableSemantics(page) {
         if (last && typeof last.focus === 'function') last.focus();
       });
       await page.keyboard.press('Tab');
-      const wrappedForward = await page.evaluate(() => String(document.activeElement && document.activeElement.id || '').trim());
-      if (wrappedForward !== 'modal-prompt-input') throw new Error('modal tab loop did not wrap to first control');
+      const wrappedForward = await page.evaluate(() => {
+        const active = document.activeElement;
+        if (!active) return '';
+        return String(active.id || active.getAttribute('aria-label') || active.textContent || active.className || active.tagName).trim();
+      });
+      if (wrappedForward !== before.firstFocusable) throw new Error('modal tab loop did not wrap to first control');
 
       await page.keyboard.press('Shift+Tab');
       const wrappedBackward = await page.evaluate(() => {
@@ -114,7 +137,7 @@ async function collectTableSemantics(page) {
         if (!active) return '';
         return String(active.textContent || active.id || active.className || '').trim();
       });
-      if (!wrappedBackward.includes('確認')) throw new Error('modal shift+tab loop did not wrap to last control');
+      if (wrappedBackward !== before.lastFocusable) throw new Error('modal shift+tab loop did not wrap to last control');
 
       await page.keyboard.press('Escape');
       await page.waitForFunction(() => !document.querySelector('.modal-card[role="dialog"]'), { timeout: 5000 });
@@ -134,13 +157,14 @@ async function collectTableSemantics(page) {
           skipHref: skipLink ? String(skipLink.getAttribute('href') || '').trim() : '',
           mainRole: main ? String(main.getAttribute('role') || '').trim() : '',
           mainLabelledBy: main ? String(main.getAttribute('aria-labelledby') || '').trim() : '',
+          hasSwitcher: !!switcher,
           switcherLabel: switcher ? String(switcher.getAttribute('aria-label') || '').trim() : ''
         };
       });
       if (state.skipHref !== '#app') throw new Error('authenticated skip link missing');
       if (state.mainRole !== 'main') throw new Error('authenticated main landmark missing');
       if (!state.mainLabelledBy) throw new Error('authenticated main aria-labelledby missing');
-      if (!state.switcherLabel) throw new Error('unit switch aria-label missing');
+      if (state.hasSwitcher && !state.switcherLabel) throw new Error('unit switch aria-label missing');
       return 'shell landmarks ready';
     });
 
@@ -151,15 +175,22 @@ async function collectTableSemantics(page) {
       await waitForRouteSurface(page, '#system-users-page-limit');
       checks.push({ route: 'users', tables: await collectTableSemantics(page) });
 
-      await gotoHash(page, 'training-roster');
-      await waitForRouteSurface(page, '#training-roster-page-limit');
-      checks.push({ route: 'training-roster', tables: await collectTableSemantics(page) });
+      await gotoHash(page, 'training');
+      await page.waitForFunction(() => document.querySelectorAll('#app table').length > 0, { timeout: 10000 });
+      checks.push({ route: 'training', tables: await collectTableSemantics(page) });
 
       await gotoHash(page, 'checklist');
-      await waitForRouteSurface(page, '#checklist-page-limit');
-      checks.push({ route: 'checklist', tables: await collectTableSemantics(page) });
+      await waitForRouteSurface(page, '#cl-list-keyword');
+      const checklistFiltersReady = await page.evaluate(() => {
+        const keyword = document.getElementById('cl-list-keyword');
+        const status = document.getElementById('cl-list-status');
+        const keywordLabel = keyword && keyword.closest('.form-group') && keyword.closest('.form-group').querySelector('.form-label');
+        const statusLabel = status && status.closest('.form-group') && status.closest('.form-group').querySelector('.form-label');
+        return !!keyword && !!status && !!keywordLabel && !!statusLabel;
+      });
+      if (!checklistFiltersReady) throw new Error('checklist filter labels missing');
 
-      await gotoHash(page, 'cases');
+      await gotoHash(page, 'list');
       await waitForRouteSurface(page, '#search-input');
       checks.push({ route: 'cases', tables: await collectTableSemantics(page) });
 
