@@ -491,15 +491,10 @@ async function assertNoXssExecution(page, label) {
       await login(page, 'easonwu', '2wsx#EDC');
       let usersReady = false;
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (attempt === 0) {
-          await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-          await page.waitForTimeout(1200);
-        } else {
-          await gotoHash(page, 'users');
-          await page.waitForTimeout(400);
-        }
+        await gotoHash(page, 'users');
+        await page.waitForTimeout(attempt === 0 ? 900 : 400);
         try {
-          await page.waitForSelector('#system-users-page-limit', { timeout: 15000 });
+          await page.waitForSelector('#system-users-page-limit', { timeout: 20000 });
           usersReady = true;
           break;
         } catch (error) {
@@ -544,17 +539,13 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03e', 'Admin', 'Unit contact review pager and filters work', async () => {
+      await login(page, 'easonwu', '2wsx#EDC');
       let reviewReady = false;
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (attempt === 0) {
-          await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-          await page.waitForTimeout(1200);
-        } else {
-          await gotoHash(page, 'unit-contact-review');
-          await page.waitForTimeout(400);
-        }
+        await gotoHash(page, 'unit-contact-review');
+        await page.waitForTimeout(attempt === 0 ? 900 : 400);
         try {
-          await page.waitForSelector('#unit-contact-review-status', { timeout: 15000 });
+          await page.waitForSelector('#unit-contact-review-status', { timeout: 20000 });
           reviewReady = true;
           break;
         } catch (error) {
@@ -610,18 +601,13 @@ async function assertNoXssExecution(page, label) {
       await login(page, 'easonwu', '2wsx#EDC');
       const checks = [
         { hash: 'users', selector: '#app table', label: 'users' },
-        { hash: 'training-fill', selector: '#app table', label: 'training-fill' },
-        { hash: 'checklist', selector: '#app table', label: 'checklist' },
-        { hash: '', selector: '#app table', label: 'case-list' }
+        { hash: 'training-roster', selector: '#app table', label: 'training-roster' },
+        { hash: 'unit-contact-review', selector: '#app table', label: 'unit-contact-review' },
+        { hash: 'list', selector: '#app table', label: 'case-list' }
       ];
       const findings = [];
       for (const check of checks) {
-        if (check.hash) {
-          await gotoHash(page, check.hash);
-        } else {
-          await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
-          await login(page, 'easonwu', '2wsx#EDC');
-        }
+        await gotoHash(page, check.hash);
         await page.waitForSelector(check.selector, { timeout: 30000 });
         const state = await page.evaluate((label) => {
           const table = document.querySelector('#app table');

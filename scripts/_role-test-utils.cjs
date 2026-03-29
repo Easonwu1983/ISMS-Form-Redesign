@@ -2,7 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('./_playwright.cjs');
 
-const BASE_URL = process.env.TEST_BASE_URL || process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/';
+const BASE_URL = String(process.env.TEST_BASE_URL || process.env.ISMS_LIVE_BASE || 'http://127.0.0.1:8088/')
+  .trim()
+  .replace(/\/+$/, '');
 const BROWSER_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
