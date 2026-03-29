@@ -29,14 +29,14 @@ const MOBILE_VISUAL_SPECS = [
 
 const PUBLIC_DESKTOP_VISUAL_SPECS = [
   { slug: 'unit-contact-apply', hash: '#apply-unit-contact', selector: '#visual-unit-contact-apply-shell' },
-  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' },
+  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status', selector: '#visual-unit-contact-status-shell' },
   { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' },
   { slug: 'unit-contact-activate', hash: '#activate-unit-contact/UCA-SMOKE-SUCCESS-001' }
 ];
 
 const PUBLIC_MOBILE_VISUAL_SPECS = [
   { slug: 'unit-contact-apply', hash: '#apply-unit-contact', selector: '#visual-unit-contact-apply-shell' },
-  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status' },
+  { slug: 'unit-contact-status', hash: '#apply-unit-contact-status', selector: '#visual-unit-contact-status-shell' },
   { slug: 'unit-contact-success', hash: '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001' },
   { slug: 'unit-contact-activate', hash: '#activate-unit-contact/UCA-SMOKE-SUCCESS-001' }
 ];
@@ -331,6 +331,73 @@ async function seedSyntheticUnitContactApply(page) {
   await page.waitForTimeout(120);
 }
 
+async function seedSyntheticUnitContactStatus(page) {
+  await page.waitForFunction(() => {
+    return !!document.querySelector('.unit-contact-shell, .card, .empty-state');
+  }, { timeout: 10000 }).catch(() => null);
+
+  await page.evaluate(() => {
+    const app = document.getElementById('app');
+    if (!app) return;
+    const existing = document.getElementById('visual-unit-contact-status-shell');
+    if (existing) existing.remove();
+    const shell = document.createElement('section');
+    shell.id = 'visual-unit-contact-status-shell';
+    shell.className = 'unit-contact-shell visual-unit-contact-status-shell card';
+    shell.innerHTML = `
+      <div class="card-header">
+        <div>
+          <div class="page-eyebrow">Application Status</div>
+          <span class="card-title">單位管理人申請進度</span>
+        </div>
+        <span class="review-card-subtitle">Synthetic focused baseline</span>
+      </div>
+      <div class="visual-unit-contact-status-mode card">
+        <div class="card-header">
+          <span class="card-title">查詢申請進度</span>
+          <span class="review-card-subtitle">輸入申請時填寫的電子郵件即可查詢</span>
+        </div>
+        <div class="visual-unit-contact-status-form">
+          <div class="form-group">
+            <label class="form-label">申請電子郵件</label>
+            <div class="form-input visual-smoke-mask-value">unit-contact-smoke@example.com</div>
+          </div>
+          <div class="visual-unit-contact-status-actions">
+            <button type="button" class="btn btn-secondary visual-smoke-mask-value">返回申請</button>
+            <button type="button" class="btn btn-primary visual-smoke-mask-value">查詢</button>
+          </div>
+        </div>
+      </div>
+      <div class="visual-unit-contact-status-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">申請進度</span>
+          </div>
+          <div class="unit-contact-summary-grid">
+            <div><strong class="visual-smoke-mask-value">狀態</strong><span class="visual-smoke-mask-value">審核中</span></div>
+            <div><strong class="visual-smoke-mask-value">單位</strong><span class="visual-smoke-mask-value">計算機及資訊網路中心</span></div>
+            <div><strong class="visual-smoke-mask-value">申請人</strong><span class="visual-smoke-mask-value">Eason Wu</span></div>
+            <div><strong class="visual-smoke-mask-value">送出時間</strong><span class="visual-smoke-mask-value">2026-03-28</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">查詢說明</span>
+          </div>
+          <ul class="unit-contact-checklist">
+            <li class="visual-smoke-mask-value">請輸入申請時填寫的電子郵件。</li>
+            <li class="visual-smoke-mask-value">系統會顯示申請單位、審核狀態與後續操作。</li>
+            <li class="visual-smoke-mask-value">若審核已通過，可直接前往帳號啟用頁。</li>
+          </ul>
+        </div>
+      </div>
+    `;
+    app.appendChild(shell);
+  });
+
+  await page.waitForTimeout(120);
+}
+
 function getVisualSmokeStyles(slug, mode) {
   const common = `
     .visual-smoke-mask-value,
@@ -529,7 +596,39 @@ function getVisualSmokeStyles(slug, mode) {
     `;
   }
 
-  if (slug === 'unit-contact-status' || slug === 'unit-contact-success' || slug === 'unit-contact-activate') {
+  if (slug === 'unit-contact-status') {
+    return common + `
+      #visual-unit-contact-status-shell {
+        max-width: ${mode === 'mobile' ? '340px' : '760px'} !important;
+        margin: 0 auto !important;
+        padding: ${mode === 'mobile' ? '16px' : '18px'} !important;
+      }
+      #visual-unit-contact-status-shell .visual-unit-contact-status-grid {
+        display: grid !important;
+        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.05fr 0.95fr'} !important;
+        gap: 14px !important;
+      }
+      #visual-unit-contact-status-shell .visual-unit-contact-status-form {
+        display: grid !important;
+        gap: 12px !important;
+      }
+      #visual-unit-contact-status-shell .visual-unit-contact-status-actions {
+        display: flex !important;
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+      }
+      #visual-unit-contact-status-shell .form-input,
+      #visual-unit-contact-status-shell .unit-contact-checklist li,
+      #visual-unit-contact-status-shell .unit-contact-summary-grid strong,
+      #visual-unit-contact-status-shell .unit-contact-summary-grid span,
+      #visual-unit-contact-status-shell .review-card-subtitle {
+        color: transparent !important;
+        text-shadow: none !important;
+      }
+    `;
+  }
+
+  if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') {
     return common + `
       .unit-contact-mode-title,
       .unit-contact-mode-text,
@@ -597,16 +696,19 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await page.waitForTimeout(600);
     await seedSyntheticUnitContactSuccess(page);
   }
-  const waitUntil = spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard' || spec.slug === 'unit-contact-apply') ? 'domcontentloaded' : 'networkidle';
+  const waitUntil = spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard' || spec.slug === 'unit-contact-apply' || spec.slug === 'unit-contact-status') ? 'domcontentloaded' : 'networkidle';
   await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
   await waitForVisualRouteReady(page, spec);
-  await page.waitForTimeout(spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard' || spec.slug === 'unit-contact-apply') ? 120 : 900);
+  await page.waitForTimeout(spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard' || spec.slug === 'unit-contact-apply' || spec.slug === 'unit-contact-status') ? 120 : 900);
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'dashboard') {
     await seedSyntheticDashboard(page);
   }
   if (spec && spec.slug === 'unit-contact-apply') {
     await seedSyntheticUnitContactApply(page);
+  }
+  if (spec && spec.slug === 'unit-contact-status') {
+    await seedSyntheticUnitContactStatus(page);
   }
   if (spec && spec.slug === 'unit-review') {
     await seedSyntheticUnitReview(page);
@@ -712,6 +814,7 @@ module.exports = {
   seedSyntheticUnitContactSuccess,
   seedSyntheticDashboard,
   seedSyntheticUnitContactApply,
+  seedSyntheticUnitContactStatus,
   captureVisualSpec,
   compareAgainstBaseline
 };

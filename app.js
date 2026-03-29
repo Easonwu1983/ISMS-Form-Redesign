@@ -781,16 +781,6 @@
   };
   const SYSTEM_USERS_SYNC_FRESHNESS_MS = 30000;
   let systemUsersSyncCachePromise = null;
-  let appBridgeRuntimeModuleApi = null;
-  function getAppBridgeRuntimeModule() {
-    if (appBridgeRuntimeModuleApi) return appBridgeRuntimeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppBridgeRuntimeModule !== 'function') {
-      throw new Error('app-bridge-runtime-module.js not loaded');
-    }
-    appBridgeRuntimeModuleApi = window.createAppBridgeRuntimeModule();
-    window._appBridgeRuntimeModule = appBridgeRuntimeModuleApi;
-    return appBridgeRuntimeModuleApi;
-  }
   function setSystemUserRepositoryState(patch) {
     Object.assign(systemUserRepositoryState, patch || {});
     return { ...systemUserRepositoryState };
@@ -877,7 +867,7 @@
     if (activeUnit) headers['X-ISMS-Active-Unit'] = encodeURIComponent(activeUnit);
     return headers;
   }
-  const appBridgeRuntime = getAppBridgeRuntimeModule().createAccess({
+  const appBridgeRuntime = getAppRuntimeServiceModule().getAppBridgeRuntimeModule(appRuntimeServiceState).createAccess({
     updateUser,
     loadData,
     saveData,
