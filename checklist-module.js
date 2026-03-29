@@ -86,6 +86,16 @@
       return `<div class="form-group cl-evidence-upload-group"><label class="form-label">上傳佐證附件</label><label class="training-file-input checklist-file-input"><input type="file" id="cl-file-${item.id}" data-item-id="${item.id}" multiple accept="image/*,.pdf"><span class="training-file-input-copy"><strong>選擇佐證附件</strong><small>${existingCount ? `目前已附 ${existingCount} 個檔案` : '支援 JPG / PNG / PDF，單檔上限 5MB。'}</small></span></label>${buildChecklistEvidencePreviewSlot(item.id, 'checklist-evidence-files')}</div>`;
     }
 
+    function applyChecklistTableHeaderScope(headersHtml) {
+      return String(headersHtml || '').replace(/<th(?![^>]*\bscope=)/g, '<th scope="col"');
+    }
+
+    function buildChecklistTableCaption(caption) {
+      const text = String(caption || '').trim();
+      if (!text) return '';
+      return '<caption class="sr-only">' + esc(text) + '</caption>';
+    }
+
     function toDateInputValue(value) {
       if (!value) return '';
       if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
@@ -1046,7 +1056,7 @@
             const rows = group.items.map((item) => renderChecklistListRow(item)).join('');
             const groupClosed = Number(group.closedCount || 0);
             const groupTotal = Number(group.totalCount || group.items.length || 0);
-            return '<details class="cl-unit-accordion" id="' + esc(groupId) + '" data-cl-year-key="' + esc(String(yearGroup.year || '').trim() || '未知') + '" data-cl-unit-key="' + esc(String(group.unit || '').trim()) + '"><summary class="cl-unit-summary"><div><div class="cl-unit-title">' + esc(group.unit) + '</div><div class="cl-unit-meta">已結案 ' + groupClosed + ' / ' + groupTotal + ' 份</div></div><div class="cl-unit-summary-right"><span class="badge ' + (groupClosed === groupTotal && groupTotal > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + groupClosed + ' / ' + groupTotal + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-unit-body"><div class="table-wrapper"><table><thead><tr><th class="record-id-head">編號</th><th>受稽單位</th><th>填報人員</th><th>稽核年度</th><th>狀態</th><th>完成率</th><th>填報日期</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></details>';
+            return '<details class="cl-unit-accordion" id="' + esc(groupId) + '" data-cl-year-key="' + esc(String(yearGroup.year || '').trim() || '未知') + '" data-cl-unit-key="' + esc(String(group.unit || '').trim()) + '"><summary class="cl-unit-summary"><div><div class="cl-unit-title">' + esc(group.unit) + '</div><div class="cl-unit-meta">已結案 ' + groupClosed + ' / ' + groupTotal + ' 份</div></div><div class="cl-unit-summary-right"><span class="badge ' + (groupClosed === groupTotal && groupTotal > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + groupClosed + ' / ' + groupTotal + '</span><span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-unit-body"><div class="table-wrapper"><table>' + buildChecklistTableCaption('檢核表清單') + '<thead><tr><th scope="col" class="record-id-head">編號</th><th scope="col">受稽單位</th><th scope="col">填報人員</th><th scope="col">稽核年度</th><th scope="col">狀態</th><th scope="col">完成率</th><th scope="col">填報日期</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></details>';
           }).join('')
         : '<div class="empty-state checklist-empty-state"><div class="empty-state-icon">' + ic('clipboard-list') + '</div><div class="empty-state-title">此年度沒有資料</div><div class="empty-state-desc">可切換到其他年份，或使用上方關鍵字搜尋。</div></div>';
       return '<details class="cl-year-accordion" open data-cl-year-key="' + esc(yearValue || '未知') + '"><summary class="cl-year-summary"><div><div class="cl-year-title">' + esc(yearGroup.year === '未知' ? '未知年度' : yearGroup.year + ' 年') + '</div><div class="cl-year-meta">已結案 ' + closedCount + ' / ' + totalCount + ' 份</div></div><div class="cl-year-summary-right"><span class="badge ' + (closedCount === totalCount && totalCount > 0 ? 'badge-closed' : 'badge-pending') + '"><span class="badge-dot"></span>' + closedCount + ' / ' + totalCount + '</span>' + deleteButton + '<span class="cl-unit-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div></summary><div class="cl-year-body">' + body + '</div></details>';

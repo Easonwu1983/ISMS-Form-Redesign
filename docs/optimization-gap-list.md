@@ -1,99 +1,113 @@
-# 優化缺口清單
+# Optimization Gap List
 
-以 2026-03-29 專案現況對照五項優化報告。
+Updated: 2026-03-29
 
-## 1. 載入效能：模組拆分與資源懶載入
+This checklist tracks the optimization report against the current repo state. Status values:
 
-狀態：部分完成
+- `done`: implemented and verified
+- `partial`: some work landed, but the gap is still open
+- `open`: not meaningfully started
 
-已完成：
-- `app.js` 已持續拆成多個 runtime/access/orchestration 模組。
-- 正式鏈最慢視覺步驟已壓掉數個大熱點。
-- `vendor/xlsx.full.min.js` 已改成按需載入，不再阻塞首屏。
+## 1. Load Performance
 
-未完成：
-- [C:\Users\User\Playground\ISMS-Form-Redesign\asset-loader.js](C:\Users\User\Playground\ISMS-Form-Redesign\asset-loader.js) 仍同步順序載入約 60 個 JS 檔。
-- `vendor/lucide.min.js` 仍在首屏全量載入。
-- [C:\Users\User\Playground\ISMS-Form-Redesign\admin-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\admin-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js) 仍未按路由懶載入。
-- 專案仍未引入 bundler、minification、tree shaking。
+Status: `partial`
 
-下一步：
-- 先把 `lucide` 改成延後或按需載入。
-- 再做 route-level lazy load。
-- 最後再切 bundler。
+Done:
+- `app.js` has been split across runtime, route, auth, shell, page orchestration, feature, bridge, and bootstrap helper modules.
+- `vendor/xlsx.full.min.js` no longer loads on first paint. It is loaded on demand through the runtime asset loader.
+- Several heavy visual smoke paths were reduced by switching to focused synthetic captures.
 
-## 2. CSS 瘦身與結構化
+Open:
+- `asset-loader.js` still synchronously loads about 60 JS files before the app is fully ready.
+- `vendor/lucide.min.js` still loads on the initial path instead of route- or feature-level demand loading.
+- `admin-module.js`, `training-module.js`, and `checklist-module.js` are still large first-class modules.
+- No bundler, minification, code splitting, or tree shaking is in place yet.
 
-狀態：大多未完成
+Next:
+- Move `lucide` to delayed or on-demand loading.
+- Introduce route-level lazy loading for admin, training, and checklist.
+- Evaluate a safe bundler migration after the remaining runtime bridges are extracted.
 
-已完成：
-- 部分高頻頁視覺 baseline 已改成 focused shell，減少視覺測試成本。
+## 2. CSS Optimization
 
-未完成：
-- [C:\Users\User\Playground\ISMS-Form-Redesign\styles.css](C:\Users\User\Playground\ISMS-Form-Redesign\styles.css) 仍約 `8805` 行 / `173KB`。
-- 尚未做 CSS minification。
-- 尚未建立 PurgeCSS safelist，也未跑 purge。
-- [C:\Users\User\Playground\ISMS-Form-Redesign\admin-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\admin-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\case-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\case-module.js) 仍有大量 inline style。
+Status: `open`
 
-下一步：
-- 先抽離高頻模板的 inline style。
-- 再做 minify。
-- 最後建立 safelist 後再做 purge。
+Done:
+- A small a11y utility layer was added, including `.sr-only`.
 
-## 3. API 層強化：去重、快取與重試
+Open:
+- `styles.css` is still large and monolithic.
+- No CSS minification is in place.
+- No PurgeCSS or safelist-driven removal is in place.
+- Inline styles still exist inside module `innerHTML` templates.
 
-狀態：部分完成
+Next:
+- Extract repeated inline styles into CSS classes.
+- Add CSS minification in the packaging pipeline.
+- Build a PurgeCSS safelist after the templates are stable.
 
-已完成：
-- [C:\Users\User\Playground\ISMS-Form-Redesign\m365-api-client.js](C:\Users\User\Playground\ISMS-Form-Redesign\m365-api-client.js) 已有 GET request dedup。
-- 已有 TTL response cache。
-- 已有 retry 與 error taxonomy。
-- [C:\Users\User\Playground\ISMS-Form-Redesign\collection-cache-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\collection-cache-module.js) 已有 bounded cache store。
+## 3. API Layer
 
-未完成：
-- TTL 策略仍偏短且不一致。
-- 模組級 cache hit/miss 仍不夠完整。
-- `training-forms` / `checklists` / `audit-trail` 的 warm path 還沒有穩定明顯快於 cold。
+Status: `partial`
 
-下一步：
-- 把 summary-only 路徑再純化。
-- 把 module-level cache telemetry 補齊到 release report。
+Done:
+- `m365-api-client.js` now has GET request deduplication.
+- TTL response caching and bounded client-side cache eviction were added.
+- Retry logic now uses exponential backoff with jitter.
+- Error classification now distinguishes timeout, auth, validation, rate-limit, server, and network failures.
 
-## 4. 無障礙性（Accessibility）
+Open:
+- Formal release reports still do not show full module-level cache hit and miss rates.
+- `training-forms`, `checklists`, and `audit-trail` summary warm paths still need more consistent wins over cold paths.
+- Backend summary-only routes are still not fully isolated from list-oriented execution paths in every module.
 
-狀態：部分完成
+Next:
+- Add backend-side cache telemetry per module.
+- Keep shrinking pure `summaryOnly` paths.
+- Surface cache hit, miss, and snapshot reasons directly in the release report.
 
-已完成：
-- [C:\Users\User\Playground\ISMS-Form-Redesign\shell-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\shell-module.js) 已補 `skip link`、`role="main"`、`aria-live`、部分 `aria-label`。
-- [C:\Users\User\Playground\ISMS-Form-Redesign\ui-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\ui-module.js) 的 modal 已有 `focus trap` 與 `focus return`。
+## 4. Accessibility
 
-未完成：
-- [C:\Users\User\Playground\ISMS-Form-Redesign\admin-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\admin-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\case-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\case-module.js) 仍有大量 `innerHTML` 模板缺少 ARIA。
-- 多數表格仍缺 `scope` / `caption`。
-- 鍵盤導航與高頻頁 a11y smoke 尚未制度化。
+Status: `partial`
 
-下一步：
-- 先補高頻頁：
-  - `dashboard`
-  - `users`
-  - `unit-contact-review`
-  - `training`
-  - `checklists`
-- 再把 axe/Playwright 接進正式 smoke。
+Done:
+- `shell-module.js` now includes core shell a11y improvements such as `role="main"`, `aria-live`, and clearer labels.
+- `ui-module.js` now has modal focus trap and focus return handling.
+- First-pass table semantics were added for admin, training, case, and checklist tables using captions and `scope="col"`.
 
-## 5. 記憶體管理：Listener 與 Cache 清理
+Open:
+- Many `innerHTML` templates still lack ARIA metadata.
+- Keyboard navigation is not systematically tested across key workflows.
+- There is no dedicated a11y smoke layer using axe or equivalent tooling.
 
-狀態：部分完成
+Next:
+- Finish table semantics and labels on `dashboard`, `users`, `unit-contact-review`, `training`, and `checklists`.
+- Add keyboard coverage for modal close, filter bars, and main tables.
+- Add a focused a11y smoke pass for the formal chain.
 
-已完成：
-- pager 已改成 root-level event delegation。
-- [C:\Users\User\Playground\ISMS-Form-Redesign\collection-cache-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\collection-cache-module.js) 已有 TTL + bounded eviction。
+## 5. Memory and Runtime Stability
 
-未完成：
-- [C:\Users\User\Playground\ISMS-Form-Redesign\admin-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\admin-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\training-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\checklist-module.js)、[C:\Users\User\Playground\ISMS-Form-Redesign\case-module.js](C:\Users\User\Playground\ISMS-Form-Redesign\case-module.js) 仍有大量局部 `addEventListener`。
-- 尚未建立全站級 `destroyPage()` / page teardown hook。
-- 大列表尚未做 virtual scrolling。
+Status: `partial`
 
-下一步：
-- 先收 `admin` / `training` 的 page-level teardown。
-- 再評估 `audit-trail` / `training roster` virtual scrolling。
+Done:
+- Pager handling now uses root-level delegation instead of one listener per button.
+- A page-runtime teardown path now exists and can scope event listeners to the current page lifetime.
+- Client collection caches now have TTL and bounded eviction behavior.
+
+Open:
+- Many modules still attach listeners directly without page-scoped cleanup.
+- There is still no complete page destroy lifecycle across all major routes.
+- Large tables still render full DOM payloads instead of using virtualization.
+
+Next:
+- Convert admin, training, checklist, and case listeners to page-scoped registration.
+- Add a consistent destroy hook for route transitions.
+- Evaluate virtualization for `audit-trail`, `training roster`, and other large tables.
+
+## Priority Order
+
+1. Load performance: lazy loading and route splitting
+2. Memory/runtime stability: page teardown and listener cleanup
+3. API layer: stronger cache telemetry and pure summary paths
+4. Accessibility: complete key workflow semantics and keyboard support
+5. CSS: minify, extract inline styles, then purge safely

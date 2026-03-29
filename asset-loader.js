@@ -6,7 +6,6 @@
   var head = document.head;
   var body = document.body;
   var assets = [
-    'vendor/lucide.min.js',
     'units.js',
     { src: 'm365-config.override.js', optional: true },
     'm365-config.js',

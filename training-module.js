@@ -1164,10 +1164,21 @@
     return '<div class="training-summary-grid training-summary-grid-wide">' + buildTrainingSummaryCards(summary) + '</div>';
   }
 
+  function applyTrainingTableHeaderScope(headersHtml) {
+    return String(headersHtml || '').replace(/<th(?![^>]*\bscope=)/g, '<th scope="col"');
+  }
+
+  function buildTrainingTableCaption(caption) {
+    const text = String(caption || '').trim();
+    if (!text) return '';
+    return '<caption class="sr-only">' + esc(text) + '</caption>';
+  }
+
   function buildTrainingTableMarkup(headersHtml, rowsHtml, options) {
     const opts = options || {};
     const tbodyIdAttr = opts.tbodyId ? ' id="' + esc(opts.tbodyId) + '"' : '';
-    return '<div class="table-wrapper"><table><thead><tr>' + headersHtml + '</tr></thead><tbody' + tbodyIdAttr + '>' + rowsHtml + '</tbody></table></div>';
+    const caption = opts.caption || opts.title || '教育訓練資料表';
+    return '<div class="table-wrapper"><table>' + buildTrainingTableCaption(caption) + '<thead><tr>' + applyTrainingTableHeaderScope(headersHtml) + '</tr></thead><tbody' + tbodyIdAttr + '>' + rowsHtml + '</tbody></table></div>';
   }
 
   function buildTrainingEmptyTableRow(colspan, title, desc, padding) {

@@ -100,9 +100,17 @@
       return appendScript('vendor/xlsx.full.min.js', 'XLSX');
     }
 
+    function ensureLucideLoaded() {
+      if (typeof window !== 'undefined' && window.lucide && typeof window.lucide.createIcons === 'function') {
+        return Promise.resolve(window.lucide);
+      }
+      return appendScript('vendor/lucide.min.js', 'lucide');
+    }
+
     return {
       appendScript: appendScript,
-      ensureXlsxLoaded: ensureXlsxLoaded
+      ensureXlsxLoaded: ensureXlsxLoaded,
+      ensureLucideLoaded: ensureLucideLoaded
     };
   };
 })();

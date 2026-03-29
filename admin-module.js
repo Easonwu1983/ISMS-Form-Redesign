@@ -51,6 +51,7 @@
       esc,
       ic,
       refreshIcons,
+      addPageEventListener,
       downloadJson,
       buildUnitCascadeControl,
       initUnitCascade,
@@ -2442,12 +2443,23 @@
       return peopleRowsHtml;
     }
 
+    function applyColHeaderScope(headersHtml) {
+      return String(headersHtml || '').replace(/<th(?![^>]*\bscope=)/g, '<th scope="col"');
+    }
+
+    function buildSrCaption(caption) {
+      const text = String(caption || '').trim();
+      if (!text) return '';
+      return '<caption class="sr-only">' + esc(text) + '</caption>';
+    }
+
     function buildReviewTableShell(key, headersHtml, rowsHtml, options) {
       const config = options || {};
       const toolbarSubtitle = config.toolbarSubtitle
         ? `<span class="review-card-subtitle">${esc(config.toolbarSubtitle)}</span>`
         : '<span class="review-card-subtitle">可拖曳表格左右移動，也可使用右側按鈕快速查看其他欄位。</span>';
-      return `<div class="review-table-shell"><div class="review-table-toolbar">${toolbarSubtitle}<div class="review-table-scroll-actions"><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-left="${esc(key)}" aria-label="向左移動">${ic('chevron-left', 'icon-sm')}</button><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-right="${esc(key)}" aria-label="向右移動">${ic('chevron-right', 'icon-sm')}</button></div></div><div class="table-wrapper review-table-wrapper" data-review-scroll-root="${esc(key)}"><table><thead><tr>${headersHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+      const caption = config.caption || String(key || 'review-table').replace(/[-_]+/g, ' ') + ' table';
+      return `<div class="review-table-shell"><div class="review-table-toolbar">${toolbarSubtitle}<div class="review-table-scroll-actions"><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-left="${esc(key)}" aria-label="向左移動">${ic('chevron-left', 'icon-sm')}</button><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-right="${esc(key)}" aria-label="向右移動">${ic('chevron-right', 'icon-sm')}</button></div></div><div class="table-wrapper review-table-wrapper" data-review-scroll-root="${esc(key)}"><table>${buildSrCaption(caption)}<thead><tr>${applyColHeaderScope(headersHtml)}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
     }
 
     function wireReviewTableScrollers(scope) {
@@ -2679,7 +2691,15 @@
         resultsEl.hidden = true;
         resultsEl.innerHTML = '';
       });
-      document.addEventListener('click', (event) => {
+      const bindPageEvent = typeof addPageEventListener === 'function'
+        ? addPageEventListener
+        : function (target, type, listener, options) {
+            target.addEventListener(type, listener, options);
+            return function () {
+              try { target.removeEventListener(type, listener, options); } catch (_) {}
+            };
+          };
+      bindPageEvent(document, 'click', (event) => {
         if (!resultsEl.contains(event.target) && event.target !== searchEl) {
           resultsEl.hidden = true;
         }

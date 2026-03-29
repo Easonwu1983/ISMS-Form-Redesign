@@ -204,9 +204,12 @@
     const BUSY_ROOT_ID = 'busy-root';
     let iconRetryTimer = null;
     let iconRetryCount = 0;
+    let lucideLoadPromise = null;
     let unsavedChangesActive = false;
     let unsavedChangesMessage = DEFAULT_UNSAVED_MESSAGE;
     let busyOverlayDepth = 0;
+    let pageRuntimeController = null;
+    let pageRuntimeCleanups = [];
 
     if (typeof window !== 'undefined' && !window.__UNSAVED_CHANGES_GUARD__) {
       window.addEventListener('beforeunload', function (event) {
@@ -298,6 +301,92 @@
       return '<span class="ntu-logo' + (safeClassName ? ' ' + escAttr(safeClassName) : '') + '">NTU</span>';
     }
 
+    function getRuntimeAssetLoaderModule() {
+      if (typeof window === 'undefined') return null;
+      if (window._runtimeAssetLoaderModule && typeof window._runtimeAssetLoaderModule.ensureLucideLoaded === 'function') {
+        return window._runtimeAssetLoaderModule;
+      }
+      if (typeof window.createRuntimeAssetLoaderModule !== 'function') return null;
+      window._runtimeAssetLoaderModule = window.createRuntimeAssetLoaderModule();
+      return window._runtimeAssetLoaderModule;
+    }
+
+    function ensureLucideLoaded() {
+      if (typeof window !== 'undefined' && window.lucide && typeof window.lucide.createIcons === 'function') {
+        return Promise.resolve(window.lucide);
+      }
+      if (lucideLoadPromise) return lucideLoadPromise;
+      const loader = getRuntimeAssetLoaderModule();
+      if (!loader || typeof loader.ensureLucideLoaded !== 'function') {
+        return Promise.reject(new Error('lucide loader unavailable'));
+      }
+      lucideLoadPromise = loader.ensureLucideLoaded().finally(function () {
+        lucideLoadPromise = null;
+      });
+      return lucideLoadPromise;
+    }
+
+    function ensurePageRuntimeController() {
+      if (!pageRuntimeController || pageRuntimeController.signal.aborted) {
+        pageRuntimeController = typeof AbortController === 'function'
+          ? new AbortController()
+          : { signal: null, abort: function () {} };
+      }
+      return pageRuntimeController;
+    }
+
+    function registerPageCleanup(callback) {
+      if (typeof callback !== 'function') return function () {};
+      pageRuntimeCleanups.push(callback);
+      return function () {
+        pageRuntimeCleanups = pageRuntimeCleanups.filter(function (entry) { return entry !== callback; });
+      };
+    }
+
+    function teardownPageRuntime() {
+      if (pageRuntimeController && typeof pageRuntimeController.abort === 'function') {
+        try { pageRuntimeController.abort(); } catch (_) {}
+      }
+      pageRuntimeController = null;
+      const callbacks = pageRuntimeCleanups.slice();
+      pageRuntimeCleanups = [];
+      callbacks.forEach(function (callback) {
+        try { callback(); } catch (_) {}
+      });
+    }
+
+    function beginPageRuntime() {
+      teardownPageRuntime();
+      return ensurePageRuntimeController().signal;
+    }
+
+    function addPageEventListener(target, type, listener, options) {
+      if (!target || typeof target.addEventListener !== 'function' || typeof listener !== 'function') {
+        return function () {};
+      }
+      const controller = ensurePageRuntimeController();
+      let removed = false;
+      const normalizedOptions = options && typeof options === 'object' ? Object.assign({}, options) : options;
+      try {
+        const scopedOptions = normalizedOptions && typeof normalizedOptions === 'object'
+          ? Object.assign({}, normalizedOptions, { signal: controller.signal })
+          : { signal: controller.signal };
+        target.addEventListener(type, listener, scopedOptions);
+        return function () {
+          if (removed) return;
+          removed = true;
+          try { target.removeEventListener(type, listener, normalizedOptions); } catch (_) {}
+        };
+      } catch (_) {
+        target.addEventListener(type, listener, normalizedOptions);
+        return registerPageCleanup(function () {
+          if (removed) return;
+          removed = true;
+          try { target.removeEventListener(type, listener, normalizedOptions); } catch (_) {}
+        });
+      }
+    }
+
     function toast(message, type) {
       const container = document.getElementById('toast-container');
       if (!container) return;
@@ -370,13 +459,22 @@
 
     function bindCopyButtons(root) {
       const scope = root || document;
-      scope.querySelectorAll('.copy-id-btn:not([data-copy-bound])').forEach(function (button) {
-        button.dataset.copyBound = '1';
-        button.addEventListener('click', function (event) {
-          event.preventDefault();
-          event.stopPropagation();
-          copyTextToClipboard(button.dataset.copy || '', button.dataset.copyLabel || '編號');
-        });
+      const isDocumentScope = scope === document;
+      if (isDocumentScope) {
+        if (window.__COPY_BUTTONS_BOUND__) return;
+        window.__COPY_BUTTONS_BOUND__ = true;
+      } else {
+        if (scope.dataset && scope.dataset.copyRootBound === '1') return;
+        if (scope.dataset) scope.dataset.copyRootBound = '1';
+      }
+      scope.addEventListener('click', function (event) {
+        const button = event.target && typeof event.target.closest === 'function'
+          ? event.target.closest('.copy-id-btn')
+          : null;
+        if (!button || (scope !== document && !scope.contains(button))) return;
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextToClipboard(button.dataset.copy || '', button.dataset.copyLabel || '編號');
       });
     }
 
@@ -435,13 +533,17 @@
     function refreshIcons() {
       const lucideApi = window.lucide;
       if (!lucideApi || typeof lucideApi.createIcons !== 'function') {
-        if (!iconRetryTimer && iconRetryCount < 20) {
-          iconRetryTimer = window.setTimeout(function () {
-            iconRetryTimer = null;
-            iconRetryCount += 1;
-            refreshIcons();
-          }, 120);
-        }
+        ensureLucideLoaded().then(function () {
+          refreshIcons();
+        }).catch(function () {
+          if (!iconRetryTimer && iconRetryCount < 20) {
+            iconRetryTimer = window.setTimeout(function () {
+              iconRetryTimer = null;
+              iconRetryCount += 1;
+              refreshIcons();
+            }, 120);
+          }
+        });
         return;
       }
       iconRetryCount = 0;
@@ -678,6 +780,10 @@
       renderCopyIdCell,
       copyTextToClipboard,
       bindCopyButtons,
+      beginPageRuntime,
+      teardownPageRuntime,
+      registerPageCleanup,
+      addPageEventListener,
       applyTestIds,
       applySelectorTestIds,
       debugFlow,

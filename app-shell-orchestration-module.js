@@ -24,6 +24,8 @@
         navigate: deps.navigate,
         toast: deps.toast,
         refreshIcons: deps.refreshIcons,
+        beginPageRuntime: deps.beginPageRuntime,
+        teardownPageRuntime: deps.teardownPageRuntime,
         markAuthenticatedBootstrapReady: deps.markAuthenticatedBootstrapReady,
         esc: deps.esc,
         ic: deps.ic,

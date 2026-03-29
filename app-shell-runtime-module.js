@@ -25,6 +25,8 @@
         navigate: d.navigate,
         toast: d.toast,
         refreshIcons: d.refreshIcons,
+        beginPageRuntime: d.beginPageRuntime,
+        teardownPageRuntime: d.teardownPageRuntime,
         markAuthenticatedBootstrapReady: d.markAuthenticatedBootstrapReady,
         esc: d.esc,
         ic: d.ic,

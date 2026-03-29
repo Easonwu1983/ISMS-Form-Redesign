@@ -23,6 +23,8 @@
       navigate,
       toast,
       refreshIcons,
+      beginPageRuntime,
+      teardownPageRuntime,
       markAuthenticatedBootstrapReady,
       esc,
       ic,
@@ -268,6 +270,8 @@
     }
 
     function renderLogin() {
+      if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
+      if (typeof beginPageRuntime === 'function') beginPageRuntime();
       purgeStaleLoginState();
       var needsLocalBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
       document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="login-page"><main class="login-card" id="app" tabindex="-1" role="main" aria-labelledby="login-page-title">' +
@@ -596,6 +600,7 @@
         if (message) toast(message, 'error');
         return;
       }
+      if (typeof beginPageRuntime === 'function') beginPageRuntime();
       renderSidebar();
       renderHeader();
       closeSidebar();
@@ -604,13 +609,16 @@
     }
 
     function renderPublicPage(page, param) {
+      if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
       document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>內部稽核管考追蹤系統</strong><span>ISMS 管考與追蹤平台</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">進入系統</a>' : '<a class="btn btn-secondary" href="#">登入系統</a>') + '</div></header><main class="public-main" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container"></div><div id="modal-root"></div></div>';
+      if (typeof beginPageRuntime === 'function') beginPageRuntime();
       getRouteMeta(page).render(param);
       refreshIcons();
       focusRouteContent();
     }
 
     function renderApp() {
+      if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
       var u = currentUser();
       if (!u) {
         handleRoute();

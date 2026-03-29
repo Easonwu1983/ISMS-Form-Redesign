@@ -131,11 +131,22 @@
     return '<div class="' + cardClass + '"' + styleAttr + '>' + (headerHtml ? '<div class="' + headerClass + '">' + headerHtml + '</div>' : '') + bodyHtml + '</div>';
   }
 
+  function applyCaseTableHeaderScope(headersHtml) {
+    return String(headersHtml || '').replace(/<th(?![^>]*\bscope=)/g, '<th scope="col"');
+  }
+
+  function buildCaseTableCaption(caption) {
+    var text = String(caption || '').trim();
+    if (!text) return '';
+    return '<caption class="sr-only">' + esc(text) + '</caption>';
+  }
+
   function buildCaseTableMarkup(headersHtml, rowsHtml, options) {
     var opts = options || {};
     var wrapperClass = opts.wrapperClass ? 'table-wrapper ' + opts.wrapperClass : 'table-wrapper';
     var tableClass = opts.tableClass ? ' class="' + opts.tableClass + '"' : '';
-    return '<div class="' + wrapperClass + '"><table' + tableClass + '><thead><tr>' + headersHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+    var caption = opts.caption || '矯正單資料表';
+    return '<div class="' + wrapperClass + '"><table' + tableClass + '>' + buildCaseTableCaption(caption) + '<thead><tr>' + applyCaseTableHeaderScope(headersHtml) + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
   }
 
   function buildCaseStatCard(tone, iconName, value, label) {
