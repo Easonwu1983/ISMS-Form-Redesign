@@ -37,6 +37,7 @@
     'app-action-module.js',
     'app-shell-orchestration-module.js',
     'app-shell-runtime-module.js',
+    'app-page-shell-runtime-module.js',
     'app-entry-module.js',
     'app-entry-runtime-module.js',
     'app-auth-session-module.js',

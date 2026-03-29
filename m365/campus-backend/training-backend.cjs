@@ -47,6 +47,7 @@ function createTrainingRouter(deps) {
     formsCacheAt: 0,
     formsCachePromise: null,
     formsQueryCache: new Map(),
+    formsSummaryCache: new Map(),
     rostersCache: null,
     rostersCacheAt: 0,
     rostersCachePromise: null,
@@ -57,6 +58,8 @@ function createTrainingRouter(deps) {
   const TRAINING_ROSTERS_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
   const TRAINING_FORMS_QUERY_CACHE_MS = 60000;
   const TRAINING_FORMS_QUERY_CACHE_MAX = 48;
+  const TRAINING_FORMS_SUMMARY_CACHE_MS = 120000;
+  const TRAINING_FORMS_SUMMARY_CACHE_MAX = 32;
   const TRAINING_ROSTERS_QUERY_CACHE_MS = 60000;
   const TRAINING_ROSTERS_QUERY_CACHE_MAX = 24;
 
@@ -257,6 +260,9 @@ function createTrainingRouter(deps) {
     state.formsCachePromise = null;
     if (state.formsQueryCache instanceof Map) {
       state.formsQueryCache.clear();
+    }
+    if (state.formsSummaryCache instanceof Map) {
+      state.formsSummaryCache.clear();
     }
     state.rostersCache = null;
     state.rostersCacheAt = 0;
@@ -510,6 +516,26 @@ function createTrainingRouter(deps) {
     ].join('::');
   }
 
+  function buildFormSummarySignature(authz, url) {
+    const safeAuthz = authz && typeof authz === 'object' ? authz : {};
+    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
+      ? safeAuthz.authorizedUnits.map((value) => cleanText(value)).filter(Boolean).sort()
+      : [];
+    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
+    return [
+      String(state.formsCacheAt || 0).trim(),
+      String(safeAuthz.username || '').trim(),
+      String(safeAuthz.role || '').trim(),
+      authorizedUnits.join('|'),
+      String(params.get('status') || '').trim(),
+      String(params.get('unit') || '').trim(),
+      String(params.get('statsUnit') || '').trim(),
+      String(params.get('trainingYear') || '').trim(),
+      String(params.get('fillerUsername') || '').trim(),
+      String(params.get('q') || '').trim().toLowerCase()
+    ].join('::');
+  }
+
   function readFormsQueryCache(cacheKey) {
     if (!(state.formsQueryCache instanceof Map)) return { body: null, reason: 'disabled' };
     if (!cacheKey) return { body: null, reason: 'empty-key' };
@@ -543,6 +569,42 @@ function createTrainingRouter(deps) {
       body: cloneJson(body)
     });
     trimQueryCache(state.formsQueryCache, TRAINING_FORMS_QUERY_CACHE_MAX);
+    return cloneJson(body);
+  }
+
+  function readFormsSummaryCache(cacheKey) {
+    if (!(state.formsSummaryCache instanceof Map)) return { body: null, reason: 'disabled' };
+    if (!cacheKey) return { body: null, reason: 'empty-key' };
+    if (!state.formsSummaryCache.has(cacheKey)) return { body: null, reason: 'missing' };
+    const cached = state.formsSummaryCache.get(cacheKey);
+    if (!cached || typeof cached !== 'object' || !cached.body) {
+      state.formsSummaryCache.delete(cacheKey);
+      return { body: null, reason: 'invalid' };
+    }
+    if (Number(cached.cacheAt || 0) !== Number(state.formsCacheAt || 0)) {
+      state.formsSummaryCache.delete(cacheKey);
+      return { body: null, reason: 'cache-version-mismatch' };
+    }
+    if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_FORMS_SUMMARY_CACHE_MS) {
+      state.formsSummaryCache.delete(cacheKey);
+      return { body: null, reason: 'expired' };
+    }
+    state.formsSummaryCache.delete(cacheKey);
+    state.formsSummaryCache.set(cacheKey, cached);
+    return {
+      body: cloneJson(cached.body),
+      reason: 'hit'
+    };
+  }
+
+  function writeFormsSummaryCache(cacheKey, body) {
+    if (!(state.formsSummaryCache instanceof Map) || !cacheKey) return cloneJson(body);
+    state.formsSummaryCache.set(cacheKey, {
+      loadedAt: Date.now(),
+      cacheAt: Number(state.formsCacheAt || 0),
+      body: cloneJson(body)
+    });
+    trimQueryCache(state.formsSummaryCache, TRAINING_FORMS_SUMMARY_CACHE_MAX);
     return cloneJson(body);
   }
 
@@ -1032,6 +1094,27 @@ function createTrainingRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = String(url.searchParams.get('summaryOnly') || '').trim() === '1';
       const filters = readTrainingFormFilters(url);
+      const summaryCacheKey = summaryOnly ? buildFormSummarySignature(authz, url) : '';
+      if (summaryOnly) {
+        const summaryLookup = readFormsSummaryCache(summaryCacheKey);
+        const summaryCached = summaryLookup && summaryLookup.body;
+        if (summaryCached) {
+          logTrainingForms('summary cache hit', {
+            username: authz.username,
+            total: summaryCached.total,
+            durationMs: Date.now() - startedAt
+          });
+          await writeJson(res, buildJsonResponse(200, {
+            ...summaryCached,
+            cache: {
+              query: 'hit',
+              summaryOnly: true,
+              reason: 'summary-hit'
+            }
+          }), origin);
+          return;
+        }
+      }
       const cacheKey = buildFormQuerySignature(authz, url);
       const cacheLookup = readFormsQueryCache(cacheKey);
       const cached = cacheLookup && cacheLookup.body;
@@ -1086,7 +1169,10 @@ function createTrainingRouter(deps) {
         },
         contractVersion: CONTRACT_VERSION
       };
-      const cachedBody = writeFormsQueryCache(cacheKey, responseBody);
+      let cachedBody = writeFormsQueryCache(cacheKey, responseBody);
+      if (summaryOnly) {
+        cachedBody = writeFormsSummaryCache(summaryCacheKey, cachedBody);
+      }
       logTrainingForms('list served', {
         username: authz.username,
         totalRows: rows.length,

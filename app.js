@@ -2590,7 +2590,8 @@
     });
     return shellModuleApi;
   }
-  const ROUTE_WHITELIST = getAppPageOrchestrationModule().buildRouteWhitelist({
+    const appPageShellRuntime = getAppRuntimeServiceModule().getAppPageShellRuntimeModule(appRuntimeServiceState).createAccess({
+    DATA_KEY,
     currentUser,
     canCreateCAR,
     canManageUsers,
@@ -2601,69 +2602,40 @@
     getAdminModule,
     getChecklistModule,
     getTrainingModule,
-    getUnitContactApplicationModule
+    getUnitContactApplicationModule,
+    getAppPageOrchestrationModule,
+    getAppRouteModule,
+    getAppVisibilityModule,
+    getAppShellOrchestrationModule,
+    getDataModule,
+    getPolicyModule,
+    getUiModule,
+    getShellModule,
+    ensureSessionHeartbeat
   });
-  function getRouteMeta(page) { return getAppRouteModule().getRouteMeta(page); }
-  function getRouteTitle(page) { return getAppRouteModule().getRouteTitle(page); }
-  function canAccessRoute(page, routeParam) {
-    return getAppRouteModule().canAccessRoute(page, routeParam);
-  }
-  function getRouteFallback(page) { return getAppRouteModule().getRouteFallback(page); }
-  window._routeWhitelist = function () {
-    return getAppRouteModule().getRouteManifest();
-  };
-  function refreshIcons() { return getUiModule().refreshIcons(); }
-  function getVisibleItems(user = currentUser()) {
-    return getAppVisibilityModule().getVisibleItems({
-      DATA_KEY,
-      currentUser,
-      getDataModule,
-      getPolicyModule
-    }, user);
-  }
-  function canAccessItem(item, user = currentUser()) {
-    return getAppVisibilityModule().canAccessItem({ currentUser, getPolicyModule }, item, user);
-  }
-  function isItemHandler(item, user = currentUser()) {
-    return getAppVisibilityModule().isItemHandler({ currentUser, getPolicyModule }, item, user);
-  }
-  function canRespondItem(item, user = currentUser()) {
-    return getAppVisibilityModule().canRespondItem({ currentUser, getPolicyModule }, item, user);
-  }
-  function canSubmitTracking(item, user = currentUser()) {
-    return getAppVisibilityModule().canSubmitTracking({ currentUser, getPolicyModule }, item, user);
-  }
-  function toTestIdFragment(value) { return getUiModule().toTestIdFragment(value); }
-
-  function isTrainingBooleanValue(value) {
-    return TRAINING_BOOLEAN_SELECT_OPTIONS.includes(String(value || '').trim());
-  }
-
-  function isTrainingBooleanCompatibleValue(value) {
-    return TRAINING_BOOLEAN_OPTIONS.includes(String(value || '').trim());
-  }
-
-  function normalizeTrainingProfessionalValue(value) {
-    const safeValue = String(value || '').trim();
-    if (!isTrainingBooleanCompatibleValue(safeValue)) return '';
-    if (safeValue === '無須' || safeValue === '不適用') return '不適用';
-    return safeValue;
-  }
-
-  function getStoredTrainingProfessionalValue(record) {
-    if (!record || record.status !== '在職') return '';
-    if (record.isInfoStaff === '否') return '不適用';
-    return isTrainingBooleanValue(record.completedProfessional) ? record.completedProfessional : '';
-  }
-  function mkChk(name, opts, sel) { return getUiModule().mkChk(name, opts, sel); }
-  function mkRadio(name, opts, sel) { return getUiModule().mkRadio(name, opts, sel); }
-  function isMobileViewport() { return getAppShellOrchestrationModule().isMobileViewport({ getShellModule }); }
-  function closeSidebar() { return getAppShellOrchestrationModule().closeSidebar({ getShellModule }); }
-  function toggleSidebar() { return getAppShellOrchestrationModule().toggleSidebar({ getShellModule }); }
-  function renderLogin() { return getAppShellOrchestrationModule().renderLogin({ getShellModule }); }
-  function renderApp() { return getAppShellOrchestrationModule().renderApp({ getShellModule, ensureSessionHeartbeat }); }
-  function renderSidebar() { return getAppShellOrchestrationModule().renderSidebar({ getShellModule }); }
-  function renderHeader() { return getAppShellOrchestrationModule().renderHeader({ getShellModule }); }
+  const {
+    ROUTE_WHITELIST,
+    bindRouteManifest,
+    getRouteMeta,
+    getRouteTitle,
+    canAccessRoute,
+    getRouteFallback,
+    refreshIcons,
+    getVisibleItems,
+    canAccessItem,
+    isItemHandler,
+    canRespondItem,
+    canSubmitTracking,
+    toTestIdFragment,
+    isMobileViewport,
+    closeSidebar,
+    toggleSidebar,
+    renderLogin,
+    renderApp,
+    renderSidebar,
+    renderHeader
+  } = appPageShellRuntime;
+  bindRouteManifest(window);
 
   // ─── Render: Dashboard ─────────────────────
   function getCurrentNextTrackingDate(item) {

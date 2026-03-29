@@ -183,78 +183,42 @@ async function seedSyntheticDashboard(page) {
     const shell = document.createElement('section');
     shell.id = 'visual-dashboard-shell';
     shell.className = 'dashboard-shell visual-dashboard-shell card';
-    shell.innerHTML = `
-      <div class="card-header">
-        <div>
-          <div class="page-eyebrow">Dashboard Overview</div>
-          <span class="card-title">儀表板</span>
-        </div>
-        <span class="review-card-subtitle">Synthetic focused baseline</span>
-      </div>
-      <div class="dashboard-meta-row visual-dashboard-pill-row">
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">總數</span><strong class="dashboard-panel-pill-value visual-smoke-mask-value">16</strong></div>
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待矯正</span><strong class="dashboard-panel-pill-value visual-smoke-mask-value">4</strong></div>
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已逾期</span><strong class="dashboard-panel-pill-value visual-smoke-mask-value">1</strong></div>
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">本月結案</span><strong class="dashboard-panel-pill-value visual-smoke-mask-value">6</strong></div>
-      </div>
-      <div class="dashboard-grid visual-dashboard-grid">
-        <div class="card dashboard-panel dashboard-chart-panel">
-          <div class="card-header">
-            <span class="card-title">狀態分布</span>
-            <span class="review-card-subtitle">Synthetic focused baseline</span>
-          </div>
-          <div class="donut-chart-container visual-dashboard-chart">
-            <svg viewBox="0 0 160 160" class="donut-chart" aria-hidden="true">
-              <circle r="60" cx="80" cy="80" fill="none" stroke="#e2e8f0" stroke-width="20"></circle>
-              <circle r="60" cx="80" cy="80" fill="none" stroke="#3b82f6" stroke-width="20" stroke-dasharray="120 257" stroke-dashoffset="0"></circle>
-              <circle r="60" cx="80" cy="80" fill="none" stroke="#f59e0b" stroke-width="20" stroke-dasharray="68 309" stroke-dashoffset="-120"></circle>
-              <circle r="60" cx="80" cy="80" fill="none" stroke="#22c55e" stroke-width="20" stroke-dasharray="94 283" stroke-dashoffset="-188"></circle>
-            </svg>
-            <div class="donut-legend">
-              <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span><span>建立</span><span class="legend-count visual-smoke-mask-value">5</span></div>
-              <div class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span><span>待矯正</span><span class="legend-count visual-smoke-mask-value">4</span></div>
-              <div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span><span>結案</span><span class="legend-count visual-smoke-mask-value">6</span></div>
-            </div>
-          </div>
-        </div>
-        <div class="card dashboard-panel dashboard-table-panel">
-          <div class="card-header">
-            <span class="card-title">最近矯正單</span>
-            <span class="review-card-subtitle">Synthetic focused baseline</span>
-          </div>
-          <div class="dashboard-recent-table-wrapper">
-            <table class="dashboard-recent-table">
-              <thead>
-                <tr>
-                  <th>單號</th>
-                  <th>說明</th>
-                  <th>狀態</th>
-                  <th>最後活動</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="visual-smoke-mask-value">CAR-001</td>
-                  <td class="visual-smoke-mask-value">Synthetic item</td>
-                  <td><span class="badge">追蹤中</span></td>
-                  <td class="visual-smoke-mask-value">2026-03-28</td>
-                </tr>
-                <tr>
-                  <td class="visual-smoke-mask-value">CAR-002</td>
-                  <td class="visual-smoke-mask-value">Synthetic item</td>
-                  <td><span class="badge">待矯正</span></td>
-                  <td class="visual-smoke-mask-value">2026-03-27</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    `;
+    shell.innerHTML =
+      '<div class="card-header">' +
+        '<div>' +
+          '<div class="page-eyebrow">Dashboard Overview</div>' +
+          '<span class="card-title">Executive Summary</span>' +
+        '</div>' +
+        '<span class="review-card-subtitle">Synthetic focused baseline</span>' +
+      '</div>' +
+      '<div class="visual-dashboard-stat-grid">' +
+        '<div class="visual-dashboard-stat-card"><span class="visual-dashboard-stat-label">Open Cases</span><strong class="visual-dashboard-stat-value visual-smoke-mask-value">16</strong></div>' +
+        '<div class="visual-dashboard-stat-card"><span class="visual-dashboard-stat-label">Pending</span><strong class="visual-dashboard-stat-value visual-smoke-mask-value">4</strong></div>' +
+        '<div class="visual-dashboard-stat-card"><span class="visual-dashboard-stat-label">Overdue</span><strong class="visual-dashboard-stat-value visual-smoke-mask-value">1</strong></div>' +
+        '<div class="visual-dashboard-stat-card"><span class="visual-dashboard-stat-label">Closed</span><strong class="visual-dashboard-stat-value visual-smoke-mask-value">6</strong></div>' +
+      '</div>' +
+      '<div class="visual-dashboard-mini-grid">' +
+        '<div class="card visual-dashboard-panel">' +
+          '<div class="card-header"><span class="card-title">Case Mix</span><span class="review-card-subtitle">Synthetic focused baseline</span></div>' +
+          '<div class="visual-dashboard-bar-stack">' +
+            '<div class="visual-dashboard-bar-row"><span class="visual-dashboard-bar-label">New</span><span class="visual-dashboard-bar" style="width:68%"></span></div>' +
+            '<div class="visual-dashboard-bar-row"><span class="visual-dashboard-bar-label">Review</span><span class="visual-dashboard-bar" style="width:48%"></span></div>' +
+            '<div class="visual-dashboard-bar-row"><span class="visual-dashboard-bar-label">Track</span><span class="visual-dashboard-bar" style="width:72%"></span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="card visual-dashboard-panel">' +
+          '<div class="card-header"><span class="card-title">Latest Signals</span><span class="review-card-subtitle">Synthetic focused baseline</span></div>' +
+          '<div class="visual-dashboard-signal-stack">' +
+            '<div class="visual-dashboard-signal-card"><span class="visual-dashboard-signal-dot"></span><div><strong>Pending sign-off</strong><div class="visual-smoke-mask-value">4 items</div></div></div>' +
+            '<div class="visual-dashboard-signal-card"><span class="visual-dashboard-signal-dot"></span><div><strong>Checklist export</strong><div class="visual-smoke-mask-value">2 units</div></div></div>' +
+            '<div class="visual-dashboard-signal-card"><span class="visual-dashboard-signal-dot"></span><div><strong>Audit follow-up</strong><div class="visual-smoke-mask-value">1 overdue</div></div></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
     app.appendChild(shell);
   });
 
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(90);
 }
 
 async function seedSyntheticUnitContactApply(page) {
@@ -270,65 +234,48 @@ async function seedSyntheticUnitContactApply(page) {
     const shell = document.createElement('section');
     shell.id = 'visual-unit-contact-apply-shell';
     shell.className = 'unit-contact-shell visual-unit-contact-apply-shell card';
-    shell.innerHTML = `
-      <div class="card-header">
-        <div>
-          <div class="page-eyebrow">Public Apply</div>
-          <span class="card-title">申請單位管理員</span>
-        </div>
-        <span class="review-card-subtitle">Synthetic focused baseline</span>
-      </div>
-      <div class="visual-unit-contact-hero">
-        <div class="visual-unit-contact-copy">
-          <div class="unit-contact-mode-title">校內正式主站由 VM 提供，這裡保留公開申請入口。</div>
-          <div class="unit-contact-mode-text">Synthetic focused baseline</div>
-        </div>
-        <div class="visual-unit-contact-badges">
-          <span class="review-count-chip">申請表單</span>
-          <span class="review-count-chip">授權文件</span>
-          <span class="review-count-chip">啟用流程</span>
-        </div>
-      </div>
-      <div class="visual-unit-contact-grid">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">申請資料</span>
-          </div>
-          <div class="visual-unit-contact-field-grid">
-            <div class="form-group"><label class="form-label">申請單位</label><div class="form-input visual-smoke-mask-value">unit</div></div>
-            <div class="form-group"><label class="form-label">申請人</label><div class="form-input visual-smoke-mask-value">name</div></div>
-            <div class="form-group"><label class="form-label">電子郵件</label><div class="form-input visual-smoke-mask-value">mail</div></div>
-            <div class="form-group"><label class="form-label">分機</label><div class="form-input visual-smoke-mask-value">61234</div></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">流程說明</span>
-          </div>
-          <div class="visual-unit-contact-step-stack">
-            <div class="unit-contact-step-card">
-              <strong>1. 填寫申請</strong>
-              <div class="unit-contact-step-card-text">Synthetic focused baseline</div>
-            </div>
-            <div class="unit-contact-step-card">
-              <strong>2. 下載授權文件</strong>
-              <div class="unit-contact-step-card-text">Synthetic focused baseline</div>
-            </div>
-            <div class="unit-contact-step-card">
-              <strong>3. 啟用帳號</strong>
-              <div class="unit-contact-step-card-text">Synthetic focused baseline</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+    shell.innerHTML =
+      '<div class="card-header">' +
+        '<div>' +
+          '<div class="page-eyebrow">Public Apply</div>' +
+          '<span class="card-title">Unit Contact Application</span>' +
+        '</div>' +
+        '<span class="review-card-subtitle">Synthetic focused baseline</span>' +
+      '</div>' +
+      '<div class="visual-unit-contact-hero">' +
+        '<div class="visual-unit-contact-copy">' +
+          '<div class="unit-contact-mode-title">Campus VM is the primary service entry.</div>' +
+          '<div class="unit-contact-mode-text">Pages keeps a lightweight public fallback shell.</div>' +
+        '</div>' +
+        '<div class="visual-unit-contact-badges">' +
+          '<span class="review-count-chip">Apply</span>' +
+          '<span class="review-count-chip">Review</span>' +
+          '<span class="review-count-chip">Activate</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="visual-unit-contact-grid">' +
+        '<div class="card">' +
+          '<div class="card-header"><span class="card-title">Request Snapshot</span></div>' +
+          '<div class="visual-unit-contact-field-grid">' +
+            '<div class="form-group"><label class="form-label">Unit</label><div class="form-input visual-smoke-mask-value">Computer Center</div></div>' +
+            '<div class="form-group"><label class="form-label">Requester</label><div class="form-input visual-smoke-mask-value">Eason Wu</div></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="card">' +
+          '<div class="card-header"><span class="card-title">Flow</span></div>' +
+          '<div class="visual-unit-contact-step-stack">' +
+            '<div class="unit-contact-step-card"><strong>1. Submit</strong><div class="unit-contact-step-card-text">Identity and unit routing</div></div>' +
+            '<div class="unit-contact-step-card"><strong>2. Review and Activate</strong><div class="unit-contact-step-card-text">Approval, document, activation</div></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
     app.appendChild(shell);
     document.querySelectorAll('.unit-contact-shell .card, .unit-contact-shell form, .unit-contact-shell .unit-contact-stepper, .unit-contact-shell .unit-contact-mode-card').forEach((node) => {
       if (node !== shell && !shell.contains(node)) node.classList.add('visual-smoke-hide');
     });
   });
 
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(90);
 }
 
 async function seedSyntheticUnitContactStatus(page) {
@@ -413,57 +360,67 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'dashboard') {
     return common + `
       #visual-dashboard-shell {
-        max-width: ${mode === 'mobile' ? '340px' : '760px'} !important;
+        max-width: ${mode === 'mobile' ? '320px' : '640px'} !important;
         margin: 0 auto !important;
-        padding: ${mode === 'mobile' ? '16px' : '18px'} !important;
+        padding: ${mode === 'mobile' ? '14px' : '16px'} !important;
       }
-      #visual-dashboard-shell .visual-dashboard-grid {
-        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.05fr 1fr'} !important;
-        gap: 14px !important;
+      #visual-dashboard-shell .visual-dashboard-stat-grid {
+        display: grid !important;
+        grid-template-columns: repeat(${mode === 'mobile' ? '2' : '4'}, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+        margin-bottom: 14px !important;
       }
-      #visual-dashboard-shell .visual-dashboard-pill-row {
-        margin-bottom: 18px !important;
+      #visual-dashboard-shell .visual-dashboard-stat-card,
+      #visual-dashboard-shell .visual-dashboard-panel {
+        border: 1px solid rgba(148, 163, 184, 0.18) !important;
+        border-radius: 16px !important;
+        background: rgba(255, 255, 255, 0.96) !important;
+        padding: 12px !important;
       }
-      #visual-dashboard-shell .visual-dashboard-chart {
-        min-height: ${mode === 'mobile' ? '220px' : '240px'} !important;
+      #visual-dashboard-shell .visual-dashboard-mini-grid {
+        display: grid !important;
+        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1fr 1fr'} !important;
+        gap: 12px !important;
       }
-      #visual-dashboard-shell .dashboard-recent-table tbody {
-        display: table-row-group !important;
+      #visual-dashboard-shell .visual-dashboard-bar-stack,
+      #visual-dashboard-shell .visual-dashboard-signal-stack {
+        display: grid !important;
+        gap: 10px !important;
       }
-      #visual-dashboard-shell .dashboard-recent-table-wrapper {
-        max-height: none !important;
+      #visual-dashboard-shell .visual-dashboard-bar-row {
+        display: grid !important;
+        grid-template-columns: 72px 1fr !important;
+        gap: 10px !important;
+        align-items: center !important;
       }
-      .dashboard-meta-value,
-      .dashboard-panel-pill-value,
-      .legend-count,
-      .stat-value,
-      .dashboard-focus-item strong,
-      .dashboard-recent-id-text,
-      .dashboard-recent-desc,
-      .dashboard-recent-handler-name,
-      .dashboard-recent-date-value {
-        color: transparent !important;
+      #visual-dashboard-shell .visual-dashboard-bar {
+        display: block !important;
+        height: 10px !important;
+        border-radius: 999px !important;
+        background: linear-gradient(90deg, rgba(59, 130, 246, 0.92), rgba(96, 165, 250, 0.76)) !important;
+      }
+      #visual-dashboard-shell .visual-dashboard-signal-card {
+        display: grid !important;
+        grid-template-columns: auto 1fr !important;
+        gap: 10px !important;
+        align-items: center !important;
+      }
+      #visual-dashboard-shell .visual-dashboard-signal-dot {
+        width: 10px !important;
+        height: 10px !important;
+        border-radius: 999px !important;
+        background: rgba(59, 130, 246, 0.92) !important;
+      }
+      #visual-dashboard-shell .visual-dashboard-stat-value,
+      #visual-dashboard-shell .visual-dashboard-stat-label,
+      #visual-dashboard-shell .visual-dashboard-bar-label,
+      #visual-dashboard-shell .visual-dashboard-signal-card div,
+      #visual-dashboard-shell .visual-dashboard-signal-card strong {
         text-shadow: none !important;
       }
-      .donut-chart text {
-        fill: transparent !important;
-      }
-      .donut-chart circle {
-        stroke: rgba(226, 232, 240, 0.92) !important;
-        stroke-dasharray: none !important;
-        stroke-dashoffset: 0 !important;
-      }
-      .dashboard-recent-status-cell .badge,
-      .dashboard-recent-status-cell .badge-dot {
-        background: rgba(226, 232, 240, 0.92) !important;
-        border-color: rgba(226, 232, 240, 0.92) !important;
+      #visual-dashboard-shell .visual-dashboard-stat-value,
+      #visual-dashboard-shell .visual-smoke-mask-value {
         color: transparent !important;
-      }
-      .dashboard-recent-table tbody {
-        display: none !important;
-      }
-      .dashboard-recent-table-wrapper {
-        max-height: none !important;
       }
     `;
   }
@@ -554,44 +511,40 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'unit-contact-apply') {
     return common + `
       #visual-unit-contact-apply-shell {
-        max-width: ${mode === 'mobile' ? '340px' : '760px'} !important;
+        max-width: ${mode === 'mobile' ? '320px' : '640px'} !important;
         margin: 0 auto !important;
-        padding: ${mode === 'mobile' ? '16px' : '18px'} !important;
+        padding: ${mode === 'mobile' ? '14px' : '16px'} !important;
       }
       #visual-unit-contact-apply-shell .visual-unit-contact-grid {
         display: grid !important;
-        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.1fr 0.9fr'} !important;
-        gap: 14px !important;
+        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1fr 0.94fr'} !important;
+        gap: 12px !important;
       }
       #visual-unit-contact-apply-shell .visual-unit-contact-hero {
         display: grid !important;
         grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.2fr auto'} !important;
-        gap: 12px !important;
-        margin-bottom: 16px !important;
+        gap: 10px !important;
+        margin-bottom: 14px !important;
       }
       #visual-unit-contact-apply-shell .visual-unit-contact-badges {
         display: flex !important;
         flex-wrap: wrap !important;
-        gap: 8px !important;
+        gap: 6px !important;
         align-items: flex-start !important;
       }
-      #visual-unit-contact-apply-shell .visual-unit-contact-field-grid {
-        display: grid !important;
-        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1fr 1fr'} !important;
-        gap: 12px !important;
-      }
+      #visual-unit-contact-apply-shell .visual-unit-contact-field-grid,
       #visual-unit-contact-apply-shell .visual-unit-contact-step-stack {
         display: grid !important;
         gap: 10px !important;
-      }
-      #visual-unit-contact-apply-shell .unit-contact-step-card {
-        min-height: 84px !important;
       }
       #visual-unit-contact-apply-shell .form-input,
       #visual-unit-contact-apply-shell .unit-contact-step-card-text,
       #visual-unit-contact-apply-shell .unit-contact-mode-text {
         color: transparent !important;
         text-shadow: none !important;
+      }
+      #visual-unit-contact-apply-shell .unit-contact-step-card {
+        min-height: 68px !important;
       }
     `;
   }

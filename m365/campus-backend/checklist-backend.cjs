@@ -40,12 +40,14 @@ function createChecklistRouter(deps) {
     cacheVersion: 0,
     entriesPromise: null,
     entriesPrewarmQueued: false,
-    queryCache: new Map()
+    queryCache: new Map(),
+    summaryCache: new Map()
   };
   const CHECKLIST_CACHE_TTL_MS = 120000;
   const CHECKLIST_PREWARM_DELAY_MS = 5000;
   const CHECKLIST_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
   const CHECKLIST_QUERY_CACHE_MAX = 80;
+  const CHECKLIST_SUMMARY_CACHE_MAX = 48;
 
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
@@ -214,6 +216,32 @@ function createChecklistRouter(deps) {
     ].join('::');
   }
 
+  function buildChecklistSummaryCacheKey(authz, url, cacheVersion) {
+    const safeAuthz = authz && typeof authz === 'object' ? authz : {};
+    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
+      ? safeAuthz.authorizedUnits.map((value) => cleanText(value)).filter(Boolean).sort()
+      : [];
+    const reviewUnits = Array.isArray(safeAuthz.reviewUnits)
+      ? safeAuthz.reviewUnits.map((value) => cleanText(value)).filter(Boolean).sort()
+      : [];
+    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
+    return [
+      String(cacheVersion || 0).trim(),
+      String(safeAuthz.username || '').trim(),
+      String(safeAuthz.role || '').trim(),
+      String(safeAuthz.primaryUnit || '').trim(),
+      String(safeAuthz.activeUnit || '').trim(),
+      authorizedUnits.join('|'),
+      reviewUnits.join('|'),
+      String(params.get('status') || '').trim(),
+      String(params.get('statusBucket') || '').trim(),
+      String(params.get('unit') || '').trim(),
+      String(params.get('auditYear') || '').trim(),
+      String(params.get('fillerUsername') || '').trim(),
+      String(params.get('q') || '').trim()
+    ].join('::');
+  }
+
   async function resolveChecklistsList() {
     return resolveNamedList(getChecklistsListName());
   }
@@ -336,6 +364,7 @@ function createChecklistRouter(deps) {
     state.entriesPromise = null;
     state.cacheVersion += 1;
     state.queryCache.clear();
+    state.summaryCache.clear();
   }
 
   async function listAllEntries(options) {
@@ -592,6 +621,27 @@ function createChecklistRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
       const filters = readChecklistFilters(url);
+      const summaryCacheKey = summaryOnly ? buildChecklistSummaryCacheKey(authz, url, state.cacheVersion || 0) : '';
+      if (summaryOnly) {
+        const summaryLookup = readQueryCache(state.summaryCache, summaryCacheKey);
+        const summaryCached = summaryLookup && summaryLookup.body;
+        if (summaryCached) {
+          logChecklistCache('summary cache hit', {
+            username: authz.username,
+            total: summaryCached.total,
+            durationMs: Date.now() - startedAt
+          });
+          await writeJson(res, buildJsonResponse(200, {
+            ...summaryCached,
+            cache: {
+              query: 'hit',
+              summaryOnly: true,
+              reason: 'summary-hit'
+            }
+          }), origin);
+          return;
+        }
+      }
       const cacheKey = buildChecklistQueryCacheKey(authz, url, state.cacheVersion || 0);
       const cacheLookup = readQueryCache(state.queryCache, cacheKey);
       const cached = cacheLookup && cacheLookup.body;
@@ -655,7 +705,10 @@ function createChecklistRouter(deps) {
         },
         contractVersion: CONTRACT_VERSION
       };
-      const cachedBody = writeQueryCache(state.queryCache, resolvedCacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);
+      let cachedBody = writeQueryCache(state.queryCache, resolvedCacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);
+      if (summaryOnly) {
+        cachedBody = writeQueryCache(state.summaryCache, summaryCacheKey, cachedBody, CHECKLIST_SUMMARY_CACHE_MAX);
+      }
       logChecklistCache('list served', {
         username: authz.username,
         totalRows: rows.length,
