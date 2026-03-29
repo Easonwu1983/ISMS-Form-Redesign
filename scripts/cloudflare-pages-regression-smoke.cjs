@@ -28,11 +28,38 @@ function pickExecutablePath() {
   return undefined;
 }
 
+async function gotoAppRoot(page, waitUntil = 'domcontentloaded') {
+  await page.goto(`${BASE_URL}/`, { waitUntil, timeout: 45000 });
+  await page.waitForFunction(() => {
+    return window.__APP_READY__ === true
+      || !!document.querySelector('[data-testid="login-form"]')
+      || !!document.querySelector('.btn-logout');
+  }, undefined, { timeout: 30000 }).catch(() => {});
+}
+
+async function gotoHashOnly(page, hash, options = {}) {
+  const target = '#' + String(hash || '').replace(/^#/, '');
+  await page.evaluate((value) => {
+    if (window.location.hash !== value) {
+      window.location.hash = value;
+      return;
+    }
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  }, target);
+  await page.waitForFunction((value) => String(window.location.hash || '') === value, target, {
+    timeout: options.timeout || 15000
+  });
+  await page.waitForTimeout(options.settleMs || 180);
+}
+
 async function login(page, username = 'easonwu', password = '2wsx#EDC') {
-  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+  await gotoAppRoot(page, 'domcontentloaded');
   const alreadyAuthenticated = await page.locator('.btn-logout').count();
   if (!alreadyAuthenticated) {
-    await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
+    await page.waitForFunction(() => {
+      return !!document.querySelector('[data-testid="login-form"]')
+        || !!document.querySelector('.btn-logout');
+    }, undefined, { timeout: 20000 });
     await page.fill('[data-testid="login-user"]', username);
     await page.fill('[data-testid="login-pass"]', password);
     await Promise.all([
@@ -99,7 +126,11 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
     }
     pushStep('unit-admin:api-scope', true, `reviewScopes=${apiState.reviewUsernames.length}`);
 
-    await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await ensureAdminSession(page);
+    await page.evaluate(() => {
+      window.location.hash = '#users';
+    });
+    await page.waitForTimeout(320);
     await page.waitForTimeout(1200);
     const usersHash = await page.evaluate(() => String(window.location.hash || ''));
     if (usersHash.startsWith('#users')) {
@@ -107,7 +138,11 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
     }
     pushStep('unit-admin:users-denied', true, usersHash || '#');
 
-    await page.goto(`${BASE_URL}/#unit-contact-review`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await ensureAdminSession(page);
+    await page.evaluate(() => {
+      window.location.hash = '#unit-contact-review';
+    });
+    await page.waitForTimeout(320);
     await page.waitForTimeout(1200);
     const reviewHash = await page.evaluate(() => String(window.location.hash || ''));
     if (reviewHash.startsWith('#unit-contact-review')) {
@@ -187,7 +222,7 @@ async function runPublicVisualBaselineChecks(browser, pushStep) {
     const comparePage = await compareContext.newPage();
 
     const desktopPage = await desktopContext.newPage();
-    await desktopPage.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    await gotoAppRoot(desktopPage, 'domcontentloaded');
     for (const spec of PUBLIC_DESKTOP_VISUAL_SPECS) {
       const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-desktop.png`);
       const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-desktop.png`);
@@ -200,7 +235,7 @@ async function runPublicVisualBaselineChecks(browser, pushStep) {
     }
 
     const mobilePage = await mobileContext.newPage();
-    await mobilePage.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    await gotoAppRoot(mobilePage, 'domcontentloaded');
     for (const spec of PUBLIC_MOBILE_VISUAL_SPECS) {
       const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-mobile.png`);
       const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-mobile.png`);
@@ -224,38 +259,27 @@ async function runPublicRouteChecks(browser, pushStep) {
 
   try {
     const openPublicRoute = async (hash) => {
-      await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.waitForFunction(() => window.__APP_READY__ === true, undefined, { timeout: 45000 });
-      await page.evaluate((nextHash) => {
-        window.location.hash = nextHash;
-      }, hash);
-      await page.waitForTimeout(300);
+      await gotoHashOnly(page, hash, { settleMs: 240 });
     };
 
+    await gotoAppRoot(page, 'domcontentloaded');
     await openPublicRoute('#apply-unit-contact');
     await page.waitForSelector('#unit-contact-apply-form', { timeout: 20000 });
-    pushStep('unit-contact-public:apply-loaded', true, '申請單位管理員');
+    pushStep('unit-contact-public:apply-loaded', true, 'public apply loaded');
 
     await openPublicRoute('#apply-unit-contact-status');
     await page.waitForSelector('#unit-contact-status-form', { timeout: 15000 });
-    pushStep('unit-contact-public:status-loaded', true, '查詢申請進度');
+    pushStep('unit-contact-public:status-loaded', true, 'public status loaded');
 
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForFunction(() => window.__APP_READY__ === true, undefined, { timeout: 45000 });
+    await gotoAppRoot(page, 'domcontentloaded');
     await seedSyntheticUnitContactSuccess(page);
-    await page.evaluate(() => {
-      window.location.hash = '#apply-unit-contact-success/UCA-SMOKE-SUCCESS-001';
-    });
-    await page.waitForTimeout(300);
+    await gotoHashOnly(page, 'apply-unit-contact-success/UCA-SMOKE-SUCCESS-001', { settleMs: 240 });
     await page.waitForSelector('.unit-contact-success-note, .empty-state', { timeout: 20000 });
     pushStep('unit-contact-public:success-loaded', true, 'success route rendered');
 
-    await page.evaluate(() => {
-      window.location.hash = '#activate-unit-contact/UCA-SMOKE-SUCCESS-001';
-    });
-    await page.waitForTimeout(300);
+    await gotoHashOnly(page, 'activate-unit-contact/UCA-SMOKE-SUCCESS-001', { settleMs: 240 });
     await page.waitForSelector('#activate-unit-contact-form, .unit-contact-activate-card, .card', { timeout: 20000 });
-    pushStep('unit-contact-public:activate-loaded', true, '帳號啟用');
+    pushStep('unit-contact-public:activate-loaded', true, 'public activate loaded');
   } finally {
     await context.close();
   }
@@ -366,7 +390,7 @@ async function run() {
   });
 
   try {
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    await gotoAppRoot(page, 'domcontentloaded');
     await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
     pushStep('landing:login-form', true, 'login form visible');
 

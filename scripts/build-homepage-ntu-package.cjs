@@ -72,6 +72,7 @@ const filesToCopy = [
   'workflow-support-module.js',
   'collection-contract-module.js',
   'shell-module.js',
+  'app-ui-bridge-module.js',
   'case-module.js',
   'admin-module.js',
   'checklist-module.js',
@@ -336,4 +337,5 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
 

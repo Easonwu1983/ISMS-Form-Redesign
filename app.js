@@ -210,36 +210,10 @@
   function canFillChecklist(user = currentUser()) { return getPolicyModule().canFillChecklist(user); }
   function canFillTraining(user = currentUser()) { return getPolicyModule().canFillTraining(user); }
   function canManageUsers(user = currentUser()) { return getPolicyModule().canManageUsers(user); }
-  function fmt(d) { return getUiModule().fmt(d); }
-  function fmtTime(d) { return getUiModule().fmtTime(d); }
   function isOverdue(item) { return item.status !== STATUSES.CLOSED && item.correctiveDueDate && new Date(item.correctiveDueDate) < new Date(); }
-  function ic(n, c = '') { return getUiModule().ic(n, c); }
-  function mkChk(name, opts, selected) { return getUiModule().mkChk(name, opts, selected); }
-  function mkRadio(name, opts, selected) { return getUiModule().mkRadio(name, opts, selected); }
-  function ntuLogo(c = '') { return getUiModule().ntuLogo(c); }
-  function esc(s) { return getUiModule().esc(s); }
-  function toast(msg, type = 'success') { return getUiModule().toast(msg, type); }
-  function renderCopyIdButton(value, label) { return getUiModule().renderCopyIdButton(value, label); }
-  function renderCopyIdCell(value, label, strong = false) { return getUiModule().renderCopyIdCell(value, label, strong); }
-  function copyTextToClipboard(value, label = '編號') { return getUiModule().copyTextToClipboard(value, label); }
-  function bindCopyButtons(root = document) { return getUiModule().bindCopyButtons(root); }
-  function applyTestIds(map) { return getUiModule().applyTestIds(map); }
-  function applySelectorTestIds(entries) { return getUiModule().applySelectorTestIds(entries); }
-  function debugFlow(scope, message, data) { return getUiModule().debugFlow(scope, message, data); }
-  function setUnsavedChangesGuard(active, message) { return getUiModule().setUnsavedChangesGuard(active, message); }
-  function clearUnsavedChangesGuard() { return getUiModule().clearUnsavedChangesGuard(); }
-  function hasUnsavedChangesGuard() { return getUiModule().hasUnsavedChangesGuard(); }
-  function confirmDiscardUnsavedChanges(message, clearOnConfirm) { return getUiModule().confirmDiscardUnsavedChanges(message, clearOnConfirm); }
-  function downloadJson(filename, payload) { return getUiModule().downloadJson(filename, payload); }
   function registerActionHandlers(namespace, handlers) {
     return getAppActionModule().registerActionHandlers(namespace, handlers);
   }
-  function closeModalRoot() { return getUiModule().closeModal(); }
-  function openConfirmDialog(message, options) { return getUiModule().openConfirmDialog(message, options); }
-  function openPromptDialog(message, options) { return getUiModule().openPromptDialog(message, options); }
-  function showBusyState(message) { return getUiModule().showBusyState(message); }
-  function hideBusyState() { return getUiModule().hideBusyState(); }
-  function runWithBusyState(message, task) { return getUiModule().runWithBusyState(message, task); }
   function installGlobalDelegation() {
     return getAppActionModule().installGlobalDelegation({
       closeModalRoot,
@@ -267,6 +241,17 @@
     window._appCoreModuleAccessModule = appCoreModuleAccessModuleApi;
     return appCoreModuleAccessModuleApi;
   }
+  let appUiBridgeModuleApi = null;
+  function getAppUiBridgeModule() {
+    if (appUiBridgeModuleApi) return appUiBridgeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppUiBridgeModule !== 'function') {
+      throw new Error('app-ui-bridge-module.js not loaded');
+    }
+    appUiBridgeModuleApi = window.createAppUiBridgeModule();
+    window._appUiBridgeModule = appUiBridgeModuleApi;
+    return appUiBridgeModuleApi;
+  }
+
   let adminModuleApi = null;
   function getAdminModule() {
     if (adminModuleApi) return adminModuleApi;
@@ -748,6 +733,37 @@
     getDataModule,
     getAuthModule
   } = appCoreModuleAccess;
+  const appUiBridge = getAppUiBridgeModule().createAccess({
+    getUiModule: function () { return getUiModule(); }
+  });
+  const {
+    fmt,
+    fmtTime,
+    ic,
+    mkChk,
+    mkRadio,
+    ntuLogo,
+    esc,
+    toast,
+    renderCopyIdButton,
+    renderCopyIdCell,
+    copyTextToClipboard,
+    bindCopyButtons,
+    applyTestIds,
+    applySelectorTestIds,
+    debugFlow,
+    setUnsavedChangesGuard,
+    clearUnsavedChangesGuard,
+    hasUnsavedChangesGuard,
+    confirmDiscardUnsavedChanges,
+    downloadJson,
+    closeModalRoot,
+    openConfirmDialog,
+    openPromptDialog,
+    showBusyState,
+    hideBusyState,
+    runWithBusyState
+  } = appUiBridge;
   const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
   const REVIEW_SCOPE_CONTRACT_VERSION = '2026-03-13';
   const AUDIT_TRAIL_CONTRACT_VERSION = '2026-03-14';

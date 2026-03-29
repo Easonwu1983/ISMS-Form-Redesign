@@ -643,16 +643,48 @@ async function waitForVisualRouteReady(page, spec) {
   }
 }
 
+async function gotoVisualRoot(page, baseUrl, waitUntil = 'domcontentloaded') {
+  await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/`, { waitUntil, timeout: 45000 });
+  await page.waitForFunction(() => window.__APP_READY__ === true || document.readyState === 'complete', undefined, {
+    timeout: 30000
+  }).catch(() => {});
+}
+
+async function gotoVisualHash(page, hash, options = {}) {
+  const target = String(hash || '').startsWith('#') ? String(hash) : ('#' + String(hash || '').replace(/^#/, ''));
+  await page.evaluate((value) => {
+    if (window.location.hash !== value) {
+      window.location.hash = value;
+      return;
+    }
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  }, target);
+  await page.waitForFunction((value) => String(window.location.hash || '') === value, target, {
+    timeout: options.timeout || 15000
+  });
+  await page.waitForTimeout(options.settleMs || 180);
+}
+
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
+  const fastHashNavigation = spec && (
+    spec.slug === 'unit-review'
+    || spec.slug === 'dashboard'
+    || spec.slug === 'unit-contact-apply'
+    || spec.slug === 'unit-contact-status'
+  );
   if (spec && (spec.slug === 'unit-contact-success' || spec.slug === 'unit-contact-activate')) {
-    await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/`, { waitUntil: 'networkidle', timeout: 45000 });
+    await gotoVisualRoot(page, baseUrl, 'networkidle');
     await page.waitForTimeout(600);
     await seedSyntheticUnitContactSuccess(page);
   }
-  const waitUntil = spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard' || spec.slug === 'unit-contact-apply' || spec.slug === 'unit-contact-status') ? 'domcontentloaded' : 'networkidle';
-  await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
+  if (fastHashNavigation && page.url().startsWith(`${String(baseUrl).replace(/\/+$/, '')}/`)) {
+    await gotoVisualHash(page, spec.hash, { settleMs: 160 });
+  } else {
+    const waitUntil = fastHashNavigation ? 'domcontentloaded' : 'networkidle';
+    await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
+  }
   await waitForVisualRouteReady(page, spec);
-  await page.waitForTimeout(spec && (spec.slug === 'unit-review' || spec.slug === 'dashboard' || spec.slug === 'unit-contact-apply' || spec.slug === 'unit-contact-status') ? 120 : 900);
+  await page.waitForTimeout(fastHashNavigation ? 120 : 900);
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'dashboard') {
     await seedSyntheticDashboard(page);
