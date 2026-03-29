@@ -26,6 +26,7 @@
     'app-ui-bridge-module.js',
     'app-domain-bridge-module.js',
     'app-training-checklist-bridge-module.js',
+    'app-domain-training-runtime-module.js',
     'app-feature-runtime-module.js',
     'service-registry-module.js',
     'app-core-service-module.js',

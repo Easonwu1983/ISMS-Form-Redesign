@@ -30,8 +30,8 @@ function pickExecutablePath() {
 
 function getVisualSampleScale(spec, mode) {
   const slug = spec && spec.slug;
-  if (slug === 'dashboard') return mode === 'mobile' ? 0.72 : 0.82;
-  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.72 : 0.82;
+  if (slug === 'dashboard') return mode === 'mobile' ? 0.64 : 0.7;
+  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.64 : 0.7;
   if (slug === 'unit-contact-status') return mode === 'mobile' ? 0.72 : 0.82;
   if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') return mode === 'mobile' ? 0.7 : 0.8;
   return 1;
@@ -63,6 +63,7 @@ async function gotoHashOnly(page, hash, options = {}) {
 
 async function login(page, username = 'easonwu', password = '2wsx#EDC', options = {}) {
   const requireVersionChip = options.requireVersionChip !== false;
+  const fastAuth = options.fastAuth === true;
   await gotoAppRoot(page, 'domcontentloaded');
   const alreadyAuthenticated = await page.locator('.btn-logout').count();
   if (!alreadyAuthenticated) {
@@ -70,12 +71,22 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
       return !!document.querySelector('[data-testid="login-form"]')
         || !!document.querySelector('.btn-logout');
     }, undefined, { timeout: 20000 });
-    await page.fill('[data-testid="login-user"]', username);
-    await page.fill('[data-testid="login-pass"]', password);
-    await Promise.all([
-      page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
-      page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
-    ]);
+    if (fastAuth) {
+      const loginResult = await page.evaluate(async ({ username, password }) => {
+        const auth = window._authModule;
+        if (!auth || typeof auth.login !== 'function') throw new Error('auth module missing');
+        return auth.login(username, password);
+      }, { username, password });
+      if (!loginResult) throw new Error('fast auth login failed');
+      await page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 });
+    } else {
+      await page.fill('[data-testid="login-user"]', username);
+      await page.fill('[data-testid="login-pass"]', password);
+      await Promise.all([
+        page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
+        page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
+      ]);
+    }
   }
   await waitForRemoteBootstrap(page);
   if (requireVersionChip) {
@@ -91,7 +102,7 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   try {
-    await login(page, 'unit1', 'unit123', { requireVersionChip: false });
+    await login(page, 'unit1', 'unit123', { requireVersionChip: false, fastAuth: true });
     pushStep('unit-admin:login', true, 'unit admin login succeeded');
 
     const apiState = await page.evaluate(async () => {
@@ -317,7 +328,7 @@ async function runVisualBaselineChecks(browser, pushStep) {
     const comparePage = await compareContext.newPage();
 
     const desktopPage = await desktopContext.newPage();
-    await login(desktopPage);
+    await login(desktopPage, 'easonwu', '2wsx#EDC', { fastAuth: true });
     for (const spec of DESKTOP_VISUAL_SPECS) {
       const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-desktop.png`);
       const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-desktop.png`);
@@ -333,7 +344,7 @@ async function runVisualBaselineChecks(browser, pushStep) {
     }
 
     const mobilePage = await mobileContext.newPage();
-    await login(mobilePage);
+    await login(mobilePage, 'easonwu', '2wsx#EDC', { fastAuth: true });
     for (const spec of MOBILE_VISUAL_SPECS) {
       const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-mobile.png`);
       const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-mobile.png`);

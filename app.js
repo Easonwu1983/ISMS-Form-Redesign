@@ -63,23 +63,46 @@
     '進修推廣學院'
   ]);
 
-  let appDomainBridgeModuleApi = null;
-  function getAppDomainBridgeModule() {
-    if (appDomainBridgeModuleApi) return appDomainBridgeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppDomainBridgeModule !== 'function') {
-      throw new Error('app-domain-bridge-module.js not loaded');
+  let appDomainTrainingRuntimeModuleApi = null;
+  function getAppDomainTrainingRuntimeModule() {
+    if (appDomainTrainingRuntimeModuleApi) return appDomainTrainingRuntimeModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAppDomainTrainingRuntimeModule !== 'function') {
+      throw new Error('app-domain-training-runtime-module.js not loaded');
     }
-    appDomainBridgeModuleApi = window.createAppDomainBridgeModule();
-    window._appDomainBridgeModule = appDomainBridgeModuleApi;
-    return appDomainBridgeModuleApi;
+    appDomainTrainingRuntimeModuleApi = window.createAppDomainTrainingRuntimeModule();
+    window._appDomainTrainingRuntimeModule = appDomainTrainingRuntimeModuleApi;
+    return appDomainTrainingRuntimeModuleApi;
   }
-  const appDomainBridge = getAppDomainBridgeModule().createAccess({
-    getUnitModule: function () { return getUnitModule(); },
-    getWorkflowSupportModule: function () { return getWorkflowSupportModule(); },
-    getDataModule: function () { return getDataModule(); },
-    getAuthModule: function () { return getAuthModule(); },
-    getPolicyModule: function () { return getPolicyModule(); }
+  const appDomainTrainingRuntime = getAppDomainTrainingRuntimeModule().createAccess({
+    getDomainBridgeConfig: function () {
+      return {
+        getUnitModule: function () { return getUnitModule(); },
+        getWorkflowSupportModule: function () { return getWorkflowSupportModule(); },
+        getDataModule: function () { return getDataModule(); },
+        getAuthModule: function () { return getAuthModule(); },
+        getPolicyModule: function () { return getPolicyModule(); }
+      };
+    },
+    getTrainingChecklistBridgeConfig: function () {
+      return {
+        CHECKLIST_KEY,
+        TRAINING_KEY,
+        trainingGeneralLabel: TRAINING_GENERAL_LABEL,
+        trainingInfoStaffLabel: TRAINING_INFO_STAFF_LABEL,
+        trainingProfessionalLabel: TRAINING_PROFESSIONAL_LABEL,
+        trainingBooleanOptions: TRAINING_BOOLEAN_OPTIONS,
+        trainingProfessionalOptions: TRAINING_PROFESSIONAL_OPTIONS,
+        getDataModule: function () { return getDataModule(); },
+        getWorkflowSupportModule: function () { return getWorkflowSupportModule(); },
+        getPolicyModule: function () { return getPolicyModule(); },
+        currentUser,
+        getSystemUnits,
+        getUnitCode,
+        splitUnitValue
+      };
+    }
   });
+  const appDomainBridge = appDomainTrainingRuntime.getDomainBridge();
   const {
     getOfficialUnits,
     getOfficialUnitCatalog,
@@ -2775,33 +2798,8 @@
   const COMPLIANCE_CLASSES = { '符合': 'comply', '部分符合': 'partial', '不符合': 'noncomply', '不適用': 'na' };
 
   // ─── Checklist Storage ─────────────────────
-  let appTrainingChecklistBridgeModuleApi = null;
-  function getAppTrainingChecklistBridgeModule() {
-    if (appTrainingChecklistBridgeModuleApi) return appTrainingChecklistBridgeModuleApi;
-    if (typeof window === 'undefined' || typeof window.createAppTrainingChecklistBridgeModule !== 'function') {
-      throw new Error('app-training-checklist-bridge-module.js not loaded');
-    }
-    appTrainingChecklistBridgeModuleApi = window.createAppTrainingChecklistBridgeModule();
-    window._appTrainingChecklistBridgeModule = appTrainingChecklistBridgeModuleApi;
-    return appTrainingChecklistBridgeModuleApi;
-  }
   const TRAINING_PROFESSIONAL_OPTIONS = ['是', '否'];
-  const appTrainingChecklistBridge = getAppTrainingChecklistBridgeModule().createAccess({
-    CHECKLIST_KEY,
-    TRAINING_KEY,
-    trainingGeneralLabel: TRAINING_GENERAL_LABEL,
-    trainingInfoStaffLabel: TRAINING_INFO_STAFF_LABEL,
-    trainingProfessionalLabel: TRAINING_PROFESSIONAL_LABEL,
-    trainingBooleanOptions: TRAINING_BOOLEAN_OPTIONS,
-    trainingProfessionalOptions: TRAINING_PROFESSIONAL_OPTIONS,
-    getDataModule: function () { return getDataModule(); },
-    getWorkflowSupportModule: function () { return getWorkflowSupportModule(); },
-    getPolicyModule: function () { return getPolicyModule(); },
-    currentUser,
-    getSystemUnits,
-    getUnitCode,
-    splitUnitValue
-  });
+  const appTrainingChecklistBridge = appDomainTrainingRuntime.getTrainingChecklistBridge();
   const {
     normalizeChecklistStatus,
     isChecklistDraftStatus,

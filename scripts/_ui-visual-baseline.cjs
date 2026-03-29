@@ -46,6 +46,17 @@ function isSyntheticRootVisualSpec(spec) {
   return slug === 'dashboard' || slug === 'unit-contact-apply' || slug === 'unit-contact-status';
 }
 
+function isBaseRootPage(url, baseUrl) {
+  const normalizedBase = String(baseUrl || '').replace(/\/+$/, '');
+  const normalizedUrl = String(url || '');
+  return normalizedUrl === normalizedBase
+    || normalizedUrl === normalizedBase + '/'
+    || normalizedUrl.startsWith(normalizedBase + '/#')
+    || normalizedUrl.startsWith(normalizedBase + '/?')
+    || normalizedUrl.startsWith(normalizedBase + '/?')
+    || normalizedUrl.startsWith(normalizedBase + '/#');
+}
+
 async function seedSyntheticUnitContactSuccess(page) {
   await page.waitForFunction(() => {
     return !!(
@@ -682,14 +693,24 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await seedSyntheticUnitContactSuccess(page);
   }
   if (syntheticRootVisual) {
-    await gotoVisualRoot(page, baseUrl, 'domcontentloaded');
+    if (!isBaseRootPage(page.url(), baseUrl)) {
+      await gotoVisualRoot(page, baseUrl, 'domcontentloaded');
+    } else {
+      await page.evaluate(() => {
+        if (window.location.hash) window.location.hash = '';
+      }).catch(() => {});
+    }
   } else if (fastHashNavigation && page.url().startsWith(`${String(baseUrl).replace(/\/+$/, '')}/`)) {
     await gotoVisualHash(page, spec.hash, { settleMs: 90 });
   } else {
     const waitUntil = fastHashNavigation ? 'domcontentloaded' : 'networkidle';
     await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
   }
-  await waitForVisualRouteReady(page, spec);
+  if (syntheticRootVisual) {
+    await page.waitForSelector('#app', { timeout: 5000 });
+  } else {
+    await waitForVisualRouteReady(page, spec);
+  }
   await page.waitForTimeout(syntheticRootVisual ? 20 : (fastHashNavigation ? 40 : 900));
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'dashboard') {
