@@ -555,23 +555,23 @@
       const req = required ? 'required' : '';
       return `<div class="unit-cascade">
       <div class="unit-cascade-search">
-        <input type="search" class="form-input unit-cascade-search-input" id="${baseId}-search" data-testid="${baseId}-search" placeholder="\u53ef\u641c\u5c0b\u55ae\u4f4d\u540d\u7a31\u6216\u4ee3\u78bc" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${baseId}-search-results" ${dis}>
+        <input type="search" class="form-input unit-cascade-search-input" id="${baseId}-search" data-testid="${baseId}-search" placeholder="\u53ef\u641c\u5c0b\u55ae\u4f4d\u540d\u7a31\u6216\u4ee3\u78bc" autocomplete="off" role="combobox" aria-label="\u641c\u5c0b\u55ae\u4f4d" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${baseId}-search-results" ${dis}>
         <div class="unit-cascade-search-results" id="${baseId}-search-results" role="listbox" aria-label="\u641c\u5c0b\u5efa\u8b70" hidden></div>
         <div class="form-hint unit-cascade-search-hint">\u53ef\u76f4\u63a5\u8f38\u5165\u55ae\u4f4d\u540d\u7a31\u6216\u4ee3\u78bc\uff0c\u7cfb\u7d71\u6703\u81ea\u52d5\u5e36\u5165\u985e\u5225\u8207\u5c64\u7d1a\u3002</div>
       </div>
       <div class="unit-cascade-grid unit-cascade-grid--training" id="${baseId}-grid">
         <div class="unit-cascade-segment">
-          <select class="form-select" id="${baseId}-category" data-testid="${baseId}-category" ${dis} ${req}></select>
+          <select class="form-select" id="${baseId}-category" data-testid="${baseId}-category" aria-label="\u55ae\u4f4d\u985e\u5225" ${dis} ${req}></select>
         </div>
         <div class="unit-cascade-segment">
-          <select class="form-select" id="${baseId}-parent" data-testid="${baseId}-parent" ${dis} ${req}></select>
+          <select class="form-select" id="${baseId}-parent" data-testid="${baseId}-parent" aria-label="\u4e00\u7d1a\u55ae\u4f4d" ${dis} ${req}></select>
         </div>
         <div class="unit-cascade-child-wrap" id="${baseId}-child-wrap">
-          <select class="form-select" id="${baseId}-child" data-testid="${baseId}-child" ${dis}></select>
+          <select class="form-select" id="${baseId}-child" data-testid="${baseId}-child" aria-label="\u4e8c\u7d1a\u55ae\u4f4d" ${dis}></select>
         </div>
       </div>
       <div class="unit-cascade-custom" id="${baseId}-custom-wrap" style="display:none;margin-top:8px">
-        <input type="text" class="form-input" id="${baseId}-custom" data-testid="${baseId}-custom" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
+        <input type="text" class="form-input" id="${baseId}-custom" data-testid="${baseId}-custom" aria-label="\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
       </div>
       <input type="hidden" id="${baseId}" data-testid="${baseId}" value="${esc(selectedUnit || '')}" />
     </div>`;

@@ -2591,6 +2591,7 @@
       ic,
       fmtTime,
       refreshIcons,
+      addPageEventListener: function (target, type, listener, options) { return getUiModule().addPageEventListener(target, type, listener, options); },
       buildUnitCascadeControl,
       initUnitCascade,
       getUnitCode,

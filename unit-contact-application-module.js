@@ -15,6 +15,7 @@
       getUnitCode,
       getM365ModeLabel,
       getM365ModeKey,
+      addPageEventListener,
       submitAttachmentUpload,
       requestUnitContactAuthorizationDocument,
       submitUnitContactApplication,
@@ -40,6 +41,17 @@
       if (typeof window === 'undefined' || !window.location.hash) return '';
       const parts = window.location.hash.replace(/^#/, '').split('/');
       return parts[1] ? decodeURIComponent(parts[1]) : '';
+    }
+
+    function bindPageEvent(target, type, listener, options) {
+      if (typeof addPageEventListener === 'function') {
+        return addPageEventListener(target, type, listener, options);
+      }
+      if (!target || typeof target.addEventListener !== 'function') return function () {};
+      target.addEventListener(type, listener, options);
+      return function () {
+        try { target.removeEventListener(type, listener, options); } catch (_) {}
+      };
     }
 
     function saveLastEmail(email) {
@@ -121,8 +133,8 @@
       const chips = selected.map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '">?</button></span>').join('');
       return '<div class="unit-chip-picker" data-unit-chip-picker="' + esc(baseId) + '">'
         + '<div class="unit-chip-picker-search">'
-        + '<input type="search" class="form-input unit-chip-picker-search-input" id="' + esc(baseId) + '-search" placeholder="' + esc(placeholder || '請輸入單位名稱') + '" autocomplete="off">'
-        + '<div class="unit-chip-picker-results" id="' + esc(baseId) + '-results" role="listbox" hidden></div>'
+        + '<input type="search" class="form-input unit-chip-picker-search-input" id="' + esc(baseId) + '-search" aria-label="搜尋額外授權資源範圍" placeholder="' + esc(placeholder || '請輸入單位名稱') + '" autocomplete="off">'
+        + '<div class="unit-chip-picker-results" id="' + esc(baseId) + '-results" role="listbox" aria-label="額外授權資源範圍搜尋結果" hidden></div>'
         + '</div>'
         + '<div class="unit-chip-picker-chips" id="' + esc(baseId) + '-chips">' + (chips || '<span class="unit-chip-picker-empty">尚未選擇</span>') + '</div>'
         + '<textarea class="unit-chip-picker-hidden" id="' + esc(baseId) + '" hidden>' + esc(selected.join('\n')) + '</textarea>'
@@ -175,13 +187,13 @@
         renderChips();
         syncHidden();
       };
-      chipsEl.addEventListener('click', (event) => {
+      bindPageEvent(chipsEl, 'click', (event) => {
         const button = event.target.closest('[data-remove-unit]');
         if (!button) return;
         event.preventDefault();
         removeValue(button.dataset.removeUnit);
       });
-      resultsEl.addEventListener('mousedown', (event) => {
+      bindPageEvent(resultsEl, 'mousedown', (event) => {
         const button = event.target.closest('[data-unit-value]');
         if (!button) return;
         event.preventDefault();
@@ -190,9 +202,9 @@
         resultsEl.hidden = true;
         resultsEl.innerHTML = '';
       });
-      searchEl.addEventListener('input', () => renderResults(searchEl.value));
-      searchEl.addEventListener('focus', () => renderResults(searchEl.value));
-      searchEl.addEventListener('keydown', (event) => {
+      bindPageEvent(searchEl, 'input', () => renderResults(searchEl.value));
+      bindPageEvent(searchEl, 'focus', () => renderResults(searchEl.value));
+      bindPageEvent(searchEl, 'keydown', (event) => {
         if (event.key !== 'Enter') return;
         const button = resultsEl.querySelector('[data-unit-value]');
         if (!button) return;
@@ -202,7 +214,7 @@
         resultsEl.hidden = true;
         resultsEl.innerHTML = '';
       });
-      document.addEventListener('click', (event) => {
+      bindPageEvent(document, 'click', (event) => {
         if (!resultsEl.contains(event.target) && event.target !== searchEl) {
           resultsEl.hidden = true;
         }
@@ -275,9 +287,9 @@
         + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 下載同意書（PDF）</button>'
         + '</div>'
         + '<div class="form-group" style="margin-top:18px">'
-        + '<label class="form-label form-required">上傳主管簽章之授權同意書</label>'
-        + '<input type="file" class="form-input" id="uca-authorization-doc" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" data-testid="unit-contact-authorization-doc-input">'
-        + '<div class="form-hint">僅支援 PDF、JPG、PNG，檔案大小上限 5MB。</div>'
+        + '<label class="form-label form-required" id="uca-authorization-doc-label" for="uca-authorization-doc">上傳主管簽章之授權同意書</label>'
+        + '<input type="file" class="form-input" id="uca-authorization-doc" aria-describedby="uca-authorization-doc-help" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" data-testid="unit-contact-authorization-doc-input">'
+        + '<div class="form-hint" id="uca-authorization-doc-help">僅支援 PDF、JPG、PNG，檔案大小上限 5MB。</div>'
         + '<div class="unit-contact-auth-doc-preview" id="uca-authorization-doc-preview"><span class="unit-contact-file-empty">尚未選擇檔案</span></div>'
         + '</div>';
       const actions = form.querySelector('.form-actions');
@@ -286,10 +298,10 @@
       } else {
         form.appendChild(card);
       }
-      card.querySelector('[data-action="unit-contact-download-auth-template"]')?.addEventListener('click', downloadAuthorizationTemplate);
+      bindPageEvent(card.querySelector('[data-action="unit-contact-download-auth-template"]'), 'click', downloadAuthorizationTemplate);
       const input = card.querySelector('#uca-authorization-doc');
-      input && input.addEventListener('change', renderAuthorizationDocumentSelection);
-      card.addEventListener('click', function (event) {
+      bindPageEvent(input, 'change', renderAuthorizationDocumentSelection);
+      bindPageEvent(card, 'click', function (event) {
         const button = event.target && event.target.closest ? event.target.closest('[data-action="unit-contact-clear-auth-doc"]') : null;
         if (!button) return;
         const fileInput = document.getElementById('uca-authorization-doc');
@@ -471,7 +483,7 @@
         + '<a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>'
         + '</div>'
         + '</form></div></div>'
-        + '<aside class="unit-contact-side">'
+        + '<section class="unit-contact-side" aria-label="申請說明">'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請步驟</div>'
         + buildStepCard('1. 下載同意書', '先下載主管授權同意書，請主管簽章後再進行申請。')
         + buildStepCard('2. 填寫資料', '填入主要歸屬單位與額外授權資源範圍，確保權限範圍清楚。')
@@ -484,7 +496,7 @@
         + '<li>授權同意書為必填附件。</li>'
         + '<li>審核通過後會直接啟用並寄送登入資訊。</li>'
         + '</ul></div>'
-        + '</aside></div></section>';
+        + '</section></div></section>';
 
       initUnitCascade('uca-unit', '', { disabled: false });
       const authorizedScopePicker = initAuthorizedScopePicker('uca-authorized-units');
@@ -493,9 +505,9 @@
       ensureAuthorizationDocumentSection(form);
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
 
-      form.addEventListener('input', markDirty);
-      form.addEventListener('change', markDirty);
-      form.addEventListener('submit', async function (event) {
+      bindPageEvent(form, 'input', markDirty);
+      bindPageEvent(form, 'change', markDirty);
+      bindPageEvent(form, 'submit', async function (event) {
         event.preventDefault();
         const unitState = readUnitFormState('uca-unit');
         const applicantName = String(document.getElementById('uca-name').value || '').trim();
@@ -646,20 +658,20 @@
         + '</div></form>'
         + '<div id="unit-contact-status-results"></div>'
         + '</div></div>'
-        + '<aside class="unit-contact-side">'
+        + '<section class="unit-contact-side" aria-label="查詢說明">'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('info', 'icon-sm') + ' 查詢說明</div>'
         + '<ul class="unit-contact-checklist">'
         + '<li>請輸入申請時的電子郵件。</li>'
         + '<li>系統會顯示申請單位、資安角色與審核狀態。</li>'
         + '<li>若審核已通過，將可直接前往啟用頁面。</li>'
-        + '</ul></div></aside>'
+        + '</ul></div></section>'
         + '</div></section>';
 
       const form = document.getElementById('unit-contact-status-form');
       const resultsEl = document.getElementById('unit-contact-status-results');
       if (resultsEl && !resultsEl.dataset.authDocPreviewBound) {
         resultsEl.dataset.authDocPreviewBound = '1';
-        resultsEl.addEventListener('click', async function (event) {
+        bindPageEvent(resultsEl, 'click', async function (event) {
           const button = event.target && event.target.closest ? event.target.closest('[data-action="unit-contact-view-auth-doc"]') : null;
           if (!button) return;
           event.preventDefault();
@@ -713,14 +725,14 @@
         }
       }
 
-      form.addEventListener('click', function (event) {
+      bindPageEvent(form, 'click', function (event) {
         const button = event.target && event.target.closest ? event.target.closest('[data-action=\"unit-contact-clear-auth-doc\"]') : null;
         if (!button) return;
         const authDocInput = document.getElementById('uca-authorization-doc');
         if (authDocInput) authDocInput.value = '';
         renderAuthorizationDocumentSelection();
       });
-      form.addEventListener('submit', function (event) {
+      bindPageEvent(form, 'submit', function (event) {
         event.preventDefault();
         runLookup();
       });

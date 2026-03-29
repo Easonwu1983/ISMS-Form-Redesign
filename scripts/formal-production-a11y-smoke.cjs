@@ -1,7 +1,8 @@
 const { runLayer } = require('./_formal-production-smoke-lib.cjs');
 
 const STEPS = [
-  { label: 'accessibility-regression', script: 'scripts/accessibility-regression.cjs' }
+  { label: 'accessibility-regression', script: 'scripts/accessibility-regression.cjs' },
+  { label: 'accessibility-axe-regression', script: 'scripts/accessibility-axe-regression.cjs' }
 ];
 
 runLayer('a11y', STEPS).catch((error) => {
