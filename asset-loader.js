@@ -17,6 +17,7 @@
     'unit-module.js',
     'ui-module.js',
     'policy-module.js',
+    'workflow-support-module.js',
     'collection-contract-module.js',
     'm365-api-client.js',
     'shell-module.js',

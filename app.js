@@ -443,7 +443,7 @@
       return ensureFeatureScript(['admin-collection-cache-module.js', 'admin-module.js']);
     },
     ensureCaseModuleScript: function () {
-      return ensureFeatureScript(['workflow-support-module.js', 'attachment-module.js', 'case-module.js']);
+      return ensureFeatureScript(['attachment-module.js', 'case-module.js']);
     }
   });
   const {
@@ -463,11 +463,11 @@
   }
 
   function ensureChecklistModuleScript() {
-    return ensureFeatureScript(['workflow-support-module.js', 'attachment-module.js', 'checklist-module.js']);
+    return ensureFeatureScript(['attachment-module.js', 'checklist-module.js']);
   }
 
   function ensureTrainingModuleScript() {
-    return ensureFeatureScript(['workflow-support-module.js', 'training-module.js']);
+    return ensureFeatureScript('training-module.js');
   }
 
   function ensureUnitContactApplicationModuleScript() {
