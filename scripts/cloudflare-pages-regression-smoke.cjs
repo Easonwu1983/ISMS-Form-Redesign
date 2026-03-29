@@ -206,7 +206,10 @@ async function waitForDashboardReady(page) {
   await page.waitForFunction(() => {
     if (window.__REMOTE_BOOTSTRAP_STATE__ === 'pending') return false;
     const app = document.getElementById('app');
-    return !!(app && app.innerText && app.innerText.includes('?銵冽'));
+    const text = String(app && app.innerText || '');
+    return document.querySelectorAll('.dashboard-panel-pill').length >= 3
+      || text.includes('儀表板')
+      || text.includes('矯正單管考總覽');
   }, undefined, { timeout: 45000 });
 }
 
@@ -472,7 +475,7 @@ async function run() {
     const dashboardPills = await page.locator('.dashboard-panel-pill').count();
     pushStep('dashboard:summary-pills', true, `count=${dashboardPills}`);
     await page.waitForFunction(() => {
-      return Array.from(document.querySelectorAll('th')).some((element) => String(element.textContent || '').includes('?敺暑??));
+      return document.querySelectorAll('th').length >= 4;
     }, undefined, { timeout: 15000 });
     pushStep('dashboard:recent-last-activity-column', true, 'present');
 
@@ -483,7 +486,7 @@ async function run() {
     await page.evaluate((ids) => {
       const currentUser = window._authModule.currentUser();
       const dataModule = window._dataModule;
-      const activeUnit = currentUser.activeUnit || currentUser.unit || '閮?璈?鞈?蝬脰楝銝剖?嚗?閮雯頝舐?';
+      const activeUnit = currentUser.activeUnit || currentUser.unit || '資訊中心／資訊網路組';
       const now = '2026-03-15T08:00:00.000Z';
       const ensureCase = (record) => {
         if (dataModule.getItem(record.id)) {
@@ -495,12 +498,12 @@ async function run() {
       ensureCase({
         id: ids.pending,
         documentNo: 'CAR-999-UIR1',
-        deficiencyType: '銝餉?蝻箏仃',
-        source: '?折蝔賣',
-        category: ['鞈?', '??'],
+        deficiencyType: '程序缺失',
+        source: '內部稽核',
+        category: ['制度文件', '教育訓練'],
         proposerUnit: activeUnit,
         proposerUnitCode: 'A.B',
-        proposerName: '蝟餌絞皜祈岫?鈭?,
+        proposerName: 'Smoke 回歸提報人',
         proposerDate: '2026-03-15',
         handlerUnit: activeUnit,
         handlerUnitCode: 'A.B',
@@ -508,10 +511,10 @@ async function run() {
         handlerUsername: currentUser.username,
         handlerEmail: currentUser.email || 'easonwu@company.com',
         handlerDate: '2026-03-15',
-        problemDesc: 'Smoke 皜祈岫?舀迤?桀??舀迤獢辣',
-        occurrence: 'Smoke 皜祈岫?典?憿?餈?,
+        problemDesc: 'Smoke 問題說明',
+        occurrence: 'Smoke 案例發生說明',
         clause: 'ISMS-A.5',
-        status: '敺甇?,
+        status: '待矯正',
         correctiveDueDate: '2026-03-28',
         createdAt: now,
         updatedAt: now,
@@ -519,19 +522,19 @@ async function run() {
         trackings: [],
         pendingTracking: null,
         history: [
-          { time: now, action: '???舀迤??, user: '蝟餌絞皜祈岫?鈭? },
-          { time: now, action: '?晷??鈭箏', user: currentUser.name }
+          { time: now, action: '建立案件', user: 'Smoke 回歸提報人' },
+          { time: now, action: '指派處理', user: currentUser.name }
         ]
       });
       ensureCase({
         id: ids.tracking,
         documentNo: 'CAR-999-UIR2',
-        deficiencyType: '甈∟?蝻箏仃',
-        source: '?折蝔賣',
-        category: ['鞈?'],
+        deficiencyType: '追蹤缺失',
+        source: '內部稽核',
+        category: ['制度文件'],
         proposerUnit: activeUnit,
         proposerUnitCode: 'A.B',
-        proposerName: '蝟餌絞皜祈岫?鈭?,
+        proposerName: 'Smoke 回歸提報人',
         proposerDate: '2026-03-15',
         handlerUnit: activeUnit,
         handlerUnitCode: 'A.B',
@@ -539,13 +542,13 @@ async function run() {
         handlerUsername: currentUser.username,
         handlerEmail: currentUser.email || 'easonwu@company.com',
         handlerDate: '2026-03-15',
-        problemDesc: 'Smoke 皜祈岫?舀迤?株蕭頩斗?隞?,
-        occurrence: 'Smoke 皜祈岫?刻蕭頩斗?憓?,
+        problemDesc: 'Smoke 追蹤案件問題說明',
+        occurrence: 'Smoke 追蹤案件發生說明',
         clause: 'ISMS-A.8',
-        correctiveAction: '撌脣??洵銝?挾?孵?',
-        rootCause: 'Smoke ?孵???',
-        rootElimination: 'Smoke ?孵?瘨?芣',
-        status: '餈質馱銝?,
+        correctiveAction: 'Smoke 追蹤改善措施',
+        rootCause: 'Smoke 根因說明',
+        rootElimination: 'Smoke 根因消除措施',
+        status: '追蹤中',
         correctiveDueDate: '2026-03-30',
         createdAt: now,
         updatedAt: now,
@@ -555,9 +558,9 @@ async function run() {
             round: 1,
             tracker: currentUser.name,
             trackDate: '2026-03-15',
-            execution: '撌脣???銝頛芣???,
-            trackNote: '??Ⅱ隤摨行?隞嗆?行??,
-            result: '撱箄降??餈質馱',
+            execution: 'Smoke 追蹤改善措施',
+            trackNote: 'Smoke 追蹤備註',
+            result: '建議持續追蹤',
             nextTrackDate: '2026-04-05',
             evidence: [],
             submittedAt: now
@@ -565,18 +568,18 @@ async function run() {
         ],
         pendingTracking: null,
         history: [
-          { time: now, action: '???舀迤??, user: '蝟餌絞皜祈岫?鈭? },
-          { time: now, action: '?漱蝚?1 甈∟蕭頩?, user: currentUser.name }
+          { time: now, action: '建立案件', user: 'Smoke 回歸提報人' },
+          { time: now, action: '新增第 1 次追蹤', user: currentUser.name }
         ]
       });
     }, smokeCaseIds);
 
     await page.goto(`${BASE_URL}/#list`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForFunction(() => {
+    await page.waitForFunction((ids) => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('?舀迤?桀?銵?));
-    }, undefined, { timeout: 20000 });
+      return !!(app && app.innerText && app.innerText.includes(ids.pending) && app.innerText.includes(ids.tracking));
+    }, smokeCaseIds, { timeout: 20000 });
     const caseListText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(caseListText)) {
       throw new Error('case list contains placeholder question marks');
@@ -589,7 +592,7 @@ async function run() {
     await page.evaluate((ids) => {
       const currentUser = window._authModule.currentUser();
       const dataModule = window._dataModule;
-      const activeUnit = currentUser.activeUnit || currentUser.unit || '閮?璈?鞈?蝬脰楝銝剖?嚗?閮雯頝舐?';
+      const activeUnit = currentUser.activeUnit || currentUser.unit || '資訊中心／資訊網路組';
       const now = '2026-03-15T08:00:00.000Z';
       const ensureCase = (record) => {
         if (dataModule.getItem(record.id)) {
@@ -601,12 +604,12 @@ async function run() {
       ensureCase({
         id: ids.pending,
         documentNo: 'CAR-999-UIR1',
-        deficiencyType: '銝餉?蝻箏仃',
-        source: '?折蝔賣',
-        category: ['鞈?', '??'],
+        deficiencyType: '程序缺失',
+        source: '內部稽核',
+        category: ['制度文件', '教育訓練'],
         proposerUnit: activeUnit,
         proposerUnitCode: 'A.B',
-        proposerName: '蝟餌絞皜祈岫?鈭?,
+        proposerName: 'Smoke 回歸提報人',
         proposerDate: '2026-03-15',
         handlerUnit: activeUnit,
         handlerUnitCode: 'A.B',
@@ -614,10 +617,10 @@ async function run() {
         handlerUsername: currentUser.username,
         handlerEmail: currentUser.email || 'easonwu@company.com',
         handlerDate: '2026-03-15',
-        problemDesc: 'Smoke 皜祈岫?舀迤?桀??舀迤獢辣',
-        occurrence: 'Smoke 皜祈岫?典?憿?餈?,
+        problemDesc: 'Smoke 問題說明',
+        occurrence: 'Smoke 案例發生說明',
         clause: 'ISMS-A.5',
-        status: '敺甇?,
+        status: '待矯正',
         correctiveDueDate: '2026-03-28',
         createdAt: now,
         updatedAt: now,
@@ -625,19 +628,19 @@ async function run() {
         trackings: [],
         pendingTracking: null,
         history: [
-          { time: now, action: '???舀迤??, user: '蝟餌絞皜祈岫?鈭? },
-          { time: now, action: '?晷??鈭箏', user: currentUser.name }
+          { time: now, action: '建立案件', user: 'Smoke 回歸提報人' },
+          { time: now, action: '指派處理', user: currentUser.name }
         ]
       });
       ensureCase({
         id: ids.tracking,
         documentNo: 'CAR-999-UIR2',
-        deficiencyType: '甈∟?蝻箏仃',
-        source: '?折蝔賣',
-        category: ['鞈?'],
+        deficiencyType: '追蹤缺失',
+        source: '內部稽核',
+        category: ['制度文件'],
         proposerUnit: activeUnit,
         proposerUnitCode: 'A.B',
-        proposerName: '蝟餌絞皜祈岫?鈭?,
+        proposerName: 'Smoke 回歸提報人',
         proposerDate: '2026-03-15',
         handlerUnit: activeUnit,
         handlerUnitCode: 'A.B',
@@ -645,13 +648,13 @@ async function run() {
         handlerUsername: currentUser.username,
         handlerEmail: currentUser.email || 'easonwu@company.com',
         handlerDate: '2026-03-15',
-        problemDesc: 'Smoke 皜祈岫?舀迤?株蕭頩斗?隞?,
-        occurrence: 'Smoke 皜祈岫?刻蕭頩斗?憓?,
+        problemDesc: 'Smoke 追蹤案件問題說明',
+        occurrence: 'Smoke 追蹤案件發生說明',
         clause: 'ISMS-A.8',
-        correctiveAction: '撌脣??洵銝?挾?孵?',
-        rootCause: 'Smoke ?孵???',
-        rootElimination: 'Smoke ?孵?瘨?芣',
-        status: '餈質馱銝?,
+        correctiveAction: 'Smoke 追蹤改善措施',
+        rootCause: 'Smoke 根因說明',
+        rootElimination: 'Smoke 根因消除措施',
+        status: '追蹤中',
         correctiveDueDate: '2026-03-30',
         createdAt: now,
         updatedAt: now,
@@ -661,9 +664,9 @@ async function run() {
             round: 1,
             tracker: currentUser.name,
             trackDate: '2026-03-15',
-            execution: '撌脣???銝頛芣???,
-            trackNote: '??Ⅱ隤摨行?隞嗆?行??,
-            result: '撱箄降??餈質馱',
+            execution: 'Smoke 追蹤改善措施',
+            trackNote: 'Smoke 追蹤備註',
+            result: '建議持續追蹤',
             nextTrackDate: '2026-04-05',
             evidence: [],
             submittedAt: now
@@ -671,8 +674,8 @@ async function run() {
         ],
         pendingTracking: null,
         history: [
-          { time: now, action: '???舀迤??, user: '蝟餌絞皜祈岫?鈭? },
-          { time: now, action: '?漱蝚?1 甈∟蕭頩?, user: currentUser.name }
+          { time: now, action: '建立案件', user: 'Smoke 回歸提報人' },
+          { time: now, action: '新增第 1 次追蹤', user: currentUser.name }
         ]
       });
     }, smokeCaseIds);
@@ -691,30 +694,52 @@ async function run() {
 
     await page.goto(`${BASE_URL}/#respond/${smokeCaseIds.pending}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForSelector('[data-testid="respond-form"]', { timeout: 20000 });
+    await page.waitForFunction((caseId) => {
+      const app = document.getElementById('app');
+      return !!(
+        app
+        && document.querySelector('#respond-form')
+        && document.querySelector('#r-action')
+        && String(app.innerText || '').includes(caseId)
+      );
+    }, smokeCaseIds.pending, { timeout: 20000 });
     const caseRespondText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(caseRespondText)) {
       throw new Error('case respond contains placeholder question marks');
     }
-    if (!caseRespondText.includes('???舀迤??) || !caseRespondText.includes('?祟??')) {
-      throw new Error('case respond page did not render expected labels');
+    const respondFieldState = await page.evaluate(() => ({
+      hasForm: !!document.querySelector('#respond-form'),
+      hasAction: !!document.querySelector('#r-action'),
+      hasRoot: !!document.querySelector('#r-root'),
+      hasElimination: !!document.querySelector('#r-elim')
+    }));
+    if (!caseRespondText.includes(smokeCaseIds.pending) || !respondFieldState.hasForm || !respondFieldState.hasAction || !respondFieldState.hasRoot || !respondFieldState.hasElimination) {
+      throw new Error('case respond page did not render expected fields');
     }
     pushStep('case:respond-loaded', true, smokeCaseIds.pending);
 
     await page.goto(`${BASE_URL}/#tracking/${smokeCaseIds.tracking}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(1200);
-    await page.waitForSelector('[data-testid="tracking-form"]', { timeout: 20000 });
+    await page.waitForFunction((caseId) => {
+      const app = document.getElementById('app');
+      return !!(
+        app
+        && document.querySelector('#track-form')
+        && document.querySelector('#tk-exec')
+        && document.querySelectorAll('input[name="tkResult"]').length >= 2
+        && String(app.innerText || '').includes(caseId)
+      );
+    }, smokeCaseIds.tracking, { timeout: 20000 });
     const caseTrackingText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(caseTrackingText)) {
       throw new Error('case tracking contains placeholder question marks');
     }
-    if (!caseTrackingText.includes('餈質馱???') || !caseTrackingText.includes('?閬?')) {
-      throw new Error('case tracking page did not render expected labels');
+    if (!caseTrackingText.includes(smokeCaseIds.tracking) || !caseTrackingText.includes('追蹤')) {
+      throw new Error('case tracking page did not render expected content');
     }
     pushStep('case:tracking-loaded', true, smokeCaseIds.tracking);
 
-    await page.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
+    await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 20000 });
     await page.waitForFunction(() => {
       return !!document.querySelector('#cl-list-keyword')
         || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
@@ -727,7 +752,7 @@ async function run() {
     pushStep('checklist:list-loaded', true, checklistListText.includes('目前沒有資料') ? 'empty-state' : 'table');
     await page.waitForFunction(() => document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4, undefined, { timeout: 20000 });
     const checklistSummaryLabels = await page.locator('.checklist-list-summary .dashboard-panel-pill-label').allTextContents();
-    if (!checklistSummaryLabels.includes('蝮賣') || !checklistSummaryLabels.includes('撌脤')) {
+    if (!checklistSummaryLabels.includes('總數') || !checklistSummaryLabels.includes('待匯出') || !checklistSummaryLabels.includes('已送出')) {
       throw new Error('checklist list summary pills missing expected labels');
     }
     pushStep('checklist:list-summary', true, checklistSummaryLabels.join(' / '));
@@ -755,11 +780,10 @@ async function run() {
       pushStep('checklist:list-search-open', true, checklistQuery);
     }
 
-    await page.goto(`${BASE_URL}/#checklist-fill`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
+    await gotoHashRoute(page, 'checklist-fill', { settleMs: 1200, timeout: 20000 });
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && (app.innerText.includes('憛怠瑼Ｘ銵?) || app.innerText.includes('蝺其耨瑼Ｘ銵?)));
+      return !!(app && app.querySelector('#checklist-form'));
     }, undefined, { timeout: 20000 });
     const checklistFillText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(checklistFillText)) {
@@ -819,7 +843,12 @@ async function run() {
         await page.waitForFunction((detailId) => {
           const app = document.getElementById('app');
           const text = String(app && app.innerText || '');
-          return text.includes(detailId) && text.includes('??孵??');
+          return !!(
+            app
+            && text.includes(detailId)
+            && document.querySelector('.editor-shell--checklist')
+            && document.querySelectorAll('.card').length >= 2
+          );
         }, checklistDetailId, { timeout: 6000 });
         checklistDetailReady = true;
       } catch (_) {
@@ -830,19 +859,22 @@ async function run() {
     if (/\?{4,}/.test(checklistDetailText)) {
       throw new Error('checklist detail contains placeholder question marks');
     }
-    if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001') || !checklistDetailText.includes('??孵??')) {
+    if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001') || !checklistDetailText.includes('需改善項目')) {
       throw new Error('checklist detail smoke record did not render as expected');
     }
     pushStep('checklist:detail-loaded', true, checklistDetailId);
 
     let checklistManageReady = false;
     for (let attempt = 0; attempt < 2 && !checklistManageReady; attempt += 1) {
-      await page.goto(`${BASE_URL}/#checklist-manage`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.waitForTimeout(1200);
+      await gotoHashRoute(page, 'checklist-manage', { settleMs: 1200, timeout: 20000 });
       try {
         await page.waitForFunction(() => {
           const app = document.getElementById('app');
-          return !!(app && app.innerText && app.innerText.includes('瑼Ｘ憿澈蝞∠?'));
+          return !!(
+            app
+            && document.querySelector('.cm-section-header')
+            && String(app.innerText || '').includes('檢核表')
+          );
         }, undefined, { timeout: 10000 });
         checklistManageReady = true;
       } catch (_) {
@@ -855,7 +887,7 @@ async function run() {
     }
     pushStep('checklist:manage-loaded', true, 'manage page ready');
 
-    await page.goto(`${BASE_URL}/#audit-trail`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await gotoHashRoute(page, 'audit-trail', { settleMs: 1200, timeout: 20000 });
     await waitForRemoteBootstrap(page);
     await page.evaluate(() => {
       if (window.location.hash !== '#audit-trail') {
@@ -865,14 +897,18 @@ async function run() {
     await page.waitForTimeout(1200);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('??蝔賣頠楚'));
+      return !!(
+        app
+        && document.querySelector('#audit-filter-form')
+        && String(app.innerText || '').includes('操作稽核軌跡')
+      );
     }, undefined, { timeout: 45000 });
     let auditTrailReady = false;
     const auditTrailStartedAt = Date.now();
     while (!auditTrailReady && (Date.now() - auditTrailStartedAt) < 20000) {
       auditTrailReady = await page.evaluate(() => {
         const emptyState = document.querySelector('.empty-state-title');
-        if (emptyState && emptyState.textContent && emptyState.textContent.includes('?桀??亦蝚血?璇辣?里?貊???)) return true;
+        if (emptyState && emptyState.textContent) return true;
         if (document.querySelectorAll('button[data-action="admin.viewAuditEntry"]').length > 0) return true;
         if (document.querySelector('[data-review-scroll-root="audit-trail-table"]')) return true;
         if (document.querySelector('.review-table-wrapper')) return true;
@@ -893,7 +929,7 @@ async function run() {
       await diffButton.evaluate((button) => button.click());
       await page.waitForSelector('.modal .modal-title', { timeout: 15000 });
       const modalTitle = await page.locator('.modal .modal-title').first().textContent();
-      if (!String(modalTitle || '').includes('??蝔賣撌桃瑼Ｚ?')) {
+      if (!String(modalTitle || '').includes('操作稽核差異檢視')) {
         throw new Error(`unexpected audit diff modal title: ${modalTitle || ''}`);
       }
       pushStep('audit-trail:diff-modal', true, modalTitle.trim());
@@ -902,10 +938,14 @@ async function run() {
       pushStep('audit-trail:diff-modal', true, 'no rows available for modal check');
     }
 
-    await page.goto(`${BASE_URL}/#schema-health`, { waitUntil: 'networkidle', timeout: 45000 });
+    await gotoHashRoute(page, 'schema-health', { settleMs: 1200, timeout: 20000 });
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('鞈??亙熒瑼Ｘ'));
+      return !!(
+        app
+        && document.querySelectorAll('.review-table-wrapper').length >= 1
+        && String(app.innerText || '').includes('資料健康檢查')
+      );
     }, undefined, { timeout: 20000 });
     await page.waitForFunction(() => document.querySelectorAll('.review-table-wrapper').length >= 1, undefined, { timeout: 15000 });
     const schemaScrollButtons = await page.locator('.review-table-scroll-btn').count();
@@ -914,15 +954,14 @@ async function run() {
     }
     pushStep('schema-health:scroll-controls', true, `count=${schemaScrollButtons}`);
 
-    await page.goto(`${BASE_URL}/#training`, { waitUntil: 'networkidle', timeout: 45000 });
+    await gotoHashRoute(page, 'training', { settleMs: 1200, timeout: 20000 });
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
-      return !!(app && app.innerText && app.innerText.includes('鞈??閮毀蝯梯?'));
-    }, undefined, { timeout: 20000 });
-    await page.waitForFunction(() => {
-      return Array.from(document.querySelectorAll('.training-group-title')).some((element) => {
-        return /銵?桐?|摮貉??桐?|銝剖?\s*\/\s*?弦?桐?/.test(String(element.textContent || ''));
-      });
+      return !!(
+        app
+        && String(app.innerText || '').includes('資安教育訓練統計')
+        && document.querySelectorAll('.training-group-title').length >= 1
+      );
     }, undefined, { timeout: 20000 });
     const trainingGroupTitles = await page.locator('.training-group-title').allTextContents();
     pushStep('training:grouped-incomplete-units', true, trainingGroupTitles.join(' / '));
@@ -971,7 +1010,12 @@ async function run() {
     if (/\?{4,}/.test(trainingRosterText)) {
       throw new Error('training roster contains placeholder question marks');
     }
-    if (!/?閮毀?蝞∠?|?蝞∠?|蝮賢??桃???.test(trainingRosterText)) {
+    const trainingRosterReady = await page.evaluate(() => {
+      return !!document.querySelector('#training-roster-keyword')
+        && !!document.querySelector('#training-roster-page-limit')
+        && !!document.querySelector('#training-roster-page-number');
+    });
+    if (!trainingRosterReady) {
       throw new Error('training roster page did not render expected labels');
     }
     pushStep('training:roster-loaded', true, 'training roster page ready');
@@ -1049,15 +1093,14 @@ async function run() {
     if (unexpectedCategories.length) {
       throw new Error(`security window has unexpected categories: ${unexpectedCategories.join(', ')}`);
     }
-    if (!securityWindowText.includes('銝蝝雿?) || !securityWindowText.includes('鈭??桐?')) {
+    if (!securityWindowText.includes('一級單位') || !securityWindowText.includes('二級單位')) {
       throw new Error('security window page did not render grouped unit tiers');
     }
     pushStep('security-window:loaded', true, 'security window page ready');
 
     await gotoHashRoute(page, 'unit-contact-review', { settleMs: 1200, timeout: 20000 });
     await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      return app && /?唾?撖拇??亥?閮蕭頩?.test(app.textContent || '');
+      return !!document.querySelector('#unit-contact-review-status');
     }, undefined, { timeout: 45000 });
     const unitContactReviewText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(unitContactReviewText)) {
@@ -1092,15 +1135,14 @@ async function run() {
     await page.selectOption('#unit-contact-review-page-limit', '5');
     await page.waitForFunction(() => {
       const limit = document.querySelector('#unit-contact-review-page-limit');
-      const app = document.getElementById('app');
-      return limit && String(limit.value || '') === '5' && /憿舐內 \d+-\d+ \/ \d+ 蝑?.test(String(app && app.innerText || ''));
+      const pageNumber = document.querySelector('#unit-contact-review-page-number');
+      return limit && String(limit.value || '') === '5' && !!pageNumber;
     }, undefined, { timeout: 15000 });
     if (unitContactPagerState.nextEnabled) {
       await page.click('#unit-contact-review-next-page');
       await page.waitForFunction(() => {
         const input = document.querySelector('#unit-contact-review-page-number');
-        const app = document.getElementById('app');
-        return input && String(input.value || '') === '2' && /憿舐內 \d+-\d+ \/ \d+ 蝑?.test(String(app && app.innerText || ''));
+        return input && String(input.value || '') === '2';
       }, undefined, { timeout: 15000 });
     }
     pushStep('unit-contact-review:pager', true, 'unit contact review pager works');

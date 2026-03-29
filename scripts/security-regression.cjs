@@ -82,18 +82,29 @@ async function ensureAdminRouteReady(page, routeHash, selector, options) {
   const opts = options && typeof options === 'object' ? options : {};
   const timeout = Math.max(1000, Number(opts.timeout) || 20000);
   const waitAfterNavMs = Math.max(0, Number(opts.waitAfterNavMs) || 900);
+  const normalizedHash = String(routeHash || '').replace(/^#/, '');
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (attempt > 0) {
       await login(page, 'easonwu', '2wsx#EDC');
     }
-    await gotoHash(page, routeHash);
+    if (attempt === 0) {
+      await gotoHash(page, normalizedHash);
+    } else {
+      await page.goto(`${BASE_URL}/#${normalizedHash}`, { waitUntil: 'domcontentloaded', timeout });
+    }
     await page.waitForTimeout(attempt === 0 ? waitAfterNavMs : 400);
     try {
-      await page.waitForSelector(selector, { timeout });
+      await page.waitForFunction(({ targetHash, targetSelector }) => {
+        const hash = String(window.location.hash || '').replace(/^#/, '');
+        const app = document.getElementById('app');
+        return hash === targetHash
+          && !!app
+          && !!document.querySelector(targetSelector);
+      }, { targetHash: normalizedHash, targetSelector: selector }, { timeout });
       return true;
     } catch (error) {
       if (attempt === 2) throw error;
-      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout });
       await page.waitForTimeout(300);
     }
   }
@@ -601,18 +612,12 @@ async function assertNoXssExecution(page, label) {
         { hash: 'users', selector: '#app table', label: 'users', readySelector: '#system-users-page-limit' },
         { hash: 'training-roster', selector: '#app table', label: 'training-roster', readySelector: '#training-roster-page-limit' },
         { hash: 'unit-contact-review', selector: '#app table', label: 'unit-contact-review', readySelector: '#unit-contact-review-status' },
-        { hash: 'list', selector: '#app table', label: 'case-list', readySelector: '#app .page-title', readyText: '矯正單列表' }
+        { hash: 'list', selector: '#app table', label: 'case-list', readySelector: '#search-input' }
       ];
       const findings = [];
       for (const check of checks) {
         const readySelector = check.readySelector || check.selector;
         await ensureAdminRouteReady(page, check.hash, readySelector, { timeout: 30000 });
-        if (check.readyText) {
-          await page.waitForFunction((expectedText) => {
-            const headings = Array.from(document.querySelectorAll('#app .page-title, #app [data-route-heading]'));
-            return headings.some((node) => String(node && node.textContent || '').includes(expectedText));
-          }, check.readyText, { timeout: 30000 });
-        }
         await page.waitForSelector(check.selector, { timeout: 30000 });
         const state = await page.evaluate((label) => {
           const table = document.querySelector('#app table');

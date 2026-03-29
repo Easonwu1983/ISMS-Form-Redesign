@@ -48,7 +48,20 @@
       }
       const existing = document.querySelector(`script[data-runtime-asset="${normalizedPath}"]`);
       const promise = new Promise(function (resolve, reject) {
+        function markLoaded(scriptNode) {
+          if (!scriptNode || !scriptNode.dataset) return;
+          scriptNode.dataset.runtimeLoaded = 'true';
+          delete scriptNode.dataset.runtimeError;
+        }
+
+        function markErrored(scriptNode) {
+          if (!scriptNode || !scriptNode.dataset) return;
+          scriptNode.dataset.runtimeError = 'true';
+          delete scriptNode.dataset.runtimeLoaded;
+        }
+
         function resolveLoaded() {
+          if (existing) markLoaded(existing);
           if (globalKey && typeof window !== 'undefined') {
             if (!window[globalKey]) {
               reject(new Error(normalizedPath + ' loaded without ' + globalKey));
@@ -61,14 +74,27 @@
         }
 
         function attachListeners(scriptNode) {
-          scriptNode.addEventListener('load', resolveLoaded, { once: true });
+          scriptNode.addEventListener('load', function () {
+            markLoaded(scriptNode);
+            resolveLoaded();
+          }, { once: true });
           scriptNode.addEventListener('error', function () {
+            markErrored(scriptNode);
             reject(new Error('Failed to load ' + normalizedPath));
           }, { once: true });
         }
 
         if (existing) {
+          if (existing.dataset && existing.dataset.runtimeLoaded === 'true') {
+            resolveLoaded();
+            return;
+          }
+          if (existing.dataset && existing.dataset.runtimeError === 'true') {
+            reject(new Error('Failed to load ' + normalizedPath));
+            return;
+          }
           if (globalKey && typeof window !== 'undefined' && window[globalKey]) {
+            markLoaded(existing);
             resolveLoaded();
             return;
           }
