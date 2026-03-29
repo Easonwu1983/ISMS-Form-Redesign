@@ -39,7 +39,8 @@ async function runAxeCheck(page, label) {
 (async () => {
   const results = createResultEnvelope({ steps: [] });
   const browser = await launchBrowser();
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1024 } });
+  const page = await context.newPage();
   attachDiagnostics(page, results);
 
   try {
@@ -71,6 +72,7 @@ async function runAxeCheck(page, label) {
   } finally {
     finalizeResults(results);
     writeJson(RESULT_PATH, results);
+    await context.close();
     await browser.close();
   }
 
