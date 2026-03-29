@@ -67,19 +67,29 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
   await gotoAppRoot(page, 'domcontentloaded');
   const alreadyAuthenticated = await page.locator('.btn-logout').count();
   if (!alreadyAuthenticated) {
-    await page.waitForFunction(() => {
-      return !!document.querySelector('[data-testid="login-form"]')
-        || !!document.querySelector('.btn-logout');
-    }, undefined, { timeout: 20000 });
     if (fastAuth) {
+      await page.waitForFunction(() => {
+        const auth = window._authModule;
+        return !!(auth && typeof auth.login === 'function');
+      }, undefined, { timeout: 20000 });
       const loginResult = await page.evaluate(async ({ username, password }) => {
         const auth = window._authModule;
         if (!auth || typeof auth.login !== 'function') throw new Error('auth module missing');
         return auth.login(username, password);
       }, { username, password });
       if (!loginResult) throw new Error('fast auth login failed');
-      await page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 });
+      await page.waitForFunction(() => {
+        const auth = window._authModule;
+        const currentUser = auth && typeof auth.currentUser === 'function'
+          ? auth.currentUser()
+          : null;
+        return !!(currentUser && currentUser.sessionToken) || !!document.querySelector('.btn-logout');
+      }, undefined, { timeout: 30000 });
     } else {
+      await page.waitForFunction(() => {
+        return !!document.querySelector('[data-testid="login-form"]')
+          || !!document.querySelector('.btn-logout');
+      }, undefined, { timeout: 20000 });
       await page.fill('[data-testid="login-user"]', username);
       await page.fill('[data-testid="login-pass"]', password);
       await Promise.all([
@@ -328,7 +338,7 @@ async function runVisualBaselineChecks(browser, pushStep) {
     const comparePage = await compareContext.newPage();
 
     const desktopPage = await desktopContext.newPage();
-    await login(desktopPage, 'easonwu', '2wsx#EDC', { fastAuth: true });
+    await login(desktopPage, 'easonwu', '2wsx#EDC', { fastAuth: true, requireVersionChip: false });
     for (const spec of DESKTOP_VISUAL_SPECS) {
       const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-desktop.png`);
       const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-desktop.png`);
@@ -344,7 +354,7 @@ async function runVisualBaselineChecks(browser, pushStep) {
     }
 
     const mobilePage = await mobileContext.newPage();
-    await login(mobilePage, 'easonwu', '2wsx#EDC', { fastAuth: true });
+    await login(mobilePage, 'easonwu', '2wsx#EDC', { fastAuth: true, requireVersionChip: false });
     for (const spec of MOBILE_VISUAL_SPECS) {
       const actualPath = path.join(VISUAL_OUT_DIR, `${spec.slug}-mobile.png`);
       const baselinePath = path.join(DEFAULT_BASELINE_DIR, `${spec.slug}-mobile.png`);

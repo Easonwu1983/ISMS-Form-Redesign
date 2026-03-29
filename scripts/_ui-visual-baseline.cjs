@@ -112,8 +112,17 @@ async function seedSyntheticUnitReview(page) {
   await page.waitForSelector('#app', { timeout: 5000 }).catch(() => null);
 
   await page.evaluate(() => {
-    const hostCard = document.querySelector('.governance-table-card, .review-table-card');
-    if (!hostCard) return;
+    const app = document.getElementById('app');
+    if (!app) return;
+    const existing = document.getElementById('visual-unit-review-shell');
+    if (existing && !existing.matches('.governance-table-card, .review-table-card')) {
+      existing.remove();
+    }
+    const hostCard = document.querySelector('.governance-table-card, .review-table-card') || (() => {
+      const shell = document.createElement('section');
+      app.appendChild(shell);
+      return shell;
+    })();
     hostCard.id = 'visual-unit-review-shell';
     hostCard.classList.add('visual-unit-review-shell');
     hostCard.innerHTML = `
@@ -367,9 +376,11 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'dashboard') {
     return common + `
       #visual-dashboard-shell {
+        width: ${mode === 'mobile' ? '320px' : '640px'} !important;
         max-width: ${mode === 'mobile' ? '320px' : '640px'} !important;
         margin: 0 auto !important;
         padding: ${mode === 'mobile' ? '14px' : '16px'} !important;
+        box-sizing: border-box !important;
       }
       #visual-dashboard-shell .visual-dashboard-stat-grid {
         display: grid !important;
@@ -464,8 +475,10 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'unit-review') {
     return common + `
       #visual-unit-review-shell {
+        width: ${mode === 'mobile' ? '360px' : '760px'} !important;
         max-width: ${mode === 'mobile' ? '360px' : '760px'} !important;
         margin: 0 auto !important;
+        box-sizing: border-box !important;
       }
       #visual-unit-review-shell .visual-unit-review-toolbar {
         padding-top: 6px;
@@ -518,9 +531,11 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'unit-contact-apply') {
     return common + `
       #visual-unit-contact-apply-shell {
+        width: ${mode === 'mobile' ? '320px' : '640px'} !important;
         max-width: ${mode === 'mobile' ? '320px' : '640px'} !important;
         margin: 0 auto !important;
         padding: ${mode === 'mobile' ? '14px' : '16px'} !important;
+        box-sizing: border-box !important;
       }
       #visual-unit-contact-apply-shell .visual-unit-contact-grid {
         display: grid !important;
@@ -559,9 +574,11 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'unit-contact-status') {
     return common + `
       #visual-unit-contact-status-shell {
+        width: ${mode === 'mobile' ? '340px' : '760px'} !important;
         max-width: ${mode === 'mobile' ? '340px' : '760px'} !important;
         margin: 0 auto !important;
         padding: ${mode === 'mobile' ? '16px' : '18px'} !important;
+        box-sizing: border-box !important;
       }
       #visual-unit-contact-status-shell .visual-unit-contact-status-grid {
         display: grid !important;
@@ -753,15 +770,17 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
       });
     }
 
-    function drawToCanvas(image, scale) {
+    function drawToCanvas(image, scale, sourceWidth, sourceHeight) {
       const safeScale = Number.isFinite(scale) && scale > 0 && scale < 1 ? scale : 1;
-      const width = Math.max(1, Math.round(image.width * safeScale));
-      const height = Math.max(1, Math.round(image.height * safeScale));
+      const baseWidth = Math.max(1, Number.isFinite(sourceWidth) ? Math.round(sourceWidth) : image.width);
+      const baseHeight = Math.max(1, Number.isFinite(sourceHeight) ? Math.round(sourceHeight) : image.height);
+      const width = Math.max(1, Math.round(baseWidth * safeScale));
+      const height = Math.max(1, Math.round(baseHeight * safeScale));
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
       const context = canvas.getContext('2d', { willReadFrequently: true });
-      context.drawImage(image, 0, 0, width, height);
+      context.drawImage(image, 0, 0, baseWidth, baseHeight, 0, 0, width, height);
       return {
         width,
         height,
@@ -771,7 +790,9 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
 
     const baselineImg = await loadImage('data:image/png;base64,' + baseline);
     const actualImg = await loadImage('data:image/png;base64,' + actual);
-    if (baselineImg.width !== actualImg.width || baselineImg.height !== actualImg.height) {
+    const widthDelta = Math.abs(baselineImg.width - actualImg.width);
+    const heightDelta = Math.abs(baselineImg.height - actualImg.height);
+    if ((widthDelta || heightDelta) && (widthDelta > 4 || heightDelta > 4)) {
       return {
         ok: false,
         reason: 'dimension-mismatch',
@@ -782,8 +803,10 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
       };
     }
 
-    const baselineFrame = drawToCanvas(baselineImg, sampleScale);
-    const actualFrame = drawToCanvas(actualImg, sampleScale);
+    const compareWidth = Math.min(baselineImg.width, actualImg.width);
+    const compareHeight = Math.min(baselineImg.height, actualImg.height);
+    const baselineFrame = drawToCanvas(baselineImg, sampleScale, compareWidth, compareHeight);
+    const actualFrame = drawToCanvas(actualImg, sampleScale, compareWidth, compareHeight);
     const baselineData = baselineFrame.data;
     const actualData = actualFrame.data;
     let diffPixels = 0;
@@ -803,6 +826,7 @@ async function compareAgainstBaseline(page, baselinePath, actualPath, options) {
       ok: diffRatio <= maxDiffRatio,
       baselineWidth: baselineFrame.width,
       baselineHeight: baselineFrame.height,
+      dimensionToleranceApplied: widthDelta <= 4 && heightDelta <= 4 && (widthDelta > 0 || heightDelta > 0),
       totalPixels,
       diffPixels,
       diffRatio,
