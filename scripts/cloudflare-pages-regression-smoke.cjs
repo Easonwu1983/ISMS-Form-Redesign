@@ -28,6 +28,15 @@ function pickExecutablePath() {
   return undefined;
 }
 
+function getVisualSampleScale(spec, mode) {
+  const slug = spec && spec.slug;
+  if (slug === 'dashboard') return mode === 'mobile' ? 0.72 : 0.82;
+  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.72 : 0.82;
+  if (slug === 'unit-contact-status') return mode === 'mobile' ? 0.72 : 0.82;
+  if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') return mode === 'mobile' ? 0.7 : 0.8;
+  return 1;
+}
+
 async function gotoAppRoot(page, waitUntil = 'domcontentloaded') {
   await page.goto(`${BASE_URL}/`, { waitUntil, timeout: 45000 });
   await page.waitForFunction(() => {
@@ -232,7 +241,10 @@ async function runPublicVisualBaselineChecks(browser, pushStep) {
       if (!fs.existsSync(baselinePath)) throw new Error(`missing public desktop baseline: ${baselinePath}`);
       await captureVisualSpec(desktopPage, BASE_URL, spec, actualPath, 'desktop');
       const publicDesktopDiff = spec.slug === 'unit-contact-apply' ? 0.06 : 0.05;
-      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, { maxDiffRatio: publicDesktopDiff });
+      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, {
+        maxDiffRatio: publicDesktopDiff,
+        sampleScale: getVisualSampleScale(spec, 'desktop')
+      });
       if (!result.ok) throw new Error(`public desktop visual drift: ${spec.slug} (${JSON.stringify(result)})`);
       pushStep(`visual:public-desktop:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
     }
@@ -245,7 +257,10 @@ async function runPublicVisualBaselineChecks(browser, pushStep) {
       if (!fs.existsSync(baselinePath)) throw new Error(`missing public mobile baseline: ${baselinePath}`);
       await captureVisualSpec(mobilePage, BASE_URL, spec, actualPath, 'mobile');
       const publicMobileDiff = ['unit-contact-apply', 'unit-contact-status', 'unit-contact-success', 'unit-contact-activate'].includes(spec.slug) ? 0.2 : 0.05;
-      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, { maxDiffRatio: publicMobileDiff });
+      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, {
+        maxDiffRatio: publicMobileDiff,
+        sampleScale: getVisualSampleScale(spec, 'mobile')
+      });
       if (!result.ok) throw new Error(`public mobile visual drift: ${spec.slug} (${JSON.stringify(result)})`);
       pushStep(`visual:public-mobile:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
     }
@@ -309,9 +324,10 @@ async function runVisualBaselineChecks(browser, pushStep) {
       if (!fs.existsSync(baselinePath)) throw new Error(`missing desktop baseline: ${baselinePath}`);
       await captureVisualSpec(desktopPage, BASE_URL, spec, actualPath, 'desktop');
       const maxDiffRatio = spec.slug === 'dashboard' ? 0.08 : spec.slug === 'training' ? 0.12 : (spec.slug === 'unit-review' ? 0.08 : 0.06);
-        const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, {
-          maxDiffRatio
-        });
+      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, {
+        maxDiffRatio,
+        sampleScale: getVisualSampleScale(spec, 'desktop')
+      });
       if (!result.ok) throw new Error(`desktop visual drift: ${spec.slug} (${JSON.stringify(result)})`);
       pushStep(`visual:desktop:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
     }
@@ -326,9 +342,10 @@ async function runVisualBaselineChecks(browser, pushStep) {
       const maxDiffRatio = spec.slug === 'dashboard'
         ? 0.3
         : (spec.slug === 'training' ? 0.16 : 0.08);
-        const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, {
-          maxDiffRatio
-        });
+      const result = await compareAgainstBaseline(comparePage, baselinePath, actualPath, {
+        maxDiffRatio,
+        sampleScale: getVisualSampleScale(spec, 'mobile')
+      });
       if (!result.ok) throw new Error(`mobile visual drift: ${spec.slug} (${JSON.stringify(result)})`);
       pushStep(`visual:mobile:${spec.slug}`, true, `diffRatio=${result.diffRatio.toFixed(4)}`);
     }

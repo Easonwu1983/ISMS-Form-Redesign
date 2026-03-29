@@ -71,6 +71,7 @@ const filesToCopy = [
   'app-ui-bridge-module.js',
   'app-domain-bridge-module.js',
   'app-training-checklist-bridge-module.js',
+  'app-feature-runtime-module.js',
   'case-module.js',
   'admin-module.js',
   'checklist-module.js',

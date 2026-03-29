@@ -13,6 +13,7 @@
         appShellRuntimeModuleApi: null,
         appAuthSessionRuntimeModuleApi: null,
         appRouterRuntimeModuleApi: null,
+        appFeatureRuntimeModuleApi: null,
         appPageShellRuntimeModuleApi: null,
         appBridgeRuntimeModuleApi: null,
         appCoreServiceState: {
@@ -64,6 +65,10 @@
       return getModuleFactory('createAppRouterRuntimeModule', 'app-router-runtime-module.js', state, 'appRouterRuntimeModuleApi', '_appRouterRuntimeModule');
     }
 
+    function getAppFeatureRuntimeModule(state) {
+      return getModuleFactory('createAppFeatureRuntimeModule', 'app-feature-runtime-module.js', state, 'appFeatureRuntimeModuleApi', '_appFeatureRuntimeModule');
+    }
+
     function getAppPageShellRuntimeModule(state) {
       return getModuleFactory('createAppPageShellRuntimeModule', 'app-page-shell-runtime-module.js', state, 'appPageShellRuntimeModuleApi', '_appPageShellRuntimeModule');
     }
@@ -82,6 +87,7 @@
       getAppShellRuntimeModule: getAppShellRuntimeModule,
       getAppAuthSessionRuntimeModule: getAppAuthSessionRuntimeModule,
       getAppRouterRuntimeModule: getAppRouterRuntimeModule,
+      getAppFeatureRuntimeModule: getAppFeatureRuntimeModule,
       getAppPageShellRuntimeModule: getAppPageShellRuntimeModule,
       getAppBridgeRuntimeModule: getAppBridgeRuntimeModule
     };

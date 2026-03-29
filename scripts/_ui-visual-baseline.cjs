@@ -41,6 +41,11 @@ const PUBLIC_MOBILE_VISUAL_SPECS = [
   { slug: 'unit-contact-activate', hash: '#activate-unit-contact/UCA-SMOKE-SUCCESS-001' }
 ];
 
+function isSyntheticRootVisualSpec(spec) {
+  const slug = spec && spec.slug;
+  return slug === 'dashboard' || slug === 'unit-contact-apply' || slug === 'unit-contact-status';
+}
+
 async function seedSyntheticUnitContactSuccess(page) {
   await page.waitForFunction(() => {
     return !!(
@@ -612,7 +617,10 @@ async function stabilizeVisualRoute(page, slug, mode) {
       });
     }
   }, { slug });
-  await page.waitForTimeout(slug === 'unit-review' ? 180 : 350);
+  const settleMs = slug === 'unit-review'
+    ? 180
+    : (slug === 'dashboard' || String(slug || '').indexOf('unit-contact-') === 0 ? 40 : 350);
+  await page.waitForTimeout(settleMs);
 }
 
 async function waitForVisualRouteReady(page, spec) {
@@ -661,6 +669,7 @@ async function gotoVisualHash(page, hash, options = {}) {
 }
 
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
+  const syntheticRootVisual = isSyntheticRootVisualSpec(spec);
   const fastHashNavigation = spec && (
     spec.slug === 'unit-review'
     || spec.slug === 'dashboard'
@@ -672,14 +681,16 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await page.waitForTimeout(600);
     await seedSyntheticUnitContactSuccess(page);
   }
-  if (fastHashNavigation && page.url().startsWith(`${String(baseUrl).replace(/\/+$/, '')}/`)) {
+  if (syntheticRootVisual) {
+    await gotoVisualRoot(page, baseUrl, 'domcontentloaded');
+  } else if (fastHashNavigation && page.url().startsWith(`${String(baseUrl).replace(/\/+$/, '')}/`)) {
     await gotoVisualHash(page, spec.hash, { settleMs: 90 });
   } else {
     const waitUntil = fastHashNavigation ? 'domcontentloaded' : 'networkidle';
     await page.goto(`${String(baseUrl).replace(/\/+$/, '')}/${spec.hash}`, { waitUntil, timeout: 45000 });
   }
   await waitForVisualRouteReady(page, spec);
-  await page.waitForTimeout(fastHashNavigation ? 40 : 900);
+  await page.waitForTimeout(syntheticRootVisual ? 20 : (fastHashNavigation ? 40 : 900));
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'dashboard') {
     await seedSyntheticDashboard(page);
