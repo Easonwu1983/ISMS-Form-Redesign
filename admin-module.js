@@ -1048,13 +1048,13 @@
       const nextButton = queryAction('next-page', 'NextPage');
       const lastButton = queryAction('last-page', 'LastPage');
       if (limitSelect) {
-        limitSelect.addEventListener('change', () => onChange({
+        bindAdminPageEvent(limitSelect, 'change', () => onChange({
           limit: String(limitSelect.value || ''),
           offset: '0'
         }));
       }
       if (pageNumberInput) {
-        pageNumberInput.addEventListener('keydown', (event) => {
+        bindAdminPageEvent(pageNumberInput, 'keydown', (event) => {
           if (event.key !== 'Enter') return;
           event.preventDefault();
           const nextOffset = getOffsetByPageNumber(page, pageNumberInput.value || '1');
@@ -1062,22 +1062,22 @@
         });
       }
       if (jumpButton && pageNumberInput) {
-        jumpButton.addEventListener('click', () => {
+        bindAdminPageEvent(jumpButton, 'click', () => {
           const nextOffset = getOffsetByPageNumber(page, pageNumberInput.value || '1');
           onChange({ offset: String(nextOffset) });
         });
       }
       if (firstButton) {
-        firstButton.addEventListener('click', () => onChange({ offset: '0' }));
+        bindAdminPageEvent(firstButton, 'click', () => onChange({ offset: '0' }));
       }
       if (prevButton) {
-        prevButton.addEventListener('click', () => onChange({ offset: String(page.prevOffset || 0) }));
+        bindAdminPageEvent(prevButton, 'click', () => onChange({ offset: String(page.prevOffset || 0) }));
       }
       if (nextButton) {
-        nextButton.addEventListener('click', () => onChange({ offset: String(page.nextOffset || 0) }));
+        bindAdminPageEvent(nextButton, 'click', () => onChange({ offset: String(page.nextOffset || 0) }));
       }
       if (lastButton) {
-        lastButton.addEventListener('click', () => {
+        bindAdminPageEvent(lastButton, 'click', () => {
           const nextOffset = getOffsetByPageNumber(page, page.pageCount || 1);
           onChange({ offset: String(nextOffset) });
         });
@@ -1904,7 +1904,7 @@
           return;
         }
         detailsEl.dataset.governanceToggleReady = 'true';
-        detailsEl.addEventListener('toggle', function () {
+        bindAdminPageEvent(detailsEl, 'toggle', function () {
           if (detailsEl.open) hydrateGovernanceCategoryCard(detailsEl);
         });
         if (detailsEl.open) hydrateGovernanceCategoryCard(detailsEl);
@@ -2522,7 +2522,7 @@
         };
 
         let dragState = null;
-        wrapper.addEventListener('pointerdown', (event) => {
+        bindAdminPageEvent(wrapper, 'pointerdown', (event) => {
           if (!isScrollable()) return;
           if (event.pointerType === 'mouse' && event.button !== 0) return;
           dragState = {
@@ -2533,7 +2533,7 @@
           wrapper.classList.add('is-dragging');
           if (wrapper.setPointerCapture) wrapper.setPointerCapture(event.pointerId);
         });
-        wrapper.addEventListener('pointermove', (event) => {
+        bindAdminPageEvent(wrapper, 'pointermove', (event) => {
           if (!dragState || event.pointerId !== dragState.pointerId) return;
           const delta = event.clientX - dragState.startX;
           wrapper.scrollLeft = dragState.startScrollLeft - delta;
@@ -2544,20 +2544,20 @@
           wrapper.classList.remove('is-dragging');
           dragState = null;
         };
-        wrapper.addEventListener('pointerup', endDrag);
-        wrapper.addEventListener('pointercancel', endDrag);
-        wrapper.addEventListener('pointerleave', (event) => {
+        bindAdminPageEvent(wrapper, 'pointerup', endDrag);
+        bindAdminPageEvent(wrapper, 'pointercancel', endDrag);
+        bindAdminPageEvent(wrapper, 'pointerleave', (event) => {
           if (dragState && event.pointerType !== 'mouse') endDrag(event);
         });
-        wrapper.addEventListener('wheel', (event) => {
+        bindAdminPageEvent(wrapper, 'wheel', (event) => {
           if (!isScrollable()) return;
           if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) && !event.shiftKey) return;
           event.preventDefault();
           wrapper.scrollLeft += event.shiftKey ? event.deltaY + event.deltaX : event.deltaY;
         }, { passive: false });
-        wrapper.addEventListener('scroll', syncButtonState, { passive: true });
-        if (leftButton) leftButton.addEventListener('click', () => scrollByDistance(-Math.max(260, wrapper.clientWidth * 0.72)));
-        if (rightButton) rightButton.addEventListener('click', () => scrollByDistance(Math.max(260, wrapper.clientWidth * 0.72)));
+        bindAdminPageEvent(wrapper, 'scroll', syncButtonState, { passive: true });
+        if (leftButton) bindAdminPageEvent(leftButton, 'click', () => scrollByDistance(-Math.max(260, wrapper.clientWidth * 0.72)));
+        if (rightButton) bindAdminPageEvent(rightButton, 'click', () => scrollByDistance(Math.max(260, wrapper.clientWidth * 0.72)));
         syncButtonState();
       });
     }
@@ -2703,13 +2703,13 @@
         renderChips();
         syncHidden();
       };
-      chipsEl.addEventListener('click', (event) => {
+      bindAdminPageEvent(chipsEl, 'click', (event) => {
         const button = event.target.closest('[data-remove-unit]');
         if (!button) return;
         event.preventDefault();
         removeValue(button.dataset.removeUnit);
       });
-      resultsEl.addEventListener('mousedown', (event) => {
+      bindAdminPageEvent(resultsEl, 'mousedown', (event) => {
         const button = event.target.closest('[data-unit-value]');
         if (!button) return;
         event.preventDefault();
@@ -2718,9 +2718,9 @@
         resultsEl.hidden = true;
         resultsEl.innerHTML = '';
       });
-      searchEl.addEventListener('input', () => renderResults(searchEl.value));
-      searchEl.addEventListener('focus', () => renderResults(searchEl.value));
-      searchEl.addEventListener('keydown', (event) => {
+      bindAdminPageEvent(searchEl, 'input', () => renderResults(searchEl.value));
+      bindAdminPageEvent(searchEl, 'focus', () => renderResults(searchEl.value));
+      bindAdminPageEvent(searchEl, 'keydown', (event) => {
         if (event.key !== 'Enter') return;
         const button = resultsEl.querySelector('[data-unit-value]');
         if (!button) return;
@@ -2730,15 +2730,7 @@
         resultsEl.hidden = true;
         resultsEl.innerHTML = '';
       });
-      const bindPageEvent = typeof addPageEventListener === 'function'
-        ? addPageEventListener
-        : function (target, type, listener, options) {
-            target.addEventListener(type, listener, options);
-            return function () {
-              try { target.removeEventListener(type, listener, options); } catch (_) {}
-            };
-          };
-      bindPageEvent(document, 'click', (event) => {
+      bindAdminPageEvent(document, 'click', (event) => {
         if (!resultsEl.contains(event.target) && event.target !== searchEl) {
           resultsEl.hidden = true;
         }
@@ -3664,7 +3656,7 @@
       return `<tr><td>${esc(fmtTime(log && log.time) || '—')}</td><td style="font-weight:500">${esc(log && log.username || '—')}</td><td>${esc(log && log.name || '—')}</td><td>${esc(log && log.role || '—')}</td><td>${badge}</td></tr>`;
     }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-title">目前沒有登入紀錄</div><div class="empty-state-desc">系統會保留最近的登入與失敗紀錄。</div></div></td></tr>';
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">登入紀錄</div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">最近 200 筆帳號登入與失敗事件。</p></div><div class="review-header-actions"><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div></div><div class="card"><div class="table-wrapper"><table><thead><tr><th>時間</th><th>帳號</th><th>姓名</th><th>角色</th><th>結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">登入紀錄</div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">最近 200 筆帳號登入與失敗事件。</p></div><div class="review-header-actions"><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div></div><div class="card"><div class="table-wrapper"><table><caption class="sr-only">登入紀錄清單</caption><thead><tr><th scope="col">時間</th><th scope="col">帳號</th><th scope="col">姓名</th><th scope="col">角色</th><th scope="col">結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
   }
 

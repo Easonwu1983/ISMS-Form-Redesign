@@ -179,7 +179,7 @@ function readLatestSummary(layerName) {
 }
 
 function buildReleaseReport(report) {
-  const layerNames = ['health', 'api', 'browser', 'visual', 'full'];
+  const layerNames = ['health', 'api', 'browser', 'a11y', 'visual', 'full'];
   const layers = {};
   layerNames.forEach((layerName) => {
     layers[layerName] = readLatestSummary(layerName);
@@ -388,7 +388,7 @@ function buildCacheSignals() {
 }
 
 function buildReleaseMetrics(layers, versions) {
-  const layerEntries = ['health', 'api', 'browser', 'visual', 'full']
+  const layerEntries = ['health', 'api', 'browser', 'a11y', 'visual', 'full']
     .map((name) => ({ name, summary: layers && layers[name] }))
     .filter((entry) => entry.summary && typeof entry.summary === 'object');
   const comparableLayers = layerEntries.filter((entry) => entry.name !== 'full');
@@ -540,7 +540,7 @@ function writeReleaseReport(report) {
     lines.push(`- ${entry.base}: ${entry.ok ? `${entry.versionKey || 'ok'} (${entry.commit || 'no-commit'})` : `error (${entry.status || entry.error || 'unknown'})`}`);
   });
   lines.push('', '## Layers', '');
-  ['health', 'api', 'browser', 'visual', 'full'].forEach((layerName) => {
+  ['health', 'api', 'browser', 'a11y', 'visual', 'full'].forEach((layerName) => {
     const summary = releaseReport.layers[layerName];
     if (!summary) {
       lines.push(`- ${layerName}: missing`);

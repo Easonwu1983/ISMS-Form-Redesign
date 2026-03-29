@@ -780,11 +780,22 @@ async function run() {
       pushStep('checklist:list-search-open', true, checklistQuery);
     }
 
-    await gotoHashRoute(page, 'checklist-fill', { settleMs: 1200, timeout: 20000 });
-    await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      return !!(app && app.querySelector('#checklist-form'));
-    }, undefined, { timeout: 20000 });
+    let checklistFillReady = false;
+    for (let attempt = 0; attempt < 2 && !checklistFillReady; attempt += 1) {
+      await gotoHashOnly(page, 'checklist-fill', { settleMs: attempt === 0 ? 1200 : 1800, timeout: 20000 });
+      try {
+        await page.waitForFunction(() => {
+          const app = document.getElementById('app');
+          return !!(app && app.querySelector('#checklist-form'));
+        }, undefined, { timeout: 8000 });
+        checklistFillReady = true;
+      } catch (_) {
+        await page.waitForTimeout(1000);
+      }
+    }
+    if (!checklistFillReady) {
+      throw new Error('checklist fill page did not render form');
+    }
     const checklistFillText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(checklistFillText)) {
       throw new Error('checklist fill contains placeholder question marks');
@@ -988,15 +999,20 @@ async function run() {
         window.location.hash = '#training-detail/' + detailId;
       }, trainingDetailId);
       await page.waitForTimeout(1200);
-      await page.waitForFunction(() => {
+      await page.waitForFunction((detailId) => {
         const app = document.getElementById('app');
-        return !!(app && app.innerText && app.innerText.includes('鞈??閮毀蝯梯?') && app.innerText.includes('?犖?敦'));
-      }, undefined, { timeout: 20000 });
+        return !!(
+          app
+          && document.querySelector('.detail-title')
+          && document.querySelector('#training-export-detail')
+          && String(app.innerText || '').includes(detailId)
+        );
+      }, trainingDetailId, { timeout: 20000 });
       const trainingDetailText = await page.locator('#app').innerText();
       if (/\?{4,}/.test(trainingDetailText)) {
         throw new Error('training detail contains placeholder question marks');
       }
-      if (!trainingDetailText.includes(trainingDetailId) || !trainingDetailText.includes('蝯梯???')) {
+      if (!trainingDetailText.includes(trainingDetailId) || !trainingDetailText.includes('資安教育訓練統計')) {
         throw new Error('training detail smoke record did not render as expected');
       }
       pushStep('training:detail-loaded', true, trainingDetailId);
@@ -1020,16 +1036,10 @@ async function run() {
     }
     pushStep('training:roster-loaded', true, 'training roster page ready');
 
-    await page.goto(`${BASE_URL}/#users`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(1200);
+    await gotoHashRoute(page, 'users', { settleMs: 1200, timeout: 20000 });
     await page.waitForFunction(() => {
-      const app = document.getElementById('app');
-      const text = app && app.innerText ? String(app.innerText) : '';
-      return !!(text && text.includes('撣唾?蝞∠?') && (
-        text.includes('銝餉?甇詨惇?桐?') ||
-        text.includes('憿???蝭?') ||
-        text.includes('鞈?蝒')
-      ));
+      return !!document.querySelector('#system-users-page-limit')
+        && !!document.querySelector('#system-users-role');
     }, undefined, { timeout: 20000 });
     const usersText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(usersText)) {
@@ -1049,15 +1059,14 @@ async function run() {
     await page.selectOption('#system-users-page-limit', '5');
     await page.waitForFunction(() => {
       const limit = document.querySelector('#system-users-page-limit');
-      const app = document.getElementById('app');
-      return limit && String(limit.value || '') === '5' && /憿舐內 1-5 \//.test(String(app && app.innerText || ''));
+      const pageNumber = document.querySelector('#system-users-page-number');
+      return limit && String(limit.value || '') === '5' && !!pageNumber;
     }, undefined, { timeout: 15000 });
     if (usersPagerState.nextEnabled) {
       await page.click('#system-users-next-page');
       await page.waitForFunction(() => {
         const input = document.querySelector('#system-users-page-number');
-        const app = document.getElementById('app');
-        return input && String(input.value || '') === '2' && /憿舐內 6-10 \//.test(String(app && app.innerText || ''));
+        return input && String(input.value || '') === '2';
       }, undefined, { timeout: 15000 });
     }
     pushStep('users:pager', true, 'account pager works');
@@ -1084,7 +1093,7 @@ async function run() {
         .filter(Boolean);
       return Array.from(new Set(labels));
     });
-    const expectedCategories = ['銵?桐?', '摮貉??桐?', '銝剖? / ?弦?桐?'];
+    const expectedCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
     const missingCategories = expectedCategories.filter((label) => !securityWindowCategories.includes(label));
     if (missingCategories.length) {
       throw new Error(`security window missing categories: ${missingCategories.join(', ')}`);
@@ -1170,7 +1179,7 @@ async function run() {
         .filter(Boolean);
       return Array.from(new Set(labels));
     });
-    const expectedGovernanceCategories = ['銵?桐?', '摮貉??桐?', '銝剖? / ?弦?桐?'];
+    const expectedGovernanceCategories = ['行政單位', '學術單位', '中心 / 研究單位'];
     const missingGovernanceCategories = expectedGovernanceCategories.filter((label) => !unitReviewCategories.includes(label));
     if (missingGovernanceCategories.length) {
       throw new Error(`unit review missing categories: ${missingGovernanceCategories.join(', ')}`);

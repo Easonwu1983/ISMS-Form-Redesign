@@ -4,6 +4,7 @@ const STEPS = [
   { label: 'formal-production-health-smoke', script: 'scripts/formal-production-health-smoke.cjs' },
   { label: 'formal-production-api-smoke', script: 'scripts/formal-production-api-smoke.cjs' },
   { label: 'formal-production-browser-smoke', script: 'scripts/formal-production-browser-smoke.cjs' },
+  { label: 'formal-production-a11y-smoke', script: 'scripts/formal-production-a11y-smoke.cjs' },
   { label: 'formal-production-visual-smoke', script: 'scripts/formal-production-visual-smoke.cjs' }
 ];
 

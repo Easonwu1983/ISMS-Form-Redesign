@@ -77,11 +77,12 @@ Done:
 - Dialogs now expose `aria-describedby` for confirm and prompt flows.
 - First-pass table semantics were added for admin, training, case, and checklist tables using captions and `scope="col"`.
 - `scripts/security-regression.cjs` now checks that key admin/training/checklist/case tables expose captions and scoped headers.
+- `scripts/accessibility-regression.cjs` now provides a dedicated formal a11y smoke pass for shell landmarks, modal keyboard behavior, and table semantics.
 
 Open:
 - Many `innerHTML` templates still lack ARIA metadata.
 - Keyboard navigation is not systematically tested across key workflows.
-- There is no dedicated a11y smoke layer using axe or equivalent tooling.
+- There is still no axe-based automation; the current a11y smoke is custom DOM and keyboard coverage.
 
 Next:
 - Finish table semantics and labels on `dashboard`, `users`, `unit-contact-review`, `training`, and `checklists`.
@@ -99,6 +100,7 @@ Done:
 - `data-module.js` access-profile caches and parsed storage cache now use bounded stores instead of unbounded raw maps.
 - `training`, `checklist`, and `case` now use page-scoped listener registration for their main list and form flows.
 - `training`, `checklist`, and `audit-trail` remote page caches now use bounded stores instead of raw unbounded page maps.
+- `admin-module.js` pager controls, governance cards, horizontal review scrollers, and unit-chip picker interactions now use page-scoped listener registration.
 
 Open:
 - Many modules still attach listeners directly without page-scoped cleanup.
