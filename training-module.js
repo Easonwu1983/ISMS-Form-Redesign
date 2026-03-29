@@ -27,6 +27,7 @@
       ic,
       toTestIdFragment,
       bindCopyButtons,
+      addPageEventListener,
       refreshIcons,
       renderCopyIdCell,
       renderCopyIdButton,
@@ -749,6 +750,19 @@
         primaryUnit,
         authorizedUnits,
         activeUnit
+      };
+    }
+
+    function bindTrainingPageEvent(target, type, listener, options) {
+      if (typeof addPageEventListener === 'function') {
+        return addPageEventListener(target, type, listener, options);
+      }
+      if (!target || typeof target.addEventListener !== 'function' || typeof listener !== 'function') {
+        return function () {};
+      }
+      target.addEventListener(type, listener, options);
+      return function () {
+        try { target.removeEventListener(type, listener, options); } catch (_) {}
       };
     }
 
@@ -1774,17 +1788,17 @@
       });
     }
 
-    document.getElementById('training-export-all')?.addEventListener('click', async () => {
+    bindTrainingPageEvent(document.getElementById('training-export-all'), 'click', async () => {
       try {
         await exportTrainingSummaryCsv(visibleForms);
       } catch (error) {
         toast(error && error.message ? error.message : '匯出 Excel 失敗', 'error');
       }
     });
-    document.getElementById('training-expand-groups')?.addEventListener('click', () => {
+    bindTrainingPageEvent(document.getElementById('training-expand-groups'), 'click', () => {
       document.querySelectorAll('.training-group-card').forEach((element) => { element.open = true; });
     });
-    document.getElementById('training-collapse-groups')?.addEventListener('click', () => {
+    bindTrainingPageEvent(document.getElementById('training-collapse-groups'), 'click', () => {
       document.querySelectorAll('.training-group-card').forEach((element) => { element.open = false; });
     });
     refreshIcons();
@@ -2473,12 +2487,12 @@
       }
     }
 
-    document.getElementById('training-save-draft').addEventListener('click', async () => {
+    bindTrainingPageEvent(document.getElementById('training-save-draft'), 'click', async () => {
       await runWithBusyState('\u6b63\u5728\u5132\u5b58\u6559\u80b2\u8a13\u7df4\u8349\u7a3f\u2026', async () => {
         await saveTrainingForm(TRAINING_STATUSES.DRAFT);
       });
     });
-    trainingForm.addEventListener('submit', async (event) => {
+    bindTrainingPageEvent(trainingForm, 'submit', async (event) => {
       event.preventDefault();
       await runWithBusyState('\u6b63\u5728\u9001\u51fa\u6559\u80b2\u8a13\u7df4\u6d41\u7a0b\u4e00\u2026', async () => {
         await saveTrainingForm(TRAINING_STATUSES.PENDING_SIGNOFF);
@@ -2492,17 +2506,17 @@
         renderRows();
       }, 120);
     };
-    document.getElementById('training-search').addEventListener('input', scheduleTrainingSearchRender);
-    document.getElementById('training-only-focus').addEventListener('change', renderRows);
-    trainingForm.addEventListener('input', (event) => {
+    bindTrainingPageEvent(document.getElementById('training-search'), 'input', scheduleTrainingSearchRender);
+    bindTrainingPageEvent(document.getElementById('training-only-focus'), 'change', renderRows);
+    bindTrainingPageEvent(trainingForm, 'input', (event) => {
       clearTrainingFeedback();
       if (!shouldIgnoreTrainingDirtyTarget(event.target)) markTrainingDirty();
     });
-    trainingForm.addEventListener('change', (event) => {
+    bindTrainingPageEvent(trainingForm, 'change', (event) => {
       clearTrainingFeedback();
       if (!shouldIgnoreTrainingDirtyTarget(event.target)) markTrainingDirty();
     });
-    document.getElementById('training-select-all').addEventListener('change', (event) => {
+    bindTrainingPageEvent(document.getElementById('training-select-all'), 'change', (event) => {
       getFilteredRows().forEach(({ row, index }) => {
         const key = getRowKey(row, index);
         if (event.target.checked) selectedKeys.add(key); else selectedKeys.delete(key);
@@ -2510,12 +2524,12 @@
       renderRows();
     });
     document.querySelectorAll('[data-bulk-general]').forEach((button) => {
-      button.addEventListener('click', () => {
+      bindTrainingPageEvent(button, 'click', () => {
         bulkGeneralValue = bulkGeneralValue === button.dataset.bulkGeneral ? '' : button.dataset.bulkGeneral;
         updateBulkSelectionText();
       });
     });
-    document.getElementById('training-apply-bulk').addEventListener('click', () => {
+    bindTrainingPageEvent(document.getElementById('training-apply-bulk'), 'click', () => {
       if (!selectedKeys.size) {
         toast('請先選取要套用的人員', 'error');
         return;
@@ -2546,7 +2560,7 @@
       renderRows();
     });
 
-    trainingAddPersonButton.addEventListener('click', async () => {
+    bindTrainingPageEvent(trainingAddPersonButton, 'click', async () => {
       const currentUnit = document.getElementById('tr-unit').value;
       if (!readPendingManualRosterPayload(currentUnit).name) {
         toast('請輸入要新增的人員姓名', 'error');
@@ -2561,7 +2575,7 @@
 
     initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });
     if (!isUnitLocked) {
-      document.getElementById('tr-unit').addEventListener('change', (event) => {
+      bindTrainingPageEvent(document.getElementById('tr-unit'), 'change', (event) => {
         syncStatsUnitField(event.target.value);
         rowsState = mergeTrainingRows(event.target.value, rowsState);
         selectedKeys.clear();
@@ -3271,14 +3285,14 @@
       });
     };
     if (toggleBtn && importWrap) {
-      toggleBtn.addEventListener('click', () => {
+      bindTrainingPageEvent(toggleBtn, 'click', () => {
         const visible = importWrap.style.display !== 'none';
         importWrap.style.display = visible ? 'none' : '';
       });
     }
     if (useRemoteRosters && keywordInput) {
       let keywordTimer = null;
-      keywordInput.addEventListener('input', () => {
+      bindTrainingPageEvent(keywordInput, 'input', () => {
         if (keywordTimer) window.clearTimeout(keywordTimer);
         keywordTimer = window.setTimeout(() => {
           keywordTimer = null;
@@ -3290,7 +3304,7 @@
       });
     }
     if (useRemoteRosters && sourceSelect) {
-      sourceSelect.addEventListener('change', () => {
+      bindTrainingPageEvent(sourceSelect, 'change', () => {
         rerenderRemoteRosterPage({
           source: sourceSelect.value || '',
           offset: '0'
@@ -3298,7 +3312,7 @@
       });
     }
     if (useRemoteRosters && statsUnitSelect) {
-      statsUnitSelect.addEventListener('change', () => {
+      bindTrainingPageEvent(statsUnitSelect, 'change', () => {
         rerenderRemoteRosterPage({
           statsUnit: statsUnitSelect.value || '',
           unit: '',
@@ -3307,7 +3321,7 @@
       });
     }
     if (useRemoteRosters && unitSelect) {
-      unitSelect.addEventListener('change', () => {
+      bindTrainingPageEvent(unitSelect, 'change', () => {
         const selectedUnit = unitSelect.value || '';
         rerenderRemoteRosterPage({
           unit: selectedUnit,
@@ -3435,7 +3449,7 @@
     syncRosterSelectionDom();
 
     if (selectAllButton) {
-      selectAllButton.addEventListener('click', () => {
+      bindTrainingPageEvent(selectAllButton, 'click', () => {
         getRosterRowsInDom().forEach((row) => {
           const rosterId = String(row.dataset.rosterId || '').trim();
           if (rosterId) selectedRosterIds.add(rosterId);
@@ -3446,7 +3460,7 @@
 
     if (groupsContainer && !groupsContainer.dataset.trainingRosterDelegatesInstalled) {
       groupsContainer.dataset.trainingRosterDelegatesInstalled = '1';
-      groupsContainer.addEventListener('change', (event) => {
+      bindTrainingPageEvent(groupsContainer, 'change', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         const groupSelectAll = target.closest('.training-roster-group-select-all');
@@ -3469,7 +3483,7 @@
           syncRosterSelectionDom();
         }
       });
-      groupsContainer.addEventListener('click', async (event) => {
+      bindTrainingPageEvent(groupsContainer, 'click', async (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         const deleteButton = target.closest('button[data-testid^="training-roster-delete-"]');
@@ -3495,14 +3509,14 @@
     }
 
     if (clearSelectionButton) {
-      clearSelectionButton.addEventListener('click', () => {
+      bindTrainingPageEvent(clearSelectionButton, 'click', () => {
         selectedRosterIds.clear();
         syncRosterSelectionDom();
       });
     }
 
     if (deleteSelectedButton) {
-      deleteSelectedButton.addEventListener('click', () => {
+      bindTrainingPageEvent(deleteSelectedButton, 'click', () => {
         deleteSelectedRosters(Array.from(selectedRosterIds));
       });
     }
@@ -3510,7 +3524,7 @@
     initUnitCascade('training-import-unit', '', { disabled: false, excludeUnits: ['學校分部總辦事處'] });
     const fileInput = document.getElementById('training-import-file');
     const fileCopy = document.getElementById('training-import-file-copy');
-    fileInput?.addEventListener('change', () => {
+    bindTrainingPageEvent(fileInput, 'change', () => {
       const file = fileInput.files && fileInput.files[0];
       if (!file) {
         fileCopy.innerHTML = buildTrainingRosterFileCopy('');
@@ -3530,7 +3544,7 @@
       }
       fileCopy.innerHTML = buildTrainingRosterFileCopy(file.name || '');
     });
-      document.getElementById('training-import-form').addEventListener('submit', async (event) => {
+      bindTrainingPageEvent(document.getElementById('training-import-form'), 'submit', async (event) => {
         event.preventDefault();
         await runWithBusyState('\u6b63\u5728\u532f\u5165\u6559\u80b2\u8a13\u7df4\u540d\u55ae\u2026', async () => {
       const unit = document.getElementById('training-import-unit').value;

@@ -69,7 +69,8 @@
       applySelectorTestIds,
       debugFlow,
       registerActionHandlers,
-      openConfirmDialog
+      openConfirmDialog,
+      addPageEventListener
     } = deps;
 
   function normalizeCaseUnitList(units) {
@@ -94,6 +95,19 @@
       authorizedUnits: authorizedUnits,
       activeUnit: activeUnit
     });
+  }
+
+  function bindCasePageEvent(target, type, listener, options) {
+    if (typeof addPageEventListener === 'function') {
+      return addPageEventListener(target, type, listener, options);
+    }
+    if (!target || typeof target.addEventListener !== 'function' || typeof listener !== 'function') {
+      return function () {};
+    }
+    target.addEventListener(type, listener, options);
+    return function () {
+      try { target.removeEventListener(type, listener, options); } catch (_) {}
+    };
   }
 
   function renderCaseStatusCell(item, useClosedGuard) {
@@ -536,8 +550,8 @@
         renderList();
       }, 120);
     };
-    document.getElementById('search-input').addEventListener('input', function (e) { curSearch = e.target.value; scheduleRenderList(); });
-    document.getElementById('filter-tabs').addEventListener('click', function (e) { if (e.target.classList.contains('filter-tab')) { curFilter = e.target.dataset.filter; renderList(); } });
+    bindCasePageEvent(document.getElementById('search-input'), 'input', function (e) { curSearch = e.target.value; scheduleRenderList(); });
+    bindCasePageEvent(document.getElementById('filter-tabs'), 'click', function (e) { if (e.target.classList.contains('filter-tab')) { curFilter = e.target.dataset.filter; renderList(); } });
   }
 
   // ─── Render: Create ────────────────────────
@@ -767,16 +781,16 @@
     }
 
     renderHandlerOptionsByUnit(handlerUnit.value);
-    handlerUnit.addEventListener('change', function () {
+    bindCasePageEvent(handlerUnit, 'change', function () {
       renderHandlerOptionsByUnit(this.value);
       syncCreateSummary();
     });
-    proposerUnit.addEventListener('change', syncCreateSummary);
-    proposerDateInput.addEventListener('change', syncCreateSummary);
-    handlerName.addEventListener('change', updateHandlerEmail);
-    dueInput.addEventListener('change', syncCreateSummary);
-    notifyInput.addEventListener('change', syncCreateSummary);
-    idInput.addEventListener('input', syncCreateSummary);
+    bindCasePageEvent(proposerUnit, 'change', syncCreateSummary);
+    bindCasePageEvent(proposerDateInput, 'change', syncCreateSummary);
+    bindCasePageEvent(handlerName, 'change', updateHandlerEmail);
+    bindCasePageEvent(dueInput, 'change', syncCreateSummary);
+    bindCasePageEvent(notifyInput, 'change', syncCreateSummary);
+    bindCasePageEvent(idInput, 'input', syncCreateSummary);
     syncCreateSummary();
 
     const createForm = document.getElementById('create-form');
@@ -833,7 +847,7 @@
       return true;
     }
 
-    document.getElementById('create-form').addEventListener('submit', async e => {
+    bindCasePageEvent(document.getElementById('create-form'), 'submit', async e => {
       e.preventDefault();
       debugFlow('create', 'submit start', { handlerUnit: document.getElementById('f-hunit').value, handlerName: document.getElementById('f-hname').value });
       setCreateFeedback('info', '\u6b63\u5728\u6aa2\u67e5\u958b\u55ae\u8cc7\u6599', ['\u6aa2\u6838\u5fc5\u586b\u6b04\u4f4d\u3001\u8655\u7406\u55ae\u4f4d\u8207\u8655\u7406\u4eba\u8cc7\u8a0a\u3002']);
@@ -914,11 +928,11 @@
       clearUnsavedChangesGuard();
       navigate('detail/' + storedItem.id);
     });
-    createForm.addEventListener('input', function () {
+    bindCasePageEvent(createForm, 'input', function () {
       clearCreateFeedback();
       markCreateDirty();
     });
-    createForm.addEventListener('change', function () {
+    bindCasePageEvent(createForm, 'change', function () {
       clearCreateFeedback();
       markCreateDirty();
     });

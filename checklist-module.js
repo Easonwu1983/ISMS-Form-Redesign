@@ -56,6 +56,7 @@
       ic,
       refreshIcons,
       bindCopyButtons,
+      addPageEventListener,
       renderCopyIdCell,
       renderCopyIdButton,
       openConfirmDialog,
@@ -326,6 +327,19 @@
         nextOffset: 0,
         pageStart: 0,
         pageEnd: 0
+      };
+    }
+
+    function bindChecklistPageEvent(target, type, listener, options) {
+      if (typeof addPageEventListener === 'function') {
+        return addPageEventListener(target, type, listener, options);
+      }
+      if (!target || typeof target.addEventListener !== 'function' || typeof listener !== 'function') {
+        return function () {};
+      }
+      target.addEventListener(type, listener, options);
+      return function () {
+        try { target.removeEventListener(type, listener, options); } catch (_) {}
       };
     }
     function createChecklistRemoteCollectionState(options) {
@@ -1188,11 +1202,11 @@
         applyChecklistKeywordFilter();
       }, 120);
     };
-    keywordEl?.addEventListener('input', () => {
+    bindChecklistPageEvent(keywordEl, 'input', () => {
       checklistBrowseState.keyword = keywordEl.value;
       scheduleRerender();
     });
-    statusEl?.addEventListener('change', () => {
+    bindChecklistPageEvent(statusEl, 'change', () => {
       checklistBrowseState.status = statusEl.value;
       if (useRemoteList) {
         rerenderRemoteChecklistPage({
@@ -1208,7 +1222,7 @@
       syncChecklistListToolbarState();
     });
     yearTabs.forEach((tab) => {
-      tab.addEventListener('click', () => {
+      bindChecklistPageEvent(tab, 'click', () => {
         checklistBrowseState.year = String(tab.dataset.checklistYear || 'all');
         if (useRemoteList) {
           rerenderRemoteChecklistPage({
@@ -1505,7 +1519,7 @@
         if (!editable) return;
         const input = document.getElementById(`cl-file-${item.id}`);
         if (!input) return;
-        input.addEventListener('change', function (event) {
+        bindChecklistPageEvent(input, 'change', function (event) {
           const currentFiles = evidenceFilesState.get(item.id) || [];
           const batch = prepareUploadBatch(currentFiles, event.target.files, {
             fileLabel: `${item.id} \u4f50\u8b49\u6a94`,
@@ -1701,9 +1715,9 @@
       });
     }
 
-    document.querySelectorAll('.cl-radio-group input').forEach((radio) => radio.addEventListener('change', updateProgress));
+    document.querySelectorAll('.cl-radio-group input').forEach((radio) => bindChecklistPageEvent(radio, 'change', updateProgress));
     document.querySelectorAll('[data-cl-anchor-index]').forEach((button) => {
-      button.addEventListener('click', () => {
+      bindChecklistPageEvent(button, 'click', () => {
         const index = Number(button.dataset.clAnchorIndex);
         const sectionEl = document.getElementById(`cl-section-${index}`);
         if (!sectionEl) return;
@@ -1711,10 +1725,10 @@
         sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
-    document.getElementById('cl-unit').addEventListener('change', syncChecklistMeta);
-    document.getElementById('cl-date').addEventListener('change', syncChecklistMeta);
-    document.getElementById('cl-year').addEventListener('input', syncChecklistMeta);
-    document.getElementById('cl-sign-status').addEventListener('change', syncChecklistMeta);
+    bindChecklistPageEvent(document.getElementById('cl-unit'), 'change', syncChecklistMeta);
+    bindChecklistPageEvent(document.getElementById('cl-date'), 'change', syncChecklistMeta);
+    bindChecklistPageEvent(document.getElementById('cl-year'), 'input', syncChecklistMeta);
+    bindChecklistPageEvent(document.getElementById('cl-sign-status'), 'change', syncChecklistMeta);
 
     const clDateInput = document.getElementById('cl-date');
     const clYearInput = document.getElementById('cl-year');
@@ -1725,14 +1739,14 @@
       if (Number.isFinite(year) && year >= 1911) clYearInput.value = String(year - 1911);
       syncChecklistMeta();
     }
-    clDateInput.addEventListener('change', syncAuditYearByDate);
+    bindChecklistPageEvent(clDateInput, 'change', syncAuditYearByDate);
     if (!existing) syncAuditYearByDate();
     syncChecklistMeta();
     updateProgress();
     updateChecklistDraftStatus(existing);
     initializeChecklistEvidenceInputs(checklistEditable);
 
-    checklistForm.addEventListener('submit', async (event) => {
+    bindChecklistPageEvent(checklistForm, 'submit', async (event) => {
       event.preventDefault();
       if (!checklistEditable) {
         toast('本單位由一級單位統一填報，請由一級單位窗口處理。', 'info');
@@ -1775,13 +1789,13 @@
       });
     });
 
-    checklistForm.addEventListener('input', markChecklistDirty);
-    checklistForm.addEventListener('change', markChecklistDirty);
+    bindChecklistPageEvent(checklistForm, 'input', markChecklistDirty);
+    bindChecklistPageEvent(checklistForm, 'change', markChecklistDirty);
 
     if (checklistEditable) {
-      document.getElementById('cl-save-draft')?.addEventListener('click', saveChecklistDraft);
-      document.getElementById('cl-save-draft-inline')?.addEventListener('click', saveChecklistDraft);
-      document.getElementById('cl-save-draft-floating')?.addEventListener('click', saveChecklistDraft);
+      bindChecklistPageEvent(document.getElementById('cl-save-draft'), 'click', saveChecklistDraft);
+      bindChecklistPageEvent(document.getElementById('cl-save-draft-inline'), 'click', saveChecklistDraft);
+      bindChecklistPageEvent(document.getElementById('cl-save-draft-floating'), 'click', saveChecklistDraft);
     }
   }
 

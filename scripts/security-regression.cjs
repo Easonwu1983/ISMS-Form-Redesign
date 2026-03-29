@@ -606,6 +606,38 @@ async function assertNoXssExecution(page, label) {
       return `unit-contact-review page=${state.currentPage || '1'}`;
     });
 
+    await runStep(results, 'SEC-03f', 'Admin', 'Key tables expose captions and scoped headers', async () => {
+      await login(page, 'easonwu', '2wsx#EDC');
+      const checks = [
+        { hash: 'users', selector: '#app table', label: 'users' },
+        { hash: 'training-fill', selector: '#app table', label: 'training-fill' },
+        { hash: 'checklist', selector: '#app table', label: 'checklist' },
+        { hash: '', selector: '#app table', label: 'case-list' }
+      ];
+      const findings = [];
+      for (const check of checks) {
+        if (check.hash) {
+          await gotoHash(page, check.hash);
+        } else {
+          await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await login(page, 'easonwu', '2wsx#EDC');
+        }
+        await page.waitForSelector(check.selector, { timeout: 30000 });
+        const state = await page.evaluate((label) => {
+          const table = document.querySelector('#app table');
+          const caption = table ? String(table.querySelector('caption')?.textContent || '').trim() : '';
+          const scoped = table ? table.querySelectorAll('thead th[scope="col"]').length : 0;
+          const headerCount = table ? table.querySelectorAll('thead th').length : 0;
+          return { label, caption, scoped, headerCount };
+        }, check.label);
+        if (!state.caption) throw new Error(`${check.label} table caption missing`);
+        if (!state.headerCount) throw new Error(`${check.label} table headers missing`);
+        if (state.scoped !== state.headerCount) throw new Error(`${check.label} scoped headers incomplete`);
+        findings.push(`${state.label}:${state.headerCount}`);
+      }
+      return findings.join(', ');
+    });
+
     await runStep(results, 'SEC-04', 'Admin', 'Case detail escapes XSS payloads', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);

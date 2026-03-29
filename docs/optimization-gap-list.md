@@ -74,6 +74,7 @@ Done:
 - `shell-module.js` now includes core shell a11y improvements such as `role="main"`, `aria-live`, and clearer labels.
 - `ui-module.js` now has modal focus trap and focus return handling.
 - First-pass table semantics were added for admin, training, case, and checklist tables using captions and `scope="col"`.
+- `scripts/security-regression.cjs` now checks that key admin/training/checklist/case tables expose captions and scoped headers.
 
 Open:
 - Many `innerHTML` templates still lack ARIA metadata.
@@ -93,6 +94,7 @@ Done:
 - Pager handling now uses root-level delegation instead of one listener per button.
 - A page-runtime teardown path now exists and can scope event listeners to the current page lifetime.
 - Client collection caches now have TTL and bounded eviction behavior.
+- `training`, `checklist`, and `case` now use page-scoped listener registration for their main list and form flows.
 
 Open:
 - Many modules still attach listeners directly without page-scoped cleanup.
