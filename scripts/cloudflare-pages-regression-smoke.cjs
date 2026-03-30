@@ -309,17 +309,23 @@ async function runPublicRouteChecks(browser, pushStep) {
   const page = await context.newPage();
 
   try {
-    const openPublicRoute = async (hash) => {
-      await gotoHashOnly(page, hash, { settleMs: 240 });
+    const openPublicRoute = async (hash, options = {}) => {
+      await gotoHashOnly(page, hash, { settleMs: options.settleMs || 120 });
     };
 
-    await gotoAppRoot(page, 'domcontentloaded');
-    await openPublicRoute('#apply-unit-contact');
-    await page.waitForSelector('#unit-contact-apply-form', { timeout: 20000 });
+    await page.goto(`${BASE_URL}/#apply-unit-contact`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForFunction(() => {
+      return !!document.querySelector('#unit-contact-apply-form')
+        && !!document.querySelector('[data-unit-contact-unit-group]')
+        && !!document.querySelector('[data-testid="unit-contact-submit"]');
+    }, undefined, { timeout: 20000 });
     pushStep('unit-contact-public:apply-loaded', true, 'public apply loaded');
 
-    await openPublicRoute('#apply-unit-contact-status');
-    await page.waitForSelector('#unit-contact-status-form', { timeout: 15000 });
+    await openPublicRoute('#apply-unit-contact-status', { settleMs: 100 });
+    await page.waitForFunction(() => {
+      return !!document.querySelector('#unit-contact-status-form')
+        && !!document.querySelector('#uca-status-email');
+    }, undefined, { timeout: 15000 });
     pushStep('unit-contact-public:status-loaded', true, 'public status loaded');
 
     await gotoAppRoot(page, 'domcontentloaded');
@@ -1023,10 +1029,12 @@ async function run() {
       pushStep('training:detail-loaded', true, trainingDetailId);
     }
 
-    await page.evaluate(() => {
-      window.location.hash = '#training-roster';
-    });
-    await page.waitForTimeout(3000);
+    await gotoHashRoute(page, 'training-roster', { settleMs: 120, timeout: 20000 });
+    await page.waitForFunction(() => {
+      return !!document.querySelector('#training-roster-keyword')
+        && !!document.querySelector('#training-roster-page-limit')
+        && !!document.querySelector('#training-roster-page-number');
+    }, undefined, { timeout: 20000 });
     const trainingRosterText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(trainingRosterText)) {
       throw new Error('training roster contains placeholder question marks');

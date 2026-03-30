@@ -3232,6 +3232,41 @@
       + '</div>';
   }
 
+  function renderTrainingRosterLoadingShell(currentApp, filters, selectedCount, previewHtml) {
+    if (!currentApp) return;
+    const previewFilters = normalizeTrainingRosterPageFilters(filters);
+    const previewSignature = getTrainingRosterRemoteSignature(previewFilters);
+    trainingRosterRemotePageState = {
+      filters: previewFilters,
+      page: normalizeTrainingRosterRemotePage(
+        trainingRosterRemotePageState && trainingRosterRemotePageState.page,
+        previewFilters,
+        [],
+        Number(trainingRosterRemotePageState && trainingRosterRemotePageState.total || 0)
+      ),
+      items: [],
+      total: Number(trainingRosterRemotePageState && trainingRosterRemotePageState.total || 0),
+      signature: previewSignature
+    };
+    const loadingPageHtml = buildTrainingRosterPage(
+      {
+        total: Number(trainingRosterRemotePageState.total || 0),
+        imported: 0,
+        manual: 0,
+        paged: true
+      },
+      '<div class="empty-state training-empty-state training-empty-state--compact"><div class="empty-state-title">正在載入名單</div><div class="empty-state-desc">先顯示查詢與分頁，名單資料會在背景完成。</div></div>',
+      0,
+      selectedCount,
+      renderTrainingRosterPager(trainingRosterRemotePageState.page),
+      previewHtml || ''
+    );
+    currentApp.innerHTML = loadingPageHtml;
+    currentApp.dataset.trainingRosterRenderSignature = 'loading::' + previewSignature;
+    refreshTrainingRosterDomCache(currentApp, currentApp.dataset.trainingRosterRenderSignature);
+    refreshIcons();
+  }
+
   function buildTrainingRosterImportCard() {
     return '<div class="card training-editor-card training-editor-card--spaced"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">' + buildTrainingRosterImportNote() + '</div><div class="form-row"><div class="form-group"><label class="form-label">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, false) + '<div class="form-hint">可先指定單位當作預設值；若 Excel 內已有「填報單位」欄位，系統會優先使用檔案中的單位。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy">' + buildTrainingRosterFileCopy('') + '</span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>' + buildTrainingRosterSampleCsv() + '</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
   }
@@ -3253,6 +3288,7 @@
         .filter(Boolean)
     );
     const useRemoteRosters = canUseRemoteTrainingRosterPaging();
+    const currentApp = document.getElementById('app');
     const syncPromise = (opts.skipSync || useRemoteRosters)
       ? Promise.resolve()
       : scheduleDeferredPromise(() => syncTrainingRostersFromM365({ silent: true }), TRAINING_DEFERRED_SYNC_TIMEOUT_MS).catch((error) => {
@@ -3265,9 +3301,18 @@
     let summary;
     let rosterPage = null;
     let remotePageSignature = '';
+    const importedPreviewHtml = (opts.rosterNames || opts.rosterIds)
+      ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
+      : '';
 
     if (useRemoteRosters) {
       const remoteFilters = opts.remoteFilters || trainingRosterRemotePageState.filters;
+      const canRenderLoadingShell = currentApp
+        && !document.getElementById('training-roster-page-limit')
+        && !document.getElementById('training-roster-groups');
+      if (canRenderLoadingShell) {
+        renderTrainingRosterLoadingShell(currentApp, remoteFilters, selectedRosterIds.size, importedPreviewHtml);
+      }
       const remotePageResult = await loadTrainingRosterRemotePage(remoteFilters, { force: !!opts.forceRemotePage });
       remotePageSignature = getTrainingRosterRemoteSignature(remotePageResult.filters);
       trainingRosterRemotePageState = {
@@ -3320,7 +3365,6 @@
       selectedSignature,
       useRemoteRosters ? remotePageSignature : 'local'
     ].join('::');
-    const currentApp = document.getElementById('app');
     const selectedCountLabel = trainingRosterDomCache.selectedCountLabel || document.getElementById('training-roster-selected-count');
     const deleteSelectedButton = trainingRosterDomCache.deleteSelectedButton || document.getElementById('training-roster-delete-selected');
     if (opts.skipSync && currentApp && currentApp.dataset.trainingRosterRenderSignature === rosterRenderSignature && trainingRosterRenderCache.signature === rosterRenderSignature && String(window.location.hash || '').startsWith('#training-roster')) {
@@ -3328,9 +3372,6 @@
       if (focusState) restoreTrainingRosterFocusState(focusState);
       return;
     }
-    const importedPreviewHtml = (opts.rosterNames || opts.rosterIds)
-      ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
-      : '';
     const initialGroupCount = useChunkedRosterRender && opts.deferFullRender && !useWindowedRosterGroups
       ? Math.min(3, groups.length)
       : 0;

@@ -42,7 +42,8 @@ function createChecklistRouter(deps) {
     entriesPrewarmQueued: false,
     queryCache: new Map(),
     summaryCache: new Map(),
-    unfilteredSummary: null
+    unfilteredSummary: null,
+    unfilteredSummarySeed: null
   };
   const CHECKLIST_CACHE_TTL_MS = 120000;
   const CHECKLIST_PREWARM_DELAY_MS = 5000;
@@ -175,6 +176,40 @@ function createChecklistRouter(deps) {
       .map((entry) => entry && entry.item)
       .filter(Boolean);
     state.unfilteredSummary = summarizeChecklistItems(items);
+    state.unfilteredSummarySeed = state.unfilteredSummary
+      ? {
+          ok: true,
+          items: [],
+          total: Number(state.unfilteredSummary.total || 0),
+          summary: cloneJson(state.unfilteredSummary),
+          generatedAt: new Date().toISOString(),
+          contractVersion: CONTRACT_VERSION
+        }
+      : null;
+  }
+
+  function buildChecklistSummaryOnlyFastResponse(url, filters, cacheReason) {
+    if (!state.unfilteredSummarySeed) return null;
+    const total = Number(state.unfilteredSummarySeed.total || 0);
+    const page = buildChecklistPageMeta(url, total);
+    return {
+      ...state.unfilteredSummarySeed,
+      page: {
+        ...page,
+        returned: 0,
+        pageStart: 0,
+        pageEnd: 0
+      },
+      filters: {
+        ...(filters || {}),
+        summaryOnly: '1'
+      },
+      cache: {
+        query: 'hit',
+        summaryOnly: true,
+        reason: String(cacheReason || 'unfiltered-summary')
+      }
+    };
   }
 
   function trimQueryCache(cache, maxEntries) {
@@ -387,6 +422,7 @@ function createChecklistRouter(deps) {
     state.queryCache.clear();
     state.summaryCache.clear();
     state.unfilteredSummary = null;
+    state.unfilteredSummarySeed = null;
   }
 
   async function listAllEntries(options) {
@@ -645,37 +681,13 @@ function createChecklistRouter(deps) {
       const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
       const filters = readChecklistFilters(url);
       const canUseUnfilteredSummary = summaryOnly && requestAuthz.isAdmin(authz) && !hasActiveChecklistFilters(filters);
-      if (canUseUnfilteredSummary && state.unfilteredSummary) {
-        const total = Number(state.unfilteredSummary.total || 0);
-        const page = buildChecklistPageMeta(url, total);
+      if (canUseUnfilteredSummary && state.unfilteredSummarySeed) {
         logChecklistCache('summary fast path hit', {
           username: authz.username,
-          total,
+          total: Number(state.unfilteredSummarySeed.total || 0),
           durationMs: Date.now() - startedAt
         });
-        await writeJson(res, buildJsonResponse(200, {
-          ok: true,
-          items: [],
-          total,
-          summary: cloneJson(state.unfilteredSummary),
-          page: {
-            ...page,
-            returned: 0,
-            pageStart: 0,
-            pageEnd: 0
-          },
-          filters: {
-            ...filters,
-            summaryOnly: '1'
-          },
-          generatedAt: new Date().toISOString(),
-          cache: {
-            query: 'hit',
-            summaryOnly: true,
-            reason: 'unfiltered-summary'
-          },
-          contractVersion: CONTRACT_VERSION
-        }), origin);
+        await writeJson(res, buildJsonResponse(200, buildChecklistSummaryOnlyFastResponse(url, filters, 'unfiltered-summary')), origin);
         return;
       }
       const summaryCacheKey = summaryOnly ? buildChecklistSummaryCacheKey(authz, url, state.cacheVersion || 0) : '';
@@ -688,14 +700,7 @@ function createChecklistRouter(deps) {
             total: summaryCached.total,
             durationMs: Date.now() - startedAt
           });
-          await writeJson(res, buildJsonResponse(200, {
-            ...summaryCached,
-            cache: {
-              query: 'hit',
-              summaryOnly: true,
-              reason: 'summary-hit'
-            }
-          }), origin);
+          await writeJson(res, buildJsonResponse(200, summaryCached), origin);
           return;
         }
       }
@@ -764,7 +769,15 @@ function createChecklistRouter(deps) {
       };
       let cachedBody = writeQueryCache(state.queryCache, resolvedCacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);
       if (summaryOnly) {
-        cachedBody = writeQueryCache(state.summaryCache, summaryCacheKey, cachedBody, CHECKLIST_SUMMARY_CACHE_MAX);
+        const summaryCacheBody = {
+          ...cachedBody,
+          cache: {
+            query: 'hit',
+            summaryOnly: true,
+            reason: 'summary-hit'
+          }
+        };
+        cachedBody = writeQueryCache(state.summaryCache, summaryCacheKey, summaryCacheBody, CHECKLIST_SUMMARY_CACHE_MAX);
       }
       logChecklistCache('list served', {
         username: authz.username,

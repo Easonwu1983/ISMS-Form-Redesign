@@ -62,6 +62,45 @@
       return function () {};
     }
 
+    function scheduleUnitContactPostPaint(task, delayMs) {
+      if (typeof task !== 'function') return function () {};
+      let cancelled = false;
+      let frameId = 0;
+      let timerId = 0;
+      const run = function () {
+        if (cancelled) return;
+        try {
+          task();
+        } catch (error) {
+          if (window && typeof window.__ismsWarn === 'function') {
+            window.__ismsWarn('unit contact deferred init failed', error);
+          }
+        }
+      };
+      const scheduleTimeout = function () {
+        const safeDelay = Math.max(0, Number(delayMs) || 0);
+        if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+          timerId = window.setTimeout(run, safeDelay);
+          return;
+        }
+        run();
+      };
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        frameId = window.requestAnimationFrame(scheduleTimeout);
+      } else {
+        scheduleTimeout();
+      }
+      return registerUnitContactPageCleanup(function () {
+        cancelled = true;
+        if (frameId && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+          try { window.cancelAnimationFrame(frameId); } catch (_) { }
+        }
+        if (timerId && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+          try { window.clearTimeout(timerId); } catch (_) { }
+        }
+      });
+    }
+
     function saveLastEmail(email) {
       try {
         window.sessionStorage.setItem(LAST_EMAIL_KEY, String(email || '').trim().toLowerCase());
@@ -609,7 +648,7 @@
         + '</section></div></section>';
 
       initUnitCascade('uca-unit', '', { disabled: false, registerCleanup: registerUnitContactPageCleanup });
-      const authorizedScopePicker = initAuthorizedScopePicker('uca-authorized-units');
+      let authorizedScopePicker = null;
       getUnitFieldTargets('uca-unit').forEach((target) => {
         const describedBy = ['uca-unit-help', 'uca-unit-error'].join(' ');
         target.setAttribute('aria-describedby', describedBy);
@@ -619,8 +658,12 @@
       });
 
       const form = document.getElementById('unit-contact-apply-form');
-      ensureAuthorizationDocumentSection(form);
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
+      scheduleUnitContactPostPaint(function () {
+        authorizedScopePicker = initAuthorizedScopePicker('uca-authorized-units') || authorizedScopePicker;
+        ensureAuthorizationDocumentSection(form);
+        refreshIcons();
+      }, 0);
 
       bindPageEvent(form, 'input', function (event) {
         markDirty();
@@ -638,7 +681,11 @@
         const applicantEmail = String(document.getElementById('uca-email').value || '').trim().toLowerCase();
         const note = String(document.getElementById('uca-note').value || '').trim();
         const securityRoles = readSelectedSecurityRoles();
-        const authDocInput = document.getElementById('uca-authorization-doc');
+        let authDocInput = document.getElementById('uca-authorization-doc');
+        if (!authDocInput) {
+          ensureAuthorizationDocumentSection(form);
+          authDocInput = document.getElementById('uca-authorization-doc');
+        }
         const authDocFile = authDocInput && authDocInput.files && authDocInput.files[0] ? authDocInput.files[0] : null;
         const unitTargets = getUnitFieldTargets('uca-unit');
         const validationErrors = [];
@@ -780,7 +827,6 @@
         }
       });
 
-      refreshIcons();
     }
 
     function renderApplySuccess(param) {
