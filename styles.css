@@ -6111,13 +6111,38 @@ body {
 }
 
 .header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   min-width: 0;
+}
+
+.header-context {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.header-kicker {
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8a9aad;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-title {
   font-size: 1.08rem;
   font-weight: 800;
   color: var(--text-heading);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-right {
@@ -8467,6 +8492,27 @@ tbody tr:hover {
   line-height: 1.8;
 }
 
+.dashboard-hero--integrated {
+  padding-top: 24px;
+}
+
+.dashboard-hero-copy--integrated {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  justify-content: center;
+}
+
+.dashboard-hero-copy--integrated .dashboard-meta-row,
+.dashboard-hero-copy--integrated .dashboard-hero-actions {
+  margin-top: 0;
+}
+
+.dashboard-hero-text--lead {
+  max-width: 720px;
+  font-size: 1rem;
+}
+
 .dashboard-meta-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -9199,6 +9245,10 @@ tbody tr:hover {
     display: none;
   }
 
+  .header-kicker {
+    display: none;
+  }
+
   .main-content {
     margin-left: 0;
     padding: 18px clamp(12px, 2vw, 22px) 28px;
@@ -9206,6 +9256,10 @@ tbody tr:hover {
 }
 
 @media (max-width: 768px) {
+  .header-context {
+    gap: 0;
+  }
+
   .dashboard-panel-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -9234,6 +9288,10 @@ tbody tr:hover {
 
   .dashboard-recent-table .record-id-col {
     width: 182px;
+  }
+
+  .dashboard-hero--integrated {
+    padding: 22px 22px 24px;
   }
 
   .dashboard-recent-table thead th:nth-child(2) {
