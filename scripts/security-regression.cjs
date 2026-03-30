@@ -78,21 +78,57 @@ async function resetSecurityRegressionApp(page) {
   }
 }
 
+async function getVerifiedSessionUsername(page) {
+  return page.evaluate(async () => {
+    const auth = window._authModule;
+    const currentUser = auth && typeof auth.currentUser === 'function'
+      ? auth.currentUser()
+      : null;
+    const username = String(currentUser && currentUser.username || '').trim();
+    const token = String(currentUser && currentUser.sessionToken || '').trim();
+    if (!username || !token) return { username, verified: false };
+    try {
+      const response = await fetch('/api/auth/verify', {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) return { username, verified: false, status: response.status };
+      const json = await response.json();
+      const verifiedUser = json && json.user && typeof json.user === 'object'
+        ? String(json.user.username || username).trim()
+        : username;
+      return { username: verifiedUser, verified: true, status: response.status };
+    } catch (error) {
+      return { username, verified: false, reason: String(error && error.message || error || 'verify-failed') };
+    }
+  }).catch(() => ({ username: '', verified: false }));
+}
+
+async function ensureSessionUser(page, username, password) {
+  const session = await getVerifiedSessionUsername(page);
+  if (session && session.verified && session.username === username) {
+    return 'reused';
+  }
+  await login(page, username, password);
+  return 'fresh';
+}
+
 async function ensureAdminRouteReady(page, routeHash, selector, options) {
   const opts = options && typeof options === 'object' ? options : {};
   const timeout = Math.max(1000, Number(opts.timeout) || 20000);
-  const waitAfterNavMs = Math.max(0, Number(opts.waitAfterNavMs) || 900);
+  const waitAfterNavMs = Math.max(0, Number(opts.waitAfterNavMs) || 450);
   const normalizedHash = String(routeHash || '').replace(/^#/, '');
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (attempt > 0) {
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
     }
     if (attempt === 0) {
       await gotoHash(page, normalizedHash);
+      await page.waitForTimeout(waitAfterNavMs);
     } else {
       await page.goto(`${BASE_URL}/#${normalizedHash}`, { waitUntil: 'domcontentloaded', timeout });
+      await page.waitForTimeout(220);
     }
-    await page.waitForTimeout(attempt === 0 ? waitAfterNavMs : 400);
     try {
       await page.waitForFunction(({ targetHash, targetSelector }) => {
         const hash = String(window.location.hash || '').replace(/^#/, '');
@@ -105,7 +141,7 @@ async function ensureAdminRouteReady(page, routeHash, selector, options) {
     } catch (error) {
       if (attempt === 2) throw error;
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout });
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(180);
     }
   }
   return false;
@@ -304,9 +340,9 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-02', 'Unit admin', 'Non-admin cannot reach schema health directly', async () => {
-      await login(page, 'unit1', 'unit123');
+      await ensureSessionUser(page, 'unit1', 'unit123');
       await gotoHash(page, 'schema-health');
-      await page.waitForTimeout(250);
+      await page.waitForTimeout(120);
       const hash = await currentHash(page);
       const title = await page.locator('.page-title').first().textContent().catch(() => '');
       if (hash === '#schema-health') throw new Error('non-admin stayed on schema-health route');
@@ -315,8 +351,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-02b', 'Unit admin', 'Authorized unit switcher matches current scope', async () => {
-      await login(page, 'unit1', 'unit123');
-      await page.waitForTimeout(150);
+      await ensureSessionUser(page, 'unit1', 'unit123');
       const access = await page.evaluate(async () => {
         const response = await fetch('/api/auth/verify', { credentials: 'include' });
         const json = await response.json();
@@ -349,8 +384,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-02c', 'Unit admin', 'Active unit switch updates training and checklist fill scope', async () => {
-      await login(page, 'unit1', 'unit123');
-      await page.waitForTimeout(150);
+      await ensureSessionUser(page, 'unit1', 'unit123');
       const access = await page.evaluate(() => {
         const switcher = document.getElementById('header-unit-switch');
         return switcher
@@ -362,7 +396,10 @@ async function assertNoXssExecution(page, label) {
       }
       const targetUnit = access[1];
       await page.selectOption('#header-unit-switch', targetUnit);
-      await page.waitForTimeout(250);
+      await page.waitForFunction((expectedUnit) => {
+        const switcher = document.getElementById('header-unit-switch');
+        return !!(switcher && String(switcher.value || '').trim() === expectedUnit);
+      }, targetUnit, { timeout: 10000 });
       await gotoHash(page, 'training-fill');
       await page.waitForSelector('#tr-unit');
       const trainingUnit = await page.locator('#tr-unit').inputValue();
@@ -378,8 +415,7 @@ async function assertNoXssExecution(page, label) {
       const scopedPage = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
       attachDiagnostics(scopedPage, results);
       try {
-        await login(scopedPage, 'unit1', 'unit123');
-        await scopedPage.waitForTimeout(150);
+        await ensureSessionUser(scopedPage, 'unit1', 'unit123');
         const apiState = await scopedPage.evaluate(async () => {
           const auth = window._authModule && typeof window._authModule.currentUser === 'function'
             ? window._authModule.currentUser()
@@ -426,12 +462,12 @@ async function assertNoXssExecution(page, label) {
         if (foreignScopes.length) throw new Error(`review scopes leaked foreign users: ${foreignScopes.join(', ')}`);
 
         await gotoHash(scopedPage, 'users');
-        await scopedPage.waitForTimeout(200);
+        await scopedPage.waitForTimeout(120);
         const usersHash = await currentHash(scopedPage);
         if (String(usersHash || '').startsWith('#users')) throw new Error('unit admin reached users page');
 
         await gotoHash(scopedPage, 'unit-contact-review');
-        await scopedPage.waitForTimeout(200);
+        await scopedPage.waitForTimeout(120);
         const reviewHash = await currentHash(scopedPage);
         if (String(reviewHash || '').startsWith('#unit-contact-review')) throw new Error('unit admin reached unit-contact-review');
 
@@ -442,7 +478,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03', 'Admin', 'Security window inventory is grouped by tier', async () => {
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       await gotoHash(page, 'security-window');
       await page.waitForSelector('.security-window-category-stack .security-window-category-card');
       const structure = await page.evaluate(() => {
@@ -512,7 +548,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03c', 'Unit admin', 'Non-admin cannot open security window or unit governance', async () => {
-      await login(page, 'unit1', 'unit123');
+      await ensureSessionUser(page, 'unit1', 'unit123');
       await gotoHash(page, 'security-window');
       if ((await currentHash(page)) === '#security-window') throw new Error('unit admin unexpectedly opened security-window');
       await gotoHash(page, 'unit-review');
@@ -521,7 +557,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03d', 'Admin', 'Users page pager and filters work', async () => {
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       const usersReady = await ensureAdminRouteReady(page, 'users', '#system-users-page-limit');
       if (!usersReady) {
         throw new Error('users page did not render');
@@ -560,7 +596,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03e', 'Admin', 'Unit contact review pager and filters work', async () => {
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       const reviewReady = await ensureAdminRouteReady(page, 'unit-contact-review', '#unit-contact-review-status');
       if (!reviewReady) {
         throw new Error('unit contact review page did not render');
@@ -607,7 +643,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-03f', 'Admin', 'Key tables expose captions and scoped headers', async () => {
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       const checks = [
         { hash: 'users', selector: '#app table', label: 'users', readySelector: '#system-users-page-limit' },
         { hash: 'training-roster', selector: '#app table', label: 'training-roster', readySelector: '#training-roster-page-limit' },
@@ -635,7 +671,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-04', 'Admin', 'Case detail escapes XSS payloads', async () => {
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
       await gotoHash(page, 'detail/' + CASE_ID);
       let caseDetailReady = false;
@@ -654,7 +690,7 @@ async function assertNoXssExecution(page, label) {
       await resetXssFlag(page);
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 30000 });
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
       await gotoHash(page, 'detail/' + CASE_ID);
       await page.waitForSelector('.detail-title', { timeout: 30000 });
@@ -663,7 +699,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-05', 'Admin', 'Checklist detail escapes XSS payloads', async () => {
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
       await resetXssFlag(page);
       const checklistDetailIds = await page.evaluate(({ checklistId, payload }) => {
@@ -690,7 +726,7 @@ async function assertNoXssExecution(page, label) {
     });
 
     await runStep(results, 'SEC-06', 'Admin', 'Training detail escapes XSS payloads', async () => {
-      await login(page, 'easonwu', '2wsx#EDC');
+      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
       await resetXssFlag(page);
       const trainingDetailIds = await page.evaluate(({ trainingId, payload }) => {

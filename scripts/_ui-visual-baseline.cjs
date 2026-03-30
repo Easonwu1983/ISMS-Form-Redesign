@@ -41,6 +41,15 @@ const PUBLIC_MOBILE_VISUAL_SPECS = [
   { slug: 'unit-contact-activate', hash: '#activate-unit-contact/UCA-SMOKE-SUCCESS-001' }
 ];
 
+const VISUAL_SYNTHETIC_SEED_SETTLE_MS = 20;
+const VISUAL_SUCCESS_ROUTE_SETTLE_MS = 120;
+const VISUAL_SYNTHETIC_ROUTE_SETTLE_MS = 10;
+const VISUAL_FAST_ROUTE_SETTLE_MS = 20;
+const VISUAL_SLOW_ROUTE_SETTLE_MS = 280;
+const VISUAL_UNIT_REVIEW_STABILIZE_MS = 180;
+const VISUAL_UNIT_REVIEW_SEED_SETTLE_MS = 80;
+const VISUAL_SYNTHETIC_STABILIZE_MS = 20;
+
 function isSyntheticRootVisualSpec(spec) {
   const slug = spec && spec.slug;
   return slug === 'dashboard' || slug === 'unit-contact-apply' || slug === 'unit-contact-status';
@@ -189,7 +198,7 @@ async function seedSyntheticUnitReview(page) {
     if (historyCard) historyCard.classList.add('visual-smoke-hide');
   });
 
-  await page.waitForTimeout(80);
+  await page.waitForTimeout(VISUAL_UNIT_REVIEW_SEED_SETTLE_MS);
 }
 
 async function seedSyntheticDashboard(page) {
@@ -238,7 +247,7 @@ async function seedSyntheticDashboard(page) {
     app.appendChild(shell);
   });
 
-  await page.waitForTimeout(40);
+  await page.waitForTimeout(VISUAL_SYNTHETIC_SEED_SETTLE_MS);
 }
 
 async function seedSyntheticUnitContactApply(page) {
@@ -293,7 +302,7 @@ async function seedSyntheticUnitContactApply(page) {
     });
   });
 
-  await page.waitForTimeout(40);
+  await page.waitForTimeout(VISUAL_SYNTHETIC_SEED_SETTLE_MS);
 }
 
 async function seedSyntheticUnitContactStatus(page) {
@@ -358,7 +367,7 @@ async function seedSyntheticUnitContactStatus(page) {
     app.appendChild(shell);
   });
 
-  await page.waitForTimeout(50);
+  await page.waitForTimeout(VISUAL_SYNTHETIC_SEED_SETTLE_MS);
 }
 
 function getVisualSmokeStyles(slug, mode) {
@@ -646,8 +655,10 @@ async function stabilizeVisualRoute(page, slug, mode) {
     }
   }, { slug });
   const settleMs = slug === 'unit-review'
-    ? 180
-    : (slug === 'dashboard' || String(slug || '').indexOf('unit-contact-') === 0 ? 40 : 350);
+    ? VISUAL_UNIT_REVIEW_STABILIZE_MS
+    : (slug === 'dashboard' || String(slug || '').indexOf('unit-contact-') === 0
+      ? VISUAL_SYNTHETIC_STABILIZE_MS
+      : VISUAL_SLOW_ROUTE_SETTLE_MS);
   await page.waitForTimeout(settleMs);
 }
 
@@ -693,7 +704,7 @@ async function gotoVisualHash(page, hash, options = {}) {
   await page.waitForFunction((value) => String(window.location.hash || '') === value, target, {
     timeout: options.timeout || 15000
   });
-  await page.waitForTimeout(options.settleMs || 120);
+  await page.waitForTimeout(options.settleMs || VISUAL_FAST_ROUTE_SETTLE_MS);
 }
 
 async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
@@ -705,8 +716,8 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     || spec.slug === 'unit-contact-status'
   );
   if (spec && (spec.slug === 'unit-contact-success' || spec.slug === 'unit-contact-activate')) {
-    await gotoVisualRoot(page, baseUrl, 'networkidle');
-    await page.waitForTimeout(600);
+    await gotoVisualRoot(page, baseUrl, 'domcontentloaded');
+    await page.waitForTimeout(VISUAL_SUCCESS_ROUTE_SETTLE_MS);
     await seedSyntheticUnitContactSuccess(page);
   }
   if (syntheticRootVisual) {
@@ -728,7 +739,11 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
   } else {
     await waitForVisualRouteReady(page, spec);
   }
-  await page.waitForTimeout(syntheticRootVisual ? 20 : (fastHashNavigation ? 40 : 900));
+  await page.waitForTimeout(
+    syntheticRootVisual
+      ? VISUAL_SYNTHETIC_ROUTE_SETTLE_MS
+      : (fastHashNavigation ? VISUAL_FAST_ROUTE_SETTLE_MS : VISUAL_SLOW_ROUTE_SETTLE_MS)
+  );
   await stabilizeVisualRoute(page, spec.slug, mode);
   if (spec && spec.slug === 'dashboard') {
     await seedSyntheticDashboard(page);

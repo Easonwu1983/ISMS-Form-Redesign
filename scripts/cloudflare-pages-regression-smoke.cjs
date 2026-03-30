@@ -30,8 +30,9 @@ function pickExecutablePath() {
 
 function getVisualSampleScale(spec, mode) {
   const slug = spec && spec.slug;
-  if (slug === 'dashboard') return mode === 'mobile' ? 0.64 : 0.7;
-  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.64 : 0.7;
+  if (slug === 'dashboard') return mode === 'mobile' ? 0.56 : 0.62;
+  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.56 : 0.62;
+  if (slug === 'unit-review') return mode === 'mobile' ? 0.68 : 0.72;
   if (slug === 'unit-contact-status') return mode === 'mobile' ? 0.72 : 0.82;
   if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') return mode === 'mobile' ? 0.7 : 0.8;
   return 1;
@@ -855,29 +856,21 @@ async function run() {
       };
       location.hash = '#checklist-detail/' + detailId;
     }, checklistDetailId);
-    let checklistDetailReady = false;
-    for (let attempt = 0; attempt < 2 && !checklistDetailReady; attempt += 1) {
-      if (attempt > 0) {
-        await page.evaluate((detailId) => {
-          location.hash = '#checklist-detail/' + detailId;
-        }, checklistDetailId);
-      }
-      try {
-        await page.waitForFunction((detailId) => {
-          const app = document.getElementById('app');
-          const text = String(app && app.innerText || '');
-          return !!(
-            app
-            && text.includes(detailId)
-            && document.querySelector('.editor-shell--checklist')
-            && document.querySelectorAll('.card').length >= 2
-          );
-        }, checklistDetailId, { timeout: 6000 });
-        checklistDetailReady = true;
-      } catch (_) {
-        await page.waitForTimeout(1200);
-      }
-    }
+    await page.waitForFunction((detailId) => {
+      const app = document.getElementById('app');
+      const text = String(app && app.innerText || '');
+      const title = document.querySelector('.detail-title');
+      const detailIdNode = document.querySelector('.detail-id');
+      const sectionCount = document.querySelectorAll('.cl-detail-section').length;
+      return !!(
+        app
+        && title
+        && detailIdNode
+        && sectionCount >= 1
+        && String(title.textContent || '').includes('內稽檢核表')
+        && text.includes(detailId)
+      );
+    }, checklistDetailId, { timeout: 6000 });
     const checklistDetailText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(checklistDetailText)) {
       throw new Error('checklist detail contains placeholder question marks');
