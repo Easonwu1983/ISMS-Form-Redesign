@@ -176,7 +176,8 @@
       categorySummaries: {},
       page: { offset: 0, limit: 12, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       loading: false,
-      lastLoadedAt: ''
+      lastLoadedAt: '',
+      renderRequestId: 0
     };
     const DEFAULT_SECURITY_WINDOW_FILTERS = Object.freeze({
       keyword: '',
@@ -192,7 +193,8 @@
       page: { offset: 0, limit: 12, total: 0, pageCount: 0, currentPage: 0, hasPrev: false, hasNext: false, prevOffset: 0, nextOffset: 0, pageStart: 0, pageEnd: 0 },
       loading: false,
       lastLoadedAt: '',
-      filterSignature: ''
+      filterSignature: '',
+      renderRequestId: 0
     };
     const SECURITY_WINDOW_SYNC_FRESHNESS_MS = 30000;
     let securityWindowLoadPromise = null;
@@ -248,6 +250,23 @@
         return registerPageCleanup(callback);
       }
       return function () {};
+    }
+
+    function beginAdminRouteRender(state, routeHashPrefix) {
+      const targetState = state && typeof state === 'object' ? state : {};
+      const prefix = String(routeHashPrefix || '').trim();
+      const requestId = Number(targetState.renderRequestId || 0) + 1;
+      targetState.renderRequestId = requestId;
+      registerAdminPageCleanup(function () {
+        if (targetState.renderRequestId === requestId) {
+          targetState.renderRequestId = requestId + 1;
+        }
+      });
+      return function isStaleRender() {
+        if (targetState.renderRequestId !== requestId) return true;
+        if (!prefix) return false;
+        return !String(window.location.hash || '').startsWith(prefix);
+      };
     }
 
     function getAdminCollectionCacheModule() {
@@ -527,7 +546,8 @@
         limit: 20,
         extra: {
           loading: false,
-          lastLoadedAt: ''
+          lastLoadedAt: '',
+          renderRequestId: 0
         }
       });
     }
