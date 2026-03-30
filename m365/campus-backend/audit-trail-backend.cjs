@@ -25,6 +25,7 @@ function createAuditTrailRouter(deps) {
     entriesCache: null,
     entriesPromise: null,
     queryCache: new Map(),
+    summaryOnlyPageCache: new Map(),
     prewarmQueued: false,
     unfilteredSummary: null
   };
@@ -74,6 +75,9 @@ function createAuditTrailRouter(deps) {
   function clearAuditQueryCache() {
     if (state.queryCache instanceof Map) {
       state.queryCache.clear();
+    }
+    if (state.summaryOnlyPageCache instanceof Map) {
+      state.summaryOnlyPageCache.clear();
     }
   }
 
@@ -201,6 +205,27 @@ function createAuditTrailRouter(deps) {
     if (state.queryCache.size > AUDIT_TRAIL_QUERY_CACHE_MAX) {
       const firstKey = state.queryCache.keys().next().value;
       if (firstKey) state.queryCache.delete(firstKey);
+    }
+  }
+
+  function getAuditSummaryOnlyPageCache(limit, offset, listLoadedAt) {
+    if (!(state.summaryOnlyPageCache instanceof Map)) return null;
+    const key = [String(listLoadedAt || 0), String(limit || 0), String(offset || 0)].join('::');
+    const cached = state.summaryOnlyPageCache.get(key);
+    if (!cached || cached.listLoadedAt !== listLoadedAt) return null;
+    return cached.value || null;
+  }
+
+  function setAuditSummaryOnlyPageCache(limit, offset, listLoadedAt, value) {
+    if (!(state.summaryOnlyPageCache instanceof Map)) return;
+    const key = [String(listLoadedAt || 0), String(limit || 0), String(offset || 0)].join('::');
+    state.summaryOnlyPageCache.set(key, {
+      listLoadedAt,
+      value
+    });
+    if (state.summaryOnlyPageCache.size > 16) {
+      const firstKey = state.summaryOnlyPageCache.keys().next().value;
+      if (firstKey) state.summaryOnlyPageCache.delete(firstKey);
     }
   }
 
@@ -592,6 +617,35 @@ function createAuditTrailRouter(deps) {
         && state.unfilteredSummary
         && typeof state.unfilteredSummary === 'object';
       if (canUseSummaryOnlyPath) {
+        const cachedSummaryPage = getAuditSummaryOnlyPageCache(
+          pageMeta.limit,
+          pageMeta.offset,
+          Number(state.entriesCache && state.entriesCache.loadedAt) || 0
+        );
+        if (cachedSummaryPage) {
+          logAuditTrail('list summary-only cache hit', {
+            requestId,
+            querySignature,
+            total: cachedSummaryPage.total,
+            offset: cachedSummaryPage.page && cachedSummaryPage.page.offset,
+            limit: cachedSummaryPage.page && cachedSummaryPage.page.limit,
+            durationMs: Date.now() - startedAt
+          });
+          await writeJson(res, buildJsonResponse(200, {
+            ok: true,
+            items: [],
+            total: cachedSummaryPage.total,
+            page: cachedSummaryPage.page,
+            summary: cachedSummaryPage.summary,
+            cache: {
+              query: 'hit',
+              summaryOnly: true,
+              reason: 'summary-only-hit'
+            },
+            contractVersion: CONTRACT_VERSION
+          }), origin);
+          return;
+        }
         const total = Array.isArray(state.entriesCache && state.entriesCache.rows)
           ? state.entriesCache.rows.length
           : 0;
@@ -608,6 +662,12 @@ function createAuditTrailRouter(deps) {
           }
         };
         setAuditQueryCache(querySignature, Number(state.entriesCache && state.entriesCache.loadedAt) || 0, summaryResult);
+        setAuditSummaryOnlyPageCache(
+          pageMeta.limit,
+          pageMeta.offset,
+          Number(state.entriesCache && state.entriesCache.loadedAt) || 0,
+          summaryResult
+        );
         logAuditTrail('list cached summary', {
           requestId,
           querySignature,

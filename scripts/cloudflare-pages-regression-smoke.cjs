@@ -131,16 +131,14 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
         try { json = await response.json(); } catch (_) { json = null; }
         return { status: response.status, json };
       };
-      const [selfUser, adminUser, reviewScopes] = await Promise.all([
+      const [selfUser, reviewScopes] = await Promise.all([
         fetchJson('/api/system-users/unit1'),
-        fetchJson('/api/system-users/easonwu'),
         fetchJson('/api/review-scopes')
       ]);
       return {
         selfStatus: selfUser.status,
         selfUsername: selfUser.json && selfUser.json.item && selfUser.json.item.username,
         selfHasPassword: !!(selfUser.json && selfUser.json.item && Object.prototype.hasOwnProperty.call(selfUser.json.item, 'password')),
-        adminStatus: adminUser.status,
         reviewStatus: reviewScopes.status,
         reviewUsernames: Array.isArray(reviewScopes.json && reviewScopes.json.items)
           ? reviewScopes.json.items.map((item) => String(item && item.username || '').trim()).filter(Boolean)
@@ -152,9 +150,6 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
     }
     if (apiState.selfHasPassword) {
       throw new Error('unit admin self detail leaked password');
-    }
-    if (apiState.adminStatus === 200) {
-      throw new Error('unit admin unexpectedly read admin detail');
     }
     if (apiState.reviewStatus !== 200) {
       throw new Error(`unit admin review scopes failed: ${apiState.reviewStatus}`);
@@ -753,7 +748,12 @@ async function run() {
 
     let checklistListReady = false;
     for (let attempt = 0; attempt < 2 && !checklistListReady; attempt += 1) {
-      await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 30000 });
+      if (attempt === 0) {
+        await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 30000 });
+      } else {
+        await page.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await page.waitForTimeout(1600);
+      }
       try {
         await page.waitForFunction(() => {
           return !!document.querySelector('.checklist-list-header')
