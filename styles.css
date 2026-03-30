@@ -5484,6 +5484,19 @@ tbody td:first-child {
   scrollbar-width: thin;
 }
 
+.audit-trail-table-wrap {
+  max-height: 68vh;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.review-virtual-spacer > td,
+.review-virtual-spacer-cell {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 .review-table-wrapper .review-data-table {
   width: max-content;
   min-width: 100%;

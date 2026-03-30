@@ -74,33 +74,22 @@
     return appDomainTrainingRuntimeModuleApi;
   }
   const appDomainTrainingRuntime = getAppDomainTrainingRuntimeModule().createAccess({
-    getDomainBridgeConfig: function () {
-      return {
-        getUnitModule: function () { return getUnitModule(); },
-        getWorkflowSupportModule: function () { return getWorkflowSupportModule(); },
-        getDataModule: function () { return getDataModule(); },
-        getAuthModule: function () { return getAuthModule(); },
-        getPolicyModule: function () { return getPolicyModule(); }
-      };
-    },
-    getTrainingChecklistBridgeConfig: function () {
-      return {
-        CHECKLIST_KEY,
-        TRAINING_KEY,
-        trainingGeneralLabel: TRAINING_GENERAL_LABEL,
-        trainingInfoStaffLabel: TRAINING_INFO_STAFF_LABEL,
-        trainingProfessionalLabel: TRAINING_PROFESSIONAL_LABEL,
-        trainingBooleanOptions: TRAINING_BOOLEAN_OPTIONS,
-        trainingProfessionalOptions: TRAINING_PROFESSIONAL_OPTIONS,
-        getDataModule: function () { return getDataModule(); },
-        getWorkflowSupportModule: function () { return getWorkflowSupportModule(); },
-        getPolicyModule: function () { return getPolicyModule(); },
-        currentUser,
-        getSystemUnits,
-        getUnitCode,
-        splitUnitValue
-      };
-    }
+    CHECKLIST_KEY,
+    TRAINING_KEY,
+    trainingGeneralLabel: TRAINING_GENERAL_LABEL,
+    trainingInfoStaffLabel: TRAINING_INFO_STAFF_LABEL,
+    trainingProfessionalLabel: TRAINING_PROFESSIONAL_LABEL,
+    trainingBooleanOptions: TRAINING_BOOLEAN_OPTIONS,
+    trainingProfessionalOptions: TRAINING_PROFESSIONAL_OPTIONS,
+    getUnitModule: function () { return getUnitModule(); },
+    getWorkflowSupportModule: function () { return getWorkflowSupportModule(); },
+    getDataModule: function () { return getDataModule(); },
+    getAuthModule: function () { return getAuthModule(); },
+    getPolicyModule: function () { return getPolicyModule(); },
+    currentUser,
+    getSystemUnits,
+    getUnitCode,
+    splitUnitValue
   });
   const appDomainBridge = appDomainTrainingRuntime.getDomainBridge();
   const {

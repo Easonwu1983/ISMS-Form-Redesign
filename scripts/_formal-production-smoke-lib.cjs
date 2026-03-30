@@ -566,27 +566,13 @@ function runNodeStep(step) {
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
     const scriptPath = path.join(ROOT, step.script);
-    const childConfig = process.platform === 'win32'
-      ? {
-        command: 'powershell.exe',
-        args: [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-Command',
-          `& '${process.execPath.replace(/'/g, "''")}' '${scriptPath.replace(/'/g, "''")}'`
-        ]
-      }
-      : {
-        command: process.execPath,
-        args: [scriptPath]
-      };
-    const result = spawnSync(childConfig.command, childConfig.args, {
+    const result = spawnSync(process.execPath, [scriptPath], {
       cwd: ROOT,
       stdio: 'pipe',
       shell: false,
       env: buildFormalEnv(),
-      encoding: 'utf8'
+      encoding: 'utf8',
+      windowsHide: true
     });
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);

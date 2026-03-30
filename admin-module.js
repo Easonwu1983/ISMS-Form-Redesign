@@ -119,12 +119,19 @@
     const auditTrailLoadPromiseMap = new Map();
     const AUDIT_TRAIL_SUMMARY_CACHE_MS = 15000;
     const AUDIT_TRAIL_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
+    const AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT = 76;
+    const AUDIT_TRAIL_VIRTUAL_ROW_OVERSCAN = 10;
+    const AUDIT_TRAIL_VIRTUAL_ROW_THRESHOLD = 140;
     let auditTrailCollectionBundle = null;
     let auditTrailState = null;
     let auditTrailSummaryCache = null;
     let auditTrailSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     let auditTrailRenderCache = null;
     let auditTrailMarkupCache = null;
+    let auditTrailTableViewport = null;
+    let auditTrailVirtualRowsRenderPending = false;
+    let releaseAuditTrailVirtualScroll = null;
+    let releaseAuditTrailVirtualResize = null;
     const DEFAULT_SYSTEM_USERS_FILTERS = Object.freeze({
       q: '',
       role: '',
@@ -1490,6 +1497,74 @@
       return Math.max(0, (safeTargetPage - 1) * meta.limit);
     }
 
+    function buildAuditTrailRow(entry, index) {
+      return `<tr><td>${formatAuditOccurredAt(entry.occurredAt)}</td><td><div style="font-weight:600;color:var(--text-primary)">${esc(entry.eventType || 'unknown')}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(entry.recordId || '—')}</div></td><td>${esc(entry.actorEmail || '—')}</td><td>${esc(entry.targetEmail || '—')}</td><td>${esc(entry.unitCode || '—')}</td><td style="max-width:360px;white-space:normal;line-height:1.55">${esc(entry.payloadPreview || entry.title || '—')}</td><td><button type="button" class="btn btn-sm btn-secondary" data-action="admin.viewAuditEntry" data-index="${index}">${ic('search', 'icon-sm')} 檢視</button></td></tr>`;
+    }
+
+    function buildAuditTrailEmptyRow() {
+      return `<tr><td colspan="7"><div class="empty-state review-empty"><div class="empty-state-icon">${ic('scroll-text')}</div><div class="empty-state-title">目前沒有符合條件的稽核紀錄</div><div class="empty-state-desc">可調整日期區間、關鍵字或事件類型，再重新整理查詢結果。</div></div></td></tr>`;
+    }
+
+    function buildAuditTrailVirtualSpacer(height) {
+      return `<tr class="review-virtual-spacer" aria-hidden="true"><td class="review-virtual-spacer-cell" colspan="7" style="height:${Math.max(0, Math.round(height))}px"></td></tr>`;
+    }
+
+    function getAuditTrailVirtualWindow(totalRows) {
+      if (!auditTrailTableViewport || totalRows <= AUDIT_TRAIL_VIRTUAL_ROW_THRESHOLD) {
+        return {
+          enabled: false,
+          start: 0,
+          end: totalRows,
+          padTop: 0,
+          padBottom: 0
+        };
+      }
+      const scrollTop = Math.max(0, Number(auditTrailTableViewport.scrollTop || 0));
+      const viewportHeight = Math.max(320, Number(auditTrailTableViewport.clientHeight || 0) || 0);
+      const start = Math.max(0, Math.floor(scrollTop / AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT) - AUDIT_TRAIL_VIRTUAL_ROW_OVERSCAN);
+      const visibleCount = Math.ceil(viewportHeight / AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT) + (AUDIT_TRAIL_VIRTUAL_ROW_OVERSCAN * 2);
+      const end = Math.min(totalRows, start + visibleCount);
+      return {
+        enabled: true,
+        start,
+        end,
+        padTop: start * AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT,
+        padBottom: Math.max(0, (totalRows - end) * AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT)
+      };
+    }
+
+    function renderAuditTrailRows(items) {
+      const body = document.getElementById('audit-trail-table-body');
+      if (!body) return;
+      const safeItems = Array.isArray(items) ? items : [];
+      if (!safeItems.length) {
+        body.innerHTML = buildAuditTrailEmptyRow();
+        return;
+      }
+      const virtualWindow = getAuditTrailVirtualWindow(safeItems.length);
+      if (!virtualWindow.enabled) {
+        body.innerHTML = safeItems.map((entry, index) => buildAuditTrailRow(entry, index)).join('');
+        return;
+      }
+      const rowsHtml = safeItems
+        .slice(virtualWindow.start, virtualWindow.end)
+        .map((entry, offset) => buildAuditTrailRow(entry, virtualWindow.start + offset))
+        .join('');
+      body.innerHTML = buildAuditTrailVirtualSpacer(virtualWindow.padTop)
+        + rowsHtml
+        + buildAuditTrailVirtualSpacer(virtualWindow.padBottom);
+    }
+
+    function scheduleAuditTrailRowsRender() {
+      if (auditTrailVirtualRowsRenderPending) return;
+      auditTrailVirtualRowsRenderPending = true;
+      window.requestAnimationFrame(function () {
+        auditTrailVirtualRowsRenderPending = false;
+        if (!String(window.location.hash || '').startsWith('#audit-trail')) return;
+        renderAuditTrailRows(Array.isArray(auditTrailState.items) ? auditTrailState.items : []);
+      });
+    }
+
     function showAuditEntryModal(index) {
       const items = Array.isArray(auditTrailState.items) ? auditTrailState.items : [];
       const entryIndex = Math.max(0, Number(index) || 0);
@@ -2498,7 +2573,11 @@
         ? `<span class="review-card-subtitle">${esc(config.toolbarSubtitle)}</span>`
         : '<span class="review-card-subtitle">可拖曳表格左右移動，也可使用右側按鈕快速查看其他欄位。</span>';
       const caption = config.caption || String(key || 'review-table').replace(/[-_]+/g, ' ') + ' table';
-      return `<div class="review-table-shell"><div class="review-table-toolbar">${toolbarSubtitle}<div class="review-table-scroll-actions"><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-left="${esc(key)}" aria-label="向左移動">${ic('chevron-left', 'icon-sm')}</button><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-right="${esc(key)}" aria-label="向右移動">${ic('chevron-right', 'icon-sm')}</button></div></div><div class="table-wrapper review-table-wrapper" data-review-scroll-root="${esc(key)}"><table>${buildSrCaption(caption)}<thead><tr>${applyColHeaderScope(headersHtml)}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+      const wrapperClass = String(config.wrapperClass || '').trim();
+      const wrapperId = String(config.wrapperId || '').trim();
+      const tableClass = String(config.tableClass || '').trim();
+      const tbodyId = String(config.tbodyId || '').trim();
+      return `<div class="review-table-shell"><div class="review-table-toolbar">${toolbarSubtitle}<div class="review-table-scroll-actions"><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-left="${esc(key)}" aria-label="向左移動">${ic('chevron-left', 'icon-sm')}</button><button type="button" class="btn btn-ghost btn-icon review-table-scroll-btn" data-review-scroll-right="${esc(key)}" aria-label="向右移動">${ic('chevron-right', 'icon-sm')}</button></div></div><div class="table-wrapper review-table-wrapper${wrapperClass ? ' ' + esc(wrapperClass) : ''}" data-review-scroll-root="${esc(key)}"${wrapperId ? ` id="${esc(wrapperId)}"` : ''}><table${tableClass ? ` class="${esc(tableClass)}"` : ''}>${buildSrCaption(caption)}<thead><tr>${applyColHeaderScope(headersHtml)}</tr></thead><tbody${tbodyId ? ` id="${esc(tbodyId)}"` : ''}>${rowsHtml}</tbody></table></div></div>`;
     }
 
     function wireReviewTableScrollers(scope) {
@@ -3567,13 +3646,12 @@
       const eventTypeSelect = [`<option value="">全部事件</option>`]
         .concat(eventTypeOptions.map((value) => `<option value="${esc(value)}" ${state.filters.eventType === value ? 'selected' : ''}>${esc(value)}</option>`))
         .join('');
-      const rows = items.length ? items.map((entry, index) => `<tr><td>${formatAuditOccurredAt(entry.occurredAt)}</td><td><div style="font-weight:600;color:var(--text-primary)">${esc(entry.eventType || 'unknown')}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(entry.recordId || '—')}</div></td><td>${esc(entry.actorEmail || '—')}</td><td>${esc(entry.targetEmail || '—')}</td><td>${esc(entry.unitCode || '—')}</td><td style="max-width:360px;white-space:normal;line-height:1.55">${esc(entry.payloadPreview || entry.title || '—')}</td><td><button type="button" class="btn btn-sm btn-secondary" data-action="admin.viewAuditEntry" data-index="${index}">${ic('search', 'icon-sm')} 檢視差異</button></td></tr>`).join('') : `<tr><td colspan="7"><div class="empty-state review-empty"><div class="empty-state-icon">${ic('scroll-text')}</div><div class="empty-state-title">目前查無符合條件的稽核紀錄</div><div class="empty-state-desc">可調整日期區間、事件類型、操作人、目標或紀錄編號後再查詢。</div></div></td></tr>`;
       const filterSummary = `共 ${state.summary.total || 0} 筆 · ${state.summary.actorCount || 0} 位操作人 · 最近事件 ${formatAuditOccurredAt(state.summary.latestOccurredAt)}`;
       const healthBadge = health.ready === false
         ? `<span class="review-status-badge pending">後端未就緒</span>`
         : `<span class="review-status-badge approved">後端正常</span>`;
       const pager = renderAuditTrailPager(state.page);
-      pageHtml = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">查詢後端權限控管與稽核寫入結果，協助管理者追查異動來源。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重新整理</button><button type="button" class="btn btn-secondary" data-action="admin.exportAuditTrail">${ic('download', 'icon-sm')} 匯出 JSON</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>${healthBadge} <strong style="margin-left:8px">${esc(filterSummary)}</strong><div class="review-card-subtitle" style="margin-top:6px">${esc(health.repository || '')}${health.actor && health.actor.tokenMode ? ` · token=${esc(health.actor.tokenMode)}` : ''}${health.message ? ` · ${esc(health.message)}` : ''}</div></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('scroll-text')}</div><div class="stat-value">${state.summary.total || 0}</div><div class="stat-label">符合條件事件</div></div><div class="stat-card closed"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${state.summary.actorCount || 0}</div><div class="stat-label">操作人數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('activity')}</div><div class="stat-value">${eventTypeOptions.length}</div><div class="stat-label">事件類型</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('clock-3')}</div><div class="stat-value">${state.summary.latestOccurredAt ? esc(formatAuditOccurredAt(state.summary.latestOccurredAt).slice(5, 16)) : '—'}</div><div class="stat-label">最近事件</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">稽核紀錄查詢</span><span class="review-card-subtitle">${esc(filterSummary)}</span></div><form id="audit-filter-form"><div class="panel-grid-two" style="margin-bottom:18px"><div class="form-group"><label class="form-label">關鍵字</label><input type="text" class="form-input" id="audit-keyword" value="${esc(state.filters.keyword)}" placeholder="事件類型、email、recordId、payload 關鍵字"></div><div class="form-group"><label class="form-label">事件類型</label><select class="form-select" id="audit-event-type">${eventTypeSelect}</select></div><div class="form-group"><label class="form-label">\u958b\u59cb\u65e5\u671f</label><input type="date" class="form-input" id="audit-occurred-from" value="${esc(state.filters.occurredFrom)}"></div><div class="form-group"><label class="form-label">\u7d50\u675f\u65e5\u671f</label><input type="date" class="form-input" id="audit-occurred-to" value="${esc(state.filters.occurredTo)}"></div><div class="form-group"><label class="form-label">操作人 email</label><input type="text" class="form-input" id="audit-actor-email" value="${esc(state.filters.actorEmail)}" placeholder="actorEmail"></div><div class="form-group"><label class="form-label">目標 email</label><input type="text" class="form-input" id="audit-target-email" value="${esc(state.filters.targetEmail)}" placeholder="targetEmail"></div><div class="form-group"><label class="form-label">單位代碼</label><input type="text" class="form-input" id="audit-unit-code" value="${esc(state.filters.unitCode)}" placeholder="unitCode"></div><div class="form-group"><label class="form-label">紀錄編號</label><input type="text" class="form-input" id="audit-record-id" value="${esc(state.filters.recordId)}" placeholder="recordId"></div><div class="form-group"><label class="form-label">筆數上限</label><select class="form-select" id="audit-limit"><option value="50" ${state.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${state.filters.limit === '100' ? 'selected' : ''}>100</option><option value="200" ${state.filters.limit === '200' ? 'selected' : ''}>200</option></select></div></div><div class="form-actions" style="justify-content:flex-start;margin-bottom:8px"><button type="submit" class="btn btn-primary">${ic('search', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetAuditTrailFilters">${ic('rotate-ccw', 'icon-sm')} 清空條件</button></div></form>${pager}${buildReviewTableShell('audit-trail-table', '<th>時間</th><th>事件</th><th>操作人</th><th>目標</th><th>單位</th><th>內容摘要</th><th>差異</th>', rows, { toolbarSubtitle: '套用篩選後可直接拖曳表格左右移動，也可用右側按鈕快速平移。' })}</div><div class="card review-history-card"><div class="card-header"><span class="card-title">事件分布</span><span class="review-card-subtitle">最近查詢摘要</span></div><div class="review-history-list">${formatAuditEventTypeSummary(state.summary)}</div></div></div></div>`;
+      pageHtml = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">查詢後端權限控管與稽核寫入結果，協助管理者追查異動來源。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重新整理</button><button type="button" class="btn btn-secondary" data-action="admin.exportAuditTrail">${ic('download', 'icon-sm')} 匯出 JSON</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>${healthBadge} <strong style="margin-left:8px">${esc(filterSummary)}</strong><div class="review-card-subtitle" style="margin-top:6px">${esc(health.repository || '')}${health.actor && health.actor.tokenMode ? ` · token=${esc(health.actor.tokenMode)}` : ''}${health.message ? ` · ${esc(health.message)}` : ''}</div></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('scroll-text')}</div><div class="stat-value">${state.summary.total || 0}</div><div class="stat-label">符合條件事件</div></div><div class="stat-card closed"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${state.summary.actorCount || 0}</div><div class="stat-label">操作人數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('activity')}</div><div class="stat-value">${eventTypeOptions.length}</div><div class="stat-label">事件類型</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('clock-3')}</div><div class="stat-value">${state.summary.latestOccurredAt ? esc(formatAuditOccurredAt(state.summary.latestOccurredAt).slice(5, 16)) : '—'}</div><div class="stat-label">最近事件</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">稽核紀錄查詢</span><span class="review-card-subtitle">${esc(filterSummary)}</span></div><form id="audit-filter-form"><div class="panel-grid-two" style="margin-bottom:18px"><div class="form-group"><label class="form-label">關鍵字</label><input type="text" class="form-input" id="audit-keyword" value="${esc(state.filters.keyword)}" placeholder="事件類型、email、recordId、payload 關鍵字"></div><div class="form-group"><label class="form-label">事件類型</label><select class="form-select" id="audit-event-type">${eventTypeSelect}</select></div><div class="form-group"><label class="form-label">\u958b\u59cb\u65e5\u671f</label><input type="date" class="form-input" id="audit-occurred-from" value="${esc(state.filters.occurredFrom)}"></div><div class="form-group"><label class="form-label">\u7d50\u675f\u65e5\u671f</label><input type="date" class="form-input" id="audit-occurred-to" value="${esc(state.filters.occurredTo)}"></div><div class="form-group"><label class="form-label">操作人 email</label><input type="text" class="form-input" id="audit-actor-email" value="${esc(state.filters.actorEmail)}" placeholder="actorEmail"></div><div class="form-group"><label class="form-label">目標 email</label><input type="text" class="form-input" id="audit-target-email" value="${esc(state.filters.targetEmail)}" placeholder="targetEmail"></div><div class="form-group"><label class="form-label">單位代碼</label><input type="text" class="form-input" id="audit-unit-code" value="${esc(state.filters.unitCode)}" placeholder="unitCode"></div><div class="form-group"><label class="form-label">紀錄編號</label><input type="text" class="form-input" id="audit-record-id" value="${esc(state.filters.recordId)}" placeholder="recordId"></div><div class="form-group"><label class="form-label">筆數上限</label><select class="form-select" id="audit-limit"><option value="50" ${state.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${state.filters.limit === '100' ? 'selected' : ''}>100</option><option value="200" ${state.filters.limit === '200' ? 'selected' : ''}>200</option></select></div></div><div class="form-actions" style="justify-content:flex-start;margin-bottom:8px"><button type="submit" class="btn btn-primary">${ic('search', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetAuditTrailFilters">${ic('rotate-ccw', 'icon-sm')} 清空條件</button></div></form>${pager}${buildReviewTableShell('audit-trail-table', '<th>時間</th><th>事件</th><th>操作人</th><th>目標</th><th>單位</th><th>內容摘要</th><th>差異</th>', '', { toolbarSubtitle: '套用篩選後可直接拖曳表格左右移動，也可用右側按鈕快速平移。', wrapperId: 'audit-trail-table-wrap', wrapperClass: 'audit-trail-table-wrap', tbodyId: 'audit-trail-table-body' })}</div><div class="card review-history-card"><div class="card-header"><span class="card-title">事件分布</span><span class="review-card-subtitle">最近查詢摘要</span></div><div class="review-history-list">${formatAuditEventTypeSummary(state.summary)}</div></div></div></div>`;
       auditTrailMarkupCache = {
         signature: renderSignature,
         html: pageHtml
@@ -3587,6 +3665,20 @@
     };
     if (app) {
       app.dataset.auditTrailRenderSignature = renderSignature;
+    }
+    auditTrailTableViewport = document.getElementById('audit-trail-table-wrap');
+    renderAuditTrailRows(Array.isArray(state.items) ? state.items : []);
+    if (typeof releaseAuditTrailVirtualScroll === 'function') {
+      releaseAuditTrailVirtualScroll();
+      releaseAuditTrailVirtualScroll = null;
+    }
+    if (typeof releaseAuditTrailVirtualResize === 'function') {
+      releaseAuditTrailVirtualResize();
+      releaseAuditTrailVirtualResize = null;
+    }
+    if (auditTrailTableViewport) {
+      releaseAuditTrailVirtualScroll = bindAdminPageEvent(auditTrailTableViewport, 'scroll', scheduleAuditTrailRowsRender, { passive: true });
+      releaseAuditTrailVirtualResize = bindAdminPageEvent(window, 'resize', scheduleAuditTrailRowsRender);
     }
     const form = document.getElementById('audit-filter-form');
     if (form) {
