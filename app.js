@@ -87,7 +87,7 @@
     getDataModule: function () { return getDataModule(); },
     getAuthModule: function () { return getAuthModule(); },
     getPolicyModule: function () { return getPolicyModule(); },
-    currentUser,
+    currentUser: function () { return currentUser.apply(null, arguments); },
     getSystemUnits: function () { return getSystemUnits.apply(null, arguments); },
     getUnitCode: function () { return getUnitCode.apply(null, arguments); },
     splitUnitValue: function () { return splitUnitValue.apply(null, arguments); }
