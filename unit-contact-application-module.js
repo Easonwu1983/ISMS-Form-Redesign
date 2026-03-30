@@ -196,9 +196,11 @@
       const chipsEl = document.getElementById(baseId + '-chips');
       if (!hiddenEl || !searchEl || !resultsEl || !chipsEl) return null;
       const state = new Set(parseUnitList(hiddenEl.value));
-      const syncHidden = () => {
+      const syncHidden = (notifyChange) => {
         hiddenEl.value = Array.from(state).join('\n');
-        hiddenEl.dispatchEvent(new Event('change', { bubbles: true }));
+        if (notifyChange !== false) {
+          hiddenEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       };
       const renderChips = () => {
         const chips = Array.from(state).map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '">?</button></span>').join('');
@@ -225,14 +227,14 @@
         if (!next || state.has(next)) return;
         state.add(next);
         renderChips();
-        syncHidden();
+        syncHidden(true);
       };
       const removeValue = (value) => {
         const next = String(value || '').trim();
         if (!state.has(next)) return;
         state.delete(next);
         renderChips();
-        syncHidden();
+        syncHidden(true);
       };
       bindPageEvent(chipsEl, 'click', (event) => {
         const button = event.target.closest('[data-remove-unit]');
@@ -267,13 +269,13 @@
         }
       });
       renderChips();
-      syncHidden();
+      syncHidden(false);
       return {
         setValues(values) {
           state.clear();
           parseUnitList(values).forEach((value) => state.add(value));
           renderChips();
-          syncHidden();
+          syncHidden(true);
         },
         getValues() { return Array.from(state); },
         addValue,
@@ -281,7 +283,7 @@
         clear() {
           state.clear();
           renderChips();
-          syncHidden();
+          syncHidden(true);
         }
       };
     }
