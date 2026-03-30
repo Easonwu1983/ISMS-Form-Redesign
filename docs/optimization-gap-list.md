@@ -39,6 +39,7 @@ Status: `partial`
 
 Done:
 - A small a11y utility layer was added, including `.sr-only`.
+- A dedicated `styles.critical.min.css` now covers the login, public shell, and authenticated shell skeleton before the deferred stylesheet chain lands.
 - Live and static package builds now load minified CSS assets through `styles.min.css`.
 - Static package builds now minify CSS assets.
 - A PurgeCSS safelist build now emits `styles.purged.min.css` and the live asset loader prefers it by default.
@@ -46,11 +47,10 @@ Done:
 Open:
 - `styles.css` is still large and monolithic.
 - Inline styles still exist inside module `innerHTML` templates.
-- There is still no critical/deferred CSS split; the stylesheet remains a single live bundle even after purge/minification.
 
 Next:
 - Extract repeated inline styles into CSS classes.
-- Build a PurgeCSS safelist after the templates are stable.
+- Keep shrinking the live stylesheet after the critical/deferred split.
 
 ## 3. API Layer
 
@@ -79,12 +79,14 @@ Status: `partial`
 Done:
 - `shell-module.js` now includes core shell a11y improvements such as `role="main"`, `aria-live`, and clearer labels.
 - `ui-module.js` now has modal focus trap and focus return handling.
+- Toast containers and toast items now expose explicit live-region semantics.
 - Dialogs now expose `aria-describedby` for confirm and prompt flows.
 - First-pass table semantics were added for admin, training, case, and checklist tables using captions and `scope="col"`.
 - `scripts/security-regression.cjs` now checks that key admin/training/checklist/case tables expose captions and scoped headers.
 - `scripts/accessibility-regression.cjs` now provides a dedicated formal a11y smoke pass for shell landmarks, modal keyboard behavior, and table semantics.
 - `scripts/accessibility-axe-regression.cjs` now adds an axe-based formal a11y smoke pass for login, dashboard, public apply, and public status pages.
 - `unit-contact-application-module.js` now exposes accessible names for public apply search/listbox/file-input flows and avoids nested complementary landmarks on the public pages.
+- Public apply and public status forms now expose `aria-invalid`, `aria-errormessage`, and screen-reader-visible feedback regions for validation failures.
 - `unit-module.js` now assigns explicit accessible names to unit cascade search and select controls.
 
 Open:
@@ -107,21 +109,22 @@ Done:
 - Client collection caches now have TTL and bounded eviction behavior.
 - `data-module.js` access-profile caches and parsed storage cache now use bounded stores instead of unbounded raw maps.
 - `training`, `checklist`, and `case` now use page-scoped listener registration for their main list and form flows.
+- `training` detail, `checklist` template modal, and `case` respond/track upload flows now use page-scoped listeners instead of raw direct bindings.
 - `training`, `checklist`, and `audit-trail` remote page caches now use bounded stores instead of raw unbounded page maps.
 - `admin-module.js` pager controls, governance cards, horizontal review scrollers, and unit-chip picker interactions now use page-scoped listener registration.
 - `unit-contact-application-module.js` now uses page-scoped listener registration for public apply and status flows.
 - `training-module.js` now window-renders the fill table for large rosters instead of painting the entire row set into the DOM at once.
-- Current repo-wide listener ratio is no longer near the old `165:7` report; the tracked source tree is currently around `439 addEventListener` to `114 removeEventListener`.
+- `admin-module.js` already virtualizes the `audit-trail` table instead of painting the full DOM payload for each row.
 
 Open:
 - Many modules still attach listeners directly without page-scoped cleanup.
 - There is still no complete page destroy lifecycle across all major routes.
-- `audit-trail`, `training roster`, and other large read-heavy tables still render full DOM payloads instead of using virtualization.
+- `training roster`, `system-users`, and other large read-heavy tables still render full DOM payloads instead of using virtualization.
 
 Next:
 - Convert admin, training, checklist, and case listeners to page-scoped registration.
 - Add a consistent destroy hook for route transitions.
-- Evaluate virtualization for `audit-trail`, `training roster`, and other large tables.
+- Evaluate virtualization for `training roster`, `system-users`, and other large tables.
 
 ## Priority Order
 

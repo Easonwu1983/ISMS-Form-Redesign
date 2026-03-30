@@ -282,14 +282,15 @@
       card.id = 'uca-authorization-doc-card';
       card.innerHTML = ''
         + '<div class="section-header">' + ic('file-text', 'icon-sm') + ' 授權同意書</div>'
-        + '<div class="form-hint" style="margin-top:8px">請先下載授權同意書 PDF，經單位主管簽章後再上傳。</div>'
-        + '<div class="form-actions" style="margin-top:14px">'
+        + '<div class="form-hint unit-contact-auth-doc-note">請先下載授權同意書 PDF，經單位主管簽章後再上傳。</div>'
+        + '<div class="form-actions unit-contact-auth-doc-actions">'
         + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 下載同意書（PDF）</button>'
         + '</div>'
-        + '<div class="form-group" style="margin-top:18px">'
+        + '<div class="form-group unit-contact-auth-doc-field">'
         + '<label class="form-label form-required" id="uca-authorization-doc-label" for="uca-authorization-doc">上傳主管簽章之授權同意書</label>'
-        + '<input type="file" class="form-input" id="uca-authorization-doc" aria-describedby="uca-authorization-doc-help" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" data-testid="unit-contact-authorization-doc-input">'
+        + '<input type="file" class="form-input" id="uca-authorization-doc" aria-describedby="uca-authorization-doc-help uca-authorization-doc-error" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" data-testid="unit-contact-authorization-doc-input">'
         + '<div class="form-hint" id="uca-authorization-doc-help">僅支援 PDF、JPG、PNG，檔案大小上限 5MB。</div>'
+        + '<div class="form-error-message" id="uca-authorization-doc-error" hidden></div>'
         + '<div class="unit-contact-auth-doc-preview" id="uca-authorization-doc-preview"><span class="unit-contact-file-empty">尚未選擇檔案</span></div>'
         + '</div>';
       const actions = form.querySelector('.form-actions');
@@ -443,6 +444,106 @@
       clearUnsavedChangesGuard();
     }
 
+    function renderFormFeedback(elementId, state, title, details) {
+      const feedback = document.getElementById(elementId);
+      if (!feedback) return;
+      const lines = Array.isArray(details) ? details.filter(Boolean) : [];
+      feedback.dataset.state = state || 'info';
+      feedback.hidden = false;
+      feedback.setAttribute('role', state === 'error' ? 'alert' : 'status');
+      feedback.setAttribute('aria-live', state === 'error' ? 'assertive' : 'polite');
+      feedback.innerHTML = '<div class="form-feedback-title">' + esc(title || '') + '</div>'
+        + (lines.length ? '<div class="form-feedback-list">' + lines.map((line) => '<span>' + esc(line) + '</span>').join('') + '</div>' : '');
+    }
+
+    function clearFormFeedback(elementId) {
+      const feedback = document.getElementById(elementId);
+      if (!feedback) return;
+      feedback.hidden = true;
+      feedback.dataset.state = 'idle';
+      feedback.removeAttribute('role');
+      feedback.setAttribute('aria-live', 'polite');
+      feedback.innerHTML = '';
+    }
+
+    function normalizeFieldTargets(targets) {
+      const source = targets && typeof targets.length === 'number' && !targets.tagName && !Array.isArray(targets)
+        ? Array.from(targets)
+        : (Array.isArray(targets) ? targets : [targets]);
+      return source.filter((target) => target && typeof target.setAttribute === 'function');
+    }
+
+    function getUnitFieldTargets(baseId) {
+      return [
+        document.getElementById(baseId + '-search'),
+        document.getElementById(baseId + '-parent'),
+        document.getElementById(baseId + '-child'),
+        document.getElementById(baseId)
+      ].filter(Boolean);
+    }
+
+    function setFieldError(options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      const targets = normalizeFieldTargets(settings.targets);
+      const message = String(settings.message || '').trim();
+      const errorEl = document.getElementById(String(settings.errorId || '').trim());
+      const group = settings.group && settings.group.classList ? settings.group : null;
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.hidden = !message;
+      }
+      if (group) group.classList.toggle('form-group--invalid', !!message);
+      targets.forEach((target) => {
+        if (message) {
+          target.setAttribute('aria-invalid', 'true');
+          if (errorEl && errorEl.id) target.setAttribute('aria-errormessage', errorEl.id);
+        } else {
+          target.removeAttribute('aria-invalid');
+          target.removeAttribute('aria-errormessage');
+        }
+      });
+    }
+
+    function clearFieldError(errorId, targets, group) {
+      setFieldError({ errorId, targets, group, message: '' });
+    }
+
+    function focusFirstTarget(targets) {
+      const firstTarget = normalizeFieldTargets(targets)[0];
+      if (!firstTarget || typeof firstTarget.focus !== 'function') return;
+      const group = firstTarget.closest('.form-group') || firstTarget;
+      if (group && typeof group.scrollIntoView === 'function') {
+        group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      firstTarget.focus();
+    }
+
+    function clearApplyValidationForTarget(target) {
+      if (!(target instanceof HTMLElement)) return;
+      if (target.id === 'uca-name') {
+        clearFieldError('uca-name-error', target, target.closest('.form-group'));
+      } else if (target.id === 'uca-extension') {
+        clearFieldError('uca-extension-error', target, target.closest('.form-group'));
+      } else if (target.id === 'uca-email') {
+        clearFieldError('uca-email-error', target, target.closest('.form-group'));
+      } else if (target.id === 'uca-authorization-doc') {
+        clearFieldError('uca-authorization-doc-error', target, target.closest('.form-group'));
+      } else if (target.id === 'uca-unit' || target.id === 'uca-unit-search' || target.id === 'uca-unit-parent' || target.id === 'uca-unit-child') {
+        clearFieldError('uca-unit-error', getUnitFieldTargets('uca-unit'), document.querySelector('[data-unit-contact-unit-group]'));
+      } else if (target.name === 'uca-security-role') {
+        clearFieldError('uca-security-role-error', document.querySelectorAll('input[name="uca-security-role"]'), document.querySelector('[data-unit-contact-role-group]'));
+      }
+      clearFormFeedback('unit-contact-apply-feedback');
+    }
+
+    function clearStatusValidationForTarget(target) {
+      if (!(target instanceof HTMLElement)) return;
+      if (target.id === 'uca-status-email') {
+        clearFieldError('uca-status-email-error', target, target.closest('.form-group'));
+      }
+      clearFormFeedback('unit-contact-status-feedback');
+    }
+
     function renderApplyForm() {
       const mount = getMount();
       if (!mount) return;
@@ -461,23 +562,24 @@
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-form-card">'
         + '<div class="section-header">' + ic('plus-circle', 'icon-sm') + ' 申請表單</div>'
-        + '<form id="unit-contact-apply-form" data-testid="unit-contact-apply-form">'
-        + '<div class="form-row"><div class="form-group"><label class="form-label form-required">申請單位</label>'
+        + '<form id="unit-contact-apply-form" data-testid="unit-contact-apply-form" novalidate>'
+        + '<div class="form-feedback" id="unit-contact-apply-feedback" data-state="idle" aria-live="polite" aria-atomic="true" hidden></div>'
+        + '<div class="form-row"><div class="form-group" data-unit-contact-unit-group><label class="form-label form-required">申請單位</label>'
         + buildUnitCascadeControl('uca-unit', '', false, true)
-        + '<div class="form-hint">請先選擇主要歸屬單位；若有跨單位兼辦，再補充額外授權資源範圍。</div></div></div>'
+        + '<div class="form-hint" id="uca-unit-help">請先選擇主要歸屬單位；若有跨單位兼辦，再補充額外授權資源範圍。</div><div class="form-error-message" id="uca-unit-error" hidden></div></div></div>'
         + '<div class="form-group"><label class="form-label">額外授權資源範圍（可複選）</label>'
         + buildAuthorizedScopePicker('uca-authorized-units', [], '請輸入單位名稱', '若有跨單位兼辦，請在此加選額外授權範圍；主歸屬單位仍以上方選擇為準。')
         + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請人姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入申請人姓名" required></div>'
-        + '<div class="form-group"><label class="form-label form-required">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" required></div>'
+        + '<div class="form-group"><label class="form-label form-required" for="uca-name">申請人姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入申請人姓名" aria-describedby="uca-name-error" required><div class="form-error-message" id="uca-name-error" hidden></div></div>'
+        + '<div class="form-group"><label class="form-label form-required" for="uca-extension">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" aria-describedby="uca-extension-error" required><div class="form-error-message" id="uca-extension-error" hidden></div></div>'
         + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="例如 ntu.edu.tw 的信箱或 Gmail" required></div>'
+        + '<div class="form-group"><label class="form-label form-required" for="uca-email">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="例如 ntu.edu.tw 的信箱或 Gmail" aria-describedby="uca-email-help uca-email-error" required><div class="form-hint" id="uca-email-help">請輸入可正常收信的電子郵件地址。</div><div class="form-error-message" id="uca-email-error" hidden></div></div>'
         + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充職稱、代理原因或其他說明"></div></div>'
-        + '<div class="form-group unit-contact-security-role-group"><label class="form-label form-required">資安角色</label>'
+        + '<div class="form-group unit-contact-security-role-group" data-unit-contact-role-group><label class="form-label form-required">資安角色</label>'
         + buildSecurityRoleCheckboxes([])
-        + '<div class="form-hint">若同時為一、二級單位資安窗口請複選，至少勾選一項。</div></div>'
+        + '<div class="form-hint" id="uca-security-role-help">若同時為一、二級單位資安窗口請複選，至少勾選一項。</div><div class="form-error-message" id="uca-security-role-error" hidden></div></div>'
         + '<div class="form-actions">'
         + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
         + '<a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>'
@@ -500,13 +602,26 @@
 
       initUnitCascade('uca-unit', '', { disabled: false });
       const authorizedScopePicker = initAuthorizedScopePicker('uca-authorized-units');
+      getUnitFieldTargets('uca-unit').forEach((target) => {
+        const describedBy = ['uca-unit-help', 'uca-unit-error'].join(' ');
+        target.setAttribute('aria-describedby', describedBy);
+      });
+      document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
+        input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
+      });
 
       const form = document.getElementById('unit-contact-apply-form');
       ensureAuthorizationDocumentSection(form);
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
 
-      bindPageEvent(form, 'input', markDirty);
-      bindPageEvent(form, 'change', markDirty);
+      bindPageEvent(form, 'input', function (event) {
+        markDirty();
+        clearApplyValidationForTarget(event.target);
+      });
+      bindPageEvent(form, 'change', function (event) {
+        markDirty();
+        clearApplyValidationForTarget(event.target);
+      });
       bindPageEvent(form, 'submit', async function (event) {
         event.preventDefault();
         const unitState = readUnitFormState('uca-unit');
@@ -517,22 +632,77 @@
         const securityRoles = readSelectedSecurityRoles();
         const authDocInput = document.getElementById('uca-authorization-doc');
         const authDocFile = authDocInput && authDocInput.files && authDocInput.files[0] ? authDocInput.files[0] : null;
+        const unitTargets = getUnitFieldTargets('uca-unit');
+        const validationErrors = [];
+
+        clearFieldError('uca-unit-error', unitTargets, document.querySelector('[data-unit-contact-unit-group]'));
+        clearFieldError('uca-name-error', document.getElementById('uca-name'), document.getElementById('uca-name') && document.getElementById('uca-name').closest('.form-group'));
+        clearFieldError('uca-extension-error', document.getElementById('uca-extension'), document.getElementById('uca-extension') && document.getElementById('uca-extension').closest('.form-group'));
+        clearFieldError('uca-email-error', document.getElementById('uca-email'), document.getElementById('uca-email') && document.getElementById('uca-email').closest('.form-group'));
+        clearFieldError('uca-security-role-error', document.querySelectorAll('input[name="uca-security-role"]'), document.querySelector('[data-unit-contact-role-group]'));
+        clearFieldError('uca-authorization-doc-error', authDocInput, authDocInput && authDocInput.closest('.form-group'));
+        clearFormFeedback('unit-contact-apply-feedback');
 
         if (!unitState.unitValue) {
-          toast('請先選擇申請單位', 'error');
-          return;
+          validationErrors.push({
+            message: '請先選擇申請單位',
+            errorId: 'uca-unit-error',
+            targets: unitTargets,
+            group: document.querySelector('[data-unit-contact-unit-group]')
+          });
+        }
+        if (!applicantName) {
+          validationErrors.push({
+            message: '請輸入申請人姓名',
+            errorId: 'uca-name-error',
+            targets: document.getElementById('uca-name'),
+            group: document.getElementById('uca-name') && document.getElementById('uca-name').closest('.form-group')
+          });
+        }
+        if (!extensionNumber) {
+          validationErrors.push({
+            message: '請輸入分機',
+            errorId: 'uca-extension-error',
+            targets: document.getElementById('uca-extension'),
+            group: document.getElementById('uca-extension') && document.getElementById('uca-extension').closest('.form-group')
+          });
         }
         if (!isApplicantEmail(applicantEmail)) {
-          toast('請輸入可收信的電子郵件', 'error');
-          return;
+          validationErrors.push({
+            message: '請輸入可收信的電子郵件',
+            errorId: 'uca-email-error',
+            targets: document.getElementById('uca-email'),
+            group: document.getElementById('uca-email') && document.getElementById('uca-email').closest('.form-group')
+          });
         }
         if (!securityRoles.length) {
-          toast('請至少選擇一種資安角色身分', 'error');
-          return;
+          validationErrors.push({
+            message: '請至少選擇一種資安角色身分',
+            errorId: 'uca-security-role-error',
+            targets: document.querySelectorAll('input[name="uca-security-role"]'),
+            group: document.querySelector('[data-unit-contact-role-group]')
+          });
         }
 
         if (!authDocFile) {
-          toast('請上傳主管授權同意書', 'error');
+          validationErrors.push({
+            message: '請上傳主管授權同意書',
+            errorId: 'uca-authorization-doc-error',
+            targets: authDocInput,
+            group: authDocInput && authDocInput.closest('.form-group')
+          });
+        }
+
+        if (validationErrors.length) {
+          validationErrors.forEach((entry) => setFieldError(entry));
+          renderFormFeedback(
+            'unit-contact-apply-feedback',
+            'error',
+            '送出前仍有欄位未完成',
+            validationErrors.map((entry) => entry.message)
+          );
+          toast(validationErrors[0].message, 'error');
+          focusFirstTarget(validationErrors[0].targets);
           return;
         }
 
@@ -579,9 +749,20 @@
           if (!result || !result.application) throw new Error('申請送出失敗');
           saveLastEmail(applicantEmail);
           clearDirty();
+          clearFormFeedback('unit-contact-apply-feedback');
           toast('申請已送出，審核通過後將直接啟用帳號。');
           navigate('apply-unit-contact-success/' + encodeURIComponent(result.application.id), { allowDirtyNavigation: true });
         } catch (error) {
+          const message = String(error && error.message || error || '申請失敗');
+          if (authDocInput && /授權同意書|檔案/.test(message)) {
+            setFieldError({
+              message: message,
+              errorId: 'uca-authorization-doc-error',
+              targets: authDocInput,
+              group: authDocInput.closest('.form-group')
+            });
+          }
+          renderFormFeedback('unit-contact-apply-feedback', 'error', '申請送出失敗', [message]);
           toast(String(error && error.message || error || '申請失敗'), 'error');
         } finally {
           if (submitButton) {
@@ -651,12 +832,13 @@
         + '<div class="unit-contact-main">'
         + '<div class="card unit-contact-form-card">'
         + '<div class="section-header">' + ic('mail', 'icon-sm') + ' 申請進度查詢</div>'
-        + '<form id="unit-contact-status-form">'
+        + '<form id="unit-contact-status-form" novalidate>'
+        + '<div class="form-feedback" id="unit-contact-status-feedback" data-state="idle" aria-live="polite" aria-atomic="true" hidden></div>'
         + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required">申請電子郵件</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入申請時填寫的電子郵件" required></div>'
-        + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary" style="width:100%">' + ic('search', 'icon-sm') + ' 查詢</button></div>'
+        + '<div class="form-group"><label class="form-label form-required" for="uca-status-email">申請電子郵件</label><input type="email" class="form-input" id="uca-status-email" value="' + esc(defaultEmail) + '" placeholder="請輸入申請時填寫的電子郵件" aria-describedby="uca-status-email-help uca-status-email-error" required><div class="form-hint" id="uca-status-email-help">請輸入申請單上填寫的電子郵件地址。</div><div class="form-error-message" id="uca-status-email-error" hidden></div></div>'
+        + '<div class="form-group unit-contact-status-action"><button type="submit" class="btn btn-primary unit-contact-status-query-btn">' + ic('search', 'icon-sm') + ' 查詢</button></div>'
         + '</div></form>'
-        + '<div id="unit-contact-status-results"></div>'
+        + '<div id="unit-contact-status-results" aria-live="polite" aria-busy="false"></div>'
         + '</div></div>'
         + '<section class="unit-contact-side" aria-label="查詢說明">'
         + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('info', 'icon-sm') + ' 查詢說明</div>'
@@ -699,16 +881,35 @@
       }
 
       async function runLookup() {
+        clearFieldError('uca-status-email-error', document.getElementById('uca-status-email'), document.getElementById('uca-status-email') && document.getElementById('uca-status-email').closest('.form-group'));
+        clearFormFeedback('unit-contact-status-feedback');
         const email = String(document.getElementById('uca-status-email').value || '').trim().toLowerCase();
         if (!email) {
+          setFieldError({
+            message: '請輸入申請時填寫的電子郵件',
+            errorId: 'uca-status-email-error',
+            targets: document.getElementById('uca-status-email'),
+            group: document.getElementById('uca-status-email') && document.getElementById('uca-status-email').closest('.form-group')
+          });
+          renderFormFeedback('unit-contact-status-feedback', 'error', '查詢前仍有欄位未完成', ['請輸入申請時填寫的電子郵件']);
           toast('請輸入申請時填寫的電子郵件', 'error');
+          focusFirstTarget(document.getElementById('uca-status-email'));
           return;
         }
         if (!isApplicantEmail(email)) {
+          setFieldError({
+            message: '請輸入有效的電子郵件格式',
+            errorId: 'uca-status-email-error',
+            targets: document.getElementById('uca-status-email'),
+            group: document.getElementById('uca-status-email') && document.getElementById('uca-status-email').closest('.form-group')
+          });
+          renderFormFeedback('unit-contact-status-feedback', 'error', '查詢前仍有欄位未完成', ['請輸入有效的電子郵件格式']);
           toast('請輸入有效的電子郵件格式', 'error');
+          focusFirstTarget(document.getElementById('uca-status-email'));
           return;
         }
         saveLastEmail(email);
+        resultsEl.setAttribute('aria-busy', 'true');
         resultsEl.innerHTML = '<div class="unit-contact-results-loading">查詢中...</div>';
         try {
           const applications = await lookupUnitContactApplicationsByEmail(email);
@@ -721,16 +922,18 @@
           refreshIcons();
         } catch (error) {
           resultsEl.innerHTML = '';
+          renderFormFeedback('unit-contact-status-feedback', 'error', '查詢失敗', [String(error && error.message || error || '查詢失敗')]);
           toast(String(error && error.message || error || '查詢失敗'), 'error');
+        } finally {
+          resultsEl.setAttribute('aria-busy', 'false');
         }
       }
 
-      bindPageEvent(form, 'click', function (event) {
-        const button = event.target && event.target.closest ? event.target.closest('[data-action=\"unit-contact-clear-auth-doc\"]') : null;
-        if (!button) return;
-        const authDocInput = document.getElementById('uca-authorization-doc');
-        if (authDocInput) authDocInput.value = '';
-        renderAuthorizationDocumentSelection();
+      bindPageEvent(form, 'input', function (event) {
+        clearStatusValidationForTarget(event.target);
+      });
+      bindPageEvent(form, 'change', function (event) {
+        clearStatusValidationForTarget(event.target);
       });
       bindPageEvent(form, 'submit', function (event) {
         event.preventDefault();

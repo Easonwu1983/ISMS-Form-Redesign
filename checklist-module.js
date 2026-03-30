@@ -2038,8 +2038,8 @@
         </form>
       </div>
     </div>`;
-    document.getElementById('cm-modal-bg').addEventListener('click', e => { if (e.target === e.currentTarget) closeModalRoot(); });
-    document.getElementById('cm-modal-form').addEventListener('submit', e => { e.preventDefault(); onSave(); closeModalRoot(); _cmRefreshSections(); });
+    bindChecklistPageEvent(document.getElementById('cm-modal-bg'), 'click', e => { if (e.target === e.currentTarget) closeModalRoot(); });
+    bindChecklistPageEvent(document.getElementById('cm-modal-form'), 'submit', e => { e.preventDefault(); onSave(); closeModalRoot(); _cmRefreshSections(); });
     refreshIcons();
   }
 

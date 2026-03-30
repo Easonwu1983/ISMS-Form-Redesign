@@ -1967,7 +1967,7 @@
       if (!body) return;
       trainingRowsDelegatesInstalled = true;
 
-      body.addEventListener('change', (event) => {
+      bindTrainingPageEvent(body, 'change', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         if (target.classList.contains('training-row-check')) {
@@ -2011,7 +2011,7 @@
         }
       });
 
-      body.addEventListener('input', (event) => {
+      bindTrainingPageEvent(body, 'input', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         if (target.classList.contains('training-row-meta')) {
@@ -2030,7 +2030,7 @@
         }
       });
 
-      body.addEventListener('click', async (event) => {
+      bindTrainingPageEvent(body, 'click', async (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         const binaryButton = target.closest('.training-binary-btn[data-field]');
@@ -2851,9 +2851,9 @@
       if (targetInput) targetInput.value = '';
     }
 
-    document.getElementById('training-export-detail')?.addEventListener('click', () => exportTrainingDetailCsv(form));
-    document.getElementById('training-undo-step-one')?.addEventListener('click', () => handleTrainingUndo(form.id));
-    document.getElementById('training-print-detail')?.addEventListener('click', () => {
+    bindTrainingPageEvent(document.getElementById('training-export-detail'), 'click', () => exportTrainingDetailCsv(form));
+    bindTrainingPageEvent(document.getElementById('training-undo-step-one'), 'click', () => handleTrainingUndo(form.id));
+    bindTrainingPageEvent(document.getElementById('training-print-detail'), 'click', () => {
       (async () => {
         let printPayload = form;
         if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && !form.printedAt) {
@@ -2887,18 +2887,18 @@
     if (form.status === TRAINING_STATUSES.PENDING_SIGNOFF && canManage) {
       const fileInput = document.getElementById('training-file-input');
       const uploadZone = document.getElementById('training-upload-zone');
-      fileInput.addEventListener('change', (event) => handleFiles(event.target.files));
-      uploadZone.addEventListener('dragover', (event) => {
+      bindTrainingPageEvent(fileInput, 'change', (event) => handleFiles(event.target.files));
+      bindTrainingPageEvent(uploadZone, 'dragover', (event) => {
         event.preventDefault();
         uploadZone.classList.add('dragover');
       });
-      uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-      uploadZone.addEventListener('drop', (event) => {
+      bindTrainingPageEvent(uploadZone, 'dragleave', () => uploadZone.classList.remove('dragover'));
+      bindTrainingPageEvent(uploadZone, 'drop', (event) => {
         event.preventDefault();
         uploadZone.classList.remove('dragover');
         handleFiles(event.dataTransfer.files);
       });
-      document.getElementById('training-finalize-submit').addEventListener('click', async () => {
+      bindTrainingPageEvent(document.getElementById('training-finalize-submit'), 'click', async () => {
         if (!filesState.length) {
           toast('\u8acb\u5148\u4e0a\u50b3\u7c3d\u6838\u6383\u63cf\u6a94', 'error');
           return;

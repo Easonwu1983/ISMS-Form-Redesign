@@ -1301,18 +1301,18 @@ function renderRespond(id) {
       syncRespondSummary();
     }
 
-    fi.addEventListener('change', e => handleF(e.target.files));
-    uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('dragover'); });
-    uz.addEventListener('dragleave', () => uz.classList.remove('dragover'));
-    uz.addEventListener('drop', e => { e.preventDefault(); uz.classList.remove('dragover'); handleF(e.dataTransfer.files); });
-    dueInput.addEventListener('change', syncRespondSummary);
-    elimDueInput.addEventListener('change', syncRespondSummary);
+    bindCasePageEvent(fi, 'change', e => handleF(e.target.files));
+    bindCasePageEvent(uz, 'dragover', e => { e.preventDefault(); uz.classList.add('dragover'); });
+    bindCasePageEvent(uz, 'dragleave', () => uz.classList.remove('dragover'));
+    bindCasePageEvent(uz, 'drop', e => { e.preventDefault(); uz.classList.remove('dragover'); handleF(e.dataTransfer.files); });
+    bindCasePageEvent(dueInput, 'change', syncRespondSummary);
+    bindCasePageEvent(elimDueInput, 'change', syncRespondSummary);
     syncRespondSummary();
 
-    respondForm.addEventListener('input', markRespondDirty);
-    respondForm.addEventListener('change', markRespondDirty);
+    bindCasePageEvent(respondForm, 'input', markRespondDirty);
+    bindCasePageEvent(respondForm, 'change', markRespondDirty);
 
-    respondForm.addEventListener('submit', async e => {
+    bindCasePageEvent(respondForm, 'submit', async e => {
       e.preventDefault();
       const ca = document.getElementById('r-action').value.trim();
       const rc = document.getElementById('r-root').value.trim();
@@ -1510,21 +1510,21 @@ function renderTracking(id) {
       });
     }
 
-    document.querySelectorAll('input[name="tkResult"]').forEach(r => r.addEventListener('change', syncTrackingSummary));
-    dateInput.addEventListener('change', syncTrackingSummary);
-    nextInput.addEventListener('change', syncTrackingSummary);
-    if (fileInput) fileInput.addEventListener('change', (event) => handleTrackingFiles(event.target.files));
+    document.querySelectorAll('input[name="tkResult"]').forEach(r => bindCasePageEvent(r, 'change', syncTrackingSummary));
+    bindCasePageEvent(dateInput, 'change', syncTrackingSummary);
+    bindCasePageEvent(nextInput, 'change', syncTrackingSummary);
+    if (fileInput) bindCasePageEvent(fileInput, 'change', (event) => handleTrackingFiles(event.target.files));
     if (uploadZone) {
-      uploadZone.addEventListener('dragover', (event) => { event.preventDefault(); uploadZone.classList.add('dragover'); });
-      uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-      uploadZone.addEventListener('drop', (event) => { event.preventDefault(); uploadZone.classList.remove('dragover'); handleTrackingFiles(event.dataTransfer.files); });
+      bindCasePageEvent(uploadZone, 'dragover', (event) => { event.preventDefault(); uploadZone.classList.add('dragover'); });
+      bindCasePageEvent(uploadZone, 'dragleave', () => uploadZone.classList.remove('dragover'));
+      bindCasePageEvent(uploadZone, 'drop', (event) => { event.preventDefault(); uploadZone.classList.remove('dragover'); handleTrackingFiles(event.dataTransfer.files); });
     }
     syncTrackingSummary();
 
-    trackForm.addEventListener('input', markTrackingDirty);
-    trackForm.addEventListener('change', markTrackingDirty);
+    bindCasePageEvent(trackForm, 'input', markTrackingDirty);
+    bindCasePageEvent(trackForm, 'change', markTrackingDirty);
 
-    trackForm.addEventListener('submit', async e => {
+    bindCasePageEvent(trackForm, 'submit', async e => {
       e.preventDefault();
       const res = document.querySelector('input[name="tkResult"]:checked');
       if (!res) { toast('請選擇本次追蹤建議', 'error'); return; }

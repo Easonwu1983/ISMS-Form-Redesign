@@ -390,8 +390,15 @@
     function toast(message, type) {
       const container = document.getElementById('toast-container');
       if (!container) return;
+      container.setAttribute('aria-live', 'polite');
+      container.setAttribute('aria-relevant', 'additions text');
+      container.setAttribute('aria-atomic', 'false');
       const node = document.createElement('div');
-      node.className = 'toast toast-' + sanitizeToken(type, 'success');
+      const tone = sanitizeToken(type, 'success');
+      node.className = 'toast toast-' + tone;
+      node.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+      node.setAttribute('aria-live', tone === 'error' ? 'assertive' : 'polite');
+      node.setAttribute('aria-atomic', 'true');
       node.innerHTML = '<span class="toast-message">' + esc(message || '') + '</span>';
       container.appendChild(node);
       window.setTimeout(function () {

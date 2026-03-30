@@ -6,6 +6,7 @@
   var head = document.head;
   var body = document.body;
   var coreBundleSrc = 'app-core.bundle.min.js';
+  var criticalStylesheet = 'styles.critical.min.css';
   var purgedStylesheet = 'styles.purged.min.css';
   var minifiedStylesheet = 'styles.min.css';
   var assets = [
@@ -110,12 +111,26 @@
     var currentHref = remaining.shift();
     var link = document.createElement('link');
     link.rel = 'stylesheet';
+    link.media = 'print';
     link.href = currentHref + '?v=' + cacheKey;
     applyIntegrity(link, currentHref);
+    link.onload = function () {
+      link.media = 'all';
+    };
     link.onerror = function () {
       appendStylesheetChain(remaining);
     };
     head.appendChild(link);
+  }
+
+  function ensureCriticalStylesheet() {
+    if (document.querySelector('link[data-critical-styles]')) return;
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = criticalStylesheet + '?v=' + cacheKey;
+    link.setAttribute('data-critical-styles', '1');
+    applyIntegrity(link, criticalStylesheet);
+    head.insertBefore(link, head.firstChild || null);
   }
 
   function loadManifest() {
@@ -209,7 +224,10 @@
     await loadManifest();
     appendLink('icon', 'favicon.svg', 'image/svg+xml');
     appendLink('preload', coreBundleSrc, 'script');
-    appendStylesheetChain([purgedStylesheet, minifiedStylesheet, 'styles.css']);
+    ensureCriticalStylesheet();
+    (window.requestAnimationFrame || window.setTimeout)(function () {
+      appendStylesheetChain([purgedStylesheet, minifiedStylesheet, 'styles.css']);
+    }, 0);
     assets.unshift('units.js');
     loadNextScript();
   }

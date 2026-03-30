@@ -8,6 +8,8 @@ const ASSET_LOADER = path.join(ROOT, 'asset-loader.js');
 const CORE_BUNDLE_OUTPUT = path.join(ROOT, 'app-core.bundle.min.js');
 const FEATURE_BUNDLE_DIR = path.join(ROOT, 'feature-bundles');
 const FEATURE_ENTRY_DIR = path.join(ROOT, '.tmp-build', 'feature-bundle-entries');
+const CRITICAL_STYLES_SOURCE = path.join(ROOT, 'styles.critical.css');
+const CRITICAL_STYLES_OUTPUT = path.join(ROOT, 'styles.critical.min.css');
 const STYLES_SOURCE = path.join(ROOT, 'styles.css');
 const STYLES_OUTPUT = path.join(ROOT, 'styles.min.css');
 const STYLES_PURGED_OUTPUT = path.join(ROOT, 'styles.purged.min.css');
@@ -224,6 +226,20 @@ async function buildMinifiedStyles() {
   };
 }
 
+async function buildCriticalStyles() {
+  const source = fs.readFileSync(CRITICAL_STYLES_SOURCE, 'utf8');
+  const result = await esbuild.transform(source, {
+    loader: 'css',
+    minify: true,
+    legalComments: 'none'
+  });
+  fs.writeFileSync(CRITICAL_STYLES_OUTPUT, result.code, 'utf8');
+  return {
+    beforeBytes: Buffer.byteLength(source, 'utf8'),
+    afterBytes: Buffer.byteLength(result.code, 'utf8')
+  };
+}
+
 async function buildPurgedStyles() {
   const source = fs.readFileSync(STYLES_SOURCE, 'utf8');
   const purgecss = new PurgeCSS();
@@ -251,11 +267,13 @@ async function buildPurgedStyles() {
 async function buildAllCoreAssets() {
   const bundle = await buildCoreBundle();
   const featureBundles = await buildFeatureBundles();
+  const criticalStyles = await buildCriticalStyles();
   const styles = await buildMinifiedStyles();
   const purgedStyles = await buildPurgedStyles();
   return {
     bundle,
     featureBundles,
+    criticalStyles,
     styles,
     purgedStyles
   };
@@ -268,6 +286,8 @@ async function main() {
     bundleBytes: result.bundle.bytes,
     featureBundleCount: result.featureBundles.bundleCount,
     featureOutputCount: result.featureBundles.outputCount,
+    criticalStylesBeforeBytes: result.criticalStyles.beforeBytes,
+    criticalStylesAfterBytes: result.criticalStyles.afterBytes,
     stylesBeforeBytes: result.styles.beforeBytes,
     stylesAfterBytes: result.styles.afterBytes,
     purgedBeforeBytes: result.purgedStyles.beforeBytes,
@@ -287,6 +307,7 @@ if (require.main === module) {
 module.exports = {
   buildCoreBundle,
   buildFeatureBundles,
+  buildCriticalStyles,
   buildMinifiedStyles,
   buildPurgedStyles,
   buildAllCoreAssets

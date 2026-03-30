@@ -1,0 +1,230 @@
+:root {
+  --bg-primary: #f2f6fb;
+  --bg-secondary: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-heading: #0f172a;
+  --accent-primary: #2459a9;
+  --accent-gradient: linear-gradient(135deg, #2f6cc0, #2459a9);
+  --border-color: #e2e8f0;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --sidebar-width: 260px;
+  --header-height: 64px;
+  --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.02), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-lg: 0 12px 32px -4px rgba(0, 0, 0, 0.06);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+body {
+  font-family: "Segoe UI", "Noto Sans TC", sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+}
+
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 4000;
+  transform: translateY(-160%);
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fff;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-primary,
+.login-btn {
+  background: var(--accent-gradient);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #f7faff;
+  color: var(--text-primary);
+  border: 1px solid #d8e4f3;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(100%, 960px);
+  display: grid;
+  gap: 20px;
+  padding: 32px;
+  border-radius: var(--radius-xl);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-lg);
+}
+
+.login-logo {
+  text-align: center;
+}
+
+.login-logo h1,
+.public-brand-text strong {
+  color: var(--text-heading);
+}
+
+.login-form,
+.unit-contact-form-card,
+.card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.public-shell {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f4f8ff 0%, #eef3fb 52%, #f8fafc 100%);
+}
+
+.public-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px clamp(18px, 4vw, 42px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.public-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+}
+
+.public-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.public-main {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 42px) 0 54px;
+}
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--sidebar-width);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-card);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  min-height: var(--header-height);
+  margin-left: var(--sidebar-width);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.main-content {
+  margin-left: var(--sidebar-width);
+  min-height: calc(100vh - var(--header-height));
+  padding: 24px;
+}
+
+.toast-container {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3200;
+  display: grid;
+  gap: 10px;
+}
+
+.busy-overlay {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+}
+
+@media (max-width: 1280px) {
+  .sidebar,
+  .header,
+  .main-content {
+    margin-left: 0;
+  }
+
+  .sidebar {
+    display: none;
+  }
+}

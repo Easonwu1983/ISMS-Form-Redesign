@@ -22,6 +22,7 @@ const buildInfo = getBuildInfo('firebase-hosting', ROOT);
 const filesToCopy = [
   'index.html',
   'styles.css',
+  'styles.critical.min.css',
   'styles.min.css',
   'styles.purged.min.css',
   'favicon.svg',
@@ -124,6 +125,10 @@ function rewriteIndex() {
   html = html.replace(
     /<meta http-equiv=\"Content-Security-Policy\"[\s\S]*?content=\"[^\"]*\">/,
     `  <meta http-equiv=\"Content-Security-Policy\"\n    content=\"${csp}\">`
+  );
+  html = html.replace(
+    '<link rel="stylesheet" href="styles.critical.min.css" data-critical-styles>',
+    `<link rel="stylesheet" href="styles.critical.min.css?v=${buildInfo.versionKey}" data-critical-styles>`
   );
   html = html.replace(
     '<script src="asset-loader.js"></script>',

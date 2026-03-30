@@ -146,7 +146,60 @@ async function collectTableSemantics(page) {
       return `buttons=${before.buttonCount}`;
     });
 
-    await runStep(results, 'A11Y-03', 'Admin', 'Authenticated shell exposes main landmark and unit switch label', async () => {
+    await runStep(results, 'A11Y-03', 'Public', 'Public apply/status forms announce validation errors', async () => {
+      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+      await gotoHash(page, 'apply-unit-contact', { handleUnsaved: false });
+      await page.waitForSelector('[data-testid="unit-contact-apply-form"]', { timeout: 20000 });
+      await page.click('[data-testid="unit-contact-submit"]');
+      await page.waitForFunction(() => {
+        const feedback = document.getElementById('unit-contact-apply-feedback');
+        return !!feedback && !feedback.hidden && String(feedback.getAttribute('role') || '').trim().length > 0;
+      }, { timeout: 10000 });
+      const applyState = await page.evaluate(() => {
+        const feedback = document.getElementById('unit-contact-apply-feedback');
+        const unitError = document.getElementById('uca-unit-error');
+        const email = document.getElementById('uca-email');
+        const authDoc = document.getElementById('uca-authorization-doc');
+        const toastContainer = document.getElementById('toast-container');
+        return {
+          feedbackRole: feedback ? String(feedback.getAttribute('role') || '').trim() : '',
+          feedbackHidden: feedback ? feedback.hidden : true,
+          unitErrorHidden: unitError ? unitError.hidden : true,
+          emailInvalid: email ? String(email.getAttribute('aria-invalid') || '').trim() : '',
+          emailErrorMessage: email ? String(email.getAttribute('aria-errormessage') || '').trim() : '',
+          authDocErrorMessage: authDoc ? String(authDoc.getAttribute('aria-errormessage') || '').trim() : '',
+          toastLive: toastContainer ? String(toastContainer.getAttribute('aria-live') || '').trim() : '',
+          toastRelevant: toastContainer ? String(toastContainer.getAttribute('aria-relevant') || '').trim() : ''
+        };
+      });
+      if (applyState.feedbackHidden || applyState.feedbackRole !== 'alert') throw new Error('public apply feedback live region missing');
+      if (applyState.unitErrorHidden) throw new Error('public apply unit error not exposed');
+      if (applyState.emailInvalid !== 'true' || !applyState.emailErrorMessage) throw new Error('public apply email error semantics missing');
+      if (!applyState.authDocErrorMessage) throw new Error('public apply auth document errormessage missing');
+      if (applyState.toastLive !== 'polite' || !applyState.toastRelevant) throw new Error('toast container live region missing');
+
+      await gotoHash(page, 'apply-unit-contact-status', { handleUnsaved: false });
+      await page.waitForSelector('#unit-contact-status-form', { timeout: 20000 });
+      await page.click('#unit-contact-status-form button[type="submit"]');
+      await page.waitForFunction(() => {
+        const feedback = document.getElementById('unit-contact-status-feedback');
+        return !!feedback && !feedback.hidden;
+      }, { timeout: 10000 });
+      const statusState = await page.evaluate(() => {
+        const feedback = document.getElementById('unit-contact-status-feedback');
+        const email = document.getElementById('uca-status-email');
+        return {
+          feedbackRole: feedback ? String(feedback.getAttribute('role') || '').trim() : '',
+          emailInvalid: email ? String(email.getAttribute('aria-invalid') || '').trim() : '',
+          emailErrorMessage: email ? String(email.getAttribute('aria-errormessage') || '').trim() : ''
+        };
+      });
+      if (statusState.feedbackRole !== 'alert') throw new Error('public status feedback live region missing');
+      if (statusState.emailInvalid !== 'true' || !statusState.emailErrorMessage) throw new Error('public status email error semantics missing');
+      return 'public validation semantics ready';
+    });
+
+    await runStep(results, 'A11Y-04', 'Admin', 'Authenticated shell exposes main landmark and unit switch label', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
       await page.waitForTimeout(200);
       const state = await page.evaluate(() => {
@@ -168,7 +221,7 @@ async function collectTableSemantics(page) {
       return 'shell landmarks ready';
     });
 
-    await runStep(results, 'A11Y-04', 'Admin', 'Key tables expose captions and scoped headers', async () => {
+    await runStep(results, 'A11Y-05', 'Admin', 'Key tables expose captions and scoped headers', async () => {
       const checks = [];
 
       await gotoHash(page, 'users');

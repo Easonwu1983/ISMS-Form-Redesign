@@ -25,6 +25,7 @@ const buildInfo = getBuildInfo('cloudflare-pages', ROOT);
 const filesToCopy = [
   'index.html',
   'styles.css',
+  'styles.critical.min.css',
   'styles.min.css',
   'styles.purged.min.css',
   'favicon.svg',
@@ -159,9 +160,17 @@ function rewriteIndex(assetIntegrity) {
     `  <meta http-equiv="Content-Security-Policy"\n    content="${csp}">`
   );
   const loaderIntegrity = assetIntegrity && assetIntegrity['asset-loader.js'];
+  const criticalStylesIntegrity = assetIntegrity && assetIntegrity['styles.critical.min.css'];
+  const criticalStylesTag = criticalStylesIntegrity
+    ? `<link rel="stylesheet" href="styles.critical.min.css?v=${buildInfo.versionKey}" data-critical-styles integrity="${criticalStylesIntegrity}" crossorigin="anonymous">`
+    : `<link rel="stylesheet" href="styles.critical.min.css?v=${buildInfo.versionKey}" data-critical-styles>`;
   const loaderTag = loaderIntegrity
     ? `<script src="asset-loader.js?v=${buildInfo.versionKey}" integrity="${loaderIntegrity}" crossorigin="anonymous"></script>`
     : `<script src="asset-loader.js?v=${buildInfo.versionKey}"></script>`;
+  html = html.replace(
+    '<link rel="stylesheet" href="styles.critical.min.css" data-critical-styles>',
+    criticalStylesTag
+  );
   html = html.replace(
     '<script src="asset-loader.js"></script>',
     `${loaderTag}`
