@@ -1269,9 +1269,13 @@
 
   function buildTrainingCard(title, bodyHtml, options) {
     const opts = options || {};
+    const cardClassName = String(opts.className || '').trim();
+    const headerClassName = String(opts.headerClassName || '').trim();
     const styleAttr = opts.style ? ' style="' + opts.style + '"' : '';
     const headerStyleAttr = opts.headerStyle ? ' style="' + opts.headerStyle + '"' : '';
-    return '<div class="card"' + styleAttr + '><div class="card-header"' + headerStyleAttr + '><span class="card-title">' + title + '</span></div>' + bodyHtml + '</div>';
+    const cardClassAttr = cardClassName ? ' class="card ' + esc(cardClassName) + '"' : ' class="card"';
+    const headerClassAttr = headerClassName ? ' class="card-header ' + esc(headerClassName) + '"' : ' class="card-header"';
+    return '<div' + cardClassAttr + styleAttr + '><div' + headerClassAttr + headerStyleAttr + '><span class="card-title">' + title + '</span></div>' + bodyHtml + '</div>';
   }
 
   function showTrainingRepositoryFallback(result, successMessage) {
@@ -2893,7 +2897,7 @@
       + (form.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(form.returnReason || '未提供') + '</div>' : '')
       + (canUndo ? '<div class="training-undo-banner">' + ic('rotate-ccw', 'icon-sm') + '<div><strong>流程一剛完成，仍可撤回。</strong><div>尚未列印簽核表前，可在剩餘 ' + undoRemainingMinutes + ' 分鐘內撤回，回到可編修的草稿狀態。</div></div></div>' : '')
       + buildTrainingCard('流程概況', '<div class="training-step-grid">' + stepCards + '</div>')
-      + buildTrainingCard('統計摘要', buildTrainingSummarySection(summary), { style: 'margin-top:20px' })
+      + buildTrainingCard('統計摘要', buildTrainingSummarySection(summary), { className: 'training-card-spaced' })
       + '<div class="panel-grid-two panel-grid-spaced">'
       + buildTrainingCard('填報資訊', buildTrainingDetailGrid([
         { label: '統計單位', value: form.statsUnit || getTrainingStatsUnit(form.unit) },
@@ -2906,8 +2910,8 @@
       + buildTrainingCard('簽核掃描檔', buildTrainingFileSlot('training-signed-files-readonly', 'training-signoff-files'))
       + '</div>'
       + uploadSection
-      + buildTrainingCard('逐人明細', buildTrainingTableMarkup('<th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>' + TRAINING_GENERAL_LABEL + '</th><th>' + TRAINING_INFO_STAFF_LABEL + '</th><th>' + TRAINING_PROFESSIONAL_LABEL + '</th><th>判定</th><th>備註</th>', detailRows), { style: 'margin-top:20px;padding:0;overflow:hidden', headerStyle: 'padding:16px 20px' })
-      + buildTrainingCard('歷程紀錄', '<div class="timeline">' + timeline + '</div>', { style: 'margin-top:20px' })
+      + buildTrainingCard('逐人明細', buildTrainingTableMarkup('<th>姓名</th><th>本職單位</th><th>身分別</th><th>職稱</th><th>在職狀態</th><th>' + TRAINING_GENERAL_LABEL + '</th><th>' + TRAINING_INFO_STAFF_LABEL + '</th><th>' + TRAINING_PROFESSIONAL_LABEL + '</th><th>判定</th><th>備註</th>', detailRows), { className: 'training-card-spaced training-card-flush', headerClassName: 'training-card-header-tight' })
+      + buildTrainingCard('歷程紀錄', '<div class="timeline">' + timeline + '</div>', { className: 'training-card-spaced' })
       + '</div>';
 
     function renderSignedFiles(targetId, editable) {

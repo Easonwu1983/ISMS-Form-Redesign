@@ -8349,6 +8349,19 @@ tbody tr:hover {
   gap: 14px;
 }
 
+.training-card-spaced {
+  margin-top: 20px;
+}
+
+.training-card-flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.training-card-header-tight {
+  padding: 16px 20px;
+}
+
 .training-step-card {
   padding: 18px;
   border-radius: 18px;

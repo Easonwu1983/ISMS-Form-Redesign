@@ -104,13 +104,74 @@ async function getVerifiedSessionUsername(page) {
   }).catch(() => ({ username: '', verified: false }));
 }
 
+async function getClientSessionSnapshot(page) {
+  return page.evaluate(() => {
+    const auth = window._authModule;
+    const currentUser = auth && typeof auth.currentUser === 'function'
+      ? auth.currentUser()
+      : null;
+    return {
+      username: String(currentUser && currentUser.username || '').trim(),
+      hasLogout: !!document.querySelector('.btn-logout'),
+      bootstrapState: String(window.__REMOTE_BOOTSTRAP_STATE__ || '').trim(),
+      authMode: String(window.__M365_UNIT_CONTACT_CONFIG__ && window.__M365_UNIT_CONTACT_CONFIG__.authMode || '').trim()
+    };
+  }).catch(() => ({
+    username: '',
+    hasLogout: false,
+    bootstrapState: '',
+    authMode: ''
+  }));
+}
+
 async function ensureSessionUser(page, username, password) {
+  const clientSnapshot = await getClientSessionSnapshot(page);
+  if (
+    clientSnapshot
+    && clientSnapshot.username === username
+    && clientSnapshot.hasLogout
+    && (
+      clientSnapshot.authMode === 'local-emulator'
+      || clientSnapshot.bootstrapState === 'ready'
+      || clientSnapshot.bootstrapState === 'idle'
+    )
+  ) {
+    return 'reused-client';
+  }
   const session = await getVerifiedSessionUsername(page);
   if (session && session.verified && session.username === username) {
     return 'reused';
   }
   await login(page, username, password);
   return 'fresh';
+}
+
+async function expectDeniedRoute(page, routeHash, options) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const timeout = Math.max(1000, Number(opts.timeout) || 6000);
+  const normalizedHash = '#' + String(routeHash || '').replace(/^#/, '');
+  await gotoHash(page, routeHash);
+  try {
+    await page.waitForFunction((blockedHash) => {
+      return String(window.location.hash || '') !== blockedHash;
+    }, normalizedHash, { timeout });
+  } catch (_) {
+    // Fall through to explicit hash assertion below.
+  }
+  return currentHash(page);
+}
+
+async function waitForDetailShell(page, routeHash, selector, detailId) {
+  await gotoHash(page, routeHash);
+  await page.waitForFunction(({ targetSelector, targetId }) => {
+    const app = document.getElementById('app');
+    const title = document.querySelector(targetSelector);
+    return !!(
+      app
+      && title
+      && String(app.innerText || '').includes(targetId)
+    );
+  }, { targetSelector: selector, targetId: detailId }, { timeout: 30000 });
 }
 
 async function ensureAdminRouteReady(page, routeHash, selector, options) {
@@ -341,9 +402,7 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-02', 'Unit admin', 'Non-admin cannot reach schema health directly', async () => {
       await ensureSessionUser(page, 'unit1', 'unit123');
-      await gotoHash(page, 'schema-health');
-      await page.waitForTimeout(120);
-      const hash = await currentHash(page);
+      const hash = await expectDeniedRoute(page, 'schema-health');
       const title = await page.locator('.page-title').first().textContent().catch(() => '');
       if (hash === '#schema-health') throw new Error('non-admin stayed on schema-health route');
       if (String(title || '').includes('稽核')) throw new Error('schema health page rendered for non-admin');
@@ -463,14 +522,10 @@ async function assertNoXssExecution(page, label) {
         const foreignScopes = apiState.reviewUsernames.filter((username) => username !== 'unit1');
         if (foreignScopes.length) throw new Error(`review scopes leaked foreign users: ${foreignScopes.join(', ')}`);
 
-        await gotoHash(scopedPage, 'users');
-        await scopedPage.waitForTimeout(120);
-        const usersHash = await currentHash(scopedPage);
+        const usersHash = await expectDeniedRoute(scopedPage, 'users');
         if (String(usersHash || '').startsWith('#users')) throw new Error('unit admin reached users page');
 
-        await gotoHash(scopedPage, 'unit-contact-review');
-        await scopedPage.waitForTimeout(120);
-        const reviewHash = await currentHash(scopedPage);
+        const reviewHash = await expectDeniedRoute(scopedPage, 'unit-contact-review');
         if (String(reviewHash || '').startsWith('#unit-contact-review')) throw new Error('unit admin reached unit-contact-review');
 
         return `reviewScopes=${apiState.reviewUsernames.length}`;
@@ -551,10 +606,8 @@ async function assertNoXssExecution(page, label) {
 
     await runStep(results, 'SEC-03c', 'Unit admin', 'Non-admin cannot open security window or unit governance', async () => {
       await ensureSessionUser(page, 'unit1', 'unit123');
-      await gotoHash(page, 'security-window');
-      if ((await currentHash(page)) === '#security-window') throw new Error('unit admin unexpectedly opened security-window');
-      await gotoHash(page, 'unit-review');
-      if ((await currentHash(page)) === '#unit-review') throw new Error('unit admin unexpectedly opened unit-review');
+      if ((await expectDeniedRoute(page, 'security-window')) === '#security-window') throw new Error('unit admin unexpectedly opened security-window');
+      if ((await expectDeniedRoute(page, 'unit-review')) === '#unit-review') throw new Error('unit admin unexpectedly opened unit-review');
       return 'security window and unit governance remained protected';
     });
 
@@ -675,27 +728,8 @@ async function assertNoXssExecution(page, label) {
     await runStep(results, 'SEC-04', 'Admin', 'Case detail escapes XSS payloads', async () => {
       await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
       await seedSecurityFixtures(page);
-      await gotoHash(page, 'detail/' + CASE_ID);
-      let caseDetailReady = false;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          await page.waitForSelector('.detail-title', { timeout: 15000 });
-          caseDetailReady = true;
-          break;
-        } catch (error) {
-          if (attempt === 1) throw error;
-          await page.waitForTimeout(500);
-          await gotoHash(page, 'detail/' + CASE_ID);
-        }
-      }
-      if (!caseDetailReady) throw new Error('case detail did not render');
       await resetXssFlag(page);
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => window.__APP_READY__ === true, { timeout: 30000 });
-      await ensureSessionUser(page, 'easonwu', '2wsx#EDC');
-      await seedSecurityFixtures(page);
-      await gotoHash(page, 'detail/' + CASE_ID);
-      await page.waitForSelector('.detail-title', { timeout: 30000 });
+      await waitForDetailShell(page, 'detail/' + CASE_ID, '.detail-title', CASE_ID);
       await assertNoXssExecution(page, 'case detail');
       return 'case detail payload rendered safely';
     });
@@ -748,20 +782,7 @@ async function assertNoXssExecution(page, label) {
       if (!trainingDetailIds.length) {
         return 'training detail skipped (no existing forms)';
       }
-      await gotoHash(page, 'training-detail/' + trainingDetailIds[0]);
-      let trainingDetailReady = false;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          await page.waitForSelector('.detail-title', { timeout: 30000 });
-          trainingDetailReady = true;
-          break;
-        } catch (error) {
-          if (attempt === 1) throw error;
-          await page.waitForTimeout(500);
-          await gotoHash(page, 'training-detail/' + trainingDetailIds[0]);
-        }
-      }
-      if (!trainingDetailReady) throw new Error('training detail did not render');
+      await waitForDetailShell(page, 'training-detail/' + trainingDetailIds[0], '.detail-title', trainingDetailIds[0]);
       await assertNoXssExecution(page, 'training detail');
       return `training detail payload rendered safely (${trainingDetailIds[0]})`;
     });

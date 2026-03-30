@@ -3990,6 +3990,16 @@
       const filterSignature = getAuditTrailFilterSignature(resolvedFilters);
       const cachedState = getAuditTrailQueryCacheValue(filterSignature);
       const canRenderFromCache = !!cachedState;
+      if (!canRenderFromCache && app) {
+        const seededSummary = readAuditTrailSummary(resolvedFilters, false) || normalizeAuditTrailSummary(null);
+        auditTrailState.filters = resolvedFilters;
+        auditTrailState.items = [];
+        auditTrailState.summary = seededSummary;
+        auditTrailState.page = normalizeAuditTrailPage(null, resolvedFilters, []);
+        auditTrailState.loading = true;
+        app.innerHTML = buildAuditTrailLoadingMarkup(resolvedFilters, seededSummary);
+        refreshIcons();
+      }
 
     let state;
     try {
