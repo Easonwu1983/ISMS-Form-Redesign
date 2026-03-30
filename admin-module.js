@@ -1059,7 +1059,7 @@
           toolbarStyle: 'margin:14px 0 0'
         });
       }
-      const page = config && config.page ? config.page : {};
+      const page = getSafeAdminCollectionPage(config && config.page, defaultLimit);
       const pageMax = Math.max(1, Number(page.pageCount) || 1);
       const pageValue = Math.max(1, Number(page.currentPage) || 1);
       const disableJump = Number(page.total || 0) > 0 ? '' : 'disabled';
@@ -1091,7 +1091,7 @@
         return;
       }
       const idPrefix = String(config && config.idPrefix || '').trim();
-      const page = config && config.page ? config.page : {};
+      const page = getSafeAdminCollectionPage(config && config.page, defaultLimit);
       const onChange = config && typeof config.onChange === 'function' ? config.onChange : null;
       const actionPrefix = String(config && config.actionPrefix || '').trim();
       if (!idPrefix || !onChange) return;
@@ -1529,6 +1529,32 @@
         hasPrev: !!(page && page.hasPrev),
         hasNext: !!(page && page.hasNext),
         isEmpty: !Number(page && page.total)
+      };
+    }
+
+    function getSafeAdminCollectionPage(page, defaultLimit) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.createPage === 'function') {
+        const basePage = moduleApi.createPage(defaultLimit);
+        return {
+          ...basePage,
+          ...(page && typeof page === 'object' ? page : {}),
+          prevOffset: Math.max(0, Number(page && page.prevOffset) || 0),
+          nextOffset: Math.max(0, Number(page && page.nextOffset) || 0)
+        };
+      }
+      return {
+        offset: Math.max(0, Number(page && page.offset) || 0),
+        limit: Math.max(1, Number(page && page.limit) || Number(defaultLimit) || 20),
+        total: Math.max(0, Number(page && page.total) || 0),
+        pageCount: Math.max(0, Number(page && page.pageCount) || 0),
+        currentPage: Math.max(0, Number(page && page.currentPage) || 0),
+        hasPrev: !!(page && page.hasPrev),
+        hasNext: !!(page && page.hasNext),
+        prevOffset: Math.max(0, Number(page && page.prevOffset) || 0),
+        nextOffset: Math.max(0, Number(page && page.nextOffset) || 0),
+        pageStart: Math.max(0, Number(page && page.pageStart) || 0),
+        pageEnd: Math.max(0, Number(page && page.pageEnd) || 0)
       };
     }
 
@@ -4000,6 +4026,8 @@
       return;
       }
 
+    state.page = normalizeAuditTrailPage(state && state.page, resolvedFilters, Array.isArray(state && state.items) ? state.items : []);
+    auditTrailState.page = state.page;
     const health = state.health || { ready: false, message: '未取得後端健康資訊' };
     const renderSignature = getAuditTrailRenderSignature(state, health);
     if (auditTrailRenderCache.signature === renderSignature && app && app.dataset.auditTrailRenderSignature === renderSignature) {
@@ -4069,14 +4097,15 @@
     }
     bindAdminCollectionPager({
       idPrefix: 'audit',
-      page: auditTrailState.page,
+      page: state.page,
       defaultLimit: 50,
       limitOptions: ['50', '100', '200'],
       getOffsetByPageNumber: getAuditTrailOffsetByPageNumber,
       onChange: function (delta) {
+        const safePage = normalizeAuditTrailPage(auditTrailState.page, auditTrailState.filters, auditTrailState.items);
         renderAuditTrail({
           ...auditTrailState.filters,
-          limit: String((delta && delta.limit) || auditTrailState.page.limit || 50),
+          limit: String((delta && delta.limit) || safePage.limit || 50),
           offset: String((delta && delta.offset) || 0)
         });
       }
@@ -4366,7 +4395,7 @@
         });
     },
     auditTrailPrevPage: function () {
-      const page = auditTrailState.page || {};
+      const page = normalizeAuditTrailPage(auditTrailState.page, auditTrailState.filters, auditTrailState.items);
       const nextOffset = Math.max(0, Number(page.prevOffset || 0) || 0);
       return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
     },
@@ -4375,16 +4404,17 @@
     },
     auditTrailJumpPage: function () {
       const targetPage = document.getElementById('audit-page-number')?.value || '1';
-      const nextOffset = getAuditTrailOffsetByPageNumber(auditTrailState.page, targetPage);
+      const safePage = normalizeAuditTrailPage(auditTrailState.page, auditTrailState.filters, auditTrailState.items);
+      const nextOffset = getAuditTrailOffsetByPageNumber(safePage, targetPage);
       return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
     },
     auditTrailNextPage: function () {
-      const page = auditTrailState.page || {};
+      const page = normalizeAuditTrailPage(auditTrailState.page, auditTrailState.filters, auditTrailState.items);
       const nextOffset = Math.max(0, Number(page.nextOffset || 0) || 0);
       return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
     },
     auditTrailLastPage: function () {
-      const page = auditTrailState.page || {};
+      const page = normalizeAuditTrailPage(auditTrailState.page, auditTrailState.filters, auditTrailState.items);
       const meta = getAuditTrailPageActionMeta(page);
       const nextOffset = getAuditTrailOffsetByPageNumber(page, meta.pageCount || 1);
       return renderAuditTrail({ ...auditTrailState.filters, offset: String(nextOffset) });
