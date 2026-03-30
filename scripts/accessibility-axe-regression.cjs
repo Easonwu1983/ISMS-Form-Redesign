@@ -77,6 +77,7 @@ async function runAxeCheck(page, label) {
 
     await runStep(results, 'AXE-02', 'Admin', 'Dashboard has no axe violations', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
+      await gotoHash(page, 'dashboard', { handleUnsaved: false });
       await waitForDashboardSurface(page, 20000);
       return runAxeCheck(page, 'dashboard');
     });

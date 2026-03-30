@@ -233,7 +233,7 @@ body {
   background: var(--bg-login);
   position: relative;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: visible;
   padding: clamp(18px, 5vh, 36px) 18px;
 }
 
