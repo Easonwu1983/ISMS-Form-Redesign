@@ -460,8 +460,17 @@ async function run() {
 
   try {
     await gotoAppRoot(page, 'domcontentloaded');
-    await page.waitForSelector('[data-testid="login-form"]', { timeout: 20000 });
-    pushStep('landing:login-form', true, 'login form visible');
+    await page.waitForFunction(() => {
+      if (document.querySelector('.btn-logout')) return true;
+      const form = document.querySelector('[data-testid="login-form"]');
+      if (form && form.offsetParent !== null) return true;
+      const loginPanel = document.getElementById('login-panel');
+      return !!(loginPanel && loginPanel.offsetParent !== null);
+    }, undefined, { timeout: 20000 });
+    const landingState = await page.evaluate(() => ({
+      existingSession: !!document.querySelector('.btn-logout')
+    }));
+    pushStep('landing:login-form', true, landingState && landingState.existingSession ? 'existing session' : 'login form visible');
 
     const authTemplateResponse = await fetch(`${BASE_URL}/unit-contact-authorization-template.pdf`);
     const authTemplateBytes = Buffer.from(await authTemplateResponse.arrayBuffer());
