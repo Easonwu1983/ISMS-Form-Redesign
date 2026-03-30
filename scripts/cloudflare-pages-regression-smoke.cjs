@@ -751,14 +751,22 @@ async function run() {
     }
     pushStep('case:tracking-loaded', true, smokeCaseIds.tracking);
 
-    await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 30000 });
-    await page.waitForFunction(() => {
-      return !!document.querySelector('.checklist-list-header')
-        || !!document.querySelector('.cl-list-shell')
-        || !!document.querySelector('#cl-list-keyword')
-        || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
-        || document.querySelectorAll('.cl-list-row').length > 0;
-    }, undefined, { timeout: 30000 });
+    let checklistListReady = false;
+    for (let attempt = 0; attempt < 2 && !checklistListReady; attempt += 1) {
+      await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 30000 });
+      try {
+        await page.waitForFunction(() => {
+          return !!document.querySelector('.checklist-list-header')
+            || !!document.querySelector('.cl-list-shell')
+            || !!document.querySelector('#cl-list-keyword')
+            || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
+            || document.querySelectorAll('.cl-list-row').length > 0;
+        }, undefined, { timeout: 30000 });
+        checklistListReady = true;
+      } catch (error) {
+        if (attempt >= 1) throw error;
+      }
+    }
     const checklistListText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(checklistListText)) {
       throw new Error('checklist list contains placeholder question marks');
