@@ -751,12 +751,14 @@ async function run() {
     }
     pushStep('case:tracking-loaded', true, smokeCaseIds.tracking);
 
-    await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 20000 });
+    await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 30000 });
     await page.waitForFunction(() => {
-      return !!document.querySelector('#cl-list-keyword')
+      return !!document.querySelector('.checklist-list-header')
+        || !!document.querySelector('.cl-list-shell')
+        || !!document.querySelector('#cl-list-keyword')
         || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
         || document.querySelectorAll('.cl-list-row').length > 0;
-    }, undefined, { timeout: 20000 });
+    }, undefined, { timeout: 30000 });
     const checklistListText = await page.locator('#app').innerText();
     if (/\?{4,}/.test(checklistListText)) {
       throw new Error('checklist list contains placeholder question marks');

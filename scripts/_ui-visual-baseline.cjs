@@ -124,17 +124,11 @@ async function seedSyntheticUnitReview(page) {
     const app = document.getElementById('app');
     if (!app) return;
     const existing = document.getElementById('visual-unit-review-shell');
-    if (existing && !existing.matches('.governance-table-card, .review-table-card')) {
-      existing.remove();
-    }
-    const hostCard = document.querySelector('.governance-table-card, .review-table-card') || (() => {
-      const shell = document.createElement('section');
-      app.appendChild(shell);
-      return shell;
-    })();
-    hostCard.id = 'visual-unit-review-shell';
-    hostCard.classList.add('visual-unit-review-shell');
-    hostCard.innerHTML = `
+    if (existing) existing.remove();
+    const shell = document.createElement('section');
+    shell.id = 'visual-unit-review-shell';
+    shell.className = 'visual-unit-review-shell card';
+    shell.innerHTML = `
       <div class="card-header">
         <span class="card-title">治理分類清單</span>
         <span class="review-card-subtitle">Synthetic focused baseline</span>
@@ -194,8 +188,12 @@ async function seedSyntheticUnitReview(page) {
         </details>
       </div>
     `;
+    app.appendChild(shell);
     const historyCard = document.querySelector('.review-history-card');
     if (historyCard) historyCard.classList.add('visual-smoke-hide');
+    document.querySelectorAll('.governance-table-card, .review-table-card').forEach((node) => {
+      if (node !== shell && !shell.contains(node)) node.classList.add('visual-smoke-hide');
+    });
   });
 
   await page.waitForTimeout(VISUAL_UNIT_REVIEW_SEED_SETTLE_MS);
