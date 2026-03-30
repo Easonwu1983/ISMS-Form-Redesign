@@ -439,9 +439,11 @@ async function assertNoXssExecution(page, label) {
             return { status: response.status, body };
           }
 
-          const selfUser = await fetchJson('/api/system-users/unit1');
-          const adminUser = await fetchJson('/api/system-users/easonwu');
-          const reviewScopes = await fetchJson('/api/review-scopes');
+          const [selfUser, adminUser, reviewScopes] = await Promise.all([
+            fetchJson('/api/system-users/unit1'),
+            fetchJson('/api/system-users/easonwu'),
+            fetchJson('/api/review-scopes')
+          ]);
           const reviewItems = Array.isArray(reviewScopes.body && reviewScopes.body.items) ? reviewScopes.body.items : [];
           const selfItem = selfUser.body && selfUser.body.item && typeof selfUser.body.item === 'object' ? selfUser.body.item : null;
           return {

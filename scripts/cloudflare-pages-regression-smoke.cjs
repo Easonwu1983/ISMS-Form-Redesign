@@ -128,9 +128,11 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
         try { json = await response.json(); } catch (_) { json = null; }
         return { status: response.status, json };
       };
-      const selfUser = await fetchJson('/api/system-users/unit1');
-      const adminUser = await fetchJson('/api/system-users/easonwu');
-      const reviewScopes = await fetchJson('/api/review-scopes');
+      const [selfUser, adminUser, reviewScopes] = await Promise.all([
+        fetchJson('/api/system-users/unit1'),
+        fetchJson('/api/system-users/easonwu'),
+        fetchJson('/api/review-scopes')
+      ]);
       return {
         selfStatus: selfUser.status,
         selfUsername: selfUser.json && selfUser.json.item && selfUser.json.item.username,
@@ -909,14 +911,14 @@ async function run() {
     }
     pushStep('checklist:manage-loaded', true, 'manage page ready');
 
-    await gotoHashRoute(page, 'audit-trail', { settleMs: 1200, timeout: 20000 });
+    await gotoHashRoute(page, 'audit-trail', { settleMs: 700, timeout: 20000 });
     await waitForRemoteBootstrap(page);
     await page.evaluate(() => {
       if (window.location.hash !== '#audit-trail') {
         window.location.hash = '#audit-trail';
       }
     });
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(300);
     await page.waitForFunction(() => {
       const app = document.getElementById('app');
       return !!(

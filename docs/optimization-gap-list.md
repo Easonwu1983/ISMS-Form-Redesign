@@ -46,6 +46,7 @@ Done:
 - Repeated inline styles from `admin`, `training`, and `checklist` flows have started moving into shared utility classes in `styles.css`.
 - Shared utility classes now cover common empty-state padding, checklist applicable-rate emphasis, checklist item ID flex behavior, and compact subtitle spacing instead of repeating those inline styles inside templates.
 - `case-module.js` now uses shared utility classes for its static card spacing, textarea sizing, detail links, muted text, and track-form visibility states instead of fixed inline styles.
+- `training-module.js` now uses shared column-width classes for the training editor roster header instead of embedding static `width` and `min-width` inline styles in the table template.
 - The live stylesheet now includes a dedicated `@media print` ruleset for public and authenticated layouts.
 
 Open:
@@ -65,6 +66,7 @@ Done:
 - TTL response caching and bounded client-side cache eviction were added.
 - Retry logic now uses exponential backoff with jitter.
 - Error classification now distinguishes timeout, auth, validation, rate-limit, server, and network failures.
+- Unit-admin review-scope authorization now uses a short-lived backend cache in `request-authz.cjs`, and `/api/review-scopes` no longer scans the SharePoint list twice for scoped users.
 
 Open:
 - Formal release reports still do not show full module-level cache hit and miss rates.
@@ -121,6 +123,7 @@ Done:
 - `admin-module.js` virtualizes both the `audit-trail` table and the `system-users` table instead of painting their full row sets into the DOM at once.
 - `admin-module.js` now virtualizes the `unit-contact-review` table instead of painting the full review queue into the DOM at once.
 - `admin-module.js` now virtualizes the `login-log` table and tears down its scroll/resize listeners on route cleanup.
+- `admin-module.js` now renders the audit-trail filter shell immediately and lets the full audit payload continue loading in the background, instead of blocking the whole route on the first remote response.
 - `training-module.js` now window-renders large `training roster` group lists instead of expanding every group body into the DOM at once.
 - Debounced search and highlight timers in `training`, `checklist`, and `case` now register page cleanup handlers so route transitions clear pending timers.
 - `unit-contact-review`, `unit-review`, and `security-window` now invalidate stale async renders on route teardown and reuse the same page-scoped review loading/empty-state classes.

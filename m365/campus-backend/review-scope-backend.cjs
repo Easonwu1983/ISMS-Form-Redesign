@@ -153,6 +153,24 @@ function createReviewScopeRouter(deps) {
       });
   }
 
+  function buildScopedItemsFromAuthz(authz) {
+    const username = cleanText(authz && authz.username);
+    const units = Array.isArray(authz && authz.reviewUnits) ? authz.reviewUnits : [];
+    return units
+      .map((unit) => cleanText(unit))
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right, 'zh-Hant'))
+      .map((unit) => ({
+        id: `${username}::${unit}`,
+        username,
+        unit,
+        createdAt: '',
+        updatedAt: '',
+        backendMode: 'a3-campus-backend',
+        recordSource: 'authz-cache'
+      }));
+  }
+
   async function buildHealth() {
     const siteId = await resolveSiteId();
     const { decoded, mode } = await getDelegatedToken();
@@ -193,11 +211,16 @@ function createReviewScopeRouter(deps) {
   async function handleList(req, res, origin, url) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
+      if (!requestAuthz.isAdmin(authz)) {
+        await writeJson(res, buildJsonResponse(200, {
+          ok: true,
+          items: buildScopedItemsFromAuthz(authz),
+          contractVersion: CONTRACT_VERSION
+        }), origin);
+        return;
+      }
       const rows = await listAllEntries();
       const scopedUrl = new URL(url.toString());
-      if (!requestAuthz.isAdmin(authz)) {
-        scopedUrl.searchParams.set('username', authz.username);
-      }
       const items = filterItems(rows.map((entry) => entry.item), scopedUrl);
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
@@ -266,6 +289,9 @@ function createReviewScopeRouter(deps) {
       });
 
       const nextRows = await listEntriesByUsername(normalized.username);
+      if (requestAuthz && typeof requestAuthz.clearReviewUnitsCache === 'function') {
+        requestAuthz.clearReviewUnitsCache(normalized.username);
+      }
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
         username: normalized.username,

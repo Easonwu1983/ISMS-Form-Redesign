@@ -8072,6 +8072,47 @@ tbody tr:hover {
   background: linear-gradient(180deg, #fbfdff, #f3f7fb);
 }
 
+.training-col-select {
+  width: 56px;
+}
+
+.training-col-index {
+  width: 68px;
+}
+
+.training-col-name,
+.training-col-unit {
+  min-width: 180px;
+}
+
+.training-col-name {
+  width: 180px;
+}
+
+.training-col-identity,
+.training-col-job,
+.training-col-status {
+  width: 140px;
+}
+
+.training-col-general,
+.training-col-info-staff,
+.training-col-professional {
+  width: 180px;
+}
+
+.training-col-result {
+  width: 160px;
+}
+
+.training-col-note {
+  min-width: 240px;
+}
+
+.training-col-actions {
+  width: 120px;
+}
+
 .training-virtual-spacer > td,
 .training-virtual-spacer-cell {
   padding: 0 !important;

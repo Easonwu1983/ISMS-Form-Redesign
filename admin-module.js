@@ -1544,6 +1544,45 @@
       });
     }
 
+    function buildAuditTrailLoadingMarkup(filters, summary) {
+      const safeFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
+      const safeSummary = normalizeAuditTrailSummary(summary);
+      const page = normalizeAuditTrailPage(null, safeFilters, []);
+      const labels = {
+        eyebrow: '\u7a3d\u6838\u8ffd\u8e64',
+        title: '\u64cd\u4f5c\u7a3d\u6838\u8ecc\u8de1',
+        subtitle: '\u5148\u5efa\u7acb\u67e5\u8a62\u8207\u6458\u8981\u9aa8\u67b6\uff0c\u80cc\u666f\u518d\u88dc\u9f4a\u5b8c\u6574\u7a3d\u6838\u8cc7\u6599\u3002',
+        summary: `count=${safeSummary.total || 0} actors=${safeSummary.actorCount || 0}`,
+        loading: '\u8f09\u5165\u4e2d',
+        searchTitle: '\u7a3d\u6838\u7d00\u9304\u67e5\u8a62',
+        distributionTitle: '\u4e8b\u4ef6\u5206\u5e03',
+        distributionSubtitle: '\u6b63\u5728\u6574\u7406\u7d71\u8a08',
+        summaryPending: '\u6458\u8981\u540c\u6b65\u4e2d',
+        summaryPendingDesc: '\u80cc\u666f\u6458\u8981\u5b8c\u6210\u5f8c\u6703\u81ea\u52d5\u66f4\u65b0\u4e8b\u4ef6\u5206\u985e\u8207\u6700\u8fd1\u6642\u9593\u3002',
+        tableLoadingTitle: 'Loading audit trail',
+        tableLoadingDesc: 'Page shell is ready. Latest records continue loading in the background.',
+        toolbarSubtitle: 'Audit trail is still syncing.',
+        keyword: '\u95dc\u9375\u5b57',
+        eventType: '\u4e8b\u4ef6\u985e\u578b',
+        startDate: '\u958b\u59cb\u65e5\u671f',
+        endDate: '\u7d50\u675f\u65e5\u671f',
+        allEvents: '\u5168\u90e8\u4e8b\u4ef6',
+        applyFilters: '\u5957\u7528\u7be9\u9078',
+        resetFilters: '\u6e05\u7a7a\u689d\u4ef6'
+      };
+      const tableShell = buildReviewTableShell(
+        'audit-trail-table',
+        '<th>Time</th><th>Event</th><th>Actor</th><th>Target</th><th>Unit</th><th>Summary</th><th>Diff</th>',
+        '<tr><td colspan="7"><div class="empty-state review-empty"><div class="empty-state-icon">' + ic('loader-circle') + '</div><div class="empty-state-title">' + labels.tableLoadingTitle + '</div><div class="empty-state-desc">' + labels.tableLoadingDesc + '</div></div></td></tr>',
+        {
+          toolbarSubtitle: labels.toolbarSubtitle,
+          wrapperId: 'audit-trail-table-wrap',
+          wrapperClass: 'audit-trail-table-wrap',
+          tbodyId: 'audit-trail-table-body'
+        }
+      );
+      return '<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">' + labels.eyebrow + '</div><h1 class="page-title">' + labels.title + '</h1><p class="page-subtitle">' + labels.subtitle + '</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>' + ic('loader-circle', 'icon-sm') + ' ' + labels.loading + '</button></div></div><div class="review-callout"><span class="review-callout-icon">' + ic('shield-check', 'icon-sm') + '</span><div><strong class="review-callout-strong">' + esc(labels.summary) + '</strong><div class="review-card-subtitle review-card-subtitle--top-6">' + labels.tableLoadingDesc + '</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">' + labels.searchTitle + '</span><span class="review-card-subtitle">' + esc(labels.summary) + '</span></div><form id="audit-filter-form"><div class="panel-grid-two review-filter-grid"><div class="form-group"><label class="form-label">' + labels.keyword + '</label><input type="text" class="form-input" id="audit-keyword" value="' + esc(safeFilters.keyword) + '" placeholder="event, email, recordId, payload" disabled></div><div class="form-group"><label class="form-label">' + labels.eventType + '</label><select class="form-select" id="audit-event-type" disabled><option value="">' + labels.allEvents + '</option></select></div><div class="form-group"><label class="form-label">' + labels.startDate + '</label><input type="date" class="form-input" id="audit-occurred-from" value="' + esc(safeFilters.occurredFrom) + '" disabled></div><div class="form-group"><label class="form-label">' + labels.endDate + '</label><input type="date" class="form-input" id="audit-occurred-to" value="' + esc(safeFilters.occurredTo) + '" disabled></div></div><div class="form-actions review-form-actions-start"><button type="submit" class="btn btn-primary" disabled>' + ic('search', 'icon-sm') + ' ' + labels.applyFilters + '</button><button type="button" class="btn btn-secondary" disabled>' + ic('rotate-ccw', 'icon-sm') + ' ' + labels.resetFilters + '</button></div></form>' + renderAuditTrailPager(page) + tableShell + '</div><div class="card review-history-card"><div class="card-header"><span class="card-title">' + labels.distributionTitle + '</span><span class="review-card-subtitle">' + labels.distributionSubtitle + '</span></div><div class="empty-state review-empty"><div class="empty-state-icon">' + ic('activity') + '</div><div class="empty-state-title">' + labels.summaryPending + '</div><div class="empty-state-desc">' + labels.summaryPendingDesc + '</div></div></div></div></div>';
+    }
     function getAuditTrailOffsetByPageNumber(page, targetPage) {
       const meta = getAuditTrailPageActionMeta(page);
       const safePageCount = Math.max(1, meta.pageCount || 1);
@@ -3948,8 +3987,11 @@
           });
         }
       } else {
-        app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">集中查詢系統登入、帳號異動、權限調整、表單送出與附件操作的後端稽核紀錄。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card review-loading-card">正在從正式稽核後端讀取資料...</div></div>`;
+        const loadingSummary = readAuditTrailSummary(resolvedFilters, false)
+          || normalizeAuditTrailSummary(auditTrailState.summary);
+        app.innerHTML = buildAuditTrailLoadingMarkup(resolvedFilters, loadingSummary);
         refreshIcons();
+        queueAuditTrailSummaryBootstrap(resolvedFilters);
         state = await loadAuditTrailData(resolvedFilters);
       }
     } catch (error) {

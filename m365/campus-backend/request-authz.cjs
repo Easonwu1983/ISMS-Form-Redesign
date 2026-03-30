@@ -56,8 +56,11 @@ function createRequestAuthz(deps) {
   } = deps;
 
   const state = {
-    listMap: null
+    listMap: null,
+    reviewUnitsCache: new Map()
   };
+  const REVIEW_SCOPE_CACHE_MS = 10000;
+  const REVIEW_SCOPE_CACHE_MAX = 64;
 
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
@@ -114,6 +117,40 @@ function createRequestAuthz(deps) {
     return listMappedEntries(getEnv('REVIEW_SCOPES_LIST', 'UnitReviewScopes'), mapGraphFieldsToReviewScope);
   }
 
+  function getCachedReviewUnits(username) {
+    const cacheKey = cleanLower(username);
+    if (!cacheKey) return null;
+    const cached = state.reviewUnitsCache.get(cacheKey);
+    if (!cached || !Number.isFinite(cached.loadedAt)) return null;
+    if ((Date.now() - cached.loadedAt) >= REVIEW_SCOPE_CACHE_MS) {
+      state.reviewUnitsCache.delete(cacheKey);
+      return null;
+    }
+    return parseUnits(cached.units);
+  }
+
+  function setCachedReviewUnits(username, units) {
+    const cacheKey = cleanLower(username);
+    if (!cacheKey) return;
+    state.reviewUnitsCache.set(cacheKey, {
+      loadedAt: Date.now(),
+      units: parseUnits(units)
+    });
+    if (state.reviewUnitsCache.size > REVIEW_SCOPE_CACHE_MAX) {
+      const firstKey = state.reviewUnitsCache.keys().next().value;
+      if (firstKey) state.reviewUnitsCache.delete(firstKey);
+    }
+  }
+
+  function clearReviewUnitsCache(username) {
+    const cacheKey = cleanLower(username);
+    if (cacheKey) {
+      state.reviewUnitsCache.delete(cacheKey);
+      return;
+    }
+    state.reviewUnitsCache.clear();
+  }
+
   async function getSystemUserEntryByUsername(username) {
     const target = cleanLower(username);
     if (!target) return null;
@@ -124,11 +161,15 @@ function createRequestAuthz(deps) {
   async function listReviewUnitsByUsername(username) {
     const target = cleanLower(username);
     if (!target) return [];
+    const cached = getCachedReviewUnits(target);
+    if (cached) return cached;
     const rows = await listReviewScopes();
-    return rows
+    const units = rows
       .filter((entry) => cleanLower(entry.item && entry.item.username) === target)
       .map((entry) => cleanText(entry.item && entry.item.unit))
       .filter(Boolean);
+    setCachedReviewUnits(target, units);
+    return units;
   }
 
   function resolveActiveUnit(req, user) {
@@ -314,7 +355,8 @@ function createRequestAuthz(deps) {
     canAccessTrainingForm,
     canManageTrainingForm,
     canManageTrainingRoster,
-    buildActorDetails
+    buildActorDetails,
+    clearReviewUnitsCache
   };
 }
 
