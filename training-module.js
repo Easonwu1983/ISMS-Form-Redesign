@@ -1246,7 +1246,16 @@
 
   function buildTrainingEmptyTableRow(colspan, title, desc, padding) {
     const descHtml = desc ? '<div class="empty-state-desc">' + esc(desc) + '</div>' : '';
-    return '<tr><td colspan="' + colspan + '"><div class="empty-state" style="padding:' + (padding || 24) + 'px"><div class="empty-state-title">' + esc(title) + '</div>' + descHtml + '</div></td></tr>';
+    const paddingValue = Math.max(0, Number(padding) || 24);
+    const paddingClass = paddingValue === 20
+      ? ' empty-state--pad-20'
+      : paddingValue === 24
+        ? ' empty-state--pad-24'
+        : paddingValue === 28
+          ? ' empty-state--pad-28'
+          : '';
+    const styleAttr = paddingClass ? '' : ' style="padding:' + paddingValue + 'px"';
+    return '<tr><td colspan="' + colspan + '"><div class="empty-state' + paddingClass + '"' + styleAttr + '><div class="empty-state-title">' + esc(title) + '</div>' + descHtml + '</div></td></tr>';
   }
 
   function buildTrainingDetailField(label, value) {
@@ -1802,7 +1811,7 @@
         + '<td><span class="training-rate-pill">' + (item.summary.completionRate || 0) + '%</span></td>'
         + '<td>' + fmtTime(item.latest.submittedAt || item.latest.updatedAt) + '</td>'
         + '<td>' + buildFormActions(item.latest) + '</td>'
-        + '</tr>').join('') : '<tr><td colspan="10"><div class="empty-state" style="padding:28px"><div class="empty-state-title">目前沒有已完成填報的單位</div></div></td></tr>';
+        + '</tr>').join('') : '<tr><td colspan="10"><div class="empty-state empty-state--pad-28"><div class="empty-state-title">目前沒有已完成填報的單位</div></div></td></tr>';
 
       const categoryOrder = getTrainingUnitCategories().slice();
       const categoryLabels = {
@@ -1873,7 +1882,7 @@
           + '<td>' + fmtTime(form.updatedAt) + '</td>'
           + '<td>' + buildFormActions(form) + '</td>'
           + '</tr>';
-      }).join('') : '<tr><td colspan="8"><div class="empty-state" style="padding:28px"><div class="empty-state-title">尚無填報單</div><div class="empty-state-desc">可先建立草稿，完成流程一後再進入簽核。</div></div></td></tr>';
+      }).join('') : '<tr><td colspan="8"><div class="empty-state empty-state--pad-28"><div class="empty-state-title">尚無填報單</div><div class="empty-state-desc">可先建立草稿，完成流程一後再進入簽核。</div></div></td></tr>';
       contentHtml = buildTrainingTableCard('我的填報單', '流程一完成後內容會先鎖定；若尚未列印簽核表，可在 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。', '', '<th>編號</th><th>填報單位</th><th>狀態</th><th>單位總人數</th><th>已完成</th><th>達成比率</th><th>最後更新</th><th>操作</th>', rows);
     }
     renderedSummarySignature = serializeTrainingListCounts(summary);
@@ -2863,7 +2872,7 @@
 
     const summary = form.summary || computeTrainingSummary(form.records || []);
     const detailRows = buildTrainingDetailRows(form.records || []);
-    const timeline = (form.history || []).slice().reverse().map((item) => '<div class="timeline-item"><div class="timeline-time">' + fmtTime(item.time) + '</div><div class="timeline-text">' + esc(item.action) + ' · ' + esc(item.user || '系統') + '</div></div>').join('') || '<div class="empty-state" style="padding:24px"><div class="empty-state-title">尚無歷程紀錄</div></div>';
+    const timeline = (form.history || []).slice().reverse().map((item) => '<div class="timeline-item"><div class="timeline-time">' + fmtTime(item.time) + '</div><div class="timeline-text">' + esc(item.action) + ' · ' + esc(item.user || '系統') + '</div></div>').join('') || '<div class="empty-state empty-state--pad-24"><div class="empty-state-title">尚無歷程紀錄</div></div>';
       const actions = ['<button type="button" class="btn btn-secondary" id="training-export-detail">' + ic('download', 'icon-sm') + ' 匯出明細 CSV</button>', '<button type="button" class="btn btn-secondary" id="training-print-detail">' + ic('printer', 'icon-sm') + ' 列印簽核表</button>', '<a href="#training" class="btn btn-secondary">← 返回列表</a>'];
     if (canEditTrainingForm(form)) actions.unshift('<a href="#training-fill/' + form.id + '" class="btn btn-primary">' + ic('edit-3', 'icon-sm') + ' 繼續填報</a>');
     if (canUndo) actions.unshift('<button type="button" class="btn btn-warning" id="training-undo-step-one">' + ic('rotate-ccw', 'icon-sm') + ' 撤回流程一</button>');

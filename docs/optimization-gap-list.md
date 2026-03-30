@@ -44,6 +44,7 @@ Done:
 - Static package builds now minify CSS assets.
 - A PurgeCSS safelist build now emits `styles.purged.min.css` and the live asset loader prefers it by default.
 - Repeated inline styles from `admin`, `training`, and `checklist` flows have started moving into shared utility classes in `styles.css`.
+- Shared utility classes now cover common empty-state padding, checklist applicable-rate emphasis, checklist item ID flex behavior, and compact subtitle spacing instead of repeating those inline styles inside templates.
 - `case-module.js` now uses shared utility classes for its static card spacing, textarea sizing, detail links, muted text, and track-form visibility states instead of fixed inline styles.
 - The live stylesheet now includes a dedicated `@media print` ruleset for public and authenticated layouts.
 
@@ -119,6 +120,7 @@ Done:
 - `training-module.js` now window-renders the fill table for large rosters instead of painting the entire row set into the DOM at once.
 - `admin-module.js` virtualizes both the `audit-trail` table and the `system-users` table instead of painting their full row sets into the DOM at once.
 - `admin-module.js` now virtualizes the `unit-contact-review` table instead of painting the full review queue into the DOM at once.
+- `admin-module.js` now virtualizes the `login-log` table and tears down its scroll/resize listeners on route cleanup.
 - `training-module.js` now window-renders large `training roster` group lists instead of expanding every group body into the DOM at once.
 - Debounced search and highlight timers in `training`, `checklist`, and `case` now register page cleanup handlers so route transitions clear pending timers.
 - `unit-contact-review`, `unit-review`, and `security-window` now invalidate stale async renders on route teardown and reuse the same page-scoped review loading/empty-state classes.

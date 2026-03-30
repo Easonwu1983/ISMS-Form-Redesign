@@ -1740,6 +1740,73 @@ tbody td:first-child {
   text-align: center;
 }
 
+.login-panel-shell[hidden] {
+  display: none !important;
+}
+
+.login-panel-link-row {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.login-panel-link {
+  color: var(--accent-primary);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.login-panel-intro {
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.login-panel-intro-title {
+  margin-top: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.login-panel-intro-text {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.login-btn--warm {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.forgot-result-card {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+}
+
+.forgot-result-title {
+  font-size: 0.88rem;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.forgot-result-meta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.forgot-result-message {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.login-form--stack-gap {
+  margin-top: 14px;
+}
+
 @media (max-width: 760px), (max-height: 760px) {
   .login-page {
     padding: 14px 12px 20px;
@@ -5197,6 +5264,10 @@ tbody td:first-child {
   color: var(--text-secondary);
 }
 
+.page-subtitle--flush {
+  margin: 0;
+}
+
 .login-logo {
   margin-bottom: 28px;
 }
@@ -5622,6 +5693,12 @@ tbody td:first-child {
   overscroll-behavior-y: contain;
 }
 
+.login-log-table-wrap {
+  max-height: min(68vh, 780px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
 .review-virtual-spacer > td,
 .review-virtual-spacer-cell {
   padding: 0;
@@ -5692,6 +5769,18 @@ tbody td:first-child {
   padding: 32px 20px;
 }
 
+.empty-state--pad-20 {
+  padding: 20px;
+}
+
+.empty-state--pad-24 {
+  padding: 24px;
+}
+
+.empty-state--pad-28 {
+  padding: 28px;
+}
+
 .empty-state--pad-24-18 {
   padding: 24px 18px;
 }
@@ -5720,6 +5809,26 @@ tbody td:first-child {
 
 .review-card-subtitle--top-10 {
   margin-top: 10px;
+}
+
+.checklist-applicable-rate {
+  font-weight: 700;
+}
+
+.checklist-applicable-rate--good {
+  color: #22c55e;
+}
+
+.checklist-applicable-rate--warn {
+  color: #f59e0b;
+}
+
+.checklist-applicable-rate--danger {
+  color: #ef4444;
+}
+
+.cl-item-id--fixed {
+  flex-shrink: 0;
 }
 
 .review-table-card--spaced {

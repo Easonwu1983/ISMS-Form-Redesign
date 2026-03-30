@@ -931,7 +931,7 @@
       return '<tr data-route="' + esc(target) + '" data-cl-search-text="' + esc(searchText) + '" data-cl-year-key="' + esc(yearKey) + '" data-cl-unit-key="' + esc(unitKey) + '" class="cl-list-row">'
         + '<td class="record-id-col">' + renderCopyIdCell(item.id, '檢核表編號', true) + '</td>'
         + '<td><div class="cl-list-unit">' + esc(item.unit) + '<small>' + esc(getChecklistTier1Unit(item) || '—') + '</small>' + (governanceNote ? '<div class="cl-list-unit-note">' + esc(governanceNote) + '</div>' : '') + '</div></td>'
-        + '<td>' + esc(item.fillerName || '—') + '<div class="review-card-subtitle" style="margin-top:4px">' + esc(item.fillerUsername || '—') + '</div></td>'
+        + '<td>' + esc(item.fillerName || '—') + '<div class="review-card-subtitle review-card-subtitle--top-4">' + esc(item.fillerUsername || '—') + '</div></td>'
         + '<td>' + esc(auditYearText) + (auditYearText === '—' ? '' : ' 年') + '</td>'
         + '<td>' + buildChecklistListStatusPill(item) + '</td>'
         + '<td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:' + rate + '%"></div></div><span class="cl-rate-text">' + rate + '%</span></td>'
@@ -1961,7 +1961,7 @@
             <div class="detail-field"><div class="detail-field-label">簽核狀態</div><div class="detail-field-value">${esc(cl.signStatus || '待簽核')}</div></div>
             <div class="detail-field"><div class="detail-field-label">簽核日期</div><div class="detail-field-value">${cl.signDate ? fmt(cl.signDate) : '—'}</div></div>
             <div class="detail-field"><div class="detail-field-label">簽核備註</div><div class="detail-field-value">${esc(cl.supervisorNote || '—')}</div></div>
-            <div class="detail-field"><div class="detail-field-label">適用項目符合率</div><div class="detail-field-value" style="font-weight:700;color:${applicableRate >= 80 ? '#22c55e' : applicableRate >= 60 ? '#f59e0b' : '#ef4444'}">${applicableRate}%（${s.conform || 0}/${applicable}）</div></div>
+            <div class="detail-field"><div class="detail-field-label">適用項目符合率</div><div class="detail-field-value checklist-applicable-rate ${applicableRate >= 80 ? 'checklist-applicable-rate--good' : applicableRate >= 60 ? 'checklist-applicable-rate--warn' : 'checklist-applicable-rate--danger'}">${applicableRate}%（${s.conform || 0}/${applicable}）</div></div>
           </div>
         </div>
       </div>
@@ -1995,7 +1995,7 @@
           <div class="cm-item-drag" title="拖曳排序">&#8942;&#8942;</div>
           <div class="cm-item-content">
             <div class="cm-item-row">
-              <span class="cl-item-id" style="flex-shrink:0">${esc(item.id)}</span>
+              <span class="cl-item-id cl-item-id--fixed">${esc(item.id)}</span>
               <span class="cm-item-text">${esc(item.text)}</span>
             </div>
             <div class="cm-item-hint">提示說明：${esc(item.hint || '未提供提示說明')}</div>
@@ -2299,4 +2299,3 @@
     };
   };
 })();
-

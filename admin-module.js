@@ -173,6 +173,14 @@
     let unitContactReviewVirtualRowsRenderPending = false;
     let releaseUnitContactReviewVirtualScroll = null;
     let releaseUnitContactReviewVirtualResize = null;
+    const LOGIN_LOG_VIRTUAL_ROW_HEIGHT = 56;
+    const LOGIN_LOG_VIRTUAL_ROW_OVERSCAN = 8;
+    const LOGIN_LOG_VIRTUAL_ROW_THRESHOLD = 60;
+    let loginLogItems = [];
+    let loginLogTableViewport = null;
+    let loginLogVirtualRowsRenderPending = false;
+    let releaseLoginLogVirtualScroll = null;
+    let releaseLoginLogVirtualResize = null;
     const DEFAULT_GOVERNANCE_FILTERS = Object.freeze({
       keyword: '',
       mode: 'all',
@@ -1684,6 +1692,83 @@
         systemUsersVirtualRowsRenderPending = false;
         if (!String(window.location.hash || '').startsWith('#users')) return;
         renderSystemUsersRows(Array.isArray(systemUsersState && systemUsersState.items) ? systemUsersState.items : []);
+      };
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(run);
+        return;
+      }
+      window.setTimeout(run, 0);
+    }
+
+    function buildLoginLogRow(log) {
+      const success = !!(log && log.success);
+      const badge = success
+        ? '<span class="review-status-badge approved">成功</span>'
+        : '<span class="review-status-badge danger">失敗</span>';
+      return `<tr><td>${esc(fmtTime(log && log.time) || '—')}</td><td class="review-cell-strong">${esc(log && log.username || '—')}</td><td>${esc(log && log.name || '—')}</td><td>${esc(log && log.role || '—')}</td><td>${badge}</td></tr>`;
+    }
+
+    function buildLoginLogEmptyRow() {
+      return '<tr><td colspan="5"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-title">目前沒有登入紀錄</div><div class="empty-state-desc">系統會保留最近的登入與失敗紀錄。</div></div></td></tr>';
+    }
+
+    function buildLoginLogVirtualSpacer(height) {
+      return `<tr class="review-virtual-spacer" aria-hidden="true"><td class="review-virtual-spacer-cell" colspan="5" style="height:${Math.max(0, Math.round(height))}px"></td></tr>`;
+    }
+
+    function getLoginLogVirtualWindow(totalRows) {
+      if (!loginLogTableViewport || totalRows <= LOGIN_LOG_VIRTUAL_ROW_THRESHOLD) {
+        return {
+          enabled: false,
+          start: 0,
+          end: totalRows,
+          padTop: 0,
+          padBottom: 0
+        };
+      }
+      const scrollTop = Math.max(0, Number(loginLogTableViewport.scrollTop || 0));
+      const viewportHeight = Math.max(ADMIN_MIN_VIRTUAL_VIEWPORT_HEIGHT, Number(loginLogTableViewport.clientHeight || 0) || 0);
+      const start = Math.max(0, Math.floor(scrollTop / LOGIN_LOG_VIRTUAL_ROW_HEIGHT) - LOGIN_LOG_VIRTUAL_ROW_OVERSCAN);
+      const visibleCount = Math.ceil(viewportHeight / LOGIN_LOG_VIRTUAL_ROW_HEIGHT) + (LOGIN_LOG_VIRTUAL_ROW_OVERSCAN * 2);
+      const end = Math.min(totalRows, start + visibleCount);
+      return {
+        enabled: true,
+        start,
+        end,
+        padTop: start * LOGIN_LOG_VIRTUAL_ROW_HEIGHT,
+        padBottom: Math.max(0, (totalRows - end) * LOGIN_LOG_VIRTUAL_ROW_HEIGHT)
+      };
+    }
+
+    function renderLoginLogRows(items) {
+      const body = document.getElementById('login-log-table-body');
+      if (!body) return;
+      const logs = Array.isArray(items) ? items : [];
+      if (!logs.length) {
+        body.innerHTML = buildLoginLogEmptyRow();
+        return;
+      }
+      const virtualWindow = getLoginLogVirtualWindow(logs.length);
+      if (!virtualWindow.enabled) {
+        body.innerHTML = logs.map((log) => buildLoginLogRow(log)).join('');
+        return;
+      }
+      const rowsHtml = logs
+        .slice(virtualWindow.start, virtualWindow.end)
+        .map((log) => buildLoginLogRow(log))
+        .join('');
+      body.innerHTML = buildLoginLogVirtualSpacer(virtualWindow.padTop)
+        + rowsHtml
+        + buildLoginLogVirtualSpacer(virtualWindow.padBottom);
+    }
+
+    function scheduleLoginLogRowsRender() {
+      if (loginLogVirtualRowsRenderPending) return;
+      loginLogVirtualRowsRenderPending = true;
+      const run = function () {
+        loginLogVirtualRowsRenderPending = false;
+        if (!String(window.location.hash || '').startsWith('#login-log')) return;
+        renderLoginLogRows(loginLogItems);
       };
       if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
         window.requestAnimationFrame(run);
@@ -3992,16 +4077,37 @@
       toast('您沒有檢視登入紀錄的權限', 'error');
       return;
     }
-    const logs = (loadLoginLogs() || []).slice().reverse();
-    const rows = logs.length ? logs.map((log) => {
-      const success = !!(log && log.success);
-      const badge = success
-        ? '<span class="review-status-badge approved">成功</span>'
-        : '<span class="review-status-badge danger">失敗</span>';
-      return `<tr><td>${esc(fmtTime(log && log.time) || '—')}</td><td class="review-cell-strong">${esc(log && log.username || '—')}</td><td>${esc(log && log.name || '—')}</td><td>${esc(log && log.role || '—')}</td><td>${badge}</td></tr>`;
-    }).join('') : '<tr><td colspan="5"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-title">目前沒有登入紀錄</div><div class="empty-state-desc">系統會保留最近的登入與失敗紀錄。</div></div></td></tr>';
+    loginLogItems = (loadLoginLogs() || []).slice().reverse();
     const app = document.getElementById('app');
-      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">登入紀錄</div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">最近 200 筆帳號登入與失敗事件。</p></div><div class="review-header-actions"><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div></div><div class="card"><div class="table-wrapper"><table><caption class="sr-only">登入紀錄清單</caption><thead><tr><th scope="col">時間</th><th scope="col">帳號</th><th scope="col">姓名</th><th scope="col">角色</th><th scope="col">結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">登入紀錄</div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">最近 200 筆帳號登入與失敗事件。</p></div><div class="review-header-actions"><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div></div><div class="card"><div class="table-wrapper login-log-table-wrap review-table-wrapper" id="login-log-table-wrap"><table class="review-data-table"><caption class="sr-only">登入紀錄清單</caption><thead><tr><th scope="col">時間</th><th scope="col">帳號</th><th scope="col">姓名</th><th scope="col">角色</th><th scope="col">結果</th></tr></thead><tbody id="login-log-table-body"></tbody></table></div></div></div>`;
+    if (typeof releaseLoginLogVirtualScroll === 'function') {
+      releaseLoginLogVirtualScroll();
+      releaseLoginLogVirtualScroll = null;
+    }
+    if (typeof releaseLoginLogVirtualResize === 'function') {
+      releaseLoginLogVirtualResize();
+      releaseLoginLogVirtualResize = null;
+    }
+    loginLogTableViewport = document.getElementById('login-log-table-wrap');
+    renderLoginLogRows(loginLogItems);
+    if (loginLogTableViewport) {
+      releaseLoginLogVirtualScroll = bindAdminPageEvent(loginLogTableViewport, 'scroll', scheduleLoginLogRowsRender, { passive: true });
+      releaseLoginLogVirtualResize = bindAdminPageEvent(window, 'resize', scheduleLoginLogRowsRender);
+    }
+    registerAdminPageCleanup(function () {
+      if (typeof releaseLoginLogVirtualScroll === 'function') {
+        releaseLoginLogVirtualScroll();
+      }
+      if (typeof releaseLoginLogVirtualResize === 'function') {
+        releaseLoginLogVirtualResize();
+      }
+      releaseLoginLogVirtualScroll = null;
+      releaseLoginLogVirtualResize = null;
+      loginLogTableViewport = null;
+      loginLogItems = [];
+      loginLogVirtualRowsRenderPending = false;
+    });
+    wireReviewTableScrollers(app);
     refreshIcons();
   }
 
