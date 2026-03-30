@@ -568,14 +568,11 @@ function runNodeStep(step) {
     const scriptPath = path.join(ROOT, step.script);
     const result = spawnSync(process.execPath, [scriptPath], {
       cwd: ROOT,
-      stdio: 'pipe',
+      stdio: 'inherit',
       shell: false,
       env: buildFormalEnv(),
-      encoding: 'utf8',
       windowsHide: true
     });
-    if (result.stdout) process.stdout.write(result.stdout);
-    if (result.stderr) process.stderr.write(result.stderr);
     const durationMs = Date.now() - startedMs;
     attemptResults.push({
       attempt,
