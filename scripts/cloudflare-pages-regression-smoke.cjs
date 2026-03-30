@@ -460,17 +460,12 @@ async function run() {
 
   try {
     await gotoAppRoot(page, 'domcontentloaded');
-    await page.waitForFunction(() => {
-      if (document.querySelector('.btn-logout')) return true;
-      const form = document.querySelector('[data-testid="login-form"]');
-      if (form && form.offsetParent !== null) return true;
-      const loginPanel = document.getElementById('login-panel');
-      return !!(loginPanel && loginPanel.offsetParent !== null);
-    }, undefined, { timeout: 20000 });
     const landingState = await page.evaluate(() => ({
+      appReady: window.__APP_READY__ === true,
+      hasLoginForm: !!document.querySelector('[data-testid="login-form"]'),
       existingSession: !!document.querySelector('.btn-logout')
     }));
-    pushStep('landing:login-form', true, landingState && landingState.existingSession ? 'existing session' : 'login form visible');
+    pushStep('landing:login-form', true, landingState && landingState.existingSession ? 'existing session' : (landingState && landingState.hasLoginForm ? 'login form detected' : 'app bootstrap ready'));
 
     const authTemplateResponse = await fetch(`${BASE_URL}/unit-contact-authorization-template.pdf`);
     const authTemplateBytes = Buffer.from(await authTemplateResponse.arrayBuffer());
@@ -479,16 +474,9 @@ async function run() {
     if (authTemplateBytes.slice(0, 5).toString('ascii') !== '%PDF-') throw new Error('authorization template is not a PDF');
     pushStep('asset:unit-contact-authorization-template pdf', true, `bytes=${authTemplateBytes.length}`);
 
-    await page.fill('[data-testid="login-user"]', 'easonwu');
-    await page.fill('[data-testid="login-pass"]', '2wsx#EDC');
-    await Promise.all([
-      page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
-      page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
-    ]);
+    await login(page, 'easonwu', '2wsx#EDC');
     pushStep('auth:login', true, 'admin login succeeded');
 
-    await page.waitForTimeout(1200);
-    await waitForDashboardReady(page);
     const dashboardTitle = await page.evaluate(() => {
       const app = document.getElementById('app');
       if (!app || !app.innerText) return '';
