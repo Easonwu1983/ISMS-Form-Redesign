@@ -70,7 +70,8 @@
       debugFlow,
       registerActionHandlers,
       openConfirmDialog,
-      addPageEventListener
+      addPageEventListener,
+      registerPageCleanup
     } = deps;
 
   function normalizeCaseUnitList(units) {
@@ -108,6 +109,13 @@
     return function () {
       try { target.removeEventListener(type, listener, options); } catch (_) {}
     };
+  }
+
+  function registerCasePageCleanup(callback) {
+    if (typeof registerPageCleanup === 'function') {
+      return registerPageCleanup(callback);
+    }
+    return function () {};
   }
 
   function renderCaseStatusCell(item, useClosedGuard) {
@@ -550,6 +558,12 @@
         renderList();
       }, 120);
     };
+    registerCasePageCleanup(function () {
+      if (searchRenderTimer) {
+        window.clearTimeout(searchRenderTimer);
+        searchRenderTimer = null;
+      }
+    });
     bindCasePageEvent(document.getElementById('search-input'), 'input', function (e) { curSearch = e.target.value; scheduleRenderList(); });
     bindCasePageEvent(document.getElementById('filter-tabs'), 'click', function (e) { if (e.target.classList.contains('filter-tab')) { curFilter = e.target.dataset.filter; renderList(); } });
   }

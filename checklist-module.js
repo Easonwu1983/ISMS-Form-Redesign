@@ -57,6 +57,7 @@
       refreshIcons,
       bindCopyButtons,
       addPageEventListener,
+      registerPageCleanup,
       renderCopyIdCell,
       renderCopyIdButton,
       openConfirmDialog,
@@ -370,6 +371,13 @@
       return function () {
         try { target.removeEventListener(type, listener, options); } catch (_) {}
       };
+    }
+
+    function registerChecklistPageCleanup(callback) {
+      if (typeof registerPageCleanup === 'function') {
+        return registerPageCleanup(callback);
+      }
+      return function () {};
     }
     function createChecklistRemoteCollectionState(options) {
       const moduleApi = getChecklistCollectionCacheModule();
@@ -1229,6 +1237,12 @@
         applyChecklistKeywordFilter();
       }, 120);
     };
+    registerChecklistPageCleanup(() => {
+      if (browseTimer) {
+        window.clearTimeout(browseTimer);
+        browseTimer = null;
+      }
+    });
     bindChecklistPageEvent(keywordEl, 'input', () => {
       checklistBrowseState.keyword = keywordEl.value;
       scheduleRerender();
@@ -1601,7 +1615,11 @@
       if (focusTarget && typeof focusTarget.focus === 'function') {
         focusTarget.focus({ preventScroll: true });
       }
-      window.setTimeout(() => itemEl.classList.remove('is-highlighted'), 2200);
+      const highlightTimer = window.setTimeout(() => itemEl.classList.remove('is-highlighted'), 2200);
+      registerChecklistPageCleanup(() => {
+        window.clearTimeout(highlightTimer);
+        itemEl.classList.remove('is-highlighted');
+      });
     }
 
     function updateProgress() {

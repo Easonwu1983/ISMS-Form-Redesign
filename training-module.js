@@ -28,6 +28,7 @@
       toTestIdFragment,
       bindCopyButtons,
       addPageEventListener,
+      registerPageCleanup,
       refreshIcons,
       renderCopyIdCell,
       renderCopyIdButton,
@@ -120,12 +121,20 @@
     const TRAINING_REMOTE_LIST_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
     const TRAINING_ROSTER_PAGE_LIMIT_OPTIONS = ['100', '200', '500'];
     const TRAINING_ROSTER_DEFAULT_PAGE_LIMIT = '200';
+    const TRAINING_ROSTER_VIRTUAL_GROUP_THRESHOLD = 18;
+    const TRAINING_ROSTER_VIRTUAL_GROUP_HEIGHT = 108;
+    const TRAINING_ROSTER_VIRTUAL_GROUP_OVERSCAN = 4;
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
     const trainingRosterRemotePageCache = createTrainingBoundedCacheStore({
       maxEntries: TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX,
       defaultTtlMs: 2 * 60 * 1000
     });
     let trainingRosterRemotePageState = null;
+    let trainingRosterGroupsViewport = null;
+    let trainingRosterVirtualGroupsRenderPending = false;
+    let trainingRosterVirtualGroupState = { signature: '', groups: [], selectedRosterIds: [], enabled: false };
+    let releaseTrainingRosterVirtualScroll = null;
+    let releaseTrainingRosterVirtualResize = null;
     let trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
       let trainingAccessProfileListenerInstalled = false;
       let trainingRowsStateVersion = 0;
@@ -669,10 +678,10 @@
       if (normalizedFilters.statsUnit) activeFilters.push('統計單位：' + normalizedFilters.statsUnit);
       if (normalizedFilters.unit) activeFilters.push('填報單位：' + normalizedFilters.unit);
       const extraActionsHtml = ''
-        + '<input type="search" class="form-input" id="training-roster-keyword" placeholder="搜尋姓名、本職單位、身分別、職稱" value="' + esc(normalizedFilters.q || '') + '" style="min-width:260px">'
-        + '<select class="form-select" id="training-roster-stats-unit" style="min-width:180px">' + statsUnitOptions + '</select>'
-        + '<select class="form-select" id="training-roster-unit" style="min-width:220px">' + unitOptions + '</select>'
-        + '<select class="form-select" id="training-roster-source" style="min-width:132px">' + sourceOptions + '</select>';
+        + '<input type="search" class="form-input training-roster-filter-keyword" id="training-roster-keyword" placeholder="搜尋姓名、本職單位、身分別、職稱" value="' + esc(normalizedFilters.q || '') + '">'
+        + '<select class="form-select training-roster-filter-stats-unit" id="training-roster-stats-unit">' + statsUnitOptions + '</select>'
+        + '<select class="form-select training-roster-filter-unit" id="training-roster-unit">' + unitOptions + '</select>'
+        + '<select class="form-select training-roster-filter-source" id="training-roster-source">' + sourceOptions + '</select>';
       if (pager && typeof pager.renderPagerToolbar === 'function') {
         return pager.renderPagerToolbar({
           page: normalizedPage,
@@ -682,10 +691,9 @@
           esc,
           ic,
           toolbarClass: 'review-toolbar review-toolbar--compact training-roster-pager',
-          toolbarStyle: 'margin:14px 0 16px',
           summary: getTrainingRosterPageSummary(normalizedPage),
           mainHtml: '<span class="review-card-subtitle">' + esc(getTrainingRosterPageSummary(normalizedPage)) + '</span>'
-            + (activeFilters.length ? '<div class="form-hint" style="margin-top:4px">目前篩選：' + esc(activeFilters.join('｜')) + '</div>' : ''),
+            + (activeFilters.length ? '<div class="form-hint training-form-hint-top">目前篩選：' + esc(activeFilters.join('｜')) + '</div>' : ''),
           extraActionsHtml
         });
       }
@@ -699,10 +707,10 @@
             ic
           })
         : '';
-      return '<div class="review-toolbar review-toolbar--compact training-roster-pager" style="margin:14px 0 16px">'
+      return '<div class="review-toolbar review-toolbar--compact training-roster-pager">'
         + '<div class="review-toolbar-main">'
         + '<span class="review-card-subtitle">' + esc(getTrainingRosterPageSummary(normalizedPage)) + '</span>'
-        + (activeFilters.length ? '<div class="form-hint" style="margin-top:4px">目前篩選：' + esc(activeFilters.join('｜')) + '</div>' : '')
+        + (activeFilters.length ? '<div class="form-hint training-form-hint-top">目前篩選：' + esc(activeFilters.join('｜')) + '</div>' : '')
         + '</div>'
         + '<div class="review-toolbar-actions">'
         + extraActionsHtml
@@ -791,6 +799,13 @@
       return function () {
         try { target.removeEventListener(type, listener, options); } catch (_) {}
       };
+    }
+
+    function registerTrainingPageCleanup(callback) {
+      if (typeof registerPageCleanup === 'function') {
+        return registerPageCleanup(callback);
+      }
+      return function () {};
     }
 
     function normalizeTrainingListCounts(summary) {
@@ -1434,42 +1449,115 @@
       + '</tr>';
   }
 
-  function buildTrainingRosterGroupTable(group, selectedRosterIds, index) {
+  function buildTrainingRosterGroupTable(group, selectedRosterIds, index, options) {
+    const opts = options && typeof options === 'object' ? options : {};
     const rows = Array.isArray(group && group.rows) ? group.rows : [];
     const bodyRows = rows.length
       ? rows.map((row, rowIndex) => buildTrainingRosterRow(row, rowIndex + 1, selectedRosterIds.has(row.id))).join('')
       : buildTrainingEmptyTableRow(9, '尚無名單資料', '', 24);
     const totalCount = Number(group && group.totalCount || rows.length);
     const subtitle = '統計單位：' + esc(group.statsUnit || '—') + '｜填報單位：' + esc(group.unit || '—') + '｜可展開 ' + totalCount + ' 位人員';
-    return '<details class="training-group-card training-roster-group-card" ' + (index === 0 ? 'open' : '') + '>'
+    const shouldOpen = opts.defaultOpen === true || (opts.defaultOpen !== false && index === 0);
+    return '<details class="training-group-card training-roster-group-card" data-roster-group-key="' + esc(group.key || '') + '" ' + (shouldOpen ? 'open' : '') + '>'
       + '<summary class="training-group-summary">'
       + '<div><span class="training-group-title">' + esc(group.unit || '未指定單位') + '</span><div class="training-group-subtitle">' + subtitle + '</div>' + buildTrainingRosterGroupSummary(group) + '</div>'
       + '<div class="training-group-meta"><span class="training-inline-status">' + esc(String(totalCount || 0)) + ' 人</span><span class="training-group-toggle">' + ic('chevron-down', 'icon-sm') + '</span></div>'
       + '</summary>'
-      + buildTrainingTableMarkup('<th style="width:56px"><input type="checkbox" class="training-roster-group-select-all" data-roster-group="' + esc(group.key || '') + '"></th><th style="width:68px">編號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:160px">建立者</th><th style="width:160px">建立時間</th><th style="width:120px">操作</th>', bodyRows)
+      + buildTrainingTableMarkup('<th class="training-roster-col-check"><input type="checkbox" class="training-roster-group-select-all" data-roster-group="' + esc(group.key || '') + '"></th><th class="training-roster-col-order">編號</th><th class="training-roster-col-name">姓名 / 來源</th><th class="training-roster-col-unit">本職單位</th><th class="training-roster-col-identity">身分別</th><th class="training-roster-col-title">職稱</th><th class="training-roster-col-created-by">建立者</th><th class="training-roster-col-created-at">建立時間</th><th class="training-roster-col-actions">操作</th>', bodyRows)
       + '</details>';
   }
 
-  function buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, startIndex, endIndex) {
+  function buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, startIndex, endIndex, options) {
     const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
     const sourceGroups = Array.isArray(groups) ? groups : [];
     const from = Math.max(0, Number(startIndex) || 0);
     const to = Math.min(sourceGroups.length, Number(endIndex) || sourceGroups.length);
     if (to <= from) return '';
-    return sourceGroups.slice(from, to).map((group, offset) => buildTrainingRosterGroupTable(group, selectedSet, from + offset)).join('');
+    return sourceGroups.slice(from, to).map((group, offset) => buildTrainingRosterGroupTable(group, selectedSet, from + offset, options)).join('');
   }
 
-  function buildTrainingRosterRowsFromGroups(groups, selectedRosterIds) {
+  function buildTrainingRosterRowsFromGroups(groups, selectedRosterIds, options) {
     const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
     const sourceGroups = Array.isArray(groups) ? groups : [];
     if (!sourceGroups.length) {
-      return '<div class="empty-state" style="padding:28px"><div class="empty-state-title">撠?鞈?</div><div class="empty-state-desc">隢??梁恣??亙??殷???桐?蝞∠??⊥憓??桀?鈭箏??/div></div>';
+      return '<div class="empty-state training-empty-state training-empty-state--compact"><div class="empty-state-title">尚無名單資料</div><div class="empty-state-desc">請先匯入名單，或由管理者新增名單外人員。</div></div>';
     }
-    return buildTrainingRosterGroupChunkHtml(sourceGroups, selectedSet, 0, sourceGroups.length);
+    return buildTrainingRosterGroupChunkHtml(sourceGroups, selectedSet, 0, sourceGroups.length, options);
   }
 
   function buildTrainingRosterRows(rosters, selectedRosterIds) {
     return buildTrainingRosterRowsFromGroups(groupTrainingRosterEntries(rosters), selectedRosterIds);
+  }
+
+  function buildTrainingRosterVirtualSpacer(height) {
+    if (height <= 0) return '';
+    return '<div class="training-roster-virtual-spacer" aria-hidden="true"><div class="training-roster-virtual-spacer-inner" style="height:' + Math.max(0, Math.round(height)) + 'px"></div></div>';
+  }
+
+  function getTrainingRosterGroupVirtualWindow(totalGroups) {
+    if (!trainingRosterGroupsViewport || totalGroups <= TRAINING_ROSTER_VIRTUAL_GROUP_THRESHOLD) {
+      return {
+        enabled: false,
+        start: 0,
+        end: totalGroups,
+        padTop: 0,
+        padBottom: 0
+      };
+    }
+    const viewportHeight = Math.max(320, Number(trainingRosterGroupsViewport.clientHeight || 0) || 0);
+    const scrollTop = Math.max(0, Number(trainingRosterGroupsViewport.scrollTop || 0) || 0);
+    const start = Math.max(0, Math.floor(scrollTop / TRAINING_ROSTER_VIRTUAL_GROUP_HEIGHT) - TRAINING_ROSTER_VIRTUAL_GROUP_OVERSCAN);
+    const visibleCount = Math.ceil(viewportHeight / TRAINING_ROSTER_VIRTUAL_GROUP_HEIGHT) + (TRAINING_ROSTER_VIRTUAL_GROUP_OVERSCAN * 2);
+    const end = Math.min(totalGroups, start + visibleCount);
+    return {
+      enabled: true,
+      start,
+      end,
+      padTop: start * TRAINING_ROSTER_VIRTUAL_GROUP_HEIGHT,
+      padBottom: Math.max(0, (totalGroups - end) * TRAINING_ROSTER_VIRTUAL_GROUP_HEIGHT)
+    };
+  }
+
+  function renderTrainingRosterGroupsView(groups, selectedRosterIds, options) {
+    const container = document.getElementById('training-roster-groups');
+    if (!container) return;
+    const sourceGroups = Array.isArray(groups) ? groups : [];
+    const selectedSet = selectedRosterIds instanceof Set ? selectedRosterIds : new Set();
+    const opts = options && typeof options === 'object' ? options : {};
+    if (!sourceGroups.length) {
+      container.innerHTML = buildTrainingRosterRowsFromGroups(sourceGroups, selectedSet, { defaultOpen: false });
+      return;
+    }
+    if (!opts.windowed) {
+      container.innerHTML = buildTrainingRosterRowsFromGroups(sourceGroups, selectedSet, { defaultOpen: true });
+      return;
+    }
+    const virtualWindow = getTrainingRosterGroupVirtualWindow(sourceGroups.length);
+    if (!virtualWindow.enabled) {
+      container.innerHTML = buildTrainingRosterRowsFromGroups(sourceGroups, selectedSet, { defaultOpen: false });
+      return;
+    }
+    container.innerHTML = buildTrainingRosterVirtualSpacer(virtualWindow.padTop)
+      + buildTrainingRosterGroupChunkHtml(sourceGroups, selectedSet, virtualWindow.start, virtualWindow.end, { defaultOpen: false })
+      + buildTrainingRosterVirtualSpacer(virtualWindow.padBottom);
+  }
+
+  function scheduleTrainingRosterGroupVirtualRender() {
+    if (trainingRosterVirtualGroupsRenderPending) return;
+    trainingRosterVirtualGroupsRenderPending = true;
+    const run = function () {
+      trainingRosterVirtualGroupsRenderPending = false;
+      if (String(window.location.hash || '').indexOf('#training-roster') !== 0) return;
+      renderTrainingRosterGroupsView(trainingRosterVirtualGroupState.groups, new Set(trainingRosterVirtualGroupState.selectedRosterIds), {
+        windowed: !!trainingRosterVirtualGroupState.enabled
+      });
+      refreshTrainingRosterDomCache(document.getElementById('app'), trainingRosterVirtualGroupState.signature);
+    };
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(run);
+      return;
+    }
+    window.setTimeout(run, 0);
   }
 
   function buildTrainingRosterPreviewRows(options) {
@@ -2414,7 +2502,7 @@
         : (visibleRows.length > 1500 ? 80 : (visibleRows.length > 600 ? 120 : 180));
       body.innerHTML = renderChunk(visibleRows.slice(0, chunkSize), 0);
       if (visibleRows.length <= chunkSize) return;
-      body.insertAdjacentHTML('beforeend', '<tr class="training-rows-loading"><td colspan="13"><div class="empty-state" style="padding:16px"><div class="empty-state-title">正在載入更多名單</div><div class="empty-state-desc">名單筆數較多，系統會分批顯示以維持操作流暢。</div></div></td></tr>');
+      body.insertAdjacentHTML('beforeend', '<tr class="training-rows-loading"><td colspan="13"><div class="empty-state training-empty-state--loading"><div class="empty-state-title">正在載入更多名單</div><div class="empty-state-desc">名單筆數較多，系統會分批顯示以維持操作流暢。</div></div></td></tr>');
       const loadingRow = body.querySelector('.training-rows-loading');
       const paintRest = async () => {
         for (let start = chunkSize; start < visibleRows.length; start += chunkSize) {
@@ -2745,7 +2833,7 @@
   function renderTrainingDetail(id) {
     const form = getTrainingForm(id);
     if (!form) {
-      document.getElementById('app').innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + ic('help-circle', 'icon-lg') + '</div><div class="empty-state-title">找不到教育訓練填報單</div><a href="#training" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>';
+      document.getElementById('app').innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + ic('help-circle', 'icon-lg') + '</div><div class="empty-state-title">找不到教育訓練填報單</div><a href="#training" class="btn btn-primary training-link-spaced-top">返回列表</a></div>';
       return;
     }
     if (!isTrainingVisible(form)) {
@@ -3115,11 +3203,11 @@
     }
   }
 
-  function buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedCount, pagerHtml) {
+  function buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedCount, pagerHtml, previewHtml) {
     const hiddenNote = hiddenCount
-      ? '<div class="training-editor-note" style="margin-bottom:16px">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
+      ? '<div class="training-editor-note training-editor-note--spaced">已略過 ' + hiddenCount + ' 筆異常名單資料，請由管理者檢查來源內容。</div>'
       : '';
-    const rosterActions = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">名單管理</span><div class="training-table-subtitle">依單位分區展開檢視；單位管理員只能新增名單外人員，不能刪除原名單。</div></div><div class="training-group-header-actions"><span class="training-inline-status" id="training-roster-selected-count">' + esc(selectedCount > 0 ? ('已選取 ' + selectedCount + ' 筆') : '尚未選取人員') + '</span><button type="button" class="btn btn-secondary btn-sm" id="training-roster-select-all">' + ic('check-square', 'icon-sm') + ' 全選</button><button type="button" class="btn btn-secondary btn-sm" id="training-roster-clear-selection">' + ic('square', 'icon-sm') + ' 清除選取</button><button type="button" class="btn btn-danger btn-sm" id="training-roster-delete-selected" ' + (selectedCount ? '' : 'disabled') + '>' + ic('trash-2', 'icon-sm') + ' 刪除所選</button><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></div>' + (pagerHtml || '') + '<div id="training-roster-import-wrap" style="display:none">' + buildTrainingRosterImportCard() + '</div><div class="training-group-stack" id="training-roster-groups">' + (groupsHtml || buildTrainingEmptyTableRow(9, '尚無名單資料', '', 24)) + '</div></div>';
+    const rosterActions = '<div class="card training-table-card"><div class="card-header"><div><span class="card-title">名單管理</span><div class="training-table-subtitle">依單位分區展開檢視；單位管理員只能新增名單外人員，不能刪除原名單。</div></div><div class="training-group-header-actions"><span class="training-inline-status" id="training-roster-selected-count">' + esc(selectedCount > 0 ? ('已選取 ' + selectedCount + ' 筆') : '尚未選取人員') + '</span><button type="button" class="btn btn-secondary btn-sm" id="training-roster-select-all">' + ic('check-square', 'icon-sm') + ' 全選</button><button type="button" class="btn btn-secondary btn-sm" id="training-roster-clear-selection">' + ic('square', 'icon-sm') + ' 清除選取</button><button type="button" class="btn btn-danger btn-sm" id="training-roster-delete-selected" ' + (selectedCount ? '' : 'disabled') + '>' + ic('trash-2', 'icon-sm') + ' 刪除所選</button><button type="button" class="btn btn-primary" id="training-roster-toggle-import">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></div>' + (pagerHtml || '') + (previewHtml || '') + '<div id="training-roster-import-wrap" class="training-roster-import-wrap is-hidden">' + buildTrainingRosterImportCard() + '</div><div class="training-roster-groups-viewport" id="training-roster-groups-viewport"><div class="training-group-stack" id="training-roster-groups">' + (groupsHtml || '<div class="empty-state training-empty-state training-empty-state--compact"><div class="empty-state-title">尚無名單資料</div><div class="empty-state-desc">請先匯入名單，或由管理者新增名單外人員。</div></div>') + '</div></div></div>';
     return '<div class="animate-in">'
       + '<div class="page-header"><div><h1 class="page-title">教育訓練名單管理</h1><p class="page-subtitle">管理者可匯入正式名單；單位管理員只能新增名單外人員，不能刪除原名單。</p></div><div><a href="#training" class="btn btn-secondary">← 返回統計</a></div></div>'
       + '<div class="stats-grid">'
@@ -3131,7 +3219,7 @@
   }
 
   function buildTrainingRosterImportCard() {
-    return '<div class="card training-editor-card" style="margin-bottom:20px"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">' + buildTrainingRosterImportNote() + '</div><div class="form-row"><div class="form-group"><label class="form-label">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, false) + '<div class="form-hint">可先指定單位當作預設值；若 Excel 內已有「填報單位」欄位，系統會優先使用檔案中的單位。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy">' + buildTrainingRosterFileCopy('') + '</span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>' + buildTrainingRosterSampleCsv() + '</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
+    return '<div class="card training-editor-card training-editor-card--spaced"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">' + buildTrainingRosterImportNote() + '</div><div class="form-row"><div class="form-group"><label class="form-label">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, false) + '<div class="form-hint">可先指定單位當作預設值；若 Excel 內已有「填報單位」欄位，系統會優先使用檔案中的單位。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy">' + buildTrainingRosterFileCopy('') + '</span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>' + buildTrainingRosterSampleCsv() + '</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
   }
 
   async function renderTrainingRoster(options) {
@@ -3202,7 +3290,12 @@
     );
     const rosterCount = Array.isArray(rosters) ? rosters.length : 0;
     const useChunkedRosterRender = rosterCount > 120 || groups.length > 24;
-    const deferRosterGroups = useChunkedRosterRender && !opts.deferFullRender;
+    const useWindowedRosterGroups = groups.length > TRAINING_ROSTER_VIRTUAL_GROUP_THRESHOLD
+      && !focusState
+      && !selectedRosterIds.size
+      && !opts.rosterNames
+      && !opts.rosterIds;
+    const deferRosterGroups = useChunkedRosterRender && !useWindowedRosterGroups && !opts.deferFullRender;
     const selectedSignature = Array.from(selectedRosterIds.values()).sort().join(',');
     const rosterRenderSignature = [
       snapshot.token || '',
@@ -3224,7 +3317,7 @@
     const importedPreviewHtml = (opts.rosterNames || opts.rosterIds)
       ? buildTrainingRosterImportPreview(opts, selectedRosterIds)
       : '';
-    const initialGroupCount = useChunkedRosterRender && opts.deferFullRender
+    const initialGroupCount = useChunkedRosterRender && opts.deferFullRender && !useWindowedRosterGroups
       ? Math.min(3, groups.length)
       : 0;
     const groupMarkupSignature = [
@@ -3236,21 +3329,25 @@
       String(initialGroupCount || 0),
       useRemoteRosters ? remotePageSignature : 'local'
     ].join('::');
-    const chunkedGroupsHtml = trainingRosterGroupMarkupCache.signature === groupMarkupSignature
+    const chunkedGroupsHtml = useWindowedRosterGroups
+      ? ''
+      : (trainingRosterGroupMarkupCache.signature === groupMarkupSignature
       ? trainingRosterGroupMarkupCache.html
       : (useChunkedRosterRender
-        ? buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, 0, initialGroupCount)
-        : buildTrainingRosterRowsFromGroups(groups, selectedRosterIds));
+        ? buildTrainingRosterGroupChunkHtml(groups, selectedRosterIds, 0, initialGroupCount, { defaultOpen: false })
+        : buildTrainingRosterRowsFromGroups(groups, selectedRosterIds, { defaultOpen: true })));
     const loadingChunkHtml = useChunkedRosterRender && initialGroupCount < groups.length
-      ? '<div class="empty-state training-roster-chunk-loading" style="padding:28px"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
+      ? '<div class="empty-state training-roster-chunk-loading training-empty-state training-empty-state--compact"><div class="empty-state-title">正在載入大量名單</div><div class="empty-state-desc">系統會先顯示摘要，名單區塊將在背景完成展開與排序。</div></div>'
       : '';
     trainingRosterGroupMarkupCache = {
       signature: groupMarkupSignature,
       html: chunkedGroupsHtml
     };
-    const groupsHtml = deferRosterGroups
-      ? importedPreviewHtml + loadingChunkHtml
-      : importedPreviewHtml + chunkedGroupsHtml + loadingChunkHtml;
+    const groupsHtml = useWindowedRosterGroups
+      ? ''
+      : (deferRosterGroups
+      ? loadingChunkHtml
+      : chunkedGroupsHtml + loadingChunkHtml);
     const pagerHtml = useRemoteRosters ? renderTrainingRosterPager(rosterPage) : '';
     const pageShellSignature = importedPreviewHtml
       ? ''
@@ -3269,7 +3366,7 @@
         ].join('::');
     const pageHtml = pageShellSignature && trainingRosterPageShellCache.signature === pageShellSignature
       ? trainingRosterPageShellCache.html
-      : buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size, pagerHtml);
+      : buildTrainingRosterPage(summary, groupsHtml, hiddenCount, selectedRosterIds.size, pagerHtml, importedPreviewHtml);
     if (pageShellSignature) {
       trainingRosterPageShellCache = {
         signature: pageShellSignature,
@@ -3288,7 +3385,43 @@
       defer: !!deferRosterGroups
     };
 
-    if (useChunkedRosterRender && opts.deferFullRender && initialGroupCount < groups.length) {
+    trainingRosterGroupsViewport = document.getElementById('training-roster-groups-viewport');
+    if (typeof releaseTrainingRosterVirtualScroll === 'function') {
+      releaseTrainingRosterVirtualScroll();
+      releaseTrainingRosterVirtualScroll = null;
+    }
+    if (typeof releaseTrainingRosterVirtualResize === 'function') {
+      releaseTrainingRosterVirtualResize();
+      releaseTrainingRosterVirtualResize = null;
+    }
+    trainingRosterVirtualGroupState = {
+      signature: rosterRenderSignature,
+      groups: groups.slice(),
+      selectedRosterIds: Array.from(selectedRosterIds),
+      enabled: !!useWindowedRosterGroups
+    };
+    renderTrainingRosterGroupsView(groups, selectedRosterIds, { windowed: useWindowedRosterGroups });
+    refreshTrainingRosterDomCache(currentApp, rosterRenderSignature);
+    syncRosterSelectionDom();
+    if (useWindowedRosterGroups && trainingRosterGroupsViewport) {
+      releaseTrainingRosterVirtualScroll = bindTrainingPageEvent(trainingRosterGroupsViewport, 'scroll', scheduleTrainingRosterGroupVirtualRender, { passive: true });
+      releaseTrainingRosterVirtualResize = bindTrainingPageEvent(window, 'resize', scheduleTrainingRosterGroupVirtualRender);
+    }
+    registerTrainingPageCleanup(function () {
+      if (typeof releaseTrainingRosterVirtualScroll === 'function') {
+        releaseTrainingRosterVirtualScroll();
+      }
+      if (typeof releaseTrainingRosterVirtualResize === 'function') {
+        releaseTrainingRosterVirtualResize();
+      }
+      releaseTrainingRosterVirtualScroll = null;
+      releaseTrainingRosterVirtualResize = null;
+      trainingRosterGroupsViewport = null;
+      trainingRosterVirtualGroupsRenderPending = false;
+      trainingRosterVirtualGroupState = { signature: '', groups: [], selectedRosterIds: [], enabled: false };
+    });
+
+    if (!useWindowedRosterGroups && useChunkedRosterRender && opts.deferFullRender && initialGroupCount < groups.length) {
       const chunkSize = Math.max(4, Math.min(12, Math.ceil(groups.length / 8)));
       const appendRosterChunk = function (startIndex) {
         if (String(window.location.hash || '').indexOf('#training-roster') !== 0) return;
@@ -3375,12 +3508,17 @@
     };
     if (toggleBtn && importWrap) {
       bindTrainingPageEvent(toggleBtn, 'click', () => {
-        const visible = importWrap.style.display !== 'none';
-        importWrap.style.display = visible ? 'none' : '';
+        importWrap.classList.toggle('is-hidden');
       });
     }
     if (useRemoteRosters && keywordInput) {
       let keywordTimer = null;
+      registerTrainingPageCleanup(() => {
+        if (keywordTimer) {
+          window.clearTimeout(keywordTimer);
+          keywordTimer = null;
+        }
+      });
       bindTrainingPageEvent(keywordInput, 'input', () => {
         if (keywordTimer) window.clearTimeout(keywordTimer);
         keywordTimer = window.setTimeout(() => {
@@ -3447,6 +3585,7 @@
     }
 
     function syncRosterSelectionDom() {
+      trainingRosterVirtualGroupState.selectedRosterIds = Array.from(selectedRosterIds);
       const rows = getRosterRowsInDom();
       rows.forEach((row) => {
         const rosterId = String(row.dataset.rosterId || '').trim();
@@ -3539,8 +3678,11 @@
 
     if (selectAllButton) {
       bindTrainingPageEvent(selectAllButton, 'click', () => {
-        getRosterRowsInDom().forEach((row) => {
-          const rosterId = String(row.dataset.rosterId || '').trim();
+        const sourceRows = trainingRosterVirtualGroupState.enabled
+          ? rosters
+          : getRosterRowsInDom();
+        sourceRows.forEach((row) => {
+          const rosterId = String((row && row.dataset ? row.dataset.rosterId : row && row.id) || '').trim();
           if (rosterId) selectedRosterIds.add(rosterId);
         });
         syncRosterSelectionDom();
@@ -3555,9 +3697,11 @@
         const groupSelectAll = target.closest('.training-roster-group-select-all');
         if (groupSelectAll instanceof HTMLInputElement) {
           const groupKey = String(groupSelectAll.dataset.rosterGroup || '').trim();
-          const rows = getRosterRowsInDom().filter((row) => String(row.dataset.rosterGroup || '').trim() === groupKey);
+          const rows = trainingRosterVirtualGroupState.enabled
+            ? ((groups.find((entry) => String(entry && entry.key || '').trim() === groupKey) || {}).rows || [])
+            : getRosterRowsInDom().filter((row) => String(row.dataset.rosterGroup || '').trim() === groupKey);
           rows.forEach((row) => {
-            const rosterId = String(row.dataset.rosterId || '').trim();
+            const rosterId = String((row && row.dataset ? row.dataset.rosterId : row && row.id) || '').trim();
             if (!rosterId) return;
             if (groupSelectAll.checked) selectedRosterIds.add(rosterId); else selectedRosterIds.delete(rosterId);
           });

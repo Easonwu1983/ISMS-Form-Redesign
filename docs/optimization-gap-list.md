@@ -114,17 +114,19 @@ Done:
 - `admin-module.js` pager controls, governance cards, horizontal review scrollers, and unit-chip picker interactions now use page-scoped listener registration.
 - `unit-contact-application-module.js` now uses page-scoped listener registration for public apply and status flows.
 - `training-module.js` now window-renders the fill table for large rosters instead of painting the entire row set into the DOM at once.
-- `admin-module.js` already virtualizes the `audit-trail` table instead of painting the full DOM payload for each row.
+- `admin-module.js` virtualizes both the `audit-trail` table and the `system-users` table instead of painting their full row sets into the DOM at once.
+- `training-module.js` now window-renders large `training roster` group lists instead of expanding every group body into the DOM at once.
+- Debounced search and highlight timers in `training`, `checklist`, and `case` now register page cleanup handlers so route transitions clear pending timers.
 
 Open:
-- Many modules still attach listeners directly without page-scoped cleanup.
-- There is still no complete page destroy lifecycle across all major routes.
-- `training roster`, `system-users`, and other large read-heavy tables still render full DOM payloads instead of using virtualization.
+- Some modules still attach listeners directly without page-scoped cleanup.
+- There is still no complete page destroy lifecycle across every major route.
+- Large read-heavy tables outside `audit-trail`, `system-users`, and `training roster` still render full DOM payloads instead of using virtualization.
 
 Next:
-- Convert admin, training, checklist, and case listeners to page-scoped registration.
-- Add a consistent destroy hook for route transitions.
-- Evaluate virtualization for `training roster`, `system-users`, and other large tables.
+- Finish converting the remaining direct route listeners to page-scoped registration.
+- Add a consistent destroy hook across the remaining route transitions.
+- Evaluate virtualization for other large read-heavy tables after `audit-trail`, `system-users`, and `training roster`.
 
 ## Priority Order
 

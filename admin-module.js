@@ -52,6 +52,7 @@
       ic,
       refreshIcons,
       addPageEventListener,
+      registerPageCleanup,
       downloadJson,
       buildUnitCascadeControl,
       initUnitCascade,
@@ -143,6 +144,13 @@
     let systemUsersState = null;
     let systemUsersRenderCache = null;
     let systemUsersMarkupCache = null;
+    const SYSTEM_USERS_VIRTUAL_ROW_HEIGHT = 64;
+    const SYSTEM_USERS_VIRTUAL_ROW_OVERSCAN = 8;
+    const SYSTEM_USERS_VIRTUAL_ROW_THRESHOLD = 40;
+    let systemUsersTableViewport = null;
+    let systemUsersVirtualRowsRenderPending = false;
+    let releaseSystemUsersVirtualScroll = null;
+    let releaseSystemUsersVirtualResize = null;
     const DEFAULT_UNIT_CONTACT_REVIEW_FILTERS = Object.freeze({
       status: 'pending_review',
       keyword: '',
@@ -233,6 +241,13 @@
       return function () {
         try { target.removeEventListener(type, listener, options); } catch (_) {}
       };
+    }
+
+    function registerAdminPageCleanup(callback) {
+      if (typeof registerPageCleanup === 'function') {
+        return registerPageCleanup(callback);
+      }
+      return function () {};
     }
 
     function getAdminCollectionCacheModule() {
@@ -1019,7 +1034,7 @@
       const actionAttr = function (suffix) {
         return actionPrefix ? ` data-action="${esc(actionPrefix)}${suffix}"` : '';
       };
-      return `<div class="review-toolbar review-toolbar--compact" style="margin:14px 0 0"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(summary)}</span></div><div class="review-toolbar-actions"><label class="form-label" for="${esc(idPrefix)}-page-limit" style="margin:0 4px 0 0">每頁</label><select class="form-select" id="${esc(idPrefix)}-page-limit" style="width:96px">${limitOptionsHtml}</select><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><span class="review-card-subtitle" style="margin:0 4px 0 8px">頁次 ${page.currentPage || 0} / ${page.pageCount || 0}</span><label class="form-label" for="${esc(idPrefix)}-page-number" style="margin:0 4px 0 8px">跳至</label><input type="number" class="form-input" id="${esc(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px"><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>前往</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button></div></div>`;
+      return `<div class="review-toolbar review-toolbar--compact review-toolbar--gap-top"><div class="review-toolbar-main"><span class="review-card-subtitle">${esc(summary)}</span></div><div class="review-toolbar-actions"><label class="form-label review-toolbar-label-inline" for="${esc(idPrefix)}-page-limit">每頁</label><select class="form-select review-page-limit-select" id="${esc(idPrefix)}-page-limit">${limitOptionsHtml}</select><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button><span class="review-card-subtitle review-page-status">頁次 ${page.currentPage || 0} / ${page.pageCount || 0}</span><label class="form-label review-page-jump-label" for="${esc(idPrefix)}-page-number">跳至</label><input type="number" class="form-input review-page-jump-input" id="${esc(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump}><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>前往</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button><button type="button" class="btn btn-secondary btn-sm" id="${esc(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button></div></div>`;
     }
 
     function bindAdminCollectionPager(config) {
@@ -1498,7 +1513,7 @@
     }
 
     function buildAuditTrailRow(entry, index) {
-      return `<tr><td>${formatAuditOccurredAt(entry.occurredAt)}</td><td><div style="font-weight:600;color:var(--text-primary)">${esc(entry.eventType || 'unknown')}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(entry.recordId || '—')}</div></td><td>${esc(entry.actorEmail || '—')}</td><td>${esc(entry.targetEmail || '—')}</td><td>${esc(entry.unitCode || '—')}</td><td style="max-width:360px;white-space:normal;line-height:1.55">${esc(entry.payloadPreview || entry.title || '—')}</td><td><button type="button" class="btn btn-sm btn-secondary" data-action="admin.viewAuditEntry" data-index="${index}">${ic('search', 'icon-sm')} 檢視</button></td></tr>`;
+      return `<tr><td>${formatAuditOccurredAt(entry.occurredAt)}</td><td><div class="review-cell-title">${esc(entry.eventType || 'unknown')}</div><div class="review-card-subtitle review-card-subtitle--top-4">${esc(entry.recordId || '—')}</div></td><td>${esc(entry.actorEmail || '—')}</td><td>${esc(entry.targetEmail || '—')}</td><td>${esc(entry.unitCode || '—')}</td><td class="review-cell-wrap">${esc(entry.payloadPreview || entry.title || '—')}</td><td><button type="button" class="btn btn-sm btn-secondary" data-action="admin.viewAuditEntry" data-index="${index}">${ic('search', 'icon-sm')} 檢視</button></td></tr>`;
     }
 
     function buildAuditTrailEmptyRow() {
@@ -1565,6 +1580,87 @@
       });
     }
 
+    function buildSystemUsersRow(user) {
+      const primaryUnit = getPrimaryAuthorizedUnit(user) || '未指定';
+      const isProtectedUser = String(user && user.username || '').trim() === 'admin' || String(user && user.role || '').trim() === ROLES.ADMIN;
+      const actionButtons = [
+        `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(user.username)}">${ic('edit-2', 'btn-icon-svg')}</button>`
+      ];
+      if (!isProtectedUser) {
+        actionButtons.push(`<button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(user.username)}">${ic('trash-2', 'btn-icon-svg')}</button>`);
+      }
+      return `<tr><td class="review-cell-strong">${esc(user.username)}</td><td>${esc(user.name)}</td><td><span class="badge-role ${getRoleBadgeClass(user.role)}">${getRoleLabel(user.role)}</span></td><td>${esc(formatSecurityRolesSummary(user.securityRoles))}</td><td>${esc(primaryUnit)}</td><td class="review-cell-secondary">${esc(formatUserUnitSummary(user))}</td><td class="review-cell-secondary">${esc(formatUserReviewUnitSummary(user))}</td><td class="review-cell-secondary">${esc(user.email || '')}</td><td><div class="user-actions">${actionButtons.join('')}</div></td></tr>`;
+    }
+
+    function buildSystemUsersEmptyRow() {
+      return `<tr><td colspan="9"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('users')}</div><div class="empty-state-title">目前沒有符合條件的帳號</div><div class="empty-state-desc">請調整篩選條件，或確認系統帳號後端是否已同步資料。</div></div></td></tr>`;
+    }
+
+    function buildSystemUsersVirtualSpacer(height) {
+      return `<tr class="review-virtual-spacer" aria-hidden="true"><td class="review-virtual-spacer-cell" colspan="9" style="height:${Math.max(0, Math.round(height))}px"></td></tr>`;
+    }
+
+    function getSystemUsersVirtualWindow(totalRows) {
+      if (!systemUsersTableViewport || totalRows <= SYSTEM_USERS_VIRTUAL_ROW_THRESHOLD) {
+        return {
+          enabled: false,
+          start: 0,
+          end: totalRows,
+          padTop: 0,
+          padBottom: 0
+        };
+      }
+      const scrollTop = Math.max(0, Number(systemUsersTableViewport.scrollTop || 0));
+      const viewportHeight = Math.max(320, Number(systemUsersTableViewport.clientHeight || 0) || 0);
+      const start = Math.max(0, Math.floor(scrollTop / SYSTEM_USERS_VIRTUAL_ROW_HEIGHT) - SYSTEM_USERS_VIRTUAL_ROW_OVERSCAN);
+      const visibleCount = Math.ceil(viewportHeight / SYSTEM_USERS_VIRTUAL_ROW_HEIGHT) + (SYSTEM_USERS_VIRTUAL_ROW_OVERSCAN * 2);
+      const end = Math.min(totalRows, start + visibleCount);
+      return {
+        enabled: true,
+        start,
+        end,
+        padTop: start * SYSTEM_USERS_VIRTUAL_ROW_HEIGHT,
+        padBottom: Math.max(0, (totalRows - end) * SYSTEM_USERS_VIRTUAL_ROW_HEIGHT)
+      };
+    }
+
+    function renderSystemUsersRows(items) {
+      const body = document.getElementById('system-users-table-body');
+      if (!body) return;
+      const users = Array.isArray(items) ? items : [];
+      if (!users.length) {
+        body.innerHTML = buildSystemUsersEmptyRow();
+        return;
+      }
+      const virtualWindow = getSystemUsersVirtualWindow(users.length);
+      if (!virtualWindow.enabled) {
+        body.innerHTML = users.map((user) => buildSystemUsersRow(user)).join('');
+        return;
+      }
+      const rowsHtml = users
+        .slice(virtualWindow.start, virtualWindow.end)
+        .map((user) => buildSystemUsersRow(user))
+        .join('');
+      body.innerHTML = buildSystemUsersVirtualSpacer(virtualWindow.padTop)
+        + rowsHtml
+        + buildSystemUsersVirtualSpacer(virtualWindow.padBottom);
+    }
+
+    function scheduleSystemUsersRowsRender() {
+      if (systemUsersVirtualRowsRenderPending) return;
+      systemUsersVirtualRowsRenderPending = true;
+      const run = function () {
+        systemUsersVirtualRowsRenderPending = false;
+        if (!String(window.location.hash || '').startsWith('#users')) return;
+        renderSystemUsersRows(Array.isArray(systemUsersState && systemUsersState.items) ? systemUsersState.items : []);
+      };
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(run);
+        return;
+      }
+      window.setTimeout(run, 0);
+    }
+
     function showAuditEntryModal(index) {
       const items = Array.isArray(auditTrailState.items) ? auditTrailState.items : [];
       const entryIndex = Math.max(0, Number(index) || 0);
@@ -1592,7 +1688,7 @@
         ['紀錄編號', entry.recordId || '—']
       ].map(([label, value]) => `<div class="audit-modal-field"><div class="audit-modal-label">${esc(label)}</div><div class="audit-modal-value">${esc(value)}</div></div>`).join('');
 
-      mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="audit-entry-modal-title" aria-describedby="audit-entry-modal-description" style="max-width:min(96vw,980px);width:min(96vw,980px);max-height:90vh;overflow:auto"><div class="modal-header"><span class="modal-title" id="audit-entry-modal-title">操作稽核差異檢視</span><button class="btn btn-ghost btn-icon" data-dismiss-modal aria-label="關閉操作稽核差異檢視">✕</button></div><div class="modal-body"><p class="sr-only" id="audit-entry-modal-description">檢視單筆操作稽核紀錄的摘要與完整內容。</p><div class="audit-modal-summary">${fieldRows}</div><div class="form-group" style="margin-top:18px"><label class="form-label">內容摘要</label><div class="review-card-subtitle" style="white-space:pre-wrap;line-height:1.6">${esc(entry.payloadPreview || '—')}</div></div><div class="form-group"><label class="form-label">完整內容</label><pre class="audit-modal-pre">${esc(payloadText)}</pre></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss-modal>關閉</button></div></div></div>`;
+      mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal audit-entry-modal" role="dialog" aria-modal="true" aria-labelledby="audit-entry-modal-title" aria-describedby="audit-entry-modal-description"><div class="modal-header"><span class="modal-title" id="audit-entry-modal-title">操作稽核差異檢視</span><button class="btn btn-ghost btn-icon" data-dismiss-modal aria-label="關閉操作稽核差異檢視">✕</button></div><div class="modal-body"><p class="sr-only" id="audit-entry-modal-description">檢視單筆操作稽核紀錄的摘要與完整內容。</p><div class="audit-modal-summary">${fieldRows}</div><div class="form-group audit-modal-summary-block"><label class="form-label">內容摘要</label><div class="review-card-subtitle review-cell-wrap">${esc(entry.payloadPreview || '—')}</div></div><div class="form-group"><label class="form-label">完整內容</label><pre class="audit-modal-pre">${esc(payloadText)}</pre></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss-modal>關閉</button></div></div></div>`;
       const backdrop = document.getElementById('modal-bg');
       if (backdrop) {
         bindAdminPageEvent(backdrop, 'click', (event) => {
@@ -2144,7 +2240,7 @@
     function renderSecurityWindowPersonBadge(person) {
       const roles = Array.isArray(person && person.securityRoles) ? person.securityRoles : [];
       if (!roles.length) return '<span class="badge-role badge-pending">未設定</span>';
-      return roles.map((role) => `<span class="badge-role badge-unit-admin" style="margin-right:6px">${esc(role)}</span>`).join('');
+      return roles.map((role) => `<span class="badge-role badge-unit-admin badge-role-chip">${esc(role)}</span>`).join('');
     }
 
     function buildSecurityWindowInventory(users, applications) {
@@ -2590,6 +2686,7 @@
         const rightButton = host.querySelector(`[data-review-scroll-right="${key}"]`);
         const maxScrollLeft = () => Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
         const isScrollable = () => maxScrollLeft() > 6;
+        const isVerticallyScrollable = () => Math.max(0, wrapper.scrollHeight - wrapper.clientHeight) > 6;
         const syncButtonState = () => {
           const maxLeft = maxScrollLeft();
           wrapper.classList.toggle('is-scrollable', maxLeft > 6);
@@ -2630,6 +2727,7 @@
         });
         bindAdminPageEvent(wrapper, 'wheel', (event) => {
           if (!isScrollable()) return;
+          if (isVerticallyScrollable() && !event.shiftKey) return;
           if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) && !event.shiftKey) return;
           event.preventDefault();
           wrapper.scrollLeft += event.shiftKey ? event.deltaY + event.deltaX : event.deltaY;
@@ -2849,7 +2947,7 @@
       const visibleUsersCache = renderUsers._remoteViewCache || (renderUsers._remoteViewCache = systemUsersCollectionBundle.viewCache || createAdminRemoteViewCache(DEFAULT_SYSTEM_USERS_FILTERS));
     systemUsersState.filters = normalizePagedFilters({ ...systemUsersState.filters, ...(opts.filters || opts) }, DEFAULT_SYSTEM_USERS_FILTERS);
     systemUsersState.loading = true;
-    app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取系統帳號清單...</div></div>`;
+      app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card review-loading-card">正在讀取系統帳號清單...</div></div>`;
     refreshIcons();
 
     async function fetchUsersForAdminView(fetchOptions) {
@@ -2904,7 +3002,7 @@
       systemUsersState.loading = false;
     } catch (error) {
       systemUsersState.loading = false;
-      app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">無法讀取系統帳號清單。</p></div><button class="btn btn-secondary" data-action="admin.refreshUsers">${ic('refresh-cw', 'icon-sm')} 重試</button></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('users')}</div><div class="empty-state-title">系統帳號後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
+      app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">無法讀取系統帳號清單。</p></div><button class="btn btn-secondary" data-action="admin.refreshUsers">${ic('refresh-cw', 'icon-sm')} 重試</button></div><div class="card"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('users')}</div><div class="empty-state-title">系統帳號後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
       return;
     }
@@ -2913,18 +3011,6 @@
     if (!(systemUsersRenderCache.signature === renderSignature && app && app.dataset.systemUsersRenderSignature === renderSignature)) {
       let pageHtml = systemUsersMarkupCache.signature === renderSignature ? systemUsersMarkupCache.html : '';
       if (!pageHtml) {
-    const users = Array.isArray(systemUsersState.items) ? systemUsersState.items : [];
-    const rows = users.length ? users.map((u) => {
-      const primaryUnit = getPrimaryAuthorizedUnit(u) || '未指定';
-      const isProtectedUser = String(u.username || '').trim() === 'admin' || String(u.role || '').trim() === ROLES.ADMIN;
-      const actionButtons = [
-        `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(u.username)}">${ic('edit-2', 'btn-icon-svg')}</button>`
-      ];
-      if (!isProtectedUser) {
-        actionButtons.push(`<button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(u.username)}">${ic('trash-2', 'btn-icon-svg')}</button>`);
-      }
-      return `<tr><td style="font-weight:500;color:var(--text-primary)">${esc(u.username)}</td><td>${esc(u.name)}</td><td><span class="badge-role ${getRoleBadgeClass(u.role)}">${getRoleLabel(u.role)}</span></td><td>${esc(formatSecurityRolesSummary(u.securityRoles))}</td><td>${esc(primaryUnit)}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(formatUserReviewUnitSummary(u))}</td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(u.email || '')}</td><td><div class="user-actions">${actionButtons.join('')}</div></td></tr>`;
-    }).join('') : `<tr><td colspan="9"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('users')}</div><div class="empty-state-title">目前沒有符合條件的帳號</div><div class="empty-state-desc">請調整篩選條件，或確認系統帳號後端是否已同步資料。</div></div></td></tr>`;
     const pager = renderAdminCollectionPager({
       idPrefix: 'system-users',
       actionPrefix: 'admin.user',
@@ -2935,13 +3021,39 @@
     });
     pageHtml = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" data-action="admin.addUser">${ic('user-plus', 'icon-sm')} 新增使用者</button></div>
       <div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${systemUsersState.summary.total || 0}</div><div class="stat-label">符合條件帳號</div></div><div class="stat-card closed"><div class="stat-icon">${ic('shield-check')}</div><div class="stat-value">${systemUsersState.summary.admin || 0}</div><div class="stat-label">最高管理者</div></div><div class="stat-card pending"><div class="stat-icon">${ic('building-2')}</div><div class="stat-value">${systemUsersState.summary.unitAdmin || 0}</div><div class="stat-label">單位管理者</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${systemUsersState.summary.securityWindow || 0}</div><div class="stat-label">具資安窗口</div></div></div>
-      <div class="card review-table-card"><div class="card-header"><span class="card-title">帳號清單</span><span class="review-card-subtitle">可依角色、單位與關鍵字查找帳號</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="system-users-keyword" value="${esc(systemUsersState.filters.q)}" placeholder="帳號、姓名、電子郵件"></div><div class="form-group"><label class="form-label">角色</label><select class="form-select" id="system-users-role"><option value="" ${!systemUsersState.filters.role ? 'selected' : ''}>全部</option><option value="${esc(ROLES.ADMIN)}" ${systemUsersState.filters.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option><option value="${esc(ROLES.UNIT_ADMIN)}" ${systemUsersState.filters.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option></select></div><div class="form-group"><label class="form-label">單位</label><input class="form-input" id="system-users-unit" value="${esc(systemUsersState.filters.unit)}" placeholder="主要或授權單位"></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUserFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUserFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('system-users-table', '<th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要歸屬單位</th><th>額外授權範圍</th><th>審核範圍</th><th>電子郵件</th><th>操作</th>', rows, { toolbarSubtitle: `最後更新：${fmtTime(systemUsersState.lastLoadedAt)}` })}</div></div>`;
+      <div class="card review-table-card"><div class="card-header"><span class="card-title">帳號清單</span><span class="review-card-subtitle">可依角色、單位與關鍵字查找帳號</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="system-users-keyword" value="${esc(systemUsersState.filters.q)}" placeholder="帳號、姓名、電子郵件"></div><div class="form-group"><label class="form-label">角色</label><select class="form-select" id="system-users-role"><option value="" ${!systemUsersState.filters.role ? 'selected' : ''}>全部</option><option value="${esc(ROLES.ADMIN)}" ${systemUsersState.filters.role === ROLES.ADMIN ? 'selected' : ''}>最高管理員</option><option value="${esc(ROLES.UNIT_ADMIN)}" ${systemUsersState.filters.role === ROLES.UNIT_ADMIN ? 'selected' : ''}>單位管理員</option></select></div><div class="form-group"><label class="form-label">單位</label><input class="form-input" id="system-users-unit" value="${esc(systemUsersState.filters.unit)}" placeholder="主要或授權單位"></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUserFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUserFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('system-users-table', '<th>帳號</th><th>姓名</th><th>角色</th><th>資安窗口</th><th>主要歸屬單位</th><th>額外授權範圍</th><th>審核範圍</th><th>電子郵件</th><th>操作</th>', '', { toolbarSubtitle: `最後更新：${fmtTime(systemUsersState.lastLoadedAt)}`, wrapperId: 'system-users-table-wrap', wrapperClass: 'system-users-table-wrap', tbodyId: 'system-users-table-body' })}</div></div>`;
         systemUsersMarkupCache = { signature: renderSignature, html: pageHtml };
       }
       app.innerHTML = pageHtml;
       systemUsersRenderCache = { signature: renderSignature, filterSignature: JSON.stringify(systemUsersState.filters) };
       if (app) app.dataset.systemUsersRenderSignature = renderSignature;
     }
+    systemUsersTableViewport = document.getElementById('system-users-table-wrap');
+    renderSystemUsersRows(Array.isArray(systemUsersState.items) ? systemUsersState.items : []);
+    if (typeof releaseSystemUsersVirtualScroll === 'function') {
+      releaseSystemUsersVirtualScroll();
+      releaseSystemUsersVirtualScroll = null;
+    }
+    if (typeof releaseSystemUsersVirtualResize === 'function') {
+      releaseSystemUsersVirtualResize();
+      releaseSystemUsersVirtualResize = null;
+    }
+    if (systemUsersTableViewport) {
+      releaseSystemUsersVirtualScroll = bindAdminPageEvent(systemUsersTableViewport, 'scroll', scheduleSystemUsersRowsRender, { passive: true });
+      releaseSystemUsersVirtualResize = bindAdminPageEvent(window, 'resize', scheduleSystemUsersRowsRender);
+    }
+    registerAdminPageCleanup(function () {
+      if (typeof releaseSystemUsersVirtualScroll === 'function') {
+        releaseSystemUsersVirtualScroll();
+      }
+      if (typeof releaseSystemUsersVirtualResize === 'function') {
+        releaseSystemUsersVirtualResize();
+      }
+      releaseSystemUsersVirtualScroll = null;
+      releaseSystemUsersVirtualResize = null;
+      systemUsersTableViewport = null;
+      systemUsersVirtualRowsRenderPending = false;
+    });
     bindAdminCollectionPager({
       idPrefix: 'system-users',
       actionPrefix: 'admin.user',
@@ -2950,6 +3062,7 @@
       limitOptions: ['5', '20', '50', '100'],
       onChange: (patch) => renderUsers({ ...systemUsersState.filters, ...patch }, { skipSync: true, forceRemote: true })
     });
+    wireReviewTableScrollers(app);
     refreshIcons();
   }
 
@@ -3680,6 +3793,18 @@
       releaseAuditTrailVirtualScroll = bindAdminPageEvent(auditTrailTableViewport, 'scroll', scheduleAuditTrailRowsRender, { passive: true });
       releaseAuditTrailVirtualResize = bindAdminPageEvent(window, 'resize', scheduleAuditTrailRowsRender);
     }
+    registerAdminPageCleanup(function () {
+      if (typeof releaseAuditTrailVirtualScroll === 'function') {
+        releaseAuditTrailVirtualScroll();
+      }
+      if (typeof releaseAuditTrailVirtualResize === 'function') {
+        releaseAuditTrailVirtualResize();
+      }
+      releaseAuditTrailVirtualScroll = null;
+      releaseAuditTrailVirtualResize = null;
+      auditTrailTableViewport = null;
+      auditTrailVirtualRowsRenderPending = false;
+    });
     const form = document.getElementById('audit-filter-form');
     if (form) {
       bindAdminPageEvent(form, 'submit', function (event) {

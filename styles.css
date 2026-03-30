@@ -5509,8 +5509,38 @@ tbody td:first-child {
   scrollbar-width: thin;
 }
 
+.review-toolbar--gap-top {
+  margin: 14px 0 0;
+}
+
+.review-toolbar-label-inline {
+  margin: 0 4px 0 0;
+}
+
+.review-page-status {
+  margin: 0 4px 0 8px;
+}
+
+.review-page-jump-label {
+  margin: 0 4px 0 8px;
+}
+
+.review-page-limit-select {
+  width: 96px;
+}
+
+.review-page-jump-input {
+  width: 88px;
+}
+
 .audit-trail-table-wrap {
   max-height: 68vh;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.system-users-table-wrap {
+  max-height: min(68vh, 860px);
   overflow-y: auto;
   overscroll-behavior-y: contain;
 }
@@ -5520,6 +5550,85 @@ tbody td:first-child {
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+.review-cell-strong {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.review-cell-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.review-cell-secondary {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.review-cell-wrap {
+  max-width: 360px;
+  white-space: normal;
+  line-height: 1.55;
+}
+
+.review-card-subtitle--top-4 {
+  margin-top: 4px;
+}
+
+.review-card-subtitle--top-6 {
+  margin-top: 6px;
+}
+
+.review-callout-strong {
+  margin-left: 8px;
+}
+
+.review-callout--spaced {
+  margin-top: 14px;
+}
+
+.review-filter-grid {
+  margin-bottom: 18px;
+}
+
+.review-form-actions-start {
+  justify-content: flex-start;
+  margin-bottom: 8px;
+}
+
+.review-loading-card {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.review-empty--spacious {
+  padding: 40px 24px;
+}
+
+.review-empty--compact {
+  padding: 36px 20px;
+}
+
+.review-empty--medium {
+  padding: 32px 20px;
+}
+
+.audit-entry-modal {
+  max-width: min(96vw, 980px);
+  width: min(96vw, 980px);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.audit-modal-summary-block {
+  margin-top: 18px;
+}
+
+.badge-role-chip {
+  margin-right: 6px;
 }
 
 .review-table-wrapper .review-data-table {
@@ -7450,6 +7559,95 @@ tbody tr:hover {
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+
+.training-editor-note--spaced {
+  margin-bottom: 16px;
+}
+
+.training-roster-import-wrap.is-hidden {
+  display: none;
+}
+
+.training-roster-groups-viewport {
+  max-height: min(66vh, 980px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.training-empty-state--compact {
+  padding: 28px;
+}
+
+.training-empty-state--loading {
+  padding: 16px;
+}
+
+.training-roster-pager {
+  margin: 14px 0 16px;
+}
+
+.training-roster-filter-keyword {
+  min-width: 260px;
+}
+
+.training-roster-filter-stats-unit {
+  min-width: 180px;
+}
+
+.training-roster-filter-unit {
+  min-width: 220px;
+}
+
+.training-roster-filter-source {
+  min-width: 132px;
+}
+
+.training-form-hint-top {
+  margin-top: 4px;
+}
+
+.training-editor-card--spaced {
+  margin-bottom: 20px;
+}
+
+.training-link-spaced-top {
+  margin-top: 16px;
+}
+
+.training-roster-col-check {
+  width: 56px;
+}
+
+.training-roster-col-order {
+  width: 68px;
+}
+
+.training-roster-col-name,
+.training-roster-col-unit {
+  min-width: 180px;
+}
+
+.training-roster-col-identity,
+.training-roster-col-title {
+  width: 140px;
+}
+
+.training-roster-col-created-by,
+.training-roster-col-created-at {
+  width: 160px;
+}
+
+.training-roster-col-actions {
+  width: 120px;
+}
+
+.training-roster-virtual-spacer {
+  pointer-events: none;
+}
+
+.training-roster-virtual-spacer-inner {
+  width: 100%;
 }
 
 .training-row-select,
