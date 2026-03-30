@@ -18,8 +18,8 @@
 
 1. `ssh useradmin@140.112.97.150`
 2. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend git -C /srv/isms-form-redesign pull --ff-only origin main`
-3. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend sh -lc 'cd /srv/isms-form-redesign && node scripts/build-version-info.cjs campus-vm > deploy-manifest.json'`
-4. `echo 'P@ss_w0rD' | sudo -S systemctl restart isms-unit-contact-backend.service caddy.service`
+3. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend bash -lc 'cd /srv/isms-form-redesign && node scripts/build-version-info.cjs campus-vm | tee deploy-manifest.json > /dev/null'`
+4. 只有 backend / runtime 變更時才跑：`echo 'P@ss_w0rD' | sudo -S systemctl restart isms-unit-contact-backend.service caddy.service`
 5. 檢查：
    - `curl http://140.112.97.150/api/unit-contact/health`
    - `curl http://140.112.97.150/deploy-manifest.json`
@@ -34,6 +34,13 @@
 - root `deploy-manifest.json` 的 `versionKey` 與 VM `git rev-parse --short=12 HEAD` 一致
 - `vm-entry-smoke` 通過
 - `campus-live-regression-smoke` 以校內 VM 為 base 通過
+
+## 避免重工
+
+- 正式部署只走 `useradmin@140.112.97.150`
+- `deploy-manifest.json` 用 `tee` 生成，不用單純 `>`，避免 batch/remote redirect 落檔不穩
+- 純前端靜態檔變更不要重啟 backend / caddy
+- Pages 發佈前先在本機刷新 root `deploy-manifest.json`
 
 ## 補充
 
