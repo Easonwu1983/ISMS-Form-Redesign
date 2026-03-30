@@ -88,9 +88,9 @@
     getAuthModule: function () { return getAuthModule(); },
     getPolicyModule: function () { return getPolicyModule(); },
     currentUser,
-    getSystemUnits,
-    getUnitCode,
-    splitUnitValue
+    getSystemUnits: function () { return getSystemUnits.apply(null, arguments); },
+    getUnitCode: function () { return getUnitCode.apply(null, arguments); },
+    splitUnitValue: function () { return splitUnitValue.apply(null, arguments); }
   });
   const appDomainBridge = appDomainTrainingRuntime.getDomainBridge();
   const {
