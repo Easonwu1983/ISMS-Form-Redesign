@@ -40,8 +40,7 @@ async function waitForAuthSurface(page, timeout = 45000) {
 
 async function waitForDashboardSurface(page, timeout = 20000) {
   await page.waitForFunction(() => {
-    return !!document.querySelector('.btn-logout')
-      && !document.querySelector('[data-testid="login-form"]')
+    return !document.querySelector('[data-testid="login-form"]')
       && (
         document.querySelectorAll('.dashboard-panel-pill').length >= 3
         || !!document.querySelector('.dashboard-grid')
