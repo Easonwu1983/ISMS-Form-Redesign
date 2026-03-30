@@ -579,37 +579,6 @@ function createAuditTrailRouter(deps) {
       const pageMeta = getAuditQueryPageMeta(url);
       const hasDetailedFilters = hasDetailedAuditFilters(url);
       const listLoadedAt = Number(state.entriesCache && state.entriesCache.loadedAt) || 0;
-      const cachedQuery = getAuditQueryCache(querySignature, listLoadedAt);
-      if (cachedQuery) {
-        logAuditTrail('list query cache hit', {
-          requestId,
-          querySignature,
-          total: cachedQuery.total,
-          offset: cachedQuery.page && cachedQuery.page.offset,
-          limit: cachedQuery.page && cachedQuery.page.limit,
-          durationMs: Date.now() - startedAt
-        });
-        await writeJson(res, buildJsonResponse(200, {
-          ok: true,
-          items: summaryOnly ? [] : cachedQuery.items,
-          total: cachedQuery.total,
-          page: summaryOnly
-            ? {
-                ...cachedQuery.page,
-                returned: 0,
-                pageStart: 0,
-                pageEnd: 0
-              }
-            : cachedQuery.page,
-          summary: cachedQuery.summary,
-          cache: {
-            query: 'hit',
-            summaryOnly
-          },
-          contractVersion: CONTRACT_VERSION
-        }), origin);
-        return;
-      }
       const canUseSummaryOnlyPath = summaryOnly
         && !hasDetailedFilters
         && state.entriesCache
@@ -661,7 +630,6 @@ function createAuditTrailRouter(deps) {
             pageEnd: 0
           }
         };
-        setAuditQueryCache(querySignature, Number(state.entriesCache && state.entriesCache.loadedAt) || 0, summaryResult);
         setAuditSummaryOnlyPageCache(
           pageMeta.limit,
           pageMeta.offset,
@@ -685,6 +653,37 @@ function createAuditTrailRouter(deps) {
           cache: {
             query: 'cached-summary',
             summaryOnly: true
+          },
+          contractVersion: CONTRACT_VERSION
+        }), origin);
+        return;
+      }
+      const cachedQuery = getAuditQueryCache(querySignature, listLoadedAt);
+      if (cachedQuery) {
+        logAuditTrail('list query cache hit', {
+          requestId,
+          querySignature,
+          total: cachedQuery.total,
+          offset: cachedQuery.page && cachedQuery.page.offset,
+          limit: cachedQuery.page && cachedQuery.page.limit,
+          durationMs: Date.now() - startedAt
+        });
+        await writeJson(res, buildJsonResponse(200, {
+          ok: true,
+          items: summaryOnly ? [] : cachedQuery.items,
+          total: cachedQuery.total,
+          page: summaryOnly
+            ? {
+                ...cachedQuery.page,
+                returned: 0,
+                pageStart: 0,
+                pageEnd: 0
+              }
+            : cachedQuery.page,
+          summary: cachedQuery.summary,
+          cache: {
+            query: 'hit',
+            summaryOnly
           },
           contractVersion: CONTRACT_VERSION
         }), origin);

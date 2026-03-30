@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   window.createShellModule = function createShellModule(deps) {
     const {
       ROUTE_WHITELIST,
@@ -113,13 +113,13 @@
     function getBuildVersionTitle() {
       var buildInfo = getBuildInfo();
       var parts = [];
-      if (buildInfo.platform) parts.push('平台：' + buildInfo.platform);
-      if (buildInfo.versionKey) parts.push('版本：' + buildInfo.versionKey);
-      if (buildInfo.commit) parts.push('提交：' + buildInfo.commit);
-      if (buildInfo.branch) parts.push('分支：' + buildInfo.branch);
-      if (buildInfo.builtAt) parts.push('建置：' + buildInfo.builtAt);
-      if (buildInfo.describe) parts.push('描述：' + buildInfo.describe);
-      return parts.length ? parts.join(' / ') : '版本資訊未提供';
+      if (buildInfo.platform) parts.push('平台: ' + buildInfo.platform);
+      if (buildInfo.versionKey) parts.push('版本: ' + buildInfo.versionKey);
+      if (buildInfo.commit) parts.push('Commit: ' + buildInfo.commit);
+      if (buildInfo.branch) parts.push('分支: ' + buildInfo.branch);
+      if (buildInfo.builtAt) parts.push('建置時間: ' + buildInfo.builtAt);
+      if (buildInfo.describe) parts.push('描述: ' + buildInfo.describe);
+      return parts.length ? parts.join(' / ') : '版本資訊不可用';
     }
 
     function renderVersionChip(extraClass) {
@@ -130,10 +130,10 @@
 
     function validatePasswordComplexity(password) {
       var value = String(password || '');
-      if (value.length < 8) return '密碼長度至少需 8 碼';
-      if (!/[a-z]/.test(value)) return '密碼至少需包含一個英文小寫字母';
-      if (!/[A-Z]/.test(value)) return '密碼至少需包含一個英文大寫字母';
-      if (!/[0-9]/.test(value)) return '密碼至少需包含一個數字';
+      if (value.length < 8) return '密碼至少需要 8 碼';
+      if (!/[a-z]/.test(value)) return '密碼至少需要一個小寫英文字母';
+      if (!/[A-Z]/.test(value)) return '密碼至少需要一個大寫英文字母';
+      if (!/[0-9]/.test(value)) return '密碼至少需要一個數字';
       return '';
     }
 
@@ -228,8 +228,8 @@
       return '<div class="app-transition-overlay" id="app-transition-overlay" aria-hidden="true">' +
         '<div class="app-transition-shell">' +
         '<div class="app-transition-icon">' + ntuLogo('ntu-logo-sm') + '</div>' +
-        '<div class="app-transition-title">正在載入系統</div>' +
-        '<div class="app-transition-subtitle">登入成功，正在切換到儀表板。</div>' +
+        '<div class="app-transition-title">甇?頛蝟餌絞</div>' +
+        '<div class="app-transition-subtitle">?餃??嚗迤?典???銵冽??/div>' +
         '</div></div>';
     }
 
@@ -252,7 +252,7 @@
     }
 
     function getRoleLabel(role) {
-      return esc(String(role || '—'));
+      return esc(String(role || '未設定'));
     }
 
     var HEADER_INTEGRATED_ROUTES = {
@@ -288,17 +288,26 @@
       var title = app.querySelector('[data-route-heading], .page-header .page-title');
       var kickerText = eyebrow && eyebrow.textContent ? eyebrow.textContent.trim() : '';
       var titleText = title && title.textContent ? title.textContent.trim() : getRouteTitle(routePage);
+      var headerContext = headerEl.querySelector('.header-context');
       var kickerEl = headerEl.querySelector('.header-kicker');
       var integrated = !!HEADER_INTEGRATED_ROUTES[routePage];
+      var hasPageHeader = !!pageHeader;
+      var shouldShowHeaderContext = !!titleText && (integrated || !hasPageHeader);
 
       if (kickerEl) {
         kickerEl.textContent = kickerText;
-        kickerEl.hidden = !kickerText;
+        kickerEl.hidden = !kickerText || !shouldShowHeaderContext;
       }
-      setHeaderContextText('.header-title', titleText);
+      if (headerContext) {
+        headerContext.hidden = !shouldShowHeaderContext;
+      }
+      headerEl.classList.toggle('header--contextual', shouldShowHeaderContext);
+      headerEl.classList.toggle('header--page-owned', hasPageHeader && !integrated);
+      setHeaderContextText('.header-title', shouldShowHeaderContext ? titleText : '');
 
       if (pageHeader) {
         pageHeader.classList.toggle('page-header--integrated', integrated);
+        pageHeader.classList.toggle('page-header--shell-owned', !integrated);
       }
     }
 
@@ -333,33 +342,33 @@
       if (typeof beginPageRuntime === 'function') beginPageRuntime();
       purgeStaleLoginState();
       var needsLocalBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
-      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="login-page"><main class="login-card" id="app" tabindex="-1" role="main" aria-labelledby="login-page-title">' +
-        '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1 id="login-page-title">內部稽核管考追蹤系統</h1><p>ISMS 管考與追蹤平台</p></div>' +
-        '<div class="login-error" id="login-error" data-testid="login-error" role="alert" aria-live="assertive" aria-atomic="true">帳號或密碼錯誤</div>' +
-        '<div id="bootstrap-panel" style="display:' + (needsLocalBootstrap ? 'block' : 'none') + '"><div class="login-entry-card login-entry-card--setup"><div class="login-entry-eyebrow">Setup</div><h2 class="login-entry-title">建立本機管理員帳號</h2><p class="login-entry-text">目前沒有任何本機帳號。請先建立一組本機管理員帳號，之後再登入系統。</p><form class="login-form" id="bootstrap-form"><div class="form-group"><label class="form-label">管理員姓名</label><input type="text" class="form-input" id="bootstrap-name" autocomplete="name" placeholder="請輸入管理員姓名" value="本機管理員" required></div><div class="form-group"><label class="form-label">管理員帳號</label><input type="text" class="form-input" id="bootstrap-user" autocomplete="username" placeholder="請輸入登入帳號" required></div><div class="form-group"><label class="form-label">電子郵件</label><input type="email" class="form-input" id="bootstrap-email" autocomplete="email" placeholder="請輸入電子郵件" required></div><div class="form-group"><label class="form-label">初始密碼</label><input type="password" class="form-input" id="bootstrap-pass" autocomplete="new-password" placeholder="至少 8 碼，含大小寫與數字" required></div><button type="submit" class="login-btn">建立本機管理員</button></form></div></div>' +
+      document.body.innerHTML = '<a class="skip-link" href="#app">頝喳銝餉??批捆</a><div class="login-page"><main class="login-card" id="app" tabindex="-1" role="main" aria-labelledby="login-page-title">' +
+        '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1 id="login-page-title">?折蝔賣蝞∟蕭頩斤頂蝯?/h1><p>ISMS 蝞∟?餈質馱撟喳</p></div>' +
+        '<div class="login-error" id="login-error" data-testid="login-error" role="alert" aria-live="assertive" aria-atomic="true">撣唾???蝣潮隤?/div>' +
+        '<div id="bootstrap-panel" style="display:' + (needsLocalBootstrap ? 'block' : 'none') + '"><div class="login-entry-card login-entry-card--setup"><div class="login-entry-eyebrow">Setup</div><h2 class="login-entry-title">撱箇??祆?蝞∠??∪董??/h2><p class="login-entry-text">?桀?瘝?隞颱??祆?撣唾????遣蝡?蝯璈恣?撣唾?嚗?敺??餃蝟餌絞??/p><form class="login-form" id="bootstrap-form"><div class="form-group"><label class="form-label">蝞∠??∪???/label><input type="text" class="form-input" id="bootstrap-name" autocomplete="name" placeholder="隢撓?亦恣?憪?" value="?祆?蝞∠??? required></div><div class="form-group"><label class="form-label">蝞∠??∪董??/label><input type="text" class="form-input" id="bootstrap-user" autocomplete="username" placeholder="隢撓?亦?亙董?? required></div><div class="form-group"><label class="form-label">?餃??萎辣</label><input type="email" class="form-input" id="bootstrap-email" autocomplete="email" placeholder="隢撓?仿摮隞? required></div><div class="form-group"><label class="form-label">??撖Ⅳ</label><input type="password" class="form-input" id="bootstrap-pass" autocomplete="new-password" placeholder="?喳? 8 蝣潘??怠之撠神?摮? required></div><button type="submit" class="login-btn">撱箇??祆?蝞∠???/button></form></div></div>' +
         '<div id="login-panel" style="display:' + (needsLocalBootstrap ? 'none' : 'block') + '"><form class="login-form" id="login-form" data-testid="login-form">' +
-        '<div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="login-user" data-testid="login-user" autocomplete="username" placeholder="請輸入帳號" required autofocus></div>' +
-        '<div class="form-group"><label class="form-label">密碼</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" autocomplete="current-password" placeholder="請輸入密碼" required></div>' +
-        '<button type="submit" class="login-btn" data-testid="login-submit">登入系統 ' + ic('arrow-right', 'icon-sm') + '</button>' +
+        '<div class="form-group"><label class="form-label">撣唾?</label><input type="text" class="form-input" id="login-user" data-testid="login-user" autocomplete="username" placeholder="隢撓?亙董?? required autofocus></div>' +
+        '<div class="form-group"><label class="form-label">撖Ⅳ</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" autocomplete="current-password" placeholder="隢撓?亙?蝣? required></div>' +
+        '<button type="submit" class="login-btn" data-testid="login-submit">?餃蝟餌絞 ' + ic('arrow-right', 'icon-sm') + '</button>' +
         '</form>' +
-        '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h2 class="login-entry-title">申請單位管理人員</h2><p class="login-entry-text">如需新增或異動各單位管理窗口，請先送出單位管理人申請。審核通過後，系統會直接啟用帳號並寄送登入資訊。</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">前往申請</a><a class="btn btn-secondary" href="#apply-unit-contact-status">查詢進度</a></div></div>' +
-        '<p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">忘記密碼？</a></p></div>' +
+        '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h2 class="login-entry-title">?唾??桐?蝞∠?鈭箏</h2><p class="login-entry-text">憒??啣?????桐?蝞∠?蝒嚗???桐?蝞∠?鈭箇隢祟?賊?敺?蝟餌絞??亙??典董?蒂撖?亥?閮?/p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">???唾?</a><a class="btn btn-secondary" href="#apply-unit-contact-status">?亥岷?脣漲</a></div></div>' +
+        '<p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">敹?撖Ⅳ嚗?/a></p></div>' +
         '<div id="change-panel" style="display:none">' +
-        '<div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">首次登入需變更密碼</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
-        '<div class="login-error" id="change-error" role="alert" aria-live="assertive" aria-atomic="true">密碼變更失敗</div>' +
-        '<form class="login-form" id="change-form"><input type="hidden" id="change-username"><div class="form-group"><label class="form-label">目前密碼</label><input type="password" class="form-input" id="change-current-password" autocomplete="current-password" placeholder="請輸入目前密碼" required></div><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="change-pass" autocomplete="new-password" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="change-pass-confirm" autocomplete="new-password" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' 立即更新密碼</button></form>' +
-        '<p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
+        '<div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">擐活?餃?霈撖Ⅳ</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">撖Ⅳ??喳? 8 蝣潘?銝血??怨?之撖怒??撖怨??詨???/p></div>' +
+        '<div class="login-error" id="change-error" role="alert" aria-live="assertive" aria-atomic="true">撖Ⅳ霈憭望?</div>' +
+        '<form class="login-form" id="change-form"><input type="hidden" id="change-username"><div class="form-group"><label class="form-label">?桀?撖Ⅳ</label><input type="password" class="form-input" id="change-current-password" autocomplete="current-password" placeholder="隢撓?亦??蝣? required></div><div class="form-group"><label class="form-label">?啣?蝣?/label><input type="password" class="form-input" id="change-pass" autocomplete="new-password" placeholder="?喳? 8 蝣? required></div><div class="form-group"><label class="form-label">蝣箄??啣?蝣?/label><input type="password" class="form-input" id="change-pass-confirm" autocomplete="new-password" placeholder="?活頛詨?啣?蝣? required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' 蝡?湔撖Ⅳ</button></form>' +
+        '<p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">餈??餃</a></p></div>' +
         '<div id="forgot-panel" style="display:none">' +
-        '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">重設密碼</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">新密碼需至少 8 碼，並包含英文大寫、英文小寫與數字。</p></div>' +
-        '<div class="login-error" id="forgot-error" role="alert" aria-live="assertive" aria-atomic="true">找不到符合帳號與電子郵件的使用者</div>' +
-        '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">帳號</label><input type="text" class="form-input" id="forgot-username" autocomplete="username" placeholder="請輸入帳號" required></div><div class="form-group"><label class="form-label">註冊電子郵件</label><input type="email" class="form-input" id="forgot-email" autocomplete="email" placeholder="請輸入帳號綁定的電子郵件" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 寄送重設信</button></form>' +
+        '<div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">?身撖Ⅳ</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">?啣?蝣潮??喳? 8 蝣潘?銝血??怨?之撖怒??撖怨??詨???/p></div>' +
+        '<div class="login-error" id="forgot-error" role="alert" aria-live="assertive" aria-atomic="true">?曆??啁泵?董???餃??萎辣?蝙?刻?/div>' +
+        '<form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">撣唾?</label><input type="text" class="form-input" id="forgot-username" autocomplete="username" placeholder="隢撓?亙董?? required></div><div class="form-group"><label class="form-label">閮餃??餃??萎辣</label><input type="email" class="form-input" id="forgot-email" autocomplete="email" placeholder="隢撓?亙董??摰??餃??萎辣" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' 撖?閮凋縑</button></form>' +
         '<div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px">' +
-        '<p style="font-size:.88rem;color:#0f172a;font-weight:600" id="reset-result-title">重設信已寄出</p>' +
-        '<p style="font-size:.82rem;color:var(--text-secondary)">帳號：<strong id="reset-username"></strong></p>' +
-        '<p style="font-size:.82rem;color:var(--text-secondary)">有效期限：<strong id="reset-expire"></strong></p>' +
+        '<p style="font-size:.88rem;color:#0f172a;font-weight:600" id="reset-result-title">?身靽∪歇撖</p>' +
+        '<p style="font-size:.82rem;color:var(--text-secondary)">撣唾?嚗?strong id="reset-username"></strong></p>' +
+        '<p style="font-size:.82rem;color:var(--text-secondary)">????嚗?strong id="reset-expire"></strong></p>' +
         '<p style="font-size:.82rem;color:var(--text-secondary);margin-top:6px" id="reset-result-message"></p>' +
-        '<form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><div class="form-group"><label class="form-label">重設代碼</label><input type="text" class="form-input" id="redeem-token" autocomplete="one-time-code" placeholder="請輸入信件中的重設代碼" required></div><div class="form-group"><label class="form-label">新密碼</label><input type="password" class="form-input" id="redeem-pass" autocomplete="new-password" placeholder="至少 8 碼" required></div><div class="form-group"><label class="form-label">確認新密碼</label><input type="password" class="form-input" id="redeem-pass-confirm" autocomplete="new-password" placeholder="再次輸入新密碼" required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' 完成重設</button></form></div>' +
-        '<p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">返回登入</a></p></div>' +
+        '<form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><div class="form-group"><label class="form-label">?身隞?Ⅳ</label><input type="text" class="form-input" id="redeem-token" autocomplete="one-time-code" placeholder="隢撓?乩縑隞嗡葉??閮凋誨蝣? required></div><div class="form-group"><label class="form-label">?啣?蝣?/label><input type="password" class="form-input" id="redeem-pass" autocomplete="new-password" placeholder="?喳? 8 蝣? required></div><div class="form-group"><label class="form-label">蝣箄??啣?蝣?/label><input type="password" class="form-input" id="redeem-pass-confirm" autocomplete="new-password" placeholder="?活頛詨?啣?蝣? required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' 摰??身</button></form></div>' +
+        '<p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">餈??餃</a></p></div>' +
         '</main></div><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div>';
 
       function switchPanel(target) {
@@ -388,13 +397,13 @@
           }
           try {
             await bootstrapLocalAdminAccount({ username: username, password: password, email: email, name: name });
-            toast('本機管理員帳號已建立，請使用新帳號登入', 'success');
+            toast('已建立本機管理員帳號，請使用新帳號登入。', 'success');
             switchPanel('login-panel');
             document.getElementById('login-user').value = username;
             document.getElementById('login-pass').value = '';
             document.getElementById('login-user').focus();
           } catch (error) {
-            toast(String(error && error.message || error || '建立本機管理員失敗'), 'error');
+            toast(String(error && error.message || error || '建立本機管理員帳號失敗'), 'error');
           }
         });
       }
@@ -410,10 +419,10 @@
               document.getElementById('change-username').value = u;
               document.getElementById('change-current-password').value = p;
               switchPanel('change-panel');
-              toast('請先變更密碼後再進入系統', 'info');
+              toast('隢?霈撖Ⅳ敺??脣蝟餌絞', 'info');
               return;
             }
-            toast('登入成功，歡迎 ' + user.name, 'success');
+            toast('?餃??嚗迭餈?' + user.name, 'success');
             try {
               sessionStorage.setItem('__AUTH_BOOTSTRAP_FRESH__', '1');
             } catch (_) { }
@@ -431,7 +440,7 @@
         } catch (error) {
           var loginError = document.getElementById('login-error');
           if (loginError) loginError.classList.add('show');
-          toast(String(error && error.message || error || '登入失敗'), 'error');
+          toast(String(error && error.message || error || '?餃憭望?'), 'error');
         }
       });
 
@@ -442,7 +451,7 @@
         var nextPassword = document.getElementById('change-pass').value;
         var confirmPassword = document.getElementById('change-pass-confirm').value;
         if (nextPassword !== confirmPassword) {
-          document.getElementById('change-error').textContent = '兩次輸入的新密碼不一致';
+          document.getElementById('change-error').textContent = '新密碼與確認密碼不一致';
           var changeError = document.getElementById('change-error');
           if (changeError) changeError.classList.add('show');
           return;
@@ -457,17 +466,17 @@
         try {
           var updatedUser = await changePassword({ username: username, currentPassword: currentPassword, newPassword: nextPassword });
           if (!updatedUser) {
-            document.getElementById('change-error').textContent = '密碼變更失敗';
+            document.getElementById('change-error').textContent = '密碼更新失敗';
             var changeError = document.getElementById('change-error');
             if (changeError) changeError.classList.add('show');
             return;
           }
-          toast('密碼已更新，請重新登入系統', 'success');
+          toast('密碼已更新，請使用新密碼重新登入。', 'success');
           switchPanel('login-panel');
           document.getElementById('login-user').value = username;
           document.getElementById('login-pass').value = '';
         } catch (error) {
-          document.getElementById('change-error').textContent = String(error && error.message || error || '密碼變更失敗');
+          document.getElementById('change-error').textContent = String(error && error.message || error || '密碼更新失敗');
           var changeError = document.getElementById('change-error');
           if (changeError) changeError.classList.add('show');
         }
@@ -502,19 +511,19 @@
           var forgotError = document.getElementById('forgot-error');
           if (forgotError) forgotError.classList.remove('show');
           document.getElementById('reset-username').textContent = resetResult.user.username;
-          document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || '依系統設定';
+          document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || '稍後再次嘗試';
           var deliveredByMail = !!(resetResult.delivery && resetResult.delivery.sent);
-          document.getElementById('reset-result-title').textContent = deliveredByMail ? '重設信已寄出' : '目前無法寄送重設信';
+          document.getElementById('reset-result-title').textContent = deliveredByMail ? '重設信已寄出' : '無法寄送重設信';
           document.getElementById('reset-result-message').textContent = deliveredByMail
-            ? ('系統已將重設代碼寄送到 ' + (resetResult.user.email || email) + '，請查看信件後貼到下方欄位。')
-            : '系統暫時無法寄送重設信，請稍後再試，或聯絡最高管理員協助重設。';
+            ? ('系統已將重設密碼通知寄到 ' + (resetResult.user.email || email) + '，請依信件說明完成後續操作。')
+            : '系統目前無法寄送重設通知，請稍後再試或由管理員協助處理。';
           document.getElementById('redeem-username').value = resetResult.user.username;
           document.getElementById('redeem-token').value = '';
           document.getElementById('redeem-form').style.display = deliveredByMail ? '' : 'none';
           document.getElementById('forgot-result').style.display = 'block';
-          toast(deliveredByMail ? '重設信已寄出' : '目前無法寄送重設信', deliveredByMail ? 'success' : 'error');
+          toast(deliveredByMail ? '重設信已寄出' : '無法寄送重設信', deliveredByMail ? 'success' : 'error');
         } catch (error) {
-          document.getElementById('forgot-error').textContent = String(error && error.message || error || '密碼重設失敗');
+          document.getElementById('forgot-error').textContent = String(error && error.message || error || '密碼重設申請失敗');
           var forgotError = document.getElementById('forgot-error');
           if (forgotError) forgotError.classList.add('show');
         }
@@ -527,7 +536,7 @@
         var nextPassword = document.getElementById('redeem-pass').value;
         var confirmPassword = document.getElementById('redeem-pass-confirm').value;
         if (nextPassword !== confirmPassword) {
-          toast('兩次輸入的新密碼不一致', 'error');
+          toast('新密碼與確認密碼不一致', 'error');
           return;
         }
         var redeemPasswordError = validatePasswordComplexity(nextPassword);
@@ -538,10 +547,10 @@
         try {
           var user = await redeemResetPassword({ username: username, token: token, newPassword: nextPassword });
           if (!user) {
-            toast('重設代碼無效或已過期', 'error');
+            toast('重設密碼失敗', 'error');
             return;
           }
-          toast('密碼已重設並完成登入', 'success');
+          toast('密碼已重設，請重新登入', 'success');
             renderApp();
         } catch (error) {
           toast(String(error && error.message || error || '重設密碼失敗'), 'error');
@@ -613,7 +622,7 @@
 
       var headerEl = document.getElementById('header');
       if (!headerEl) return;
-      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context"><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout">登出</button></div>';
+      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context" hidden><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout">登出</button></div>';
 
       var switcher = document.getElementById('header-unit-switch');
       if (switcher) {
@@ -629,7 +638,7 @@
       closeSidebar();
       var appEl = document.getElementById('app');
       if (!appEl) return;
-      appEl.innerHTML = '<div class="animate-in"><div class="card"><div class="card-header"><span class="card-title">正在同步系統資料</span></div><p class="page-subtitle" style="margin:0">正在驗證登入狀態並同步矯正單、檢核表與教育訓練資料，完成後會自動載入頁面。</p></div></div>';
+      appEl.innerHTML = '<div class="animate-in"><div class="card"><div class="card-header"><span class="card-title">甇??郊蝟餌絞鞈?</span></div><p class="page-subtitle" style="margin:0">甇?撽??餃??蒂?郊?舀迤?柴炎?貉”???脰?蝺渲???摰?敺??芸?頛???/p></div></div>';
       refreshIcons();
     }
 
@@ -678,7 +687,7 @@
         })
         .catch(function (error) {
           window.__ismsError('route render failed:', error);
-          toast('頁面載入失敗，請稍後再試', 'error');
+          toast('?頛憭望?嚗?蝔??岫', 'error');
         })
         .finally(function () {
           setRouteLoadingState(false);
@@ -688,7 +697,7 @@
 
     function renderPublicPage(page, param) {
       if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
-      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>內部稽核管考追蹤系統</strong><span>ISMS 管考與追蹤平台</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">進入系統</a>' : '<a class="btn btn-secondary" href="#">登入系統</a>') + '</div></header><main class="public-main" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div></div>';
+      document.body.innerHTML = '<a class="skip-link" href="#app">頝喳銝餉??批捆</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>?折蝔賣蝞∟蕭頩斤頂蝯?/strong><span>ISMS 蝞∟?餈質馱撟喳</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">?亥岷?脣漲</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">?脣蝟餌絞</a>' : '<a class="btn btn-secondary" href="#">?餃蝟餌絞</a>') + '</div></header><main class="public-main" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div></div>';
       if (typeof beginPageRuntime === 'function') beginPageRuntime();
       setRouteLoadingState(true);
       Promise.resolve(getRouteMeta(page).render(param))
@@ -697,7 +706,7 @@
         })
         .catch(function (error) {
           window.__ismsError('public route render failed:', error);
-          toast('頁面載入失敗，請稍後再試', 'error');
+          toast('?頛憭望?嚗?蝔??岫', 'error');
         })
         .finally(function () {
           setRouteLoadingState(false);
@@ -717,7 +726,7 @@
         return;
       }
       var showTransitionOverlay = consumeAppTransitionFlag();
-      document.body.innerHTML = '<a class="skip-link" href="#app">跳到主要內容</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div>' + (showTransitionOverlay ? renderAppTransitionOverlay() : '');
+      document.body.innerHTML = '<a class="skip-link" href="#app">頝喳銝餉??批捆</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div>' + (showTransitionOverlay ? renderAppTransitionOverlay() : '');
       if (typeof window !== 'undefined' && window.__REMOTE_BOOTSTRAP_STATE__ === 'ready') {
         handleRoute();
         if (showTransitionOverlay) dismissAppTransitionOverlay();
@@ -728,8 +737,8 @@
         if (currentUser()) handleRoute();
       }).catch(function (error) {
         window.__ismsError(error && error.stack ? error.stack : String(error));
-        if (String(error && error.message || '').indexOf('登入狀態已失效') >= 0) {
-          toast('登入狀態已失效，請重新登入', 'error');
+        if (String(error && error.message || '').indexOf('?餃??歇憭望?') >= 0) {
+          toast('?餃??歇憭望?嚗???餃', 'error');
           handleRoute();
           return;
         }
@@ -741,7 +750,7 @@
 
     registerActionHandlers('shell', {
       logout: function () {
-        if (hasUnsavedChangesGuard() && !confirmDiscardUnsavedChanges('目前有尚未儲存的內容，確定要登出嗎？')) return;
+        if (hasUnsavedChangesGuard() && !confirmDiscardUnsavedChanges('?桀????芸摮??批捆嚗Ⅱ摰??餃??')) return;
         Promise.resolve(logout()).catch(function (error) {
           window.__ismsError(error && error.stack ? error.stack : String(error));
         });

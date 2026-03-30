@@ -254,6 +254,16 @@ async function gotoHashRoute(page, hash, options = {}) {
   await waitForRemoteBootstrap(page).catch(() => {});
 }
 
+async function openChecklistSmokePage(context) {
+  const checklistPage = await context.newPage();
+  await login(checklistPage, 'easonwu', '2wsx#EDC', {
+    requireVersionChip: false,
+    fastAuth: true
+  });
+  await waitForDashboardReady(checklistPage).catch(() => {});
+  return checklistPage;
+}
+
 async function runPublicVisualBaselineChecks(browser, pushStep) {
   if (!fs.existsSync(DEFAULT_BASELINE_DIR)) {
     throw new Error(`visual baseline directory not found: ${DEFAULT_BASELINE_DIR}`);
@@ -746,183 +756,194 @@ async function run() {
     }
     pushStep('case:tracking-loaded', true, smokeCaseIds.tracking);
 
-    let checklistListReady = false;
-    for (let attempt = 0; attempt < 2 && !checklistListReady; attempt += 1) {
-      if (attempt === 0) {
-        await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 30000 });
-      } else {
-        await page.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await page.waitForTimeout(1600);
+    const checklistPage = await openChecklistSmokePage(context);
+    try {
+      let checklistListReady = false;
+      for (let attempt = 0; attempt < 3 && !checklistListReady; attempt += 1) {
+        if (attempt === 0) {
+          await gotoHashRoute(checklistPage, 'checklist', { settleMs: 1200, timeout: 30000 });
+        } else if (attempt === 1) {
+          await gotoAppRoot(checklistPage, 'domcontentloaded');
+          await ensureAdminSession(checklistPage);
+          await waitForDashboardReady(checklistPage).catch(() => {});
+          await gotoHashRoute(checklistPage, 'checklist', { settleMs: 1600, timeout: 30000 });
+        } else {
+          await checklistPage.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await ensureAdminSession(checklistPage);
+          await checklistPage.waitForTimeout(2200);
+        }
+        try {
+          await checklistPage.waitForFunction(() => {
+            return !!document.querySelector('.checklist-list-header')
+              || !!document.querySelector('.cl-list-shell')
+              || !!document.querySelector('#cl-list-keyword')
+              || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
+              || document.querySelectorAll('.cl-list-row').length > 0;
+          }, undefined, { timeout: 30000 });
+          checklistListReady = true;
+        } catch (error) {
+          if (attempt >= 2) throw error;
+        }
       }
-      try {
-        await page.waitForFunction(() => {
-          return !!document.querySelector('.checklist-list-header')
-            || !!document.querySelector('.cl-list-shell')
-            || !!document.querySelector('#cl-list-keyword')
-            || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
-            || document.querySelectorAll('.cl-list-row').length > 0;
-        }, undefined, { timeout: 30000 });
-        checklistListReady = true;
-      } catch (error) {
-        if (attempt >= 1) throw error;
+      const checklistListText = await checklistPage.locator('#app').innerText();
+      if (/\?{4,}/.test(checklistListText)) {
+        throw new Error('checklist list contains placeholder question marks');
       }
-    }
-    const checklistListText = await page.locator('#app').innerText();
-    if (/\?{4,}/.test(checklistListText)) {
-      throw new Error('checklist list contains placeholder question marks');
-    }
-    pushStep('checklist:list-loaded', true, checklistListText.includes('目前沒有資料') ? 'empty-state' : 'table');
-    await page.waitForFunction(() => document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4, undefined, { timeout: 20000 });
-    const checklistSummaryLabels = await page.locator('.checklist-list-summary .dashboard-panel-pill-label').allTextContents();
-    if (!checklistSummaryLabels.includes('總數') || !checklistSummaryLabels.includes('待匯出') || !checklistSummaryLabels.includes('已送出')) {
-      throw new Error('checklist list summary pills missing expected labels');
-    }
-    pushStep('checklist:list-summary', true, checklistSummaryLabels.join(' / '));
-    const checklistPagerLabels = await page.evaluate(() => {
-      const root = document.querySelector('[data-pager-root]');
-      if (!root) return [];
-      return Array.from(root.querySelectorAll('button')).map((button) => String(button.textContent || '').trim()).filter(Boolean);
-    });
-    if (!checklistPagerLabels.some((label) => label.includes('首頁'))
-      || !checklistPagerLabels.some((label) => label.includes('上一頁'))
-      || !checklistPagerLabels.some((label) => label.includes('下一頁'))
-      || !checklistPagerLabels.some((label) => label.includes('末頁'))) {
-      throw new Error(`checklist pager labels invalid: ${checklistPagerLabels.join(' | ')}`);
-    }
-    pushStep('checklist:pager-labels', true, checklistPagerLabels.join(' / '));
-    const checklistRows = await page.locator('.cl-list-row').evaluateAll((rows) => rows.map((row) => String(row.getAttribute('data-cl-search-text') || '').trim()).filter(Boolean));
-    const checklistQuery = checklistRows.length ? String(checklistRows[0]).slice(0, 12) : '';
-    if (checklistQuery) {
-      await page.fill('#cl-list-keyword', checklistQuery);
-      await page.waitForTimeout(350);
-      const checklistSearchState = await page.evaluate(() => ({
-        activeTag: document.activeElement && document.activeElement.tagName,
-        activeId: document.activeElement && document.activeElement.id,
-        visibleRows: Array.from(document.querySelectorAll('.cl-list-row')).filter((row) => !row.hidden && row.offsetParent !== null).length,
-        openUnits: Array.from(document.querySelectorAll('.cl-unit-accordion')).filter((el) => el.open).length,
-        openYears: Array.from(document.querySelectorAll('.cl-year-accordion')).filter((el) => el.open).length
-      }));
-      if (checklistSearchState.activeId !== 'cl-list-keyword') {
-        throw new Error(`checklist keyword input lost focus: ${checklistSearchState.activeTag || ''}#${checklistSearchState.activeId || ''}`);
+      pushStep('checklist:list-loaded', true, checklistListText.includes('目前沒有資料') ? 'empty-state' : 'table');
+      await checklistPage.waitForFunction(() => document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4, undefined, { timeout: 20000 });
+      const checklistSummaryLabels = await checklistPage.locator('.checklist-list-summary .dashboard-panel-pill-label').allTextContents();
+      if (!checklistSummaryLabels.includes('總數') || !checklistSummaryLabels.includes('待匯出') || !checklistSummaryLabels.includes('已送出')) {
+        throw new Error('checklist list summary pills missing expected labels');
       }
-      if (checklistSearchState.visibleRows < 1) {
-        throw new Error('checklist search should keep at least one visible row');
+      pushStep('checklist:list-summary', true, checklistSummaryLabels.join(' / '));
+      const checklistPagerLabels = await checklistPage.evaluate(() => {
+        const root = document.querySelector('[data-pager-root]');
+        if (!root) return [];
+        return Array.from(root.querySelectorAll('button')).map((button) => String(button.textContent || '').trim()).filter(Boolean);
+      });
+      if (!checklistPagerLabels.some((label) => label.includes('首頁'))
+        || !checklistPagerLabels.some((label) => label.includes('上一頁'))
+        || !checklistPagerLabels.some((label) => label.includes('下一頁'))
+        || !checklistPagerLabels.some((label) => label.includes('末頁'))) {
+        throw new Error(`checklist pager labels invalid: ${checklistPagerLabels.join(' | ')}`);
       }
-      if (checklistSearchState.openUnits < 1) {
-        throw new Error('checklist search should open the matching unit accordion');
+      pushStep('checklist:pager-labels', true, checklistPagerLabels.join(' / '));
+      const checklistRows = await checklistPage.locator('.cl-list-row').evaluateAll((rows) => rows.map((row) => String(row.getAttribute('data-cl-search-text') || '').trim()).filter(Boolean));
+      const checklistQuery = checklistRows.length ? String(checklistRows[0]).slice(0, 12) : '';
+      if (checklistQuery) {
+        await checklistPage.fill('#cl-list-keyword', checklistQuery);
+        await checklistPage.waitForTimeout(350);
+        const checklistSearchState = await checklistPage.evaluate(() => ({
+          activeTag: document.activeElement && document.activeElement.tagName,
+          activeId: document.activeElement && document.activeElement.id,
+          visibleRows: Array.from(document.querySelectorAll('.cl-list-row')).filter((row) => !row.hidden && row.offsetParent !== null).length,
+          openUnits: Array.from(document.querySelectorAll('.cl-unit-accordion')).filter((el) => el.open).length,
+          openYears: Array.from(document.querySelectorAll('.cl-year-accordion')).filter((el) => el.open).length
+        }));
+        if (checklistSearchState.activeId !== 'cl-list-keyword') {
+          throw new Error(`checklist keyword input lost focus: ${checklistSearchState.activeTag || ''}#${checklistSearchState.activeId || ''}`);
+        }
+        if (checklistSearchState.visibleRows < 1) {
+          throw new Error('checklist search should keep at least one visible row');
+        }
+        if (checklistSearchState.openUnits < 1) {
+          throw new Error('checklist search should open the matching unit accordion');
+        }
+        pushStep('checklist:list-search-open', true, checklistQuery);
       }
-      pushStep('checklist:list-search-open', true, checklistQuery);
-    }
 
-    let checklistFillReady = false;
-    for (let attempt = 0; attempt < 2 && !checklistFillReady; attempt += 1) {
-      await gotoHashOnly(page, 'checklist-fill', { settleMs: attempt === 0 ? 1200 : 1800, timeout: 20000 });
-      try {
-        await page.waitForFunction(() => {
-          const app = document.getElementById('app');
-          return !!(app && app.querySelector('#checklist-form'));
-        }, undefined, { timeout: 8000 });
-        checklistFillReady = true;
-      } catch (_) {
-        await page.waitForTimeout(1000);
+      let checklistFillReady = false;
+      for (let attempt = 0; attempt < 2 && !checklistFillReady; attempt += 1) {
+        await gotoHashOnly(checklistPage, 'checklist-fill', { settleMs: attempt === 0 ? 1200 : 1800, timeout: 20000 });
+        try {
+          await checklistPage.waitForFunction(() => {
+            const app = document.getElementById('app');
+            return !!(app && app.querySelector('#checklist-form'));
+          }, undefined, { timeout: 8000 });
+          checklistFillReady = true;
+        } catch (_) {
+          await checklistPage.waitForTimeout(1000);
+        }
       }
-    }
-    if (!checklistFillReady) {
-      throw new Error('checklist fill page did not render form');
-    }
-    const checklistFillText = await page.locator('#app').innerText();
-    if (/\?{4,}/.test(checklistFillText)) {
-      throw new Error('checklist fill contains placeholder question marks');
-    }
-    pushStep('checklist:fill-loaded', true, 'form ready');
-
-    const checklistDetailId = 'CHK-SMOKE-DETAIL-001';
-    await page.evaluate((detailId) => {
-      const sections = window._dataModule.getChecklistSections();
-      const items = sections.flatMap((section) => Array.isArray(section.items) ? section.items : []);
-      const results = {};
-      if (items[0]) results[items[0].id] = { compliance: '\u7b26\u5408', execution: 'Smoke conform', evidence: 'Smoke evidence A' };
-      if (items[1]) results[items[1].id] = { compliance: '\u90e8\u5206\u7b26\u5408', execution: 'Smoke partial', evidence: 'Smoke evidence B' };
-      if (items[2]) results[items[2].id] = { compliance: '\u4e0d\u7b26\u5408', execution: 'Smoke nonconform', evidence: 'Smoke evidence C' };
-      if (items[3]) results[items[3].id] = { compliance: '\u4e0d\u9069\u7528', execution: 'Smoke NA', evidence: 'Smoke evidence D' };
-      const originalGetChecklist = window._dataModule.getChecklist.bind(window._dataModule);
-      const smokeChecklist = {
-        id: detailId,
-        unit: document.getElementById('cl-unit') ? document.getElementById('cl-unit').value : '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44',
-        fillerName: document.getElementById('cl-filler') ? document.getElementById('cl-filler').value : 'easonwu',
-        fillerUsername: 'easonwu',
-        auditYear: '999',
-        fillDate: '2026-03-14',
-        supervisorName: 'SYSTEM SMOKE',
-        supervisorTitle: 'SYSTEM',
-        supervisor: 'SYSTEM SMOKE',
-        signStatus: '\u5df2\u7c3d\u6838',
-        signDate: '2026-03-14',
-        supervisorNote: 'UI smoke only',
-        results,
-        summary: {
-          total: items.length,
-          conform: 1,
-          partial: 1,
-          nonConform: 1,
-          na: 1
-        },
-        status: '\u8349\u7a3f',
-        createdAt: '2026-03-14T13:20:00.000Z',
-        updatedAt: '2026-03-14T13:20:00.000Z'
-      };
-      window._dataModule.getChecklist = function(id) {
-        if (id === detailId) return smokeChecklist;
-        return originalGetChecklist(id);
-      };
-      location.hash = '#checklist-detail/' + detailId;
-    }, checklistDetailId);
-    await page.waitForFunction((detailId) => {
-      const app = document.getElementById('app');
-      const text = String(app && app.innerText || '');
-      const title = document.querySelector('.detail-title');
-      const detailIdNode = document.querySelector('.detail-id');
-      const sectionCount = document.querySelectorAll('.cl-detail-section').length;
-      return !!(
-        app
-        && title
-        && detailIdNode
-        && sectionCount >= 1
-        && String(title.textContent || '').includes('內稽檢核表')
-        && text.includes(detailId)
-      );
-    }, checklistDetailId, { timeout: 6000 });
-    const checklistDetailText = await page.locator('#app').innerText();
-    if (/\?{4,}/.test(checklistDetailText)) {
-      throw new Error('checklist detail contains placeholder question marks');
-    }
-    if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001') || !checklistDetailText.includes('需改善項目')) {
-      throw new Error('checklist detail smoke record did not render as expected');
-    }
-    pushStep('checklist:detail-loaded', true, checklistDetailId);
-
-    let checklistManageReady = false;
-    for (let attempt = 0; attempt < 2 && !checklistManageReady; attempt += 1) {
-      await gotoHashRoute(page, 'checklist-manage', { settleMs: 1200, timeout: 20000 });
-      try {
-        await page.waitForFunction(() => {
-          const app = document.getElementById('app');
-          return !!(
-            app
-            && document.querySelector('.cm-section-header')
-            && String(app.innerText || '').includes('檢核表')
-          );
-        }, undefined, { timeout: 10000 });
-        checklistManageReady = true;
-      } catch (_) {
-        await page.waitForTimeout(1200);
+      if (!checklistFillReady) {
+        throw new Error('checklist fill page did not render form');
       }
+      const checklistFillText = await checklistPage.locator('#app').innerText();
+      if (/\?{4,}/.test(checklistFillText)) {
+        throw new Error('checklist fill contains placeholder question marks');
+      }
+      pushStep('checklist:fill-loaded', true, 'form ready');
+
+      const checklistDetailId = 'CHK-SMOKE-DETAIL-001';
+      await checklistPage.evaluate((detailId) => {
+        const sections = window._dataModule.getChecklistSections();
+        const items = sections.flatMap((section) => Array.isArray(section.items) ? section.items : []);
+        const results = {};
+        if (items[0]) results[items[0].id] = { compliance: '\u7b26\u5408', execution: 'Smoke conform', evidence: 'Smoke evidence A' };
+        if (items[1]) results[items[1].id] = { compliance: '\u90e8\u5206\u7b26\u5408', execution: 'Smoke partial', evidence: 'Smoke evidence B' };
+        if (items[2]) results[items[2].id] = { compliance: '\u4e0d\u7b26\u5408', execution: 'Smoke nonconform', evidence: 'Smoke evidence C' };
+        if (items[3]) results[items[3].id] = { compliance: '\u4e0d\u9069\u7528', execution: 'Smoke NA', evidence: 'Smoke evidence D' };
+        const originalGetChecklist = window._dataModule.getChecklist.bind(window._dataModule);
+        const smokeChecklist = {
+          id: detailId,
+          unit: document.getElementById('cl-unit') ? document.getElementById('cl-unit').value : '\u8a08\u7b97\u6a5f\u53ca\u8cc7\u8a0a\u7db2\u8def\u4e2d\u5fc3\uff0f\u8cc7\u8a0a\u7db2\u8def\u7d44',
+          fillerName: document.getElementById('cl-filler') ? document.getElementById('cl-filler').value : 'easonwu',
+          fillerUsername: 'easonwu',
+          auditYear: '999',
+          fillDate: '2026-03-14',
+          supervisorName: 'SYSTEM SMOKE',
+          supervisorTitle: 'SYSTEM',
+          supervisor: 'SYSTEM SMOKE',
+          signStatus: '\u5df2\u7c3d\u6838',
+          signDate: '2026-03-14',
+          supervisorNote: 'UI smoke only',
+          results,
+          summary: {
+            total: items.length,
+            conform: 1,
+            partial: 1,
+            nonConform: 1,
+            na: 1
+          },
+          status: '\u8349\u7a3f',
+          createdAt: '2026-03-14T13:20:00.000Z',
+          updatedAt: '2026-03-14T13:20:00.000Z'
+        };
+        window._dataModule.getChecklist = function(id) {
+          if (id === detailId) return smokeChecklist;
+          return originalGetChecklist(id);
+        };
+        location.hash = '#checklist-detail/' + detailId;
+      }, checklistDetailId);
+      await checklistPage.waitForFunction((detailId) => {
+        const app = document.getElementById('app');
+        const text = String(app && app.innerText || '');
+        const title = document.querySelector('.detail-title');
+        const detailIdNode = document.querySelector('.detail-id');
+        const sectionCount = document.querySelectorAll('.cl-detail-section').length;
+        return !!(
+          app
+          && title
+          && detailIdNode
+          && sectionCount >= 1
+          && String(title.textContent || '').includes('內稽檢核表')
+          && text.includes(detailId)
+        );
+      }, checklistDetailId, { timeout: 6000 });
+      const checklistDetailText = await checklistPage.locator('#app').innerText();
+      if (/\?{4,}/.test(checklistDetailText)) {
+        throw new Error('checklist detail contains placeholder question marks');
+      }
+      if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001') || !checklistDetailText.includes('需改善項目')) {
+        throw new Error('checklist detail smoke record did not render as expected');
+      }
+      pushStep('checklist:detail-loaded', true, checklistDetailId);
+
+      let checklistManageReady = false;
+      for (let attempt = 0; attempt < 2 && !checklistManageReady; attempt += 1) {
+        await gotoHashRoute(checklistPage, 'checklist-manage', { settleMs: 1200, timeout: 20000 });
+        try {
+          await checklistPage.waitForFunction(() => {
+            const app = document.getElementById('app');
+            return !!(
+              app
+              && document.querySelector('.cm-section-header')
+              && String(app.innerText || '').includes('檢核表')
+            );
+          }, undefined, { timeout: 10000 });
+          checklistManageReady = true;
+        } catch (_) {
+          await checklistPage.waitForTimeout(1200);
+        }
+      }
+      const checklistManageText = await checklistPage.locator('#app').innerText();
+      if (/\?{4,}/.test(checklistManageText)) {
+        throw new Error('checklist manage contains placeholder question marks');
+      }
+      pushStep('checklist:manage-loaded', true, 'manage page ready');
+    } finally {
+      await checklistPage.close();
     }
-    const checklistManageText = await page.locator('#app').innerText();
-    if (/\?{4,}/.test(checklistManageText)) {
-      throw new Error('checklist manage contains placeholder question marks');
-    }
-    pushStep('checklist:manage-loaded', true, 'manage page ready');
 
     await gotoHashRoute(page, 'audit-trail', { settleMs: 700, timeout: 20000 });
     await waitForRemoteBootstrap(page);

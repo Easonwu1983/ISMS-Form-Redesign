@@ -1134,20 +1134,39 @@ function createTrainingRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = String(url.searchParams.get('summaryOnly') || '').trim() === '1';
       const filters = readTrainingFormFilters(url);
+      const summaryCacheKey = summaryOnly ? buildFormSummarySignature(authz, url) : '';
       const canUseUnfilteredSummary = summaryOnly && requestAuthz.isAdmin(authz) && !hasActiveTrainingFormFilters(filters);
       if (canUseUnfilteredSummary && state.formsUnfilteredSummarySeed) {
-        const responseBody = buildTrainingSummaryOnlyFastResponse(url, filters, 'unfiltered-summary');
-        if (responseBody) {
-          logTrainingForms('unfiltered summary hit', {
+        const fastSummaryLookup = readFormsSummaryCache(summaryCacheKey);
+        const fastSummaryCached = fastSummaryLookup && fastSummaryLookup.body;
+        if (fastSummaryCached) {
+          logTrainingForms('unfiltered summary cache hit', {
             username: authz.username,
-            total: responseBody.total,
+            total: fastSummaryCached.total,
             durationMs: Date.now() - startedAt
           });
-          await writeJson(res, buildJsonResponse(200, responseBody), origin);
+          await writeJson(res, buildJsonResponse(200, {
+            ...fastSummaryCached,
+            cache: {
+              query: 'hit',
+              summaryOnly: true,
+              reason: 'unfiltered-summary-hit'
+            }
+          }), origin);
+          return;
+        }
+        const responseBody = buildTrainingSummaryOnlyFastResponse(url, filters, 'unfiltered-summary');
+        if (responseBody) {
+          const cachedFastBody = writeFormsSummaryCache(summaryCacheKey, responseBody);
+          logTrainingForms('unfiltered summary hit', {
+            username: authz.username,
+            total: cachedFastBody.total,
+            durationMs: Date.now() - startedAt
+          });
+          await writeJson(res, buildJsonResponse(200, cachedFastBody), origin);
           return;
         }
       }
-      const summaryCacheKey = summaryOnly ? buildFormSummarySignature(authz, url) : '';
       if (summaryOnly) {
         const summaryLookup = readFormsSummaryCache(summaryCacheKey);
         const summaryCached = summaryLookup && summaryLookup.body;

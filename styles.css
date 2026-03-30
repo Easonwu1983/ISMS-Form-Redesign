@@ -9933,3 +9933,114 @@ tbody tr:hover {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ========================================
+   Eleventh Round Shell + Form Route Refinement
+   ======================================== */
+.header {
+  padding: 0 22px;
+}
+
+.header-left {
+  gap: 10px;
+}
+
+.header--page-owned {
+  background: rgba(255, 255, 255, 0.97);
+}
+
+.header-context[hidden] {
+  display: none !important;
+}
+
+.header-context {
+  min-height: 34px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(168, 184, 205, 0.4);
+}
+
+.header-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8ea0b8;
+}
+
+.header-title {
+  font-size: 0.96rem;
+}
+
+.header--page-owned .header-left {
+  gap: 6px;
+}
+
+.main-content {
+  padding: 22px 28px 36px;
+}
+
+.page-header--shell-owned {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding-top: 4px;
+  margin-bottom: 24px;
+}
+
+.page-header--shell-owned .page-title {
+  font-size: clamp(1.42rem, 2vw, 1.72rem);
+  line-height: 1.14;
+  letter-spacing: -0.02em;
+}
+
+.page-header--shell-owned .page-subtitle {
+  margin-top: 10px;
+  max-width: 920px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.page-header--shell-owned .btn,
+.page-header--shell-owned .header-action {
+  margin-top: 2px;
+}
+
+.editor-shell--checklist,
+.editor-shell--training {
+  margin-top: 4px;
+}
+
+.editor-mobile-summary--checklist {
+  scroll-margin-top: calc(var(--header-height) + 16px);
+}
+
+@media (max-width: 1120px) {
+  .header {
+    padding: 0 16px;
+  }
+
+  .main-content {
+    padding: 18px 16px 28px;
+  }
+
+  .page-header--shell-owned {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 16px 12px 24px;
+  }
+
+  .page-header--shell-owned .page-title {
+    font-size: 1.34rem;
+  }
+
+  .page-header--shell-owned .page-subtitle {
+    font-size: 0.9rem;
+  }
+}
