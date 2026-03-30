@@ -172,17 +172,21 @@ async function waitForReadyWithReload(page, timeout = 30000) {
   }
 }
 
-async function login(page, username, password) {
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+async function waitForAuthSurface(page, timeout = 45000) {
   await page.waitForFunction(() => {
     const loginForm = document.querySelector('[data-testid="login-form"]');
     const logoutButton = document.querySelector('.btn-logout');
-    if (window.__APP_READY__ === true || !!logoutButton) return true;
-    if (!loginForm) return false;
-    const style = window.getComputedStyle(loginForm);
-    const rect = loginForm.getBoundingClientRect();
-    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
-  }, { timeout: 45000 });
+    const auth = window._authModule;
+    return window.__APP_READY__ === true
+      || !!logoutButton
+      || !!loginForm
+      || !!(auth && typeof auth.login === 'function');
+  }, { timeout });
+}
+
+async function login(page, username, password) {
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await waitForAuthSurface(page, 45000);
   if (await page.locator('.btn-logout').count()) {
     const loggedOutViaAuthModule = await page.evaluate(async () => {
       try {
@@ -200,12 +204,12 @@ async function login(page, username, password) {
     }
     await clearAuthClientState(page);
     try {
-      await page.waitForSelector('[data-testid="login-form"]', { timeout: 5000 });
+      await waitForAuthSurface(page, 5000);
     } catch (_) {
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
       await clearAuthClientState(page);
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('[data-testid="login-form"]', { timeout: 15000 });
+      await waitForAuthSurface(page, 15000);
     }
   }
   const loginResult = await page.evaluate(async ({ username, password }) => {

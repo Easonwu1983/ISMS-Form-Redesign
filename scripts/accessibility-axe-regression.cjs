@@ -26,6 +26,31 @@ function formatViolations(violations) {
   }).join('; ');
 }
 
+async function waitForAuthSurface(page, timeout = 45000) {
+  await page.waitForFunction(() => {
+    const loginForm = document.querySelector('[data-testid="login-form"]');
+    const logoutButton = document.querySelector('.btn-logout');
+    const auth = window._authModule;
+    return window.__APP_READY__ === true
+      || !!logoutButton
+      || !!loginForm
+      || !!(auth && typeof auth.login === 'function');
+  }, { timeout });
+}
+
+async function waitForDashboardSurface(page, timeout = 20000) {
+  await page.waitForFunction(() => {
+    return !!document.querySelector('.btn-logout')
+      && !document.querySelector('[data-testid="login-form"]')
+      && (
+        document.querySelectorAll('.dashboard-panel-pill').length >= 3
+        || !!document.querySelector('.dashboard-grid')
+        || !!document.querySelector('.dashboard-card')
+        || !!document.querySelector('.dashboard-panel')
+      );
+  }, { timeout });
+}
+
 async function runAxeCheck(page, label) {
   const results = await new AxeBuilder({ page })
     .disableRules(['color-contrast'])
@@ -46,13 +71,13 @@ async function runAxeCheck(page, label) {
   try {
     await runStep(results, 'AXE-01', 'Public', 'Login page has no axe violations', async () => {
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('[data-testid="login-form"]', { timeout: 45000 });
+      await waitForAuthSurface(page, 45000);
       return runAxeCheck(page, 'login');
     });
 
     await runStep(results, 'AXE-02', 'Admin', 'Dashboard has no axe violations', async () => {
       await login(page, 'easonwu', '2wsx#EDC');
-      await page.waitForTimeout(300);
+      await waitForDashboardSurface(page, 20000);
       return runAxeCheck(page, 'dashboard');
     });
 
