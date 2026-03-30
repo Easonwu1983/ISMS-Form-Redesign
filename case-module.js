@@ -176,7 +176,7 @@
     var wrapperClass = opts.wrapperClass ? 'table-wrapper ' + opts.wrapperClass : 'table-wrapper';
     var tableClass = opts.tableClass ? ' class="' + opts.tableClass + '"' : '';
     var caption = opts.caption || '矯正單資料表';
-    return '<div class="' + wrapperClass + '"><table' + tableClass + '>' + buildCaseTableCaption(caption) + '<thead><tr>' + applyCaseTableHeaderScope(headersHtml) + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+    return '<div class="' + wrapperClass + '" tabindex="0"><table' + tableClass + '>' + buildCaseTableCaption(caption) + '<thead><tr>' + applyCaseTableHeaderScope(headersHtml) + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
   }
 
   function buildCaseStatCard(tone, iconName, value, label) {
