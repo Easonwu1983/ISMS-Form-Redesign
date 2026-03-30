@@ -117,6 +117,7 @@ Done:
 - `admin-module.js` virtualizes both the `audit-trail` table and the `system-users` table instead of painting their full row sets into the DOM at once.
 - `training-module.js` now window-renders large `training roster` group lists instead of expanding every group body into the DOM at once.
 - Debounced search and highlight timers in `training`, `checklist`, and `case` now register page cleanup handlers so route transitions clear pending timers.
+- `unit-contact-review`, `unit-review`, and `security-window` now invalidate stale async renders on route teardown and reuse the same page-scoped review loading/empty-state classes.
 
 Open:
 - Some modules still attach listeners directly without page-scoped cleanup.

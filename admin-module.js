@@ -2009,7 +2009,7 @@
         <div class="card-header governance-card-header">
           <div>
             <div class="review-unit-name">${esc(unit.unit)}</div>
-            <div class="review-card-subtitle" style="margin-top:4px">${esc(unit.category || '正式單位')}</div>
+            <div class="review-card-subtitle review-card-subtitle--top-4">${esc(unit.category || '正式單位')}</div>
           </div>
           <div class="governance-card-status">${buildGovernanceModeBadge(unit.mode)}</div>
         </div>
@@ -2378,7 +2378,7 @@
         const units = Array.isArray(person.units) ? person.units : [];
         const unitSummary = units.length ? units.join('、') : '未指定';
         const statusMeta = getSecurityWindowUnitStatusMeta(person.hasWindow ? 'assigned' : 'missing');
-        return `<tr><td style="font-weight:600;color:var(--text-primary)">${esc(person.name || person.username || '—')}</td><td>${esc(person.username || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(person.email || '—')}</div></td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(unitSummary)}</td><td>${renderSecurityWindowPersonBadge(person)}</td><td><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span></td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(person.activeUnit || '—')}</td></tr>`;
+        return `<tr><td style="font-weight:600;color:var(--text-primary)">${esc(person.name || person.username || '—')}</td><td>${esc(person.username || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(person.email || '—')}</div></td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(unitSummary)}</td><td>${renderSecurityWindowPersonBadge(person)}</td><td><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span></td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(person.activeUnit || '—')}</td></tr>`;
       }).join('');
     }
 
@@ -2510,7 +2510,7 @@
     function renderSecurityWindowUnitCards(units, categorySummaries) {
       const rows = Array.isArray(units) ? units : [];
       if (!rows.length) {
-        return `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">目前沒有符合條件的資安窗口單位</div><div class="empty-state-desc">請調整關鍵字、狀態或先確認單位治理設定。</div></div>`;
+        return `<div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">目前沒有符合條件的資安窗口單位</div><div class="empty-state-desc">請調整關鍵字、狀態或先確認單位治理設定。</div></div>`;
       }
       const groups = groupSecurityWindowUnitsByCategory(rows);
       return `<div class="security-window-category-stack">${groups.map((group, index) => renderSecurityWindowCategoryCard(group, index, categorySummaries)).join('')}</div>`;
@@ -2572,7 +2572,7 @@
       };
       const cardsHtml = groupedItems.length
         ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index, categorySummaries, { deferBody: true })).join('')
-        : `<div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
+        : `<div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('layout-grid')}</div><div class="empty-state-title">沒有符合條件的單位</div><div class="empty-state-desc">請嘗試調整關鍵字，或先確認單位治理範圍。</div></div>`;
       unitGovernanceRenderCache = {
         signature,
         cardsHtml
@@ -3252,7 +3252,7 @@
   function renderUnitContactReviewRows(items) {
     const rows = Array.isArray(items) ? items : [];
     if (!rows.length) {
-      return `<tr><td colspan="7"><div class="empty-state" style="padding:36px 20px"><div class="empty-state-title">目前沒有符合條件的申請</div><div class="empty-state-desc">請調整篩選條件，或等待新的申請送出。</div></div></td></tr>`;
+      return `<tr><td colspan="7"><div class="empty-state review-empty review-empty--compact"><div class="empty-state-title">目前沒有符合條件的申請</div><div class="empty-state-desc">請調整篩選條件，或等待新的申請送出。</div></div></td></tr>`;
     }
     return rows.map((item) => {
       const id = String(item && item.id || '').trim();
@@ -3271,18 +3271,19 @@
           actionButtons.push(`<button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
         }
       }
-      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle" style="margin-top:4px">${esc(item && item.applicantEmail || '—')}</div><div class="review-card-subtitle" style="margin-top:4px">資安角色：${esc(formatSecurityRolesSummary(item && item.securityRoles))}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions review-actions--unit-contact">${actionButtons.join('')}</div></td></tr>`;
+      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.applicantEmail || '—')}</div><div class="review-card-subtitle review-card-subtitle--top-4">資安角色：${esc(formatSecurityRolesSummary(item && item.securityRoles))}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions review-actions--unit-contact">${actionButtons.join('')}</div></td></tr>`;
     }).join('');
   }
 
   async function renderUnitContactReview(nextFilters, options) {
     if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可審核單位管理人申請', 'error'); return; }
     const opts = options || {};
+    const isStaleRender = beginAdminRouteRender(unitContactReviewState, "#unit-contact-review");
       const visibleApplicationsCache = renderUnitContactReview._remoteViewCache || (renderUnitContactReview._remoteViewCache = unitContactReviewCollectionBundle.viewCache || createAdminRemoteViewCache(DEFAULT_UNIT_CONTACT_REVIEW_FILTERS));
     unitContactReviewState.filters = normalizePagedFilters({ ...unitContactReviewState.filters, ...(nextFilters || {}) }, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
     unitContactReviewState.loading = true;
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">集中處理單位管理人申請，通過後會直接啟用帳號並寄送登入資訊。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在讀取申請資料...</div></div>`;
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">集中處理單位管理人申請，通過後會直接啟用帳號並寄送登入資訊。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card review-loading-card">正在讀取申請資料...</div></div>`;
     refreshIcons();
     async function fetchApplicationsForAdminView(fetchOptions) {
       const remoteOpts = fetchOptions || {};
@@ -3327,6 +3328,7 @@
     }
     try {
       const result = await fetchApplicationsForAdminView({ force: !!opts.forceRemote });
+      if (isStaleRender()) return;
       unitContactReviewState.items = Array.isArray(result && result.items) ? result.items : [];
       unitContactReviewState.summary = normalizeUnitContactReviewSummary(result && result.summary, unitContactReviewState.items.length);
       unitContactReviewState.page = result && result.page ? result.page : buildAdminCollectionPage(unitContactReviewState.filters, unitContactReviewState.items.length, 50, 100);
@@ -3334,8 +3336,9 @@
       unitContactReviewState.lastLoadedAt = String(result && result.generatedAt || '').trim() || new Date().toISOString();
       unitContactReviewState.loading = false;
     } catch (error) {
+      if (isStaleRender()) return;
       unitContactReviewState.loading = false;
-      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">無法讀取申請清單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">申請後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">無法讀取申請清單。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">申請後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
       return;
     }
@@ -3376,11 +3379,13 @@
       if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可管理單位治理', 'error'); return; }
       unitGovernanceState.filters = normalizePagedFilters({ ...unitGovernanceState.filters, ...(nextFilters || {}) }, DEFAULT_GOVERNANCE_FILTERS);
       unitGovernanceState.loading = true;
+    const isStaleRender = beginAdminRouteRender(unitGovernanceState, "#unit-review");
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">可為一級單位設定獨立或合併填報模式，並快速檢視轄下二級單位的填報關聯。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在整理單位治理資料...</div></div>`;
+    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">可為一級單位設定獨立或合併填報模式，並快速檢視轄下二級單位的填報關聯。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card review-loading-card">正在整理單位治理資料...</div></div>`;
     refreshIcons();
     try {
         const result = await listGovernanceItemsForAdmin(unitGovernanceState.filters);
+        if (isStaleRender()) return;
         unitGovernanceState.items = Array.isArray(result && result.items) ? result.items : [];
         unitGovernanceState.summary = result && result.summary ? result.summary : summarizeGovernanceItems(unitGovernanceState.items);
         unitGovernanceState.categorySummaries = normalizeGovernanceCategorySummaries(result && result.categorySummaries);
@@ -3388,7 +3393,8 @@
         unitGovernanceState.filters = normalizePagedFilters(result && result.filters ? result.filters : unitGovernanceState.filters, DEFAULT_GOVERNANCE_FILTERS);
         unitGovernanceState.lastLoadedAt = String(result && result.generatedAt || '').trim() || new Date().toISOString();
     } catch (error) {
-      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">無法讀取單位治理資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">單位治理資料尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
+      if (isStaleRender()) return;
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">無法讀取單位治理資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitReview">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">單位治理資料尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
       return;
     }
@@ -3418,9 +3424,9 @@
         <div class="card-header"><span class="card-title">治理分類清單</span><span class="review-card-subtitle">依行政單位、學術單位、中心 / 研究單位展開，統一查看填報模式與轄下單位。</span></div>
         <div class="review-toolbar">
           <div class="review-toolbar-main">
-            <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="unit-governance-keyword" value="${esc(unitGovernanceState.filters.keyword || '')}" placeholder="單位名稱、子單位、模式、備註"></div>
-            <div class="form-group" style="min-width:180px"><label class="form-label">填報模式</label><select class="form-select" id="unit-governance-mode"><option value="all" ${unitGovernanceState.filters.mode === 'all' ? 'selected' : ''}>全部</option><option value="independent" ${unitGovernanceState.filters.mode === 'independent' ? 'selected' : ''}>獨立填報</option><option value="consolidated" ${unitGovernanceState.filters.mode === 'consolidated' ? 'selected' : ''}>合併 / 統一填報</option></select></div>
-            <div class="form-group" style="min-width:200px"><label class="form-label">分類</label><select class="form-select" id="unit-governance-category"><option value="all" ${unitGovernanceState.filters.category === 'all' ? 'selected' : ''}>全部</option><option value="行政單位" ${unitGovernanceState.filters.category === '行政單位' ? 'selected' : ''}>行政單位</option><option value="學術單位" ${unitGovernanceState.filters.category === '學術單位' ? 'selected' : ''}>學術單位</option><option value="中心 / 研究單位" ${unitGovernanceState.filters.category === '中心 / 研究單位' ? 'selected' : ''}>中心 / 研究單位</option></select></div>
+            <div class="form-group review-filter-group review-filter-group--wide"><label class="form-label">關鍵字</label><input class="form-input" id="unit-governance-keyword" value="${esc(unitGovernanceState.filters.keyword || '')}" placeholder="單位名稱、子單位、模式、備註"></div>
+            <div class="form-group review-filter-group"><label class="form-label">填報模式</label><select class="form-select" id="unit-governance-mode"><option value="all" ${unitGovernanceState.filters.mode === 'all' ? 'selected' : ''}>全部</option><option value="independent" ${unitGovernanceState.filters.mode === 'independent' ? 'selected' : ''}>獨立填報</option><option value="consolidated" ${unitGovernanceState.filters.mode === 'consolidated' ? 'selected' : ''}>合併 / 統一填報</option></select></div>
+            <div class="form-group review-filter-group review-filter-group--medium"><label class="form-label">分類</label><select class="form-select" id="unit-governance-category"><option value="all" ${unitGovernanceState.filters.category === 'all' ? 'selected' : ''}>全部</option><option value="行政單位" ${unitGovernanceState.filters.category === '行政單位' ? 'selected' : ''}>行政單位</option><option value="學術單位" ${unitGovernanceState.filters.category === '學術單位' ? 'selected' : ''}>學術單位</option><option value="中心 / 研究單位" ${unitGovernanceState.filters.category === '中心 / 研究單位' ? 'selected' : ''}>中心 / 研究單位</option></select></div>
           </div>
           <div class="review-toolbar-actions">
             <button type="button" class="btn btn-primary" data-action="admin.applyGovernanceFilters">${ic('filter', 'icon-sm')} 套用篩選</button>
@@ -3560,15 +3566,18 @@
     if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理者可檢視資安窗口', 'error'); return; }
     const opts = options || {};
     securityWindowState.filters = normalizePagedFilters({ ...securityWindowState.filters, ...(nextFilters || {}) }, DEFAULT_SECURITY_WINDOW_FILTERS);
+    const isStaleRender = beginAdminRouteRender(securityWindowState, "#security-window");
     const app = document.getElementById('app');
     const resolvedFilters = { ...DEFAULT_SECURITY_WINDOW_FILTERS, ...securityWindowState.filters };
     let response;
     try {
-      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">盤點全校各單位的資安窗口配置，依行政單位、學術單位、中心 / 研究單位分層顯示，僅最高管理者可檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在載入資安窗口盤點資料...</div></div>`;
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">盤點全校各單位的資安窗口配置，依行政單位、學術單位、中心 / 研究單位分層顯示，僅最高管理者可檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card review-loading-card">正在載入資安窗口盤點資料...</div></div>`;
       refreshIcons();
       response = await fetchSecurityWindowInventoryFromSource(resolvedFilters, opts);
+      if (isStaleRender()) return;
     } catch (error) {
-      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">資安窗口盤點資料載入失敗，請稍後再試。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshSecurityWindow">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">載入失敗</div><div class="empty-state-desc">${esc(String(error && error.message || error || '無法載入資安窗口盤點資料'))}</div></div></div></div>`;
+      if (isStaleRender()) return;
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">資安窗口盤點資料載入失敗，請稍後再試。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshSecurityWindow">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="card"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">載入失敗</div><div class="empty-state-desc">${esc(String(error && error.message || error || '無法載入資安窗口盤點資料'))}</div></div></div></div>`;
       refreshIcons();
       return;
     }
@@ -3621,9 +3630,9 @@
         <div class="card-header"><span class="card-title">單位盤點</span><span class="review-card-subtitle">依行政單位、學術單位、中心 / 研究單位展開，顯示各單位與二級單位的資安窗口狀態</span></div>
         <form id="security-window-filter-form" class="review-toolbar">
           <div class="review-toolbar-main">
-            <div class="form-group" style="min-width:260px;flex:1"><label class="form-label">關鍵字</label><input class="form-input" id="security-window-keyword" value="${esc(securityWindowState.filters.keyword)}" placeholder="單位、姓名、帳號、電子郵件、角色"></div>
-            <div class="form-group" style="min-width:180px"><label class="form-label">狀態</label><select class="form-select" id="security-window-status"><option value="all" ${securityWindowState.filters.status === 'all' ? 'selected' : ''}>全部</option><option value="assigned" ${securityWindowState.filters.status === 'assigned' ? 'selected' : ''}>已設定</option><option value="missing" ${securityWindowState.filters.status === 'missing' ? 'selected' : ''}>未設定</option><option value="pending" ${securityWindowState.filters.status === 'pending' ? 'selected' : ''}>待審核</option><option value="exempted" ${securityWindowState.filters.status === 'exempted' ? 'selected' : ''}>由一級單位統一</option></select></div>
-            <div class="form-group" style="min-width:200px"><label class="form-label">分類</label><select class="form-select" id="security-window-category"><option value="all" ${securityWindowState.filters.category === 'all' ? 'selected' : ''}>全部</option><option value="行政單位" ${securityWindowState.filters.category === '行政單位' ? 'selected' : ''}>行政單位</option><option value="學術單位" ${securityWindowState.filters.category === '學術單位' ? 'selected' : ''}>學術單位</option><option value="中心 / 研究單位" ${securityWindowState.filters.category === '中心 / 研究單位' ? 'selected' : ''}>中心 / 研究單位</option></select></div>
+            <div class="form-group review-filter-group review-filter-group--wide"><label class="form-label">關鍵字</label><input class="form-input" id="security-window-keyword" value="${esc(securityWindowState.filters.keyword)}" placeholder="單位、姓名、帳號、電子郵件、角色"></div>
+            <div class="form-group review-filter-group"><label class="form-label">狀態</label><select class="form-select" id="security-window-status"><option value="all" ${securityWindowState.filters.status === 'all' ? 'selected' : ''}>全部</option><option value="assigned" ${securityWindowState.filters.status === 'assigned' ? 'selected' : ''}>已設定</option><option value="missing" ${securityWindowState.filters.status === 'missing' ? 'selected' : ''}>未設定</option><option value="pending" ${securityWindowState.filters.status === 'pending' ? 'selected' : ''}>待審核</option><option value="exempted" ${securityWindowState.filters.status === 'exempted' ? 'selected' : ''}>由一級單位統一</option></select></div>
+            <div class="form-group review-filter-group review-filter-group--medium"><label class="form-label">分類</label><select class="form-select" id="security-window-category"><option value="all" ${securityWindowState.filters.category === 'all' ? 'selected' : ''}>全部</option><option value="行政單位" ${securityWindowState.filters.category === '行政單位' ? 'selected' : ''}>行政單位</option><option value="學術單位" ${securityWindowState.filters.category === '學術單位' ? 'selected' : ''}>學術單位</option><option value="中心 / 研究單位" ${securityWindowState.filters.category === '中心 / 研究單位' ? 'selected' : ''}>中心 / 研究單位</option></select></div>
           </div>
           <div class="review-toolbar-actions">
             <button type="button" class="btn btn-secondary" data-action="admin.applySecurityWindowFilters">${ic('search', 'icon-sm')} 套用</button>
@@ -3633,7 +3642,7 @@
         <div class="governance-grid">${unitCardsHtml}</div>
         ${unitPagerHtml}
       </div>
-      <div class="card review-table-card" style="margin-top:18px">
+      <div class="card review-table-card review-table-card--spaced">
         <div class="card-header"><span class="card-title">資安窗口人員</span><span class="review-card-subtitle">依姓名、帳號、單位與狀態快速查找資安窗口人員</span></div>
         ${buildReviewTableShell('security-window-people-table', '<th>姓名</th><th>帳號 / 電子郵件</th><th>單位</th><th>資安角色</th><th>狀態</th><th>主要單位</th>', peopleRowsHtml, { toolbarSubtitle: '可依姓名、帳號、電子郵件、單位與資安角色篩選。' })}
       </div>
@@ -3735,12 +3744,12 @@
           });
         }
       } else {
-        app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">集中查詢系統登入、帳號異動、權限調整、表單送出與附件操作的後端稽核紀錄。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card" style="padding:32px;text-align:center;color:var(--text-secondary)">正在從正式稽核後端讀取資料...</div></div>`;
+        app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">集中查詢系統登入、帳號異動、權限調整、表單送出與附件操作的後端稽核紀錄。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card review-loading-card">正在從正式稽核後端讀取資料...</div></div>`;
         refreshIcons();
         state = await loadAuditTrailData(resolvedFilters);
       }
     } catch (error) {
-      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">無法讀取後端稽核資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">稽核軌跡後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">無法讀取後端稽核資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">稽核軌跡後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;
       refreshIcons();
       return;
       }
@@ -3871,7 +3880,7 @@
         ? '<span class="review-status-badge approved">成功</span>'
         : '<span class="review-status-badge danger">失敗</span>';
       return `<tr><td>${esc(fmtTime(log && log.time) || '—')}</td><td style="font-weight:500">${esc(log && log.username || '—')}</td><td>${esc(log && log.name || '—')}</td><td>${esc(log && log.role || '—')}</td><td>${badge}</td></tr>`;
-    }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:40px 24px"><div class="empty-state-title">目前沒有登入紀錄</div><div class="empty-state-desc">系統會保留最近的登入與失敗紀錄。</div></div></td></tr>';
+    }).join('') : '<tr><td colspan="5"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-title">目前沒有登入紀錄</div><div class="empty-state-desc">系統會保留最近的登入與失敗紀錄。</div></div></td></tr>';
     const app = document.getElementById('app');
       app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">登入紀錄</div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">最近 200 筆帳號登入與失敗事件。</p></div><div class="review-header-actions"><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div></div><div class="card"><div class="table-wrapper"><table><caption class="sr-only">登入紀錄清單</caption><thead><tr><th scope="col">時間</th><th scope="col">帳號</th><th scope="col">姓名</th><th scope="col">角色</th><th scope="col">結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     refreshIcons();
@@ -3939,7 +3948,7 @@
     const health = getSchemaHealth();
     const attachmentHealth = await getAttachmentHealth();
     const attentionCount = health.totals.attention + health.totals.error + health.totals.missing;
-    const rows = health.stores.map((store) => `<tr><td><div class="review-unit-name">${esc(store.label)}</div><div class="review-card-subtitle" style="margin-top:4px">${esc(store.key)}</div></td><td>${schemaStatusBadge(store)}</td><td>v${store.storedVersion === null ? '—' : store.storedVersion} / v${store.expectedVersion}</td><td>${store.hasEnvelope ? 'Versioned envelope' : (store.exists ? 'Legacy raw JSON' : 'Not created')}</td><td>${esc(store.summary)}</td><td>${store.recordCount}</td><td>${formatSchemaBytes(store.rawSize)}</td></tr>`).join('');
+    const rows = health.stores.map((store) => `<tr><td><div class="review-unit-name">${esc(store.label)}</div><div class="review-card-subtitle review-card-subtitle--top-4">${esc(store.key)}</div></td><td>${schemaStatusBadge(store)}</td><td>v${store.storedVersion === null ? '—' : store.storedVersion} / v${store.expectedVersion}</td><td>${store.hasEnvelope ? 'Versioned envelope' : (store.exists ? 'Legacy raw JSON' : 'Not created')}</td><td>${esc(store.summary)}</td><td>${store.recordCount}</td><td>${formatSchemaBytes(store.rawSize)}</td></tr>`).join('');
     const app = document.getElementById('app');
     app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">Schema Diagnostics</div><h1 class="page-title">資料健康檢查</h1><p class="page-subtitle">檢查各個 localStorage store 的 schema version、envelope 格式、資料筆數與 migration 狀態，並補上支援包與附件資料庫診斷。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshSchemaHealth">${ic('refresh-cw', 'icon-sm')} 重新檢查</button><button type="button" class="btn btn-secondary" data-action="admin.exportSupportBundle">${ic('download', 'icon-sm')} 匯出支援包</button><button type="button" class="btn btn-secondary" data-action="admin.pruneOrphanAttachments">${ic('trash-2', 'icon-sm')} 清除孤兒附件</button><button type="button" class="btn btn-primary" data-action="admin.repairSchemaHealth">${ic('database', 'icon-sm')} 重跑 migration repair</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>本頁只提供診斷與安全補寫，不會刪除表單資料。最近檢查時間：<strong>${esc(fmtTime(health.generatedAt))}</strong></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('database')}</div><div class="stat-value">${health.totals.totalStores}</div><div class="stat-label">受管 Store</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${health.totals.healthy}</div><div class="stat-label">狀態正常</div></div><div class="stat-card pending"><div class="stat-icon">${ic('alert-triangle')}</div><div class="stat-value">${attentionCount}</div><div class="stat-label">待處理</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('paperclip')}</div><div class="stat-value">${attachmentHealth.totalAttachments}</div><div class="stat-label">附件總數</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">Store 狀態明細</span><span class="review-card-subtitle">版本、格式與資料量一覽</span></div>${buildReviewTableShell('schema-health-table', '<th>Store</th><th>狀態</th><th>版本</th><th>格式</th><th>內容摘要</th><th>筆數</th><th>容量</th>', rows, { toolbarSubtitle: '欄位較多時可直接拖曳左右平移，也可用右側按鈕快速查看後段欄位。' })}</div><div class="card review-history-card"><div class="card-header"><span class="card-title">待處理項目</span><span class="review-card-subtitle">優先處理格式損毀、待升級資料與孤兒附件</span></div><div class="review-history-list">${renderSchemaHealthIssueList(health.stores)}</div></div>${renderAttachmentHealthPanel(attachmentHealth)}</div></div>`;
     wireReviewTableScrollers(app);

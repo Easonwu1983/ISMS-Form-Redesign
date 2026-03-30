@@ -5589,6 +5589,19 @@ tbody td:first-child {
   margin-top: 14px;
 }
 
+.review-filter-group {
+  min-width: 180px;
+}
+
+.review-filter-group--medium {
+  min-width: 200px;
+}
+
+.review-filter-group--wide {
+  min-width: 260px;
+  flex: 1;
+}
+
 .review-filter-grid {
   margin-bottom: 18px;
 }
@@ -5596,6 +5609,10 @@ tbody td:first-child {
 .review-form-actions-start {
   justify-content: flex-start;
   margin-bottom: 8px;
+}
+
+.form-actions--end {
+  justify-content: flex-end;
 }
 
 .review-loading-card {
@@ -5614,6 +5631,22 @@ tbody td:first-child {
 
 .review-empty--medium {
   padding: 32px 20px;
+}
+
+.review-card-subtitle--top-10 {
+  margin-top: 10px;
+}
+
+.review-table-card--spaced {
+  margin-top: 18px;
+}
+
+.governance-card-body--top-pad {
+  padding-top: 14px;
+}
+
+.security-window-scope-chip-row--top-8 {
+  margin-top: 8px;
 }
 
 .audit-entry-modal {
