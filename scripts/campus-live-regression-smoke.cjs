@@ -6,6 +6,14 @@ const OUT_PATH = path.join(process.cwd(), 'logs', 'campus-live-regression-smoke.
 const KNOWN_TRAINING_UNIT = '計算機及資訊網路中心／資訊網路組';
 const KNOWN_TRAINING_STATS_UNIT = '計算機及資訊網路中心';
 
+function isValidChecklistAuditYear(value) {
+  const raw = String(value || '').trim();
+  if (!/^\d{3}$/.test(raw)) return false;
+  const year = Number(raw);
+  const currentYear = Number(new Date().getFullYear() - 1911);
+  return Number.isFinite(year) && year >= 90 && year <= currentYear + 1;
+}
+
   async function requestJson(url, options) {
     const response = await fetch(url, options);
     const text = await response.text();
@@ -422,6 +430,16 @@ async function run() {
     const closed = Number(summary.closed || 0);
     if ((editing + pendingExport + closed) !== total) throw new Error('checklists summary-only warm bucket mismatch');
     return { total, pendingExport, closed, cacheState: String(json && json.cache && json.cache.query || '') };
+  }, { critical: true });
+
+  await step('checklists years valid', async () => {
+    const { response, json } = await requestAdminJson(`${DEFAULT_BASE}/api/checklists?limit=50`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const items = Array.isArray(json && json.items) ? json.items : [];
+    const years = Array.from(new Set(items.map((item) => String(item && item.auditYear || '').trim()).filter(Boolean)));
+    const invalidYears = years.filter((year) => !isValidChecklistAuditYear(year));
+    if (invalidYears.length) throw new Error(`invalid checklist years detected: ${invalidYears.join(', ')}`);
+    return { count: years.length, years };
   }, { critical: true });
 
   await step('training-rosters ids unique', async () => {

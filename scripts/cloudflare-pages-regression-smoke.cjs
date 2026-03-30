@@ -756,6 +756,18 @@ async function run() {
       throw new Error('checklist list summary pills missing expected labels');
     }
     pushStep('checklist:list-summary', true, checklistSummaryLabels.join(' / '));
+    const checklistPagerLabels = await page.evaluate(() => {
+      const root = document.querySelector('[data-pager-root]');
+      if (!root) return [];
+      return Array.from(root.querySelectorAll('button')).map((button) => String(button.textContent || '').trim()).filter(Boolean);
+    });
+    if (!checklistPagerLabels.some((label) => label.includes('首頁'))
+      || !checklistPagerLabels.some((label) => label.includes('上一頁'))
+      || !checklistPagerLabels.some((label) => label.includes('下一頁'))
+      || !checklistPagerLabels.some((label) => label.includes('末頁'))) {
+      throw new Error(`checklist pager labels invalid: ${checklistPagerLabels.join(' | ')}`);
+    }
+    pushStep('checklist:pager-labels', true, checklistPagerLabels.join(' / '));
     const checklistRows = await page.locator('.cl-list-row').evaluateAll((rows) => rows.map((row) => String(row.getAttribute('data-cl-search-text') || '').trim()).filter(Boolean));
     const checklistQuery = checklistRows.length ? String(checklistRows[0]).slice(0, 12) : '';
     if (checklistQuery) {

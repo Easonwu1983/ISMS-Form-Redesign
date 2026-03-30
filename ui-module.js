@@ -76,20 +76,20 @@
         return actionPrefix ? ` data-action="${escAttr(actionPrefix + name)}"` : '';
       };
       const limitHtml = showLimit
-        ? `<label class="form-label" for="${escAttr(idPrefix)}-page-limit" style="margin:0 4px 0 0">瘥?</label>`
+        ? `<label class="form-label" for="${escAttr(idPrefix)}-page-limit" style="margin:0 4px 0 0">筆數</label>`
           + `<select class="form-select" id="${escAttr(idPrefix)}-page-limit" style="min-width:88px">`
           + limitOptions.map((value) => `<option value="${esc(value)}" ${String(page.limit) === value ? 'selected' : ''}>${esc(value)}</option>`).join('')
           + '</select>'
         : '';
       return `${limitHtml}`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 擐?</button>`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 銝???/button>`
-        + `<span class="review-card-subtitle" style="margin:0 4px 0 8px">?活 ${page.currentPage || 0} / ${page.pageCount || 0}</span>`
-        + `<label class="form-label" for="${escAttr(idPrefix)}-page-number" style="margin:0 4px 0 8px">頝唾</label>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button>`
+        + `<span class="review-card-subtitle" style="margin:0 4px 0 8px">第 ${page.currentPage || 0} / ${page.pageCount || 0} 頁</span>`
+        + `<label class="form-label" for="${escAttr(idPrefix)}-page-number" style="margin:0 4px 0 8px">跳轉</label>`
         + `<input type="number" class="form-input" id="${escAttr(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px">`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>??</button>`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>銝???${ic('chevron-right', 'icon-sm')}</button>`
-        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>?恍? ${ic('chevrons-right', 'icon-sm')}</button>`;
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>前往</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button>`
+        + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button>`;
     }
 
     function renderPagerToolbar(config) {
@@ -98,7 +98,7 @@
       const toolbarClass = String(options.toolbarClass || 'review-toolbar review-toolbar--compact').trim();
       const toolbarStyle = String(options.toolbarStyle || '').trim();
       const idPrefix = String(options.idPrefix || 'pager').trim() || 'pager';
-      const ariaLabel = String(options.ariaLabel || '?”??').trim() || '?”??';
+      const ariaLabel = String(options.ariaLabel || '分頁工具列').trim() || '分頁工具列';
       const page = normalizePage(options.page, options.defaultLimit);
       const summary = String(options.summary || formatPageSummary(page, options.emptyText, options.defaultLimit)).trim();
       const mainHtml = options.mainHtml
@@ -414,8 +414,8 @@
     function renderCopyIdButton(value, label) {
       const text = String(value || '').trim();
       if (!text) return '';
-      const safeLabel = String(label || '蝺刻?').trim() || '蝺刻?';
-      return '<button type="button" class="copy-id-btn" data-copy="' + escAttr(text) + '" data-copy-label="' + escAttr(safeLabel) + '" title="銴ˊ' + esc(safeLabel) + '" aria-label="銴ˊ' + esc(safeLabel) + '">' + ic('copy', 'icon-xs') + '</button>';
+      const safeLabel = String(label || '內容').trim() || '內容';
+      return '<button type="button" class="copy-id-btn" data-copy="' + escAttr(text) + '" data-copy-label="' + escAttr(safeLabel) + '" title="複製' + esc(safeLabel) + '" aria-label="複製' + esc(safeLabel) + '">' + ic('copy', 'icon-xs') + '</button>';
     }
 
     function renderCopyIdCell(value, label, strong) {
@@ -427,9 +427,9 @@
 
     function copyTextToClipboard(value, label) {
       const text = String(value || '').trim();
-      const safeLabel = String(label || '蝺刻?').trim() || '蝺刻?';
+      const safeLabel = String(label || '內容').trim() || '內容';
       if (!text) {
-        toast('瘝??航?鋆賜?' + safeLabel, 'error');
+        toast('沒有可複製的' + safeLabel, 'error');
         return Promise.resolve(false);
       }
 
@@ -448,7 +448,7 @@
           toast(safeLabel + ' 已複製');
           return true;
         } catch (_) {
-          toast(safeLabel + '銴ˊ憭望?', 'error');
+          toast(safeLabel + '複製失敗', 'error');
           return false;
         }
       }
@@ -481,7 +481,7 @@
         if (!button || (scope !== document && !scope.contains(button))) return;
         event.preventDefault();
         event.stopPropagation();
-        copyTextToClipboard(button.dataset.copy || '', button.dataset.copyLabel || '蝺刻?');
+        copyTextToClipboard(button.dataset.copy || '', button.dataset.copyLabel || '內容');
       });
     }
 
@@ -630,7 +630,7 @@
         ? document.activeElement
         : null;
       document.body.classList.add('modal-open');
-      modalRoot.innerHTML = '<div class="modal-backdrop" data-modal-dismiss="1"></div><div class="modal-shell"><div class="modal-card ' + escAttr(opts.className || '') + '" role="dialog" aria-modal="true" aria-labelledby="' + escAttr(titleId) + '"' + (describedBy ? ' aria-describedby="' + escAttr(describedBy) + '"' : '') + ' tabindex="-1"><button type="button" class="modal-close-btn" data-modal-dismiss="1" aria-label="??">' + ic('x', 'icon-sm') + '</button>' + contentHtml + '</div></div>';
+      modalRoot.innerHTML = '<div class="modal-backdrop" data-modal-dismiss="1"></div><div class="modal-shell"><div class="modal-card ' + escAttr(opts.className || '') + '" role="dialog" aria-modal="true" aria-labelledby="' + escAttr(titleId) + '"' + (describedBy ? ' aria-describedby="' + escAttr(describedBy) + '"' : '') + ' tabindex="-1"><button type="button" class="modal-close-btn" data-modal-dismiss="1" aria-label="關閉">' + ic('x', 'icon-sm') + '</button>' + contentHtml + '</div></div>';
       const modalCard = modalRoot.querySelector('.modal-card');
       const cleanup = function () {
         document.removeEventListener('keydown', handleKeydown);
@@ -691,7 +691,7 @@
         const dialog = renderDialog(
           '<div class="modal-header"><div class="modal-kicker">' + esc(opts.kicker || '確認') + '</div><h3 class="modal-title" id="modal-title">' + esc(opts.title || '請再次確認') + '</h3></div>'
           + '<div class="modal-body"><p class="modal-message" id="modal-description">' + esc(message || '') + '</p></div>'
-          + '<div class="modal-actions"><button type="button" class="btn btn-secondary" data-modal-cancel="1">' + esc(opts.cancelLabel || '??') + '</button><button type="button" class="btn ' + escAttr(opts.confirmClass || 'btn-primary') + '" data-modal-confirm="1">' + esc(opts.confirmLabel || '蝣箄?') + '</button></div>',
+          + '<div class="modal-actions"><button type="button" class="btn btn-secondary" data-modal-cancel="1">' + esc(opts.cancelLabel || '取消') + '</button><button type="button" class="btn ' + escAttr(opts.confirmClass || 'btn-primary') + '" data-modal-confirm="1">' + esc(opts.confirmLabel || '確認') + '</button></div>',
           { className: 'modal-card--confirm', describedBy: 'modal-description' }
         );
         const cancel = dialog.root.querySelector('[data-modal-cancel]');
@@ -716,7 +716,7 @@
         const inputId = 'modal-prompt-input';
         const dialog = renderDialog(
           '<div class="modal-header"><div class="modal-kicker">' + esc(opts.kicker || '輸入') + '</div><h3 class="modal-title" id="modal-title">' + esc(opts.title || '請輸入內容') + '</h3></div>'
-          + '<form class="modal-body modal-form" data-modal-form="1"><p class="modal-message" id="modal-description">' + esc(message || '') + '</p><div class="form-group"><label class="form-label" for="' + inputId + '">' + esc(opts.label || '?批捆') + '</label><input type="text" class="form-input" id="' + inputId + '" aria-describedby="modal-description" value="' + escAttr(opts.defaultValue || '') + '" placeholder="' + escAttr(opts.placeholder || '') + '" ' + (opts.required === false ? '' : 'required') + '></div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-modal-cancel="1">' + esc(opts.cancelLabel || '??') + '</button><button type="submit" class="btn ' + escAttr(opts.confirmClass || 'btn-primary') + '">' + esc(opts.confirmLabel || '蝣箄?') + '</button></div></form>',
+          + '<form class="modal-body modal-form" data-modal-form="1"><p class="modal-message" id="modal-description">' + esc(message || '') + '</p><div class="form-group"><label class="form-label" for="' + inputId + '">' + esc(opts.label || '內容') + '</label><input type="text" class="form-input" id="' + inputId + '" aria-describedby="modal-description" value="' + escAttr(opts.defaultValue || '') + '" placeholder="' + escAttr(opts.placeholder || '') + '" ' + (opts.required === false ? '' : 'required') + '></div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-modal-cancel="1">' + esc(opts.cancelLabel || '取消') + '</button><button type="submit" class="btn ' + escAttr(opts.confirmClass || 'btn-primary') + '">' + esc(opts.confirmLabel || '確認') + '</button></div></form>',
           { className: 'modal-card--prompt', describedBy: 'modal-description' }
         );
         const form = dialog.root.querySelector('[data-modal-form]');

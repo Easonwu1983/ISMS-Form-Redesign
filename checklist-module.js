@@ -763,6 +763,32 @@
       return String(parsed.getFullYear() - 1911);
     }
 
+    function getChecklistCurrentAuditYear() {
+      return Number(new Date().getFullYear() - 1911);
+    }
+
+    function isValidChecklistAuditYearValue(value) {
+      const raw = String(value || '').trim();
+      if (!/^\d{3}$/.test(raw)) return false;
+      const year = Number(raw);
+      const minYear = 90;
+      const maxYear = getChecklistCurrentAuditYear() + 1;
+      return Number.isFinite(year) && year >= minYear && year <= maxYear;
+    }
+
+    function normalizeChecklistAuditYearValue(value) {
+      const raw = String(value || '').trim();
+      return isValidChecklistAuditYearValue(raw) ? raw : '';
+    }
+
+    function requireChecklistAuditYearValue(value) {
+      const normalized = normalizeChecklistAuditYearValue(value);
+      if (normalized) return normalized;
+      const minYear = 90;
+      const maxYear = getChecklistCurrentAuditYear() + 1;
+      throw new Error(`稽核年度格式無效，請填寫民國 ${minYear}-${maxYear} 年。`);
+    }
+
     function getChecklistTier1Unit(item) {
       const parsed = splitUnitValue(String(item && item.unit || '').trim());
       return String(parsed && parsed.parent || item && item.unit || '').trim();
@@ -810,9 +836,9 @@
       const years = new Set();
       (Array.isArray(items) ? items : []).forEach((item) => {
         const year = getChecklistAuditYear(item);
-        if (year) years.add(year);
+        if (isValidChecklistAuditYearValue(year)) years.add(year);
       });
-      const currentYear = String(new Date().getFullYear() - 1911);
+      const currentYear = String(getChecklistCurrentAuditYear());
       years.add(currentYear);
       return Array.from(years).sort((a, b) => Number(b) - Number(a));
     }
@@ -843,7 +869,7 @@
     function groupChecklistListItems(items) {
       const groups = new Map();
       (Array.isArray(items) ? items : []).forEach((item) => {
-        const year = getChecklistAuditYear(item) || '未知';
+        const year = normalizeChecklistAuditYearValue(getChecklistAuditYear(item)) || '未知年度';
         const unit = getChecklistTier1Unit(item) || String(item && item.unit || '未命名單位').trim();
         const yearKey = year;
         if (!groups.has(yearKey)) groups.set(yearKey, new Map());
@@ -889,7 +915,8 @@
       const conform = Number(summary.conform || 0);
       const rate = total > 0 ? Math.round((conform / total) * 100) : 0;
       const governanceNote = buildChecklistGovernanceNote(item);
-      const yearKey = String(getChecklistAuditYear(item) || '').trim() || '未知';
+      const auditYearText = normalizeChecklistAuditYearValue(getChecklistAuditYear(item)) || '—';
+      const yearKey = String(auditYearText || '').trim() || '未知年度';
       const unitKey = String(getChecklistTier1Unit(item) || String(item && item.unit || '未命名單位').trim()).trim();
       const searchText = [
         item && item.id,
@@ -904,7 +931,7 @@
         + '<td class="record-id-col">' + renderCopyIdCell(item.id, '檢核表編號', true) + '</td>'
         + '<td><div class="cl-list-unit">' + esc(item.unit) + '<small>' + esc(getChecklistTier1Unit(item) || '—') + '</small>' + (governanceNote ? '<div class="cl-list-unit-note">' + esc(governanceNote) + '</div>' : '') + '</div></td>'
         + '<td>' + esc(item.fillerName || '—') + '<div class="review-card-subtitle" style="margin-top:4px">' + esc(item.fillerUsername || '—') + '</div></td>'
-        + '<td>' + esc(getChecklistAuditYear(item)) + ' 年</td>'
+        + '<td>' + esc(auditYearText) + (auditYearText === '—' ? '' : ' 年') + '</td>'
         + '<td>' + buildChecklistListStatusPill(item) + '</td>'
         + '<td><div class="cl-rate-bar"><div class="cl-rate-fill" style="width:' + rate + '%"></div></div><span class="cl-rate-text">' + rate + '%</span></td>'
         + '<td>' + fmt(item && item.fillDate) + '</td>'
@@ -913,9 +940,10 @@
 
     function buildChecklistListYearTabs(years) {
       const activeYear = String(checklistBrowseState.year || '').trim() || 'all';
+      const currentYear = String(getChecklistCurrentAuditYear());
       const tabButtons = ['all'].concat(Array.isArray(years) ? years : []).map((year) => {
         const isActive = activeYear === year;
-        const label = year === 'all' ? '全部' : (year === String(new Date().getFullYear() - 1911) ? `今年度（${year}）` : `${year} 年`);
+        const label = year === 'all' ? '全部' : (year === currentYear ? `今年度（${year}）` : `${year} 年`);
         return '<button type="button" class="cl-year-tab ' + (isActive ? 'is-active' : '') + '" data-checklist-year="' + esc(year) + '">' + esc(label) + '</button>';
       }).join('');
       return '<div class="cl-year-tabs" role="tablist">' + tabButtons + '</div>';
@@ -1426,7 +1454,7 @@
               <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="cl-date" value="${esc(toDateInputValue(existing?.fillDate) || today)}" ${checklistEditable ? 'required' : 'disabled'}></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label form-required">\u7a3d\u6838\u5e74\u5ea6</label><input type="text" class="form-input" id="cl-year" value="${existing ? esc(existing.auditYear) : String(new Date().getFullYear() - 1911)}" ${checklistEditable ? 'required' : 'disabled'}></div>
+              <div class="form-group"><label class="form-label form-required">\u7a3d\u6838\u5e74\u5ea6</label><input type="text" class="form-input" id="cl-year" inputmode="numeric" maxlength="3" pattern="\\d{3}" value="${existing ? esc(existing.auditYear) : String(getChecklistCurrentAuditYear())}" ${checklistEditable ? 'required' : 'disabled'}></div>
               <div class="form-group"><label class="form-label form-required">\u6b0a\u8cac\u4e3b\u7ba1\u59d3\u540d</label><input type="text" class="form-input" id="cl-supervisor-name" value="${esc(supervisorName)}" placeholder="\u4f8b\u5982 \u8cc7\u8a0a\u7db2\u8def\u7d44\u7d44\u9577" ${checklistEditable ? 'required' : 'disabled'}></div>
               <div class="form-group"><label class="form-label form-required">\u4e3b\u7ba1\u8077\u7a31</label><input type="text" class="form-input" id="cl-supervisor-title" value="${esc(supervisorTitle)}" placeholder="\u4f8b\u5982 \u7d44\u9577 / \u4e3b\u4efb" ${checklistEditable ? 'required' : 'disabled'}></div>
             </div>
@@ -1519,14 +1547,14 @@
     function syncChecklistMeta() {
       document.getElementById('cl-side-unit').textContent = document.getElementById('cl-unit').value || '—';
       document.getElementById('cl-side-date').textContent = document.getElementById('cl-date').value ? fmt(document.getElementById('cl-date').value) : '—';
-      document.getElementById('cl-side-year').textContent = document.getElementById('cl-year').value || '—';
+      document.getElementById('cl-side-year').textContent = normalizeChecklistAuditYearValue(document.getElementById('cl-year').value) || '—';
       document.getElementById('cl-side-sign-status').textContent = document.getElementById('cl-sign-status').value || '待簽核';
     }
 
     function getChecklistOwnerId() {
       const unitValue = checklistUnitLocked ? (u.activeUnit || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
       const fillDateValue = document.getElementById('cl-date').value;
-      const auditYearValue = document.getElementById('cl-year').value;
+      const auditYearValue = requireChecklistAuditYearValue(document.getElementById('cl-year').value);
       return existing ? existing.id : generateChecklistIdForYear(unitValue, auditYearValue, fillDateValue);
     }
 
@@ -1689,7 +1717,7 @@
       const supervisorTitleValue = document.getElementById('cl-supervisor-title').value.trim();
       const unitValue = checklistUnitLocked ? (u.activeUnit || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
       const fillDateValue = document.getElementById('cl-date').value;
-      const auditYearValue = document.getElementById('cl-year').value;
+      const auditYearValue = requireChecklistAuditYearValue(document.getElementById('cl-year').value);
       return {
         id: existing ? existing.id : generateChecklistIdForYear(unitValue, auditYearValue, fillDateValue),
         unit: unitValue,
@@ -1772,7 +1800,13 @@
     });
     bindChecklistPageEvent(document.getElementById('cl-unit'), 'change', syncChecklistMeta);
     bindChecklistPageEvent(document.getElementById('cl-date'), 'change', syncChecklistMeta);
-    bindChecklistPageEvent(document.getElementById('cl-year'), 'input', syncChecklistMeta);
+    bindChecklistPageEvent(document.getElementById('cl-year'), 'input', () => {
+      const yearInput = document.getElementById('cl-year');
+      if (yearInput) {
+        yearInput.value = String(yearInput.value || '').replace(/[^\d]/g, '').slice(0, 3);
+      }
+      syncChecklistMeta();
+    });
     bindChecklistPageEvent(document.getElementById('cl-sign-status'), 'change', syncChecklistMeta);
 
     const clDateInput = document.getElementById('cl-date');
