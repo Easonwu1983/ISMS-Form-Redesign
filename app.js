@@ -18,6 +18,7 @@
   const TRAINING_EMPLOYEE_STATUS = ['在職', '離職', '退休', '留職停薪', '單位調職'];
   const TRAINING_BOOLEAN_OPTIONS = ['是', '否', '無須', '不適用'];
   const TRAINING_BOOLEAN_SELECT_OPTIONS = ['是', '否'];
+  const TRAINING_PROFESSIONAL_OPTIONS = ['是', '否'];
   const TRAINING_GENERAL_LABEL = '資安通識（1年3小時）';
   const TRAINING_INFO_STAFF_LABEL = '資訊人員(含承辦委外資通系統)';
   const TRAINING_PROFESSIONAL_LABEL = '資安專業課程（1年3小時）';
@@ -2872,7 +2873,6 @@
   const COMPLIANCE_CLASSES = { '符合': 'comply', '部分符合': 'partial', '不符合': 'noncomply', '不適用': 'na' };
 
   // ─── Checklist Storage ─────────────────────
-  const TRAINING_PROFESSIONAL_OPTIONS = ['是', '否'];
   const appTrainingChecklistBridge = appDomainTrainingRuntime.getTrainingChecklistBridge();
   const {
     normalizeChecklistStatus,
