@@ -4013,11 +4013,6 @@
           });
         }
       } else {
-        const loadingSummary = readAuditTrailSummary(resolvedFilters, false)
-          || normalizeAuditTrailSummary(auditTrailState.summary);
-        app.innerHTML = buildAuditTrailLoadingMarkup(resolvedFilters, loadingSummary);
-        refreshIcons();
-        queueAuditTrailSummaryBootstrap(resolvedFilters);
         state = await loadAuditTrailData(resolvedFilters);
       }
     } catch (error) {
