@@ -106,6 +106,7 @@
 
     let lastTrainingRosterFocusState = null;
     let trainingRosterFocusTrackerInstalled = false;
+    let releaseTrainingRosterFocusTracker = null;
     let trainingRosterGroupingCache = { token: '', groups: null };
     let trainingRosterSnapshotCache = { token: '', rawLength: 0, rosters: null, hiddenCount: 0, summary: null };
     let trainingRosterRenderCache = createTrainingRenderCache({ selectedSignature: '', defer: false });
@@ -1272,7 +1273,7 @@
   }
 
   function buildTrainingSignoffUploadCard() {
-    return '<div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">流程三：上傳簽核掃描檔</span></div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div>' + buildTrainingFileSlot('training-file-previews', 'training-signoff-files') + '<div class="form-actions"><button type="button" class="btn btn-primary" id="training-finalize-submit">' + ic('check-circle-2', 'icon-sm') + ' 完成流程三並正式結束填報</button></div></div>';
+    return '<div class="card card--top-20"><div class="card-header"><span class="card-title">流程三：上傳簽核掃描檔</span></div><div class="upload-zone" id="training-upload-zone"><input type="file" id="training-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">' + ic('folder-open') + '</div><div class="upload-zone-text">拖曳檔案或 <strong>點此選擇</strong></div><div class="upload-zone-hint">支援 JPG / PNG / PDF，單檔上限 5MB</div></div>' + buildTrainingFileSlot('training-file-previews', 'training-signoff-files') + '<div class="form-actions"><button type="button" class="btn btn-primary" id="training-finalize-submit">' + ic('check-circle-2', 'icon-sm') + ' 完成流程三並正式結束填報</button></div></div>';
   }
 
   function buildTrainingStepCards(stepDefs) {
@@ -1940,7 +1941,7 @@
       + '<div id="training-summary">' + buildTrainingSummarySection(computeTrainingSummary(existing?.records || [])) + '</div>'
       + '<div class="training-bulk-bar"><div class="training-bulk-count" id="training-selected-count">尚未選取人員</div><div class="training-bulk-controls"><select class="form-select" id="training-bulk-status"><option value="">套用在職狀態</option>' + TRAINING_EMPLOYEE_STATUS.map((status) => '<option value="' + esc(status) + '">' + esc(status) + '</option>').join('') + '</select><div class="training-bulk-general"><span>' + TRAINING_GENERAL_LABEL + '</span><div class="training-binary-group"><button type="button" class="training-binary-btn" data-bulk-general="是">✓</button><button type="button" class="training-binary-btn" data-bulk-general="否">✕</button></div></div><button type="button" class="btn btn-secondary" id="training-apply-bulk">' + ic('check-circle-2', 'icon-sm') + ' 套用到所選人員</button></div></div>'
       + '<div class="training-inline-form"><div class="form-group"><label class="form-label">新增名單外人員</label><input type="text" class="form-input" id="tr-new-name" placeholder="姓名"></div><div class="form-group"><label class="form-label">本職單位</label><input type="text" class="form-input" id="tr-new-unit-name" placeholder="例如 資訊網路組"></div><div class="form-group"><label class="form-label">身分別</label><input type="text" class="form-input" id="tr-new-identity" placeholder="例如 職員／委外"></div><div class="form-group"><label class="form-label">職稱</label><input type="text" class="form-input" id="tr-new-job-title" placeholder="例如 工程師"></div><div class="training-inline-action"><button type="button" class="btn btn-secondary" id="training-add-person">' + ic('user-plus', 'icon-sm') + ' 新增名單</button></div></div>'
-      + '<div class="training-editor-note" style="margin-top:-4px">草稿或退回更正狀態下，可刪除自己手動新增的人員；正式名單與他人新增資料仍會保留。</div>'
+      + '<div class="training-editor-note training-editor-note--tight">草稿或退回更正狀態下，可刪除自己手動新增的人員；正式名單與他人新增資料仍會保留。</div>'
       + '<div class="training-record-table-wrap" id="training-record-table-wrap">' + buildTrainingTableMarkup('<th style="width:56px"><input type="checkbox" id="training-select-all"></th><th style="width:68px">序號</th><th style="width:180px">姓名 / 來源</th><th style="min-width:180px">本職單位</th><th style="width:140px">身分別</th><th style="width:140px">職稱</th><th style="width:140px">在職狀態</th><th style="width:180px">' + TRAINING_GENERAL_LABEL + '</th><th style="width:180px">' + TRAINING_INFO_STAFF_LABEL + '</th><th style="width:180px">' + TRAINING_PROFESSIONAL_LABEL + '</th><th style="width:160px">判定</th><th style="min-width:240px">備註</th><th style="width:120px">操作</th>', '', { tbodyId: 'training-rows-body' }) + '</div>'
       + '<div class="form-actions"><button type="button" class="btn btn-secondary" id="training-save-draft" data-testid="training-save-draft">' + ic('save', 'icon-sm') + ' 儲存暫存</button><button type="submit" class="btn btn-primary" data-testid="training-submit">' + ic('lock', 'icon-sm') + ' ' + submitLabel + '</button><a href="#training" class="btn btn-ghost">取消</a></div>'
       + '</form></div>'
@@ -3076,13 +3077,20 @@
 
   function installTrainingRosterFocusTracker() {
     if (trainingRosterFocusTrackerInstalled || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
-    document.addEventListener('focusin', function () {
+    releaseTrainingRosterFocusTracker = bindTrainingPageEvent(document, 'focusin', function () {
       const state = captureTrainingRosterFocusState();
       if (state) {
         lastTrainingRosterFocusState = { ...state };
       }
     }, true);
     trainingRosterFocusTrackerInstalled = true;
+    registerTrainingPageCleanup(function () {
+      if (typeof releaseTrainingRosterFocusTracker === 'function') {
+        releaseTrainingRosterFocusTracker();
+      }
+      releaseTrainingRosterFocusTracker = null;
+      trainingRosterFocusTrackerInstalled = false;
+    });
   }
 
   function focusTrainingRosterElement(element, state) {

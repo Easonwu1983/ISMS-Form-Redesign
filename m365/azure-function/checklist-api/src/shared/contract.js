@@ -22,6 +22,20 @@ function cleanText(value) {
   return String(value || '').trim();
 }
 
+function getCurrentAuditYear() {
+  return Number(new Date().getFullYear() - 1911);
+}
+
+function isValidAuditYear(value, options) {
+  const raw = cleanText(value);
+  if (!/^\d{3}$/.test(raw)) return false;
+  const year = Number(raw);
+  const opts = options && typeof options === 'object' ? options : {};
+  const minYear = Math.max(1, Number(opts.minYear) || 90);
+  const maxYear = Math.max(minYear, Number(opts.maxYear) || (getCurrentAuditYear() + 1));
+  return Number.isFinite(year) && year >= minYear && year <= maxYear;
+}
+
 function createError(message, statusCode) {
   const error = new Error(message);
   error.statusCode = statusCode || 400;
@@ -276,6 +290,11 @@ function validateChecklistPayload(payload, options) {
   if (!cleanText(payload.fillerName)) throw createError('\u7f3a\u5c11\u586b\u5831\u4eba\u59d3\u540d\u3002', 400);
   if (!cleanText(payload.fillDate)) throw createError('\u7f3a\u5c11\u586b\u5831\u65e5\u671f\u3002', 400);
   if (!cleanText(payload.auditYear)) throw createError('\u7f3a\u5c11\u7a3d\u6838\u5e74\u5ea6\u3002', 400);
+  if (!isValidAuditYear(payload.auditYear)) {
+    const minYear = 90;
+    const maxYear = getCurrentAuditYear() + 1;
+    throw createError(`\u7a3d\u6838\u5e74\u5ea6\u683c\u5f0f\u7121\u6548\uff0c\u8acb\u586b\u5beb\u6c11\u570b ${minYear}-${maxYear} \u5e74\u3002`, 400);
+  }
 
   const summary = normalizeChecklistSummary(payload.summary);
   if (!Number.isFinite(summary.total) || summary.total < 0) {
@@ -346,6 +365,7 @@ module.exports = {
   normalizeChecklistPayload,
   normalizeStoredChecklist,
   parseChecklistId,
+  isValidAuditYear,
   validateActionEnvelope,
   validateChecklistPayload
 };

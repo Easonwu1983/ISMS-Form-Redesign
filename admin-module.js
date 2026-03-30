@@ -162,6 +162,13 @@
     let unitContactReviewState = null;
     let unitContactReviewRenderCache = null;
     let unitContactReviewMarkupCache = null;
+    const UNIT_CONTACT_REVIEW_VIRTUAL_ROW_HEIGHT = 72;
+    const UNIT_CONTACT_REVIEW_VIRTUAL_ROW_OVERSCAN = 8;
+    const UNIT_CONTACT_REVIEW_VIRTUAL_ROW_THRESHOLD = 40;
+    let unitContactReviewTableViewport = null;
+    let unitContactReviewVirtualRowsRenderPending = false;
+    let releaseUnitContactReviewVirtualScroll = null;
+    let releaseUnitContactReviewVirtualResize = null;
     const DEFAULT_GOVERNANCE_FILTERS = Object.freeze({
       keyword: '',
       mode: 'all',
@@ -2047,7 +2054,7 @@
               <textarea class="form-textarea governance-note-input" data-governance-unit-note="${esc(unit.unit)}" rows="3" placeholder="例如：主計室由一級單位統一代填；學院各系獨立填報。">${esc(unit.note || '')}</textarea>
             </div>
           </div>
-          <div class="review-callout compact" style="margin-top:14px">
+          <div class="review-callout compact review-callout--spaced">
             <span class="review-callout-icon">${ic('building-2', 'icon-sm')}</span>
             <div>${esc(modeHint)}</div>
           </div>
@@ -2055,7 +2062,7 @@
             <div class="cl-governance-child-title">轄下二級單位</div>
             <div class="cl-governance-child-list">${childrenHtml}</div>
           </div>
-          <div class="form-actions" style="justify-content:flex-end">
+          <div class="form-actions form-actions--end">
             <button type="button" class="btn btn-primary" data-action="admin.saveGovernanceMode" data-unit="${esc(unit.unit)}">${ic('save', 'icon-sm')} 儲存設定</button>
           </div>
         </div>
@@ -2392,13 +2399,13 @@
     function renderSecurityWindowPersonRows(items) {
       const rows = Array.isArray(items) ? items : [];
       if (!rows.length) {
-        return `<tr><td colspan="6"><div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">沒有符合條件的資安窗口人員</div><div class="empty-state-desc">請調整關鍵字或狀態篩選。</div></div></td></tr>`;
+        return `<tr><td colspan="6"><div class="empty-state empty-state--pad-32-20"><div class="empty-state-title">沒有符合條件的資安窗口人員</div><div class="empty-state-desc">請調整關鍵字或狀態篩選。</div></div></td></tr>`;
       }
       return rows.map((person) => {
         const units = Array.isArray(person.units) ? person.units : [];
         const unitSummary = units.length ? units.join('、') : '未指定';
         const statusMeta = getSecurityWindowUnitStatusMeta(person.hasWindow ? 'assigned' : 'missing');
-        return `<tr><td style="font-weight:600;color:var(--text-primary)">${esc(person.name || person.username || '—')}</td><td>${esc(person.username || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(person.email || '—')}</div></td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(unitSummary)}</td><td>${renderSecurityWindowPersonBadge(person)}</td><td><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span></td><td style="font-size:.82rem;color:var(--text-secondary)">${esc(person.activeUnit || '—')}</td></tr>`;
+        return `<tr><td class="review-cell-strong">${esc(person.name || person.username || '—')}</td><td>${esc(person.username || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(person.email || '—')}</div></td><td class="review-cell-secondary">${esc(unitSummary)}</td><td>${renderSecurityWindowPersonBadge(person)}</td><td><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span></td><td class="review-cell-secondary">${esc(person.activeUnit || '—')}</td></tr>`;
       }).join('');
     }
 
@@ -2431,7 +2438,7 @@
           </div>
           <div class="security-window-scope-card-body">
             <div class="security-window-scope-chip-row">${holderHtml}</div>
-            ${pending.length ? `<div class="review-card-subtitle" style="margin-top:10px">待審核：<div class="security-window-scope-chip-row" style="margin-top:8px">${pendingHtml}</div></div>` : ''}
+            ${pending.length ? `<div class="review-card-subtitle review-card-subtitle--top-10">待審核：<div class="security-window-scope-chip-row security-window-scope-chip-row--top-8">${pendingHtml}</div></div>` : ''}
           </div>
         </article>`;
     }
@@ -2501,7 +2508,7 @@
         ['已設定', holderCount],
         ['待審核', pendingCount]
       ];
-      return `<details class="training-group-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="training-group-summary security-window-summary"><div><span class="training-group-title">${esc(unit.unit)}</span><div class="training-group-subtitle">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div><div class="training-group-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="governance-card-body" style="padding-top:14px"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div>${renderSecurityWindowScopeRows(unit)}</div></details>`;
+      return `<details class="training-group-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="training-group-summary security-window-summary"><div><span class="training-group-title">${esc(unit.unit)}</span><div class="training-group-subtitle">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div><div class="training-group-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="governance-card-body governance-card-body--top-pad"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div>${renderSecurityWindowScopeRows(unit)}</div></details>`;
     }
 
     function renderSecurityWindowCategoryCard(group, index, categorySummaries) {
@@ -3295,6 +3302,68 @@
     }).join('');
   }
 
+  function buildUnitContactReviewVirtualSpacer(height) {
+    return `<tr class="review-virtual-spacer" aria-hidden="true"><td class="review-virtual-spacer-cell" colspan="7" style="height:${Math.max(0, Math.round(height))}px"></td></tr>`;
+  }
+
+  function getUnitContactReviewVirtualWindow(totalRows) {
+    if (!unitContactReviewTableViewport || totalRows <= UNIT_CONTACT_REVIEW_VIRTUAL_ROW_THRESHOLD) {
+      return {
+        enabled: false,
+        start: 0,
+        end: totalRows,
+        padTop: 0,
+        padBottom: 0
+      };
+    }
+    const scrollTop = Math.max(0, Number(unitContactReviewTableViewport.scrollTop || 0));
+    const viewportHeight = Math.max(320, Number(unitContactReviewTableViewport.clientHeight || 0) || 0);
+    const start = Math.max(0, Math.floor(scrollTop / UNIT_CONTACT_REVIEW_VIRTUAL_ROW_HEIGHT) - UNIT_CONTACT_REVIEW_VIRTUAL_ROW_OVERSCAN);
+    const visibleCount = Math.ceil(viewportHeight / UNIT_CONTACT_REVIEW_VIRTUAL_ROW_HEIGHT) + (UNIT_CONTACT_REVIEW_VIRTUAL_ROW_OVERSCAN * 2);
+    const end = Math.min(totalRows, start + visibleCount);
+    return {
+      enabled: true,
+      start,
+      end,
+      padTop: start * UNIT_CONTACT_REVIEW_VIRTUAL_ROW_HEIGHT,
+      padBottom: Math.max(0, (totalRows - end) * UNIT_CONTACT_REVIEW_VIRTUAL_ROW_HEIGHT)
+    };
+  }
+
+  function renderUnitContactReviewVirtualRows(items) {
+    const body = document.getElementById('unit-contact-review-table-body');
+    if (!body) return;
+    const rows = Array.isArray(items) ? items : [];
+    if (!rows.length) {
+      body.innerHTML = renderUnitContactReviewRows([]);
+      return;
+    }
+    const virtualWindow = getUnitContactReviewVirtualWindow(rows.length);
+    if (!virtualWindow.enabled) {
+      body.innerHTML = renderUnitContactReviewRows(rows);
+      return;
+    }
+    const rowsHtml = renderUnitContactReviewRows(rows.slice(virtualWindow.start, virtualWindow.end));
+    body.innerHTML = buildUnitContactReviewVirtualSpacer(virtualWindow.padTop)
+      + rowsHtml
+      + buildUnitContactReviewVirtualSpacer(virtualWindow.padBottom);
+  }
+
+  function scheduleUnitContactReviewRowsRender() {
+    if (unitContactReviewVirtualRowsRenderPending) return;
+    unitContactReviewVirtualRowsRenderPending = true;
+    const run = function () {
+      unitContactReviewVirtualRowsRenderPending = false;
+      if (!String(window.location.hash || '').startsWith('#unit-contact-review')) return;
+      renderUnitContactReviewVirtualRows(Array.isArray(unitContactReviewState && unitContactReviewState.items) ? unitContactReviewState.items : []);
+    };
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(run);
+      return;
+    }
+    window.setTimeout(run, 0);
+  }
+
   async function renderUnitContactReview(nextFilters, options) {
     if (!isAdmin()) { navigate('dashboard'); toast('僅最高管理員可審核單位管理人申請', 'error'); return; }
     const opts = options || {};
@@ -3376,13 +3445,39 @@
       defaultLimit: 50,
       limitOptions: ['5', '20', '50', '100']
     });
-    unitContactReviewPageHtml = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">最後更新：${esc(fmtTime(unitContactReviewState.lastLoadedAt))}</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('mail-plus')}</div><div class="stat-value">${counts.total || 0}</div><div class="stat-label">符合條件申請</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${counts.pendingReview || 0}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${(counts.approved || 0) + (counts.activationPending || 0) + (counts.active || 0)}</div><div class="stat-label">已處理</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('key-round')}</div><div class="stat-value">${counts.active || 0}</div><div class="stat-label">已啟用</div></div></div><div class="card review-table-card"><div class="card-header"><span class="card-title">申請清單</span><span class="review-card-subtitle">可依狀態、電子郵件與關鍵字過濾</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">狀態</label><select class="form-select" id="unit-contact-review-status"><option value="" ${!unitContactReviewState.filters.status ? 'selected' : ''}>全部</option><option value="pending_review" ${unitContactReviewState.filters.status === 'pending_review' ? 'selected' : ''}>待審核</option><option value="approved" ${unitContactReviewState.filters.status === 'approved' ? 'selected' : ''}>已通過（舊資料）</option><option value="returned" ${unitContactReviewState.filters.status === 'returned' ? 'selected' : ''}>退回補件</option><option value="rejected" ${unitContactReviewState.filters.status === 'rejected' ? 'selected' : ''}>未核准</option><option value="active" ${unitContactReviewState.filters.status === 'active' ? 'selected' : ''}>已啟用</option></select></div><div class="form-group"><label class="form-label">申請電子郵件</label><input class="form-input" id="unit-contact-review-email" value="${esc(unitContactReviewState.filters.email)}" placeholder="例如 ntu.edu.tw 或 Gmail"></div><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="unit-contact-review-keyword" value="${esc(unitContactReviewState.filters.keyword)}" placeholder="單位、申請人、編號"></div><div class="form-group"><label class="form-label">筆數</label><select class="form-select" id="unit-contact-review-limit"><option value="5" ${unitContactReviewState.filters.limit === '5' ? 'selected' : ''}>5</option><option value="20" ${unitContactReviewState.filters.limit === '20' ? 'selected' : ''}>20</option><option value="50" ${unitContactReviewState.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${unitContactReviewState.filters.limit === '100' ? 'selected' : ''}>100</option></select></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUnitContactFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUnitContactFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('unit-contact-review-table', '<th>申請編號 / 單位</th><th>申請人</th><th>分機</th><th>狀態</th><th>處理說明</th><th>最後更新</th><th>操作</th>', renderUnitContactReviewRows(unitContactReviewState.items), { toolbarSubtitle: '通過後會直接啟用帳號並寄送登入資訊；已啟用案件可補寄登入資訊。' })}</div></div>`;
+    unitContactReviewPageHtml = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">最後更新：${esc(fmtTime(unitContactReviewState.lastLoadedAt))}</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshUnitContactReview">${ic('refresh-cw', 'icon-sm')} 重新整理</button></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('mail-plus')}</div><div class="stat-value">${counts.total || 0}</div><div class="stat-label">符合條件申請</div></div><div class="stat-card pending"><div class="stat-icon">${ic('hourglass')}</div><div class="stat-value">${counts.pendingReview || 0}</div><div class="stat-label">待審核</div></div><div class="stat-card closed"><div class="stat-icon">${ic('badge-check')}</div><div class="stat-value">${(counts.approved || 0) + (counts.activationPending || 0) + (counts.active || 0)}</div><div class="stat-label">已處理</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('key-round')}</div><div class="stat-value">${counts.active || 0}</div><div class="stat-label">已啟用</div></div></div><div class="card review-table-card"><div class="card-header"><span class="card-title">申請清單</span><span class="review-card-subtitle">可依狀態、電子郵件與關鍵字過濾</span></div><div class="review-toolbar"><div class="review-toolbar-main"><div class="form-group"><label class="form-label">狀態</label><select class="form-select" id="unit-contact-review-status"><option value="" ${!unitContactReviewState.filters.status ? 'selected' : ''}>全部</option><option value="pending_review" ${unitContactReviewState.filters.status === 'pending_review' ? 'selected' : ''}>待審核</option><option value="approved" ${unitContactReviewState.filters.status === 'approved' ? 'selected' : ''}>已通過（舊資料）</option><option value="returned" ${unitContactReviewState.filters.status === 'returned' ? 'selected' : ''}>退回補件</option><option value="rejected" ${unitContactReviewState.filters.status === 'rejected' ? 'selected' : ''}>未核准</option><option value="active" ${unitContactReviewState.filters.status === 'active' ? 'selected' : ''}>已啟用</option></select></div><div class="form-group"><label class="form-label">申請電子郵件</label><input class="form-input" id="unit-contact-review-email" value="${esc(unitContactReviewState.filters.email)}" placeholder="例如 ntu.edu.tw 或 Gmail"></div><div class="form-group"><label class="form-label">關鍵字</label><input class="form-input" id="unit-contact-review-keyword" value="${esc(unitContactReviewState.filters.keyword)}" placeholder="單位、申請人、編號"></div><div class="form-group"><label class="form-label">筆數</label><select class="form-select" id="unit-contact-review-limit"><option value="5" ${unitContactReviewState.filters.limit === '5' ? 'selected' : ''}>5</option><option value="20" ${unitContactReviewState.filters.limit === '20' ? 'selected' : ''}>20</option><option value="50" ${unitContactReviewState.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${unitContactReviewState.filters.limit === '100' ? 'selected' : ''}>100</option></select></div></div><div class="review-toolbar-actions"><button type="button" class="btn btn-primary" data-action="admin.applyUnitContactFilters">${ic('filter', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetUnitContactFilters">${ic('rotate-ccw', 'icon-sm')} 重設</button></div></div>${pager}${buildReviewTableShell('unit-contact-review-table', '<th>申請編號 / 單位</th><th>申請人</th><th>分機</th><th>狀態</th><th>處理說明</th><th>最後更新</th><th>操作</th>', '', { toolbarSubtitle: '通過後會直接啟用帳號並寄送登入資訊；已啟用案件可補寄登入資訊。', wrapperId: 'unit-contact-review-table-wrap', wrapperClass: 'unit-contact-review-table-wrap', tbodyId: 'unit-contact-review-table-body' })}</div></div>`;
         unitContactReviewMarkupCache = { signature: renderUnitContactReviewSignature, html: unitContactReviewPageHtml };
       }
       app.innerHTML = unitContactReviewPageHtml;
       unitContactReviewRenderCache = { signature: renderUnitContactReviewSignature, filterSignature: JSON.stringify(unitContactReviewState.filters) };
       if (app) app.dataset.unitContactReviewRenderSignature = renderUnitContactReviewSignature;
     }
+    unitContactReviewTableViewport = document.getElementById('unit-contact-review-table-wrap');
+    renderUnitContactReviewVirtualRows(Array.isArray(unitContactReviewState.items) ? unitContactReviewState.items : []);
+    if (typeof releaseUnitContactReviewVirtualScroll === 'function') {
+      releaseUnitContactReviewVirtualScroll();
+      releaseUnitContactReviewVirtualScroll = null;
+    }
+    if (typeof releaseUnitContactReviewVirtualResize === 'function') {
+      releaseUnitContactReviewVirtualResize();
+      releaseUnitContactReviewVirtualResize = null;
+    }
+    if (unitContactReviewTableViewport) {
+      releaseUnitContactReviewVirtualScroll = bindAdminPageEvent(unitContactReviewTableViewport, 'scroll', scheduleUnitContactReviewRowsRender, { passive: true });
+      releaseUnitContactReviewVirtualResize = bindAdminPageEvent(window, 'resize', scheduleUnitContactReviewRowsRender);
+    }
+    registerAdminPageCleanup(function () {
+      if (typeof releaseUnitContactReviewVirtualScroll === 'function') {
+        releaseUnitContactReviewVirtualScroll();
+      }
+      if (typeof releaseUnitContactReviewVirtualResize === 'function') {
+        releaseUnitContactReviewVirtualResize();
+      }
+      releaseUnitContactReviewVirtualScroll = null;
+      releaseUnitContactReviewVirtualResize = null;
+      unitContactReviewTableViewport = null;
+      unitContactReviewVirtualRowsRenderPending = false;
+    });
     bindAdminCollectionPager({
       idPrefix: 'unit-contact-review',
       actionPrefix: 'admin.unitContactReview',
@@ -3793,7 +3888,7 @@
         ? `<span class="review-status-badge pending">後端未就緒</span>`
         : `<span class="review-status-badge approved">後端正常</span>`;
       const pager = renderAuditTrailPager(state.page);
-      pageHtml = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">查詢後端權限控管與稽核寫入結果，協助管理者追查異動來源。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重新整理</button><button type="button" class="btn btn-secondary" data-action="admin.exportAuditTrail">${ic('download', 'icon-sm')} 匯出 JSON</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>${healthBadge} <strong style="margin-left:8px">${esc(filterSummary)}</strong><div class="review-card-subtitle" style="margin-top:6px">${esc(health.repository || '')}${health.actor && health.actor.tokenMode ? ` · token=${esc(health.actor.tokenMode)}` : ''}${health.message ? ` · ${esc(health.message)}` : ''}</div></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('scroll-text')}</div><div class="stat-value">${state.summary.total || 0}</div><div class="stat-label">符合條件事件</div></div><div class="stat-card closed"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${state.summary.actorCount || 0}</div><div class="stat-label">操作人數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('activity')}</div><div class="stat-value">${eventTypeOptions.length}</div><div class="stat-label">事件類型</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('clock-3')}</div><div class="stat-value">${state.summary.latestOccurredAt ? esc(formatAuditOccurredAt(state.summary.latestOccurredAt).slice(5, 16)) : '—'}</div><div class="stat-label">最近事件</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">稽核紀錄查詢</span><span class="review-card-subtitle">${esc(filterSummary)}</span></div><form id="audit-filter-form"><div class="panel-grid-two" style="margin-bottom:18px"><div class="form-group"><label class="form-label">關鍵字</label><input type="text" class="form-input" id="audit-keyword" value="${esc(state.filters.keyword)}" placeholder="事件類型、email、recordId、payload 關鍵字"></div><div class="form-group"><label class="form-label">事件類型</label><select class="form-select" id="audit-event-type">${eventTypeSelect}</select></div><div class="form-group"><label class="form-label">\u958b\u59cb\u65e5\u671f</label><input type="date" class="form-input" id="audit-occurred-from" value="${esc(state.filters.occurredFrom)}"></div><div class="form-group"><label class="form-label">\u7d50\u675f\u65e5\u671f</label><input type="date" class="form-input" id="audit-occurred-to" value="${esc(state.filters.occurredTo)}"></div><div class="form-group"><label class="form-label">操作人 email</label><input type="text" class="form-input" id="audit-actor-email" value="${esc(state.filters.actorEmail)}" placeholder="actorEmail"></div><div class="form-group"><label class="form-label">目標 email</label><input type="text" class="form-input" id="audit-target-email" value="${esc(state.filters.targetEmail)}" placeholder="targetEmail"></div><div class="form-group"><label class="form-label">單位代碼</label><input type="text" class="form-input" id="audit-unit-code" value="${esc(state.filters.unitCode)}" placeholder="unitCode"></div><div class="form-group"><label class="form-label">紀錄編號</label><input type="text" class="form-input" id="audit-record-id" value="${esc(state.filters.recordId)}" placeholder="recordId"></div><div class="form-group"><label class="form-label">筆數上限</label><select class="form-select" id="audit-limit"><option value="50" ${state.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${state.filters.limit === '100' ? 'selected' : ''}>100</option><option value="200" ${state.filters.limit === '200' ? 'selected' : ''}>200</option></select></div></div><div class="form-actions" style="justify-content:flex-start;margin-bottom:8px"><button type="submit" class="btn btn-primary">${ic('search', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetAuditTrailFilters">${ic('rotate-ccw', 'icon-sm')} 清空條件</button></div></form>${pager}${buildReviewTableShell('audit-trail-table', '<th>時間</th><th>事件</th><th>操作人</th><th>目標</th><th>單位</th><th>內容摘要</th><th>差異</th>', '', { toolbarSubtitle: '套用篩選後可直接拖曳表格左右移動，也可用右側按鈕快速平移。', wrapperId: 'audit-trail-table-wrap', wrapperClass: 'audit-trail-table-wrap', tbodyId: 'audit-trail-table-body' })}</div><div class="card review-history-card"><div class="card-header"><span class="card-title">事件分布</span><span class="review-card-subtitle">最近查詢摘要</span></div><div class="review-history-list">${formatAuditEventTypeSummary(state.summary)}</div></div></div></div>`;
+      pageHtml = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">查詢後端權限控管與稽核寫入結果，協助管理者追查異動來源。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重新整理</button><button type="button" class="btn btn-secondary" data-action="admin.exportAuditTrail">${ic('download', 'icon-sm')} 匯出 JSON</button></div></div><div class="review-callout"><span class="review-callout-icon">${ic('shield-check', 'icon-sm')}</span><div>${healthBadge} <strong class="review-callout-strong">${esc(filterSummary)}</strong><div class="review-card-subtitle review-card-subtitle--top-6">${esc(health.repository || '')}${health.actor && health.actor.tokenMode ? ` · token=${esc(health.actor.tokenMode)}` : ''}${health.message ? ` · ${esc(health.message)}` : ''}</div></div></div><div class="stats-grid review-stats-grid"><div class="stat-card total"><div class="stat-icon">${ic('scroll-text')}</div><div class="stat-value">${state.summary.total || 0}</div><div class="stat-label">符合條件事件</div></div><div class="stat-card closed"><div class="stat-icon">${ic('users')}</div><div class="stat-value">${state.summary.actorCount || 0}</div><div class="stat-label">操作人數</div></div><div class="stat-card pending"><div class="stat-icon">${ic('activity')}</div><div class="stat-value">${eventTypeOptions.length}</div><div class="stat-label">事件類型</div></div><div class="stat-card overdue"><div class="stat-icon">${ic('clock-3')}</div><div class="stat-value">${state.summary.latestOccurredAt ? esc(formatAuditOccurredAt(state.summary.latestOccurredAt).slice(5, 16)) : '—'}</div><div class="stat-label">最近事件</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">稽核紀錄查詢</span><span class="review-card-subtitle">${esc(filterSummary)}</span></div><form id="audit-filter-form"><div class="panel-grid-two review-filter-grid"><div class="form-group"><label class="form-label">關鍵字</label><input type="text" class="form-input" id="audit-keyword" value="${esc(state.filters.keyword)}" placeholder="事件類型、email、recordId、payload 關鍵字"></div><div class="form-group"><label class="form-label">事件類型</label><select class="form-select" id="audit-event-type">${eventTypeSelect}</select></div><div class="form-group"><label class="form-label">\u958b\u59cb\u65e5\u671f</label><input type="date" class="form-input" id="audit-occurred-from" value="${esc(state.filters.occurredFrom)}"></div><div class="form-group"><label class="form-label">\u7d50\u675f\u65e5\u671f</label><input type="date" class="form-input" id="audit-occurred-to" value="${esc(state.filters.occurredTo)}"></div><div class="form-group"><label class="form-label">操作人 email</label><input type="text" class="form-input" id="audit-actor-email" value="${esc(state.filters.actorEmail)}" placeholder="actorEmail"></div><div class="form-group"><label class="form-label">目標 email</label><input type="text" class="form-input" id="audit-target-email" value="${esc(state.filters.targetEmail)}" placeholder="targetEmail"></div><div class="form-group"><label class="form-label">單位代碼</label><input type="text" class="form-input" id="audit-unit-code" value="${esc(state.filters.unitCode)}" placeholder="unitCode"></div><div class="form-group"><label class="form-label">紀錄編號</label><input type="text" class="form-input" id="audit-record-id" value="${esc(state.filters.recordId)}" placeholder="recordId"></div><div class="form-group"><label class="form-label">筆數上限</label><select class="form-select" id="audit-limit"><option value="50" ${state.filters.limit === '50' ? 'selected' : ''}>50</option><option value="100" ${state.filters.limit === '100' ? 'selected' : ''}>100</option><option value="200" ${state.filters.limit === '200' ? 'selected' : ''}>200</option></select></div></div><div class="form-actions review-form-actions-start"><button type="submit" class="btn btn-primary">${ic('search', 'icon-sm')} 套用篩選</button><button type="button" class="btn btn-secondary" data-action="admin.resetAuditTrailFilters">${ic('rotate-ccw', 'icon-sm')} 清空條件</button></div></form>${pager}${buildReviewTableShell('audit-trail-table', '<th>時間</th><th>事件</th><th>操作人</th><th>目標</th><th>單位</th><th>內容摘要</th><th>差異</th>', '', { toolbarSubtitle: '套用篩選後可直接拖曳表格左右移動，也可用右側按鈕快速平移。', wrapperId: 'audit-trail-table-wrap', wrapperClass: 'audit-trail-table-wrap', tbodyId: 'audit-trail-table-body' })}</div><div class="card review-history-card"><div class="card-header"><span class="card-title">事件分布</span><span class="review-card-subtitle">最近查詢摘要</span></div><div class="review-history-list">${formatAuditEventTypeSummary(state.summary)}</div></div></div></div>`;
       auditTrailMarkupCache = {
         signature: renderSignature,
         html: pageHtml
@@ -3899,7 +3994,7 @@
       const badge = success
         ? '<span class="review-status-badge approved">成功</span>'
         : '<span class="review-status-badge danger">失敗</span>';
-      return `<tr><td>${esc(fmtTime(log && log.time) || '—')}</td><td style="font-weight:500">${esc(log && log.username || '—')}</td><td>${esc(log && log.name || '—')}</td><td>${esc(log && log.role || '—')}</td><td>${badge}</td></tr>`;
+      return `<tr><td>${esc(fmtTime(log && log.time) || '—')}</td><td class="review-cell-strong">${esc(log && log.username || '—')}</td><td>${esc(log && log.name || '—')}</td><td>${esc(log && log.role || '—')}</td><td>${badge}</td></tr>`;
     }).join('') : '<tr><td colspan="5"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-title">目前沒有登入紀錄</div><div class="empty-state-desc">系統會保留最近的登入與失敗紀錄。</div></div></td></tr>';
     const app = document.getElementById('app');
       app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">登入紀錄</div><h1 class="page-title">登入紀錄</h1><p class="page-subtitle">最近 200 筆帳號登入與失敗事件。</p></div><div class="review-header-actions"><button type="button" class="btn btn-danger" data-action="admin.clearLoginLogs">${ic('trash-2', 'icon-sm')} 清除紀錄</button></div></div><div class="card"><div class="table-wrapper"><table><caption class="sr-only">登入紀錄清單</caption><thead><tr><th scope="col">時間</th><th scope="col">帳號</th><th scope="col">姓名</th><th scope="col">角色</th><th scope="col">結果</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
@@ -3941,7 +4036,7 @@
   function renderSchemaHealthIssueList(stores) {
     const issues = stores.filter((store) => store.status !== 'healthy');
     if (!issues.length) {
-      return `<div class="empty-state" style="padding:32px 20px"><div class="empty-state-title">目前沒有待處理的 schema 問題</div><div class="empty-state-desc">所有受管 store 都已使用最新 envelope 與版本格式。</div></div>`;
+      return `<div class="empty-state empty-state--pad-32-20"><div class="empty-state-title">目前沒有待處理的 schema 問題</div><div class="empty-state-desc">所有受管 store 都已使用最新 envelope 與版本格式。</div></div>`;
     }
     return issues.map((store) => {
       const detail = store.parseError
@@ -3959,7 +4054,7 @@
       : '目前沒有孤兒附件';
     const orphanList = attachmentHealth.orphaned.length
       ? attachmentHealth.orphaned.slice(0, 8).map((record) => `<div class="review-history-item"><div class="review-history-top"><span class="review-history-badge pending">孤兒附件</span><span class="review-history-time">${esc(record.scope || '未分類')}</span></div><div class="review-history-title">${esc(record.name || record.attachmentId)}</div><div class="review-history-meta">${esc(record.ownerId || '未綁定紀錄')} · ${formatSchemaBytes(record.size)}</div></div>`).join('')
-      : `<div class="empty-state" style="padding:24px 18px"><div class="empty-state-title">附件引用正常</div><div class="empty-state-desc">所有 IndexedDB 附件都還有對應的單據引用。</div></div>`;
+      : `<div class="empty-state empty-state--pad-24-18"><div class="empty-state-title">附件引用正常</div><div class="empty-state-desc">所有 IndexedDB 附件都還有對應的單據引用。</div></div>`;
     return `<div class="card review-history-card"><div class="card-header"><span class="card-title">附件資料庫</span><span class="review-card-subtitle">${esc(attachmentHealth.database)}</span></div><div class="review-history-list"><div class="review-callout compact"><span class="review-callout-icon">${ic('paperclip', 'icon-sm')}</span><div>共 ${attachmentHealth.totalAttachments} 筆附件，已引用 ${attachmentHealth.referencedAttachments} 筆，${orphanText}。</div></div>${orphanList}</div></div>`;
   }
 

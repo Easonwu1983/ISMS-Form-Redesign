@@ -5545,6 +5545,12 @@ tbody td:first-child {
   overscroll-behavior-y: contain;
 }
 
+.unit-contact-review-table-wrap {
+  max-height: min(68vh, 820px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
 .review-virtual-spacer > td,
 .review-virtual-spacer-cell {
   padding: 0;
@@ -5611,6 +5617,14 @@ tbody td:first-child {
   margin-bottom: 8px;
 }
 
+.empty-state--pad-32-20 {
+  padding: 32px 20px;
+}
+
+.empty-state--pad-24-18 {
+  padding: 24px 18px;
+}
+
 .form-actions--end {
   justify-content: flex-end;
 }
@@ -5641,6 +5655,10 @@ tbody td:first-child {
   margin-top: 18px;
 }
 
+.card--top-20 {
+  margin-top: 20px;
+}
+
 .governance-card-body--top-pad {
   padding-top: 14px;
 }
@@ -5658,6 +5676,36 @@ tbody td:first-child {
 
 .audit-modal-summary-block {
   margin-top: 18px;
+}
+
+.training-editor-note--tight {
+  margin-top: -4px;
+}
+
+.review-inline-gap-8 {
+  display: flex;
+  gap: 8px;
+}
+
+.checklist-detail-back-btn {
+  margin-top: 16px;
+}
+
+.checklist-issue-card {
+  margin-top: 20px;
+  border-left: 3px solid #ef4444;
+}
+
+.checklist-modal--wide {
+  max-width: 620px;
+}
+
+.form-textarea--min-60 {
+  min-height: 60px;
+}
+
+.form-textarea--min-80 {
+  min-height: 80px;
 }
 
 .badge-role-chip {

@@ -43,6 +43,7 @@ Done:
 - Live and static package builds now load minified CSS assets through `styles.min.css`.
 - Static package builds now minify CSS assets.
 - A PurgeCSS safelist build now emits `styles.purged.min.css` and the live asset loader prefers it by default.
+- Repeated inline styles from `admin`, `training`, and `checklist` flows have started moving into shared utility classes in `styles.css`.
 
 Open:
 - `styles.css` is still large and monolithic.
@@ -115,6 +116,7 @@ Done:
 - `unit-contact-application-module.js` now uses page-scoped listener registration for public apply and status flows.
 - `training-module.js` now window-renders the fill table for large rosters instead of painting the entire row set into the DOM at once.
 - `admin-module.js` virtualizes both the `audit-trail` table and the `system-users` table instead of painting their full row sets into the DOM at once.
+- `admin-module.js` now virtualizes the `unit-contact-review` table instead of painting the full review queue into the DOM at once.
 - `training-module.js` now window-renders large `training roster` group lists instead of expanding every group body into the DOM at once.
 - Debounced search and highlight timers in `training`, `checklist`, and `case` now register page cleanup handlers so route transitions clear pending timers.
 - `unit-contact-review`, `unit-review`, and `security-window` now invalidate stale async renders on route teardown and reuse the same page-scoped review loading/empty-state classes.

@@ -1882,7 +1882,7 @@
     cleanupRenderedAttachmentUrls();
     const cl = getChecklist(id);
     if (!cl) {
-      document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到這份檢核表</div><a href="#checklist" class="btn btn-primary" style="margin-top:16px">返回列表</a></div>`;
+      document.getElementById('app').innerHTML = `<div class="empty-state"><div class="empty-state-icon">${ic('help-circle', 'icon-lg')}</div><div class="empty-state-title">找不到這份檢核表</div><a href="#checklist" class="btn btn-primary checklist-detail-back-btn">返回列表</a></div>`;
       return;
     }
     if (!canAccessChecklist(cl)) { navigate('checklist'); toast('您沒有權限檢視這份檢核表', 'error'); return; }
@@ -1938,7 +1938,7 @@
         issues.push({ id: item.id, text: item.text, compliance: r.compliance, execution: r.execution || '' });
       }
     }));
-    const issueHtml = issues.length ? `<div class="card" style="margin-top:20px;border-left:3px solid #ef4444"><div class="section-header">${ic('alert-triangle', 'icon-sm')} 需改善項目 ${issues.length} 項</div>${issues.map((iss) => `<div class="cl-issue-item"><span class="cl-compliance-badge cl-badge-${COMPLIANCE_CLASSES[iss.compliance]}">${iss.compliance}</span><span class="cl-item-id">${iss.id}</span> ${esc(iss.text)}${iss.execution ? `<div class="cl-issue-note">${esc(iss.execution)}</div>` : ''}</div>`).join('')}</div>` : '';
+    const issueHtml = issues.length ? `<div class="card checklist-issue-card"><div class="section-header">${ic('alert-triangle', 'icon-sm')} 需改善項目 ${issues.length} 項</div>${issues.map((iss) => `<div class="cl-issue-item"><span class="cl-compliance-badge cl-badge-${COMPLIANCE_CLASSES[iss.compliance]}">${iss.compliance}</span><span class="cl-item-id">${iss.id}</span> ${esc(iss.text)}${iss.execution ? `<div class="cl-issue-note">${esc(iss.execution)}</div>` : ''}</div>`).join('')}</div>` : '';
     const statusCls = normalizeChecklistStatus(cl.status) === CHECKLIST_STATUS_SUBMITTED ? 'badge-closed' : 'badge-pending';
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
@@ -1965,7 +1965,7 @@
         </div>
       </div>
       ${issueHtml}
-      <div class="card" style="margin-top:20px"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 檢核項目明細</span></div>${sectDetail}</div>
+      <div class="card card--top-20"><div class="card-header"><span class="card-title">${ic('clipboard-list', 'icon-sm')} 檢核項目明細</span></div>${sectDetail}</div>
     </div>`;
     getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {
       const result = cl.results?.[item.id] || {};
@@ -2041,7 +2041,7 @@
           <h1 class="page-title">檢核題庫管理</h1>
           <p class="page-subtitle">目前共有 ${getChecklistSectionsState().length} 個章節、${totalItems} 個題目，可拖曳調整順序並維護題目內容。</p>
         </div>
-        <div style="display:flex;gap:8px">
+        <div class="review-inline-gap-8">
           <button class="btn btn-secondary" data-action="checklist.resetDefault">${ic('refresh-cw', 'icon-sm')} 還原預設題庫</button>
           <button class="btn btn-primary" data-action="checklist.addSection">${ic('plus-circle', 'icon-sm')} 新增章節</button>
         </div>
@@ -2076,7 +2076,7 @@
       return fallbackRoot;
     }());
     mr.innerHTML = `<div class="modal-backdrop" id="cm-modal-bg">
-      <div class="modal" style="max-width:620px">
+      <div class="modal checklist-modal--wide">
         <div class="modal-header">
           <span class="modal-title">${title}</span>
           <button class="btn btn-ghost btn-icon" data-dismiss-modal>關閉</button>
@@ -2172,11 +2172,11 @@
       </div>
       <div class="form-group">
         <label class="form-label form-required">項目內容</label>
-        <textarea class="form-textarea" id="cm-item-text" placeholder="請輸入檢核項目內容" required style="min-height:80px" autofocus></textarea>
+          <textarea class="form-textarea form-textarea--min-80" id="cm-item-text" placeholder="請輸入檢核項目內容" required autofocus></textarea>
       </div>
       <div class="form-group">
         <label class="form-label">提示說明</label>
-        <textarea class="form-textarea" id="cm-item-hint" placeholder="例如 可補充應提供的文件、畫面截圖或查核重點" style="min-height:60px"></textarea>
+          <textarea class="form-textarea form-textarea--min-60" id="cm-item-hint" placeholder="例如 可補充應提供的文件、畫面截圖或查核重點"></textarea>
       </div>`, () => {
       const id = document.getElementById('cm-item-id').value.trim();
       const text = document.getElementById('cm-item-text').value.trim();
@@ -2203,11 +2203,11 @@
       </div>
       <div class="form-group">
         <label class="form-label form-required">項目內容</label>
-        <textarea class="form-textarea" id="cm-item-text" required style="min-height:80px">${esc(item.text)}</textarea>
+          <textarea class="form-textarea form-textarea--min-80" id="cm-item-text" required>${esc(item.text)}</textarea>
       </div>
       <div class="form-group">
         <label class="form-label">提示說明</label>
-        <textarea class="form-textarea" id="cm-item-hint" style="min-height:60px">${esc(item.hint || '')}</textarea>
+          <textarea class="form-textarea form-textarea--min-60" id="cm-item-hint">${esc(item.hint || '')}</textarea>
       </div>`, () => {
       const newId = document.getElementById('cm-item-id').value.trim();
       const text = document.getElementById('cm-item-text').value.trim();
