@@ -255,6 +255,57 @@
       return esc(String(role || '—'));
     }
 
+    var HEADER_INTEGRATED_ROUTES = {
+      dashboard: true,
+      list: true,
+      users: true,
+      'unit-contact-review': true,
+      'login-log': true,
+      'audit-trail': true,
+      'security-window': true,
+      'schema-health': true,
+      checklist: true,
+      'checklist-manage': true,
+      'unit-review': true,
+      training: true,
+      'training-roster': true
+    };
+
+    function setHeaderContextText(selector, value) {
+      var node = document.querySelector(selector);
+      if (!node) return;
+      node.textContent = String(value || '').trim();
+    }
+
+    function syncHeaderRouteContext(page) {
+      var headerEl = document.getElementById('header');
+      var app = document.getElementById('app');
+      if (!headerEl || !app) return;
+
+      var routePage = String(page || '').trim() || 'dashboard';
+      var pageHeader = app.querySelector('.page-header');
+      var eyebrow = app.querySelector('.page-header .page-eyebrow, .dashboard-hero-eyebrow');
+      var title = app.querySelector('[data-route-heading], .page-header .page-title');
+      var subtitle = app.querySelector('.page-header .page-subtitle, .dashboard-hero-text--lead, .dashboard-hero-text');
+      var kickerText = eyebrow && eyebrow.textContent ? eyebrow.textContent.trim() : '內部稽核管考追蹤系統';
+      var titleText = title && title.textContent ? title.textContent.trim() : getRouteTitle(routePage);
+      var subtitleText = subtitle && subtitle.textContent ? subtitle.textContent.trim() : '';
+      var subtitleEl = headerEl.querySelector('.header-subtitle');
+      var integrated = !!HEADER_INTEGRATED_ROUTES[routePage];
+
+      setHeaderContextText('.header-kicker', kickerText);
+      setHeaderContextText('.header-title', titleText);
+
+      if (subtitleEl) {
+        subtitleEl.textContent = integrated ? subtitleText : '';
+        subtitleEl.hidden = !integrated || !subtitleText;
+      }
+
+      if (pageHeader) {
+        pageHeader.classList.toggle('page-header--integrated', integrated);
+      }
+    }
+
     function focusRouteContent() {
       window.requestAnimationFrame(function () {
         var heading = document.querySelector('[data-route-heading]');
@@ -566,7 +617,7 @@
 
       var headerEl = document.getElementById('header');
       if (!headerEl) return;
-      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context"><span class="header-kicker">內部稽核管考追蹤系統</span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout">登出</button></div>';
+      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context"><span class="header-kicker">內部稽核管考追蹤系統</span><span class="header-title">' + getRouteTitle(route.page) + '</span><span class="header-subtitle" hidden></span></div></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout">登出</button></div>';
 
       var switcher = document.getElementById('header-unit-switch');
       if (switcher) {
@@ -626,6 +677,7 @@
       setRouteLoadingState(true);
       Promise.resolve(getRouteMeta(page).render(route.param))
         .then(function () {
+          syncHeaderRouteContext(page);
           focusRouteContent();
         })
         .catch(function (error) {
