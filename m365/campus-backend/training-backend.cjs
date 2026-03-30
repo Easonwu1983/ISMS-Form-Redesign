@@ -48,6 +48,7 @@ function createTrainingRouter(deps) {
     formsCachePromise: null,
     formsQueryCache: new Map(),
     formsSummaryCache: new Map(),
+    formsUnfilteredSummarySeed: null,
     rostersCache: null,
     rostersCacheAt: 0,
     rostersCachePromise: null,
@@ -258,6 +259,7 @@ function createTrainingRouter(deps) {
     state.formsCache = null;
     state.formsCacheAt = 0;
     state.formsCachePromise = null;
+    state.formsUnfilteredSummarySeed = null;
     if (state.formsQueryCache instanceof Map) {
       state.formsQueryCache.clear();
     }
@@ -495,6 +497,43 @@ function createTrainingRouter(deps) {
     return summary;
   }
 
+  function hasActiveTrainingFormFilters(filters) {
+    const safeFilters = filters && typeof filters === 'object' ? filters : {};
+    return !!(
+      safeFilters.status
+      || safeFilters.unit
+      || safeFilters.statsUnit
+      || safeFilters.trainingYear
+      || safeFilters.fillerUsername
+      || safeFilters.q
+    );
+  }
+
+  function buildTrainingSummaryOnlyFastResponse(url, filters, cacheReason) {
+    if (!state.formsUnfilteredSummarySeed) return null;
+    const total = Number(state.formsUnfilteredSummarySeed.total || 0);
+    return {
+      ok: true,
+      items: [],
+      summary: {
+        ...state.formsUnfilteredSummarySeed,
+        total
+      },
+      total,
+      filters: {
+        ...(filters || {}),
+        summaryOnly: '1'
+      },
+      generatedAt: new Date().toISOString(),
+      cache: {
+        query: 'hit',
+        summaryOnly: true,
+        reason: cacheReason || 'unfiltered-summary'
+      },
+      contractVersion: CONTRACT_VERSION
+    };
+  }
+
   function buildFormQuerySignature(authz, url) {
     const safeAuthz = authz && typeof authz === 'object' ? authz : {};
     const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
@@ -631,6 +670,7 @@ function createTrainingRouter(deps) {
     }
       state.formsCache = rows.slice();
       state.formsCacheAt = Date.now();
+      state.formsUnfilteredSummarySeed = summarizeTrainingForms(rows.map((entry) => entry && entry.item).filter(Boolean));
       if (state.formsQueryCache instanceof Map) {
         state.formsQueryCache.clear();
       }
@@ -1094,6 +1134,19 @@ function createTrainingRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = String(url.searchParams.get('summaryOnly') || '').trim() === '1';
       const filters = readTrainingFormFilters(url);
+      const canUseUnfilteredSummary = summaryOnly && requestAuthz.isAdmin(authz) && !hasActiveTrainingFormFilters(filters);
+      if (canUseUnfilteredSummary && state.formsUnfilteredSummarySeed) {
+        const responseBody = buildTrainingSummaryOnlyFastResponse(url, filters, 'unfiltered-summary');
+        if (responseBody) {
+          logTrainingForms('unfiltered summary hit', {
+            username: authz.username,
+            total: responseBody.total,
+            durationMs: Date.now() - startedAt
+          });
+          await writeJson(res, buildJsonResponse(200, responseBody), origin);
+          return;
+        }
+      }
       const summaryCacheKey = summaryOnly ? buildFormSummarySignature(authz, url) : '';
       if (summaryOnly) {
         const summaryLookup = readFormsSummaryCache(summaryCacheKey);

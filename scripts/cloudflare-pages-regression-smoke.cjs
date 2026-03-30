@@ -65,6 +65,7 @@ async function gotoHashOnly(page, hash, options = {}) {
 async function login(page, username = 'easonwu', password = '2wsx#EDC', options = {}) {
   const requireVersionChip = options.requireVersionChip !== false;
   const fastAuth = options.fastAuth === true;
+  const skipBootstrap = options.skipBootstrap === true;
   await gotoAppRoot(page, 'domcontentloaded');
   const alreadyAuthenticated = await page.locator('.btn-logout').count();
   if (!alreadyAuthenticated) {
@@ -99,8 +100,10 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
       ]);
     }
   }
-  await waitForRemoteBootstrap(page);
-  if (requireVersionChip) {
+  if (!skipBootstrap) {
+    await waitForRemoteBootstrap(page);
+  }
+  if (requireVersionChip && !skipBootstrap) {
     await page.waitForSelector('.sidebar-footer [data-testid="app-version-chip"]', { timeout: 30000 });
     const sidebarVersion = await page.locator('.sidebar-footer [data-testid="app-version-chip"]').first().textContent();
     if (!String(sidebarVersion || '').trim()) {
@@ -113,7 +116,7 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   try {
-    await login(page, 'unit1', 'unit123', { requireVersionChip: false, fastAuth: true });
+    await login(page, 'unit1', 'unit123', { requireVersionChip: false, fastAuth: true, skipBootstrap: true });
     pushStep('unit-admin:login', true, 'unit admin login succeeded');
 
     const apiState = await page.evaluate(async () => {

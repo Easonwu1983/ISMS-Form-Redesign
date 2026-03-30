@@ -216,32 +216,20 @@ async function seedSyntheticDashboard(page) {
       '<div class="card-header">' +
         '<div>' +
           '<div class="page-eyebrow">Dashboard Overview</div>' +
-          '<span class="card-title">Executive Summary</span>' +
+          '<span class="card-title">Focused Summary</span>' +
         '</div>' +
         '<span class="review-card-subtitle">Synthetic focused baseline</span>' +
       '</div>' +
       '<div class="visual-dashboard-stat-grid">' +
         '<div class="visual-dashboard-stat-card"><span class="visual-dashboard-stat-label">Open Cases</span><strong class="visual-dashboard-stat-value visual-smoke-mask-value">16</strong></div>' +
         '<div class="visual-dashboard-stat-card"><span class="visual-dashboard-stat-label">Pending</span><strong class="visual-dashboard-stat-value visual-smoke-mask-value">4</strong></div>' +
-        '<div class="visual-dashboard-stat-card"><span class="visual-dashboard-stat-label">Overdue</span><strong class="visual-dashboard-stat-value visual-smoke-mask-value">1</strong></div>' +
         '<div class="visual-dashboard-stat-card"><span class="visual-dashboard-stat-label">Closed</span><strong class="visual-dashboard-stat-value visual-smoke-mask-value">6</strong></div>' +
       '</div>' +
-      '<div class="visual-dashboard-mini-grid">' +
-        '<div class="card visual-dashboard-panel">' +
-          '<div class="card-header"><span class="card-title">Case Mix</span><span class="review-card-subtitle">Synthetic focused baseline</span></div>' +
-          '<div class="visual-dashboard-bar-stack">' +
-            '<div class="visual-dashboard-bar-row"><span class="visual-dashboard-bar-label">New</span><span class="visual-dashboard-bar" style="width:68%"></span></div>' +
-            '<div class="visual-dashboard-bar-row"><span class="visual-dashboard-bar-label">Review</span><span class="visual-dashboard-bar" style="width:48%"></span></div>' +
-            '<div class="visual-dashboard-bar-row"><span class="visual-dashboard-bar-label">Track</span><span class="visual-dashboard-bar" style="width:72%"></span></div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="card visual-dashboard-panel">' +
-          '<div class="card-header"><span class="card-title">Latest Signals</span><span class="review-card-subtitle">Synthetic focused baseline</span></div>' +
-          '<div class="visual-dashboard-signal-stack">' +
-            '<div class="visual-dashboard-signal-card"><span class="visual-dashboard-signal-dot"></span><div><strong>Pending sign-off</strong><div class="visual-smoke-mask-value">4 items</div></div></div>' +
-            '<div class="visual-dashboard-signal-card"><span class="visual-dashboard-signal-dot"></span><div><strong>Checklist export</strong><div class="visual-smoke-mask-value">2 units</div></div></div>' +
-            '<div class="visual-dashboard-signal-card"><span class="visual-dashboard-signal-dot"></span><div><strong>Audit follow-up</strong><div class="visual-smoke-mask-value">1 overdue</div></div></div>' +
-          '</div>' +
+      '<div class="card visual-dashboard-panel">' +
+        '<div class="card-header"><span class="card-title">Latest Signals</span><span class="review-card-subtitle">Synthetic focused baseline</span></div>' +
+        '<div class="visual-dashboard-signal-stack">' +
+          '<div class="visual-dashboard-signal-card"><span class="visual-dashboard-signal-dot"></span><div><strong>Pending sign-off</strong><div class="visual-smoke-mask-value">4 items</div></div></div>' +
+          '<div class="visual-dashboard-signal-card"><span class="visual-dashboard-signal-dot"></span><div><strong>Audit follow-up</strong><div class="visual-smoke-mask-value">1 overdue</div></div></div>' +
         '</div>' +
       '</div>';
     app.appendChild(shell);
@@ -385,34 +373,29 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'dashboard') {
     return common + `
       #visual-dashboard-shell {
-        width: ${mode === 'mobile' ? '320px' : '640px'} !important;
-        max-width: ${mode === 'mobile' ? '320px' : '640px'} !important;
+        width: ${mode === 'mobile' ? '300px' : '560px'} !important;
+        max-width: ${mode === 'mobile' ? '300px' : '560px'} !important;
         margin: 0 auto !important;
-        padding: ${mode === 'mobile' ? '14px' : '16px'} !important;
+        padding: ${mode === 'mobile' ? '12px' : '14px'} !important;
         box-sizing: border-box !important;
       }
       #visual-dashboard-shell .visual-dashboard-stat-grid {
         display: grid !important;
-        grid-template-columns: repeat(${mode === 'mobile' ? '2' : '4'}, minmax(0, 1fr)) !important;
-        gap: 10px !important;
-        margin-bottom: 14px !important;
+        grid-template-columns: repeat(${mode === 'mobile' ? '1' : '3'}, minmax(0, 1fr)) !important;
+        gap: 9px !important;
+        margin-bottom: 12px !important;
       }
       #visual-dashboard-shell .visual-dashboard-stat-card,
       #visual-dashboard-shell .visual-dashboard-panel {
         border: 1px solid rgba(148, 163, 184, 0.18) !important;
-        border-radius: 16px !important;
+        border-radius: 14px !important;
         background: rgba(255, 255, 255, 0.96) !important;
-        padding: 12px !important;
-      }
-      #visual-dashboard-shell .visual-dashboard-mini-grid {
-        display: grid !important;
-        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1fr 1fr'} !important;
-        gap: 12px !important;
+        padding: 11px !important;
       }
       #visual-dashboard-shell .visual-dashboard-bar-stack,
       #visual-dashboard-shell .visual-dashboard-signal-stack {
         display: grid !important;
-        gap: 10px !important;
+        gap: 8px !important;
       }
       #visual-dashboard-shell .visual-dashboard-bar-row {
         display: grid !important;
