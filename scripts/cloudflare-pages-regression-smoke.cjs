@@ -476,6 +476,7 @@ async function run() {
 
     await login(page, 'easonwu', '2wsx#EDC', { fastAuth: true, requireVersionChip: false });
     pushStep('auth:login', true, 'admin login succeeded');
+    await gotoAppRoot(page, 'domcontentloaded');
     await waitForDashboardReady(page);
 
     const dashboardTitle = await page.evaluate(() => {
