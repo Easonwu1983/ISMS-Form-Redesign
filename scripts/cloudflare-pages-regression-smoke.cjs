@@ -474,7 +474,7 @@ async function run() {
     if (authTemplateBytes.slice(0, 5).toString('ascii') !== '%PDF-') throw new Error('authorization template is not a PDF');
     pushStep('asset:unit-contact-authorization-template pdf', true, `bytes=${authTemplateBytes.length}`);
 
-    await login(page, 'easonwu', '2wsx#EDC', { fastAuth: true });
+    await login(page, 'easonwu', '2wsx#EDC', { fastAuth: true, requireVersionChip: false });
     pushStep('auth:login', true, 'admin login succeeded');
 
     const dashboardTitle = await page.evaluate(() => {
