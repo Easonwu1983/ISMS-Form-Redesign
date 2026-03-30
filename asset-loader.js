@@ -68,9 +68,63 @@
   var index = 0;
   var integrityMap = {};
   var manifestPromise = null;
+  var nativeConsole = window.console && typeof window.console === 'object' ? window.console : {};
+  var runtimeLogBuffer = Array.isArray(window.__ISMS_RUNTIME_LOG__) ? window.__ISMS_RUNTIME_LOG__ : [];
+  var runtimeLogLimit = 200;
 
   window.__APP_BUILD_INFO__ = initialBuildInfo;
   window.__APP_ASSET_VERSION__ = cacheKey;
+  window.__ISMS_RUNTIME_LOG__ = runtimeLogBuffer;
+
+  function shouldMirrorRuntimeLogs() {
+    try {
+      var search = window.location && typeof window.location.search === 'string' ? window.location.search : '';
+      var hostname = window.location && typeof window.location.hostname === 'string' ? window.location.hostname : '';
+      if (/(^|[?&])debugLog=1(?:&|$)/.test(search)) return true;
+      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') return true;
+      if (window.localStorage && window.localStorage.getItem('isms:debug-log') === '1') return true;
+    } catch (_) {}
+    return false;
+  }
+
+  function serializeRuntimeArg(value) {
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: value.message,
+        stack: value.stack || ''
+      };
+    }
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value == null) {
+      return value;
+    }
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return String(value);
+    }
+  }
+
+  function emitRuntimeLog(level, argsLike) {
+    var args = Array.prototype.slice.call(argsLike || []);
+    runtimeLogBuffer.push({
+      level: String(level || 'log'),
+      time: new Date().toISOString(),
+      args: args.map(serializeRuntimeArg)
+    });
+    if (runtimeLogBuffer.length > runtimeLogLimit) {
+      runtimeLogBuffer.splice(0, runtimeLogBuffer.length - runtimeLogLimit);
+    }
+    if (!shouldMirrorRuntimeLogs()) return;
+    var sink = nativeConsole[level];
+    if (typeof sink === 'function') {
+      sink.apply(nativeConsole, args);
+    }
+  }
+
+  window.__ismsLog = function () { emitRuntimeLog('log', arguments); };
+  window.__ismsWarn = function () { emitRuntimeLog('warn', arguments); };
+  window.__ismsError = function () { emitRuntimeLog('error', arguments); };
 
   function normalizeAssetPath(assetPath) {
     return String(assetPath || '').replace(/^\.?\//, '').replace(/\?.*$/, '');
@@ -167,7 +221,7 @@
         return manifest;
       })
       .catch(function (error) {
-        console.warn('Failed to load asset manifest:', error && error.message ? error.message : error);
+        window.__ismsWarn('Failed to load asset manifest:', error && error.message ? error.message : error);
         integrityMap = {};
         window.__APP_ASSET_MANIFEST__ = window.__APP_ASSET_MANIFEST__ || {};
         window.__APP_ASSET_INTEGRITY__ = integrityMap;
@@ -204,7 +258,7 @@
     };
     script.onerror = function () {
       if (!optional && !coreBundleFallbackActive && assetSrc === coreBundleSrc) {
-        console.warn('Falling back to legacy core asset chain:', script.src);
+        window.__ismsWarn('Falling back to legacy core asset chain:', script.src);
         coreBundleFallbackActive = true;
         assets = fallbackAssets.slice();
         index = 0;
@@ -212,7 +266,7 @@
         return;
       }
       if (!optional) {
-        console.error('Failed to load asset:', script.src);
+        window.__ismsError('Failed to load asset:', script.src);
       }
       index += 1;
       loadNextScript();

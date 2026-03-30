@@ -125,6 +125,12 @@
     const TRAINING_ROSTER_VIRTUAL_GROUP_THRESHOLD = 18;
     const TRAINING_ROSTER_VIRTUAL_GROUP_HEIGHT = 108;
     const TRAINING_ROSTER_VIRTUAL_GROUP_OVERSCAN = 4;
+    const TRAINING_MIN_VIRTUAL_VIEWPORT_HEIGHT = 320;
+    const TRAINING_DEFERRED_SYNC_TIMEOUT_MS = 250;
+    const TRAINING_ROUTE_SETTLE_DELAY_MS = 450;
+    const TRAINING_IDLE_CALLBACK_TIMEOUT_MS = 250;
+    const TRAINING_RERENDER_RETRY_DELAY_MS = 60;
+    const TRAINING_FOCUS_RESTORE_DELAY_MS = 250;
     const TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX = 12;
     const trainingRosterRemotePageCache = createTrainingBoundedCacheStore({
       maxEntries: TRAINING_ROSTER_REMOTE_PAGE_CACHE_MAX,
@@ -273,13 +279,13 @@
         });
       }
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
-      const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
+      const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : TRAINING_DEFERRED_SYNC_TIMEOUT_MS;
       return new Promise((resolve) => {
         const run = function () {
           try {
             resolve(Promise.resolve(typeof taskFactory === 'function' ? taskFactory() : null));
           } catch (error) {
-            console.warn('deferred task failed to start', error);
+            window.__ismsWarn('deferred task failed to start', error);
             resolve(Promise.resolve());
           }
         };
@@ -895,7 +901,7 @@
             renderTraining({ skipSync: true });
           }
         }).catch((error) => {
-          console.warn('training list summary bootstrap failed', error);
+          window.__ismsWarn('training list summary bootstrap failed', error);
         }).finally(() => {
           resetTrainingRemoteListSummaryBootstrapState();
         });
@@ -1505,7 +1511,7 @@
         padBottom: 0
       };
     }
-    const viewportHeight = Math.max(320, Number(trainingRosterGroupsViewport.clientHeight || 0) || 0);
+    const viewportHeight = Math.max(TRAINING_MIN_VIRTUAL_VIEWPORT_HEIGHT, Number(trainingRosterGroupsViewport.clientHeight || 0) || 0);
     const scrollTop = Math.max(0, Number(trainingRosterGroupsViewport.scrollTop || 0) || 0);
     const start = Math.max(0, Math.floor(scrollTop / TRAINING_ROSTER_VIRTUAL_GROUP_HEIGHT) - TRAINING_ROSTER_VIRTUAL_GROUP_OVERSCAN);
     const visibleCount = Math.ceil(viewportHeight / TRAINING_ROSTER_VIRTUAL_GROUP_HEIGHT) + (TRAINING_ROSTER_VIRTUAL_GROUP_OVERSCAN * 2);
@@ -1709,16 +1715,16 @@
           restoreFocusState
         });
       } catch (error) {
-        console.warn('training roster rerender after delete failed; retrying once', error);
+        window.__ismsWarn('training roster rerender after delete failed; retrying once', error);
         clearTrainingRosterRemotePageCache();
         try {
-          await new Promise((resolve) => setTimeout(resolve, 450));
+          await new Promise((resolve) => setTimeout(resolve, TRAINING_ROUTE_SETTLE_DELAY_MS));
           await renderTrainingRoster({
             skipSync: true,
             restoreFocusState
           });
         } catch (retryError) {
-          console.error('training roster rerender after delete failed twice', retryError);
+          window.__ismsError('training roster rerender after delete failed twice', retryError);
           toast('名單刪除成功，但列表刷新失敗，請重新整理頁面。', 'warning');
         }
       }
@@ -1747,8 +1753,8 @@
       const accessProfile = getTrainingAccessProfile();
       const syncPromise = opts.skipSync
         ? Promise.resolve()
-        : scheduleDeferredPromise(() => syncTrainingFormsFromM365({ silent: true }), 250).catch((error) => {
-          console.warn('training list sync failed', error);
+        : scheduleDeferredPromise(() => syncTrainingFormsFromM365({ silent: true }), TRAINING_DEFERRED_SYNC_TIMEOUT_MS).catch((error) => {
+          window.__ismsWarn('training list sync failed', error);
         });
       const listSnapshot = getTrainingListSnapshot(accessProfile);
       const visibleForms = listSnapshot.visibleForms;
@@ -1888,7 +1894,7 @@
           if (serializeTrainingListCounts(nextSummary) === renderedSummarySignature) return;
           renderTraining({ skipSync: true });
         }).catch((error) => {
-          console.warn('training list remote summary sync failed', error);
+          window.__ismsWarn('training list remote summary sync failed', error);
         });
       } else if (!remoteSummary) {
         queueTrainingRemoteListSummaryBootstrap(accessProfile);
@@ -1900,7 +1906,7 @@
         if (!String(window.location.hash || '').startsWith('#training')) return;
         renderTraining({ skipSync: true, forceRemoteSummary: true });
       }).catch((error) => {
-        console.warn('training list background sync failed', error);
+        window.__ismsWarn('training list background sync failed', error);
       });
     }
 
@@ -2294,7 +2300,7 @@
           try {
             await syncTrainingRostersFromM365({ silent: true });
           } catch (error) {
-            console.warn('training roster post-sync failed', error);
+            window.__ismsWarn('training roster post-sync failed', error);
           }
           return getAllTrainingRosters().find((row) => row.unit === payload.currentUnit && row.name.toLowerCase() === payload.name.toLowerCase()) || null;
         })());
@@ -2414,7 +2420,7 @@
           padBottom: 0
         };
       }
-      const viewportHeight = Math.max(320, Number(trainingTableViewport.clientHeight) || 0);
+      const viewportHeight = Math.max(TRAINING_MIN_VIRTUAL_VIEWPORT_HEIGHT, Number(trainingTableViewport.clientHeight) || 0);
       const scrollTop = Math.max(0, Number(trainingTableViewport.scrollTop) || 0);
       const start = Math.max(0, Math.floor(scrollTop / TRAINING_VIRTUAL_ROW_HEIGHT) - TRAINING_VIRTUAL_ROW_OVERSCAN);
       const visibleCount = Math.ceil(viewportHeight / TRAINING_VIRTUAL_ROW_HEIGHT) + (TRAINING_VIRTUAL_ROW_OVERSCAN * 2);
@@ -2526,7 +2532,7 @@
         loadingRow?.remove();
       };
       paintRest().catch((error) => {
-        console.warn('training row chunk render failed', error);
+        window.__ismsWarn('training row chunk render failed', error);
       });
     }
 
@@ -2541,7 +2547,7 @@
         renderRows();
       };
       if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(run, { timeout: 250 });
+        window.requestIdleCallback(run, { timeout: TRAINING_IDLE_CALLBACK_TIMEOUT_MS });
       } else {
         window.setTimeout(run, 0);
       }
@@ -2751,7 +2757,7 @@
       }
     });
 
-    initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked });
+    initUnitCascade('tr-unit', unitValue, { disabled: isUnitLocked, registerCleanup: registerTrainingPageCleanup });
     if (!isUnitLocked) {
       bindTrainingPageEvent(document.getElementById('tr-unit'), 'change', (event) => {
         syncStatsUnitField(event.target.value);
@@ -2784,7 +2790,7 @@
     syncPromise.then((syncResults) => {
       syncResults.forEach((result, index) => {
         if (result.status === 'rejected') {
-          console.warn(index === 0 ? 'training roster bootstrap sync failed' : 'training form bootstrap sync failed', result.reason);
+          window.__ismsWarn(index === 0 ? 'training roster bootstrap sync failed' : 'training form bootstrap sync failed', result.reason);
         }
       });
       if (!document.getElementById('training-form')) return;
@@ -2827,7 +2833,7 @@
       scheduleTrainingRowsRender();
     }).catch((error) => {
       trainingRosterHydrating = false;
-      console.warn('training fill background sync failed', error);
+      window.__ismsWarn('training fill background sync failed', error);
     });
   }
 
@@ -3249,8 +3255,8 @@
     const useRemoteRosters = canUseRemoteTrainingRosterPaging();
     const syncPromise = (opts.skipSync || useRemoteRosters)
       ? Promise.resolve()
-      : scheduleDeferredPromise(() => syncTrainingRostersFromM365({ silent: true }), 250).catch((error) => {
-        console.warn('training roster page sync failed', error);
+      : scheduleDeferredPromise(() => syncTrainingRostersFromM365({ silent: true }), TRAINING_DEFERRED_SYNC_TIMEOUT_MS).catch((error) => {
+        window.__ismsWarn('training roster page sync failed', error);
       });
 
     let snapshot;
@@ -3448,11 +3454,11 @@
             appendRosterChunk(endIndex);
           };
           if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-            window.requestIdleCallback(next, { timeout: 250 });
+            window.requestIdleCallback(next, { timeout: TRAINING_IDLE_CALLBACK_TIMEOUT_MS });
             return;
           }
           if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-            window.setTimeout(next, 60);
+            window.setTimeout(next, TRAINING_RERENDER_RETRY_DELAY_MS);
             return;
           }
           next();
@@ -3480,16 +3486,16 @@
       if (syncPromise && typeof syncPromise.then === 'function') {
         syncPromise.then(() => {
           if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-            window.requestIdleCallback(rerender, { timeout: 250 });
+            window.requestIdleCallback(rerender, { timeout: TRAINING_IDLE_CALLBACK_TIMEOUT_MS });
             return;
           }
           if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-            window.setTimeout(rerender, 250);
+            window.setTimeout(rerender, TRAINING_DEFERRED_SYNC_TIMEOUT_MS);
             return;
           }
           rerender();
         }).catch((error) => {
-          console.warn('training roster background rerender failed', error);
+          window.__ismsWarn('training roster background rerender failed', error);
         });
       }
       return;
@@ -3649,7 +3655,7 @@
         try {
           await syncTrainingRostersFromM365({ silent: true, force: true });
         } catch (error) {
-          console.warn('training roster delete post-sync failed', error);
+          window.__ismsWarn('training roster delete post-sync failed', error);
         }
         clearTrainingRosterRemotePageCache();
         dispatchTrainingCacheInvalidation('training-rosters', 'training-roster-batch-delete');
@@ -3762,7 +3768,7 @@
       });
     }
 
-    initUnitCascade('training-import-unit', '', { disabled: false, excludeUnits: ['學校分部總辦事處'] });
+    initUnitCascade('training-import-unit', '', { disabled: false, excludeUnits: ['學校分部總辦事處'], registerCleanup: registerTrainingPageCleanup });
     const fileInput = document.getElementById('training-import-file');
     const fileCopy = document.getElementById('training-import-file-copy');
     bindTrainingPageEvent(fileInput, 'change', () => {
@@ -3831,7 +3837,7 @@
       try {
         await syncTrainingRostersFromM365({ silent: true });
       } catch (error) {
-        console.warn('training roster import pre-sync failed', error);
+        window.__ismsWarn('training roster import pre-sync failed', error);
       }
       const actor = currentUser() || {};
       const rosterIndex = new Map(
@@ -3932,7 +3938,7 @@
       try {
         await syncTrainingRostersFromM365({ silent: true, force: true });
       } catch (error) {
-        console.warn('training roster import post-sync failed', error);
+        window.__ismsWarn('training roster import post-sync failed', error);
       }
       dispatchTrainingCacheInvalidation('training-rosters', 'training-roster-import');
       clearTrainingRosterRemotePageCache();
@@ -3962,12 +3968,12 @@
         window.requestAnimationFrame(function () {
           window.requestAnimationFrame(restoreFocus);
         });
-        window.setTimeout(restoreFocus, 250);
+        window.setTimeout(restoreFocus, TRAINING_FOCUS_RESTORE_DELAY_MS);
         return;
       }
       if (typeof window.setTimeout === 'function') {
         window.setTimeout(restoreFocus, 50);
-        window.setTimeout(restoreFocus, 250);
+        window.setTimeout(restoreFocus, TRAINING_FOCUS_RESTORE_DELAY_MS);
         return;
       }
       restoreFocus();

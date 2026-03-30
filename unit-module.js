@@ -33,6 +33,7 @@
       '學校分部總辦事處',
       '國立臺灣大學系統'
     ]);
+    const UNIT_CASCADE_SEARCH_BLUR_DELAY_MS = 180;
     let officialUnitsCache = null;
     let officialUnitCatalogCache = null;
     let officialUnitSetCache = null;
@@ -570,7 +571,7 @@
           <select class="form-select" id="${baseId}-child" data-testid="${baseId}-child" aria-label="\u4e8c\u7d1a\u55ae\u4f4d" ${dis}></select>
         </div>
       </div>
-      <div class="unit-cascade-custom" id="${baseId}-custom-wrap" style="display:none;margin-top:8px">
+      <div class="unit-cascade-custom unit-cascade-custom--hidden" id="${baseId}-custom-wrap">
         <input type="text" class="form-input" id="${baseId}-custom" data-testid="${baseId}-custom" aria-label="\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" placeholder="\u8acb\u8f38\u5165\u81ea\u8a02\u55ae\u4f4d\u540d\u7a31" ${dis}>
       </div>
       <input type="hidden" id="${baseId}" data-testid="${baseId}" value="${esc(selectedUnit || '')}" />
@@ -589,6 +590,9 @@
       const customWrap = document.getElementById(`${baseId}-custom-wrap`);
       const customEl = document.getElementById(`${baseId}-custom`);
       if (!categoryEl || !parentEl || !childEl || !hiddenEl) return;
+      if (typeof hiddenEl.__unitCascadeCleanup__ === 'function') {
+        try { hiddenEl.__unitCascadeCleanup__(); } catch (_) {}
+      }
 
       const allowCustom = isAdmin() && !opts.disabled && !!customWrap && !!customEl;
       const structure = getSelectableUnitStructure({ excludeUnits: opts.excludeUnits });
@@ -605,6 +609,36 @@
       const initialCategory = parsed.parent ? categorizeTopLevelUnit(parsed.parent) : '';
       let activeSearchIndex = -1;
       let searchBlurTimer = null;
+      const cleanupFns = [];
+
+      const bindCascadeEvent = (target, type, listener, eventOptions) => {
+        if (!target || typeof target.addEventListener !== 'function' || typeof listener !== 'function') return function () {};
+        target.addEventListener(type, listener, eventOptions);
+        const cleanup = () => {
+          try { target.removeEventListener(type, listener, eventOptions); } catch (_) {}
+        };
+        cleanupFns.push(cleanup);
+        return cleanup;
+      };
+
+      const destroy = () => {
+        if (searchBlurTimer) {
+          window.clearTimeout(searchBlurTimer);
+          searchBlurTimer = null;
+        }
+        while (cleanupFns.length) {
+          const cleanup = cleanupFns.pop();
+          try { cleanup(); } catch (_) {}
+        }
+        if (hiddenEl.__unitCascadeCleanup__ === destroy) {
+          delete hiddenEl.__unitCascadeCleanup__;
+        }
+      };
+
+      hiddenEl.__unitCascadeCleanup__ = destroy;
+      if (typeof opts.registerCleanup === 'function') {
+        opts.registerCleanup(destroy);
+      }
 
       categoryEl.innerHTML =
         '<option value="">\u9078\u55ae\u4f4d\u985e\u5225</option>' +
@@ -618,7 +652,7 @@
 
       const setCustomMode = (enabled) => {
         if (!customWrap || !customEl) return;
-        customWrap.style.display = enabled ? 'block' : 'none';
+        customWrap.classList.toggle('unit-cascade-custom--hidden', !enabled);
         customEl.required = !!enabled;
       };
 
@@ -784,11 +818,11 @@
           return '<button type="button" class="unit-cascade-search-option" id="' + esc(optionId) + '" role="option" aria-selected="false" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(meta) + '</span></button>';
         }).join('');
         searchResultsEl.querySelectorAll('[data-unit-value]').forEach((button) => {
-          button.addEventListener('mousedown', (event) => {
+          bindCascadeEvent(button, 'mousedown', (event) => {
             event.preventDefault();
             applySelectedUnit(button.dataset.unitValue);
           });
-          button.addEventListener('mouseenter', () => {
+          bindCascadeEvent(button, 'mouseenter', () => {
             const options = Array.from(searchResultsEl.querySelectorAll('[data-unit-value]'));
             setActiveSearchOption(options.indexOf(button));
           });
@@ -796,17 +830,17 @@
         setActiveSearchOption(0);
       };
 
-      categoryEl.addEventListener('change', () => {
+      bindCascadeEvent(categoryEl, 'change', () => {
         renderParents(categoryEl.value, '');
         renderChildren('', '');
         syncHidden(true);
       });
-      parentEl.addEventListener('change', () => {
+      bindCascadeEvent(parentEl, 'change', () => {
         renderChildren(parentEl.value, '');
         syncHidden(true);
       });
-      childEl.addEventListener('change', () => syncHidden(true));
-      if (allowCustom) customEl.addEventListener('input', () => syncHidden(true));
+      bindCascadeEvent(childEl, 'change', () => syncHidden(true));
+      if (allowCustom) bindCascadeEvent(customEl, 'input', () => syncHidden(true));
 
       if (isInitialCustom) {
         categoryEl.value = initialCategory || '\u4e2d\u5fc3\uff0f\u7814\u7a76\u55ae\u4f4d';
@@ -821,15 +855,15 @@
       syncHidden(false);
 
       if (searchEl) {
-        searchEl.addEventListener('input', (event) => renderSearchResults(event.target.value));
-        searchEl.addEventListener('focus', () => {
+        bindCascadeEvent(searchEl, 'input', (event) => renderSearchResults(event.target.value));
+        bindCascadeEvent(searchEl, 'focus', () => {
           if (searchBlurTimer) {
             window.clearTimeout(searchBlurTimer);
             searchBlurTimer = null;
           }
           if (String(searchEl.value || '').trim()) renderSearchResults(searchEl.value);
         });
-        searchEl.addEventListener('keydown', (event) => {
+        bindCascadeEvent(searchEl, 'keydown', (event) => {
           const options = Array.from(searchResultsEl?.querySelectorAll('[data-unit-value]') || []);
           if (event.key === 'Escape') {
             hideSearchResults();
@@ -857,8 +891,8 @@
             }
           }
         });
-        searchEl.addEventListener('blur', () => {
-          searchBlurTimer = window.setTimeout(hideSearchResults, 180);
+        bindCascadeEvent(searchEl, 'blur', () => {
+          searchBlurTimer = window.setTimeout(hideSearchResults, UNIT_CASCADE_SEARCH_BLUR_DELAY_MS);
         });
         syncSearchInput();
       }
@@ -870,6 +904,7 @@
         childEl.disabled = true;
         if (customEl) customEl.disabled = true;
       }
+      return { destroy };
     }
 
     return {

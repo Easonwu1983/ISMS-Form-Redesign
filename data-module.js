@@ -264,7 +264,7 @@
           }
         }));
       } catch (_) {
-        console.warn('[data-module] storage warning:', String(message || '').trim());
+        window.__ismsWarn('[data-module] storage warning:', String(message || '').trim());
       }
     }
 

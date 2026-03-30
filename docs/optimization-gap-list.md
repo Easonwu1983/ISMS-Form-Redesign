@@ -44,10 +44,12 @@ Done:
 - Static package builds now minify CSS assets.
 - A PurgeCSS safelist build now emits `styles.purged.min.css` and the live asset loader prefers it by default.
 - Repeated inline styles from `admin`, `training`, and `checklist` flows have started moving into shared utility classes in `styles.css`.
+- `case-module.js` now uses shared utility classes for its static card spacing, textarea sizing, detail links, muted text, and track-form visibility states instead of fixed inline styles.
+- The live stylesheet now includes a dedicated `@media print` ruleset for public and authenticated layouts.
 
 Open:
 - `styles.css` is still large and monolithic.
-- Inline styles still exist inside module `innerHTML` templates.
+- Inline styles still exist inside module `innerHTML` templates, but the tracked source total is down to roughly 40 static/dynamic `style="..."` occurrences.
 
 Next:
 - Extract repeated inline styles into CSS classes.
@@ -120,6 +122,7 @@ Done:
 - `training-module.js` now window-renders large `training roster` group lists instead of expanding every group body into the DOM at once.
 - Debounced search and highlight timers in `training`, `checklist`, and `case` now register page cleanup handlers so route transitions clear pending timers.
 - `unit-contact-review`, `unit-review`, and `security-window` now invalidate stale async renders on route teardown and reuse the same page-scoped review loading/empty-state classes.
+- `unit-module.js` now owns a cleanup-aware unit cascade lifecycle so route teardown can dispose the custom search/input listeners instead of leaking them across renders.
 
 Open:
 - Some modules still attach listeners directly without page-scoped cleanup.
@@ -130,6 +133,17 @@ Next:
 - Finish converting the remaining direct route listeners to page-scoped registration.
 - Add a consistent destroy hook across the remaining route transitions.
 - Evaluate virtualization for other large read-heavy tables after `audit-trail`, `system-users`, and `training roster`.
+
+## 6. Production Logging Hygiene
+
+Status: `done`
+
+Done:
+- Tracked source modules now use the buffered runtime logger helpers (`window.__ismsLog`, `window.__ismsWarn`, `window.__ismsError`) instead of direct production `console.log/warn/error` calls.
+- Browser console mirroring is now limited to local debug contexts or explicit debug flags, while production keeps the messages buffered in memory.
+
+Open:
+- Temporary probe scripts in the repo root still use direct `console.*`, but they are not part of the deployed formal chain.
 
 ## Priority Order
 

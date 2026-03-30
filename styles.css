@@ -92,6 +92,10 @@ body {
   border: 0;
 }
 
+.is-hidden {
+  display: none !important;
+}
+
 :where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.42);
   outline-offset: 2px;
@@ -257,6 +261,69 @@ body {
   left: -100px;
   filter: blur(80px);
   z-index: 0;
+}
+
+.login-inline-link-row {
+  text-align: center;
+  margin-top: 14px;
+}
+
+.login-inline-link {
+  color: var(--accent-primary);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.login-panel-intro {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.login-panel-intro-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin-top: 8px;
+}
+
+.login-panel-intro-text {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.login-btn--warning {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.login-result-card {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+}
+
+.login-result-title {
+  font-size: 0.88rem;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.login-result-meta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.login-result-message {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+.login-form--spaced {
+  margin-top: 14px;
 }
 
 .login-card {
@@ -2445,6 +2512,10 @@ tbody td:first-child {
   font-size: 0.86rem;
   color: #7c8ca3;
   margin-top: 6px;
+}
+
+.page-subtitle--compact {
+  margin: 0;
 }
 
 /* --- Donut Chart --- */
@@ -5659,6 +5730,23 @@ tbody td:first-child {
   margin-top: 20px;
 }
 
+.card--bottom-16 {
+  margin-bottom: 16px;
+}
+
+.card--accent-teal {
+  border-left: 3px solid #0f766e;
+}
+
+.card--accent-orange {
+  border-left: 3px solid #f97316;
+}
+
+.case-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
 .governance-card-body--top-pad {
   padding-top: 14px;
 }
@@ -5706,6 +5794,65 @@ tbody td:first-child {
 
 .form-textarea--min-80 {
   min-height: 80px;
+}
+
+.form-textarea--min-88 {
+  min-height: 88px;
+}
+
+.form-textarea--min-92 {
+  min-height: 92px;
+}
+
+.form-textarea--min-108 {
+  min-height: 108px;
+}
+
+.form-textarea--min-112 {
+  min-height: 112px;
+}
+
+.form-textarea--min-126 {
+  min-height: 126px;
+}
+
+.form-textarea--min-78 {
+  min-height: 78px;
+}
+
+.chk-label--top-4 {
+  margin-top: 4px;
+}
+
+.detail-content--muted {
+  color: var(--text-muted);
+}
+
+.detail-empty-note {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.detail-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.detail-section--top-12 {
+  margin-top: 12px;
+}
+
+.link-accent {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.detail-note-muted {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
 }
 
 .badge-role-chip {
@@ -7349,6 +7496,14 @@ tbody tr:hover {
 
 .unit-cascade-grid--training .form-select {
   font-size: 0.88rem;
+}
+
+.unit-cascade-custom {
+  margin-top: 8px;
+}
+
+.unit-cascade-custom--hidden {
+  display: none;
 }
 
 .unit-contact-security-roles {
@@ -9143,6 +9298,96 @@ tbody tr:hover {
 @media (max-width: 1520px) {
   .review-actions--unit-contact {
     grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #000000 !important;
+  }
+
+  body {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .skip-link,
+  .sidebar,
+  .sidebar-backdrop,
+  .header,
+  .public-header,
+  .header-menu-btn,
+  .toast-container,
+  .modal-backdrop,
+  #modal-root,
+  .btn,
+  .btn-logout,
+  .review-header-actions,
+  .review-toolbar-actions,
+  .page-eyebrow,
+  .dashboard-panel-note,
+  .training-file-input,
+  .review-table-scroll-left,
+  .review-table-scroll-right {
+    display: none !important;
+  }
+
+  .main-content,
+  .public-main,
+  .public-shell,
+  #app {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: auto !important;
+    width: auto !important;
+  }
+
+  .page-header,
+  .card,
+  .review-table-card,
+  .dashboard-chart-panel,
+  .dashboard-table-panel,
+  .detail-grid,
+  .detail-section,
+  .detail-history-section {
+    background: #ffffff !important;
+    border: 1px solid #d1d5db !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  .table-wrapper,
+  .review-table-wrapper,
+  .training-record-table-wrap,
+  .system-users-table-wrap,
+  .audit-trail-table-wrap,
+  .unit-contact-review-table-wrap {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  table {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    position: static !important;
+    background: #ffffff !important;
+  }
+
+  a,
+  a:visited {
+    color: inherit !important;
+    text-decoration: none !important;
   }
 }
 

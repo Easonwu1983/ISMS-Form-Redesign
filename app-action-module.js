@@ -23,7 +23,7 @@
       });
       if (result && typeof result.then === 'function') {
         result.catch(function (error) {
-          console.error(error && error.stack ? error.stack : String(error));
+          window.__ismsError(error && error.stack ? error.stack : String(error));
           deps.toast(String(error && error.message || error || '操作失敗'), 'error');
         });
       }

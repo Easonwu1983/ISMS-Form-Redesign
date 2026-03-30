@@ -130,6 +130,7 @@
     let checklistRemoteSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     const CHECKLIST_REMOTE_SUMMARY_TTL_MS = 15000;
     const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
+    const CHECKLIST_DEFERRED_SYNC_TIMEOUT_MS = 250;
     let checklistRemotePageState = null;
     let checklistAccessProfileListenerInstalled = false;
 
@@ -235,7 +236,7 @@
             renderChecklistList({ skipSync: true });
           }
         }).catch((error) => {
-          console.warn('checklist list summary bootstrap failed', error);
+          window.__ismsWarn('checklist list summary bootstrap failed', error);
         }).finally(() => {
           resetChecklistRemoteSummaryBootstrapState();
         });
@@ -243,13 +244,13 @@
     }
 
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
-      const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : 250;
+      const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : CHECKLIST_DEFERRED_SYNC_TIMEOUT_MS;
       return new Promise((resolve) => {
         const run = function () {
           try {
             resolve(Promise.resolve(typeof taskFactory === 'function' ? taskFactory() : null));
           } catch (error) {
-            console.warn('deferred task failed to start', error);
+            window.__ismsWarn('deferred task failed to start', error);
             resolve(Promise.resolve());
           }
         };
@@ -1144,8 +1145,8 @@
     const useRemoteList = canUseRemoteChecklistPaging();
     const syncPromise = (opts.skipSync || useRemoteList)
       ? Promise.resolve()
-      : scheduleDeferredPromise(() => syncChecklistsFromM365({ silent: true }), 250).catch((error) => {
-        console.warn('checklist list sync failed', error);
+      : scheduleDeferredPromise(() => syncChecklistsFromM365({ silent: true }), CHECKLIST_DEFERRED_SYNC_TIMEOUT_MS).catch((error) => {
+        window.__ismsWarn('checklist list sync failed', error);
       });
     const localSnapshot = getChecklistListSnapshot(getVisibleChecklists());
     const years = localSnapshot.years;
@@ -1216,7 +1217,7 @@
         if (!String(window.location.hash || '').startsWith('#checklist')) return;
         renderChecklistList({ skipSync: true });
       }).catch((error) => {
-        console.warn('checklist list background rerender failed', error);
+        window.__ismsWarn('checklist list background rerender failed', error);
       });
     }
     if (useRemoteList && !opts.skipRemoteSummary) {
@@ -1227,7 +1228,7 @@
           if (serializeChecklistRemoteSummary(nextSummary) === renderedSummarySignature) return;
           renderChecklistList({ skipSync: true });
         }).catch((error) => {
-          console.warn('checklist list remote summary sync failed', error);
+          window.__ismsWarn('checklist list remote summary sync failed', error);
         });
       } else if (!remoteSummary) {
         queueChecklistRemoteSummaryBootstrap(checklistRemotePageState.filters);
@@ -1532,7 +1533,7 @@
     applySelectorTestIds([
       { selector: '#checklist-form button[type="submit"]', testId: 'checklist-submit' }
     ]);
-    initUnitCascade('cl-unit', selectedUnit, { disabled: checklistUnitLocked });
+    initUnitCascade('cl-unit', selectedUnit, { disabled: checklistUnitLocked, registerCleanup: registerChecklistPageCleanup });
     const checklistForm = document.getElementById('checklist-form');
     const evidenceFilesState = new Map();
     getChecklistSectionsState().forEach((sec) => sec.items.forEach((item) => {

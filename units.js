@@ -55,7 +55,7 @@
       installUnitApi(payload);
       return payload;
     }).catch((error) => {
-      console.error(error && error.stack ? error.stack : String(error));
+      window.__ismsError(error && error.stack ? error.stack : String(error));
       installEmptyUnitApi();
       return null;
     });

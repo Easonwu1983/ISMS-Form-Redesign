@@ -51,14 +51,14 @@
 
     function handleWindowFocus(deps) {
       deps.runSessionHeartbeat().catch(function (error) {
-        console.warn('session heartbeat failed', error);
+        window.__ismsWarn('session heartbeat failed', error);
       });
     }
 
     function handleDocumentVisibilityChange(deps) {
       if (document.visibilityState === 'visible') {
         deps.runSessionHeartbeat().catch(function (error) {
-          console.warn('session heartbeat failed', error);
+          window.__ismsWarn('session heartbeat failed', error);
         });
       }
     }

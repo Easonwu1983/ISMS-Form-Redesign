@@ -74,6 +74,10 @@
       registerPageCleanup
     } = deps;
 
+  const CASE_DASHBOARD_HYDRATION_IDLE_TIMEOUT_MS = 1500;
+  const CASE_ASYNC_FALLBACK_DELAY_MS = 0;
+  const CASE_LIST_SEARCH_DEBOUNCE_MS = 120;
+
   function normalizeCaseUnitList(units) {
     var source = Array.isArray(units) ? units : [];
     return Array.from(new Set(source.map(function (unit) {
@@ -151,6 +155,10 @@
     var headerClass = opts.headerClass || 'card-header';
     var cardClass = opts.cardClass ? 'card ' + opts.cardClass : 'card';
     return '<div class="' + cardClass + '"' + styleAttr + '>' + (headerHtml ? '<div class="' + headerClass + '">' + headerHtml + '</div>' : '') + bodyHtml + '</div>';
+  }
+
+  function getCaseEmptyStateClass(padding) {
+    return Number(padding) >= 40 ? 'empty-state review-empty--spacious' : 'empty-state empty-state--pad-32-20';
   }
 
   function applyCaseTableHeaderScope(headersHtml) {
@@ -303,7 +311,7 @@
   }
 
   function buildCaseEmptyTableRow(colspan, iconName, title, padding) {
-    return '<tr><td colspan="' + colspan + '"><div class="empty-state" style="padding:' + (padding || 32) + 'px"><div class="empty-state-icon">' + ic(iconName || 'inbox') + '</div><div class="empty-state-title">' + esc(title) + '</div></div></td></tr>';
+    return '<tr><td colspan="' + colspan + '"><div class="' + getCaseEmptyStateClass(padding || 32) + '"><div class="empty-state-icon">' + ic(iconName || 'inbox') + '</div><div class="empty-state-title">' + esc(title) + '</div></div></td></tr>';
   }
 
   function toDateInputValue(value) {
@@ -410,11 +418,11 @@
 
   function scheduleDashboardHydration(task) {
     if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(task, { timeout: 1500 });
+      window.requestIdleCallback(task, { timeout: CASE_DASHBOARD_HYDRATION_IDLE_TIMEOUT_MS });
       return;
     }
     if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-      window.setTimeout(task, 0);
+      window.setTimeout(task, CASE_ASYNC_FALLBACK_DELAY_MS);
       return;
     }
     task();
@@ -547,7 +555,7 @@
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
       '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + listSnapshot.total + ' 筆，顯示 ' + listSnapshot.filteredCount + ' 筆</p></div>' + createBtn + '</div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
-      buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', listSnapshot.rows), { style: 'padding:0;overflow:hidden;' }) + '</div>';
+      buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', listSnapshot.rows), { cardClass: 'case-table-card' }) + '</div>';
     refreshIcons();
     bindCopyButtons();
     let searchRenderTimer = null;
@@ -556,7 +564,7 @@
       searchRenderTimer = window.setTimeout(function () {
         searchRenderTimer = null;
         renderList();
-      }, 120);
+      }, CASE_LIST_SEARCH_DEBOUNCE_MS);
     };
     registerCasePageCleanup(function () {
       if (searchRenderTimer) {
@@ -626,10 +634,10 @@
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">處理人員</label><select class="form-select" id="f-hname" data-testid="create-handler-name" required><option value="">請先選擇處理單位</option></select></div>
               <div class="form-group"><label class="form-label">指派日期</label><input type="date" class="form-input" id="f-hdate"></div>
-              <div class="form-group"><label class="form-label">處理人員電子郵件</label><div class="input-with-icon"><input type="email" class="form-input" id="f-hemail" placeholder="選擇處理人員後自動帶入" readonly style="background:#f8fafc"><span class="input-icon-hint">${ic('mail', 'icon-xs')}</span></div><p class="form-hint">系統後續通知將優先送往此電子郵件</p></div>
+              <div class="form-group"><label class="form-label">處理人員電子郵件</label><div class="input-with-icon"><input type="email" class="form-input" id="f-hemail" placeholder="選擇處理人員後自動帶入" readonly><span class="input-icon-hint">${ic('mail', 'icon-xs')}</span></div><p class="form-hint">系統後續通知將優先送往此電子郵件</p></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label">通知設定</label><label class="chk-label" style="margin-top:4px"><input type="checkbox" id="f-notify" checked><span class="chk-box"></span>開單後寄送指派通知給處理人員</label></div>
+              <div class="form-group"><label class="form-label">通知設定</label><label class="chk-label chk-label--top-4"><input type="checkbox" id="f-notify" checked><span class="chk-box"></span>開單後寄送指派通知給處理人員</label></div>
             </div>
             <div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
             <div class="form-group"><label class="form-label form-required">缺失種類</label>${mkRadio('defType', DEF_TYPES, '')}</div>
@@ -637,8 +645,8 @@
             <div class="form-group"><label class="form-label form-required">分類（可複選）</label>${mkChk('category', CATEGORIES, [])}</div>
             <div class="form-group"><label class="form-label">條文</label><input type="text" class="form-input" id="f-clause" placeholder="例：A.9.2.6、ISO 27001:2022"></div>
             <div class="section-header">${ic('message-square-warning', 'icon-sm')} 問題描述</div>
-            <div class="form-group"><label class="form-label form-required">問題或缺失說明</label><textarea class="form-textarea" id="f-problem" placeholder="請具體描述發現的問題、缺失情境與影響範圍" required style="min-height:112px"></textarea></div>
-            <div class="form-group"><label class="form-label form-required">缺失發生情形</label><textarea class="form-textarea" id="f-occurrence" placeholder="說明缺失發生的背景、時間點與實際狀況" required style="min-height:92px"></textarea></div>
+            <div class="form-group"><label class="form-label form-required">問題或缺失說明</label><textarea class="form-textarea form-textarea--min-112" id="f-problem" placeholder="請具體描述發現的問題、缺失情境與影響範圍" required></textarea></div>
+            <div class="form-group"><label class="form-label form-required">缺失發生情形</label><textarea class="form-textarea form-textarea--min-92" id="f-occurrence" placeholder="說明缺失發生的背景、時間點與實際狀況" required></textarea></div>
             <div class="section-header">${ic('calendar', 'icon-sm')} 時程設定</div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">預定完成日期</label><input type="date" class="form-input" id="f-due" required></div>
@@ -665,7 +673,7 @@
         renderCreate._usersSyncPromise = Promise.resolve()
           .then(() => syncUsersFromM365({ silent: true }))
           .catch((error) => {
-            console.warn('create handler sync failed', error);
+            window.__ismsWarn('create handler sync failed', error);
           })
           .finally(() => {
             renderCreate._usersSyncPromise = null;
@@ -713,8 +721,8 @@
     const summaryDue = document.getElementById('create-summary-due');
     const summaryNotify = document.getElementById('create-summary-notify');
 
-    initUnitCascade('f-punit', u.activeUnit || u.primaryUnit || u.unit || '', { disabled: true });
-    initUnitCascade('f-hunit', '', { disabled: false });
+    initUnitCascade('f-punit', u.activeUnit || u.primaryUnit || u.unit || '', { disabled: true, registerCleanup: registerCasePageCleanup });
+    initUnitCascade('f-hunit', '', { disabled: false, registerCleanup: registerCasePageCleanup });
 
     function getAutoGeneratedIdPreview() {
       const documentNo = buildCorrectionDocumentNo(handlerUnit.value, proposerDateInput.value);
@@ -985,7 +993,7 @@
     const mainEvidenceSlotId = 'case-evidence-main';
     evidenceMounts.push({ id: mainEvidenceSlotId, files: item.evidence || [], emptyText: '尚無佐證' });
     const tl = buildCaseTimeline(item.history || []);
-    const pendingTrackingHtml = pending ? `<div class="card" style="margin-top:20px;border-left:3px solid #0f766e;"><div class="card-header"><span class="card-title">${ic('hourglass', 'icon-sm')} 待管理者審核的追蹤提報</span></div>
+    const pendingTrackingHtml = pending ? `<div class="card card--top-20 card--accent-teal"><div class="card-header"><span class="card-title">${ic('hourglass', 'icon-sm')} 待管理者審核的追蹤提報</span></div>
       <div class="detail-grid">
         <div class="detail-field"><div class="detail-field-label">追蹤輪次</div><div class="detail-field-value">第 ${pending.round || ((item.trackings || []).length + 1)} 次</div></div>
         <div class="detail-field"><div class="detail-field-label">提報人員</div><div class="detail-field-value">${esc(pending.tracker || '—')}</div></div>
@@ -996,7 +1004,7 @@
       <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(pending.execution || '')}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(pending.trackNote || '')}</div></div>
       <div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次提報佐證</div>${buildCaseEvidenceSlot('case-pending-evidence')}</div>
-      ${canReviewTracking ? `<div class="form-actions"><button type="button" class="btn btn-success" data-testid="pending-tracking-approve-close" data-action="case.reviewTracking" data-id="${item.id}" data-decision="close">${ic('check', 'icon-sm')} 同意結案</button><button type="button" class="btn btn-warning" data-testid="pending-tracking-approve-continue" data-action="case.reviewTracking" data-id="${item.id}" data-decision="continue">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button></div>` : `<div class="detail-section"><div class="detail-content" style="color:var(--text-muted)">${isHandler ? '已送出追蹤提報，待管理者審核。' : '目前已有追蹤提報待管理者審核。'}</div></div>`}
+      ${canReviewTracking ? `<div class="form-actions"><button type="button" class="btn btn-success" data-testid="pending-tracking-approve-close" data-action="case.reviewTracking" data-id="${item.id}" data-decision="close">${ic('check', 'icon-sm')} 同意結案</button><button type="button" class="btn btn-warning" data-testid="pending-tracking-approve-continue" data-action="case.reviewTracking" data-id="${item.id}" data-decision="continue">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button></div>` : `<div class="detail-section"><div class="detail-content detail-content--muted">${isHandler ? '已送出追蹤提報，待管理者審核。' : '目前已有追蹤提報待管理者審核。'}</div></div>`}
     </div>` : '';
     if (pending) evidenceMounts.push({ id: 'case-pending-evidence', files: pending.evidence || [], emptyText: '本次追蹤未附佐證' });
 
@@ -1006,21 +1014,21 @@
       const evidenceSlotId = 'case-tracking-evidence-' + i;
       const evidenceHtml = tk.evidence && tk.evidence.length ? `<div class="detail-section"><div class="detail-section-title">${ic('paperclip', 'icon-sm')} 本次佐證</div>${buildCaseEvidenceSlot(evidenceSlotId)}</div>` : '';
       if (tk.evidence && tk.evidence.length) evidenceMounts.push({ id: evidenceSlotId, files: tk.evidence || [], emptyText: '' });
-      return `<div class="card" style="margin-bottom:16px;border-left:3px solid #f97316;"><div class="section-header">第 ${i + 1} 次追蹤 — ${fmt(tk.trackDate)}</div>
+      return `<div class="card card--bottom-16 card--accent-orange"><div class="section-header">第 ${i + 1} 次追蹤 — ${fmt(tk.trackDate)}</div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">追蹤人</div><div class="detail-field-value">${esc(tk.tracker)}</div></div><div class="detail-field"><div class="detail-field-label">審核人</div><div class="detail-field-value">${esc(tk.reviewer || '—')}</div></div><div class="detail-field"><div class="detail-field-label">審核日期</div><div class="detail-field-value">${tk.reviewDate ? fmt(tk.reviewDate) : '—'}</div></div>${nextHtml}</div>
         <div class="detail-section"><div class="detail-section-title">${ic('clipboard-list', 'icon-sm')} 執行情形</div><div class="detail-content">${esc(tk.execution)}</div></div>
         <div class="detail-section"><div class="detail-section-title">${ic('message-circle', 'icon-sm')} 追蹤說明</div><div class="detail-content">${esc(tk.trackNote)}</div></div>
         ${requestedHtml}
         <div class="detail-section"><div class="detail-section-title">${ic('check-circle', 'icon-sm')} 管理者決議</div><div class="detail-content">${esc(tk.result || '—')}</div></div>
         ${evidenceHtml}</div>`;
-    }).join('') || '<p style="color:var(--text-muted);font-size:.88rem">尚無追蹤紀錄</p>';
+    }).join('') || '<p class="detail-empty-note">尚無追蹤紀錄</p>';
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="detail-header"><div><div class="detail-id detail-id-with-copy"><span>${esc(item.id)} · ${esc(item.deficiencyType)}</span>${renderCopyIdButton(item.id, '矯正單號')}</div><h1 class="detail-title">${esc(item.problemDesc || '').substring(0, 50)}</h1>
         <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(item.proposerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(item.proposerDate)}</span><span class="badge badge-${STATUS_CLASSES[item.status]}"><span class="badge-dot"></span>${item.status}</span>${otag}</div>
-      </div><div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">${btns}<a href="#list" class="btn btn-secondary">← 返回</a></div></div>
+      </div><div class="detail-actions-row">${btns}<a href="#list" class="btn btn-secondary">← 返回</a></div></div>
       <div class="stepper">${stepper}</div>
-      <div class="card" style="margin-top:20px"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
+      <div class="card card--top-20"><div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
         <div class="detail-grid">
           <div class="detail-field"><div class="detail-field-label">案件編號</div><div class="detail-field-value">${esc(item.id)}</div></div>
           <div class="detail-field"><div class="detail-field-label">編號前綴</div><div class="detail-field-value">${esc(item.documentNo || '—')}</div></div>
@@ -1031,37 +1039,37 @@
           <div class="detail-field"><div class="detail-field-label">處理單位代碼</div><div class="detail-field-value">${esc(item.handlerUnitCode || getUnitCode(item.handlerUnit) || '—')}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理單位</div><div class="detail-field-value">${esc(item.handlerUnit)}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理人員</div><div class="detail-field-value">${esc(item.handlerName)}</div></div>
-          <div class="detail-field"><div class="detail-field-label">處理人員電子郵件</div><div class="detail-field-value">${item.handlerEmail ? '<a href="mailto:' + esc(item.handlerEmail) + '" style="color:var(--accent-primary);text-decoration:none">' + ic('mail', 'icon-xs') + ' ' + esc(item.handlerEmail) + '</a>' : '—'}</div></div>
+          <div class="detail-field"><div class="detail-field-label">處理人員電子郵件</div><div class="detail-field-value">${item.handlerEmail ? '<a href="mailto:' + esc(item.handlerEmail) + '" class="link-accent">' + ic('mail', 'icon-xs') + ' ' + esc(item.handlerEmail) + '</a>' : '—'}</div></div>
           <div class="detail-field"><div class="detail-field-label">處理日期</div><div class="detail-field-value">${fmt(item.handlerDate)}</div></div>
           <div class="detail-field"><div class="detail-field-label">下一次追蹤日期</div><div class="detail-field-value">${fmt(getCurrentNextTrackingDate(item))}</div></div>
         </div></div>
-      <div class="card" style="margin-top:20px"><div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
+      <div class="card card--top-20"><div class="section-header">${ic('tag', 'icon-sm')} 缺失分類</div>
         <div class="detail-grid">
           <div class="detail-field"><div class="detail-field-label">缺失種類</div><div class="detail-field-value">${esc(item.deficiencyType)}</div></div>
           <div class="detail-field"><div class="detail-field-label">來源</div><div class="detail-field-value">${esc(item.source)}</div></div>
           <div class="detail-field"><div class="detail-field-label">條文</div><div class="detail-field-value">${esc(item.clause || '—')}</div></div>
         </div>
-        <div class="detail-section" style="margin-top:12px"><div class="detail-section-title">分類</div><div class="detail-content">${cats || '—'}</div></div></div>
-      <div class="card" style="margin-top:20px"><div class="section-header">${ic('message-square-warning', 'icon-sm')} 問題描述</div>
+        <div class="detail-section detail-section--top-12"><div class="detail-section-title">分類</div><div class="detail-content">${cats || '—'}</div></div></div>
+      <div class="card card--top-20"><div class="section-header">${ic('message-square-warning', 'icon-sm')} 問題描述</div>
         <div class="detail-section"><div class="detail-section-title">問題或缺失說明</div><div class="detail-content">${esc(item.problemDesc)}</div></div>
         <div class="detail-section"><div class="detail-section-title">缺失發生過程</div><div class="detail-content">${esc(item.occurrence)}</div></div></div>
-      ${item.correctiveAction ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('wrench', 'icon-sm')} 矯正措施提案</div>
+      ${item.correctiveAction ? `<div class="card card--top-20"><div class="section-header">${ic('wrench', 'icon-sm')} 矯正措施提案</div>
         <div class="detail-section"><div class="detail-content">${esc(item.correctiveAction)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.correctiveDueDate)}</div></div></div></div>` : ''}
-      ${item.rootCause ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('microscope', 'icon-sm')} 根因分析</div>
+      ${item.rootCause ? `<div class="card card--top-20"><div class="section-header">${ic('microscope', 'icon-sm')} 根因分析</div>
         <div class="detail-section"><div class="detail-content">${esc(item.rootCause)}</div></div></div>` : ''}
-      ${item.riskDesc ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('shield-alert', 'icon-sm')} 風險管理</div>
+      ${item.riskDesc ? `<div class="card card--top-20"><div class="section-header">${ic('shield-alert', 'icon-sm')} 風險管理</div>
         <div class="detail-section"><div class="detail-content">${esc(item.riskDesc)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">受理人員</div><div class="detail-field-value">${esc(item.riskAcceptor || '—')}</div></div>
         <div class="detail-field"><div class="detail-field-label">受理日期</div><div class="detail-field-value">${fmt(item.riskAcceptDate)}</div></div>
         <div class="detail-field"><div class="detail-field-label">風險評鑑日期</div><div class="detail-field-value">${fmt(item.riskAssessDate)}</div></div></div></div>` : ''}
-      ${item.rootElimination ? `<div class="card" style="margin-top:20px"><div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
+      ${item.rootElimination ? `<div class="card card--top-20"><div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
         <div class="detail-section"><div class="detail-content">${esc(item.rootElimination)}</div></div>
         <div class="detail-grid"><div class="detail-field"><div class="detail-field-label">預定完成日期</div><div class="detail-field-value">${fmt(item.rootElimDueDate)}</div></div></div></div>` : ''}
-      ${buildCaseCard('<span class="card-title">' + ic('paperclip', 'icon-sm') + ' 佐證文件</span>', buildCaseEvidenceSlot(mainEvidenceSlotId), { style: 'margin-top:20px' })}
+      ${buildCaseCard('<span class="card-title">' + ic('paperclip', 'icon-sm') + ' 佐證文件</span>', buildCaseEvidenceSlot(mainEvidenceSlotId), { cardClass: 'card--top-20' })}
       ${pendingTrackingHtml}
-      ${buildCaseCard('<span class="card-title">' + ic('git-branch', 'icon-sm') + ' 追蹤監控</span>', tkHtml, { style: 'margin-top:20px' })}
-      ${buildCaseCard('<span class="card-title">' + ic('history', 'icon-sm') + ' 歷程紀錄</span>', '<div class="timeline">' + tl + '</div>', { style: 'margin-top:20px' })}
+      ${buildCaseCard('<span class="card-title">' + ic('git-branch', 'icon-sm') + ' 追蹤監控</span>', tkHtml, { cardClass: 'card--top-20' })}
+      ${buildCaseCard('<span class="card-title">' + ic('history', 'icon-sm') + ' 歷程紀錄</span>', '<div class="timeline">' + tl + '</div>', { cardClass: 'card--top-20' })}
     </div>`;
     refreshIcons();
     bindCopyButtons();
@@ -1204,16 +1212,16 @@ async function handleStatusTransition(id, ns) {
         <section class="editor-main">
           <div class="card editor-card"><form id="respond-form">
             <div class="section-header">${ic('wrench', 'icon-sm')} 矯正措施與期限</div>
-            <div class="form-group"><label class="form-label form-required">矯正措施說明</label><textarea class="form-textarea" id="r-action" placeholder="請說明預計採取的改善措施、執行方式與完成標準" required style="min-height:126px">${esc(item.correctiveAction || '')}</textarea></div>
+            <div class="form-group"><label class="form-label form-required">矯正措施說明</label><textarea class="form-textarea form-textarea--min-126" id="r-action" placeholder="請說明預計採取的改善措施、執行方式與完成標準" required>${esc(item.correctiveAction || '')}</textarea></div>
             <div class="form-group"><label class="form-label form-required">預定完成日期</label><input type="date" class="form-input" id="r-due" value="${toDateInputValue(item.correctiveDueDate)}" required></div>
             <div class="section-header">${ic('microscope', 'icon-sm')} 根因分析</div>
-            <div class="form-group"><label class="form-label form-required">根因說明</label><textarea class="form-textarea" id="r-root" placeholder="請說明缺失發生的根本原因，而不是只描述表面現象" required style="min-height:108px">${esc(item.rootCause || '')}</textarea></div>
+            <div class="form-group"><label class="form-label form-required">根因說明</label><textarea class="form-textarea form-textarea--min-108" id="r-root" placeholder="請說明缺失發生的根本原因，而不是只描述表面現象" required>${esc(item.rootCause || '')}</textarea></div>
             <div class="section-header">${ic('shield-check', 'icon-sm')} 根因消除措施</div>
-            <div class="form-group"><label class="form-label form-required">消除措施</label><textarea class="form-textarea" id="r-elim" placeholder="請說明如何從制度、流程或系統面消除此根因" required style="min-height:108px">${esc(item.rootElimination || '')}</textarea></div>
+            <div class="form-group"><label class="form-label form-required">消除措施</label><textarea class="form-textarea form-textarea--min-108" id="r-elim" placeholder="請說明如何從制度、流程或系統面消除此根因" required>${esc(item.rootElimination || '')}</textarea></div>
             <div class="form-group"><label class="form-label">消除措施完成日期</label><input type="date" class="form-input" id="r-elimdue" value="${toDateInputValue(item.rootElimDueDate)}"></div>
             <div class="section-header">${ic('shield-alert', 'icon-sm')} 風險接受資訊</div>
-            <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:12px">若評估暫時無法完全消除根因，可補充風險接受說明與責任歸屬。</p>
-            <div class="form-group"><label class="form-label">風險說明</label><textarea class="form-textarea" id="r-risk" placeholder="請說明暫時保留的風險內容與影響" style="min-height:78px">${esc(item.riskDesc || '')}</textarea></div>
+            <p class="detail-note-muted">若評估暫時無法完全消除根因，可補充風險接受說明與責任歸屬。</p>
+            <div class="form-group"><label class="form-label">風險說明</label><textarea class="form-textarea form-textarea--min-78" id="r-risk" placeholder="請說明暫時保留的風險內容與影響">${esc(item.riskDesc || '')}</textarea></div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">風險接受人</label><input type="text" class="form-input" id="r-riskwho" value="${esc(item.riskAcceptor || '')}"></div>
               <div class="form-group"><label class="form-label">接受日期</label><input type="date" class="form-input" id="r-riskdate" value="${toDateInputValue(item.riskAcceptDate)}"></div>
@@ -1417,12 +1425,12 @@ function renderRespond(id) {
               <div class="form-group"><label class="form-label form-required">編修人員</label><input type="text" class="form-input" id="tk-tracker" value="${esc(currentUser().name)}" readonly></div>
               <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="tk-date" value="${new Date().toISOString().split('T')[0]}" required></div>
             </div>
-            <div class="form-group"><label class="form-label form-required">改善措施執行情形</label><textarea class="form-textarea" id="tk-exec" placeholder="請說明目前的改善進度、已完成內容與尚待處理事項" required style="min-height:112px"></textarea></div>
-            <div class="form-group"><label class="form-label form-required">追蹤觀察與說明</label><textarea class="form-textarea" id="tk-note" placeholder="請記錄本次追蹤的判斷依據、重點發現或需補強事項" required style="min-height:88px"></textarea></div>
+            <div class="form-group"><label class="form-label form-required">改善措施執行情形</label><textarea class="form-textarea form-textarea--min-112" id="tk-exec" placeholder="請說明目前的改善進度、已完成內容與尚待處理事項" required></textarea></div>
+            <div class="form-group"><label class="form-label form-required">追蹤觀察與說明</label><textarea class="form-textarea form-textarea--min-88" id="tk-note" placeholder="請記錄本次追蹤的判斷依據、重點發現或需補強事項" required></textarea></div>
             <div class="section-header">${ic('check-circle', 'icon-sm')} 提報建議</div>
             <div class="form-group"><label class="form-label form-required">本次建議</label>${mkRadio('tkResult', ['擬請同意結案', '建議持續追蹤'], '')}</div>
-            <div class="form-group" id="tk-next-wrap" style="display:none"><label class="form-label form-required">下一次追蹤日期</label><input type="date" class="form-input" id="tk-next"></div>
-            <div class="form-group" id="tk-evidence-wrap" style="display:none"><label class="form-label form-required">結案佐證資料</label><div class="upload-zone" id="tk-upload-zone"><input type="file" id="tk-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">可拖曳檔案，或 <strong>點擊選擇</strong></div><div class="upload-zone-hint">只有選擇「擬請同意結案」時，才會強制要求上傳佐證</div></div><div class="file-preview-list" id="tk-file-previews"></div></div>
+            <div class="form-group is-hidden" id="tk-next-wrap"><label class="form-label form-required">下一次追蹤日期</label><input type="date" class="form-input" id="tk-next"></div>
+            <div class="form-group is-hidden" id="tk-evidence-wrap"><label class="form-label form-required">結案佐證資料</label><div class="upload-zone" id="tk-upload-zone"><input type="file" id="tk-file-input" multiple accept="image/*,.pdf"><div class="upload-zone-icon">${ic('folder-open')}</div><div class="upload-zone-text">可拖曳檔案，或 <strong>點擊選擇</strong></div><div class="upload-zone-hint">只有選擇「擬請同意結案」時，才會強制要求上傳佐證</div></div><div class="file-preview-list" id="tk-file-previews"></div></div>
             <div class="form-actions"><button type="submit" class="btn btn-primary">${ic('send', 'icon-sm')} 送出追蹤提報</button><a href="#detail/${item.id}" class="btn btn-secondary">取消返回</a></div>
           </form></div>
         </section>
@@ -1479,10 +1487,10 @@ function renderTracking(id) {
       const isClosable = selectedValue.includes('結案');
       summaryResult.textContent = selected ? selected.value : '待判定';
       summaryNext.textContent = nextInput.value ? fmt(nextInput.value) : '未指定';
-      nextWrap.style.display = isContinue ? 'block' : 'none';
+      nextWrap.classList.toggle('is-hidden', !isContinue);
       nextInput.required = !!isContinue;
       if (fileInput) fileInput.required = false;
-      if (evidenceWrap) evidenceWrap.style.display = isClosable ? 'block' : 'none';
+      if (evidenceWrap) evidenceWrap.classList.toggle('is-hidden', !isClosable);
     }
 
     function handleTrackingFiles(files) {

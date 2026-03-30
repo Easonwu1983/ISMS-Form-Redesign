@@ -629,7 +629,7 @@
           focusRouteContent();
         })
         .catch(function (error) {
-          console.error('route render failed:', error);
+          window.__ismsError('route render failed:', error);
           toast('頁面載入失敗，請稍後再試', 'error');
         })
         .finally(function () {
@@ -648,7 +648,7 @@
           focusRouteContent();
         })
         .catch(function (error) {
-          console.error('public route render failed:', error);
+          window.__ismsError('public route render failed:', error);
           toast('頁面載入失敗，請稍後再試', 'error');
         })
         .finally(function () {
@@ -679,7 +679,7 @@
       Promise.resolve(ensureAuthenticatedRemoteBootstrap()).then(function () {
         if (currentUser()) handleRoute();
       }).catch(function (error) {
-        console.error(error && error.stack ? error.stack : String(error));
+        window.__ismsError(error && error.stack ? error.stack : String(error));
         if (String(error && error.message || '').indexOf('登入狀態已失效') >= 0) {
           toast('登入狀態已失效，請重新登入', 'error');
           handleRoute();
@@ -695,7 +695,7 @@
       logout: function () {
         if (hasUnsavedChangesGuard() && !confirmDiscardUnsavedChanges('目前有尚未儲存的內容，確定要登出嗎？')) return;
         Promise.resolve(logout()).catch(function (error) {
-          console.error(error && error.stack ? error.stack : String(error));
+          window.__ismsError(error && error.stack ? error.stack : String(error));
         });
       },
       'toggle-sidebar': function () { toggleSidebar(); },

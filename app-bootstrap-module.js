@@ -5,7 +5,7 @@
         try {
           task();
         } catch (error) {
-          console.warn('bootstrap task failed', error);
+          window.__ismsWarn('bootstrap task failed', error);
         }
       };
       const waitMs = Number(timeoutMs) || 2000;
@@ -35,18 +35,18 @@
         try {
           options.seedData();
         } catch (error) {
-          console.warn('seed data warmup failed', error);
+          window.__ismsWarn('seed data warmup failed', error);
         }
         try {
           options.ensurePrimaryAdminProfile();
         } catch (error) {
-          console.warn('primary admin warmup failed', error);
+          window.__ismsWarn('primary admin warmup failed', error);
         }
       });
 
       scheduleIdleTask(function () {
         void options.migrateAttachmentStores().catch(function (error) {
-          console.warn('attachment migration failed', error);
+          window.__ismsWarn('attachment migration failed', error);
         });
       });
 
@@ -54,7 +54,7 @@
         try {
           options.getDataModule().migrateAllStores();
         } catch (error) {
-          console.warn('store migration failed', error);
+          window.__ismsWarn('store migration failed', error);
         }
       });
 

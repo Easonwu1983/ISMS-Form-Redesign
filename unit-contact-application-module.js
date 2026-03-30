@@ -16,6 +16,7 @@
       getM365ModeLabel,
       getM365ModeKey,
       addPageEventListener,
+      registerPageCleanup,
       submitAttachmentUpload,
       requestUnitContactAuthorizationDocument,
       submitUnitContactApplication,
@@ -52,6 +53,13 @@
       return function () {
         try { target.removeEventListener(type, listener, options); } catch (_) {}
       };
+    }
+
+    function registerUnitContactPageCleanup(callback) {
+      if (typeof registerPageCleanup === 'function') {
+        return registerPageCleanup(callback);
+      }
+      return function () {};
     }
 
     function saveLastEmail(email) {
@@ -600,7 +608,7 @@
         + '</ul></div>'
         + '</section></div></section>';
 
-      initUnitCascade('uca-unit', '', { disabled: false });
+      initUnitCascade('uca-unit', '', { disabled: false, registerCleanup: registerUnitContactPageCleanup });
       const authorizedScopePicker = initAuthorizedScopePicker('uca-authorized-units');
       getUnitFieldTargets('uca-unit').forEach((target) => {
         const describedBy = ['uca-unit-help', 'uca-unit-error'].join(' ');

@@ -35,14 +35,14 @@
         try {
           tasks = typeof taskFactory === 'function' ? (taskFactory() || []) : [];
         } catch (error) {
-          console.warn('authenticated bootstrap warmup setup failed', error);
+          window.__ismsWarn('authenticated bootstrap warmup setup failed', error);
           return;
         }
         Promise.allSettled(tasks).then(function (results) {
           const fallbackLabels = Array.isArray(labels) ? labels : [];
           results.forEach(function (result, index) {
             if (result.status === 'rejected') {
-              console.warn(fallbackLabels[index] || 'authenticated bootstrap warmup failed', result.reason);
+              window.__ismsWarn(fallbackLabels[index] || 'authenticated bootstrap warmup failed', result.reason);
             }
           });
         });
@@ -302,7 +302,7 @@
           await deps.logout();
           return;
         }
-        console.warn('session heartbeat failed', error);
+        window.__ismsWarn('session heartbeat failed', error);
       }
     }
 
@@ -331,7 +331,7 @@
       sessionHeartbeatKey = heartbeatKey;
       sessionHeartbeatTimer = window.setInterval(function () {
         runSessionHeartbeat(deps).catch(function (error) {
-          console.warn('session heartbeat failed', error);
+          window.__ismsWarn('session heartbeat failed', error);
         });
       }, SESSION_HEARTBEAT_INTERVAL_MS);
     }

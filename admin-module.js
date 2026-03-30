@@ -123,6 +123,10 @@
     const AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT = 76;
     const AUDIT_TRAIL_VIRTUAL_ROW_OVERSCAN = 10;
     const AUDIT_TRAIL_VIRTUAL_ROW_THRESHOLD = 140;
+    const ADMIN_MIN_VIRTUAL_VIEWPORT_HEIGHT = 320;
+    const ADMIN_COLLECTION_FILTER_INVENTORY_LIMIT = 60;
+    const ADMIN_HORIZONTAL_SCROLL_MIN_PX = 260;
+    const ADMIN_HORIZONTAL_SCROLL_RATIO = 0.72;
     let auditTrailCollectionBundle = null;
     let auditTrailState = null;
     let auditTrailSummaryCache = null;
@@ -1205,7 +1209,7 @@
             .toLowerCase();
           return haystack.includes(keyword);
         });
-        const page = buildAdminCollectionPage(nextFilters, items.length, 12, 60);
+        const page = buildAdminCollectionPage(nextFilters, items.length, 12, ADMIN_COLLECTION_FILTER_INVENTORY_LIMIT);
         return {
           items: items.slice(page.offset, page.offset + page.limit),
           page,
@@ -1219,7 +1223,7 @@
       const response = await client.listUnitGovernanceEntries(nextFilters);
       return {
         items: Array.isArray(response && response.items) ? response.items : [],
-        page: response && response.page ? response.page : buildAdminCollectionPage(nextFilters, response && response.total, 12, 60),
+        page: response && response.page ? response.page : buildAdminCollectionPage(nextFilters, response && response.total, 12, ADMIN_COLLECTION_FILTER_INVENTORY_LIMIT),
         summary: response && response.summary ? response.summary : summarizeGovernanceItems(response && response.items),
         categorySummaries: normalizeGovernanceCategorySummaries(response && response.categorySummaries),
         filters: { ...nextFilters, ...(response && response.filters ? response.filters : {}) },
@@ -1253,7 +1257,7 @@
         const response = await client.getSecurityWindowInventory(nextFilters);
         return {
           inventory: response && response.inventory ? response.inventory : buildEmptySecurityWindowInventory(),
-          page: response && response.page ? response.page : buildAdminCollectionPage(nextFilters, response && response.total, 12, 60),
+          page: response && response.page ? response.page : buildAdminCollectionPage(nextFilters, response && response.total, 12, ADMIN_COLLECTION_FILTER_INVENTORY_LIMIT),
           filters: { ...nextFilters, ...(response && response.filters ? response.filters : {}) },
           categorySummaries: normalizeSecurityWindowCategorySummaries((response && response.categorySummaries) || (response && response.inventory && response.inventory.categorySummaries))
         };
@@ -1261,7 +1265,7 @@
       const applications = await listUnitContactApplications({ limit: '200' });
       const inventory = buildSecurityWindowInventory(getUsers(), Array.isArray(applications) ? applications : []);
       const filteredInventory = filterSecurityWindowInventory(inventory, nextFilters);
-      const page = buildAdminCollectionPage(nextFilters, Array.isArray(filteredInventory.units) ? filteredInventory.units.length : 0, 12, 60);
+      const page = buildAdminCollectionPage(nextFilters, Array.isArray(filteredInventory.units) ? filteredInventory.units.length : 0, 12, ADMIN_COLLECTION_FILTER_INVENTORY_LIMIT);
       return {
         inventory: {
           ...filteredInventory,
@@ -1390,7 +1394,7 @@
             renderAuditTrail({ ...auditTrailState.filters });
           }
         }).catch((error) => {
-          console.warn('audit trail summary bootstrap failed', error);
+          window.__ismsWarn('audit trail summary bootstrap failed', error);
         }).finally(() => {
           resetAuditTrailSummaryBootstrapState();
         });
@@ -1562,7 +1566,7 @@
         };
       }
       const scrollTop = Math.max(0, Number(auditTrailTableViewport.scrollTop || 0));
-      const viewportHeight = Math.max(320, Number(auditTrailTableViewport.clientHeight || 0) || 0);
+      const viewportHeight = Math.max(ADMIN_MIN_VIRTUAL_VIEWPORT_HEIGHT, Number(auditTrailTableViewport.clientHeight || 0) || 0);
       const start = Math.max(0, Math.floor(scrollTop / AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT) - AUDIT_TRAIL_VIRTUAL_ROW_OVERSCAN);
       const visibleCount = Math.ceil(viewportHeight / AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT) + (AUDIT_TRAIL_VIRTUAL_ROW_OVERSCAN * 2);
       const end = Math.min(totalRows, start + visibleCount);
@@ -1638,7 +1642,7 @@
         };
       }
       const scrollTop = Math.max(0, Number(systemUsersTableViewport.scrollTop || 0));
-      const viewportHeight = Math.max(320, Number(systemUsersTableViewport.clientHeight || 0) || 0);
+      const viewportHeight = Math.max(ADMIN_MIN_VIRTUAL_VIEWPORT_HEIGHT, Number(systemUsersTableViewport.clientHeight || 0) || 0);
       const start = Math.max(0, Math.floor(scrollTop / SYSTEM_USERS_VIRTUAL_ROW_HEIGHT) - SYSTEM_USERS_VIRTUAL_ROW_OVERSCAN);
       const visibleCount = Math.ceil(viewportHeight / SYSTEM_USERS_VIRTUAL_ROW_HEIGHT) + (SYSTEM_USERS_VIRTUAL_ROW_OVERSCAN * 2);
       const end = Math.min(totalRows, start + visibleCount);
@@ -1778,7 +1782,7 @@
                 const nextSignature = getAuditTrailFilterSignature(nextFilters);
                 if (!getAuditTrailQueryCacheValue(nextSignature) && !getAuditTrailLoadPromise(nextSignature)) {
                   loadAuditTrailData(nextFilters, { prefetch: true }).catch((error) => {
-                    console.warn('audit trail prefetch failed', error);
+                    window.__ismsWarn('audit trail prefetch failed', error);
                   });
                 }
               }
@@ -1787,7 +1791,7 @@
           return state;
         })
         .catch((error) => {
-          console.warn('audit trail fetch failed', error);
+          window.__ismsWarn('audit trail fetch failed', error);
           const cachedState = !force ? getAuditTrailQueryCacheValue(filterSignature) : null;
           if (cachedState && !prefetch) {
             return cachedState;
@@ -1883,7 +1887,7 @@
           return health;
         })
         .catch((error) => {
-          console.warn('audit trail health fetch failed', error);
+          window.__ismsWarn('audit trail health fetch failed', error);
           if (auditTrailHealthCache && auditTrailHealthCache.value) {
             return auditTrailHealthCache.value;
           }
@@ -2760,8 +2764,8 @@
           wrapper.scrollLeft += event.shiftKey ? event.deltaY + event.deltaX : event.deltaY;
         }, { passive: false });
         bindAdminPageEvent(wrapper, 'scroll', syncButtonState, { passive: true });
-        if (leftButton) bindAdminPageEvent(leftButton, 'click', () => scrollByDistance(-Math.max(260, wrapper.clientWidth * 0.72)));
-        if (rightButton) bindAdminPageEvent(rightButton, 'click', () => scrollByDistance(Math.max(260, wrapper.clientWidth * 0.72)));
+        if (leftButton) bindAdminPageEvent(leftButton, 'click', () => scrollByDistance(-Math.max(ADMIN_HORIZONTAL_SCROLL_MIN_PX, wrapper.clientWidth * ADMIN_HORIZONTAL_SCROLL_RATIO)));
+        if (rightButton) bindAdminPageEvent(rightButton, 'click', () => scrollByDistance(Math.max(ADMIN_HORIZONTAL_SCROLL_MIN_PX, wrapper.clientWidth * ADMIN_HORIZONTAL_SCROLL_RATIO)));
         syncButtonState();
       });
     }
@@ -3117,7 +3121,7 @@
       await submitUserDelete(cleanUsername, { username: cleanUsername });
       if (typeof syncUsersFromM365 === 'function') {
         await syncUsersFromM365({ silent: true, force: true }).catch(function (error) {
-          console.warn('system users sync after delete failed', error);
+          window.__ismsWarn('system users sync after delete failed', error);
         });
       }
       dispatchAdminCacheInvalidationScopes(['system-users', 'audit-trail'], 'user-deleted');
@@ -3157,7 +3161,7 @@
       <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div>
     </form></div></div>`;
 
-    initUnitCascade('u-unit', primaryUnit, { disabled: false });
+    initUnitCascade('u-unit', primaryUnit, { disabled: false, registerCleanup: registerAdminPageCleanup });
 
     const roleEl = document.getElementById('u-role');
     const unitLabel = document.getElementById('u-unit-label');
@@ -3317,7 +3321,7 @@
       };
     }
     const scrollTop = Math.max(0, Number(unitContactReviewTableViewport.scrollTop || 0));
-    const viewportHeight = Math.max(320, Number(unitContactReviewTableViewport.clientHeight || 0) || 0);
+    const viewportHeight = Math.max(ADMIN_MIN_VIRTUAL_VIEWPORT_HEIGHT, Number(unitContactReviewTableViewport.clientHeight || 0) || 0);
     const start = Math.max(0, Math.floor(scrollTop / UNIT_CONTACT_REVIEW_VIRTUAL_ROW_HEIGHT) - UNIT_CONTACT_REVIEW_VIRTUAL_ROW_OVERSCAN);
     const visibleCount = Math.ceil(viewportHeight / UNIT_CONTACT_REVIEW_VIRTUAL_ROW_HEIGHT) + (UNIT_CONTACT_REVIEW_VIRTUAL_ROW_OVERSCAN * 2);
     const end = Math.min(totalRows, start + visibleCount);
@@ -3504,7 +3508,7 @@
         unitGovernanceState.items = Array.isArray(result && result.items) ? result.items : [];
         unitGovernanceState.summary = result && result.summary ? result.summary : summarizeGovernanceItems(unitGovernanceState.items);
         unitGovernanceState.categorySummaries = normalizeGovernanceCategorySummaries(result && result.categorySummaries);
-        unitGovernanceState.page = result && result.page ? result.page : buildAdminCollectionPage(unitGovernanceState.filters, unitGovernanceState.items.length, 12, 60);
+        unitGovernanceState.page = result && result.page ? result.page : buildAdminCollectionPage(unitGovernanceState.filters, unitGovernanceState.items.length, 12, ADMIN_COLLECTION_FILTER_INVENTORY_LIMIT);
         unitGovernanceState.filters = normalizePagedFilters(result && result.filters ? result.filters : unitGovernanceState.filters, DEFAULT_GOVERNANCE_FILTERS);
         unitGovernanceState.lastLoadedAt = String(result && result.generatedAt || '').trim() || new Date().toISOString();
     } catch (error) {
@@ -3663,7 +3667,7 @@
       };
       return inventory;
     })().catch((error) => {
-      console.warn('security window inventory load failed', error);
+      window.__ismsWarn('security window inventory load failed', error);
       if (securityWindowInventoryCache.value) {
         return securityWindowInventoryCache.value;
       }
@@ -3700,7 +3704,7 @@
       const safeInventory = normalizeSecurityWindowInventory(response && response.inventory);
       securityWindowState.inventory = safeInventory;
       securityWindowState.categorySummaries = normalizeSecurityWindowCategorySummaries(response && response.categorySummaries);
-      securityWindowState.page = response && response.page ? response.page : buildAdminCollectionPage(resolvedFilters, safeInventory.units.length, 12, 60);
+      securityWindowState.page = response && response.page ? response.page : buildAdminCollectionPage(resolvedFilters, safeInventory.units.length, 12, ADMIN_COLLECTION_FILTER_INVENTORY_LIMIT);
       securityWindowState.filters = normalizePagedFilters(response && response.filters ? response.filters : resolvedFilters, DEFAULT_SECURITY_WINDOW_FILTERS);
       securityWindowState.lastLoadedAt = safeInventory.generatedAt || new Date().toISOString();
     securityWindowState.filterSignature = getSecurityWindowFilterSignature(securityWindowState.filters);
@@ -3855,7 +3859,7 @@
               renderAuditTrail(resolvedFilters);
             }
           }).catch(function (error) {
-            console.warn('audit trail background refresh failed', error);
+            window.__ismsWarn('audit trail background refresh failed', error);
           });
         }
       } else {
@@ -3962,7 +3966,7 @@
         if (serializeAuditTrailSummary(summary) === renderedSummarySignature) return;
         renderAuditTrail({ ...resolvedFilters });
       }).catch((error) => {
-        console.warn('audit trail remote summary sync failed', error);
+        window.__ismsWarn('audit trail remote summary sync failed', error);
       });
     } else if (!cachedSummary) {
       queueAuditTrailSummaryBootstrap(resolvedFilters);

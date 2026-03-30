@@ -76,17 +76,17 @@
         return actionPrefix ? ` data-action="${escAttr(actionPrefix + name)}"` : '';
       };
       const limitHtml = showLimit
-        ? `<label class="form-label" for="${escAttr(idPrefix)}-page-limit" style="margin:0 4px 0 0">筆數</label>`
-          + `<select class="form-select" id="${escAttr(idPrefix)}-page-limit" style="min-width:88px">`
+        ? `<label class="form-label review-toolbar-label-inline" for="${escAttr(idPrefix)}-page-limit">筆數</label>`
+          + `<select class="form-select review-page-limit-select" id="${escAttr(idPrefix)}-page-limit">`
           + limitOptions.map((value) => `<option value="${esc(value)}" ${String(page.limit) === value ? 'selected' : ''}>${esc(value)}</option>`).join('')
           + '</select>'
         : '';
       return `${limitHtml}`
         + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-first-page"${actionAttr('FirstPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevrons-left', 'icon-sm')} 首頁</button>`
         + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-prev-page"${actionAttr('PrevPage')} ${page.hasPrev ? '' : 'disabled'}>${ic('chevron-left', 'icon-sm')} 上一頁</button>`
-        + `<span class="review-card-subtitle" style="margin:0 4px 0 8px">第 ${page.currentPage || 0} / ${page.pageCount || 0} 頁</span>`
-        + `<label class="form-label" for="${escAttr(idPrefix)}-page-number" style="margin:0 4px 0 8px">跳轉</label>`
-        + `<input type="number" class="form-input" id="${escAttr(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump} style="width:88px">`
+        + `<span class="review-card-subtitle review-page-status">第 ${page.currentPage || 0} / ${page.pageCount || 0} 頁</span>`
+        + `<label class="form-label review-page-jump-label" for="${escAttr(idPrefix)}-page-number">跳轉</label>`
+        + `<input type="number" class="form-input review-page-jump-input" id="${escAttr(idPrefix)}-page-number" min="1" max="${pageMax}" value="${pageValue}" ${disableJump}>`
         + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-jump-page"${actionAttr('JumpPage')} ${disableJump}>前往</button>`
         + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-next-page"${actionAttr('NextPage')} ${page.hasNext ? '' : 'disabled'}>下一頁 ${ic('chevron-right', 'icon-sm')}</button>`
         + `<button type="button" class="btn btn-secondary btn-sm" id="${escAttr(idPrefix)}-last-page"${actionAttr('LastPage')} ${page.hasNext ? '' : 'disabled'}>末頁 ${ic('chevrons-right', 'icon-sm')}</button>`;

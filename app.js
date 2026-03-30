@@ -457,7 +457,7 @@
   function ensureFeatureBundle(bundlePath, fallbackScripts) {
     var loader = getRuntimeAssetLoaderModule();
     return loader.appendScript(bundlePath, { type: 'module' }).catch(function (error) {
-      console.warn('Falling back to legacy feature chain for', bundlePath, error && error.message ? error.message : error);
+      window.__ismsWarn('Falling back to legacy feature chain for', bundlePath, error && error.message ? error.message : error);
       return ensureFeatureScript(fallbackScripts);
     });
   }
@@ -3006,7 +3006,7 @@
         files.push(await submitAttachmentUpload(entry, options));
       } catch (error) {
         const message = String(error && error.message || error || 'attachment-migration-failed');
-        console.warn('[attachment-migration]', message, entry && entry.name ? entry.name : '');
+        window.__ismsWarn('[attachment-migration]', message, entry && entry.name ? entry.name : '');
         errors.push({
           name: String(entry && entry.name || '').trim(),
           scope: String(options && options.scope || '').trim(),

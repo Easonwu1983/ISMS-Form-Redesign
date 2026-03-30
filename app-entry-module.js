@@ -43,7 +43,7 @@
         await initApp(deps);
       } catch (error) {
         deps.recordBootstrapStep('app-init-failed', String(error && error.message || error || 'unknown'));
-        console.error(error && error.stack ? error.stack : String(error));
+        window.__ismsError(error && error.stack ? error.stack : String(error));
         const root = typeof document !== 'undefined' ? document.getElementById('app') : null;
         if (root) {
           root.innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + deps.ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">系統初始化失敗</div><div class="empty-state-desc">' + deps.esc(String(error && error.message || error || '未知錯誤')) + '</div></div>';
