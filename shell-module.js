@@ -639,7 +639,13 @@
         if (currentPasswordInput) currentPasswordInput.focus();
       }
 
-      refreshIcons();
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(refreshIcons);
+      } else if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        window.setTimeout(refreshIcons, 0);
+      } else {
+        refreshIcons();
+      }
     }
 
 

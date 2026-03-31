@@ -130,7 +130,7 @@
     let checklistRemoteSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     const CHECKLIST_REMOTE_SUMMARY_TTL_MS = 15000;
     const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = getChecklistBootstrapRetryDelays();
-    const CHECKLIST_DEFERRED_SYNC_TIMEOUT_MS = 250;
+    const CHECKLIST_DEFERRED_SYNC_TIMEOUT_MS = 60;
     let checklistRemotePageState = null;
     let checklistListRenderGeneration = 0;
     let checklistAccessProfileListenerInstalled = false;

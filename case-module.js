@@ -74,7 +74,7 @@
       registerPageCleanup
     } = deps;
 
-  const CASE_DASHBOARD_HYDRATION_IDLE_TIMEOUT_MS = 60;
+  const CASE_DASHBOARD_HYDRATION_IDLE_TIMEOUT_MS = 0;
   const CASE_ASYNC_FALLBACK_DELAY_MS = 0;
   const CASE_LIST_SEARCH_DEBOUNCE_MS = 120;
 
@@ -120,6 +120,18 @@
       return registerPageCleanup(callback);
     }
     return function () {};
+  }
+
+  function scheduleRefreshIcons() {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(refreshIcons);
+      return;
+    }
+    if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+      window.setTimeout(refreshIcons, 0);
+      return;
+    }
+    refreshIcons();
   }
 
   function renderCaseStatusCell(item, useClosedGuard) {
@@ -525,7 +537,7 @@
       + buildCaseCard('<span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', recentShell, { cardClass: 'dashboard-panel dashboard-table-panel' })
         + '</div></div>';
 
-    refreshIcons();
+    scheduleRefreshIcons();
     bindCopyButtons();
     scheduleDashboardHydration(function () {
       if (renderToken !== dashboardRenderToken) return;
@@ -593,7 +605,7 @@
       chartSlot.innerHTML = buildDashboardStatusOverview(snapshot) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>';
       recentSlot.classList.remove('dashboard-card-loading');
       recentSlot.innerHTML = buildCaseTableMarkup('<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>最後活動</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { wrapperClass: 'dashboard-recent-table-wrapper', tableClass: 'dashboard-recent-table' });
-      refreshIcons();
+      scheduleRefreshIcons();
       bindCopyButtons(recentSlot);
     });
   }
@@ -607,7 +619,7 @@
       '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + listSnapshot.total + ' 筆，顯示 ' + listSnapshot.filteredCount + ' 筆</p></div>' + createBtn + '</div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
       buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', listSnapshot.rows), { cardClass: 'case-table-card' }) + '</div>';
-    refreshIcons();
+    scheduleRefreshIcons();
     bindCopyButtons();
     let searchRenderTimer = null;
     const scheduleRenderList = function () {
@@ -737,7 +749,7 @@
     }
 
     document.getElementById('app').innerHTML = buildCreatePage(u);
-    refreshIcons();
+    scheduleRefreshIcons();
     applyTestIds({
       'f-docno': 'create-document-no',
       'f-id': 'create-id',
@@ -1122,10 +1134,10 @@
       ${buildCaseCard('<span class="card-title">' + ic('git-branch', 'icon-sm') + ' 追蹤監控</span>', tkHtml, { cardClass: 'card--top-20' })}
       ${buildCaseCard('<span class="card-title">' + ic('history', 'icon-sm') + ' 歷程紀錄</span>', '<div class="timeline">' + tl + '</div>', { cardClass: 'card--top-20' })}
     </div>`;
-    refreshIcons();
+    scheduleRefreshIcons();
     bindCopyButtons();
     Promise.all(evidenceMounts.map((entry) => mountCaseEvidenceList(entry.id, entry.files, entry.emptyText))).then(() => {
-      refreshIcons();
+      scheduleRefreshIcons();
     });
   }
 
@@ -1170,7 +1182,7 @@ async function handleStatusTransition(id, ns) {
     toast(`已更新為 ${ns}`);
     renderDetail(id);
     renderSidebar();
-    refreshIcons();
+    scheduleRefreshIcons();
   };
 
   async function handleReviewTracking(id, decision) {
@@ -1220,7 +1232,7 @@ async function handleStatusTransition(id, ns) {
     toast(shouldClose ? '已核定結案' : '已核定持續追蹤');
     renderDetail(id);
     renderSidebar();
-    refreshIcons();
+    scheduleRefreshIcons();
   };
 
   // ─── Render: Respond ───────────────────────
@@ -1296,7 +1308,7 @@ function renderRespond(id) {
     cleanupRenderedAttachmentUrls();
     let tempEv = [];
     document.getElementById('app').innerHTML = buildRespondPage(item);
-    refreshIcons();
+    scheduleRefreshIcons();
     applyTestIds({
       'respond-form': 'respond-form',
       'r-action': 'respond-action',
@@ -1498,7 +1510,7 @@ function renderTracking(id) {
     const round = (item.trackings || []).length + 1;
     if (round > 3) { toast('系統目前最多支援 3 次追蹤', 'error'); navigate('detail/' + id); return; }
     document.getElementById('app').innerHTML = buildTrackingPage(item, round);
-    refreshIcons();
+    scheduleRefreshIcons();
     applyTestIds({
       'track-form': 'tracking-form',
       'tk-tracker': 'tracking-tracker',
@@ -1679,4 +1691,3 @@ function renderTracking(id) {
     };
   };
 })();
-

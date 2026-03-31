@@ -29,6 +29,7 @@
     const AUTHORIZATION_TEMPLATE_URL = 'unit-contact-authorization-template.pdf';
     const AUTHORIZATION_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
     const AUTHORIZATION_UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+    const UNIT_CONTACT_POST_PAINT_DELAY_MS = 120;
     const SECURITY_ROLE_OPTIONS = [
       '一級單位資安窗口',
       '二級單位資安窗口'
@@ -60,6 +61,18 @@
         return registerPageCleanup(callback);
       }
       return function () {};
+    }
+
+    function scheduleRefreshIcons() {
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(refreshIcons);
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        window.setTimeout(refreshIcons, 0);
+        return;
+      }
+      refreshIcons();
     }
 
     function scheduleUnitContactPostPaint(task, delayMs) {
@@ -686,8 +699,8 @@
         document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
           input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
         });
-        refreshIcons();
-      }, 800);
+        scheduleRefreshIcons();
+      }, UNIT_CONTACT_POST_PAINT_DELAY_MS);
 
       bindPageEvent(form, 'input', function (event) {
         markDirty();
@@ -873,7 +886,7 @@
           )
           + '<div class="empty-state"><div class="empty-state-icon">' + ic('alert-triangle', 'icon-lg') + '</div><div class="empty-state-title">找不到申請資料</div><div class="empty-state-desc">請重新申請或使用進度查詢功能確認目前狀態。</div></div>'
           + '</section>';
-        refreshIcons();
+        scheduleRefreshIcons();
         return;
       }
       mount.innerHTML = ''
@@ -892,7 +905,7 @@
         + '<div class="unit-contact-success-note">授權同意書與申請資料已保留，後續若有補件需求，可由進度頁面查詢並重新提交。</div>'
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">查詢進度</a><a class="btn btn-ghost" href="#apply-unit-contact">再次申請</a></div>'
         + '</div></div></div></section>';
-      refreshIcons();
+      scheduleRefreshIcons();
     }
 
     function renderApplyStatus() {
@@ -996,11 +1009,11 @@
           const applications = await lookupUnitContactApplicationsByEmail(email);
           if (!applications.length) {
             resultsEl.innerHTML = '<div class="empty-state unit-contact-inline-empty"><div class="empty-state-icon">' + ic('inbox', 'icon-lg') + '</div><div class="empty-state-title">查無申請資料</div><div class="empty-state-desc">請確認輸入的是申請時填寫的電子郵件，或稍後再試一次。</div></div>';
-            refreshIcons();
+            scheduleRefreshIcons();
             return;
           }
           resultsEl.innerHTML = '<div class="unit-contact-status-list">' + applications.map((application) => buildApplicationStatusCard(application, currentLookupEmail)).join('') + '</div>';
-          refreshIcons();
+          scheduleRefreshIcons();
         } catch (error) {
           resultsEl.innerHTML = '';
           renderFormFeedback('unit-contact-status-feedback', 'error', '查詢失敗', [String(error && error.message || error || '查詢失敗')]);
@@ -1021,7 +1034,7 @@
         runLookup();
       });
       if (defaultEmail) runLookup();
-      refreshIcons();
+      scheduleRefreshIcons();
     }
 
     function renderActivate(param) {
@@ -1045,7 +1058,7 @@
         + (application ? buildApplicationSummary(application) : '')
         + '<div class="form-actions"><a class="btn btn-primary" href="#apply-unit-contact-status">返回查詢</a></div>'
         + '</div></div></div></section>';
-      refreshIcons();
+      scheduleRefreshIcons();
     }
 
     return {
