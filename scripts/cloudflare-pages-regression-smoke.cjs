@@ -112,7 +112,7 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
           ? auth.currentUser()
           : null;
         return !!(currentUser && currentUser.sessionToken) || !!document.querySelector('.btn-logout');
-      }, undefined, { timeout: 30000 });
+      }, undefined, { timeout: 12000 });
     } else {
       await page.waitForFunction(() => {
         return !!document.querySelector('[data-testid="login-form"]')
@@ -311,7 +311,9 @@ async function gotoHashRoute(page, hash, options = {}) {
     timeout: options.timeout || 15000
   });
   await page.waitForTimeout(options.settleMs || 250);
-  await waitForRemoteBootstrap(page).catch(() => {});
+  if (options.waitForBootstrap !== false) {
+    await waitForRemoteBootstrap(page).catch(() => {});
+  }
 }
 
 async function openChecklistSmokePage(context) {
@@ -322,8 +324,7 @@ async function openChecklistSmokePage(context) {
     skipBootstrap: true,
     initialHash: 'checklist'
   });
-  await gotoHashRoute(checklistPage, 'checklist', { settleMs: 260, timeout: 20000 }).catch(() => {});
-  await waitForRemoteBootstrap(checklistPage).catch(() => {});
+  await gotoHashRoute(checklistPage, 'checklist', { settleMs: 160, timeout: 20000, waitForBootstrap: false }).catch(() => {});
   await waitForChecklistListReady(checklistPage, 2500).catch(() => {});
   return checklistPage;
 }

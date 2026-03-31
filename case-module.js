@@ -230,6 +230,23 @@
       recent: []
     };
     var nextDueTimestamp = 0;
+    var recent = [];
+    function compareRecentEntry(a, b) {
+      var aClosed = a.item && a.item.status === STATUSES.CLOSED ? 1 : 0;
+      var bClosed = b.item && b.item.status === STATUSES.CLOSED ? 1 : 0;
+      if (aClosed !== bClosed) return aClosed - bClosed;
+      return (b.sortTime || 0) - (a.sortTime || 0);
+    }
+    function insertRecentEntry(entry) {
+      var index = 0;
+      while (index < recent.length && compareRecentEntry(recent[index], entry) <= 0) {
+        index += 1;
+      }
+      recent.splice(index, 0, entry);
+      if (recent.length > 5) {
+        recent.length = 5;
+      }
+    }
     list.forEach(function (item) {
       if (!item) return;
       var status = item.status || STATUSES.CREATED;
@@ -254,18 +271,12 @@
         nextDueTimestamp = dueTime;
         snapshot.nextDueItem = item;
       }
-      snapshot.recent.push({
+      insertRecentEntry({
         item: item,
         sortTime: getDashboardRecentSortTime(item)
       });
     });
-    snapshot.recent.sort(function (a, b) {
-      var aClosed = a.item && a.item.status === STATUSES.CLOSED ? 1 : 0;
-      var bClosed = b.item && b.item.status === STATUSES.CLOSED ? 1 : 0;
-      if (aClosed !== bClosed) return aClosed - bClosed;
-      return (b.sortTime || 0) - (a.sortTime || 0);
-    });
-    snapshot.recent = snapshot.recent.slice(0, 5).map(function (entry) {
+    snapshot.recent = recent.map(function (entry) {
       return {
         item: entry.item,
         lastActivity: getCaseLastActivityTime(entry.item)

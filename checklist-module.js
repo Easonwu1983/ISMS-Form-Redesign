@@ -134,6 +134,7 @@
     let checklistRemotePageState = null;
     let checklistListRenderGeneration = 0;
     let checklistAccessProfileListenerInstalled = false;
+    let checklistListShellSnapshotCache = { token: '', length: 0, items: [], years: [] };
 
     function serializeChecklistRemoteSummary(summary) {
       const safe = normalizeChecklistRemoteSummary(summary, summary && summary.total);
@@ -890,6 +891,19 @@
       return Array.from(years).sort((a, b) => Number(b) - Number(a));
     }
 
+    function getChecklistListShellSnapshot(items) {
+      const source = Array.isArray(items) ? items.slice() : [];
+      const token = typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '';
+      const remoteSignature = canUseRemoteChecklistPaging() ? String(checklistRemotePageState.signature || '') : '';
+      const cacheKey = token + '::' + String(source.length) + '::' + remoteSignature;
+      if (checklistListShellSnapshotCache.token === cacheKey && Array.isArray(checklistListShellSnapshotCache.items)) {
+        return checklistListShellSnapshotCache;
+      }
+      const years = buildChecklistListQueryYearOptions(source);
+      checklistListShellSnapshotCache = { token: cacheKey, length: source.length, items: source, years };
+      return checklistListShellSnapshotCache;
+    }
+
     function filterChecklistListItems(items) {
       const keyword = String(checklistBrowseState.keyword || '').trim().toLowerCase();
       const year = String(checklistBrowseState.year || '').trim();
@@ -1211,8 +1225,8 @@
       : scheduleDeferredPromise(() => syncChecklistsFromM365({ silent: true }), CHECKLIST_DEFERRED_SYNC_TIMEOUT_MS).catch((error) => {
         window.__ismsWarn('checklist list sync failed', error);
       });
-    const localSnapshot = getChecklistListSnapshot(getVisibleChecklists());
-    const years = localSnapshot.years;
+    const shellSnapshot = getChecklistListShellSnapshot(getVisibleChecklists());
+    const years = shellSnapshot.years;
     if (!checklistBrowseState.year || !years.includes(checklistBrowseState.year) && checklistBrowseState.year !== 'all') {
       checklistBrowseState.year = years.includes(String(new Date().getFullYear() - 1911)) ? String(new Date().getFullYear() - 1911) : (years[0] || 'all');
     }
@@ -1261,8 +1275,7 @@
       remoteSummary = opts.skipRemoteSummary
         ? null
         : readChecklistRemoteSummary(remoteFilters, !!opts.forceRemoteSummary);
-      const shellItems = localSnapshot.items;
-      const shellSnapshot = localSnapshot;
+      const shellItems = shellSnapshot.items;
       const shellSummary = normalizeChecklistRemoteSummary(
         remoteSummary || checklistRemotePageState.summary || null,
         checklistRemotePageState.total || shellSnapshot.items.length
@@ -1313,7 +1326,7 @@
         window.__ismsWarn('checklist list remote page load failed', error);
       });
     } else {
-      snapshot = localSnapshot;
+      snapshot = shellSnapshot;
       checklists = snapshot.items;
       if (shouldDeferChecklistView) {
         listSummary = summarizeChecklistListItems(snapshot.items);

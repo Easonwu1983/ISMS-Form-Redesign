@@ -677,16 +677,15 @@
         + '</section></div></section>';
 
       let authorizedScopePicker = null;
-      document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
-        input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
-      });
-
       const form = document.getElementById('unit-contact-apply-form');
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
       scheduleUnitContactPostPaint(function () {
         ensureUnitCascadeControl();
         authorizedScopePicker = ensureAuthorizedScopePicker() || authorizedScopePicker;
         ensureAuthorizationDocumentSection(form);
+        document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
+          input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
+        });
         refreshIcons();
       }, 0);
 

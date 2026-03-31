@@ -155,8 +155,7 @@
       currentUserCacheKey = '';
       currentUserCacheValue = null;
       if (opts.notify) {
-        notifyAccessProfileChanged(opts.reason || 'session-cleared', previousUser);
-        notifyCacheInvalidation('access-profile', opts.reason || 'session-cleared', previousUser);
+        queueSessionNotification(opts.reason || 'session-cleared', previousUser);
       }
     }
 
@@ -182,6 +181,24 @@
       } catch (_) {}
     }
 
+    function queueSessionNotification(reason, user) {
+      const task = function () {
+        try {
+          notifyAccessProfileChanged(reason, user);
+          notifyCacheInvalidation('access-profile', reason, user);
+        } catch (_) {}
+      };
+      if (typeof window !== 'undefined' && typeof window.queueMicrotask === 'function') {
+        window.queueMicrotask(task);
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        window.setTimeout(task, 0);
+        return;
+      }
+      task();
+    }
+
     function writeAuthSession(user, options) {
       const opts = options && typeof options === 'object' ? options : {};
       const normalized = user ? normalizeUserRecord(user) : null;
@@ -200,8 +217,7 @@
       currentUserCacheKey = '';
       currentUserCacheValue = null;
       if (opts.notify) {
-        notifyAccessProfileChanged(opts.reason || 'session-updated', normalized);
-        notifyCacheInvalidation('access-profile', opts.reason || 'session-updated', normalized);
+        queueSessionNotification(opts.reason || 'session-updated', normalized);
       }
       return normalized;
     }
