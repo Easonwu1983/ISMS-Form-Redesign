@@ -28,7 +28,6 @@
       options.installAppEventListeners();
       options.initializeCoreServices('initApp');
       options.renderApp();
-      void options.ensureAuthenticatedRemoteBootstrap();
 
       scheduleIdleTask(function () {
         if (options.getAuthMode() === 'm365-api') return;
@@ -57,6 +56,12 @@
           window.__ismsWarn('store migration failed', error);
         }
       });
+
+      scheduleIdleTask(function () {
+        void options.ensureAuthenticatedRemoteBootstrap().catch(function (error) {
+          window.__ismsWarn('authenticated remote bootstrap failed', error);
+        });
+      }, 250);
 
       options.setLastStableHash(window.location.hash || '#dashboard');
       options.refreshIcons();
