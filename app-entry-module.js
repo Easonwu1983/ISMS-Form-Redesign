@@ -4,19 +4,13 @@
       const label = String(reason || 'bootstrap').trim() || 'bootstrap';
       deps.getBootstrapCoordinator();
       try {
-        deps.getM365ApiClient();
-        deps.recordBootstrapStep('core-service-ready', 'm365ApiClient:' + label);
-      } catch (error) {
-        deps.recordBootstrapStep('core-service-failed', 'm365ApiClient:' + String(error && error.message || error || 'unknown'));
-        throw error;
-      }
-      try {
         deps.getShellModule();
         deps.recordBootstrapStep('core-service-ready', 'shellModule:' + label);
       } catch (error) {
         deps.recordBootstrapStep('core-service-failed', 'shellModule:' + String(error && error.message || error || 'unknown'));
         throw error;
       }
+      deps.recordBootstrapStep('core-service-deferred', 'm365ApiClient:' + label);
     }
 
     async function initApp(deps) {
