@@ -322,10 +322,7 @@ async function openChecklistSmokePage(context) {
     skipBootstrap: true,
     initialHash: 'checklist'
   });
-  const currentHash = await checklistPage.evaluate(() => String(window.location.hash || ''));
-  if (!currentHash.startsWith('#checklist')) {
-    await gotoHashRoute(checklistPage, 'checklist', { settleMs: 260, timeout: 20000 }).catch(() => {});
-  }
+  await gotoHashRoute(checklistPage, 'checklist', { settleMs: 260, timeout: 20000 }).catch(() => {});
   await waitForRemoteBootstrap(checklistPage).catch(() => {});
   await waitForChecklistListReady(checklistPage, 2500).catch(() => {});
   return checklistPage;
