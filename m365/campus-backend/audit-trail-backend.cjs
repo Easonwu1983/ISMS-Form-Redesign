@@ -81,6 +81,12 @@ function createAuditTrailRouter(deps) {
     }
   }
 
+  function cloneAuditValue(value) {
+    return value && typeof value === 'object'
+      ? JSON.parse(JSON.stringify(value))
+      : value;
+  }
+
   function rebuildAuditDerivedState(rows) {
     const items = Array.isArray(rows) ? rows.map((entry) => entry && entry.item).filter(Boolean) : [];
     state.unfilteredSummary = summarizeAuditEntries(items);
@@ -213,7 +219,7 @@ function createAuditTrailRouter(deps) {
     const key = [String(listLoadedAt || 0), String(limit || 0), String(offset || 0)].join('::');
     const cached = state.summaryOnlyPageCache.get(key);
     if (!cached || cached.listLoadedAt !== listLoadedAt) return null;
-    return cached.value || null;
+    return cloneAuditValue(cached.value) || null;
   }
 
   function setAuditSummaryOnlyPageCache(limit, offset, listLoadedAt, value) {
@@ -221,7 +227,7 @@ function createAuditTrailRouter(deps) {
     const key = [String(listLoadedAt || 0), String(limit || 0), String(offset || 0)].join('::');
     state.summaryOnlyPageCache.set(key, {
       listLoadedAt,
-      value
+      value: cloneAuditValue(value)
     });
     if (state.summaryOnlyPageCache.size > 16) {
       const firstKey = state.summaryOnlyPageCache.keys().next().value;
@@ -600,26 +606,15 @@ function createAuditTrailRouter(deps) {
             limit: cachedSummaryPage.page && cachedSummaryPage.page.limit,
             durationMs: Date.now() - startedAt
           });
-          await writeJson(res, buildJsonResponse(200, {
-            ok: true,
-            items: [],
-            total: cachedSummaryPage.total,
-            page: cachedSummaryPage.page,
-            summary: cachedSummaryPage.summary,
-            cache: {
-              query: 'hit',
-              summaryOnly: true,
-              reason: 'summary-only-hit'
-            },
-            contractVersion: CONTRACT_VERSION
-          }), origin);
+          await writeJson(res, buildJsonResponse(200, cachedSummaryPage), origin);
           return;
         }
         const total = Array.isArray(state.entriesCache && state.entriesCache.rows)
           ? state.entriesCache.rows.length
           : 0;
         const summaryPage = buildAuditPageMeta(total, pageMeta.limit, pageMeta.offset, 0);
-        const summaryResult = {
+        const summaryBody = {
+          ok: true,
           items: [],
           total,
           summary: state.unfilteredSummary,
@@ -628,34 +623,29 @@ function createAuditTrailRouter(deps) {
             returned: 0,
             pageStart: 0,
             pageEnd: 0
-          }
+          },
+          cache: {
+            query: 'hit',
+            summaryOnly: true,
+            reason: 'summary-only-hit'
+          },
+          contractVersion: CONTRACT_VERSION
         };
         setAuditSummaryOnlyPageCache(
           pageMeta.limit,
           pageMeta.offset,
           Number(state.entriesCache && state.entriesCache.loadedAt) || 0,
-          summaryResult
+          summaryBody
         );
         logAuditTrail('list cached summary', {
           requestId,
           querySignature,
           total,
-          offset: summaryResult.page && summaryResult.page.offset,
-          limit: summaryResult.page && summaryResult.page.limit,
+          offset: summaryBody.page && summaryBody.page.offset,
+          limit: summaryBody.page && summaryBody.page.limit,
           durationMs: Date.now() - startedAt
         });
-        await writeJson(res, buildJsonResponse(200, {
-          ok: true,
-          items: [],
-          total,
-          page: summaryResult.page,
-          summary: summaryResult.summary,
-          cache: {
-            query: 'cached-summary',
-            summaryOnly: true
-          },
-          contractVersion: CONTRACT_VERSION
-        }), origin);
+        await writeJson(res, buildJsonResponse(200, summaryBody), origin);
         return;
       }
       const cachedQuery = getAuditQueryCache(querySignature, listLoadedAt);

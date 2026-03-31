@@ -49,6 +49,7 @@ function createTrainingRouter(deps) {
     formsQueryCache: new Map(),
     formsSummaryCache: new Map(),
     formsUnfilteredSummarySeed: null,
+    formsUnfilteredSummaryBody: null,
     rostersCache: null,
     rostersCacheAt: 0,
     rostersCachePromise: null,
@@ -260,6 +261,7 @@ function createTrainingRouter(deps) {
     state.formsCacheAt = 0;
     state.formsCachePromise = null;
     state.formsUnfilteredSummarySeed = null;
+    state.formsUnfilteredSummaryBody = null;
     if (state.formsQueryCache instanceof Map) {
       state.formsQueryCache.clear();
     }
@@ -510,6 +512,13 @@ function createTrainingRouter(deps) {
   }
 
   function buildTrainingSummaryOnlyFastResponse(url, filters, cacheReason) {
+    if (state.formsUnfilteredSummaryBody && !hasActiveTrainingFormFilters(filters)) {
+      const cachedBody = cloneJson(state.formsUnfilteredSummaryBody);
+      if (cachedBody && cachedBody.cache) {
+        cachedBody.cache.reason = cacheReason || cachedBody.cache.reason || 'unfiltered-summary-hit';
+      }
+      return cachedBody;
+    }
     if (!state.formsUnfilteredSummarySeed) return null;
     const total = Number(state.formsUnfilteredSummarySeed.total || 0);
     return {
@@ -671,6 +680,25 @@ function createTrainingRouter(deps) {
       state.formsCache = rows.slice();
       state.formsCacheAt = Date.now();
       state.formsUnfilteredSummarySeed = summarizeTrainingForms(rows.map((entry) => entry && entry.item).filter(Boolean));
+      state.formsUnfilteredSummaryBody = {
+        ok: true,
+        items: [],
+        summary: {
+          ...state.formsUnfilteredSummarySeed,
+          total: Number(state.formsUnfilteredSummarySeed && state.formsUnfilteredSummarySeed.total || 0)
+        },
+        total: Number(state.formsUnfilteredSummarySeed && state.formsUnfilteredSummarySeed.total || 0),
+        filters: {
+          summaryOnly: '1'
+        },
+        generatedAt: new Date(state.formsCacheAt).toISOString(),
+        cache: {
+          query: 'hit',
+          summaryOnly: true,
+          reason: 'unfiltered-summary-hit'
+        },
+        contractVersion: CONTRACT_VERSION
+      };
       if (state.formsQueryCache instanceof Map) {
         state.formsQueryCache.clear();
       }

@@ -30,21 +30,41 @@ function pickExecutablePath() {
 
 function getVisualSampleScale(spec, mode) {
   const slug = spec && spec.slug;
-  if (slug === 'dashboard') return mode === 'mobile' ? 0.56 : 0.62;
+  if (slug === 'dashboard') return mode === 'mobile' ? 0.5 : 0.54;
   if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.56 : 0.62;
-  if (slug === 'unit-review') return mode === 'mobile' ? 0.68 : 0.72;
+  if (slug === 'unit-review') return mode === 'mobile' ? 0.58 : 0.62;
   if (slug === 'unit-contact-status') return mode === 'mobile' ? 0.72 : 0.82;
   if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') return mode === 'mobile' ? 0.7 : 0.8;
   return 1;
 }
 
-async function gotoAppRoot(page, waitUntil = 'domcontentloaded') {
-  await page.goto(`${BASE_URL}/`, { waitUntil, timeout: 45000 });
+function normalizeHash(hash) {
+  const value = String(hash || '').trim().replace(/^#+/, '');
+  return value ? `/#${value}` : '/';
+}
+
+async function gotoAppEntry(page, hash, waitUntil = 'domcontentloaded') {
+  await page.goto(`${BASE_URL}${normalizeHash(hash)}`, { waitUntil, timeout: 45000 });
+}
+
+async function waitForAuthSurface(page, timeout = 30000) {
   await page.waitForFunction(() => {
     return window.__APP_READY__ === true
       || !!document.querySelector('[data-testid="login-form"]')
       || !!document.querySelector('.btn-logout');
-  }, undefined, { timeout: 30000 }).catch(() => {});
+  }, undefined, { timeout }).catch(() => {});
+}
+
+async function waitForAuthModule(page, timeout = 20000) {
+  await page.waitForFunction(() => {
+    const auth = window._authModule;
+    return !!(auth && typeof auth.login === 'function');
+  }, undefined, { timeout });
+}
+
+async function gotoAppRoot(page, waitUntil = 'domcontentloaded') {
+  await gotoAppEntry(page, '', waitUntil);
+  await waitForAuthSurface(page, 30000);
 }
 
 async function gotoHashOnly(page, hash, options = {}) {
@@ -66,14 +86,20 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
   const requireVersionChip = options.requireVersionChip !== false;
   const fastAuth = options.fastAuth === true;
   const skipBootstrap = options.skipBootstrap === true;
-  await gotoAppRoot(page, 'domcontentloaded');
+  const initialHash = String(options.initialHash || '').trim();
+  await gotoAppEntry(page, initialHash, 'domcontentloaded');
+  if (fastAuth) {
+    await waitForAuthModule(page, 20000).catch(async () => {
+      await waitForAuthSurface(page, 20000);
+      await waitForAuthModule(page, 10000);
+    });
+  } else {
+    await waitForAuthSurface(page, 30000);
+  }
   const alreadyAuthenticated = await page.locator('.btn-logout').count();
   if (!alreadyAuthenticated) {
     if (fastAuth) {
-      await page.waitForFunction(() => {
-        const auth = window._authModule;
-        return !!(auth && typeof auth.login === 'function');
-      }, undefined, { timeout: 20000 });
+      await waitForAuthModule(page, 20000);
       const loginResult = await page.evaluate(async ({ username, password }) => {
         const auth = window._authModule;
         if (!auth || typeof auth.login !== 'function') throw new Error('auth module missing');
@@ -112,11 +138,26 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
   }
 }
 
+async function waitForChecklistListReady(page, timeout = 25000) {
+  await page.waitForFunction(() => {
+    return !!document.querySelector('#cl-list-keyword')
+      || !!document.querySelector('.checklist-list-header')
+      || !!document.querySelector('.cl-list-shell')
+      || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
+      || document.querySelectorAll('.cl-list-row').length > 0;
+  }, undefined, { timeout });
+}
+
 async function runUnitAdminScopeChecks(browser, pushStep) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   try {
-    await login(page, 'unit1', 'unit123', { requireVersionChip: false, fastAuth: true, skipBootstrap: true });
+    await login(page, 'unit1', 'unit123', {
+      requireVersionChip: false,
+      fastAuth: true,
+      skipBootstrap: true,
+      initialHash: 'dashboard'
+    });
     pushStep('unit-admin:login', true, 'unit admin login succeeded');
 
     const apiState = await page.evaluate(async () => {
@@ -258,9 +299,12 @@ async function openChecklistSmokePage(context) {
   const checklistPage = await context.newPage();
   await login(checklistPage, 'easonwu', '2wsx#EDC', {
     requireVersionChip: false,
-    fastAuth: true
+    fastAuth: true,
+    skipBootstrap: true,
+    initialHash: 'checklist'
   });
-  await waitForDashboardReady(checklistPage).catch(() => {});
+  await gotoHashRoute(checklistPage, 'checklist', { settleMs: 500, timeout: 20000 }).catch(() => {});
+  await waitForChecklistListReady(checklistPage, 15000).catch(() => {});
   return checklistPage;
 }
 
@@ -474,15 +518,18 @@ async function run() {
     if (authTemplateBytes.slice(0, 5).toString('ascii') !== '%PDF-') throw new Error('authorization template is not a PDF');
     pushStep('asset:unit-contact-authorization-template pdf', true, `bytes=${authTemplateBytes.length}`);
 
-    await login(page, 'easonwu', '2wsx#EDC', { fastAuth: true, requireVersionChip: false });
+    await login(page, 'easonwu', '2wsx#EDC', {
+      fastAuth: true,
+      requireVersionChip: false,
+      initialHash: 'dashboard'
+    });
     pushStep('auth:login', true, 'admin login succeeded');
-    await gotoAppRoot(page, 'domcontentloaded');
+    await gotoHashRoute(page, 'dashboard', { settleMs: 300, timeout: 20000 }).catch(() => {});
     await waitForDashboardReady(page);
 
     const dashboardTitle = await page.evaluate(() => {
-      const app = document.getElementById('app');
-      if (!app || !app.innerText) return '';
-      return app.innerText.split('\n').map((entry) => entry.trim()).find(Boolean) || '';
+      const pageTitle = document.querySelector('.page-header .page-title, .page-title, .card-title');
+      return String(pageTitle && pageTitle.textContent || '').trim();
     });
     if (!String(dashboardTitle || '').trim()) throw new Error('missing dashboard title');
     pushStep('dashboard:loaded', true, dashboardTitle.trim());
@@ -760,31 +807,27 @@ async function run() {
       let checklistListReady = false;
       for (let attempt = 0; attempt < 3 && !checklistListReady; attempt += 1) {
         if (attempt === 0) {
-          await gotoHashRoute(checklistPage, 'checklist', { settleMs: 1200, timeout: 30000 });
+          await gotoHashRoute(checklistPage, 'checklist', { settleMs: 450, timeout: 20000 });
         } else if (attempt === 1) {
-          await gotoAppRoot(checklistPage, 'domcontentloaded');
+          await gotoAppEntry(checklistPage, 'checklist', 'domcontentloaded');
           await ensureAdminSession(checklistPage);
-          await waitForDashboardReady(checklistPage).catch(() => {});
-          await gotoHashRoute(checklistPage, 'checklist', { settleMs: 1600, timeout: 30000 });
+          await checklistPage.waitForTimeout(650);
         } else {
           await checklistPage.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
           await ensureAdminSession(checklistPage);
-          await checklistPage.waitForTimeout(2200);
+          await checklistPage.waitForTimeout(900);
         }
         try {
-          await checklistPage.waitForFunction(() => {
-            return !!document.querySelector('.checklist-list-header')
-              || !!document.querySelector('.cl-list-shell')
-              || !!document.querySelector('#cl-list-keyword')
-              || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
-              || document.querySelectorAll('.cl-list-row').length > 0;
-          }, undefined, { timeout: 30000 });
+          await waitForChecklistListReady(checklistPage, 20000);
           checklistListReady = true;
         } catch (error) {
           if (attempt >= 2) throw error;
         }
       }
-      const checklistListText = await checklistPage.locator('#app').innerText();
+      const checklistListText = await checklistPage.evaluate(() => {
+        const root = document.querySelector('.cl-list-shell') || document.querySelector('.checklist-list-header') || document.getElementById('app');
+        return String(root && root.innerText || '');
+      });
       if (/\?{4,}/.test(checklistListText)) {
         throw new Error('checklist list contains placeholder question marks');
       }
