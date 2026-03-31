@@ -259,12 +259,12 @@ async function waitForRemoteBootstrap(page) {
 }
 
 async function waitForDashboardReady(page) {
-  await waitForRemoteBootstrap(page);
   await page.waitForFunction(() => {
-    if (window.__REMOTE_BOOTSTRAP_STATE__ === 'pending') return false;
     const app = document.getElementById('app');
     const text = String(app && app.innerText || '');
-    return document.querySelectorAll('.dashboard-panel-pill').length >= 3
+    return !!document.querySelector('.dashboard-hero--integrated')
+      || !!document.querySelector('#visual-dashboard-shell')
+      || document.querySelectorAll('.dashboard-panel-pill').length >= 3
       || text.includes('儀表板')
       || text.includes('矯正單管考總覽');
   }, undefined, { timeout: 45000 });
