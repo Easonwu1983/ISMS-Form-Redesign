@@ -40,7 +40,13 @@ async function login(page) {
         return !!result;
       });
       if (ok) {
-        await page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 });
+        await page.waitForFunction(() => {
+          const auth = window._authModule;
+          const currentUser = auth && typeof auth.currentUser === 'function'
+            ? auth.currentUser()
+            : null;
+          return !!(currentUser && currentUser.sessionToken) || !!document.querySelector('.btn-logout');
+        }, undefined, { timeout: 30000 });
         return;
       }
     }
@@ -48,7 +54,13 @@ async function login(page) {
     await page.fill('[data-testid="login-user"]', 'easonwu');
     await page.fill('[data-testid="login-pass"]', '2wsx#EDC');
     await Promise.all([
-      page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 }),
+      page.waitForFunction(() => {
+        const auth = window._authModule;
+        const currentUser = auth && typeof auth.currentUser === 'function'
+          ? auth.currentUser()
+          : null;
+        return !!(currentUser && currentUser.sessionToken) || !!document.querySelector('.btn-logout');
+      }, undefined, { timeout: 30000 }),
       page.locator('[data-testid="login-form"]').evaluate((form) => form.requestSubmit())
     ]);
   }
@@ -89,11 +101,14 @@ async function run() {
     await capturePublicSpecs(mobile, PUBLIC_MOBILE_VISUAL_SPECS, 'mobile');
     await mobilePage.goto(`${BASE_URL}/#dashboard`, { waitUntil: 'networkidle', timeout: 45000 });
     await mobilePage.waitForTimeout(900);
-    await mobilePage.click('[data-action="shell.toggle-sidebar"]');
-    await mobilePage.waitForTimeout(500);
-    await mobilePage.screenshot({
-      path: path.join(OUT_DIR, 'dashboard-sidebar-mobile.png')
-    });
+    const sidebarToggle = mobilePage.locator('[data-action="shell.toggle-sidebar"]').first();
+    if (await sidebarToggle.count()) {
+      await sidebarToggle.click();
+      await mobilePage.waitForTimeout(500);
+      await mobilePage.screenshot({
+        path: path.join(OUT_DIR, 'dashboard-sidebar-mobile.png')
+      });
+    }
   } finally {
     await browser.close();
   }
