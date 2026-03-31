@@ -687,7 +687,7 @@
           input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
         });
         refreshIcons();
-      }, 0);
+      }, 800);
 
       bindPageEvent(form, 'input', function (event) {
         markDirty();
