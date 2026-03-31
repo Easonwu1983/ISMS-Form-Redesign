@@ -19,6 +19,10 @@
 7. 再發 Pages 備援頁
 8. 最後跑：`node scripts/formal-production-smoke.cjs`
 
+## 切帳號勾選表
+
+- [account-handoff-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/account-handoff-checklist.md)
+
 ## 避免重工
 
 - 正式部署入口只看 `useradmin@140.112.97.150`，不要再走 guest `127.0.0.1:2222`

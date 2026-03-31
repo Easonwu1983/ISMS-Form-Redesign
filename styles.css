@@ -234,32 +234,32 @@ body {
   position: relative;
   overflow-x: hidden;
   overflow-y: visible;
-  padding: clamp(18px, 5vh, 36px) 18px;
+  padding: clamp(14px, 4vh, 28px) 16px;
 }
 
 .login-page::before {
   content: '';
   position: absolute;
-  width: 600px;
-  height: 600px;
-  background: rgba(59, 130, 246, 0.12);
+  width: 460px;
+  height: 460px;
+  background: rgba(59, 130, 246, 0.08);
   border-radius: 50%;
-  top: -150px;
-  right: -100px;
-  filter: blur(80px);
+  top: -130px;
+  right: -120px;
+  filter: blur(70px);
   z-index: 0;
 }
 
 .login-page::after {
   content: '';
   position: absolute;
-  width: 500px;
-  height: 500px;
-  background: rgba(16, 185, 129, 0.1);
+  width: 420px;
+  height: 420px;
+  background: rgba(16, 185, 129, 0.06);
   border-radius: 50%;
-  bottom: -150px;
-  left: -100px;
-  filter: blur(80px);
+  bottom: -140px;
+  left: -120px;
+  filter: blur(72px);
   z-index: 0;
 }
 
@@ -328,11 +328,11 @@ body {
 
 .login-card {
   background: #ffffff;
-  border-radius: var(--radius-xl);
-  padding: 40px 36px;
-  width: min(100%, 520px);
-  max-width: min(94vw, 520px);
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
+  border-radius: 24px;
+  padding: 34px 32px;
+  width: min(100%, 500px);
+  max-width: min(94vw, 500px);
+  box-shadow: 0 16px 32px -18px rgba(15, 23, 42, 0.24), 0 0 1px rgba(15, 23, 42, 0.08);
   z-index: 1;
   position: relative;
   animation: fadeSlideUp 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -341,7 +341,7 @@ body {
 
 .login-logo {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .login-logo-icon {
@@ -352,14 +352,14 @@ body {
 }
 
 .login-logo h1 {
-  font-size: 1.5rem;
+  font-size: 1.34rem;
   font-weight: 700;
   color: var(--text-heading);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .login-logo p {
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   color: var(--text-muted);
 }
 
@@ -8732,32 +8732,30 @@ tbody tr:hover {
 .dashboard-hero {
   position: relative;
   overflow: hidden;
-  padding: 32px 34px;
-  border-radius: 30px;
-  border: 1px solid rgba(198, 210, 224, 0.94);
+  padding: 24px 26px;
+  border-radius: 24px;
+  border: 1px solid rgba(198, 210, 224, 0.9);
   background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.18), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.14), transparent 28%),
-    linear-gradient(140deg, #ffffff 0%, #f7fbff 58%, #eef5fb 100%);
-  box-shadow: 0 24px 48px -34px rgba(15, 23, 42, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.95) 100%);
+  box-shadow: 0 14px 28px -22px rgba(15, 23, 42, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .dashboard-hero::after {
   content: '';
   position: absolute;
-  inset: auto -80px -110px auto;
-  width: 280px;
-  height: 280px;
+  inset: auto -90px -120px auto;
+  width: 220px;
+  height: 220px;
   border-radius: 50%;
-  background: rgba(14, 165, 233, 0.08);
-  filter: blur(10px);
+  background: rgba(14, 165, 233, 0.06);
+  filter: blur(8px);
   pointer-events: none;
 }
 
 .dashboard-hero-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.82fr);
-  gap: 24px;
+  gap: 18px;
   align-items: stretch;
 }
 
@@ -8769,40 +8767,40 @@ tbody tr:hover {
 .dashboard-hero-eyebrow {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 999px;
   background: rgba(22, 96, 169, 0.08);
   color: #18467b;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .dashboard-hero-title {
-  margin: 18px 0 10px;
-  font-size: clamp(2rem, 2.6vw, 2.6rem);
-  line-height: 1.08;
-  letter-spacing: -0.03em;
+  margin: 14px 0 8px;
+  font-size: clamp(1.8rem, 2.2vw, 2.3rem);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
   color: var(--text-heading);
 }
 
 .dashboard-hero-text {
-  max-width: 760px;
+  max-width: 720px;
   margin: 0;
   color: var(--text-secondary);
-  font-size: 0.97rem;
-  line-height: 1.8;
+  font-size: 0.94rem;
+  line-height: 1.75;
 }
 
 .dashboard-hero--integrated {
-  padding-top: 24px;
+  padding-top: 20px;
 }
 
 .dashboard-hero-copy--integrated {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   justify-content: center;
 }
 
@@ -8812,20 +8810,20 @@ tbody tr:hover {
 }
 
 .dashboard-hero-text--lead {
-  max-width: 720px;
-  font-size: 1rem;
+  max-width: 700px;
+  font-size: 0.96rem;
 }
 
 .dashboard-meta-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 22px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .dashboard-meta-chip {
-  padding: 14px 16px;
-  border-radius: 20px;
+  padding: 12px 14px;
+  border-radius: 16px;
   border: 1px solid rgba(202, 213, 226, 0.92);
   background: rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -8833,7 +8831,7 @@ tbody tr:hover {
 
 .dashboard-meta-label {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
   letter-spacing: 0.04em;
 }
@@ -8841,7 +8839,7 @@ tbody tr:hover {
 .dashboard-meta-value {
   display: block;
   margin-top: 6px;
-  font-size: 1.36rem;
+  font-size: 1.26rem;
   color: var(--text-heading);
 }
 
@@ -8849,7 +8847,7 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 22px;
+  margin-top: 16px;
 }
 
 .dashboard-hero-side {
@@ -8860,12 +8858,12 @@ tbody tr:hover {
 
 .dashboard-focus-card {
   height: 100%;
-  padding: 24px;
-  border-radius: 26px;
+  padding: 20px;
+  border-radius: 20px;
   border: 1px solid rgba(202, 213, 226, 0.92);
   background: linear-gradient(180deg, rgba(13, 42, 73, 0.96) 0%, rgba(23, 74, 126, 0.96) 100%);
   color: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 22px 38px -28px rgba(15, 23, 42, 0.65);
+  box-shadow: 0 16px 28px -24px rgba(15, 23, 42, 0.6);
 }
 
 .dashboard-focus-label {
@@ -8877,16 +8875,16 @@ tbody tr:hover {
 }
 
 .dashboard-focus-text {
-  margin-top: 14px;
-  font-size: 1rem;
-  line-height: 1.8;
+  margin-top: 12px;
+  font-size: 0.96rem;
+  line-height: 1.7;
   color: rgba(255, 255, 255, 0.94);
 }
 
 .dashboard-focus-list {
   display: grid;
-  gap: 12px;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .dashboard-focus-item {
@@ -8894,8 +8892,8 @@ tbody tr:hover {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 12px 14px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -8914,15 +8912,15 @@ tbody tr:hover {
 .dashboard-panel-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .dashboard-panel-pill {
   display: grid;
   gap: 4px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  padding: 12px 14px;
+  border-radius: 16px;
   border: 1px solid rgba(214, 223, 233, 0.92);
   background: rgba(255, 255, 255, 0.82);
 }
