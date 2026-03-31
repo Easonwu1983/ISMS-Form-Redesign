@@ -660,10 +660,10 @@
     function renderChecklistListSummary(summary) {
       const safeSummary = normalizeChecklistRemoteSummary(summary, summary && summary.total);
       return `<div class="dashboard-panel-summary checklist-list-summary">
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">蝮賣</span><strong class="dashboard-panel-pill-value">${safeSummary.total}</strong></div>
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">?阮</span><strong class="dashboard-panel-pill-value">${safeSummary.editing}</strong></div>
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">敺??/span><strong class="dashboard-panel-pill-value">${safeSummary.pendingExport}</strong></div>
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">撌脤</span><strong class="dashboard-panel-pill-value">${safeSummary.closed}</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">總數</span><strong class="dashboard-panel-pill-value">${safeSummary.total}</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">編輯中</span><strong class="dashboard-panel-pill-value">${safeSummary.editing}</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待匯出</span><strong class="dashboard-panel-pill-value">${safeSummary.pendingExport}</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已結案</span><strong class="dashboard-panel-pill-value">${safeSummary.closed}</strong></div>
       </div>`;
     }
 
