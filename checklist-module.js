@@ -663,7 +663,7 @@
         <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">總數</span><strong class="dashboard-panel-pill-value">${safeSummary.total}</strong></div>
         <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">編輯中</span><strong class="dashboard-panel-pill-value">${safeSummary.editing}</strong></div>
         <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待匯出</span><strong class="dashboard-panel-pill-value">${safeSummary.pendingExport}</strong></div>
-        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已結案</span><strong class="dashboard-panel-pill-value">${safeSummary.closed}</strong></div>
+        <div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已送出</span><strong class="dashboard-panel-pill-value">${safeSummary.closed}</strong></div>
       </div>`;
     }
 
