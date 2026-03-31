@@ -188,8 +188,7 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
       requireVersionChip: false,
       fastAuth: true,
       skipBootstrap: true,
-      initialHash: '',
-      preferLocalLogin: true
+      initialHash: ''
     });
     pushStep('unit-admin:login', true, 'unit admin login succeeded');
 
