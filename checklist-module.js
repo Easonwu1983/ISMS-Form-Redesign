@@ -132,6 +132,7 @@
     const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = getChecklistBootstrapRetryDelays();
     const CHECKLIST_DEFERRED_SYNC_TIMEOUT_MS = 250;
     let checklistRemotePageState = null;
+    let checklistListRenderGeneration = 0;
     let checklistAccessProfileListenerInstalled = false;
 
     function serializeChecklistRemoteSummary(summary) {
@@ -1164,6 +1165,7 @@
 
   async function renderChecklistList(options) {
     const opts = options || {};
+    const renderGeneration = ++checklistListRenderGeneration;
     const useRemoteList = canUseRemoteChecklistPaging();
     const syncPromise = (opts.skipSync || useRemoteList)
       ? Promise.resolve()
@@ -1179,10 +1181,33 @@
     let snapshot;
     let viewSnapshot;
     let remotePage = null;
-    let remotePagePromise = null;
     let listSummary;
     let remoteSummary = null;
     let renderedSummarySignature = '';
+    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
+    const renderListShell = (summary, page) => {
+      document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
+      <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報紀錄，協助管理者快速掌握檢核狀況。</p></div><div class="page-header-actions">${fillBtn}</div></div>
+      <div class="card cl-list-shell" data-checklist-route="list" data-checklist-route-state="shell">
+        <div class="cl-list-toolbar-wrap">
+          ${buildChecklistListFilters()}
+          <div class="cl-year-tabs-shell">
+          <div class="cl-year-tabs-label">年度頁籤</div>
+          ${buildChecklistListYearTabs(years)}
+        </div>
+        </div>
+        <div class="cl-list-summary-shell" data-checklist-list-summary>${renderChecklistListSummary(summary)}</div>
+        <div class="cl-list-pager-shell" data-checklist-list-pager>${useRemoteList ? renderChecklistListPager(page) : ''}</div>
+        <div class="cl-list-content" data-checklist-route="list" data-checklist-route-state="shell"><div class="cl-list-loading-shell">載入檢核表列表…</div></div>
+      </div>
+    </div>`;
+    };
+    const updateChecklistListShellChrome = (summary, page) => {
+      const summaryEl = document.querySelector('[data-checklist-list-summary]');
+      if (summaryEl) summaryEl.innerHTML = renderChecklistListSummary(summary);
+      const pagerEl = document.querySelector('[data-checklist-list-pager]');
+      if (pagerEl) pagerEl.innerHTML = useRemoteList ? renderChecklistListPager(page) : '';
+    };
     if (useRemoteList) {
       const remoteFilters = normalizeChecklistRemoteFilters(opts.remoteFilters || {
         limit: checklistRemotePageState.filters.limit,
@@ -1208,76 +1233,53 @@
       listSummary = shellSummary;
       remotePage = shellPage;
       renderedSummarySignature = serializeChecklistRemoteSummary(shellSummary);
-      const shellFillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
-      document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
-      <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報紀錄，協助管理者快速掌握檢核狀況。</p></div><div class="page-header-actions">${shellFillBtn}</div></div>
-      <div class="card cl-list-shell" data-checklist-route="list" data-checklist-route-state="shell">
-        <div class="cl-list-toolbar-wrap">
-          ${buildChecklistListFilters()}
-          <div class="cl-year-tabs-shell">
-          <div class="cl-year-tabs-label">年度頁籤</div>
-          ${buildChecklistListYearTabs(years)}
-        </div>
-        </div>
-        ${renderChecklistListSummary(shellSummary)}
-        ${renderChecklistListPager(shellPage)}
-        <div class="cl-list-content" data-checklist-route="list" data-checklist-route-state="shell"><div class="cl-list-loading-shell">載入檢核表列表…</div></div>
-      </div>
-    </div>`;
+      renderListShell(shellSummary, shellPage);
       setChecklistListRouteState('ready');
       renderChecklistListContent(shellItems, shellSnapshot, shellViewSnapshot);
       syncChecklistListToolbarState();
       refreshIcons();
       bindCopyButtons();
-      remotePagePromise = prefetchedRemotePageResult
+      const remotePagePromise = prefetchedRemotePageResult
         ? Promise.resolve(prefetchedRemotePageResult)
         : loadChecklistRemotePage(remoteFilters, { force: !!opts.forceRemotePage });
-      const remotePageResult = await remotePagePromise;
-      checklistRemotePageState = {
-        filters: remotePageResult.filters,
-        page: remotePageResult.page,
-        items: Array.isArray(remotePageResult.items) ? remotePageResult.items.slice() : [],
-        summary: normalizeChecklistRemoteSummary(remotePageResult.summary, remotePageResult.total),
-        total: remotePageResult.total,
-        signature: getChecklistRemoteSignature(remotePageResult.filters)
-      };
-      remotePage = remotePageResult.page;
-      checklists = checklistRemotePageState.items;
-      listSummary = normalizeChecklistRemoteSummary(remoteSummary || checklistRemotePageState.summary, checklistRemotePageState.total);
-      snapshot = getChecklistListSnapshot(checklists);
-      viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
-      renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
-      renderChecklistListContent(checklists, snapshot, viewSnapshot);
-      syncChecklistListToolbarState();
-      refreshIcons();
-      bindCopyButtons();
+      remotePagePromise.then((remotePageResult) => {
+        if (renderGeneration !== checklistListRenderGeneration) return;
+        if (!String(window.location.hash || '').startsWith('#checklist')) return;
+        checklistRemotePageState = {
+          filters: remotePageResult.filters,
+          page: remotePageResult.page,
+          items: Array.isArray(remotePageResult.items) ? remotePageResult.items.slice() : [],
+          summary: normalizeChecklistRemoteSummary(remotePageResult.summary, remotePageResult.total),
+          total: remotePageResult.total,
+          signature: getChecklistRemoteSignature(remotePageResult.filters)
+        };
+        remotePage = remotePageResult.page;
+        checklists = checklistRemotePageState.items;
+        listSummary = normalizeChecklistRemoteSummary(remoteSummary || checklistRemotePageState.summary, checklistRemotePageState.total);
+        snapshot = getChecklistListSnapshot(checklists);
+        viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
+        renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
+        updateChecklistListShellChrome(listSummary, remotePage);
+        renderChecklistListContent(checklists, snapshot, viewSnapshot);
+        syncChecklistListToolbarState();
+        refreshIcons();
+        bindCopyButtons();
+      }).catch((error) => {
+        window.__ismsWarn('checklist list remote page load failed', error);
+      });
     } else {
       snapshot = localSnapshot;
       viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
       checklists = snapshot.items;
       listSummary = summarizeChecklistListItems(viewSnapshot.filtered);
       renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
+      renderListShell(listSummary, null);
+      setChecklistListRouteState('ready');
       renderChecklistListContent(checklists, snapshot, viewSnapshot);
       syncChecklistListToolbarState();
       refreshIcons();
       bindCopyButtons();
     }
-    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
-    document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
-      <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報紀錄，協助管理者快速掌握檢核狀況。</p></div><div class="page-header-actions">${fillBtn}</div></div>
-      <div class="card cl-list-shell" data-checklist-route="list" data-checklist-route-state="shell">
-        <div class="cl-list-toolbar-wrap">
-          ${buildChecklistListFilters()}
-          <div class="cl-year-tabs-shell">
-          <div class="cl-year-tabs-label">年度頁籤</div>
-          ${buildChecklistListYearTabs(years)}
-        </div>
-        </div>
-        ${renderChecklistListSummary(listSummary)}
-        ${useRemoteList ? renderChecklistListPager(remotePage) : ''}
-        <div class="cl-list-content" data-checklist-route="list" data-checklist-route-state="shell"></div>
-      </div>
-    </div>`;
     if (!opts.skipSync && !useRemoteList && syncPromise && typeof syncPromise.then === 'function') {
       syncPromise.then(() => {
         if (!String(window.location.hash || '').startsWith('#checklist')) return;
