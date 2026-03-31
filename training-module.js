@@ -119,7 +119,7 @@
     let trainingRemoteListSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     let trainingAdminDashboardCache = { signature: '', statsUnits: [], latestByUnit: [], completedUnits: [], incompleteUnits: [] };
     const TRAINING_REMOTE_LIST_SUMMARY_TTL_MS = 15000;
-    const TRAINING_REMOTE_LIST_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
+    const TRAINING_REMOTE_LIST_SUMMARY_BOOTSTRAP_DELAYS = getTrainingBootstrapRetryDelays();
     const TRAINING_ROSTER_PAGE_LIMIT_OPTIONS = ['100', '200', '500'];
     const TRAINING_ROSTER_DEFAULT_PAGE_LIMIT = '200';
     const TRAINING_ROSTER_VIRTUAL_GROUP_THRESHOLD = 18;
@@ -146,23 +146,43 @@
       let trainingAccessProfileListenerInstalled = false;
       let trainingRowsStateVersion = 0;
       let trainingRowsFilterCache = { signature: '', rows: [] };
-      const trainingManualRosterDraftCache = new Map();
+      const TRAINING_MANUAL_ROSTER_DRAFT_CACHE_KEY = 'rows';
+      const trainingManualRosterDraftCache = createTrainingBoundedCacheStore({
+        maxEntries: 1,
+        defaultTtlMs: 0
+      });
       const TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY = '__TRAINING_MANUAL_ROSTER_DRAFTS__';
+      function getTrainingManualRosterDraftCacheRows() {
+        const hit = trainingManualRosterDraftCache && typeof trainingManualRosterDraftCache.get === 'function'
+          ? trainingManualRosterDraftCache.get(TRAINING_MANUAL_ROSTER_DRAFT_CACHE_KEY)
+          : null;
+        return hit && Array.isArray(hit.value) ? hit.value.slice() : null;
+      }
+      function setTrainingManualRosterDraftCacheRows(rows) {
+        if (!trainingManualRosterDraftCache || typeof trainingManualRosterDraftCache.set !== 'function') return;
+        trainingManualRosterDraftCache.set(TRAINING_MANUAL_ROSTER_DRAFT_CACHE_KEY, Array.isArray(rows) ? rows.slice() : []);
+      }
       function readTrainingManualRosterDraftStorage() {
+        const cachedRows = getTrainingManualRosterDraftCacheRows();
+        if (cachedRows) return cachedRows;
         try {
           if (typeof window === 'undefined' || !window.sessionStorage) return [];
           const raw = window.sessionStorage.getItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY);
           if (!raw) return [];
           const parsed = JSON.parse(raw);
-          return Array.isArray(parsed) ? parsed : [];
+          const rows = Array.isArray(parsed) ? parsed : [];
+          setTrainingManualRosterDraftCacheRows(rows);
+          return rows;
         } catch (_) {
           return [];
         }
       }
       function writeTrainingManualRosterDraftStorage(rows) {
+        const normalizedRows = Array.isArray(rows) ? rows.slice() : [];
+        setTrainingManualRosterDraftCacheRows(normalizedRows);
         try {
           if (typeof window === 'undefined' || !window.sessionStorage) return;
-          window.sessionStorage.setItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY, JSON.stringify(rows || []));
+          window.sessionStorage.setItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY, JSON.stringify(normalizedRows));
         } catch (_) { }
       }
       function syncTrainingManualRosterDraftStorage(nextRows) {
@@ -197,11 +217,6 @@
         normalized.manualDraft = true;
         const primaryKey = getTrainingManualRosterDraftKey(normalized);
         if (!primaryKey) return normalized;
-        trainingManualRosterDraftCache.set(primaryKey, normalized);
-        const rosterId = String(normalized.rosterId || normalized.id || '').trim().toUpperCase();
-        if (rosterId) trainingManualRosterDraftCache.set(`id:${rosterId}`, normalized);
-        const aliasKey = `${String(normalized.unit || '').trim().toLowerCase()}::${String(normalized.name || '').trim().toLowerCase()}`;
-        if (aliasKey.trim() !== '::') trainingManualRosterDraftCache.set(`name:${aliasKey}`, normalized);
         syncTrainingManualRosterDraftStorage([normalized]);
         return normalized;
       }
@@ -210,16 +225,6 @@
         const rosterId = String(raw && (raw.rosterId || raw.id) || '').trim().toUpperCase();
         const name = String(raw && raw.name || '').trim().toLowerCase();
         const unit = String(raw && raw.unit || '').trim().toLowerCase();
-        Array.from(trainingManualRosterDraftCache.keys()).forEach((key) => {
-          const entry = trainingManualRosterDraftCache.get(key);
-          const entryId = String(entry && (entry.rosterId || entry.id) || '').trim().toUpperCase();
-          const entryName = String(entry && entry.name || '').trim().toLowerCase();
-          const entryUnit = String(entry && entry.unit || '').trim().toLowerCase();
-          if ((rosterId && (key === `id:${rosterId}` || entryId === rosterId))
-            || (name && entryName === name && (!unit || entryUnit === unit))) {
-            trainingManualRosterDraftCache.delete(key);
-          }
-        });
         const remaining = readTrainingManualRosterDraftStorage().filter((row) => {
           const normalized = normalizeTrainingRecordRow(row, row && row.unit);
           if (row && row.manualDraft) normalized.manualDraft = true;
@@ -233,7 +238,7 @@
       function getRememberedTrainingRosterRows() {
         const rows = [];
         const seen = new Set();
-        [].concat(readTrainingManualRosterDraftStorage(), Array.from(trainingManualRosterDraftCache.values())).forEach((row) => {
+        readTrainingManualRosterDraftStorage().forEach((row) => {
           if (!row || typeof row !== 'object') return;
           const normalized = normalizeTrainingRecordRow(row, row && row.unit);
           if (row.manualDraft) normalized.manualDraft = true;
@@ -326,6 +331,13 @@
         return window.__ISMS_COLLECTION_CACHE__;
       }
       return null;
+    }
+    function getTrainingBootstrapRetryDelays(delays) {
+      const moduleApi = getTrainingCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.getBootstrapRetryDelays === 'function') {
+        return moduleApi.getBootstrapRetryDelays(delays);
+      }
+      return (Array.isArray(delays) && delays.length ? delays : [80, 160, 320, 640]).slice();
     }
     function createTrainingCollectionPage(limit) {
       const moduleApi = getTrainingCollectionCacheModule();
@@ -486,7 +498,9 @@
       trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
       trainingRowsFilterCache = { signature: '', rows: [] };
       lastTrainingRosterFocusState = null;
-      trainingManualRosterDraftCache.clear();
+      if (trainingManualRosterDraftCache && typeof trainingManualRosterDraftCache.clear === 'function') {
+        trainingManualRosterDraftCache.clear();
+      }
       try {
         if (typeof window !== 'undefined' && window.sessionStorage) {
           window.sessionStorage.removeItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY);

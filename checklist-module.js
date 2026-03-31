@@ -129,7 +129,7 @@
     let checklistRemoteSummaryCache = null;
     let checklistRemoteSummaryBootstrapState = { signature: '', timer: 0, attempt: 0 };
     const CHECKLIST_REMOTE_SUMMARY_TTL_MS = 15000;
-    const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
+    const CHECKLIST_REMOTE_SUMMARY_BOOTSTRAP_DELAYS = getChecklistBootstrapRetryDelays();
     const CHECKLIST_DEFERRED_SYNC_TIMEOUT_MS = 250;
     let checklistRemotePageState = null;
     let checklistAccessProfileListenerInstalled = false;
@@ -315,6 +315,13 @@
         return window.__ISMS_COLLECTION_CACHE__;
       }
       return null;
+    }
+    function getChecklistBootstrapRetryDelays(delays) {
+      const moduleApi = getChecklistCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.getBootstrapRetryDelays === 'function') {
+        return moduleApi.getBootstrapRetryDelays(delays);
+      }
+      return (Array.isArray(delays) && delays.length ? delays : [80, 160, 320, 640]).slice();
     }
     function createChecklistCollectionPage(limit) {
       const moduleApi = getChecklistCollectionCacheModule();

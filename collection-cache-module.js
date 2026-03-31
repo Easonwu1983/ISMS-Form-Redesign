@@ -1,7 +1,21 @@
 (function () {
   window.createCollectionCacheModule = function createCollectionCacheModule() {
+    const DEFAULT_BOOTSTRAP_RETRY_DELAYS = Object.freeze([80, 160, 320, 640]);
+
     function cloneObject(value) {
       return value && typeof value === 'object' ? { ...value } : {};
+    }
+
+    function getBootstrapRetryDelays(delays) {
+      const source = Array.isArray(delays) && delays.length ? delays : DEFAULT_BOOTSTRAP_RETRY_DELAYS;
+      const normalized = source
+        .map(function (delay) {
+          return Math.max(0, Number(delay) || 0);
+        })
+        .filter(function (delay) {
+          return delay > 0;
+        });
+      return normalized.length ? normalized : DEFAULT_BOOTSTRAP_RETRY_DELAYS.slice();
     }
 
     function createPage(limit) {
@@ -355,6 +369,7 @@
 
     return {
       cloneObject: cloneObject,
+      getBootstrapRetryDelays: getBootstrapRetryDelays,
       createPage: createPage,
       createRemoteCollectionState: createRemoteCollectionState,
       createRemoteViewCache: createRemoteViewCache,

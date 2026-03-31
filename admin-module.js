@@ -119,7 +119,7 @@
     });
     const auditTrailLoadPromiseMap = new Map();
     const AUDIT_TRAIL_SUMMARY_CACHE_MS = 15000;
-    const AUDIT_TRAIL_SUMMARY_BOOTSTRAP_DELAYS = [80, 160, 320, 640];
+    const AUDIT_TRAIL_SUMMARY_BOOTSTRAP_DELAYS = getAdminBootstrapRetryDelays();
     const AUDIT_TRAIL_VIRTUAL_ROW_HEIGHT = 76;
     const AUDIT_TRAIL_VIRTUAL_ROW_OVERSCAN = 10;
     const AUDIT_TRAIL_VIRTUAL_ROW_THRESHOLD = 140;
@@ -298,6 +298,14 @@
         return window.__ISMS_ADMIN_COLLECTION_CACHE__;
       }
       return null;
+    }
+
+    function getAdminBootstrapRetryDelays(delays) {
+      const moduleApi = getAdminCollectionCacheModule();
+      if (moduleApi && typeof moduleApi.getBootstrapRetryDelays === 'function') {
+        return moduleApi.getBootstrapRetryDelays(delays);
+      }
+      return (Array.isArray(delays) && delays.length ? delays : [80, 160, 320, 640]).slice();
     }
 
     function createAdminCollectionPage(limit) {
