@@ -7845,6 +7845,35 @@ tbody tr:hover {
   flex-wrap: wrap;
 }
 
+.unit-contact-unit-shell {
+  min-height: 144px;
+  border: 1px dashed rgba(96, 165, 250, 0.28);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(242, 247, 255, 0.92));
+  padding: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.unit-contact-unit-shell .unit-contact-picker-loading {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.unit-contact-unit-shell .unit-contact-picker-loading::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid rgba(96, 165, 250, 0.24);
+  border-top-color: rgba(37, 99, 235, 0.88);
+  animation: busySpin 0.9s linear infinite;
+}
+
 .unit-contact-file-empty {
   color: var(--text-secondary);
   font-size: 0.88rem;

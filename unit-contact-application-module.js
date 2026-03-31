@@ -299,6 +299,22 @@
       return initAuthorizedScopePicker('uca-authorized-units');
     }
 
+    function ensureUnitCascadeControl() {
+      const shell = document.querySelector('[data-unit-contact-unit-shell]');
+      if (!shell) return null;
+      if (shell.dataset.hydrated === '1') {
+        return getUnitFieldTargets('uca-unit');
+      }
+      shell.innerHTML = buildUnitCascadeControl('uca-unit', '', false, true);
+      shell.dataset.hydrated = '1';
+      const targets = initUnitCascade('uca-unit', '', { disabled: false, registerCleanup: registerUnitContactPageCleanup });
+      getUnitFieldTargets('uca-unit').forEach((target) => {
+        const describedBy = ['uca-unit-help', 'uca-unit-error'].join(' ');
+        target.setAttribute('aria-describedby', describedBy);
+      });
+      return targets;
+    }
+
     function validateAuthorizationDocument(file) {
       if (!(file instanceof File)) throw new Error('請上傳有效檔案');
       const size = Number(file.size || 0);
@@ -625,7 +641,7 @@
         + '<form id="unit-contact-apply-form" data-testid="unit-contact-apply-form" novalidate>'
         + '<div class="form-feedback" id="unit-contact-apply-feedback" data-state="idle" aria-live="polite" aria-atomic="true" hidden></div>'
         + '<div class="form-row"><div class="form-group" data-unit-contact-unit-group><label class="form-label form-required">申請單位</label>'
-        + buildUnitCascadeControl('uca-unit', '', false, true)
+        + '<div class="unit-contact-unit-shell" data-unit-contact-unit-shell><div class="unit-contact-picker-loading">載入主要單位選擇…</div></div>'
         + '<div class="form-hint" id="uca-unit-help">請先選擇主要歸屬單位；若有跨單位兼辦，再補充額外授權資源範圍。</div><div class="form-error-message" id="uca-unit-error" hidden></div></div></div>'
         + '<div class="form-group"><label class="form-label">額外授權資源範圍（可複選）</label>'
         + '<div class="unit-contact-authorized-scope-shell" data-unit-contact-authorized-scope-shell><div class="unit-contact-picker-loading">載入額外授權資源範圍…</div></div>'
@@ -662,10 +678,6 @@
 
       initUnitCascade('uca-unit', '', { disabled: false, registerCleanup: registerUnitContactPageCleanup });
       let authorizedScopePicker = null;
-      getUnitFieldTargets('uca-unit').forEach((target) => {
-        const describedBy = ['uca-unit-help', 'uca-unit-error'].join(' ');
-        target.setAttribute('aria-describedby', describedBy);
-      });
       document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
         input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
       });
@@ -673,6 +685,7 @@
       const form = document.getElementById('unit-contact-apply-form');
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
       scheduleUnitContactPostPaint(function () {
+        ensureUnitCascadeControl();
         authorizedScopePicker = ensureAuthorizedScopePicker() || authorizedScopePicker;
         ensureAuthorizationDocumentSection(form);
         refreshIcons();
@@ -688,6 +701,7 @@
       });
       bindPageEvent(form, 'submit', async function (event) {
         event.preventDefault();
+        ensureUnitCascadeControl();
         const unitState = readUnitFormState('uca-unit');
         const applicantName = String(document.getElementById('uca-name').value || '').trim();
         const extensionNumber = String(document.getElementById('uca-extension').value || '').trim();
