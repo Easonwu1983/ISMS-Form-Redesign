@@ -27,3 +27,34 @@
 - 正式判準只看：
   - 校內 VM
   - Pages
+
+## 目前正式鏈熱點
+
+以 `logs/formal-production/latest-release-report.md` 為準，2026-03-31 這輪主要還剩：
+
+- `visual:desktop:dashboard`
+- `visual:desktop:unit-review`
+- `landing:login-form`
+- `checklist:list-loaded`
+- `visual:public-desktop:unit-contact-apply`
+
+次要熱點：
+
+- `unit-admin:login`
+- `unit-admin:api-scope`
+- `audit-trail:loaded`
+
+API warm-state 目前狀態：
+
+- `audit-trail summary-only`：已改善
+- `checklists summary-only`：已改善
+- `training-forms summary-only`：已改善
+
+## 常見撞牆點
+
+- 本機 root `deploy-manifest.json` 如果沒刷新，Pages 很容易出現版本不一致或 SRI mismatch。
+- 動到 `shell / CSS / bundles / asset-loader` 卻沒跑 `node scripts/build-app-core-assets.cjs`，正式站與 Pages 會出現舊資產。
+- `cloudflare-pages-regression-smoke.cjs` 和 `formal-production-smoke.cjs` 平行跑，容易因共用 session 造成假紅燈。
+- 純前端變更不需要重啟 `isms-unit-contact-backend.service` 或 `caddy.service`；多餘重啟只會增加噪音。
+- repo 內長期存在很多未追蹤暫存檔，只要 `git status --short` 沒有 tracked 變更，就不要浪費時間處理它們。
+- `styles.min.css`、`styles.purged.min.css` 是正常建置產物；如果它們是本輪 build 產生的，不要誤判成衝突。

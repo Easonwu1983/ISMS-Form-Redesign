@@ -25,6 +25,35 @@
 - `cloudflare-pages-regression-smoke.cjs` 不要和 `formal-production-smoke.cjs` 平行跑
 - 純前端靜態檔變更不做多餘 service restart
 - 正式部署只走 `useradmin@140.112.97.150`
+- 若改到 `shell / CSS / bundles / asset-loader`，一定先跑 `node scripts/build-app-core-assets.cjs`
+- `styles.min.css`、`styles.purged.min.css` 是正常 build 產物，不要因為它們改動就中止上版
+
+## 目前上版後先驗什麼
+
+先看 `logs/formal-production/latest-release-report.md` 的：
+
+- `Metrics`
+- `Coverage`
+- `Cache Signals`
+- `Warm State`
+- `Latency Hotspots`
+- `Unstable Steps`
+
+目前最值得盯的熱點：
+
+- `visual:desktop:dashboard`
+- `visual:desktop:unit-review`
+- `checklist:list-loaded`
+- `visual:public-desktop:unit-contact-apply`
+- `unit-admin:login`
+
+## 目前最常撞牆的地方
+
+- 忘記刷新本機 root `deploy-manifest.json`，導致 Pages manifest 與 VM 版本不一致
+- 直接跑 Pages smoke，但前面沒有先驗校內 VM
+- 把 Pages smoke 和 full smoke 一起跑，造成 session 互踩
+- 純前端改動仍重啟 service，浪費時間又增加變數
+- 修改 visual baseline capture 邏輯時沒有同步更新 baseline，會把 visual smoke 假紅燈帶進正式報告
 
 ## 校內 VM 同步
 

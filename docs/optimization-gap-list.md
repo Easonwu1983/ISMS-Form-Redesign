@@ -1,6 +1,6 @@
 # Optimization Gap List
 
-Updated: 2026-03-30
+Updated: 2026-03-31
 
 This checklist tracks the optimization report against the current repo state. Status values:
 
@@ -27,6 +27,12 @@ Done:
 Open:
 - `asset-loader.js` still uses a script-loader bootstrap for the synchronous core path.
 - `workflow-support-module.js`, `policy-module.js`, `m365-api-client.js`, and several runtime bridge modules still remain on the initial path because startup normalization depends on them.
+- Pages/browser hot spots still remain on:
+  - `visual:desktop:dashboard`
+  - `visual:desktop:unit-review`
+  - `checklist:list-loaded`
+  - `visual:public-desktop:unit-contact-apply`
+  - `unit-admin:login`
 
 Next:
 - Keep shrinking the synchronous core set.
@@ -67,10 +73,14 @@ Done:
 - Retry logic now uses exponential backoff with jitter.
 - Error classification now distinguishes timeout, auth, validation, rate-limit, server, and network failures.
 - Unit-admin review-scope authorization now uses a short-lived backend cache in `request-authz.cjs`, and `/api/review-scopes` no longer scans the SharePoint list twice for scoped users.
+- The latest formal production report now shows module-level summary cache status for:
+  - `audit-trail`
+  - `checklists`
+  - `training-forms`
+- The current formal report shows all three `summaryOnly` warm paths as improved over cold.
 
 Open:
-- Formal release reports still do not show full module-level cache hit and miss rates.
-- `training-forms`, `checklists`, and `audit-trail` summary warm paths still need more consistent wins over cold paths.
+- Formal release reports still do not show full cache hit and miss rates for every backend module; coverage is still focused on the main summary routes.
 - Backend summary-only routes are still not fully isolated from list-oriented execution paths in every module.
 
 Next:
@@ -134,6 +144,12 @@ Open:
 - There is still no complete page destroy lifecycle across every major route.
 - Large read-heavy tables outside `audit-trail`, `system-users`, and `training roster` still render full DOM payloads instead of using virtualization.
 
+Current high-value next steps:
+
+- Finish route cleanup on the remaining admin and checklist branches.
+- Keep shrinking `checklist:list-loaded`, which is still a browser-layer hot spot even after the smoke flake work.
+- Expand virtualization only where the formal report still shows heavy DOM cost.
+
 Next:
 - Finish converting the remaining direct route listeners to page-scoped registration.
 - Add a consistent destroy hook across the remaining route transitions.
@@ -152,8 +168,8 @@ Open:
 
 ## Priority Order
 
-1. Load performance: lazy loading and route splitting
+1. Load performance: `dashboard`, `unit-review`, `checklist:list-loaded`, public apply
 2. Memory/runtime stability: page teardown and listener cleanup
 3. API layer: stronger cache telemetry and pure summary paths
-4. Accessibility: complete key workflow semantics and keyboard support
-5. CSS: minify, extract inline styles, then purge safely
+4. CSS: keep extracting inline styles from `admin`, `training`, and `checklist`
+5. Accessibility: expand authenticated-route coverage beyond the current shell/public focus

@@ -32,6 +32,27 @@
 - 本機 `8088` 不是正式判準
 - Pages smoke 不和 full smoke 平行執行
 
+## 目前固定優先順序
+
+1. 先把正式鏈維持綠燈
+2. 再壓 `latest-release-report.md` 裡最大的 latency hotspot
+3. 最後才做結構性重構或視覺細修
+
+目前優先修的點：
+
+- `visual:desktop:dashboard`
+- `visual:desktop:unit-review`
+- `checklist:list-loaded`
+- `visual:public-desktop:unit-contact-apply`
+- `unit-admin:login`
+
+## 固定避坑
+
+- 不再把 guest `127.0.0.1:2222` 當正式部署入口
+- 不再把本機 `8088` 混進正式版本治理
+- 不要因為大量未追蹤暫存檔就中斷；只看 tracked 變更
+- 如果本輪動到 build 產物相關檔案，先重建 core assets，再推版
+
 ## 例外層
 
 - [fast-redeploy-runbook.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/fast-redeploy-runbook.md)

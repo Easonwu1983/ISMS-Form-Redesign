@@ -37,3 +37,26 @@
 - 正式主站：校內 VM
 - Pages：備援頁
 - 本機 `8088`：僅開發驗證
+
+## 目前先看哪裡
+
+每次接手先只看：
+
+1. `logs/formal-production/latest-release-report.md`
+2. `docs/optimization-gap-list.md`
+3. `git status --short`
+
+如果正式鏈是綠的，下一輪優先看這些熱點：
+
+- `visual:desktop:dashboard`
+- `visual:desktop:unit-review`
+- `checklist:list-loaded`
+- `visual:public-desktop:unit-contact-apply`
+- `unit-admin:login`
+
+## 開機時最容易漏掉的事
+
+- Pages 發佈前一定先刷新本機 root `deploy-manifest.json`
+- shell / CSS / bundle / asset-loader 有變更時一定先跑 `node scripts/build-app-core-assets.cjs`
+- 只做前端靜態檔調整時，不要順手重啟 backend / caddy
+- 看到大量未追蹤 `tmp_*`、報告檔、extract 檔時，直接忽略；只關心 tracked 變更
