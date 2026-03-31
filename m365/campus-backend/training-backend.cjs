@@ -653,13 +653,12 @@ function createTrainingRouter(deps) {
   function writeFormsSummaryCache(cacheKey, body) {
     if (!(state.formsSummaryCache instanceof Map) || !cacheKey) return cloneJson(body);
     const cachedBody = cloneJson(body);
-    const cachedHitBody = cloneJson(cachedBody);
-    if (cachedHitBody && cachedHitBody.cache) {
-      cachedHitBody.cache = {
-        ...cachedHitBody.cache,
+    if (cachedBody && cachedBody.cache) {
+      cachedBody.cache = {
+        ...cachedBody.cache,
         query: 'hit',
         summaryOnly: true,
-        reason: cachedHitBody.cache.reason === 'unfiltered-summary'
+        reason: cachedBody.cache.reason === 'unfiltered-summary'
           ? 'unfiltered-summary-hit'
           : 'summary-hit'
       };
@@ -668,7 +667,7 @@ function createTrainingRouter(deps) {
       loadedAt: Date.now(),
       cacheAt: Number(state.formsCacheAt || 0),
       body: cachedBody,
-      response: createTrainingJsonResponse(cachedHitBody)
+      response: createTrainingJsonResponse(cachedBody)
     });
     trimQueryCache(state.formsSummaryCache, TRAINING_FORMS_SUMMARY_CACHE_MAX);
     return cloneJson(cachedBody);

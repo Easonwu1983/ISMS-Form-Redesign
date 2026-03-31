@@ -1245,13 +1245,22 @@
       listSummary = normalizeChecklistRemoteSummary(remoteSummary || checklistRemotePageState.summary, checklistRemotePageState.total);
       snapshot = getChecklistListSnapshot(checklists);
       viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
+      renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
+      renderChecklistListContent(checklists, snapshot, viewSnapshot);
+      syncChecklistListToolbarState();
+      refreshIcons();
+      bindCopyButtons();
     } else {
       snapshot = localSnapshot;
       viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
       checklists = snapshot.items;
       listSummary = summarizeChecklistListItems(viewSnapshot.filtered);
+      renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
+      renderChecklistListContent(checklists, snapshot, viewSnapshot);
+      syncChecklistListToolbarState();
+      refreshIcons();
+      bindCopyButtons();
     }
-    renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
       <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報內容，可快速搜尋填報人員與單位狀態。</p></div><div class="page-header-actions">${fillBtn}</div></div>
@@ -1268,10 +1277,6 @@
         <div class="cl-list-content" data-checklist-route="list" data-checklist-route-state="shell"></div>
       </div>
     </div>`;
-    renderChecklistListContent(checklists, snapshot, viewSnapshot);
-    syncChecklistListToolbarState();
-    refreshIcons();
-    bindCopyButtons();
     if (!opts.skipSync && !useRemoteList && syncPromise && typeof syncPromise.then === 'function') {
       syncPromise.then(() => {
         if (!String(window.location.hash || '').startsWith('#checklist')) return;
