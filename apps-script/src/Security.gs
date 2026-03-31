@@ -154,11 +154,107 @@ function buildLoginRateLimitKey_(username, request) {
   return `login_rl_${user}_${ip}`;
 }
 
+function buildPersistentLoginRateLimitKey_(username, request) {
+  return `LOGIN_RATE_LIMIT_${sha256Hex_(buildLoginRateLimitKey_(username, request)).slice(0, 24)}`;
+}
+
+function readPersistentLoginRateLimit_(username, request) {
+  const propKey = buildPersistentLoginRateLimitKey_(username, request);
+  try {
+    const raw = String(PropertiesService.getScriptProperties().getProperty(propKey) || '');
+    if (!raw) return null;
+    const state = JSON.parse(raw);
+    if (!state || typeof state !== 'object') return null;
+    const now = Date.now();
+    if (now >= Number(state.resetAt || 0)) {
+      PropertiesService.getScriptProperties().deleteProperty(propKey);
+      return null;
+    }
+    return state;
+  } catch (err) {
+    recordInternalError_('Security.readPersistentLoginRateLimit_', err, { propKey });
+    try {
+      PropertiesService.getScriptProperties().deleteProperty(propKey);
+    } catch (_cleanupErr) {}
+    return null;
+  }
+}
+
+function writePersistentLoginRateLimit_(username, request, state) {
+  const propKey = buildPersistentLoginRateLimitKey_(username, request);
+  try {
+    PropertiesService.getScriptProperties().setProperty(propKey, JSON.stringify({
+      count: Number(state && state.count || 0),
+      resetAt: Number(state && state.resetAt || 0)
+    }));
+  } catch (err) {
+    recordInternalError_('Security.writePersistentLoginRateLimit_', err, { propKey });
+  }
+}
+
+function clearPersistentLoginRateLimit_(username, request) {
+  const propKey = buildPersistentLoginRateLimitKey_(username, request);
+  try {
+    PropertiesService.getScriptProperties().deleteProperty(propKey);
+  } catch (err) {
+    recordInternalError_('Security.clearPersistentLoginRateLimit_', err, { propKey });
+  }
+}
+
+function syncLoginRateLimitStateFromPersistent_(username, request, ttlSeconds) {
+  const state = readPersistentLoginRateLimit_(username, request);
+  if (!state) return null;
+  try {
+    CacheService.getScriptCache().put(
+      buildLoginRateLimitKey_(username, request),
+      JSON.stringify(state),
+      Math.max(1, Number(ttlSeconds || 1))
+    );
+  } catch (err) {
+    recordInternalError_('Security.syncLoginRateLimitStateFromPersistent_', err, {
+      username: String(username || '').trim().toLowerCase()
+    });
+  }
+  return state;
+}
+
+function prunePersistentLoginRateLimitStates_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const now = Date.now();
+    const all = props.getProperties();
+    Object.keys(all || {}).forEach((key) => {
+      if (!/^LOGIN_RATE_LIMIT_/.test(String(key || ''))) return;
+      try {
+        const state = JSON.parse(String(all[key] || ''));
+        if (!state || now >= Number(state.resetAt || 0)) {
+          props.deleteProperty(key);
+        }
+      } catch (_err) {
+        props.deleteProperty(key);
+      }
+    });
+  } catch (err) {
+    recordInternalError_('Security.prunePersistentLoginRateLimitStates_', err);
+  }
+}
+
 function assertLoginRateLimit_(username, request) {
   const cache = CacheService.getScriptCache();
   const key = buildLoginRateLimitKey_(username, request);
+  const windowMinutes = getIntConfig_('login_rate_limit_window_minutes', 15, 1, 1440);
+  const ttlSeconds = windowMinutes * 60;
   const raw = cache.get(key);
-  if (!raw) return;
+
+  if (!raw) {
+    const persisted = syncLoginRateLimitStateFromPersistent_(username, request, ttlSeconds);
+    if (!persisted) return;
+    const maxAttempts = getIntConfig_('login_rate_limit_max_attempts', 10, 1, 500);
+    if (Number(persisted.count || 0) >= maxAttempts) {
+      throw createHttpError_('LOCKED', 'Too many login attempts. Please retry later.', 423);
+    }
+    return;
+  }
 
   let state;
   try {
@@ -172,6 +268,7 @@ function assertLoginRateLimit_(username, request) {
   const now = Date.now();
   if (!state || now >= Number(state.resetAt || 0)) {
     cache.remove(key);
+    clearPersistentLoginRateLimit_(username, request);
     return;
   }
 
@@ -208,11 +305,13 @@ function recordLoginRateLimitFailure_(username, request) {
   }
 
   cache.put(key, JSON.stringify(state), ttlSeconds);
+  writePersistentLoginRateLimit_(username, request, state);
 }
 
 function clearLoginRateLimit_(username, request) {
   const cache = CacheService.getScriptCache();
   cache.remove(buildLoginRateLimitKey_(username, request));
+  clearPersistentLoginRateLimit_(username, request);
 }
 
 function computeLogIntegrityHash_(rowObj) {
@@ -258,6 +357,7 @@ function runDailySecurityMaintenance_() {
     pruneSheetByTime_(SHEET_NAMES.apiAudit, 'created_at', retentionDays);
     pruneSheetByTime_(SHEET_NAMES.passwordResets, 'requested_at', retentionDays);
     pruneSheetByTime_(SHEET_NAMES.loginSessions, 'expires_at', retentionDays);
+    prunePersistentLoginRateLimitStates_();
 
     props.setProperty('LAST_SECURITY_MAINTENANCE_DATE', today);
   } catch (err) {
