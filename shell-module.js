@@ -724,18 +724,19 @@
       app.classList.toggle('page-loading', !!isLoading);
     }
 
-    function handleRoute() {
+    function handleRoute(cachedUser) {
       const route = getRoute();
       const page = ROUTE_WHITELIST[route.page] ? route.page : 'dashboard';
+      const user = cachedUser || currentUser();
       if (isPublicRoute(page)) {
         renderPublicPage(page, route.param);
         return;
       }
-      if (!currentUser()) {
+      if (!user) {
         renderLogin();
         return;
       }
-      if (currentUser() && currentUser().mustChangePassword) {
+      if (user.mustChangePassword) {
         renderLogin();
         return;
       }
@@ -772,7 +773,8 @@
 
     function renderPublicPage(page, param) {
       if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
-      document.body.innerHTML = '<a class="skip-link" href="#app">\u8df3\u5230\u4e3b\u8981\u5167\u5bb9</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71</strong><span>ISMS \u7ba1\u8003\u8207\u8ffd\u8e64\u5e73\u53f0</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">\u67e5\u8a62\u9032\u5ea6</a>' + (currentUser() ? '<a class="btn btn-secondary" href="#dashboard">\u9032\u5165\u7cfb\u7d71</a>' : '<a class="btn btn-secondary" href="#">\u767b\u5165\u7cfb\u7d71</a>') + '</div></header><main class="public-main" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div></div>';
+      const loggedInUser = currentUser();
+      document.body.innerHTML = '<a class="skip-link" href="#app">\u8df3\u5230\u4e3b\u8981\u5167\u5bb9</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71</strong><span>ISMS \u7ba1\u8003\u8207\u8ffd\u8e64\u5e73\u53f0</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">\u67e5\u8a62\u9032\u5ea6</a>' + (loggedInUser ? '<a class="btn btn-secondary" href="#dashboard">\u9032\u5165\u7cfb\u7d71</a>' : '<a class="btn btn-secondary" href="#">\u767b\u5165\u7cfb\u7d71</a>') + '</div></header><main class="public-main" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div></div>';
       if (typeof beginPageRuntime === 'function') beginPageRuntime();
       setRouteLoadingState(true);
       Promise.resolve(getRouteMeta(page).render(param))
@@ -803,13 +805,14 @@
       var showTransitionOverlay = consumeAppTransitionFlag();
       document.body.innerHTML = '<a class="skip-link" href="#app">\u8df3\u5230\u4e3b\u8981\u5167\u5bb9</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div>' + (showTransitionOverlay ? renderAppTransitionOverlay() : '');
       if (typeof window !== 'undefined' && window.__REMOTE_BOOTSTRAP_STATE__ === 'ready') {
-        handleRoute();
+        handleRoute(u);
         if (showTransitionOverlay) dismissAppTransitionOverlay();
         return;
       }
       renderBootstrapShell();
       Promise.resolve(ensureAuthenticatedRemoteBootstrap()).then(function () {
-        if (currentUser()) handleRoute();
+        var resolvedUser = u || currentUser();
+        if (resolvedUser) handleRoute(resolvedUser);
       }).catch(function (error) {
         window.__ismsError(error && error.stack ? error.stack : String(error));
         if (String(error && error.message || '').indexOf('\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548') >= 0) {

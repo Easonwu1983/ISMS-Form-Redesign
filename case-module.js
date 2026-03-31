@@ -451,11 +451,32 @@
   let dashboardRenderToken = 0;
 
   function scheduleDashboardHydration(task) {
-    if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-      window.setTimeout(task, CASE_ASYNC_FALLBACK_DELAY_MS);
+    if (typeof task !== 'function') return;
+    var cancelled = false;
+    var frameId = 0;
+    var timerId = 0;
+    var runTask = function () {
+      if (cancelled) return;
+      try {
+        task();
+      } catch (error) {
+        if (typeof window !== 'undefined' && window.__ismsWarn) {
+          window.__ismsWarn('dashboard hydration failed', error);
+        }
+      }
+    };
+    var scheduleTimeout = function () {
+      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        timerId = window.setTimeout(runTask, CASE_DASHBOARD_HYDRATION_IDLE_TIMEOUT_MS);
+        return;
+      }
+      runTask();
+    };
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      frameId = window.requestAnimationFrame(scheduleTimeout);
       return;
     }
-    task();
+    scheduleTimeout();
   }
 
   function renderDashboard() {
