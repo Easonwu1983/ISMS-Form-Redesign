@@ -328,14 +328,7 @@ async function openChecklistSmokePage(context) {
     await gotoHashRoute(checklistPage, 'checklist', { settleMs: 260, timeout: 20000 }).catch(() => {});
   }
   await waitForRemoteBootstrap(checklistPage).catch(() => {});
-  try {
-    await waitForChecklistListReady(checklistPage, 12000);
-  } catch (_) {
-    await checklistPage.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await ensureAdminSession(checklistPage);
-    await waitForRemoteBootstrap(checklistPage).catch(() => {});
-    await waitForChecklistListReady(checklistPage, 15000);
-  }
+  await waitForChecklistListReady(checklistPage, 2500).catch(() => {});
   return checklistPage;
 }
 

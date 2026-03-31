@@ -292,7 +292,7 @@
       var kickerEl = headerEl.querySelector('.header-kicker');
       var integrated = !!HEADER_INTEGRATED_ROUTES[routePage];
       var hasPageHeader = !!pageHeader;
-      var shouldShowHeaderContext = !!titleText && (integrated || !hasPageHeader);
+      var shouldShowHeaderContext = !!titleText && !hasPageHeader;
 
       if (kickerEl) {
         kickerEl.textContent = kickerText;

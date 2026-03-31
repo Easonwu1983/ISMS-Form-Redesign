@@ -177,7 +177,7 @@
 
     function buildAuthorizedScopePicker(baseId, values, placeholder, hint) {
       const selected = parseUnitList(values);
-      const chips = selected.map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '">?</button></span>').join('');
+      const chips = selected.map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '" aria-label="移除 ' + esc(value) + '">×</button></span>').join('');
       return '<div class="unit-chip-picker" data-unit-chip-picker="' + esc(baseId) + '">'
         + '<div class="unit-chip-picker-search">'
         + '<input type="search" class="form-input unit-chip-picker-search-input" id="' + esc(baseId) + '-search" aria-label="搜尋額外授權資源範圍" placeholder="' + esc(placeholder || '請輸入單位名稱') + '" autocomplete="off">'
@@ -203,7 +203,7 @@
         }
       };
       const renderChips = () => {
-        const chips = Array.from(state).map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '">?</button></span>').join('');
+        const chips = Array.from(state).map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '" aria-label="移除 ' + esc(value) + '">×</button></span>').join('');
         chipsEl.innerHTML = chips || '<span class="unit-chip-picker-empty">尚未選擇</span>';
       };
       const renderResults = (query) => {
@@ -220,7 +220,7 @@
           resultsEl.innerHTML = '<div class="unit-chip-picker-empty">找不到符合條件的單位</div>';
           return;
         }
-        resultsEl.innerHTML = matches.map((entry) => '<button type="button" class="unit-cascade-search-option unit-chip-picker-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(entry.category || '') + (entry.code ? ' 繚 ' + entry.code : '') + '</span></button>').join('');
+        resultsEl.innerHTML = matches.map((entry) => '<button type="button" class="unit-cascade-search-option unit-chip-picker-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(entry.category || '') + (entry.code ? ' ／ ' + entry.code : '') + '</span></button>').join('');
       };
       const addValue = (value) => {
         const next = String(value || '').trim();
@@ -769,7 +769,8 @@
           if (submitButton) {
             submitButton.disabled = true;
             submitButton.dataset.originalText = submitButton.innerHTML;
-            submitButton.innerHTML = '?銝?..';
+            submitButton.innerHTML = ic('loader-circle', 'icon-sm') + ' 送出中…';
+            submitButton.setAttribute('aria-busy', 'true');
           }
 
           const uploadedAuthDoc = await submitAttachmentUpload({ file: authDocFile, name: authDocFile.name, type: authDocFile.type }, {
@@ -825,6 +826,7 @@
           if (submitButton) {
             submitButton.disabled = false;
             submitButton.innerHTML = submitButton.dataset.originalText || (ic('send', 'icon-sm') + ' 送出申請');
+            submitButton.removeAttribute('aria-busy');
           }
         }
       });
