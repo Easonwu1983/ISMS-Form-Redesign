@@ -2012,7 +2012,7 @@
     document.getElementById('app').innerHTML = `<div class="animate-in">
       <div class="detail-header"><div>
         <div class="detail-id detail-id-with-copy"><span>${esc(cl.id)} / ${esc(cl.auditYear)} 年</span>${renderCopyIdButton(cl.id, '複製編號')}</div>
-        <h1 class="detail-title">檢核明細 / ${esc(cl.unit)}</h1>
+        <h1 class="detail-title">內稽檢核表 / ${esc(cl.unit)}</h1>
         <div class="detail-meta"><span class="detail-meta-item"><span class="detail-meta-icon">${ic('user', 'icon-xs')}</span>${esc(cl.fillerName)}</span><span class="detail-meta-item"><span class="detail-meta-icon">${ic('calendar', 'icon-xs')}</span>${fmt(cl.fillDate)}</span><span class="badge ${statusCls}"><span class="badge-dot"></span>${esc(cl.status)}</span></div>
       </div><a href="#checklist" class="btn btn-secondary">返回列表</a></div>
       <div class="panel-grid-two panel-grid-spaced">
