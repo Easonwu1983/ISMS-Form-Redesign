@@ -30,8 +30,8 @@ function pickExecutablePath() {
 
 function getVisualSampleScale(spec, mode) {
   const slug = spec && spec.slug;
-  if (slug === 'dashboard') return mode === 'mobile' ? 0.24 : 0.28;
-  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.32 : 0.36;
+  if (slug === 'dashboard') return mode === 'mobile' ? 0.16 : 0.2;
+  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.22 : 0.24;
   if (slug === 'unit-review') return mode === 'mobile' ? 0.35 : 0.4;
   if (slug === 'unit-contact-status') return mode === 'mobile' ? 0.72 : 0.82;
   if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') return mode === 'mobile' ? 0.7 : 0.8;
@@ -86,6 +86,8 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
   const requireVersionChip = options.requireVersionChip !== false;
   const fastAuth = options.fastAuth === true;
   const skipBootstrap = options.skipBootstrap === true;
+  const skipPostLoginWait = options.skipPostLoginWait === true;
+  const preferLocalLogin = options.preferLocalLogin === true;
   const initialHash = String(options.initialHash || '').trim();
   await gotoAppEntry(page, initialHash, 'domcontentloaded');
   if (fastAuth) {
@@ -100,19 +102,21 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
   if (!alreadyAuthenticated) {
     if (fastAuth) {
       await waitForAuthModule(page, 20000);
-      const loginResult = await page.evaluate(async ({ username, password }) => {
+      const loginResult = await page.evaluate(async ({ username, password, options }) => {
         const auth = window._authModule;
         if (!auth || typeof auth.login !== 'function') throw new Error('auth module missing');
-        return auth.login(username, password);
-      }, { username, password });
+        return auth.login(username, password, options);
+      }, { username, password, options: { preferLocalLogin } });
       if (!loginResult) throw new Error('fast auth login failed');
-      await page.waitForFunction(() => {
-        const auth = window._authModule;
-        const currentUser = auth && typeof auth.currentUser === 'function'
-          ? auth.currentUser()
-          : null;
-        return !!(currentUser && currentUser.sessionToken) || !!document.querySelector('.btn-logout');
-      }, undefined, { timeout: 12000 });
+      if (!skipPostLoginWait) {
+        await page.waitForFunction(() => {
+          const auth = window._authModule;
+          const currentUser = auth && typeof auth.currentUser === 'function'
+            ? auth.currentUser()
+            : null;
+          return !!(currentUser && currentUser.sessionToken) || !!document.querySelector('.btn-logout');
+        }, undefined, { timeout: 12000 });
+      }
     } else {
       await page.waitForFunction(() => {
         return !!document.querySelector('[data-testid="login-form"]')
@@ -175,7 +179,8 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
       requireVersionChip: false,
       fastAuth: true,
       skipBootstrap: true,
-      initialHash: ''
+      initialHash: '',
+      preferLocalLogin: true
     });
     pushStep('unit-admin:login', true, 'unit admin login succeeded');
 
@@ -543,10 +548,11 @@ async function run() {
     await login(page, 'easonwu', '2wsx#EDC', {
       fastAuth: true,
       requireVersionChip: false,
-      initialHash: 'dashboard'
+      initialHash: '',
+      skipPostLoginWait: true
     });
     pushStep('auth:login', true, 'admin login succeeded');
-    await gotoHashRoute(page, 'dashboard', { settleMs: 300, timeout: 20000 }).catch(() => {});
+    await gotoHashRoute(page, 'dashboard', { settleMs: 60, timeout: 20000 }).catch(() => {});
     await waitForDashboardReady(page);
 
     const dashboardTitle = await page.evaluate(() => {

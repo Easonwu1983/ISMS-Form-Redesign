@@ -402,6 +402,36 @@
       return card;
     }
 
+    function buildApplySideContent() {
+      return ''
+        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請步驟</div>'
+        + buildStepCard('1. 下載同意書', '先下載主管授權同意書，請主管簽章後再進行申請。')
+        + buildStepCard('2. 填寫資料', '填入主要歸屬單位與額外授權資源範圍，確保權限範圍清楚。')
+        + buildStepCard('3. 上傳送出', '上傳簽章文件並送出，審核通過後即可啟用帳號。')
+        + '</div>'
+        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 申請提醒</div>'
+        + '<ul class="unit-contact-checklist">'
+        + '<li>主要歸屬單位決定帳號主視角。</li>'
+        + '<li>額外授權資源範圍用於跨單位兼辦。</li>'
+        + '<li>授權同意書為必填附件。</li>'
+        + '<li>審核通過後會直接啟用並寄送登入資訊。</li>'
+        + '</ul></div>';
+    }
+
+    function buildApplyCoreContent() {
+      return ''
+        + '<div class="form-row unit-contact-compact-row">'
+        + '<div class="form-group"><label class="form-label form-required" for="uca-name">申請人姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入申請人姓名" aria-describedby="uca-name-error" required><div class="form-error-message" id="uca-name-error" hidden></div></div>'
+        + '<div class="form-group"><label class="form-label form-required" for="uca-extension">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" aria-describedby="uca-extension-error" required><div class="form-error-message" id="uca-extension-error" hidden></div></div>'
+        + '</div>'
+        + '<div class="form-row unit-contact-compact-row">'
+        + '<div class="form-group"><label class="form-label form-required" for="uca-email">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="例如 ntu.edu.tw 的信箱或 Gmail" aria-describedby="uca-email-help uca-email-error" required><div class="form-hint" id="uca-email-help">請輸入可正常收信的電子郵件地址。</div><div class="form-error-message" id="uca-email-error" hidden></div></div>'
+        + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充職稱、代理原因或其他說明"></div></div>'
+        + '<div class="form-group unit-contact-security-role-group" data-unit-contact-role-group><label class="form-label form-required">資安角色</label>'
+        + '<div class="unit-contact-security-role-shell" data-unit-contact-role-shell><div class="unit-contact-picker-loading">載入資安角色選項…</div></div>'
+        + '<div class="form-hint" id="uca-security-role-help">若同時為一、二級單位資安窗口請複選，至少勾選一項。</div><div class="form-error-message" id="uca-security-role-error" hidden></div></div>';
+    }
+
     async function openAuthorizationDocumentPreview(applicationId, email, options) {
       const response = await requestUnitContactAuthorizationDocument(applicationId, {
         email: email || "",
@@ -659,34 +689,14 @@
         + '<div class="form-group"><label class="form-label">額外授權資源範圍（可複選）</label>'
         + '<div class="unit-contact-authorized-scope-shell" data-unit-contact-authorized-scope-shell><div class="unit-contact-picker-loading">載入額外授權資源範圍…</div></div>'
         + '</div>'
-        + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required" for="uca-name">申請人姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入申請人姓名" aria-describedby="uca-name-error" required><div class="form-error-message" id="uca-name-error" hidden></div></div>'
-        + '<div class="form-group"><label class="form-label form-required" for="uca-extension">分機</label><input type="text" class="form-input" id="uca-extension" data-testid="unit-contact-extension" placeholder="例如 61234 或 3366" aria-describedby="uca-extension-error" required><div class="form-error-message" id="uca-extension-error" hidden></div></div>'
-        + '</div>'
-        + '<div class="form-row unit-contact-compact-row">'
-        + '<div class="form-group"><label class="form-label form-required" for="uca-email">申請電子郵件</label><input type="email" class="form-input" id="uca-email" data-testid="unit-contact-email" placeholder="例如 ntu.edu.tw 的信箱或 Gmail" aria-describedby="uca-email-help uca-email-error" required><div class="form-hint" id="uca-email-help">請輸入可正常收信的電子郵件地址。</div><div class="form-error-message" id="uca-email-error" hidden></div></div>'
-        + '<div class="form-group"><label class="form-label">備註</label><input type="text" class="form-input" id="uca-note" data-testid="unit-contact-note" placeholder="可補充職稱、代理原因或其他說明"></div></div>'
-        + '<div class="form-group unit-contact-security-role-group" data-unit-contact-role-group><label class="form-label form-required">資安角色</label>'
-        + buildSecurityRoleCheckboxes([])
-        + '<div class="form-hint" id="uca-security-role-help">若同時為一、二級單位資安窗口請複選，至少勾選一項。</div><div class="form-error-message" id="uca-security-role-error" hidden></div></div>'
+        + '<div class="unit-contact-core-shell" data-unit-contact-core-shell><div class="unit-contact-picker-loading">基本欄位載入中…</div></div>'
         + '<div class="form-actions">'
-        + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit">' + ic('send', 'icon-sm') + ' 送出申請</button>'
+        + '<button type="submit" class="btn btn-primary" data-testid="unit-contact-submit" disabled>' + ic('send', 'icon-sm') + ' 送出申請</button>'
         + '<a class="btn btn-ghost" href="#apply-unit-contact-status">查詢進度</a>'
         + '</div>'
         + '</form></div></div>'
-        + '<section class="unit-contact-side" aria-label="申請說明">'
-        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('route', 'icon-sm') + ' 申請步驟</div>'
-        + buildStepCard('1. 下載同意書', '先下載主管授權同意書，請主管簽章後再進行申請。')
-        + buildStepCard('2. 填寫資料', '填入主要歸屬單位與額外授權資源範圍，確保權限範圍清楚。')
-        + buildStepCard('3. 上傳送出', '上傳簽章文件並送出，審核通過後即可啟用帳號。')
-        + '</div>'
-        + '<div class="card unit-contact-side-card"><div class="section-header">' + ic('sparkles', 'icon-sm') + ' 申請提醒</div>'
-        + '<ul class="unit-contact-checklist">'
-        + '<li>主要歸屬單位決定帳號主視角。</li>'
-        + '<li>額外授權資源範圍用於跨單位兼辦。</li>'
-        + '<li>授權同意書為必填附件。</li>'
-        + '<li>審核通過後會直接啟用並寄送登入資訊。</li>'
-        + '</ul></div>'
+        + '<section class="unit-contact-side" aria-label="申請說明" data-unit-contact-side-shell>'
+        + '<div class="unit-contact-side-loading">申請說明載入中…</div>'
         + '</section></div></section>';
 
       let authorizedScopePicker = null;
@@ -695,7 +705,25 @@
       scheduleUnitContactPostPaint(function () {
         ensureUnitCascadeControl();
         authorizedScopePicker = ensureAuthorizedScopePicker() || authorizedScopePicker;
+        const coreShell = document.querySelector('[data-unit-contact-core-shell]');
+        if (coreShell && !coreShell.dataset.hydrated) {
+          coreShell.innerHTML = buildApplyCoreContent();
+          coreShell.dataset.hydrated = '1';
+        }
         ensureAuthorizationDocumentSection(form);
+        const roleShell = document.querySelector('[data-unit-contact-role-shell]');
+        if (roleShell && !roleShell.dataset.hydrated) {
+          roleShell.innerHTML = buildSecurityRoleCheckboxes([]);
+          roleShell.dataset.hydrated = '1';
+        }
+        const sideShell = document.querySelector('[data-unit-contact-side-shell]');
+        if (sideShell && !sideShell.dataset.hydrated) {
+          sideShell.innerHTML = buildApplySideContent();
+          sideShell.dataset.hydrated = '1';
+        }
+        if (submitButton && submitButton.disabled) {
+          submitButton.disabled = false;
+        }
         document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
           input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
         });

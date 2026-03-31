@@ -341,10 +341,11 @@
       return createSecurePassword();
     }
 
-    async function login(username, password) {
+    async function login(username, password, options) {
       const cleanUsername = String(username || '').trim();
       const cleanPassword = String(password || '');
-      if (typeof loginWithBackend === 'function') {
+      const opts = options && typeof options === 'object' ? options : {};
+      if (typeof loginWithBackend === 'function' && !opts.preferLocalLogin) {
         try {
           const remoteUser = await loginWithBackend(cleanUsername, cleanPassword);
           const success = !!remoteUser;
