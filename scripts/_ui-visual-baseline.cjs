@@ -52,7 +52,10 @@ const VISUAL_SYNTHETIC_STABILIZE_MS = 20;
 
 function isSyntheticRootVisualSpec(spec) {
   const slug = spec && spec.slug;
-  return slug === 'dashboard' || slug === 'unit-contact-apply' || slug === 'unit-contact-status';
+  return slug === 'dashboard'
+    || slug === 'unit-contact-apply'
+    || slug === 'unit-contact-status'
+    || slug === 'unit-review';
 }
 
 function isBaseRootPage(url, baseUrl) {
@@ -739,21 +742,30 @@ async function captureVisualSpec(page, baseUrl, spec, outputPath, mode) {
     await seedSyntheticUnitReview(page);
   }
   if (spec && spec.selector) {
-    if (spec.slug === 'unit-review') {
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        await page.waitForSelector(spec.selector, { timeout: 2500 });
-      } catch (_) {
-        await seedSyntheticUnitReview(page);
-        await page.waitForSelector(spec.selector, { timeout: 5000 });
+        if (spec.slug === 'unit-review') {
+          try {
+            await page.waitForSelector(spec.selector, { timeout: 2500 });
+          } catch (_) {
+            await seedSyntheticUnitReview(page);
+            await page.waitForSelector(spec.selector, { timeout: 5000 });
+          }
+        } else {
+          await page.waitForSelector(spec.selector, { timeout: 5000 });
+        }
+        await page.locator(spec.selector).first().screenshot({
+          path: outputPath,
+          animations: 'disabled'
+        });
+        return;
+      } catch (error) {
+        lastError = error;
+        await page.waitForTimeout(150);
       }
-    } else {
-      await page.waitForSelector(spec.selector, { timeout: 5000 });
     }
-    await page.locator(spec.selector).first().screenshot({
-      path: outputPath,
-      animations: 'disabled'
-    });
-    return;
+    throw lastError;
   }
   const options = spec.clip
     ? { path: outputPath, clip: spec.clip }

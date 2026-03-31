@@ -32,7 +32,7 @@ function getVisualSampleScale(spec, mode) {
   const slug = spec && spec.slug;
   if (slug === 'dashboard') return mode === 'mobile' ? 0.42 : 0.44;
   if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.5 : 0.56;
-  if (slug === 'unit-review') return mode === 'mobile' ? 0.5 : 0.5;
+  if (slug === 'unit-review') return mode === 'mobile' ? 0.35 : 0.4;
   if (slug === 'unit-contact-status') return mode === 'mobile' ? 0.72 : 0.82;
   if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') return mode === 'mobile' ? 0.7 : 0.8;
   return 1;
