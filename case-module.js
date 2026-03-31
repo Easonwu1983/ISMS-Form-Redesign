@@ -256,16 +256,21 @@
       }
       snapshot.recent.push({
         item: item,
-        lastActivity: getCaseLastActivityTime(item)
+        sortTime: getDashboardRecentSortTime(item)
       });
     });
     snapshot.recent.sort(function (a, b) {
       var aClosed = a.item && a.item.status === STATUSES.CLOSED ? 1 : 0;
       var bClosed = b.item && b.item.status === STATUSES.CLOSED ? 1 : 0;
       if (aClosed !== bClosed) return aClosed - bClosed;
-      return b.lastActivity - a.lastActivity;
+      return (b.sortTime || 0) - (a.sortTime || 0);
     });
-    snapshot.recent = snapshot.recent.slice(0, 5);
+    snapshot.recent = snapshot.recent.slice(0, 5).map(function (entry) {
+      return {
+        item: entry.item,
+        lastActivity: getCaseLastActivityTime(entry.item)
+      };
+    });
     return snapshot;
   }
 
@@ -407,6 +412,24 @@
   function formatCaseLastActivity(item) {
     var last = getCaseLastActivityTime(item);
     return last ? fmtTime(new Date(last).toISOString()) : '—';
+  }
+
+  function getDashboardRecentSortTime(item) {
+    if (!item) return 0;
+    var candidates = [
+      item.updatedAt,
+      item.createdAt,
+      item.closedDate,
+      item.reviewDate,
+      item.handlerDate,
+      item.correctiveDueDate,
+      item.pendingTracking && item.pendingTracking.submittedAt,
+      item.pendingTracking && item.pendingTracking.reviewedAt,
+      item.pendingTracking && item.pendingTracking.nextTrackDate
+    ];
+    return candidates.reduce(function (max, value) {
+      return Math.max(max, toTimestamp(value));
+    }, 0);
   }
 
   function getDashboardStatusBucket(item) {
