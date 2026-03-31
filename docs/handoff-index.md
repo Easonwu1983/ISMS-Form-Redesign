@@ -1,10 +1,16 @@
-﻿# 接手入口
+# 接手入口
 
 - 先認拓樸：[production-topology.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/production-topology.md)
 - 先看 [boot-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/boot-checklist.md)
 - 校內 VM 更新看 [vm-migration-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/vm-migration-checklist.md)
 - 只有異常時才看 [fast-redeploy-runbook.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/fast-redeploy-runbook.md)
 - 發佈或回滾看 [release-and-rollback.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/release-and-rollback.md)
+
+## 三份最常用文件
+
+1. [只留可執行步驟](./operational-steps-only.md)
+2. [切帳號交接版](./account-handoff-checklist.md)
+3. [上版前必看版](./pre-release-must-read.md)
 
 ## 固定快路徑
 
@@ -34,17 +40,16 @@
 
 ## 目前正式鏈熱點
 
-以 `logs/formal-production/latest-release-report.md` 為準，2026-03-31 這輪主要還剩：
+以 `logs/formal-production/latest-release-report.md` 為準，先盯：
 
 - `visual:desktop:dashboard`
 - `visual:desktop:unit-review`
-- `landing:login-form`
 - `checklist:list-loaded`
 - `visual:public-desktop:unit-contact-apply`
+- `unit-admin:login`
 
 次要熱點：
 
-- `unit-admin:login`
 - `unit-admin:api-scope`
 - `audit-trail:loaded`
 
@@ -62,3 +67,4 @@ API warm-state 目前狀態：
 - 純前端變更不需要重啟 `isms-unit-contact-backend.service` 或 `caddy.service`；多餘重啟只會增加噪音。
 - repo 內長期存在很多未追蹤暫存檔，只要 `git status --short` 沒有 tracked 變更，就不要浪費時間處理它們。
 - `styles.min.css`、`styles.purged.min.css` 是正常建置產物；如果它們是本輪 build 產生的，不要誤判成衝突。
+
