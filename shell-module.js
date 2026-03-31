@@ -228,8 +228,8 @@
       return '<div class="app-transition-overlay" id="app-transition-overlay" aria-hidden="true">' +
         '<div class="app-transition-shell">' +
         '<div class="app-transition-icon">' + ntuLogo('ntu-logo-sm') + '</div>' +
-        '<div class="app-transition-title">甇?頛蝟餌絞</div>' +
-        '<div class="app-transition-subtitle">?餃??嚗迤?典???銵冽??/div>' +
+        '<div class="app-transition-title">正在登入系統</div>' +
+        '<div class="app-transition-subtitle">請稍候，正在同步登入狀態與頁面權限。</div>' +
         '</div></div>';
     }
 
