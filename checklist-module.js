@@ -1179,6 +1179,7 @@
     let snapshot;
     let viewSnapshot;
     let remotePage = null;
+    let remotePagePromise = null;
     let listSummary;
     let remoteSummary = null;
     let renderedSummarySignature = '';
@@ -1193,7 +1194,44 @@
       remoteSummary = opts.skipRemoteSummary
         ? null
         : readChecklistRemoteSummary(remoteFilters, !!opts.forceRemoteSummary);
-      const remotePageResult = await loadChecklistRemotePage(remoteFilters, { force: !!opts.forceRemotePage });
+      const shellItems = localSnapshot.items;
+      const shellSnapshot = localSnapshot;
+      const shellViewSnapshot = getChecklistListViewSnapshot(shellSnapshot.items);
+      const shellSummary = normalizeChecklistRemoteSummary(
+        remoteSummary || checklistRemotePageState.summary || null,
+        checklistRemotePageState.total || shellSnapshot.items.length
+      );
+      const shellPage = normalizeChecklistRemotePage(null, remoteFilters, shellItems, shellSnapshot.items.length);
+      checklists = shellItems;
+      snapshot = shellSnapshot;
+      viewSnapshot = shellViewSnapshot;
+      listSummary = shellSummary;
+      remotePage = shellPage;
+      renderedSummarySignature = serializeChecklistRemoteSummary(shellSummary);
+      const shellFillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
+      document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
+      <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報內容，可快速搜尋填報人員與單位狀態。</p></div><div class="page-header-actions">${shellFillBtn}</div></div>
+      <div class="card cl-list-shell" data-checklist-route="list" data-checklist-route-state="shell">
+        <div class="cl-list-toolbar-wrap">
+          ${buildChecklistListFilters()}
+          <div class="cl-year-tabs-shell">
+          <div class="cl-year-tabs-label">年份頁籤</div>
+          ${buildChecklistListYearTabs(years)}
+        </div>
+        </div>
+        ${renderChecklistListSummary(shellSummary)}
+        ${renderChecklistListPager(shellPage)}
+        <div class="cl-list-content" data-checklist-route="list" data-checklist-route-state="shell"><div class="cl-list-loading-shell">資料載入中…</div></div>
+      </div>
+    </div>`;
+      renderChecklistListContent(shellItems, shellSnapshot, shellViewSnapshot);
+      syncChecklistListToolbarState();
+      refreshIcons();
+      bindCopyButtons();
+      remotePagePromise = prefetchedRemotePageResult
+        ? Promise.resolve(prefetchedRemotePageResult)
+        : loadChecklistRemotePage(remoteFilters, { force: !!opts.forceRemotePage });
+      const remotePageResult = await remotePagePromise;
       checklistRemotePageState = {
         filters: remotePageResult.filters,
         page: remotePageResult.page,

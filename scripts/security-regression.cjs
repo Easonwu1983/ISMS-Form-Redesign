@@ -177,7 +177,7 @@ async function waitForDetailShell(page, routeHash, selector, detailId) {
 async function ensureAdminRouteReady(page, routeHash, selector, options) {
   const opts = options && typeof options === 'object' ? options : {};
   const timeout = Math.max(1000, Number(opts.timeout) || 20000);
-  const waitAfterNavMs = Math.max(0, Number(opts.waitAfterNavMs) || 450);
+  const waitAfterNavMs = Math.max(0, Number(opts.waitAfterNavMs) || 160);
   const normalizedHash = String(routeHash || '').replace(/^#/, '');
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (attempt > 0) {
@@ -188,7 +188,7 @@ async function ensureAdminRouteReady(page, routeHash, selector, options) {
       await page.waitForTimeout(waitAfterNavMs);
     } else {
       await page.goto(`${BASE_URL}/#${normalizedHash}`, { waitUntil: 'domcontentloaded', timeout });
-      await page.waitForTimeout(220);
+      await page.waitForTimeout(120);
     }
     try {
       await page.waitForFunction(({ targetHash, targetSelector }) => {
@@ -202,7 +202,7 @@ async function ensureAdminRouteReady(page, routeHash, selector, options) {
     } catch (error) {
       if (attempt === 2) throw error;
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout });
-      await page.waitForTimeout(180);
+      await page.waitForTimeout(100);
     }
   }
   return false;
@@ -573,7 +573,7 @@ async function assertNoXssExecution(page, label) {
           break;
         } catch (error) {
           if (attempt === 1) throw error;
-          await page.waitForTimeout(250);
+          await page.waitForTimeout(120);
         }
       }
       if (!governanceReady) {
