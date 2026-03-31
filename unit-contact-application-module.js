@@ -676,7 +676,6 @@
         + '</ul></div>'
         + '</section></div></section>';
 
-      initUnitCascade('uca-unit', '', { disabled: false, registerCleanup: registerUnitContactPageCleanup });
       let authorizedScopePicker = null;
       document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
         input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');

@@ -160,6 +160,28 @@
       }
     }
 
+    function queueLoginLog(username, user, success) {
+      if (typeof window !== 'undefined' && typeof window.queueMicrotask === 'function') {
+        window.queueMicrotask(function () {
+          try {
+            addLoginLog(username, user, success);
+          } catch (_) {}
+        });
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        window.setTimeout(function () {
+          try {
+            addLoginLog(username, user, success);
+          } catch (_) {}
+        }, 0);
+        return;
+      }
+      try {
+        addLoginLog(username, user, success);
+      } catch (_) {}
+    }
+
     function writeAuthSession(user, options) {
       const opts = options && typeof options === 'object' ? options : {};
       const normalized = user ? normalizeUserRecord(user) : null;
@@ -310,20 +332,28 @@
         try {
           const remoteUser = await loginWithBackend(cleanUsername, cleanPassword);
           const success = !!remoteUser;
-          addLoginLog(cleanUsername, remoteUser, success);
-          if (!success) return null;
-          return writeAuthSession(remoteUser, { notify: true, reason: 'login' });
+          if (!success) {
+            queueLoginLog(cleanUsername, null, false);
+            return null;
+          }
+          const session = writeAuthSession(remoteUser, { notify: true, reason: 'login' });
+          queueLoginLog(cleanUsername, remoteUser, true);
+          return session;
         } catch (error) {
-          addLoginLog(cleanUsername, null, false);
+          queueLoginLog(cleanUsername, null, false);
           throw error;
         }
       }
 
       const user = findUser(cleanUsername);
       const success = !!(user && await verifyLocalPassword(user, cleanPassword));
-      addLoginLog(cleanUsername, user, success);
-      if (!success) return null;
-      return writeAuthSession(user, { notify: true, reason: 'login' });
+      if (!success) {
+        queueLoginLog(cleanUsername, user, false);
+        return null;
+      }
+      const session = writeAuthSession(user, { notify: true, reason: 'login' });
+      queueLoginLog(cleanUsername, user, true);
+      return session;
     }
 
     async function logout() {

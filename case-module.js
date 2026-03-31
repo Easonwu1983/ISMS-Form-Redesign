@@ -440,10 +440,6 @@
   let dashboardRenderToken = 0;
 
   function scheduleDashboardHydration(task) {
-    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(task, { timeout: CASE_DASHBOARD_HYDRATION_IDLE_TIMEOUT_MS });
-      return;
-    }
     if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
       window.setTimeout(task, CASE_ASYNC_FALLBACK_DELAY_MS);
       return;

@@ -1021,6 +1021,23 @@
       });
     }
 
+    function queueLoginLog(username, user, success) {
+      const run = function () {
+        try {
+          addLoginLog(username, user, success);
+        } catch (_) {}
+      };
+      if (typeof window !== 'undefined' && typeof window.queueMicrotask === 'function') {
+        window.queueMicrotask(run);
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+        window.setTimeout(run, 0);
+        return;
+      }
+      run();
+    }
+
     function clearLoginLogs() {
       removeCachedJson(LOGIN_LOG_KEY);
     }

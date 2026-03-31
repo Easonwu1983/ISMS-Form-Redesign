@@ -1223,6 +1223,9 @@
     let listSummary;
     let remoteSummary = null;
     let renderedSummarySignature = '';
+    const shouldDeferChecklistView = !String(checklistBrowseState.keyword || '').trim()
+      && String(checklistBrowseState.status || 'all') === 'all'
+      && String(checklistBrowseState.year || 'all') === 'all';
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     const renderListShell = (summary, page) => {
       document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
@@ -1260,7 +1263,6 @@
         : readChecklistRemoteSummary(remoteFilters, !!opts.forceRemoteSummary);
       const shellItems = localSnapshot.items;
       const shellSnapshot = localSnapshot;
-      const shellViewSnapshot = getChecklistListViewSnapshot(shellSnapshot.items);
       const shellSummary = normalizeChecklistRemoteSummary(
         remoteSummary || checklistRemotePageState.summary || null,
         checklistRemotePageState.total || shellSnapshot.items.length
@@ -1268,7 +1270,6 @@
       const shellPage = normalizeChecklistRemotePage(null, remoteFilters, shellItems, shellSnapshot.items.length);
       checklists = shellItems;
       snapshot = shellSnapshot;
-      viewSnapshot = shellViewSnapshot;
       listSummary = shellSummary;
       remotePage = shellPage;
       renderedSummarySignature = serializeChecklistRemoteSummary(shellSummary);
@@ -1277,6 +1278,7 @@
       scheduleChecklistPostPaint(() => {
         if (renderGeneration !== checklistListRenderGeneration) return;
         if (!String(window.location.hash || '').startsWith('#checklist')) return;
+        const shellViewSnapshot = getChecklistListViewSnapshot(shellSnapshot.items);
         renderChecklistListContent(shellItems, shellSnapshot, shellViewSnapshot);
         syncChecklistListToolbarState();
         refreshIcons();
@@ -1312,20 +1314,36 @@
       });
     } else {
       snapshot = localSnapshot;
-      viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
       checklists = snapshot.items;
-      listSummary = summarizeChecklistListItems(viewSnapshot.filtered);
-      renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
-      renderListShell(listSummary, null);
-      setChecklistListRouteState('ready');
-      scheduleChecklistPostPaint(() => {
-        if (renderGeneration !== checklistListRenderGeneration) return;
-        if (!String(window.location.hash || '').startsWith('#checklist')) return;
-        renderChecklistListContent(checklists, snapshot, viewSnapshot);
-        syncChecklistListToolbarState();
-        refreshIcons();
-        bindCopyButtons();
-      }, 0);
+      if (shouldDeferChecklistView) {
+        listSummary = summarizeChecklistListItems(snapshot.items);
+        renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
+        renderListShell(listSummary, null);
+        setChecklistListRouteState('ready');
+        scheduleChecklistPostPaint(() => {
+          if (renderGeneration !== checklistListRenderGeneration) return;
+          if (!String(window.location.hash || '').startsWith('#checklist')) return;
+          const localViewSnapshot = getChecklistListViewSnapshot(snapshot.items);
+          renderChecklistListContent(checklists, snapshot, localViewSnapshot);
+          syncChecklistListToolbarState();
+          refreshIcons();
+          bindCopyButtons();
+        }, 0);
+      } else {
+        viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
+        listSummary = summarizeChecklistListItems(viewSnapshot.filtered);
+        renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
+        renderListShell(listSummary, null);
+        setChecklistListRouteState('ready');
+        scheduleChecklistPostPaint(() => {
+          if (renderGeneration !== checklistListRenderGeneration) return;
+          if (!String(window.location.hash || '').startsWith('#checklist')) return;
+          renderChecklistListContent(checklists, snapshot, viewSnapshot);
+          syncChecklistListToolbarState();
+          refreshIcons();
+          bindCopyButtons();
+        }, 0);
+      }
     }
     if (!opts.skipSync && !useRemoteList && syncPromise && typeof syncPromise.then === 'function') {
       syncPromise.then(() => {
