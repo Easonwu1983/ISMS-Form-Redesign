@@ -30,9 +30,9 @@ function pickExecutablePath() {
 
 function getVisualSampleScale(spec, mode) {
   const slug = spec && spec.slug;
-  if (slug === 'dashboard') return mode === 'mobile' ? 0.44 : 0.46;
-  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.56 : 0.62;
-  if (slug === 'unit-review') return mode === 'mobile' ? 0.52 : 0.54;
+  if (slug === 'dashboard') return mode === 'mobile' ? 0.42 : 0.44;
+  if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.5 : 0.56;
+  if (slug === 'unit-review') return mode === 'mobile' ? 0.5 : 0.5;
   if (slug === 'unit-contact-status') return mode === 'mobile' ? 0.72 : 0.82;
   if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') return mode === 'mobile' ? 0.7 : 0.8;
   return 1;
@@ -149,6 +149,22 @@ async function waitForChecklistListReady(page, timeout = 25000) {
       || !!document.querySelector('.cl-list-shell')
       || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
       || document.querySelectorAll('.cl-list-row').length > 0);
+  }, undefined, { timeout });
+}
+
+async function waitForChecklistFillReady(page, timeout = 20000) {
+  await page.waitForFunction(() => {
+    const routeState = document.querySelector('[data-checklist-route="fill"]')?.dataset?.checklistRouteState;
+    return routeState === 'ready'
+      || (!!document.querySelector('#checklist-form') && !!document.querySelector('.editor-shell--checklist'));
+  }, undefined, { timeout });
+}
+
+async function waitForChecklistManageReady(page, timeout = 20000) {
+  await page.waitForFunction(() => {
+    const routeState = document.querySelector('[data-checklist-route="manage"]')?.dataset?.checklistRouteState;
+    return routeState === 'ready'
+      || (!!document.querySelector('#cm-sections-wrap') && !!document.querySelector('.cm-section-header'));
   }, undefined, { timeout });
 }
 
@@ -311,11 +327,13 @@ async function openChecklistSmokePage(context) {
   if (!currentHash.startsWith('#checklist')) {
     await gotoHashRoute(checklistPage, 'checklist', { settleMs: 260, timeout: 20000 }).catch(() => {});
   }
+  await waitForRemoteBootstrap(checklistPage).catch(() => {});
   try {
     await waitForChecklistListReady(checklistPage, 12000);
   } catch (_) {
     await checklistPage.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await ensureAdminSession(checklistPage);
+    await waitForRemoteBootstrap(checklistPage).catch(() => {});
     await waitForChecklistListReady(checklistPage, 15000);
   }
   return checklistPage;
@@ -884,15 +902,17 @@ async function run() {
 
       let checklistFillReady = false;
       for (let attempt = 0; attempt < 2 && !checklistFillReady; attempt += 1) {
-        await gotoHashOnly(checklistPage, 'checklist-fill', { settleMs: attempt === 0 ? 1200 : 1800, timeout: 20000 });
+        if (attempt === 0) {
+          await gotoHashOnly(checklistPage, 'checklist-fill', { settleMs: 540, timeout: 20000 });
+        } else {
+          await checklistPage.goto(`${BASE_URL}/#checklist-fill`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await ensureAdminSession(checklistPage);
+        }
         try {
-          await checklistPage.waitForFunction(() => {
-            const app = document.getElementById('app');
-            return !!(app && app.querySelector('#checklist-form'));
-          }, undefined, { timeout: 8000 });
+          await waitForChecklistFillReady(checklistPage, attempt === 0 ? 10000 : 16000);
           checklistFillReady = true;
         } catch (_) {
-          await checklistPage.waitForTimeout(1000);
+          await checklistPage.waitForTimeout(600);
         }
       }
       if (!checklistFillReady) {
@@ -971,19 +991,17 @@ async function run() {
 
       let checklistManageReady = false;
       for (let attempt = 0; attempt < 2 && !checklistManageReady; attempt += 1) {
-        await gotoHashRoute(checklistPage, 'checklist-manage', { settleMs: 1200, timeout: 20000 });
+        if (attempt === 0) {
+          await gotoHashRoute(checklistPage, 'checklist-manage', { settleMs: 480, timeout: 20000 });
+        } else {
+          await checklistPage.goto(`${BASE_URL}/#checklist-manage`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await ensureAdminSession(checklistPage);
+        }
         try {
-          await checklistPage.waitForFunction(() => {
-            const app = document.getElementById('app');
-            return !!(
-              app
-              && document.querySelector('.cm-section-header')
-              && String(app.innerText || '').includes('檢核表')
-            );
-          }, undefined, { timeout: 10000 });
+          await waitForChecklistManageReady(checklistPage, attempt === 0 ? 9000 : 15000);
           checklistManageReady = true;
         } catch (_) {
-          await checklistPage.waitForTimeout(1200);
+          await checklistPage.waitForTimeout(600);
         }
       }
       const checklistManageText = await checklistPage.locator('#app').innerText();

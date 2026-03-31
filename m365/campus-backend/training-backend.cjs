@@ -130,6 +130,14 @@ function createTrainingRouter(deps) {
       : value;
   }
 
+  function createTrainingJsonResponse(body) {
+    return {
+      status: 200,
+      jsonBody: body,
+      jsonPayload: JSON.stringify(body)
+    };
+  }
+
   function trimQueryCache(cache, maxEntries) {
     const target = cache instanceof Map ? cache : null;
     const safeMaxEntries = Math.max(1, Number(maxEntries) || 12);
@@ -621,39 +629,53 @@ function createTrainingRouter(deps) {
   }
 
   function readFormsSummaryCache(cacheKey) {
-    if (!(state.formsSummaryCache instanceof Map)) return { body: null, reason: 'disabled' };
-    if (!cacheKey) return { body: null, reason: 'empty-key' };
-    if (!state.formsSummaryCache.has(cacheKey)) return { body: null, reason: 'missing' };
+    if (!(state.formsSummaryCache instanceof Map)) return { body: null, response: null, reason: 'disabled' };
+    if (!cacheKey) return { body: null, response: null, reason: 'empty-key' };
+    if (!state.formsSummaryCache.has(cacheKey)) return { body: null, response: null, reason: 'missing' };
     const cached = state.formsSummaryCache.get(cacheKey);
     if (!cached || typeof cached !== 'object' || !cached.body) {
       state.formsSummaryCache.delete(cacheKey);
-      return { body: null, reason: 'invalid' };
+      return { body: null, response: null, reason: 'invalid' };
     }
     if (Number(cached.cacheAt || 0) !== Number(state.formsCacheAt || 0)) {
       state.formsSummaryCache.delete(cacheKey);
-      return { body: null, reason: 'cache-version-mismatch' };
+      return { body: null, response: null, reason: 'cache-version-mismatch' };
     }
     if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_FORMS_SUMMARY_CACHE_MS) {
       state.formsSummaryCache.delete(cacheKey);
-      return { body: null, reason: 'expired' };
+      return { body: null, response: null, reason: 'expired' };
     }
     state.formsSummaryCache.delete(cacheKey);
     state.formsSummaryCache.set(cacheKey, cached);
     return {
       body: cloneJson(cached.body),
+      response: cached.response || null,
       reason: 'hit'
     };
   }
 
   function writeFormsSummaryCache(cacheKey, body) {
     if (!(state.formsSummaryCache instanceof Map) || !cacheKey) return cloneJson(body);
+    const cachedBody = cloneJson(body);
+    const cachedHitBody = cloneJson(cachedBody);
+    if (cachedHitBody && cachedHitBody.cache) {
+      cachedHitBody.cache = {
+        ...cachedHitBody.cache,
+        query: 'hit',
+        summaryOnly: true,
+        reason: cachedHitBody.cache.reason === 'unfiltered-summary'
+          ? 'unfiltered-summary-hit'
+          : 'summary-hit'
+      };
+    }
     state.formsSummaryCache.set(cacheKey, {
       loadedAt: Date.now(),
       cacheAt: Number(state.formsCacheAt || 0),
-      body: cloneJson(body)
+      body: cachedBody,
+      response: createTrainingJsonResponse(cachedHitBody)
     });
     trimQueryCache(state.formsSummaryCache, TRAINING_FORMS_SUMMARY_CACHE_MAX);
-    return cloneJson(body);
+    return cloneJson(cachedBody);
   }
 
   async function listAllForms() {
@@ -1173,14 +1195,11 @@ function createTrainingRouter(deps) {
             total: fastSummaryCached.total,
             durationMs: Date.now() - startedAt
           });
-          await writeJson(res, buildJsonResponse(200, {
-            ...fastSummaryCached,
-            cache: {
-              query: 'hit',
-              summaryOnly: true,
-              reason: 'unfiltered-summary-hit'
-            }
-          }), origin);
+          if (fastSummaryLookup && fastSummaryLookup.response) {
+            await writeJson(res, fastSummaryLookup.response, origin);
+          } else {
+            await writeJson(res, buildJsonResponse(200, fastSummaryCached), origin);
+          }
           return;
         }
         const responseBody = buildTrainingSummaryOnlyFastResponse(url, filters, 'unfiltered-summary');
@@ -1204,14 +1223,11 @@ function createTrainingRouter(deps) {
             total: summaryCached.total,
             durationMs: Date.now() - startedAt
           });
-          await writeJson(res, buildJsonResponse(200, {
-            ...summaryCached,
-            cache: {
-              query: 'hit',
-              summaryOnly: true,
-              reason: 'summary-hit'
-            }
-          }), origin);
+          if (summaryLookup && summaryLookup.response) {
+            await writeJson(res, summaryLookup.response, origin);
+          } else {
+            await writeJson(res, buildJsonResponse(200, summaryCached), origin);
+          }
           return;
         }
       }

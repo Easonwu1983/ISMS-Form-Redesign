@@ -1957,7 +1957,7 @@
   function buildTrainingFillPage(params) {
     const { existing, isUnitLocked, submitLabel, takeoverDraft, unitValue, user } = params;
     return '<div class="animate-in">'
-      + '<div class="page-header"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">此頁為流程一：逐人填報教育訓練完成情形。送出後會先鎖定；若尚未列印簽核表，可於 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。</p></div><div class="training-toolbar-actions"><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
+      + '<div class="page-header page-header--editor"><div><h1 class="page-title">填報資安教育訓練統計</h1><p class="page-subtitle">此頁為流程一：逐人填報教育訓練完成情形。送出後會先鎖定；若尚未列印簽核表，可於 ' + TRAINING_UNDO_WINDOW_MINUTES + ' 分鐘內撤回重新編修。</p></div><div class="training-toolbar-actions"><a href="#training" class="btn btn-secondary">← 返回列表</a></div></div>'
       + (existing && existing.status === TRAINING_STATUSES.RETURNED ? '<div class="training-return-banner">' + ic('alert-triangle', 'icon-sm') + ' 退回原因：' + esc(existing.returnReason || '未提供') + '</div>' : '')
       + (takeoverDraft ? '<div class="training-return-banner">' + ic('user-cog', 'icon-sm') + ' 此草稿原送件者為 ' + esc(existing.fillerName || '未指定') + '，本次儲存後將改由目前單位管理員 ' + esc(user.name) + ' 接手編修。</div>' : '')
       + '<div class="training-editor-layout">'

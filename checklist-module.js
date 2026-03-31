@@ -1022,15 +1022,19 @@
       };
     }
 
-    function setChecklistListRouteState(state) {
-      const page = document.querySelector('.cl-list-page');
-      const shell = document.querySelector('.cl-list-shell');
-      const content = document.querySelector('.cl-list-content');
-      const nextState = String(state || '').trim() || 'ready';
-      if (page) page.dataset.checklistRouteState = nextState;
-      if (shell) shell.dataset.checklistRouteState = nextState;
-      if (content) content.dataset.checklistRouteState = nextState;
-    }
+  function setChecklistRouteState(routeName, state) {
+    const targetRoute = String(routeName || '').trim();
+    if (!targetRoute) return;
+    const nextState = String(state || '').trim() || 'ready';
+    document.querySelectorAll('[data-checklist-route]').forEach((node) => {
+      if (!node || !node.dataset || node.dataset.checklistRoute !== targetRoute) return;
+      node.dataset.checklistRouteState = nextState;
+    });
+  }
+
+  function setChecklistListRouteState(state) {
+    setChecklistRouteState('list', state);
+  }
 
     function renderChecklistListContent(items, snapshotOverride, viewSnapshotOverride) {
       const renderSignature = [
@@ -1211,9 +1215,9 @@
     }
     renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
-    document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route-state="shell">
+    document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
       <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報內容，可快速搜尋填報人員與單位狀態。</p></div><div class="page-header-actions">${fillBtn}</div></div>
-      <div class="card cl-list-shell" data-checklist-route-state="shell">
+      <div class="card cl-list-shell" data-checklist-route="list" data-checklist-route-state="shell">
         <div class="cl-list-toolbar-wrap">
           ${buildChecklistListFilters()}
           <div class="cl-year-tabs-shell">
@@ -1223,7 +1227,7 @@
         </div>
         ${renderChecklistListSummary(listSummary)}
         ${useRemoteList ? renderChecklistListPager(remotePage) : ''}
-        <div class="cl-list-content" data-checklist-route-state="shell"></div>
+        <div class="cl-list-content" data-checklist-route="list" data-checklist-route-state="shell"></div>
       </div>
     </div>`;
     renderChecklistListContent(checklists, snapshot, viewSnapshot);
@@ -1461,10 +1465,10 @@
       : `<div class="cl-checklist-lock-banner cl-checklist-lock-banner--inline"><strong>本單位由一級單位統一填報。</strong><span>您目前可檢視內容，但無法在此單位填寫或送出。</span></div><div class="form-actions"><a href="#checklist" class="btn btn-secondary">返回列表</a>${existing ? `<a href="#checklist-detail/${esc(existing.id)}" class="btn btn-primary">查看明細</a>` : ''}</div>`;
 
     document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header"><div><h1 class="page-title">${existing ? '\u7de8\u4fee\u6aa2\u6838\u8868' : '\u586b\u5831\u6aa2\u6838\u8868'}</h1><p class="page-subtitle">\u53d7\u7a3d\u55ae\u4f4d\u9810\u8a2d\u5e36\u5165\u76ee\u524d\u767b\u5165\u55ae\u4f4d\uff0c\u4f46\u53ef\u4f9d\u5be6\u969b\u586b\u5831\u9700\u6c42\u5207\u63db\u5230\u5176\u4ed6\u55ae\u4f4d\u3002\u8349\u7a3f\u53ef\u96a8\u6642\u66ab\u5b58\uff0c\u6b63\u5f0f\u9001\u51fa\u5f8c\u9396\u5b9a\u3002</p></div><a href="#checklist" class="btn btn-secondary">\u8fd4\u56de\u5217\u8868</a></div>
+      <div class="page-header page-header--editor" data-checklist-route="fill" data-checklist-route-state="shell"><div><h1 class="page-title">${existing ? '\u7de8\u4fee\u6aa2\u6838\u8868' : '\u586b\u5831\u6aa2\u6838\u8868'}</h1><p class="page-subtitle">\u53d7\u7a3d\u55ae\u4f4d\u9810\u8a2d\u5e36\u5165\u76ee\u524d\u767b\u5165\u55ae\u4f4d\uff0c\u4f46\u53ef\u4f9d\u5be6\u969b\u586b\u5831\u9700\u6c42\u5207\u63db\u5230\u5176\u4ed6\u55ae\u4f4d\u3002\u8349\u7a3f\u53ef\u96a8\u6642\u66ab\u5b58\uff0c\u6b63\u5f0f\u9001\u51fa\u5f8c\u9396\u5b9a\u3002</p></div><a href="#checklist" class="btn btn-secondary">\u8fd4\u56de\u5217\u8868</a></div>
       <div class="editor-shell editor-shell--checklist">
         <section class="editor-main">
-          <div class="card editor-card"><form id="checklist-form" data-testid="checklist-form">
+          <div class="card editor-card"><form id="checklist-form" data-checklist-route="fill" data-checklist-route-state="shell" data-testid="checklist-form">
             ${checklistLockBanner}
             <div class="section-header">${ic('info', 'icon-sm')} \u57fa\u672c\u8cc7\u6599</div>
             <div class="form-row">
@@ -1895,6 +1899,7 @@
       bindChecklistPageEvent(document.getElementById('cl-save-draft-inline'), 'click', saveChecklistDraft);
       bindChecklistPageEvent(document.getElementById('cl-save-draft-floating'), 'click', saveChecklistDraft);
     }
+    setChecklistRouteState('fill', 'ready');
   }
 
   function renderChecklistDetail(id) {
@@ -2054,8 +2059,8 @@
     const totalItems = getChecklistManageTotalItems();
     const sectHtml = buildChecklistManageSectionsHtml();
 
-    document.getElementById('app').innerHTML = `<div class="animate-in">
-      <div class="page-header">
+    document.getElementById('app').innerHTML = `<div class="animate-in" data-checklist-route="manage" data-checklist-route-state="shell">
+      <div class="page-header" data-checklist-route="manage" data-checklist-route-state="shell">
         <div>
           <h1 class="page-title">檢核題庫管理</h1>
           <p class="page-subtitle">目前共有 ${getChecklistSectionsState().length} 個章節、${totalItems} 個題目，可拖曳調整順序並維護題目內容。</p>
@@ -2071,10 +2076,11 @@
         <span>這裡調整的是後續新建檢核表會使用的題目與提示；已建立的檢核表仍保留當時版本，避免影響既有填報。</span>
       </div>
 
-      <div id="cm-sections-wrap">${sectHtml}</div>
+      <div id="cm-sections-wrap" data-checklist-route="manage" data-checklist-route-state="shell">${sectHtml}</div>
     </div>`;
 
     refreshIcons();
+    setChecklistRouteState('manage', 'ready');
   }
 
   function _cmRefreshSections() {

@@ -219,20 +219,28 @@ function createAuditTrailRouter(deps) {
     const key = [String(listLoadedAt || 0), String(limit || 0), String(offset || 0)].join('::');
     const cached = state.summaryOnlyPageCache.get(key);
     if (!cached || cached.listLoadedAt !== listLoadedAt) return null;
-    return cloneAuditValue(cached.value) || null;
+    return cached.response || null;
   }
 
-  function setAuditSummaryOnlyPageCache(limit, offset, listLoadedAt, value) {
+  function setAuditSummaryOnlyPageCache(limit, offset, listLoadedAt, response) {
     if (!(state.summaryOnlyPageCache instanceof Map)) return;
     const key = [String(listLoadedAt || 0), String(limit || 0), String(offset || 0)].join('::');
     state.summaryOnlyPageCache.set(key, {
       listLoadedAt,
-      value: cloneAuditValue(value)
+      response
     });
     if (state.summaryOnlyPageCache.size > 16) {
       const firstKey = state.summaryOnlyPageCache.keys().next().value;
       if (firstKey) state.summaryOnlyPageCache.delete(firstKey);
     }
+  }
+
+  function createAuditJsonResponse(body) {
+    return {
+      status: 200,
+      jsonBody: body,
+      jsonPayload: JSON.stringify(body)
+    };
   }
 
   async function fetchListMap() {
@@ -606,7 +614,7 @@ function createAuditTrailRouter(deps) {
             limit: cachedSummaryPage.page && cachedSummaryPage.page.limit,
             durationMs: Date.now() - startedAt
           });
-          await writeJson(res, buildJsonResponse(200, cachedSummaryPage), origin);
+          await writeJson(res, cachedSummaryPage, origin);
           return;
         }
         const total = Array.isArray(state.entriesCache && state.entriesCache.rows)
@@ -631,11 +639,12 @@ function createAuditTrailRouter(deps) {
           },
           contractVersion: CONTRACT_VERSION
         };
+        const summaryResponse = createAuditJsonResponse(summaryBody);
         setAuditSummaryOnlyPageCache(
           pageMeta.limit,
           pageMeta.offset,
           Number(state.entriesCache && state.entriesCache.loadedAt) || 0,
-          summaryBody
+          summaryResponse
         );
         logAuditTrail('list cached summary', {
           requestId,
@@ -645,7 +654,7 @@ function createAuditTrailRouter(deps) {
           limit: summaryBody.page && summaryBody.page.limit,
           durationMs: Date.now() - startedAt
         });
-        await writeJson(res, buildJsonResponse(200, summaryBody), origin);
+        await writeJson(res, summaryResponse, origin);
         return;
       }
       const cachedQuery = getAuditQueryCache(querySignature, listLoadedAt);

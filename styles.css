@@ -9989,6 +9989,37 @@ tbody tr:hover {
   margin-bottom: 26px;
 }
 
+.page-header--editor {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 22px 24px;
+  margin-bottom: 22px;
+  border: 1px solid rgba(214, 223, 233, 0.94);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.78), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.97) 100%);
+  box-shadow:
+    0 26px 48px -40px rgba(15, 23, 42, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+  overflow: hidden;
+}
+
+.page-header--editor::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.04), rgba(14, 165, 233, 0.02) 42%, transparent 72%);
+  pointer-events: none;
+}
+
+.page-header--editor > * {
+  position: relative;
+  z-index: 1;
+}
+
 .page-header--shell-owned > :first-child {
   min-width: 0;
   display: grid;
@@ -10009,6 +10040,28 @@ tbody tr:hover {
   line-height: 1.72;
 }
 
+.page-header--editor > :first-child {
+  gap: 10px;
+}
+
+.page-header--editor .page-title {
+  font-size: clamp(1.46rem, 2.2vw, 1.84rem);
+}
+
+.page-header--editor .page-subtitle {
+  max-width: 760px;
+  font-size: 0.92rem;
+  line-height: 1.68;
+  color: #607186;
+}
+
+.page-header--editor .btn,
+.page-header--editor .header-action,
+.page-header--editor .training-toolbar-actions {
+  margin-top: 0;
+  align-self: center;
+}
+
 .page-header--shell-owned .btn,
 .page-header--shell-owned .header-action {
   margin-top: 4px;
@@ -10017,7 +10070,22 @@ tbody tr:hover {
 
 .editor-shell--checklist,
 .editor-shell--training {
-  margin-top: 8px;
+  margin-top: 0;
+}
+
+.editor-shell--checklist .editor-main,
+.editor-shell--training .editor-main {
+  padding-top: 2px;
+}
+
+.editor-shell--checklist .editor-aside,
+.editor-shell--training .editor-aside {
+  padding-top: 2px;
+}
+
+.editor-sticky {
+  top: calc(var(--header-height) + 18px);
+  max-height: calc(100vh - var(--header-height) - 24px);
 }
 
 .editor-mobile-summary--checklist {
@@ -10038,6 +10106,11 @@ tbody tr:hover {
     gap: 12px;
     margin-bottom: 20px;
   }
+
+  .page-header--editor {
+    padding: 20px 18px;
+    border-radius: 24px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -10051,5 +10124,19 @@ tbody tr:hover {
 
   .page-header--shell-owned .page-subtitle {
     font-size: 0.9rem;
+  }
+
+  .page-header--editor {
+    padding: 18px 16px;
+    gap: 14px;
+  }
+
+  .page-header--editor .page-title {
+    font-size: 1.32rem;
+  }
+
+  .page-header--editor .page-subtitle {
+    font-size: 0.88rem;
+    line-height: 1.62;
   }
 }

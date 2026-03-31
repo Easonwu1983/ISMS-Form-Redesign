@@ -371,10 +371,10 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'dashboard') {
     return common + `
       #visual-dashboard-shell {
-        width: ${mode === 'mobile' ? '280px' : '500px'} !important;
-        max-width: ${mode === 'mobile' ? '280px' : '500px'} !important;
+        width: ${mode === 'mobile' ? '264px' : '460px'} !important;
+        max-width: ${mode === 'mobile' ? '264px' : '460px'} !important;
         margin: 0 auto !important;
-        padding: ${mode === 'mobile' ? '11px' : '12px'} !important;
+        padding: ${mode === 'mobile' ? '10px' : '11px'} !important;
         box-sizing: border-box !important;
       }
       #visual-dashboard-shell .visual-dashboard-stat-grid {
@@ -465,8 +465,8 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'unit-review') {
     return common + `
       #visual-unit-review-shell {
-        width: ${mode === 'mobile' ? '340px' : '680px'} !important;
-        max-width: ${mode === 'mobile' ? '340px' : '680px'} !important;
+        width: ${mode === 'mobile' ? '320px' : '620px'} !important;
+        max-width: ${mode === 'mobile' ? '320px' : '620px'} !important;
         margin: 0 auto !important;
         box-sizing: border-box !important;
       }
@@ -521,22 +521,22 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'unit-contact-apply') {
     return common + `
       #visual-unit-contact-apply-shell {
-        width: ${mode === 'mobile' ? '320px' : '640px'} !important;
-        max-width: ${mode === 'mobile' ? '320px' : '640px'} !important;
+        width: ${mode === 'mobile' ? '300px' : '560px'} !important;
+        max-width: ${mode === 'mobile' ? '300px' : '560px'} !important;
         margin: 0 auto !important;
-        padding: ${mode === 'mobile' ? '14px' : '16px'} !important;
+        padding: ${mode === 'mobile' ? '12px' : '14px'} !important;
         box-sizing: border-box !important;
       }
       #visual-unit-contact-apply-shell .visual-unit-contact-grid {
         display: grid !important;
-        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1fr 0.94fr'} !important;
-        gap: 12px !important;
+        grid-template-columns: ${mode === 'mobile' ? '1fr' : '1fr 0.88fr'} !important;
+        gap: 10px !important;
       }
       #visual-unit-contact-apply-shell .visual-unit-contact-hero {
         display: grid !important;
         grid-template-columns: ${mode === 'mobile' ? '1fr' : '1.2fr auto'} !important;
-        gap: 10px !important;
-        margin-bottom: 14px !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
       }
       #visual-unit-contact-apply-shell .visual-unit-contact-badges {
         display: flex !important;
@@ -547,7 +547,7 @@ function getVisualSmokeStyles(slug, mode) {
       #visual-unit-contact-apply-shell .visual-unit-contact-field-grid,
       #visual-unit-contact-apply-shell .visual-unit-contact-step-stack {
         display: grid !important;
-        gap: 10px !important;
+        gap: 8px !important;
       }
       #visual-unit-contact-apply-shell .form-input,
       #visual-unit-contact-apply-shell .unit-contact-step-card-text,
@@ -556,7 +556,7 @@ function getVisualSmokeStyles(slug, mode) {
         text-shadow: none !important;
       }
       #visual-unit-contact-apply-shell .unit-contact-step-card {
-        min-height: 68px !important;
+        min-height: 62px !important;
       }
     `;
   }

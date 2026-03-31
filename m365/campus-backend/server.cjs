@@ -171,7 +171,9 @@ function buildSecurityHeaders(pathname) {
 }
 
 async function writeJson(res, response, origin) {
-  const payload = JSON.stringify(response.jsonBody || {});
+  const payload = typeof response.jsonPayload === 'string'
+    ? response.jsonPayload
+    : JSON.stringify(response.jsonBody || {});
   const headers = {
     ...(response.headers || {}),
     ...buildCorsHeaders(origin),
