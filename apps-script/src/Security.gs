@@ -163,7 +163,8 @@ function assertLoginRateLimit_(username, request) {
   let state;
   try {
     state = JSON.parse(raw);
-  } catch (_) {
+  } catch (err) {
+    recordInternalError_('Security.assertLoginRateLimit_.parse', err, { key });
     cache.remove(key);
     return;
   }
@@ -195,8 +196,8 @@ function recordLoginRateLimitFailure_(username, request) {
       if (parsed && now < Number(parsed.resetAt || 0)) {
         state = parsed;
       }
-    } catch (_) {
-      // ignore broken cache payload
+    } catch (err) {
+      recordInternalError_('Security.recordLoginRateLimitFailure_.parse', err, { key });
     }
   }
 
@@ -259,8 +260,8 @@ function runDailySecurityMaintenance_() {
     pruneSheetByTime_(SHEET_NAMES.loginSessions, 'expires_at', retentionDays);
 
     props.setProperty('LAST_SECURITY_MAINTENANCE_DATE', today);
-  } catch (_) {
-    // Do not block API calls when maintenance fails.
+  } catch (err) {
+    recordInternalError_('Security.runDailySecurityMaintenance_', err);
   }
 }
 

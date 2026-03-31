@@ -36,50 +36,52 @@ function parseRequestBody_(e) {
 }
 
 function dispatchRequest_(request) {
-  const requestId = request.requestId || createRequestId_();
-  const action = String(request.action || '').trim();
-  const payload = request.payload || {};
+  return withRequestScope_(() => {
+    const requestId = request.requestId || createRequestId_();
+    const action = String(request.action || '').trim();
+    const payload = request.payload || {};
 
-  runDailySecurityMaintenance_();
+    runDailySecurityMaintenance_();
 
-  let actorEmail = '';
-  let actorUsername = '';
-  try {
-    if (!action) throw createHttpError_('BAD_REQUEST', 'Missing action', 400);
+    let actorEmail = '';
+    let actorUsername = '';
+    try {
+      if (!action) throw createHttpError_('BAD_REQUEST', 'Missing action', 400);
 
-    const handlers = getActionHandlers_();
-    const handler = handlers[action];
-    if (!handler) throw createHttpError_('NOT_FOUND', `Unknown action: ${action}`, 404);
+      const handlers = getActionHandlers_();
+      const handler = handlers[action];
+      if (!handler) throw createHttpError_('NOT_FOUND', `Unknown action: ${action}`, 404);
 
-    let authContext = null;
-    if (isAuthRequired_(action)) {
-      authContext = authenticateRequest_(request);
-      actorEmail = authContext.email || '';
-      actorUsername = authContext.username || '';
-      assertPasswordChangeGate_(action, authContext);
+      let authContext = null;
+      if (isAuthRequired_(action)) {
+        authContext = authenticateRequest_(request);
+        actorEmail = authContext.email || '';
+        actorUsername = authContext.username || '';
+        assertPasswordChangeGate_(action, authContext);
+      }
+
+      const data = handler(payload, authContext, request);
+      logApiAudit_(requestId, action, actorEmail, actorUsername, 'OK', '');
+      return jsonResponse_(200, {
+        ok: true,
+        requestId,
+        data,
+        ts: nowIso_()
+      });
+    } catch (err) {
+      const normalized = normalizeError_(err);
+      logApiAudit_(requestId, action || 'unknown', actorEmail, actorUsername, 'ERR', `${normalized.code}: ${normalized.message}`);
+      return jsonResponse_(normalized.status, {
+        ok: false,
+        requestId,
+        error: {
+          code: normalized.code,
+          message: normalized.message
+        },
+        ts: nowIso_()
+      });
     }
-
-    const data = handler(payload, authContext, request);
-    logApiAudit_(requestId, action, actorEmail, actorUsername, 'OK', '');
-    return jsonResponse_(200, {
-      ok: true,
-      requestId,
-      data,
-      ts: nowIso_()
-    });
-  } catch (err) {
-    const normalized = normalizeError_(err);
-    logApiAudit_(requestId, action || 'unknown', actorEmail, actorUsername, 'ERR', `${normalized.code}: ${normalized.message}`);
-    return jsonResponse_(normalized.status, {
-      ok: false,
-      requestId,
-      error: {
-        code: normalized.code,
-        message: normalized.message
-      },
-      ts: nowIso_()
-    });
-  }
+  });
 }
 
 function getActionHandlers_() {
@@ -158,8 +160,14 @@ function logApiAudit_(requestId, action, actorEmail, actorUsername, status, mess
     row.integrity_hash = computeLogIntegrityHash_(row);
 
     appendSheetRow_(SHEET_NAMES.apiAudit, row);
-  } catch (_) {
-    // Keep API available even if audit logging fails.
+  } catch (err) {
+    recordInternalError_('Main.logApiAudit_', err, {
+      requestId,
+      action,
+      actorEmail,
+      actorUsername,
+      status
+    });
   }
 }
 

@@ -232,22 +232,15 @@ function createLoginSession_(user, request) {
 
 function findValidSessionByToken_(sessionToken) {
   const tokenHash = hashToken_(sessionToken);
-  const rows = readSheetRows_(SHEET_NAMES.loginSessions);
-  const now = Date.now();
-
-  const found = rows
-    .filter((r) => String(r.session_token_hash || '') === tokenHash)
-    .filter((r) => !String(r.revoked_at || '').trim())
-    .filter((r) => parseIsoMs_(r.expires_at) > now)
-    .sort((a, b) => parseIsoMs_(b.issued_at) - parseIsoMs_(a.issued_at));
-
-  return found.length > 0 ? found[0] : null;
+  const lookup = getLoginSessionLookup_();
+  const found = lookup.activeByTokenHash[tokenHash];
+  return found ? { ...found } : null;
 }
 
 function revokeSessionByToken_(sessionToken) {
   const tokenHash = hashToken_(sessionToken);
-  const rows = readSheetRows_(SHEET_NAMES.loginSessions);
-  const row = rows.find((r) => String(r.session_token_hash || '') === tokenHash && !String(r.revoked_at || '').trim());
+  const lookup = getLoginSessionLookup_();
+  const row = lookup.activeByTokenHash[tokenHash];
   if (!row) return;
 
   upsertSheetRowByKey_(SHEET_NAMES.loginSessions, 'id', {
@@ -426,22 +419,22 @@ function mapUserForClient_(user) {
 
 function findUserById_(id) {
   if (!id) return null;
-  const rows = readSheetRows_(SHEET_NAMES.users);
-  return rows.find((r) => String(r.id || '') === String(id || '')) || null;
+  const row = getUserLookup_().byId[String(id || '')];
+  return row ? { ...row } : null;
 }
 
 function findUserByUsername_(username) {
   if (!username) return null;
-  const target = String(username || '').toLowerCase();
-  const rows = readSheetRows_(SHEET_NAMES.users);
-  return rows.find((r) => String(r.username || '').toLowerCase() === target) || null;
+  const target = String(username || '').trim().toLowerCase();
+  const row = getUserLookup_().byUsername[target];
+  return row ? { ...row } : null;
 }
 
 function findUserByEmail_(email) {
   if (!email) return null;
-  const target = String(email || '').toLowerCase();
-  const rows = readSheetRows_(SHEET_NAMES.users);
-  return rows.find((r) => String(r.email || '').toLowerCase() === target) || null;
+  const target = String(email || '').trim().toLowerCase();
+  const row = getUserLookup_().byEmail[target];
+  return row ? { ...row } : null;
 }
 
 function findUserByUsernameOrEmail_(username, email) {
@@ -524,9 +517,61 @@ function logLoginAttempt_(params) {
     row.integrity_hash = computeLogIntegrityHash_(row);
 
     appendSheetRow_(SHEET_NAMES.loginLogs, row);
-  } catch (_) {
-    // Keep auth flow available even when audit write fails.
+  } catch (err) {
+    recordInternalError_('Auth.logLoginAttempt_', err, {
+      username: String((params && params.username) || ''),
+      success: !!(params && params.success),
+      message: String((params && params.message) || '')
+    });
   }
+}
+
+function getUserLookup_() {
+  return getRequestScopeValue_('auth', 'userLookup', () => {
+    const rows = readSheetRows_(SHEET_NAMES.users);
+    const lookup = {
+      byId: Object.create(null),
+      byUsername: Object.create(null),
+      byEmail: Object.create(null)
+    };
+
+    rows.forEach((row) => {
+      const byIdKey = String(row.id || '');
+      const byUsernameKey = String(row.username || '').trim().toLowerCase();
+      const byEmailKey = String(row.email || '').trim().toLowerCase();
+
+      if (byIdKey) lookup.byId[byIdKey] = row;
+      if (byUsernameKey) lookup.byUsername[byUsernameKey] = row;
+      if (byEmailKey) lookup.byEmail[byEmailKey] = row;
+    });
+
+    return lookup;
+  });
+}
+
+function getLoginSessionLookup_() {
+  return getRequestScopeValue_('auth', 'loginSessionLookup', () => {
+    const rows = readSheetRows_(SHEET_NAMES.loginSessions);
+    const now = Date.now();
+    const activeByTokenHash = Object.create(null);
+
+    rows.forEach((row) => {
+      const tokenHash = String(row.session_token_hash || '');
+      if (!tokenHash) return;
+      if (String(row.revoked_at || '').trim()) return;
+      if (parseIsoMs_(row.expires_at) <= now) return;
+
+      const current = activeByTokenHash[tokenHash];
+      if (!current || parseIsoMs_(row.issued_at) > parseIsoMs_(current.issued_at)) {
+        activeByTokenHash[tokenHash] = row;
+      }
+    });
+
+    return {
+      rows,
+      activeByTokenHash
+    };
+  });
 }
 
 function isAdmin_(authContext) {

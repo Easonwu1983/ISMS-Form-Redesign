@@ -63,8 +63,8 @@ function sendMailByGmailApp_(to, subject, body, preferredSender, fromName) {
       if (aliases.includes(sender)) {
         options.from = sender;
       }
-    } catch (_) {
-      // Ignore alias lookup failure and fallback to default sender.
+    } catch (err) {
+      recordInternalError_('Notify.sendMailByGmailApp_.aliasLookup', err, { sender });
     }
   }
 

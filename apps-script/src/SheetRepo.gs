@@ -36,23 +36,28 @@ function ensureSheet_(sheetName, headers) {
 }
 
 function readSheetRows_(sheetName) {
-  const sheet = getSheetOrNull_(sheetName);
-  if (!sheet) return [];
+  const cacheKey = String(sheetName || '');
+  const rows = getRequestScopeValue_('sheetRows', cacheKey, () => {
+    const sheet = getSheetOrNull_(sheetName);
+    if (!sheet) return [];
 
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  if (lastRow < 2 || lastCol < 1) return [];
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) return [];
 
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
 
-  return values.map((row) => {
-    const obj = {};
-    headers.forEach((h, idx) => {
-      obj[String(h || '').trim()] = row[idx];
+    return values.map((row) => {
+      const obj = {};
+      headers.forEach((h, idx) => {
+        obj[String(h || '').trim()] = row[idx];
+      });
+      return obj;
     });
-    return obj;
   });
+
+  return rows.map((row) => ({ ...row }));
 }
 
 function appendSheetRow_(sheetName, rowObj) {
@@ -62,6 +67,7 @@ function appendSheetRow_(sheetName, rowObj) {
   const sheet = ensureSheet_(sheetName, headers);
   const row = headers.map((h) => rowObj[h] !== undefined ? rowObj[h] : '');
   sheet.appendRow(row);
+  invalidateSheetRequestScopeCaches_(sheetName);
 }
 
 function upsertSheetRowByKey_(sheetName, keyField, rowObj) {
@@ -84,6 +90,7 @@ function upsertSheetRowByKey_(sheetName, keyField, rowObj) {
     const targetRow = idx + 2;
     sheet.getRange(targetRow, 1, 1, headers.length).setValues([row]);
   }
+  invalidateSheetRequestScopeCaches_(sheetName);
 }
 
 function replaceSheetRows_(sheetName, rowObjs) {
@@ -101,6 +108,7 @@ function replaceSheetRows_(sheetName, rowObjs) {
 
   const rows = rowObjs.map((obj) => headers.map((h) => obj[h] !== undefined ? obj[h] : ''));
   sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  invalidateSheetRequestScopeCaches_(sheetName);
 }
 
 function nextSequence_(key) {
@@ -116,6 +124,7 @@ function nextSequence_(key) {
     if (idx < 0) {
       const startNo = 1;
       sheet.appendRow([key, startNo + 1]);
+      invalidateSheetRequestScopeCaches_(sheetName);
       return startNo;
     }
 
@@ -124,6 +133,7 @@ function nextSequence_(key) {
     const next = current + 1;
     const targetRow = idx + 2;
     sheet.getRange(targetRow, 2).setValue(next);
+    invalidateSheetRequestScopeCaches_(sheetName);
     return current;
   } finally {
     lock.releaseLock();

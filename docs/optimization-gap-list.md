@@ -72,6 +72,10 @@ Done:
 - TTL response caching and bounded client-side cache eviction were added.
 - Retry logic now uses exponential backoff with jitter.
 - Error classification now distinguishes timeout, auth, validation, rate-limit, server, and network failures.
+- `apps-script/src/SheetRepo.gs` now reuses request-scoped row caches, so repeated reads of the same sheet inside one API request no longer trigger repeated full-sheet scans.
+- `apps-script/src/Config.gs` now resolves config through a request-scoped map backed by Script Cache, instead of re-reading the config sheet for every lookup.
+- `apps-script/src/Auth.gs` now builds request-scoped user and login-session indexes, so `findUserById_/Username_/Email_` and session token validation no longer scan the full sheet repeatedly inside one request.
+- `apps-script/src/Auth.gs`, `apps-script/src/Main.gs`, and `apps-script/src/Security.gs` no longer swallow operational write failures silently; they now record internal errors to `ScriptProperties` and `console.error`.
 - Unit-admin review-scope authorization now uses a short-lived backend cache in `request-authz.cjs`, and `/api/review-scopes` no longer scans the SharePoint list twice for scoped users.
 - The latest formal production report now shows module-level summary cache status for:
   - `audit-trail`
@@ -82,11 +86,14 @@ Done:
 Open:
 - Formal release reports still do not show full cache hit and miss rates for every backend module; coverage is still focused on the main summary routes.
 - Backend summary-only routes are still not fully isolated from list-oriented execution paths in every module.
+- Apps Script login rate limiting still lives only in `CacheService`; it is still volatile across cache resets and has no durable fallback record.
+- Low-frequency Apps Script paths such as notification alias lookup and malformed historical JSON rows now log internal errors, but there is still no dedicated error sheet or alerting channel.
 
 Next:
 - Add backend-side cache telemetry per module.
 - Keep shrinking pure `summaryOnly` paths.
 - Surface cache hit, miss, and snapshot reasons directly in the release report.
+- Add a durable fallback for Apps Script login rate limits and internal error reporting if the Apps Script backend remains part of the supported stack.
 
 ## 4. Accessibility
 

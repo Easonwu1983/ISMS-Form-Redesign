@@ -69,7 +69,8 @@ function mapCarListItem_(row) {
     try {
       categories = JSON.parse(raw);
       if (!Array.isArray(categories)) categories = [];
-    } catch (_) {
+    } catch (err) {
+      recordInternalError_('CarService.mapCarListItem_.categories', err, { id: String(row.id || '') });
       categories = [];
     }
   }

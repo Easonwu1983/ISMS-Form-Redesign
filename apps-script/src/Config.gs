@@ -64,10 +64,10 @@ function safeToBool_(value) {
 }
 
 function getConfigValue_(key, fallbackValue) {
-  const rows = readSheetRows_(SHEET_NAMES.config);
-  const row = rows.find((x) => x.key === key);
-  if (!row || row.value === undefined || row.value === null || row.value === '') return fallbackValue;
-  return row.value;
+  const configMap = getConfigMap_();
+  const value = configMap[String(key || '')];
+  if (value === undefined || value === null || value === '') return fallbackValue;
+  return value;
 }
 
 function getNumberConfig_(key, fallbackValue) {
