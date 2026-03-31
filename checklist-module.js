@@ -83,7 +83,7 @@
     function buildChecklistEvidenceUpload(item, saved, editable = true) {
       const existingCount = getChecklistEvidenceFiles(saved).length;
       if (!editable) {
-        return `<div class="form-group cl-evidence-upload-group"><label class="form-label">銝雿??辣</label>${buildChecklistEvidenceReadonlySlot(item.id)}</div>`;
+        return `<div class="form-group cl-evidence-upload-group"><label class="form-label">佐證檔案</label>${buildChecklistEvidenceReadonlySlot(item.id)}</div>`;
       }
       return `<div class="form-group cl-evidence-upload-group"><label class="form-label">附加佐證檔案</label><label class="training-file-input checklist-file-input"><input type="file" id="cl-file-${item.id}" data-item-id="${item.id}" multiple accept="image/*,.pdf"><span class="training-file-input-copy"><strong>上傳佐證檔案</strong><small>${existingCount ? `已附 ${existingCount} 筆` : '支援 JPG / PNG / PDF，單檔上限 5MB'}</small></span></label>${buildChecklistEvidencePreviewSlot(item.id, 'checklist-evidence-files')}</div>`;
     }
@@ -837,7 +837,7 @@
 
     function buildChecklistGovernanceNote(item) {
       const state = getChecklistGovernanceState(item && item.unit);
-      return state.consolidatedChild ? '?曹?蝝雿絞銝憛怠' : '';
+      return state.consolidatedChild ? '由一級單位統一填報' : '';
     }
 
     function buildChecklistListQueryYearOptions(items) {
@@ -961,11 +961,11 @@
       const statusOptions = CHECKLIST_LIST_STATUS_OPTIONS.map((opt) => '<option value="' + esc(opt.value) + '" ' + (String(checklistBrowseState.status || 'all') === opt.value ? 'selected' : '') + '>' + esc(opt.label) + '</option>').join('');
       return '<div class="cl-list-toolbar">'
         + '<div class="cl-list-toolbar-main">'
-        + '<div class="form-group"><label class="form-label">?摮?撠?/label><input type="search" class="form-input" id="cl-list-keyword" placeholder="?桐??迂?‵?梯??楊?? value="' + esc(checklistBrowseState.keyword || '') + '"></div>'
-        + '<div class="form-group"><label class="form-label">??祟??/label><select class="form-select" id="cl-list-status">' + statusOptions + '</select></div>'
+        + '<div class="form-group"><label class="form-label">關鍵字搜尋</label><input type="search" class="form-input" id="cl-list-keyword" placeholder="單位名稱、填報者姓名、編號" value="' + esc(checklistBrowseState.keyword || '') + '"></div>'
+        + '<div class="form-group"><label class="form-label">狀態篩選</label><select class="form-select" id="cl-list-status">' + statusOptions + '</select></div>'
         + '</div>'
         + '<div class="cl-list-toolbar-actions">'
-        + '<button type="button" class="btn btn-secondary" data-action="checklist.resetListFilters">' + ic('rotate-ccw', 'icon-sm') + ' ?身</button>'
+        + '<button type="button" class="btn btn-secondary" data-action="checklist.resetListFilters">' + ic('rotate-ccw', 'icon-sm') + ' 重設篩選</button>'
         + '</div>'
         + '</div>';
     }
@@ -1055,7 +1055,7 @@
       const html = grouped.length ? grouped.map((yearGroup) => buildChecklistYearAccordion(yearGroup)).join('') : '';
       checklistListRenderCache = { signature: renderSignature, html };
       contentEl.dataset.checklistRenderSignature = renderSignature;
-      contentEl.innerHTML = `<div class="card checklist-empty-card cl-list-empty-state" hidden><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">?桀?瘝?蝚血?璇辣?炎?貉”</div><div class="empty-state-desc">?臬??僑隞賬????摮??唳?撠?/div></div></div>`
+      contentEl.innerHTML = `<div class="card checklist-empty-card cl-list-empty-state" hidden><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有符合條件的檢核資料</div><div class="empty-state-desc">請先調整關鍵字、狀態或年度篩選，再重新查詢。</div></div></div>`
         + html;
       refreshChecklistListDomCache(contentEl, renderSignature);
       refreshIcons();
@@ -1208,20 +1208,20 @@
       listSummary = shellSummary;
       remotePage = shellPage;
       renderedSummarySignature = serializeChecklistRemoteSummary(shellSummary);
-      const shellFillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 憛怠瑼Ｘ銵?/a>` : '';
+      const shellFillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
       document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
-      <div class="page-header checklist-list-header"><div><h1 class="page-title">?抒里瑼Ｘ銵?/h1><p class="page-subtitle">?僑摨西?銝蝝雿?撅斗炎閬??‵?勗摰對??臬翰??撠‵?曹犖?∟??桐????/p></div><div class="page-header-actions">${shellFillBtn}</div></div>
+      <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報紀錄，協助管理者快速掌握檢核狀況。</p></div><div class="page-header-actions">${shellFillBtn}</div></div>
       <div class="card cl-list-shell" data-checklist-route="list" data-checklist-route-state="shell">
         <div class="cl-list-toolbar-wrap">
           ${buildChecklistListFilters()}
           <div class="cl-year-tabs-shell">
-          <div class="cl-year-tabs-label">撟港遢?惜</div>
+          <div class="cl-year-tabs-label">年度頁籤</div>
           ${buildChecklistListYearTabs(years)}
         </div>
         </div>
         ${renderChecklistListSummary(shellSummary)}
         ${renderChecklistListPager(shellPage)}
-        <div class="cl-list-content" data-checklist-route="list" data-checklist-route-state="shell"><div class="cl-list-loading-shell">鞈?頛銝凌?/div></div>
+        <div class="cl-list-content" data-checklist-route="list" data-checklist-route-state="shell"><div class="cl-list-loading-shell">載入檢核表列表…</div></div>
       </div>
     </div>`;
       setChecklistListRouteState('ready');
@@ -1262,14 +1262,14 @@
       refreshIcons();
       bindCopyButtons();
     }
-    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 憛怠瑼Ｘ銵?/a>` : '';
+    const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
-      <div class="page-header checklist-list-header"><div><h1 class="page-title">?抒里瑼Ｘ銵?/h1><p class="page-subtitle">?僑摨西?銝蝝雿?撅斗炎閬??‵?勗摰對??臬翰??撠‵?曹犖?∟??桐????/p></div><div class="page-header-actions">${fillBtn}</div></div>
+      <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報紀錄，協助管理者快速掌握檢核狀況。</p></div><div class="page-header-actions">${fillBtn}</div></div>
       <div class="card cl-list-shell" data-checklist-route="list" data-checklist-route-state="shell">
         <div class="cl-list-toolbar-wrap">
           ${buildChecklistListFilters()}
           <div class="cl-year-tabs-shell">
-          <div class="cl-year-tabs-label">撟港遢?惜</div>
+          <div class="cl-year-tabs-label">年度頁籤</div>
           ${buildChecklistListYearTabs(years)}
         </div>
         </div>
@@ -1460,7 +1460,7 @@
 
   function renderChecklistFill(id) {
     cleanupRenderedAttachmentUrls();
-    if (!canFillChecklist()) { navigate('checklist'); toast('?冽??‵?望炎?貉”甈?', 'error'); return; }
+    if (!canFillChecklist()) { navigate('checklist'); toast('目前無法填報此檢核表。', 'error'); return; }
 
     const u = getChecklistAccessProfile(currentUser());
     const currentAuditYear = String(new Date().getFullYear() - 1911);
@@ -1518,7 +1518,7 @@
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">\u53d7\u7a3d\u55ae\u4f4d</label>${buildUnitCascadeControl('cl-unit', selectedUnit, checklistUnitLocked || checklistGovernanceLocked, true)}</div>
               <div class="form-group"><label class="form-label form-required">\u586b\u5831\u4eba\u54e1</label><input type="text" class="form-input" id="cl-filler" value="${esc(u.name)}" readonly></div>
-              <div class="form-group"><label class="form-label form-required">憛怠?交?</label><input type="date" class="form-input" id="cl-date" value="${esc(toDateInputValue(existing?.fillDate) || today)}" ${checklistEditable ? 'required' : 'disabled'}></div>
+              <div class="form-group"><label class="form-label form-required">填報日期</label><input type="date" class="form-input" id="cl-date" value="${esc(toDateInputValue(existing?.fillDate) || today)}" ${checklistEditable ? 'required' : 'disabled'}></div>
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">\u7a3d\u6838\u5e74\u5ea6</label><input type="text" class="form-input" id="cl-year" inputmode="numeric" maxlength="3" pattern="\\d{3}" value="${existing ? esc(existing.auditYear) : String(getChecklistCurrentAuditYear())}" ${checklistEditable ? 'required' : 'disabled'}></div>
@@ -1527,7 +1527,7 @@
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label form-required">\u7c3d\u6838\u72c0\u614b</label><select class="form-select" id="cl-sign-status" ${checklistEditable ? 'required' : 'disabled'}><option value="\u5f85\u7c3d\u6838" ${signStatus === '\u5f85\u7c3d\u6838' ? 'selected' : ''}>\u5f85\u7c3d\u6838</option><option value="\u5df2\u7c3d\u6838" ${signStatus === '\u5df2\u7c3d\u6838' ? 'selected' : ''}>\u5df2\u7c3d\u6838</option></select></div>
-              <div class="form-group"><label class="form-label form-required">蝪賣?交?</label><input type="date" class="form-input" id="cl-sign-date" ${checklistEditable ? 'required' : 'disabled'} value="${esc(toDateInputValue(signDate))}"></div>
+              <div class="form-group"><label class="form-label form-required">簽核日期</label><input type="date" class="form-input" id="cl-sign-date" ${checklistEditable ? 'required' : 'disabled'} value="${esc(toDateInputValue(signDate))}"></div>
               <div class="form-group"><label class="form-label">\u7c3d\u6838\u5099\u8a3b</label><input type="text" class="form-input" id="cl-supervisor-note" value="${esc(supervisorNote)}" placeholder="\u53ef\u88dc\u5145\u4e3b\u7ba1\u610f\u898b\u6216\u8ffd\u8e64\u8aaa\u660e"></div>
             </div>
             <div class="cl-progress-bar-wrap"><div class="cl-progress-label">\u586b\u5831\u9032\u5ea6</div><div class="cl-progress-bar"><div class="cl-progress-fill" id="cl-progress-fill" style="width:0%"></div></div><span class="cl-progress-text" id="cl-progress-text">0 / ${totalItems}</span></div>
@@ -1542,7 +1542,7 @@
             <div class="editor-mobile-summary-body">
               <div class="editor-sticky">
                 <div class="editor-side-card checklist-nav-card">
-                  <div class="editor-side-title">銋之憿??/div>
+                  <div class="editor-side-title">填報目錄</div>
                   <div class="cl-anchor-list">${sectionAnchorHtml}</div>
                 </div>
                 <div class="editor-side-card editor-progress-card">
@@ -1980,7 +1980,7 @@
       segs = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="#e2e8f0" stroke-width="16"/>`;
     }
 
-    const svg = `<svg viewBox="0 0 120 120" class="cl-donut">${segs}<text x="60" y="56" text-anchor="middle" fill="#0f172a" font-size="18" font-weight="700" font-family="Inter">${applicableRate}%</text><text x="60" y="72" text-anchor="middle" fill="#94a3b8" font-size="8" font-weight="500" font-family="Inter">?拍?蝚血???/text></svg>`;
+    const svg = `<svg viewBox="0 0 120 120" class="cl-donut">${segs}<text x="60" y="56" text-anchor="middle" fill="#0f172a" font-size="18" font-weight="700" font-family="Inter">${applicableRate}%</text><text x="60" y="72" text-anchor="middle" fill="#94a3b8" font-size="8" font-weight="500" font-family="Inter">適用率</text></svg>`;
     const legend = vals.map((v) => `<div class="cl-legend-item"><span class="cl-legend-dot" style="background:${v.color}"></span>${v.label}<span class="cl-legend-count">${v.count}</span></div>`).join('');
 
     let sectDetail = '';
@@ -1988,12 +1988,12 @@
       let rows = '';
       sec.items.forEach((item) => {
         const r = cl.results?.[item.id] || {};
-        const comp = r.compliance || '撠憛怠神';
+        const comp = r.compliance || '不適用';
         const compCls = COMPLIANCE_CLASSES[comp] || '';
         rows += `<div class="cl-detail-item"><div class="cl-detail-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span><span class="cl-compliance-badge cl-badge-${compCls}">${esc(comp)}</span></div>`;
-        if (r.execution) rows += `<div class="cl-detail-field"><span class="cl-detail-label">?瑁??耦隤芣?嚗?/span>${esc(r.execution)}</div>`;
-        if (r.evidence) rows += `<div class="cl-detail-field"><span class="cl-detail-label">雿?鞈?隤芣?嚗?/span>${esc(r.evidence)}</div>`;
-        if (Array.isArray(r.evidenceFiles) && r.evidenceFiles.length) rows += `<div class="cl-detail-field cl-detail-field--files"><span class="cl-detail-label">?辣嚗?/span>${buildChecklistEvidenceReadonlySlot(item.id)}</div>`;
+        if (r.execution) rows += `<div class="cl-detail-field"><span class="cl-detail-label">執行情形：</span>${esc(r.execution)}</div>`;
+        if (r.evidence) rows += `<div class="cl-detail-field"><span class="cl-detail-label">佐證說明：</span>${esc(r.evidence)}</div>`;
+        if (Array.isArray(r.evidenceFiles) && r.evidenceFiles.length) rows += `<div class="cl-detail-field cl-detail-field--files"><span class="cl-detail-label">佐證檔案：</span>${buildChecklistEvidenceReadonlySlot(item.id)}</div>`;
         rows += '</div>';
       });
       sectDetail += `<div class="cl-detail-section"><div class="cl-detail-section-title">${esc(sec.section)}</div>${rows}</div>`;
@@ -2059,17 +2059,17 @@
   function renderChecklistManageItem(item, si, ii) {
     return `
         <div class="cm-item" data-si="${si}" data-ii="${ii}">
-          <div class="cm-item-drag" title="???">&#8942;&#8942;</div>
+          <div class="cm-item-drag" title="拖曳調整順序">&#8942;&#8942;</div>
           <div class="cm-item-content">
             <div class="cm-item-row">
               <span class="cl-item-id cl-item-id--fixed">${esc(item.id)}</span>
               <span class="cm-item-text">${esc(item.text)}</span>
             </div>
-            <div class="cm-item-hint">?內隤芣?嚗?{esc(item.hint || '?芣?靘?蝷箄牧??)}</div>
+            <div class="cm-item-hint">說明：${esc(item.hint || '尚無說明')}</div>
           </div>
           <div class="cm-item-actions">
-            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="蝺刻摩?">${ic('edit-2', 'btn-icon-svg')}</button>
-            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="?芷?">${ic('trash-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯題目">${ic('edit-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除題目">${ic('trash-2', 'btn-icon-svg')}</button>
           </div>
         </div>`;
   }
@@ -2084,10 +2084,10 @@
               <span class="cm-section-name" id="cm-sname-${si}">${esc(sec.section)}</span>
             </div>
             <div class="cm-section-actions">
-              <span class="cm-item-count">${sec.items.length} ??/span>
-              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="蝺刻摩蝡?">${ic('edit-2', 'btn-icon-svg')}</button>
-              <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${si}" title="?啣??">${ic('plus', 'btn-icon-svg')} ?啣??</button>
-              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${si}" title="?芷蝡?">${ic('trash-2', 'btn-icon-svg')}</button>
+              <span class="cm-item-count">${sec.items.length} 題</span>
+              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="編輯類別">${ic('edit-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${si}" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
+              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${si}" title="刪除類別">${ic('trash-2', 'btn-icon-svg')}</button>
             </div>
           </div>
           <div class="cm-items-wrap">${itemRows}</div>
@@ -2110,14 +2110,14 @@
           <p class="page-subtitle">目前共有 ${getChecklistSectionsState().length} 個類別、${totalItems} 個題目可管理。</p>
         </div>
         <div class="review-inline-gap-8">
-          <button class="btn btn-secondary" data-action="checklist.resetDefault">${ic('refresh-cw', 'icon-sm')} ???身憿澈</button>
-          <button class="btn btn-primary" data-action="checklist.addSection">${ic('plus-circle', 'icon-sm')} ?啣?蝡?</button>
+          <button class="btn btn-secondary" data-action="checklist.resetDefault">${ic('refresh-cw', 'icon-sm')} 恢復預設</button>
+          <button class="btn btn-primary" data-action="checklist.addSection">${ic('plus-circle', 'icon-sm')} 新增類別</button>
         </div>
       </div>
 
       <div class="cm-info-banner">
         ${ic('info', 'icon-sm')}
-        <span>?ㄐ隤踵?敺??啣遣瑼Ｘ銵冽?雿輻???株??內嚗歇撱箇??炎?貉”隞?????穿??踹?敶梢?Ｘ?憛怠??/span>
+        <span>可拖曳題目調整順序，變更後會即時同步到填報頁面。</span>
       </div>
 
       <div id="cm-sections-wrap" data-checklist-route="manage" data-checklist-route-state="shell">${sectHtml}</div>
@@ -2188,10 +2188,10 @@
   }
 
   function cmAddSection() {
-    _cmModal('?啣?蝡?', `
+    _cmModal('新增類別', `
       <div class="form-group">
-        <label class="form-label form-required">蝡??迂</label>
-        <input type="text" class="form-input" id="cm-sec-name" placeholder="靘? 10. 鞈?蝟餌絞摮??批" required autofocus>
+        <label class="form-label form-required">類別名稱</label>
+        <input type="text" class="form-input" id="cm-sec-name" placeholder="例如 10. 基本資料" required autofocus>
       </div>`, () => {
       const name = document.getElementById('cm-sec-name').value.trim();
       if (!name) return;
@@ -2205,9 +2205,9 @@
   function cmEditSection(si) {
     const secs = getChecklistSections();
     const sec = secs[si];
-    _cmModal('蝺刻摩蝡?', `
+    _cmModal('編輯類別', `
       <div class="form-group">
-        <label class="form-label form-required">蝡??迂</label>
+        <label class="form-label form-required">類別名稱</label>
         <input type="text" class="form-input" id="cm-sec-name" value="${esc(sec.section)}" required autofocus>
       </div>`, () => {
       const name = document.getElementById('cm-sec-name').value.trim();
@@ -2231,21 +2231,21 @@
 
   function cmAddItem(si) {
     const nextId = _cmNextItemId(si);
-    _cmModal('?啣??', `
+    _cmModal('新增題目', `
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label form-required">?蝺刻?</label>
-          <input type="text" class="form-input" id="cm-item-id" value="${esc(nextId)}" placeholder="靘? 8.10" required>
-          <p class="form-hint">?蝺刻?撱箄降瘝輻蝡?蝺函Ⅳ嚗靘踵?摨?敺?餈質馱??/p>
+          <label class="form-label form-required">題號</label>
+          <input type="text" class="form-input" id="cm-item-id" value="${esc(nextId)}" placeholder="例如 8.10" required>
+          <p class="form-hint">題號應符合類別編號格式，並可搭配小數點子題號。</p>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label form-required">??批捆</label>
-          <textarea class="form-textarea form-textarea--min-80" id="cm-item-text" placeholder="隢撓?交炎?賊??桀摰? required autofocus></textarea>
+        <label class="form-label form-required">題目內容</label>
+          <textarea class="form-textarea form-textarea--min-80" id="cm-item-text" placeholder="請輸入題目內容" required autofocus></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">?內隤芣?</label>
-          <textarea class="form-textarea form-textarea--min-60" id="cm-item-hint" placeholder="靘? ?航???????隞嗚?Ｘ???交??"></textarea>
+        <label class="form-label">說明</label>
+          <textarea class="form-textarea form-textarea--min-60" id="cm-item-hint" placeholder="可選填，補充填寫說明或限制條件"></textarea>
       </div>`, () => {
       const id = document.getElementById('cm-item-id').value.trim();
       const text = document.getElementById('cm-item-text').value.trim();
@@ -2263,19 +2263,19 @@
   function cmEditItem(si, ii) {
     const secs = getChecklistSections();
     const item = secs[si].items[ii];
-    _cmModal('蝺刻摩?', `
+    _cmModal('編輯題目', `
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label form-required">?蝺刻?</label>
+          <label class="form-label form-required">題號</label>
           <input type="text" class="form-input" id="cm-item-id" value="${esc(item.id)}" required>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label form-required">??批捆</label>
+        <label class="form-label form-required">題目內容</label>
           <textarea class="form-textarea form-textarea--min-80" id="cm-item-text" required>${esc(item.text)}</textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">?內隤芣?</label>
+        <label class="form-label">說明</label>
           <textarea class="form-textarea form-textarea--min-60" id="cm-item-hint">${esc(item.hint || '')}</textarea>
       </div>`, () => {
       const newId = document.getElementById('cm-item-id').value.trim();
@@ -2306,14 +2306,14 @@
     const confirmed = await openConfirmDialog('確定要恢復預設檢核類別嗎？', { title: '恢復預設', confirmText: '恢復預設', cancelText: '取消' });
     if (!confirmed) return;
     resetChecklistSectionsAndInvalidate('checklist-template-reset-default');
-    toast('撌脤????身憿澈', 'info');
+    toast('已恢復預設檢核類別。', 'info');
     _cmRefreshSections();
   };
 
   async function handleDeleteChecklistYear(year) {
     const targetYear = String(year || '').trim();
     if (!targetYear) {
-      toast('隢???撟游漲', 'error');
+      toast('請先輸入有效年度。', 'error');
       return;
     }
     const label = targetYear + ' 年';
