@@ -241,6 +241,7 @@
     };
     let unitGovernanceDeferredBodiesCache = {
       signature: '',
+      itemsByCategory: {},
       htmlByCategory: {}
     };
     let securityWindowRenderCache = {
@@ -788,7 +789,7 @@
       unitGovernanceTopLevelCache = { signature: '', value: [], filteredSignature: '', filteredValue: [] };
       unitGovernanceFilteredCache = { signature: '', value: [] };
       unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
-      unitGovernanceDeferredBodiesCache = { signature: '', htmlByCategory: {} };
+      unitGovernanceDeferredBodiesCache = { signature: '', itemsByCategory: {}, htmlByCategory: {} };
       securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
     }
 
@@ -796,12 +797,12 @@
       unitGovernanceState.summary = { total: 0, consolidated: 0, independent: 0, children: 0 };
       unitGovernanceState.categorySummaries = {};
       unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
-      unitGovernanceDeferredBodiesCache = { signature: '', htmlByCategory: {} };
+      unitGovernanceDeferredBodiesCache = { signature: '', itemsByCategory: {}, htmlByCategory: {} };
     }
 
     function resetUnitGovernanceRenderState() {
       unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
-      unitGovernanceDeferredBodiesCache = { signature: '', htmlByCategory: {} };
+      unitGovernanceDeferredBodiesCache = { signature: '', itemsByCategory: {}, htmlByCategory: {} };
     }
 
     function resetSecurityWindowSummaryState() {
@@ -2238,9 +2239,23 @@
 
     function getDeferredGovernanceCategoryBody(category) {
       const key = String(category || '').trim();
-      const bodies = unitGovernanceDeferredBodiesCache && unitGovernanceDeferredBodiesCache.htmlByCategory;
-      if (!key || !bodies || typeof bodies !== 'object') return '';
-      return String(bodies[key] || '');
+      const cache = unitGovernanceDeferredBodiesCache || {};
+      const bodies = cache.htmlByCategory && typeof cache.htmlByCategory === 'object' ? cache.htmlByCategory : null;
+      if (key && bodies && Object.prototype.hasOwnProperty.call(bodies, key)) {
+        return String(bodies[key] || '');
+      }
+      const itemsByCategory = cache.itemsByCategory && typeof cache.itemsByCategory === 'object' ? cache.itemsByCategory : null;
+      const items = key && itemsByCategory && Object.prototype.hasOwnProperty.call(itemsByCategory, key)
+        ? itemsByCategory[key]
+        : [];
+      const bodyHtml = buildGovernanceCategoryBodyHtml(items);
+      if (key) {
+        if (!cache.htmlByCategory || typeof cache.htmlByCategory !== 'object') {
+          unitGovernanceDeferredBodiesCache.htmlByCategory = {};
+        }
+        unitGovernanceDeferredBodiesCache.htmlByCategory[key] = bodyHtml;
+      }
+      return bodyHtml;
     }
 
     function hydrateGovernanceCategoryCard(detailsEl) {
@@ -2753,11 +2768,12 @@
       const groupedItems = groupGovernanceUnitsByCategory(items);
       unitGovernanceDeferredBodiesCache = {
         signature,
-        htmlByCategory: groupedItems.reduce((result, group) => {
+        itemsByCategory: groupedItems.reduce((result, group) => {
           const key = String(group && group.category || '').trim();
-          if (key) result[key] = buildGovernanceCategoryBodyHtml(group && group.items);
+          if (key) result[key] = Array.isArray(group && group.items) ? group.items.slice() : [];
           return result;
-        }, {})
+        }, {}),
+        htmlByCategory: {}
       };
       const cardsHtml = groupedItems.length
         ? groupedItems.map((group, index) => renderGovernanceCategoryCard(group, index, categorySummaries, { deferBody: true })).join('')
