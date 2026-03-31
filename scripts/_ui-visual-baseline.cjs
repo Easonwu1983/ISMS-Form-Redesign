@@ -371,10 +371,10 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'dashboard') {
     return common + `
       #visual-dashboard-shell {
-        width: ${mode === 'mobile' ? '300px' : '560px'} !important;
-        max-width: ${mode === 'mobile' ? '300px' : '560px'} !important;
+        width: ${mode === 'mobile' ? '280px' : '500px'} !important;
+        max-width: ${mode === 'mobile' ? '280px' : '500px'} !important;
         margin: 0 auto !important;
-        padding: ${mode === 'mobile' ? '12px' : '14px'} !important;
+        padding: ${mode === 'mobile' ? '11px' : '12px'} !important;
         box-sizing: border-box !important;
       }
       #visual-dashboard-shell .visual-dashboard-stat-grid {
@@ -465,8 +465,8 @@ function getVisualSmokeStyles(slug, mode) {
   if (slug === 'unit-review') {
     return common + `
       #visual-unit-review-shell {
-        width: ${mode === 'mobile' ? '360px' : '760px'} !important;
-        max-width: ${mode === 'mobile' ? '360px' : '760px'} !important;
+        width: ${mode === 'mobile' ? '340px' : '680px'} !important;
+        max-width: ${mode === 'mobile' ? '340px' : '680px'} !important;
         margin: 0 auto !important;
         box-sizing: border-box !important;
       }

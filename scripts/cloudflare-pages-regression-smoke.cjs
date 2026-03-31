@@ -30,9 +30,9 @@ function pickExecutablePath() {
 
 function getVisualSampleScale(spec, mode) {
   const slug = spec && spec.slug;
-  if (slug === 'dashboard') return mode === 'mobile' ? 0.5 : 0.54;
+  if (slug === 'dashboard') return mode === 'mobile' ? 0.44 : 0.46;
   if (slug === 'unit-contact-apply') return mode === 'mobile' ? 0.56 : 0.62;
-  if (slug === 'unit-review') return mode === 'mobile' ? 0.58 : 0.62;
+  if (slug === 'unit-review') return mode === 'mobile' ? 0.52 : 0.54;
   if (slug === 'unit-contact-status') return mode === 'mobile' ? 0.72 : 0.82;
   if (slug === 'unit-contact-success' || slug === 'unit-contact-activate') return mode === 'mobile' ? 0.7 : 0.8;
   return 1;
@@ -140,11 +140,15 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
 
 async function waitForChecklistListReady(page, timeout = 25000) {
   await page.waitForFunction(() => {
+    const routeState = document.querySelector('.cl-list-page')?.dataset?.checklistRouteState
+      || document.querySelector('.cl-list-shell')?.dataset?.checklistRouteState
+      || document.querySelector('.cl-list-content')?.dataset?.checklistRouteState;
     return !!document.querySelector('#cl-list-keyword')
+      && (routeState === 'ready'
       || !!document.querySelector('.checklist-list-header')
       || !!document.querySelector('.cl-list-shell')
       || document.querySelectorAll('.checklist-list-summary .dashboard-panel-pill').length >= 4
-      || document.querySelectorAll('.cl-list-row').length > 0;
+      || document.querySelectorAll('.cl-list-row').length > 0);
   }, undefined, { timeout });
 }
 
@@ -156,7 +160,7 @@ async function runUnitAdminScopeChecks(browser, pushStep) {
       requireVersionChip: false,
       fastAuth: true,
       skipBootstrap: true,
-      initialHash: 'dashboard'
+      initialHash: ''
     });
     pushStep('unit-admin:login', true, 'unit admin login succeeded');
 
@@ -303,8 +307,17 @@ async function openChecklistSmokePage(context) {
     skipBootstrap: true,
     initialHash: 'checklist'
   });
-  await gotoHashRoute(checklistPage, 'checklist', { settleMs: 500, timeout: 20000 }).catch(() => {});
-  await waitForChecklistListReady(checklistPage, 15000).catch(() => {});
+  const currentHash = await checklistPage.evaluate(() => String(window.location.hash || ''));
+  if (!currentHash.startsWith('#checklist')) {
+    await gotoHashRoute(checklistPage, 'checklist', { settleMs: 260, timeout: 20000 }).catch(() => {});
+  }
+  try {
+    await waitForChecklistListReady(checklistPage, 12000);
+  } catch (_) {
+    await checklistPage.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await ensureAdminSession(checklistPage);
+    await waitForChecklistListReady(checklistPage, 15000);
+  }
   return checklistPage;
 }
 
@@ -805,23 +818,18 @@ async function run() {
     const checklistPage = await openChecklistSmokePage(context);
     try {
       let checklistListReady = false;
-      for (let attempt = 0; attempt < 3 && !checklistListReady; attempt += 1) {
-        if (attempt === 0) {
-          await gotoHashRoute(checklistPage, 'checklist', { settleMs: 450, timeout: 20000 });
-        } else if (attempt === 1) {
-          await gotoAppEntry(checklistPage, 'checklist', 'domcontentloaded');
-          await ensureAdminSession(checklistPage);
-          await checklistPage.waitForTimeout(650);
-        } else {
-          await checklistPage.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-          await ensureAdminSession(checklistPage);
-          await checklistPage.waitForTimeout(900);
-        }
+      for (let attempt = 0; attempt < 2 && !checklistListReady; attempt += 1) {
         try {
-          await waitForChecklistListReady(checklistPage, 20000);
+          if (attempt === 0) {
+            await waitForChecklistListReady(checklistPage, 14000);
+          } else {
+            await checklistPage.goto(`${BASE_URL}/#checklist`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await ensureAdminSession(checklistPage);
+            await waitForChecklistListReady(checklistPage, 18000);
+          }
           checklistListReady = true;
         } catch (error) {
-          if (attempt >= 2) throw error;
+          if (attempt >= 1) throw error;
         }
       }
       const checklistListText = await checklistPage.evaluate(() => {

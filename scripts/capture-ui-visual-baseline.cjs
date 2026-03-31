@@ -22,9 +22,28 @@ function pickExecutablePath() {
 }
 
 async function login(page) {
-  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 45000 });
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForFunction(() => {
+    return window.__APP_READY__ === true
+      || !!document.querySelector('[data-testid="login-form"]')
+      || !!document.querySelector('.btn-logout');
+  }, undefined, { timeout: 30000 }).catch(() => {});
   const alreadyAuthenticated = await page.locator('.btn-logout').count();
   if (!alreadyAuthenticated) {
+    const fastAuthReady = await page.waitForFunction(() => {
+      return !!(window._authModule && typeof window._authModule.login === 'function');
+    }, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
+    if (fastAuthReady) {
+      const ok = await page.evaluate(async () => {
+        const auth = window._authModule;
+        const result = await auth.login('easonwu', '2wsx#EDC');
+        return !!result;
+      });
+      if (ok) {
+        await page.waitForFunction(() => !!document.querySelector('.btn-logout'), undefined, { timeout: 30000 });
+        return;
+      }
+    }
     await page.waitForSelector('[data-testid="login-form"]', { timeout: 30000 });
     await page.fill('[data-testid="login-user"]', 'easonwu');
     await page.fill('[data-testid="login-pass"]', '2wsx#EDC');

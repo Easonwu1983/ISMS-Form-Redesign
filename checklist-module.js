@@ -1022,6 +1022,16 @@
       };
     }
 
+    function setChecklistListRouteState(state) {
+      const page = document.querySelector('.cl-list-page');
+      const shell = document.querySelector('.cl-list-shell');
+      const content = document.querySelector('.cl-list-content');
+      const nextState = String(state || '').trim() || 'ready';
+      if (page) page.dataset.checklistRouteState = nextState;
+      if (shell) shell.dataset.checklistRouteState = nextState;
+      if (content) content.dataset.checklistRouteState = nextState;
+    }
+
     function renderChecklistListContent(items, snapshotOverride, viewSnapshotOverride) {
       const renderSignature = [
         typeof getStoreTouchToken === 'function' ? String(getStoreTouchToken('checklists') || '') : '',
@@ -1046,6 +1056,7 @@
       refreshChecklistListDomCache(contentEl, renderSignature);
       refreshIcons();
       bindCopyButtons();
+      setChecklistListRouteState('ready');
       applyChecklistKeywordFilter();
     }
 
@@ -1200,9 +1211,9 @@
     }
     renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
-    document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page">
+    document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route-state="shell">
       <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報內容，可快速搜尋填報人員與單位狀態。</p></div><div class="page-header-actions">${fillBtn}</div></div>
-      <div class="card cl-list-shell">
+      <div class="card cl-list-shell" data-checklist-route-state="shell">
         <div class="cl-list-toolbar-wrap">
           ${buildChecklistListFilters()}
           <div class="cl-year-tabs-shell">
@@ -1212,7 +1223,7 @@
         </div>
         ${renderChecklistListSummary(listSummary)}
         ${useRemoteList ? renderChecklistListPager(remotePage) : ''}
-        <div class="cl-list-content"></div>
+        <div class="cl-list-content" data-checklist-route-state="shell"></div>
       </div>
     </div>`;
     renderChecklistListContent(checklists, snapshot, viewSnapshot);
