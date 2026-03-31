@@ -343,6 +343,9 @@
       if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
       if (typeof beginPageRuntime === 'function') beginPageRuntime();
       purgeStaleLoginState();
+      if (typeof window !== 'undefined') {
+        window.__APP_READY__ = false;
+      }
       var needsLocalBootstrap = false;
       var textMap = {
         skip: '\u8df3\u5230\u4e3b\u8981\u5167\u5bb9',
@@ -408,6 +411,9 @@
         '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h2 class="login-entry-title">' + textMap.firstUseTitle + '</h2><p class="login-entry-text">' + textMap.firstUseText + '</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">' + textMap.applyUnitContact + '</a><a class="btn btn-secondary" href="#apply-unit-contact-status">' + textMap.checkProgress + '</a></div></div><p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.forgotPassword + '</a></p></div>' +
         '<div id="auth-secondary-panels"></div>' +
         '</main></div><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div>';
+      if (typeof window !== 'undefined') {
+        window.__APP_READY__ = true;
+      }
 
       function buildChangePanelHtml() {
         return '<div id="change-panel" style="display:none"><div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">' + textMap.changeTitle + '</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">' + textMap.passwordRule + '</p></div><div class="login-error" id="change-error" role="alert" aria-live="assertive" aria-atomic="true">' + textMap.changeError + '</div><form class="login-form" id="change-form"><input type="hidden" id="change-username"><div class="form-group"><label class="form-label">' + textMap.currentPassword + '</label><input type="password" class="form-input" id="change-current-password" autocomplete="current-password" placeholder="' + textMap.currentPassword + '" required></div><div class="form-group"><label class="form-label">' + textMap.newPassword + '</label><input type="password" class="form-input" id="change-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><div class="form-group"><label class="form-label">' + textMap.confirmNewPassword + '</label><input type="password" class="form-input" id="change-pass-confirm" autocomplete="new-password" placeholder="' + textMap.confirmNewPassword + '" required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' ' + textMap.updatePassword + '</button></form><p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.backToLogin + '</a></p></div>';
@@ -790,6 +796,9 @@
 
     function renderPublicPage(page, param) {
       if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
+      if (typeof window !== 'undefined') {
+        window.__APP_READY__ = false;
+      }
       const loggedInUser = currentUser();
       document.body.innerHTML = '<a class="skip-link" href="#app">\u8df3\u5230\u4e3b\u8981\u5167\u5bb9</a><div class="public-shell"><header class="public-header"><a class="public-brand" href="#apply-unit-contact"><span class="public-brand-icon">' + ntuLogo('ntu-logo-sm') + '</span><span class="public-brand-text"><strong>\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71</strong><span>ISMS \u7ba1\u8003\u8207\u8ffd\u8e64\u5e73\u53f0</span></span></a><div class="public-header-actions"><a class="btn btn-ghost" href="#apply-unit-contact-status">\u67e5\u8a62\u9032\u5ea6</a>' + (loggedInUser ? '<a class="btn btn-secondary" href="#dashboard">\u9032\u5165\u7cfb\u7d71</a>' : '<a class="btn btn-secondary" href="#">\u767b\u5165\u7cfb\u7d71</a>') + '</div></header><main class="public-main" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div></div>';
       if (typeof beginPageRuntime === 'function') beginPageRuntime();
@@ -810,6 +819,9 @@
 
     function renderApp() {
       if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
+      if (typeof window !== 'undefined') {
+        window.__APP_READY__ = false;
+      }
       var u = currentUser();
       if (!u) {
         handleRoute();
@@ -821,6 +833,9 @@
       }
       var showTransitionOverlay = consumeAppTransitionFlag();
       document.body.innerHTML = '<a class="skip-link" href="#app">\u8df3\u5230\u4e3b\u8981\u5167\u5bb9</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div>' + (showTransitionOverlay ? renderAppTransitionOverlay() : '');
+      if (typeof window !== 'undefined') {
+        window.__APP_READY__ = true;
+      }
       if (typeof window !== 'undefined' && window.__REMOTE_BOOTSTRAP_STATE__ === 'ready') {
         handleRoute(u);
         if (showTransitionOverlay) dismissAppTransitionOverlay();
