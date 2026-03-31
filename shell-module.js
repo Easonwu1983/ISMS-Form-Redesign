@@ -406,9 +406,146 @@
         '<div id="bootstrap-panel" style="display:' + (needsLocalBootstrap ? 'block' : 'none') + '"><div class="login-entry-card login-entry-card--setup"><div class="login-entry-eyebrow">Setup</div><h2 class="login-entry-title">' + textMap.setupTitle + '</h2><p class="login-entry-text">' + textMap.setupText + '</p><form class="login-form" id="bootstrap-form"><div class="form-group"><label class="form-label">' + textMap.adminName + '</label><input type="text" class="form-input" id="bootstrap-name" autocomplete="name" placeholder="' + textMap.placeholderName + '" value="' + textMap.defaultAdminName + '" required></div><div class="form-group"><label class="form-label">' + textMap.adminUser + '</label><input type="text" class="form-input" id="bootstrap-user" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required></div><div class="form-group"><label class="form-label">' + textMap.email + '</label><input type="email" class="form-input" id="bootstrap-email" autocomplete="email" placeholder="' + textMap.placeholderEmail + '" required></div><div class="form-group"><label class="form-label">' + textMap.initPassword + '</label><input type="password" class="form-input" id="bootstrap-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><button type="submit" class="login-btn">' + textMap.createAdmin + '</button></form></div></div>' +
         '<div id="login-panel" style="display:' + (needsLocalBootstrap ? 'none' : 'block') + '"><form class="login-form" id="login-form" data-testid="login-form"><div class="form-group"><label class="form-label">' + textMap.account + '</label><input type="text" class="form-input" id="login-user" data-testid="login-user" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required autofocus></div><div class="form-group"><label class="form-label">' + textMap.password + '</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" autocomplete="current-password" placeholder="' + textMap.password + '" required></div><button type="submit" class="login-btn" data-testid="login-submit">' + textMap.loginAction + ' ' + ic('arrow-right', 'icon-sm') + '</button></form>' +
         '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h2 class="login-entry-title">' + textMap.firstUseTitle + '</h2><p class="login-entry-text">' + textMap.firstUseText + '</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">' + textMap.applyUnitContact + '</a><a class="btn btn-secondary" href="#apply-unit-contact-status">' + textMap.checkProgress + '</a></div></div><p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.forgotPassword + '</a></p></div>' +
-        '<div id="change-panel" style="display:none"><div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">' + textMap.changeTitle + '</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">' + textMap.passwordRule + '</p></div><div class="login-error" id="change-error" role="alert" aria-live="assertive" aria-atomic="true">' + textMap.changeError + '</div><form class="login-form" id="change-form"><input type="hidden" id="change-username"><div class="form-group"><label class="form-label">' + textMap.currentPassword + '</label><input type="password" class="form-input" id="change-current-password" autocomplete="current-password" placeholder="' + textMap.currentPassword + '" required></div><div class="form-group"><label class="form-label">' + textMap.newPassword + '</label><input type="password" class="form-input" id="change-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><div class="form-group"><label class="form-label">' + textMap.confirmNewPassword + '</label><input type="password" class="form-input" id="change-pass-confirm" autocomplete="new-password" placeholder="' + textMap.confirmNewPassword + '" required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' ' + textMap.updatePassword + '</button></form><p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.backToLogin + '</a></p></div>' +
-        '<div id="forgot-panel" style="display:none"><div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">' + textMap.resetTitle + '</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">' + textMap.passwordRule + '</p></div><div class="login-error" id="forgot-error" role="alert" aria-live="assertive" aria-atomic="true">' + textMap.resetError + '</div><form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">' + textMap.account + '</label><input type="text" class="form-input" id="forgot-username" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required></div><div class="form-group"><label class="form-label">' + textMap.registeredEmail + '</label><input type="email" class="form-input" id="forgot-email" autocomplete="email" placeholder="' + textMap.registeredEmailPlaceholder + '" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' ' + textMap.sendReset + '</button></form><div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px"><p style="font-size:.88rem;color:#0f172a;font-weight:600" id="reset-result-title">' + textMap.resetSent + '</p><p style="font-size:.82rem;color:var(--text-secondary)">' + textMap.accountPrefix + '<strong id="reset-username"></strong></p><p style="font-size:.82rem;color:var(--text-secondary)">' + textMap.expiryPrefix + '<strong id="reset-expire"></strong></p><p style="font-size:.82rem;color:var(--text-secondary);margin-top:6px" id="reset-result-message"></p><form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><div class="form-group"><label class="form-label">\u91cd\u8a2d\u4ee3\u78bc</label><input type="text" class="form-input" id="redeem-token" autocomplete="one-time-code" placeholder="\u8acb\u8f38\u5165\u4fe1\u4ef6\u4e2d\u7684\u91cd\u8a2d\u4ee3\u78bc" required></div><div class="form-group"><label class="form-label">' + textMap.newPassword + '</label><input type="password" class="form-input" id="redeem-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><div class="form-group"><label class="form-label">' + textMap.confirmNewPassword + '</label><input type="password" class="form-input" id="redeem-pass-confirm" autocomplete="new-password" placeholder="' + textMap.confirmNewPassword + '" required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' \u5b8c\u6210\u91cd\u8a2d</button></form></div><p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.backToLogin + '</a></p></div>' +
+        '<div id="auth-secondary-panels"></div>' +
         '</main></div><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div>';
+
+      function buildChangePanelHtml() {
+        return '<div id="change-panel" style="display:none"><div style="text-align:center;margin-bottom:18px">' + ic('shield-check', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">' + textMap.changeTitle + '</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">' + textMap.passwordRule + '</p></div><div class="login-error" id="change-error" role="alert" aria-live="assertive" aria-atomic="true">' + textMap.changeError + '</div><form class="login-form" id="change-form"><input type="hidden" id="change-username"><div class="form-group"><label class="form-label">' + textMap.currentPassword + '</label><input type="password" class="form-input" id="change-current-password" autocomplete="current-password" placeholder="' + textMap.currentPassword + '" required></div><div class="form-group"><label class="form-label">' + textMap.newPassword + '</label><input type="password" class="form-input" id="change-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><div class="form-group"><label class="form-label">' + textMap.confirmNewPassword + '</label><input type="password" class="form-input" id="change-pass-confirm" autocomplete="new-password" placeholder="' + textMap.confirmNewPassword + '" required></div><button type="submit" class="login-btn">' + ic('key-round', 'icon-sm') + ' ' + textMap.updatePassword + '</button></form><p style="text-align:center;margin-top:14px"><a href="#" id="change-back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.backToLogin + '</a></p></div>';
+      }
+
+      function buildForgotPanelHtml() {
+        return '<div id="forgot-panel" style="display:none"><div style="text-align:center;margin-bottom:18px">' + ic('key', 'icon-xl') + '<h2 style="font-size:1.1rem;font-weight:600;color:var(--text-heading);margin-top:8px">' + textMap.resetTitle + '</h2><p style="margin-top:8px;color:var(--text-secondary);font-size:.82rem;line-height:1.6">' + textMap.passwordRule + '</p></div><div class="login-error" id="forgot-error" role="alert" aria-live="assertive" aria-atomic="true">' + textMap.resetError + '</div><form class="login-form" id="forgot-form"><div class="form-group"><label class="form-label">' + textMap.account + '</label><input type="text" class="form-input" id="forgot-username" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required></div><div class="form-group"><label class="form-label">' + textMap.registeredEmail + '</label><input type="email" class="form-input" id="forgot-email" autocomplete="email" placeholder="' + textMap.registeredEmailPlaceholder + '" required></div><button type="submit" class="login-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">' + ic('mail', 'icon-sm') + ' ' + textMap.sendReset + '</button></form><div id="forgot-result" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px"><p style="font-size:.88rem;color:#0f172a;font-weight:600" id="reset-result-title">' + textMap.resetSent + '</p><p style="font-size:.82rem;color:var(--text-secondary)">' + textMap.accountPrefix + '<strong id="reset-username"></strong></p><p style="font-size:.82rem;color:var(--text-secondary)">' + textMap.expiryPrefix + '<strong id="reset-expire"></strong></p><p style="font-size:.82rem;color:var(--text-secondary);margin-top:6px" id="reset-result-message"></p><form class="login-form" id="redeem-form" style="margin-top:14px"><input type="hidden" id="redeem-username"><div class="form-group"><label class="form-label">\u91cd\u8a2d\u4ee3\u78bc</label><input type="text" class="form-input" id="redeem-token" autocomplete="one-time-code" placeholder="\u8acb\u8f38\u5165\u4fe1\u4ef6\u4e2d\u7684\u91cd\u8a2d\u4ee3\u78bc" required></div><div class="form-group"><label class="form-label">' + textMap.newPassword + '</label><input type="password" class="form-input" id="redeem-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><div class="form-group"><label class="form-label">' + textMap.confirmNewPassword + '</label><input type="password" class="form-input" id="redeem-pass-confirm" autocomplete="new-password" placeholder="' + textMap.confirmNewPassword + '" required></div><button type="submit" class="login-btn">' + ic('check', 'icon-sm') + ' \u5b8c\u6210\u91cd\u8a2d</button></form></div><p style="text-align:center;margin-top:14px"><a href="#" id="back-login-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.backToLogin + '</a></p></div>';
+      }
+
+      function ensureAuthPanel(panelId) {
+        var panel = document.getElementById(panelId);
+        if (panel) return panel;
+        var host = document.getElementById('auth-secondary-panels');
+        if (!host) return null;
+        if (panelId === 'change-panel') {
+          host.insertAdjacentHTML('beforeend', buildChangePanelHtml());
+        } else if (panelId === 'forgot-panel') {
+          host.insertAdjacentHTML('beforeend', buildForgotPanelHtml());
+        }
+        return document.getElementById(panelId);
+      }
+
+      function wireChangePanel() {
+        var panel = ensureAuthPanel('change-panel');
+        if (!panel || panel.dataset.authBound === '1') return panel;
+        panel.dataset.authBound = '1';
+        bindPageEvent(document.getElementById('change-form'), 'submit', async function (e) {
+          e.preventDefault();
+          var username = document.getElementById('change-username').value.trim();
+          var currentPassword = document.getElementById('change-current-password').value;
+          var nextPassword = document.getElementById('change-pass').value;
+          var confirmPassword = document.getElementById('change-pass-confirm').value;
+          if (nextPassword !== confirmPassword) {
+            document.getElementById('change-error').textContent = textMap.changeMismatch;
+            var changeError = document.getElementById('change-error');
+            if (changeError) changeError.classList.add('show');
+            return;
+          }
+          var changePasswordError = validatePasswordComplexity(nextPassword);
+          if (changePasswordError) {
+            document.getElementById('change-error').textContent = changePasswordError;
+            var changeError = document.getElementById('change-error');
+            if (changeError) changeError.classList.add('show');
+            return;
+          }
+          try {
+            var updatedUser = await changePassword({ username: username, currentPassword: currentPassword, newPassword: nextPassword });
+            if (!updatedUser) {
+              document.getElementById('change-error').textContent = textMap.changeError;
+              var changeError = document.getElementById('change-error');
+              if (changeError) changeError.classList.add('show');
+              return;
+            }
+            toast(textMap.changeDone, 'success');
+            switchPanel('login-panel');
+            document.getElementById('login-user').value = username;
+            document.getElementById('login-pass').value = '';
+          } catch (error) {
+            document.getElementById('change-error').textContent = String(error && error.message || error || textMap.changeError);
+            var changeError = document.getElementById('change-error');
+            if (changeError) changeError.classList.add('show');
+          }
+        });
+        bindPageEvent(document.getElementById('change-back-login-link'), 'click', function (e) {
+          e.preventDefault();
+          switchPanel(needsLocalBootstrap ? 'bootstrap-panel' : 'login-panel');
+        });
+        return panel;
+      }
+
+      function wireForgotPanel() {
+        var panel = ensureAuthPanel('forgot-panel');
+        if (!panel || panel.dataset.authBound === '1') return panel;
+        panel.dataset.authBound = '1';
+        bindPageEvent(document.getElementById('forgot-form'), 'submit', async function (e) {
+          e.preventDefault();
+          var username = document.getElementById('forgot-username').value.trim();
+          var email = document.getElementById('forgot-email').value.trim();
+          try {
+            var resetResult = await resetPasswordByEmail({ username: username, email: email });
+            if (!resetResult) {
+              var forgotError = document.getElementById('forgot-error');
+              if (forgotError) forgotError.classList.add('show');
+              return;
+            }
+            var forgotError = document.getElementById('forgot-error');
+            if (forgotError) forgotError.classList.remove('show');
+            document.getElementById('reset-username').textContent = resetResult.user.username;
+            document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || textMap.forgotExpireFallback;
+            var deliveredByMail = !!(resetResult.delivery && resetResult.delivery.sent);
+            document.getElementById('reset-result-title').textContent = deliveredByMail ? textMap.forgotDeliverySent : textMap.forgotDeliveryUnavailable;
+            document.getElementById('reset-result-message').textContent = deliveredByMail
+              ? (textMap.forgotDeliverySentMessagePrefix + (resetResult.user.email || email) + textMap.forgotDeliverySentMessageSuffix)
+              : textMap.forgotDeliveryUnavailableMessage;
+            document.getElementById('redeem-username').value = resetResult.user.username;
+            document.getElementById('redeem-token').value = '';
+            document.getElementById('redeem-form').style.display = deliveredByMail ? '' : 'none';
+            document.getElementById('forgot-result').style.display = 'block';
+            toast(deliveredByMail ? textMap.forgotDeliverySent : textMap.forgotDeliveryUnavailable, deliveredByMail ? 'success' : 'error');
+          } catch (error) {
+            document.getElementById('forgot-error').textContent = String(error && error.message || error || textMap.resetFailed);
+            var forgotError = document.getElementById('forgot-error');
+            if (forgotError) forgotError.classList.add('show');
+          }
+        });
+        bindPageEvent(document.getElementById('back-login-link'), 'click', function (e) {
+          e.preventDefault();
+          switchPanel(needsLocalBootstrap ? 'bootstrap-panel' : 'login-panel');
+        });
+        bindPageEvent(document.getElementById('redeem-form'), 'submit', async function (e) {
+          e.preventDefault();
+          var username = document.getElementById('redeem-username').value.trim();
+          var token = document.getElementById('redeem-token').value.trim();
+          var nextPassword = document.getElementById('redeem-pass').value;
+          var confirmPassword = document.getElementById('redeem-pass-confirm').value;
+          if (nextPassword !== confirmPassword) {
+            toast(textMap.changeMismatch, 'error');
+            return;
+          }
+          var redeemPasswordError = validatePasswordComplexity(nextPassword);
+          if (redeemPasswordError) {
+            toast(redeemPasswordError, 'error');
+            return;
+          }
+          try {
+            var user = await redeemResetPassword({ username: username, token: token, newPassword: nextPassword });
+            if (!user) {
+              toast(textMap.resetInvalid, 'error');
+              return;
+            }
+            toast(textMap.resetDone, 'success');
+            renderApp();
+          } catch (error) {
+            toast(String(error && error.message || error || textMap.resetFailed), 'error');
+          }
+        });
+        return panel;
+      }
 
       function switchPanel(target) {
         ['bootstrap-panel', 'login-panel', 'forgot-panel', 'change-panel'].forEach(function (id) {
@@ -455,6 +592,8 @@
           var user = await login(username, password);
           if (user) {
             if (user.mustChangePassword) {
+              ensureAuthPanel('change-panel');
+              wireChangePanel();
               document.getElementById('change-username').value = username;
               document.getElementById('change-current-password').value = password;
               switchPanel('change-panel');
@@ -483,121 +622,17 @@
         }
       });
 
-      bindPageEvent(document.getElementById('change-form'), 'submit', async function (e) {
-        e.preventDefault();
-        var username = document.getElementById('change-username').value.trim();
-        var currentPassword = document.getElementById('change-current-password').value;
-        var nextPassword = document.getElementById('change-pass').value;
-        var confirmPassword = document.getElementById('change-pass-confirm').value;
-        if (nextPassword !== confirmPassword) {
-          document.getElementById('change-error').textContent = textMap.changeMismatch;
-          var changeError = document.getElementById('change-error');
-          if (changeError) changeError.classList.add('show');
-          return;
-        }
-        var changePasswordError = validatePasswordComplexity(nextPassword);
-        if (changePasswordError) {
-          document.getElementById('change-error').textContent = changePasswordError;
-          var changeError = document.getElementById('change-error');
-          if (changeError) changeError.classList.add('show');
-          return;
-        }
-        try {
-          var updatedUser = await changePassword({ username: username, currentPassword: currentPassword, newPassword: nextPassword });
-          if (!updatedUser) {
-            document.getElementById('change-error').textContent = textMap.changeError;
-            var changeError = document.getElementById('change-error');
-            if (changeError) changeError.classList.add('show');
-            return;
-          }
-          toast(textMap.changeDone, 'success');
-          switchPanel('login-panel');
-          document.getElementById('login-user').value = username;
-          document.getElementById('login-pass').value = '';
-        } catch (error) {
-          document.getElementById('change-error').textContent = String(error && error.message || error || textMap.changeError);
-          var changeError = document.getElementById('change-error');
-          if (changeError) changeError.classList.add('show');
-        }
-      });
-
       bindPageEvent(document.getElementById('forgot-link'), 'click', function (e) {
         e.preventDefault();
+        ensureAuthPanel('forgot-panel');
+        wireForgotPanel();
         switchPanel('forgot-panel');
-      });
-
-      bindPageEvent(document.getElementById('back-login-link'), 'click', function (e) {
-        e.preventDefault();
-        switchPanel(needsLocalBootstrap ? 'bootstrap-panel' : 'login-panel');
-      });
-
-      bindPageEvent(document.getElementById('change-back-login-link'), 'click', function (e) {
-        e.preventDefault();
-        switchPanel(needsLocalBootstrap ? 'bootstrap-panel' : 'login-panel');
-      });
-
-      bindPageEvent(document.getElementById('forgot-form'), 'submit', async function (e) {
-        e.preventDefault();
-        var username = document.getElementById('forgot-username').value.trim();
-        var email = document.getElementById('forgot-email').value.trim();
-        try {
-          var resetResult = await resetPasswordByEmail({ username: username, email: email });
-          if (!resetResult) {
-            var forgotError = document.getElementById('forgot-error');
-            if (forgotError) forgotError.classList.add('show');
-            return;
-          }
-          var forgotError = document.getElementById('forgot-error');
-          if (forgotError) forgotError.classList.remove('show');
-          document.getElementById('reset-username').textContent = resetResult.user.username;
-          document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || textMap.forgotExpireFallback;
-          var deliveredByMail = !!(resetResult.delivery && resetResult.delivery.sent);
-          document.getElementById('reset-result-title').textContent = deliveredByMail ? textMap.forgotDeliverySent : textMap.forgotDeliveryUnavailable;
-          document.getElementById('reset-result-message').textContent = deliveredByMail
-            ? (textMap.forgotDeliverySentMessagePrefix + (resetResult.user.email || email) + textMap.forgotDeliverySentMessageSuffix)
-            : textMap.forgotDeliveryUnavailableMessage;
-          document.getElementById('redeem-username').value = resetResult.user.username;
-          document.getElementById('redeem-token').value = '';
-          document.getElementById('redeem-form').style.display = deliveredByMail ? '' : 'none';
-          document.getElementById('forgot-result').style.display = 'block';
-          toast(deliveredByMail ? textMap.forgotDeliverySent : textMap.forgotDeliveryUnavailable, deliveredByMail ? 'success' : 'error');
-        } catch (error) {
-          document.getElementById('forgot-error').textContent = String(error && error.message || error || textMap.resetFailed);
-          var forgotError = document.getElementById('forgot-error');
-          if (forgotError) forgotError.classList.add('show');
-        }
-      });
-
-      bindPageEvent(document.getElementById('redeem-form'), 'submit', async function (e) {
-        e.preventDefault();
-        var username = document.getElementById('redeem-username').value.trim();
-        var token = document.getElementById('redeem-token').value.trim();
-        var nextPassword = document.getElementById('redeem-pass').value;
-        var confirmPassword = document.getElementById('redeem-pass-confirm').value;
-        if (nextPassword !== confirmPassword) {
-          toast(textMap.changeMismatch, 'error');
-          return;
-        }
-        var redeemPasswordError = validatePasswordComplexity(nextPassword);
-        if (redeemPasswordError) {
-          toast(redeemPasswordError, 'error');
-          return;
-        }
-        try {
-          var user = await redeemResetPassword({ username: username, token: token, newPassword: nextPassword });
-          if (!user) {
-            toast(textMap.resetInvalid, 'error');
-            return;
-          }
-          toast(textMap.resetDone, 'success');
-          renderApp();
-        } catch (error) {
-          toast(String(error && error.message || error || textMap.resetFailed), 'error');
-        }
       });
 
       var loggedInUser = currentUser();
       if (loggedInUser && loggedInUser.mustChangePassword) {
+        ensureAuthPanel('change-panel');
+        wireChangePanel();
         switchPanel('change-panel');
         document.getElementById('change-username').value = loggedInUser.username || '';
         var currentPasswordInput = document.getElementById('change-current-password');

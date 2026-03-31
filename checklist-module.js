@@ -388,6 +388,44 @@
       }
       return function () {};
     }
+
+    function scheduleChecklistPostPaint(task, delayMs) {
+      if (typeof task !== 'function') return function () {};
+      let cancelled = false;
+      let frameId = 0;
+      let timerId = 0;
+      const run = function () {
+        if (cancelled) return;
+        try {
+          task();
+        } catch (error) {
+          window.__ismsWarn('checklist post paint task failed', error);
+        }
+      };
+      const scheduleTimeout = function () {
+        const safeDelay = Math.max(0, Number(delayMs) || 0);
+        if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+          timerId = window.setTimeout(run, safeDelay);
+          return;
+        }
+        run();
+      };
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        frameId = window.requestAnimationFrame(scheduleTimeout);
+      } else {
+        scheduleTimeout();
+      }
+      return registerChecklistPageCleanup(function () {
+        cancelled = true;
+        if (frameId && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+          try { window.cancelAnimationFrame(frameId); } catch (_) {}
+        }
+        if (timerId && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+          try { window.clearTimeout(timerId); } catch (_) {}
+        }
+      });
+    }
+
     function createChecklistRemoteCollectionState(options) {
       const moduleApi = getChecklistCollectionCacheModule();
       if (moduleApi && typeof moduleApi.createRemoteCollectionState === 'function') return moduleApi.createRemoteCollectionState(options);
@@ -1236,10 +1274,14 @@
       renderedSummarySignature = serializeChecklistRemoteSummary(shellSummary);
       renderListShell(shellSummary, shellPage);
       setChecklistListRouteState('ready');
-      renderChecklistListContent(shellItems, shellSnapshot, shellViewSnapshot);
-      syncChecklistListToolbarState();
-      refreshIcons();
-      bindCopyButtons();
+      scheduleChecklistPostPaint(() => {
+        if (renderGeneration !== checklistListRenderGeneration) return;
+        if (!String(window.location.hash || '').startsWith('#checklist')) return;
+        renderChecklistListContent(shellItems, shellSnapshot, shellViewSnapshot);
+        syncChecklistListToolbarState();
+        refreshIcons();
+        bindCopyButtons();
+      }, 0);
       const remotePagePromise = prefetchedRemotePageResult
         ? Promise.resolve(prefetchedRemotePageResult)
         : loadChecklistRemotePage(remoteFilters, { force: !!opts.forceRemotePage });
@@ -1276,10 +1318,14 @@
       renderedSummarySignature = serializeChecklistRemoteSummary(listSummary);
       renderListShell(listSummary, null);
       setChecklistListRouteState('ready');
-      renderChecklistListContent(checklists, snapshot, viewSnapshot);
-      syncChecklistListToolbarState();
-      refreshIcons();
-      bindCopyButtons();
+      scheduleChecklistPostPaint(() => {
+        if (renderGeneration !== checklistListRenderGeneration) return;
+        if (!String(window.location.hash || '').startsWith('#checklist')) return;
+        renderChecklistListContent(checklists, snapshot, viewSnapshot);
+        syncChecklistListToolbarState();
+        refreshIcons();
+        bindCopyButtons();
+      }, 0);
     }
     if (!opts.skipSync && !useRemoteList && syncPromise && typeof syncPromise.then === 'function') {
       syncPromise.then(() => {

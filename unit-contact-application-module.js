@@ -288,6 +288,17 @@
       };
     }
 
+    function ensureAuthorizedScopePicker() {
+      const shell = document.querySelector('[data-unit-contact-authorized-scope-shell]');
+      if (!shell) return null;
+      if (shell.dataset.hydrated === '1') {
+        return initAuthorizedScopePicker('uca-authorized-units');
+      }
+      shell.innerHTML = buildAuthorizedScopePicker('uca-authorized-units', [], '請輸入單位名稱', '若有跨單位兼辦，請在此加選額外授權範圍；主歸屬單位仍以上方選擇為準。');
+      shell.dataset.hydrated = '1';
+      return initAuthorizedScopePicker('uca-authorized-units');
+    }
+
     function validateAuthorizationDocument(file) {
       if (!(file instanceof File)) throw new Error('請上傳有效檔案');
       const size = Number(file.size || 0);
@@ -617,7 +628,7 @@
         + buildUnitCascadeControl('uca-unit', '', false, true)
         + '<div class="form-hint" id="uca-unit-help">請先選擇主要歸屬單位；若有跨單位兼辦，再補充額外授權資源範圍。</div><div class="form-error-message" id="uca-unit-error" hidden></div></div></div>'
         + '<div class="form-group"><label class="form-label">額外授權資源範圍（可複選）</label>'
-        + buildAuthorizedScopePicker('uca-authorized-units', [], '請輸入單位名稱', '若有跨單位兼辦，請在此加選額外授權範圍；主歸屬單位仍以上方選擇為準。')
+        + '<div class="unit-contact-authorized-scope-shell" data-unit-contact-authorized-scope-shell><div class="unit-contact-picker-loading">載入額外授權資源範圍…</div></div>'
         + '</div>'
         + '<div class="form-row unit-contact-compact-row">'
         + '<div class="form-group"><label class="form-label form-required" for="uca-name">申請人姓名</label><input type="text" class="form-input" id="uca-name" data-testid="unit-contact-name" placeholder="請輸入申請人姓名" aria-describedby="uca-name-error" required><div class="form-error-message" id="uca-name-error" hidden></div></div>'
@@ -662,7 +673,7 @@
       const form = document.getElementById('unit-contact-apply-form');
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
       scheduleUnitContactPostPaint(function () {
-        authorizedScopePicker = initAuthorizedScopePicker('uca-authorized-units') || authorizedScopePicker;
+        authorizedScopePicker = ensureAuthorizedScopePicker() || authorizedScopePicker;
         ensureAuthorizationDocumentSection(form);
         refreshIcons();
       }, 0);
