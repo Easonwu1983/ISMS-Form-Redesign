@@ -9982,33 +9982,42 @@ tbody tr:hover {
 .page-header--shell-owned {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 16px;
   align-items: start;
-  padding-top: 4px;
-  margin-bottom: 24px;
+  padding-top: 12px;
+  padding-bottom: 18px;
+  margin-bottom: 26px;
+}
+
+.page-header--shell-owned > :first-child {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
 }
 
 .page-header--shell-owned .page-title {
   font-size: clamp(1.42rem, 2vw, 1.72rem);
-  line-height: 1.14;
+  line-height: 1.18;
   letter-spacing: -0.02em;
+  margin: 0;
 }
 
 .page-header--shell-owned .page-subtitle {
-  margin-top: 10px;
+  margin-top: 0;
   max-width: 920px;
   font-size: 0.95rem;
-  line-height: 1.6;
+  line-height: 1.72;
 }
 
 .page-header--shell-owned .btn,
 .page-header--shell-owned .header-action {
-  margin-top: 2px;
+  margin-top: 4px;
+  align-self: start;
 }
 
 .editor-shell--checklist,
 .editor-shell--training {
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .editor-mobile-summary--checklist {
