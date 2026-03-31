@@ -521,11 +521,7 @@ function createTrainingRouter(deps) {
 
   function buildTrainingSummaryOnlyFastResponse(url, filters, cacheReason) {
     if (state.formsUnfilteredSummaryBody && !hasActiveTrainingFormFilters(filters)) {
-      const cachedBody = cloneJson(state.formsUnfilteredSummaryBody);
-      if (cachedBody && cachedBody.cache) {
-        cachedBody.cache.reason = cacheReason || cachedBody.cache.reason || 'unfiltered-summary-hit';
-      }
-      return cachedBody;
+      return state.formsUnfilteredSummaryBody;
     }
     if (!state.formsUnfilteredSummarySeed) return null;
     const total = Number(state.formsUnfilteredSummarySeed.total || 0);
@@ -612,7 +608,7 @@ function createTrainingRouter(deps) {
     state.formsQueryCache.delete(cacheKey);
     state.formsQueryCache.set(cacheKey, cached);
     return {
-      body: cloneJson(cached.body),
+      body: cached.body,
       reason: 'hit'
     };
   }
@@ -648,7 +644,7 @@ function createTrainingRouter(deps) {
     state.formsSummaryCache.delete(cacheKey);
     state.formsSummaryCache.set(cacheKey, cached);
     return {
-      body: cloneJson(cached.body),
+      body: cached.body,
       response: cached.response || null,
       reason: 'hit'
     };
