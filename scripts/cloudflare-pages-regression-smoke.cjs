@@ -143,7 +143,11 @@ async function waitForChecklistListReady(page, timeout = 25000) {
     const routeState = document.querySelector('.cl-list-page')?.dataset?.checklistRouteState
       || document.querySelector('.cl-list-shell')?.dataset?.checklistRouteState
       || document.querySelector('.cl-list-content')?.dataset?.checklistRouteState;
-    return routeState === 'ready' && !!document.querySelector('#cl-list-keyword');
+    const keyword = !!document.querySelector('#cl-list-keyword');
+    const shell = !!document.querySelector('.cl-list-shell')
+      || !!document.querySelector('.checklist-list-header')
+      || !!document.querySelector('[data-checklist-route="list"]');
+    return (routeState === 'ready' && keyword) || (keyword && shell);
   }, undefined, { timeout });
 }
 

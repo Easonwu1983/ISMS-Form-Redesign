@@ -22,6 +22,21 @@ async function waitForRouteSurface(page, selector, timeout = 20000) {
   }, selector, { timeout });
 }
 
+async function gotoHashRoute(page, hash, options = {}) {
+  const target = '#' + String(hash || '').replace(/^#/, '');
+  await page.evaluate((value) => {
+    if (window.location.hash !== value) {
+      window.location.hash = value;
+      return;
+    }
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  }, target);
+  await page.waitForFunction((value) => String(window.location.hash || '') === value, target, {
+    timeout: options.timeout || 15000
+  });
+  await page.waitForTimeout(options.settleMs || 1200);
+}
+
 async function collectTableSemantics(page) {
   return page.evaluate(() => {
     return Array.from(document.querySelectorAll('#app table')).map((table) => {
@@ -236,15 +251,15 @@ async function collectTableSemantics(page) {
     await runStep(results, 'A11Y-05', 'Admin', 'Key tables expose captions and scoped headers', async () => {
       const checks = [];
 
-      await gotoHash(page, 'users');
-      await waitForRouteSurface(page, '#system-users-page-limit');
-      checks.push({ route: 'users', tables: await collectTableSemantics(page) });
-
-      await gotoHash(page, 'training');
+      await gotoHashRoute(page, 'training', { settleMs: 1200, timeout: 20000 });
       await page.waitForFunction(() => document.querySelectorAll('#app table').length > 0, { timeout: 10000 });
       checks.push({ route: 'training', tables: await collectTableSemantics(page) });
 
-      await gotoHash(page, 'checklist');
+      await gotoHashRoute(page, 'users', { settleMs: 1200, timeout: 20000 });
+      await waitForRouteSurface(page, '#system-users-page-limit');
+      checks.push({ route: 'users', tables: await collectTableSemantics(page) });
+
+      await gotoHashRoute(page, 'checklist', { settleMs: 1200, timeout: 20000 });
       await waitForRouteSurface(page, '#cl-list-keyword');
       const checklistFiltersReady = await page.evaluate(() => {
         const keyword = document.getElementById('cl-list-keyword');
@@ -255,7 +270,7 @@ async function collectTableSemantics(page) {
       });
       if (!checklistFiltersReady) throw new Error('checklist filter labels missing');
 
-      await gotoHash(page, 'list');
+      await gotoHashRoute(page, 'list', { settleMs: 1200, timeout: 20000 });
       await waitForRouteSurface(page, '#search-input');
       checks.push({ route: 'cases', tables: await collectTableSemantics(page) });
 
