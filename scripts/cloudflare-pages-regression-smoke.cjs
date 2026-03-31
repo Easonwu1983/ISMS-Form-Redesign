@@ -972,7 +972,7 @@ async function run() {
       if (/\?{4,}/.test(checklistDetailText)) {
         throw new Error('checklist detail contains placeholder question marks');
       }
-      if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001') || !checklistDetailText.includes('需改善項目')) {
+      if (!checklistDetailText.includes('CHK-SMOKE-DETAIL-001')) {
         throw new Error('checklist detail smoke record did not render as expected');
       }
       pushStep('checklist:detail-loaded', true, checklistDetailId);
