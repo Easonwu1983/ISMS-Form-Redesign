@@ -102,11 +102,20 @@ async function login(page, username = 'easonwu', password = '2wsx#EDC', options 
   if (!alreadyAuthenticated) {
     if (fastAuth) {
       await waitForAuthModule(page, 20000);
-      const loginResult = await page.evaluate(async ({ username, password, options }) => {
+      const tryLogin = async (useLocalLogin) => page.evaluate(async ({ username, password, options }) => {
         const auth = window._authModule;
         if (!auth || typeof auth.login !== 'function') throw new Error('auth module missing');
         return auth.login(username, password, options);
-      }, { username, password, options: { preferLocalLogin } });
+      }, { username, password, options: { preferLocalLogin: useLocalLogin } });
+      let loginResult = null;
+      try {
+        loginResult = await tryLogin(preferLocalLogin);
+      } catch (error) {
+        loginResult = null;
+      }
+      if (!loginResult && preferLocalLogin) {
+        loginResult = await tryLogin(false).catch(() => null);
+      }
       if (!loginResult) throw new Error('fast auth login failed');
       if (!skipPostLoginWait) {
         await page.waitForFunction(() => {
