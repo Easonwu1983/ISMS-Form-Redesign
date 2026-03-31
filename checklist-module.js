@@ -1048,6 +1048,7 @@
       if (!contentEl) return;
       if (checklistListRenderCache.signature === renderSignature && contentEl.dataset.checklistRenderSignature === renderSignature) {
         applyChecklistKeywordFilter();
+        setChecklistListRouteState('ready');
         return;
       }
       const snapshot = snapshotOverride || getChecklistListSnapshot(items);
