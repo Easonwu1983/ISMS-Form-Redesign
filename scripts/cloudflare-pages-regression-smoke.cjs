@@ -325,6 +325,7 @@ async function openChecklistSmokePage(context) {
     initialHash: 'checklist'
   });
   await gotoHashRoute(checklistPage, 'checklist', { settleMs: 160, timeout: 20000, waitForBootstrap: false }).catch(() => {});
+  await waitForRemoteBootstrap(checklistPage).catch(() => {});
   await waitForChecklistListReady(checklistPage, 2500).catch(() => {});
   return checklistPage;
 }
@@ -854,6 +855,10 @@ async function run() {
         throw new Error('checklist list summary pills missing expected labels');
       }
       pushStep('checklist:list-summary', true, checklistSummaryLabels.join(' / '));
+      await checklistPage.waitForFunction(() => {
+        const root = document.querySelector('[data-pager-root]');
+        return !!root && root.querySelectorAll('button').length >= 5;
+      }, undefined, { timeout: 15000 }).catch(() => {});
       const checklistPagerLabels = await checklistPage.evaluate(() => {
         const root = document.querySelector('[data-pager-root]');
         if (!root) return [];
