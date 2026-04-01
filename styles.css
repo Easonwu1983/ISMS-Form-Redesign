@@ -5643,6 +5643,35 @@ tbody td:first-child {
   white-space: nowrap;
 }
 
+.unit-contact-review-actions {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(242, 247, 255, 0.95));
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.unit-contact-review-actions-header {
+  display: grid;
+  gap: 6px;
+}
+
+.unit-contact-review-actions-kicker {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.unit-contact-review-actions-note {
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
 .review-table-card tbody tr {
   cursor: default;
 }
@@ -9934,6 +9963,10 @@ tbody tr:hover {
   .review-actions--unit-contact .review-action-secondary,
   .review-actions--unit-contact .review-action-danger {
     grid-column: auto;
+  }
+
+  .unit-contact-review-actions {
+    padding: 12px;
   }
 
   .unit-contact-review-attachment {

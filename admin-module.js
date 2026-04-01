@@ -3465,6 +3465,16 @@
     return `<div class="unit-contact-review-attachment"><div class="unit-contact-review-attachment-copy"><div class="unit-contact-review-attachment-label">附件</div><div class="unit-contact-review-attachment-title">${esc(fileName)}</div><div class="unit-contact-review-attachment-meta">${uploadedAt ? `上傳：${esc(uploadedAt)}` : '已上傳'}${esc(sizeText)}</div></div><button type="button" class="btn btn-sm btn-secondary unit-contact-review-attachment-action" data-action="admin.unitContactViewAuthDoc" data-id="${esc(id)}" data-applicant-email="${esc(item && item.applicantEmail || '')}">${ic('file-search', 'icon-sm')} 檢視附件</button></div>`;
   }
 
+  function buildUnitContactReviewActionNote(status) {
+    if (status === 'pending_review' || status === 'returned') {
+      return '<div class="unit-contact-review-actions-note">通過後會自動建立帳號並寄送登入資訊；退回與拒絕會保留審核紀錄。</div>';
+    }
+    if (status === 'approved' || status === 'activation_pending' || status === 'active') {
+      return '<div class="unit-contact-review-actions-note">已啟用可重新寄送登入資訊；若需補件，仍可退回調整。</div>';
+    }
+    return '<div class="unit-contact-review-actions-note">請先確認申請內容與附件，再選擇審核動作。</div>';
+  }
+
   function buildUnitContactReviewActions(item, id, status) {
     const buttons = [];
     if (status === 'pending_review' || status === 'returned') {
@@ -3477,7 +3487,7 @@
         buttons.push(`<button type="button" class="btn btn-sm btn-secondary review-action-secondary" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
       }
     }
-    return buttons;
+    return `<div class="unit-contact-review-actions"><div class="unit-contact-review-actions-header"><div class="unit-contact-review-actions-kicker">審核操作</div>${buildUnitContactReviewActionNote(status)}</div><div class="review-actions review-actions--unit-contact ${status === 'pending_review' || status === 'returned' ? 'review-actions--unit-contact--review' : 'review-actions--unit-contact--maintenance'}">${buttons.join('')}</div></div>`;
   }
 
   function renderUnitContactReviewRows(items) {
@@ -3493,7 +3503,7 @@
       const actionClass = status === 'pending_review' || status === 'returned'
         ? 'review-actions review-actions--unit-contact review-actions--unit-contact--review'
         : 'review-actions review-actions--unit-contact review-actions--unit-contact--maintenance';
-      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.applicantEmail || '—')}</div><div class="review-card-subtitle review-card-subtitle--top-4">資安角色：${esc(formatSecurityRolesSummary(item && item.securityRoles))}</div>${attachmentBlock}</td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="${actionClass}">${actionButtons.join('')}</div></td></tr>`;
+      return `<tr data-review-id="${esc(id)}"><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.applicantEmail || '—')}</div><div class="review-card-subtitle review-card-subtitle--top-4">資安角色：${esc(formatSecurityRolesSummary(item && item.securityRoles))}</div>${attachmentBlock}</td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="${actionClass}">${actionButtons}</div></td></tr>`;
     }).join('');
   }
 
