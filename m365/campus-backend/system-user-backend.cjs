@@ -141,6 +141,22 @@ function createSystemUserRouter(deps) {
     return Number.isFinite(raw) && raw > 0 ? raw : (8 * 60 * 60 * 1000);
   }
 
+  function buildSessionCookieHeaders(token) {
+    const maxAgeSec = Math.floor(getSessionTtlMs() / 1000);
+    const parts = [
+      'isms_session=' + encodeURIComponent(token),
+      'HttpOnly',
+      'SameSite=Strict',
+      'Path=/api',
+      'Max-Age=' + maxAgeSec
+    ];
+    return { 'Set-Cookie': parts.join('; ') };
+  }
+
+  function buildClearSessionCookieHeaders() {
+    return { 'Set-Cookie': 'isms_session=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0' };
+  }
+
   function getLoginMaxFailedAttempts() {
     const raw = Number(process.env.AUTH_MAX_FAILED_ATTEMPTS || '');
     return Number.isFinite(raw) && raw > 0 ? raw : 5;
@@ -922,7 +938,10 @@ function createSystemUserRouter(deps) {
           sessionVersion: readStoredPasswordState(resolvedEntry.item.password).sessionVersion
         })
       });
-      await writeJson(res, buildJsonResponse(200, buildLoginPayload(resolvedEntry.item)), origin);
+      const loginResponse = buildLoginPayload(resolvedEntry.item);
+      const sessionToken = loginResponse && loginResponse.session && loginResponse.session.token || '';
+      const cookieHeaders = sessionToken ? buildSessionCookieHeaders(sessionToken) : {};
+      await writeJson(res, buildJsonResponse(200, loginResponse, cookieHeaders), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to login.', 500), origin);
     }
@@ -963,7 +982,7 @@ function createSystemUserRouter(deps) {
       });
       await writeJson(res, buildJsonResponse(200, {
         ok: true, username: saved.item.username, loggedOut: true, contractVersion: AUTH_CONTRACT_VERSION
-      }), origin);
+      }, buildClearSessionCookieHeaders()), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to logout.', 500), origin);
     }

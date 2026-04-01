@@ -877,7 +877,7 @@
 
     function getAccessProfile(user) {
       installAccessProfileCacheInvalidation();
-      const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email']);
+      const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email', 'sessionToken', 'sessionExpiresAt']);
       return getCachedUserList(ACCESS_PROFILE_CACHE, cacheKey, function () {
         const role = normalizeUserRole(user?.role);
         const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
@@ -923,7 +923,7 @@
 
     function normalizeUserRecord(user) {
       installAccessProfileCacheInvalidation();
-      const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email']);
+      const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email', 'sessionToken', 'sessionExpiresAt']);
       return getCachedUserList(USER_RECORD_CACHE, cacheKey, function () {
         return getAccessProfile(user);
       });

@@ -10,11 +10,21 @@ const {
   createError,
   mapChecklistForClient,
   normalizeChecklistPayload,
-  summarizeChecklists,
   validateActionEnvelope,
   validateChecklistPayload
 } = require('../azure-function/checklist-api/src/shared/contract');
 const db = require('./db.cjs');
+
+function summarizeChecklists(items) {
+  const summary = { total: 0, draft: 0, submitted: 0 };
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const status = String(item && item.status || '').trim();
+    summary.total += 1;
+    if (status === STATUSES.DRAFT) summary.draft += 1;
+    else if (status === STATUSES.SUBMITTED) summary.submitted += 1;
+  });
+  return summary;
+}
 
 function mapRowToChecklist(row) {
   if (!row) return null;

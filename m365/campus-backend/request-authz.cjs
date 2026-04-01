@@ -38,6 +38,14 @@ function readHeader(req, name) {
   return Array.isArray(value) ? cleanText(value[0]) : cleanText(value);
 }
 
+function readSessionCookie(req) {
+  const cookieHeader = readHeader(req, 'cookie');
+  if (!cookieHeader) return '';
+  const match = cookieHeader.match(/(?:^|;\s*)isms_session=([^;]*)/);
+  if (!match || !match[1]) return '';
+  try { return decodeURIComponent(match[1].trim()); } catch (_) { return match[1].trim(); }
+}
+
 function decodeHeaderUnit(value) {
   const raw = cleanText(value);
   if (!raw) return '';
@@ -159,10 +167,16 @@ function createRequestAuthz() {
   async function requireAuthenticatedUser(req) {
     if (req && req.__ismsAuthz) return req.__ismsAuthz;
     const authorization = readHeader(req, 'authorization');
-    if (!authorization || !/^Bearer\s+/i.test(authorization)) {
+    let token = '';
+    if (authorization && /^Bearer\s+/i.test(authorization)) {
+      token = authorization.replace(/^Bearer\s+/i, '').trim();
+    }
+    if (!token) {
+      token = readSessionCookie(req);
+    }
+    if (!token) {
       throw createHttpError('Authentication required', 401);
     }
-    const token = authorization.replace(/^Bearer\s+/i, '').trim();
     const sessionPayload = verifySessionToken(token, sessionSecret);
     if (!sessionPayload || !cleanText(sessionPayload.sub)) {
       throw createHttpError('Invalid session token', 401);

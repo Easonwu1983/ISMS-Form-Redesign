@@ -500,6 +500,38 @@ async function listApplicationsForAdmin(filters) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Global API rate limiter (per IP)                                   */
+/* ------------------------------------------------------------------ */
+
+const GLOBAL_RATE_LIMIT_WINDOW_MS = Number(process.env.API_RATE_LIMIT_WINDOW_MS) || 60_000;
+const GLOBAL_RATE_LIMIT_MAX_REQUESTS = Number(process.env.API_RATE_LIMIT_MAX_REQUESTS) || 120;
+const globalRateLimitStore = new Map();
+
+function checkGlobalRateLimit(req) {
+  const now = Date.now();
+  const clientIp = readClientAddress(req) || 'unknown';
+  const activeSince = now - GLOBAL_RATE_LIMIT_WINDOW_MS;
+  const timestamps = (globalRateLimitStore.get(clientIp) || []).filter((ts) => ts > activeSince);
+  timestamps.push(now);
+  globalRateLimitStore.set(clientIp, timestamps);
+  if (timestamps.length > GLOBAL_RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterMs = Math.max(1000, GLOBAL_RATE_LIMIT_WINDOW_MS - (now - timestamps[0]));
+    return { limited: true, retryAfterSec: Math.ceil(retryAfterMs / 1000) };
+  }
+  return { limited: false, retryAfterSec: 0 };
+}
+
+/* Clean up stale entries every 5 minutes */
+setInterval(() => {
+  const cutoff = Date.now() - GLOBAL_RATE_LIMIT_WINDOW_MS;
+  for (const [key, timestamps] of globalRateLimitStore) {
+    const fresh = timestamps.filter((ts) => ts > cutoff);
+    if (fresh.length === 0) globalRateLimitStore.delete(key);
+    else globalRateLimitStore.set(key, fresh);
+  }
+}, 5 * 60_000).unref();
+
+/* ------------------------------------------------------------------ */
 /*  Apply throttle                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -1409,6 +1441,21 @@ function createServer() {
       res.writeHead(204, { ...buildCorsHeaders(origin), ...buildSecurityHeaders(url.pathname) });
       res.end();
       return;
+    }
+
+    /* Global API rate limiting */
+    if (String(url.pathname || '').startsWith('/api/')) {
+      const rateCheck = checkGlobalRateLimit(req);
+      if (rateCheck.limited) {
+        res.writeHead(429, {
+          'Content-Type': 'application/json',
+          'Retry-After': String(rateCheck.retryAfterSec),
+          ...buildCorsHeaders(origin),
+          ...buildSecurityHeaders(url.pathname)
+        });
+        res.end(JSON.stringify({ ok: false, message: 'Too many requests. Please try again later.', retryAfterSec: rateCheck.retryAfterSec }));
+        return;
+      }
     }
 
     try {

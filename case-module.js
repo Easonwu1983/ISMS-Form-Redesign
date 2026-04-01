@@ -730,12 +730,13 @@
     const allUsers = getUsers().map((entry) => getCaseAccessProfile(entry));
     const users = allUsers.filter((x) => x && x.role === ROLES.UNIT_ADMIN);
 
-    if (canManageUsers(u) && !users.length) {
+    if (canManageUsers(u) && !users.length && !renderCreate._usersSyncAttempted) {
       const appRoot = document.getElementById('app');
       if (appRoot) {
         appRoot.innerHTML = '<div class="busy-overlay" aria-live="polite" aria-busy="true"><div class="busy-card"><span class="busy-spinner" aria-hidden="true"></span><div class="busy-title">正在同步處理人員清單…</div></div></div>';
       }
       if (!renderCreate._usersSyncPromise && typeof syncUsersFromM365 === 'function') {
+        renderCreate._usersSyncAttempted = true;
         renderCreate._usersSyncPromise = Promise.resolve()
           .then(() => syncUsersFromM365({ silent: true }))
           .catch((error) => {

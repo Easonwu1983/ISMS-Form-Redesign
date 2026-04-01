@@ -3056,6 +3056,19 @@
     installAppEventListeners,
     startApp
   } = appStartRuntime;
+
+  /* ─── m365ApiClient auto-initialization after login ─── */
+  window.addEventListener('isms:access-profile-changed', function (e) {
+    var detail = e && e.detail;
+    if (!detail || detail.reason !== 'login') return;
+    try {
+      getM365ApiClient();
+      recordBootstrapStep('m365-client-auto-init', 'triggered-by-login:' + (detail.username || ''));
+    } catch (err) {
+      recordBootstrapStep('m365-client-auto-init-failed', String(err && err.message || err));
+    }
+  });
+
   startApp();
 
 })();
