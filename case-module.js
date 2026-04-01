@@ -604,8 +604,11 @@
       chartSlot.innerHTML = buildDashboardStatusOverview(snapshot) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>';
       recentSlot.classList.remove('dashboard-card-loading');
       recentSlot.innerHTML = buildCaseTableMarkup('<th class="record-id-head">單號</th><th>說明</th><th>狀態</th><th>最後活動</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', recentRows, { wrapperClass: 'dashboard-recent-table-wrapper', tableClass: 'dashboard-recent-table' });
-      scheduleRefreshIcons();
-      bindCopyButtons(recentSlot);
+      window.setTimeout(function () {
+        if (renderToken !== dashboardRenderToken) return;
+        scheduleRefreshIcons();
+        bindCopyButtons(recentSlot);
+      }, 0);
     });
   }
 

@@ -27,6 +27,8 @@
     let authSessionCacheValue = null;
     let currentUserCacheKey = '';
     let currentUserCacheValue = null;
+    let localUsersCacheKey = '';
+    let localUsersCacheValue = null;
     let authCacheListenerInstalled = false;
 
     function validateLocalPasswordComplexity(password) {
@@ -264,6 +266,17 @@
       return '0';
     }
 
+    function getLocalUsersStoreTouchToken() {
+      if (typeof getStoreTouchToken === 'function') {
+        try {
+          return String(getStoreTouchToken(DATA_KEY) || '0');
+        } catch (_) {
+          return '0';
+        }
+      }
+      return '0';
+    }
+
     function installAuthCacheInvalidation() {
       if (authCacheListenerInstalled || typeof window === 'undefined' || !window.addEventListener) return;
       window.addEventListener('storage', function (event) {
@@ -432,8 +445,15 @@
     }
 
     function hasLocalUsers() {
+      const cacheKey = getLocalUsersStoreTouchToken();
+      if (cacheKey === localUsersCacheKey) {
+        return !!localUsersCacheValue;
+      }
       const data = loadData();
-      return !!(data && Array.isArray(data.users) && data.users.length);
+      const hasUsers = !!(data && Array.isArray(data.users) && data.users.length);
+      localUsersCacheKey = cacheKey;
+      localUsersCacheValue = hasUsers;
+      return hasUsers;
     }
 
     async function bootstrapLocalAdminAccount(input) {

@@ -614,14 +614,14 @@ function createTrainingRouter(deps) {
   }
 
   function writeFormsQueryCache(cacheKey, body) {
-    if (!(state.formsQueryCache instanceof Map) || !cacheKey) return cloneJson(body);
+    if (!(state.formsQueryCache instanceof Map) || !cacheKey) return body;
     state.formsQueryCache.set(cacheKey, {
       loadedAt: Date.now(),
       cacheAt: Number(state.formsCacheAt || 0),
-      body: cloneJson(body)
+      body
     });
     trimQueryCache(state.formsQueryCache, TRAINING_FORMS_QUERY_CACHE_MAX);
-    return cloneJson(body);
+    return body;
   }
 
   function readFormsSummaryCache(cacheKey) {
@@ -651,14 +651,19 @@ function createTrainingRouter(deps) {
   }
 
   function writeFormsSummaryCache(cacheKey, body) {
-    if (!(state.formsSummaryCache instanceof Map) || !cacheKey) return cloneJson(body);
-    const cachedBody = cloneJson(body);
-    if (cachedBody && cachedBody.cache) {
+    if (!(state.formsSummaryCache instanceof Map) || !cacheKey) return body;
+    const cachedBody = body && typeof body === 'object'
+      ? { ...body }
+      : body;
+    if (cachedBody && typeof cachedBody === 'object') {
+      const currentCache = cachedBody.cache && typeof cachedBody.cache === 'object'
+        ? cachedBody.cache
+        : {};
       cachedBody.cache = {
-        ...cachedBody.cache,
+        ...currentCache,
         query: 'hit',
         summaryOnly: true,
-        reason: cachedBody.cache.reason === 'unfiltered-summary'
+        reason: currentCache.reason === 'unfiltered-summary'
           ? 'unfiltered-summary-hit'
           : 'summary-hit'
       };

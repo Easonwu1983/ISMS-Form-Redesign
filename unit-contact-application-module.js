@@ -704,30 +704,33 @@
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
       scheduleUnitContactPostPaint(function () {
         ensureUnitCascadeControl();
-        authorizedScopePicker = ensureAuthorizedScopePicker() || authorizedScopePicker;
         const coreShell = document.querySelector('[data-unit-contact-core-shell]');
         if (coreShell && !coreShell.dataset.hydrated) {
           coreShell.innerHTML = buildApplyCoreContent();
           coreShell.dataset.hydrated = '1';
         }
-        ensureAuthorizationDocumentSection(form);
-        const roleShell = document.querySelector('[data-unit-contact-role-shell]');
-        if (roleShell && !roleShell.dataset.hydrated) {
-          roleShell.innerHTML = buildSecurityRoleCheckboxes([]);
-          roleShell.dataset.hydrated = '1';
-        }
-        const sideShell = document.querySelector('[data-unit-contact-side-shell]');
-        if (sideShell && !sideShell.dataset.hydrated) {
-          sideShell.innerHTML = buildApplySideContent();
-          sideShell.dataset.hydrated = '1';
-        }
         if (submitButton && submitButton.disabled) {
           submitButton.disabled = false;
         }
-        document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
-          input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
-        });
-        scheduleRefreshIcons();
+        scheduleUnitContactPostPaint(function () {
+          if (!document.getElementById('unit-contact-apply-form')) return;
+          authorizedScopePicker = ensureAuthorizedScopePicker() || authorizedScopePicker;
+          ensureAuthorizationDocumentSection(form);
+          const roleShell = document.querySelector('[data-unit-contact-role-shell]');
+          if (roleShell && !roleShell.dataset.hydrated) {
+            roleShell.innerHTML = buildSecurityRoleCheckboxes([]);
+            roleShell.dataset.hydrated = '1';
+          }
+          const sideShell = document.querySelector('[data-unit-contact-side-shell]');
+          if (sideShell && !sideShell.dataset.hydrated) {
+            sideShell.innerHTML = buildApplySideContent();
+            sideShell.dataset.hydrated = '1';
+          }
+          document.querySelectorAll('input[name="uca-security-role"]').forEach((input) => {
+            input.setAttribute('aria-describedby', 'uca-security-role-help uca-security-role-error');
+          });
+          scheduleRefreshIcons();
+        }, 0);
       }, UNIT_CONTACT_POST_PAINT_DELAY_MS);
 
       bindPageEvent(form, 'input', function (event) {

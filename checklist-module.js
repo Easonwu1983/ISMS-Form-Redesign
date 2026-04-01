@@ -1297,8 +1297,12 @@
         const shellViewSnapshot = getChecklistListViewSnapshot(shellSnapshot.items);
         renderChecklistListContent(shellItems, shellSnapshot, shellViewSnapshot);
         syncChecklistListToolbarState();
-        refreshIcons();
-        bindCopyButtons();
+        window.setTimeout(() => {
+          if (renderGeneration !== checklistListRenderGeneration) return;
+          if (!String(window.location.hash || '').startsWith('#checklist')) return;
+          refreshIcons();
+          bindCopyButtons();
+        }, 0);
       }, 0);
       const remotePagePromise = prefetchedRemotePageResult
         ? Promise.resolve(prefetchedRemotePageResult)
@@ -1323,8 +1327,12 @@
         updateChecklistListShellChrome(listSummary, remotePage);
         renderChecklistListContent(checklists, snapshot, viewSnapshot);
         syncChecklistListToolbarState();
-        refreshIcons();
-        bindCopyButtons();
+        window.setTimeout(() => {
+          if (renderGeneration !== checklistListRenderGeneration) return;
+          if (!String(window.location.hash || '').startsWith('#checklist')) return;
+          refreshIcons();
+          bindCopyButtons();
+        }, 0);
       }).catch((error) => {
         window.__ismsWarn('checklist list remote page load failed', error);
       });
@@ -1342,8 +1350,12 @@
           const localViewSnapshot = getChecklistListViewSnapshot(snapshot.items);
           renderChecklistListContent(checklists, snapshot, localViewSnapshot);
           syncChecklistListToolbarState();
-          refreshIcons();
-          bindCopyButtons();
+          window.setTimeout(() => {
+            if (renderGeneration !== checklistListRenderGeneration) return;
+            if (!String(window.location.hash || '').startsWith('#checklist')) return;
+            refreshIcons();
+            bindCopyButtons();
+          }, 0);
         }, 0);
       } else {
         viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
@@ -1356,8 +1368,12 @@
           if (!String(window.location.hash || '').startsWith('#checklist')) return;
           renderChecklistListContent(checklists, snapshot, viewSnapshot);
           syncChecklistListToolbarState();
-          refreshIcons();
-          bindCopyButtons();
+          window.setTimeout(() => {
+            if (renderGeneration !== checklistListRenderGeneration) return;
+            if (!String(window.location.hash || '').startsWith('#checklist')) return;
+            refreshIcons();
+            bindCopyButtons();
+          }, 0);
         }, 0);
       }
     }
