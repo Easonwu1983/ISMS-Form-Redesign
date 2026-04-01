@@ -1,3 +1,5 @@
+'use strict';
+
 const {
   ACTIONS,
   CONTRACT_VERSION,
@@ -11,8 +13,6 @@ const {
   createCaseRecord,
   createError,
   mapCaseForClient,
-  mapCaseToGraphFields,
-  mapGraphFieldsToCase,
   normalizeCreatePayload,
   normalizeRespondPayload,
   normalizeReviewPayload,
@@ -33,30 +33,84 @@ const {
 const {
   buildHtmlDocument
 } = require('./graph-mailer.cjs');
+const db = require('./db.cjs');
+
+function parseJsonField(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch (_) { return null; }
+}
+
+function mapRowToCase(row) {
+  if (!row) return null;
+  return {
+    id: row.case_id || '',
+    documentNo: row.document_no || '',
+    caseSeq: row.case_seq || 0,
+    proposerUnit: row.proposer_unit || '',
+    proposerUnitCode: row.proposer_unit_code || '',
+    proposerName: row.proposer_name || '',
+    proposerUsername: row.proposer_username || '',
+    proposerDate: row.proposer_date ? new Date(row.proposer_date).toISOString() : '',
+    handlerUnit: row.handler_unit || '',
+    handlerUnitCode: row.handler_unit_code || '',
+    handlerName: row.handler_name || '',
+    handlerUsername: row.handler_username || '',
+    handlerEmail: row.handler_email || '',
+    handlerDate: row.handler_date ? new Date(row.handler_date).toISOString() : '',
+    deficiencyType: row.deficiency_type || '',
+    source: row.source || '',
+    category: parseJsonField(row.category_json) || [],
+    clause: row.clause || '',
+    problemDesc: row.problem_description || '',
+    occurrence: row.occurrence || '',
+    correctiveAction: row.corrective_action || '',
+    correctiveDueDate: row.corrective_due_date ? new Date(row.corrective_due_date).toISOString() : '',
+    rootCause: row.root_cause || '',
+    riskDesc: row.risk_description || '',
+    riskAcceptor: row.risk_acceptor || '',
+    riskAcceptDate: row.risk_accept_date ? new Date(row.risk_accept_date).toISOString() : '',
+    riskAssessDate: row.risk_assess_date ? new Date(row.risk_assess_date).toISOString() : '',
+    rootElimination: row.root_elimination || '',
+    rootElimDueDate: row.root_elimination_due_date ? new Date(row.root_elimination_due_date).toISOString() : '',
+    reviewResult: row.review_result || '',
+    reviewNextDate: row.review_next_date ? new Date(row.review_next_date).toISOString() : '',
+    reviewer: row.reviewer || '',
+    reviewDate: row.review_date ? new Date(row.review_date).toISOString() : '',
+    pendingTracking: parseJsonField(row.pending_tracking_json),
+    trackings: parseJsonField(row.trackings_json) || [],
+    status: row.status || '',
+    evidence: parseJsonField(row.evidence_json) || [],
+    history: parseJsonField(row.history_json) || [],
+    closedDate: row.closed_date ? new Date(row.closed_date).toISOString() : '',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : '',
+    backendMode: row.backend_mode || '',
+    recordSource: row.record_source || ''
+  };
+}
+
+const CASE_SELECT = `
+  SELECT id, case_id, document_no, case_seq, proposer_unit, proposer_unit_code,
+         proposer_name, proposer_username, proposer_date, handler_unit, handler_unit_code,
+         handler_name, handler_username, handler_email, handler_date,
+         deficiency_type, source, category_json, clause, problem_description, occurrence,
+         corrective_action, corrective_due_date, root_cause, risk_description,
+         risk_acceptor, risk_accept_date, risk_assess_date,
+         root_elimination, root_elimination_due_date,
+         review_result, review_next_date, reviewer, review_date,
+         pending_tracking_json, trackings_json, status,
+         evidence_json, history_json, closed_date,
+         backend_mode, record_source, created_at, updated_at
+  FROM corrective_actions
+`;
 
 function createCorrectiveActionRouter(deps) {
-  const {
-    parseJsonBody,
-    writeJson,
-    graphRequest,
-    resolveSiteId,
-    getDelegatedToken,
-    sendGraphMail,
-    requestAuthz
-  } = deps;
+  const { parseJsonBody, writeJson, requestAuthz, sendGraphMail } = deps;
+  const graphRequest = deps.graphRequest;
+  const getDelegatedToken = deps.getDelegatedToken;
 
-  const state = {
-    listMap: null
-  };
-
-  function getEnv(name, fallback) {
-    const value = cleanText(process.env[name]);
-    return value || fallback || '';
-  }
-
-  function routeCaseId(value) {
-    return decodeURIComponent(String(value || '').trim());
-  }
+  function routeCaseId(value) { return decodeURIComponent(String(value || '').trim()); }
 
   function actorLabel(payload, fallback) {
     return cleanText(payload && (payload.actorName || payload.actorUsername)) || fallback || 'system';
@@ -65,8 +119,7 @@ function createCorrectiveActionRouter(deps) {
   function appendHistory(history, action, user, time) {
     return (Array.isArray(history) ? history : []).concat([{
       time: cleanText(time) || new Date().toISOString(),
-      action: cleanText(action),
-      user: cleanText(user) || 'system'
+      action: cleanText(action), user: cleanText(user) || 'system'
     }]);
   }
 
@@ -78,19 +131,14 @@ function createCorrectiveActionRouter(deps) {
     };
   }
 
-  function buildStatusHistory(status) {
-    return `\u72c0\u614b\u8b8a\u66f4\u70ba\u300c${status}\u300d`;
-  }
+  function buildStatusHistory(status) { return `狀態變更為「${status}」`; }
 
   function buildCaseSnapshot(item) {
     if (!item) return null;
     return {
-      id: cleanText(item.id),
-      proposerUnit: cleanText(item.proposerUnit),
-      handlerUnit: cleanText(item.handlerUnit),
-      handlerUsername: cleanText(item.handlerUsername),
-      deficiencyType: cleanText(item.deficiencyType),
-      status: cleanText(item.status),
+      id: cleanText(item.id), proposerUnit: cleanText(item.proposerUnit),
+      handlerUnit: cleanText(item.handlerUnit), handlerUsername: cleanText(item.handlerUsername),
+      deficiencyType: cleanText(item.deficiencyType), status: cleanText(item.status),
       evidence: summarizeAttachments(item.evidence),
       trackingsCount: Array.isArray(item.trackings) ? item.trackings.length : 0
     };
@@ -100,37 +148,16 @@ function createCorrectiveActionRouter(deps) {
     const beforeEvidence = summarizeAttachments(beforeItem && beforeItem.evidence);
     const afterEvidence = summarizeAttachments(afterItem && afterItem.evidence);
     return buildFieldChanges(beforeItem, afterItem, [
-      'proposerUnit',
-      'proposerName',
-      'handlerUnit',
-      'handlerName',
-      'handlerUsername',
-      'handlerEmail',
-      'deficiencyType',
-      'source',
-      { key: 'category', kind: 'array' },
-      'clause',
-      'problemDesc',
-      'occurrence',
-      'correctiveAction',
-      'correctiveDueDate',
-      'rootCause',
-      'riskDesc',
-      'riskAcceptor',
-      'riskAcceptDate',
-      'riskAssessDate',
-      'rootElimination',
-      'rootElimDueDate',
-      'reviewResult',
-      'reviewNextDate',
-      'reviewer',
-      'reviewDate',
-      'status',
-      'closedDate',
-      { label: 'evidenceCount', kind: 'number', get: function (item) { return item === beforeItem ? beforeEvidence.count : afterEvidence.count; } },
-      { label: 'trackingCount', kind: 'number', get: function (item) { return Array.isArray(item && item.trackings) ? item.trackings.length : 0; } },
-      { label: 'pendingTrackingResult', get: function (item) { return item && item.pendingTracking && item.pendingTracking.result; } },
-      { label: 'pendingTrackingNextDate', get: function (item) { return item && item.pendingTracking && item.pendingTracking.nextTrackDate; } }
+      'proposerUnit', 'proposerName', 'handlerUnit', 'handlerName', 'handlerUsername',
+      'handlerEmail', 'deficiencyType', 'source', { key: 'category', kind: 'array' },
+      'clause', 'problemDesc', 'occurrence', 'correctiveAction', 'correctiveDueDate',
+      'rootCause', 'riskDesc', 'riskAcceptor', 'riskAcceptDate', 'riskAssessDate',
+      'rootElimination', 'rootElimDueDate', 'reviewResult', 'reviewNextDate',
+      'reviewer', 'reviewDate', 'status', 'closedDate',
+      { label: 'evidenceCount', kind: 'number', get: (item) => item === beforeItem ? beforeEvidence.count : afterEvidence.count },
+      { label: 'trackingCount', kind: 'number', get: (item) => Array.isArray(item && item.trackings) ? item.trackings.length : 0 },
+      { label: 'pendingTrackingResult', get: (item) => item && item.pendingTracking && item.pendingTracking.result },
+      { label: 'pendingTrackingNextDate', get: (item) => item && item.pendingTracking && item.pendingTracking.nextTrackDate }
     ]);
   }
 
@@ -141,199 +168,158 @@ function createCorrectiveActionRouter(deps) {
       html: buildHtmlDocument([
         `您好，${cleanText(item && item.handlerName) || cleanText(item && item.handlerUsername)}：`,
         '您有一筆新的矯正單指派待處理。',
-        `單號：${cleanText(item && item.id)}`,
-        `所屬單位：${cleanText(item && item.handlerUnit)}`,
-        `缺失類型：${cleanText(item && item.deficiencyType)}`,
-        `問題說明：${cleanText(item && item.problemDesc)}`,
-        `預定完成日：${cleanText(item && item.correctiveDueDate)}`,
-        `系統入口：${portalUrl}`,
+        `單號：${cleanText(item && item.id)}`, `所屬單位：${cleanText(item && item.handlerUnit)}`,
+        `缺失類型：${cleanText(item && item.deficiencyType)}`, `問題說明：${cleanText(item && item.problemDesc)}`,
+        `預定完成日：${cleanText(item && item.correctiveDueDate)}`, `系統入口：${portalUrl}`,
         '請登入系統查看並填寫矯正措施。'
       ])
     };
   }
 
-  async function fetchListMap() {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
-    return new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
-  }
-
-  async function resolveNamedList(name) {
-    const listName = cleanText(name);
-    if (!state.listMap || !state.listMap.has(listName)) {
-      state.listMap = await fetchListMap();
+  async function createAuditRow(input) {
+    try {
+      await db.query(`
+        INSERT INTO ops_audit (title, event_type, actor_email, target_email, unit_code, record_id, occurred_at, payload_json)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `, [
+        cleanText(input.recordId || input.eventType || 'audit'), cleanText(input.eventType),
+        cleanText(input.actorEmail), cleanText(input.targetEmail), cleanText(input.unitCode),
+        cleanText(input.recordId), cleanText(input.occurredAt) || new Date().toISOString(),
+        cleanText(input.payloadJson)
+      ]);
+    } catch (error) {
+      console.error('[corrective-actions] audit row failed', String(error && error.message || error));
     }
-    let list = state.listMap.get(listName);
-    if (!list) {
-      state.listMap = await fetchListMap();
-      list = state.listMap.get(listName);
-    }
-    if (!list) {
-      throw createError(`SharePoint list not found: ${listName}`, 500);
-    }
-    return list;
-  }
-
-  function getCorrectiveActionsListName() {
-    return getEnv('CORRECTIVE_ACTIONS_LIST', 'CorrectiveActions');
-  }
-
-  function getAuditListName() {
-    return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
-  }
-
-  async function resolveCorrectiveActionsList() {
-    return resolveNamedList(getCorrectiveActionsListName());
-  }
-
-  async function resolveAuditList() {
-    return resolveNamedList(getAuditListName());
-  }
-
-  async function listAllEntries() {
-    const siteId = await resolveSiteId();
-    const list = await resolveCorrectiveActionsList();
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      rows.push(...batch.map((entry) => ({
-        listItemId: cleanText(entry && entry.id),
-        item: mapGraphFieldsToCase(entry && entry.fields ? entry.fields : {})
-      })));
-      nextUrl = cleanText(body && body['@odata.nextLink']);
-    }
-    return rows;
   }
 
   async function getEntryByCaseId(caseId) {
     const target = cleanText(caseId);
     if (!target) throw createError('Missing corrective-action id.', 400);
-    const rows = await listAllEntries();
-    return rows.find((entry) => entry.item.id === target) || null;
+    const row = await db.queryOne(CASE_SELECT + ` WHERE case_id = $1`, [target]);
+    if (!row) return null;
+    return { listItemId: String(row.id), item: mapRowToCase(row) };
   }
 
   async function updateCaseRecord(existingEntry, nextItem) {
-    const siteId = await resolveSiteId();
-    const list = await resolveCorrectiveActionsList();
     const normalized = normalizeStoredCase(nextItem);
-    await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapCaseToGraphFields(normalized));
+    const now = normalized.updatedAt || new Date().toISOString();
+    await db.query(`
+      UPDATE corrective_actions SET
+        corrective_action = $2, corrective_due_date = $3, root_cause = $4,
+        risk_description = $5, risk_acceptor = $6, risk_accept_date = $7, risk_assess_date = $8,
+        root_elimination = $9, root_elimination_due_date = $10,
+        review_result = $11, review_next_date = $12, reviewer = $13, review_date = $14,
+        pending_tracking_json = $15, trackings_json = $16,
+        status = $17, evidence_json = $18, history_json = $19,
+        closed_date = $20, updated_at = $21
+      WHERE id = $1
+    `, [
+      Number(existingEntry.listItemId),
+      cleanText(normalized.correctiveAction), normalized.correctiveDueDate || null,
+      cleanText(normalized.rootCause), cleanText(normalized.riskDesc),
+      cleanText(normalized.riskAcceptor), normalized.riskAcceptDate || null,
+      normalized.riskAssessDate || null, cleanText(normalized.rootElimination),
+      normalized.rootElimDueDate || null, cleanText(normalized.reviewResult),
+      normalized.reviewNextDate || null, cleanText(normalized.reviewer),
+      normalized.reviewDate || null,
+      JSON.stringify(normalized.pendingTracking || null),
+      JSON.stringify(normalized.trackings || []),
+      cleanText(normalized.status), JSON.stringify(normalized.evidence || []),
+      JSON.stringify(normalized.history || []),
+      normalized.closedDate || null, now
+    ]);
     return normalized;
   }
 
-  async function createAuditRow(input) {
-    const siteId = await resolveSiteId();
-    const list = await resolveAuditList();
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: {
-        Title: cleanText(input.recordId || input.eventType || 'audit'),
-        EventType: cleanText(input.eventType),
-        ActorEmail: cleanText(input.actorEmail),
-        TargetEmail: cleanText(input.targetEmail),
-        UnitCode: cleanText(input.unitCode),
-        RecordId: cleanText(input.recordId),
-        OccurredAt: cleanText(input.occurredAt) || new Date().toISOString(),
-        PayloadJson: cleanText(input.payloadJson)
-      }
-    });
+  async function createCaseInDb(item) {
+    const now = item.createdAt || new Date().toISOString();
+    await db.query(`
+      INSERT INTO corrective_actions (
+        case_id, document_no, case_seq, proposer_unit, proposer_unit_code,
+        proposer_name, proposer_username, proposer_date, handler_unit, handler_unit_code,
+        handler_name, handler_username, handler_email, handler_date,
+        deficiency_type, source, category_json, clause, problem_description, occurrence,
+        corrective_action, corrective_due_date, root_cause, risk_description,
+        risk_acceptor, risk_accept_date, risk_assess_date,
+        root_elimination, root_elimination_due_date,
+        review_result, review_next_date, reviewer, review_date,
+        pending_tracking_json, trackings_json, status,
+        evidence_json, history_json, closed_date,
+        backend_mode, record_source, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
+    `, [
+      cleanText(item.id), cleanText(item.documentNo), item.caseSeq || 0,
+      cleanText(item.proposerUnit), cleanText(item.proposerUnitCode),
+      cleanText(item.proposerName), cleanText(item.proposerUsername),
+      item.proposerDate || now,
+      cleanText(item.handlerUnit), cleanText(item.handlerUnitCode),
+      cleanText(item.handlerName), cleanText(item.handlerUsername),
+      cleanText(item.handlerEmail), item.handlerDate || null,
+      cleanText(item.deficiencyType), cleanText(item.source),
+      JSON.stringify(item.category || []), cleanText(item.clause),
+      cleanText(item.problemDesc), cleanText(item.occurrence),
+      cleanText(item.correctiveAction), item.correctiveDueDate || null,
+      cleanText(item.rootCause), cleanText(item.riskDesc),
+      cleanText(item.riskAcceptor), item.riskAcceptDate || null,
+      item.riskAssessDate || null, cleanText(item.rootElimination),
+      item.rootElimDueDate || null,
+      cleanText(item.reviewResult), item.reviewNextDate || null,
+      cleanText(item.reviewer), item.reviewDate || null,
+      JSON.stringify(item.pendingTracking || null),
+      JSON.stringify(item.trackings || []),
+      cleanText(item.status),
+      JSON.stringify(item.evidence || []),
+      JSON.stringify(item.history || []),
+      item.closedDate || null,
+      'pg-campus-backend', 'frontend', now, now
+    ]);
   }
+
+  // ── Handlers ──────────────────────────────────────────────
 
   async function buildHealth() {
-    const siteId = await resolveSiteId();
-    const { decoded, mode } = await getDelegatedToken();
-    const health = {
-      ok: true,
-      ready: true,
-      contractVersion: CONTRACT_VERSION,
-      repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
-      actor: {
-        tokenMode: cleanText(mode) || 'delegated-cli',
-        appId: cleanText(decoded.appid || decoded.azp),
-        upn: cleanText(decoded.upn),
-        scopes: cleanText(decoded.scp),
-        roles: Array.isArray(decoded.roles) ? decoded.roles.join(',') : ''
-      },
-      site: {
-        id: siteId
-      }
-    };
-    try {
-      health.list = await resolveCorrectiveActionsList();
-    } catch (error) {
-      health.ok = false;
-      health.ready = false;
-      health.message = cleanText(error && error.message) || 'CorrectiveActions list is not ready.';
-    }
-    return health;
-  }
-
-  function filterItems(items, url) {
-    const status = cleanText(url.searchParams.get('status'));
-    const handlerUnit = cleanText(url.searchParams.get('handlerUnit'));
-    const handlerUsername = cleanText(url.searchParams.get('handlerUsername'));
-    const query = cleanText(url.searchParams.get('q')).toLowerCase();
-    return items.filter((entry) => {
-      if (status && entry.status !== status) return false;
-      if (handlerUnit && entry.handlerUnit !== handlerUnit) return false;
-      if (handlerUsername && entry.handlerUsername !== handlerUsername) return false;
-      if (query) {
-        const haystack = [
-          entry.id,
-          entry.proposerName,
-          entry.handlerName,
-          entry.problemDesc,
-          entry.deficiencyType,
-          entry.source
-        ].join(' ').toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-      return true;
-    }).sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
+    const dbHealth = await db.healthCheck();
+    return { ok: dbHealth.ok, ready: dbHealth.ok, contractVersion: CONTRACT_VERSION, repository: 'postgresql', database: dbHealth };
   }
 
   async function handleHealth(_req, res, origin) {
-    try {
-      await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
-    } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to read corrective-action backend health.', 500), origin);
-    }
+    try { await writeJson(res, buildJsonResponse(200, await buildHealth()), origin); }
+    catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to read corrective-action backend health.', 500), origin); }
   }
 
   async function handleList(req, res, origin, url) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const rows = await listAllEntries();
-      const items = filterItems(rows.map((entry) => entry.item), url)
+      const rows = await db.queryAll(CASE_SELECT + ` ORDER BY updated_at DESC`);
+      const items = rows.map(mapRowToCase)
         .filter((entry) => requestAuthz.canAccessCorrectiveAction(authz, entry));
-      await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        items: items.map(mapCaseForClient),
-        contractVersion: CONTRACT_VERSION
-      }), origin);
-    } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to list corrective actions.', 500), origin);
-    }
+      // Apply filters
+      const status = cleanText(url.searchParams.get('status'));
+      const handlerUnit = cleanText(url.searchParams.get('handlerUnit'));
+      const handlerUsername = cleanText(url.searchParams.get('handlerUsername'));
+      const query = cleanText(url.searchParams.get('q')).toLowerCase();
+      const filtered = items.filter((entry) => {
+        if (status && entry.status !== status) return false;
+        if (handlerUnit && entry.handlerUnit !== handlerUnit) return false;
+        if (handlerUsername && entry.handlerUsername !== handlerUsername) return false;
+        if (query) {
+          const haystack = [entry.id, entry.proposerName, entry.handlerName, entry.problemDesc, entry.deficiencyType, entry.source].join(' ').toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        return true;
+      });
+      await writeJson(res, buildJsonResponse(200, { ok: true, items: filtered.map(mapCaseForClient), contractVersion: CONTRACT_VERSION }), origin);
+    } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to list corrective actions.', 500), origin); }
   }
 
   async function handleDetail(req, res, origin, caseId) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
-      if (!existing) {
-        throw createError('Corrective action not found.', 404);
-      }
-      if (!requestAuthz.canAccessCorrectiveAction(authz, existing.item)) {
-        throw requestAuthz.createHttpError('You do not have access to this corrective action.', 403);
-      }
-      await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: mapCaseForClient(existing.item),
-        contractVersion: CONTRACT_VERSION
-      }), origin);
-    } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to read corrective action detail.', 500), origin);
-    }
+      if (!existing) throw createError('Corrective action not found.', 404);
+      if (!requestAuthz.canAccessCorrectiveAction(authz, existing.item)) throw requestAuthz.createHttpError('Forbidden', 403);
+      await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(existing.item), contractVersion: CONTRACT_VERSION }), origin);
+    } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to read corrective action detail.', 500), origin); }
   }
 
   async function handleCreate(req, res, origin) {
@@ -345,74 +331,37 @@ function createCorrectiveActionRouter(deps) {
       const payload = normalizeCreatePayload(envelope.payload);
       validateCreatePayload(payload);
       const existing = await getEntryByCaseId(payload.id);
-      if (existing) {
-        throw createError('Corrective action already exists.', 409);
-      }
+      if (existing) throw createError('Corrective action already exists.', 409);
       const now = new Date().toISOString();
       const actor = buildActor(authz, payload, payload.proposerName);
       const item = createCaseRecord({
         ...payload,
         history: [
-          { time: now, action: '\u958b\u7acb\u77ef\u6b63\u55ae', user: actor.actorLabel },
+          { time: now, action: '開立矯正單', user: actor.actorLabel },
           { time: now, action: buildStatusHistory(STATUSES.PENDING), user: actor.actorLabel }
         ]
       }, now);
-      const siteId = await resolveSiteId();
-      const list = await resolveCorrectiveActionsList();
-      await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-        fields: mapCaseToGraphFields(item)
-      });
+      await createCaseInDb(item);
       await createAuditRow({
-        eventType: 'corrective_action.created',
-        actorEmail: actor.actorMeta.actorEmail,
-        targetEmail: cleanText(item.handlerEmail),
-        unitCode: cleanText(item.handlerUnitCode),
-        recordId: item.id,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          actorName: actor.actorMeta.actorName,
-          actorUsername: actor.actorMeta.actorUsername,
-          snapshot: buildCaseSnapshot(item),
-          changes: buildCaseChanges(null, item)
-        })
+        eventType: 'corrective_action.created', actorEmail: actor.actorMeta.actorEmail,
+        targetEmail: cleanText(item.handlerEmail), unitCode: cleanText(item.handlerUnitCode),
+        recordId: item.id, occurredAt: now,
+        payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, snapshot: buildCaseSnapshot(item), changes: buildCaseChanges(null, item) })
       });
       const shouldNotify = envelope && envelope.payload && envelope.payload.notifyHandler !== false;
       const notification = shouldNotify && item.handlerEmail
-        ? await sendGraphMail({
-            graphRequest,
-            getDelegatedToken,
-            to: item.handlerEmail,
-            ...buildAssignmentMail(item)
-          })
-        : {
-            sent: false,
-            channel: 'graph-mail',
-            reason: shouldNotify ? 'missing-recipient' : 'disabled'
-          };
+        ? await sendGraphMail({ graphRequest, getDelegatedToken, to: item.handlerEmail, ...buildAssignmentMail(item) })
+        : { sent: false, channel: 'graph-mail', reason: shouldNotify ? 'missing-recipient' : 'disabled' };
       if (shouldNotify) {
         await createAuditRow({
           eventType: notification.sent ? 'corrective_action.notification_sent' : 'corrective_action.notification_failed',
-          actorEmail: actor.actorMeta.actorEmail,
-          targetEmail: cleanText(item.handlerEmail),
-          unitCode: cleanText(item.handlerUnitCode),
-          recordId: item.id,
-          occurredAt: now,
-          payloadJson: JSON.stringify({
-            actorName: actor.actorMeta.actorName,
-            actorUsername: actor.actorMeta.actorUsername,
-            notification
-          })
+          actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(item.handlerEmail),
+          unitCode: cleanText(item.handlerUnitCode), recordId: item.id, occurredAt: now,
+          payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, notification })
         });
       }
-      await writeJson(res, buildJsonResponse(201, {
-        ok: true,
-        item: mapCaseForClient(item),
-        notification,
-        contractVersion: CONTRACT_VERSION
-      }), origin);
-    } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to create corrective action.'), origin);
-    }
+      await writeJson(res, buildJsonResponse(201, { ok: true, item: mapCaseForClient(item), notification, contractVersion: CONTRACT_VERSION }), origin);
+    } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to create corrective action.'), origin); }
   }
 
   async function handleRespond(req, res, origin, caseId) {
@@ -420,65 +369,31 @@ function createCorrectiveActionRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
       if (!existing) throw createError('Corrective action not found.', 404);
-      if (!requestAuthz.canRespondCorrectiveAction(authz, existing.item)) {
-        throw requestAuthz.createHttpError('You do not have permission to respond to this corrective action.', 403);
-      }
-      if (existing.item.status !== STATUSES.PENDING) {
-        throw createError('Corrective action is not in pending status.', 409);
-      }
+      if (!requestAuthz.canRespondCorrectiveAction(authz, existing.item)) throw requestAuthz.createHttpError('Forbidden', 403);
+      if (existing.item.status !== STATUSES.PENDING) throw createError('Not in pending status.', 409);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.RESPOND);
       const payload = normalizeRespondPayload(envelope.payload);
       validateRespondPayload(payload);
       const now = new Date().toISOString();
       const actor = buildActor(authz, payload, existing.item.handlerName || authz.username);
-      const history = appendHistory(existing.item.history, `${actor.actorLabel} \u63d0\u4ea4\u77ef\u6b63\u63aa\u65bd\u63d0\u6848`, actor.actorLabel, now);
-      let nextHistory = appendHistory(history, buildStatusHistory(STATUSES.PROPOSED), actor.actorLabel, now);
-      if (payload.evidence.length) {
-        nextHistory = nextHistory.concat([{
-          time: now,
-          action: `\u5df2\u4e0a\u50b3 ${payload.evidence.length} \u4efd\u4f50\u8b49`,
-          user: actor.actorLabel
-        }]);
-      }
+      let history = appendHistory(existing.item.history, `${actor.actorLabel} 提交矯正措施提案`, actor.actorLabel, now);
+      history = appendHistory(history, buildStatusHistory(STATUSES.PROPOSED), actor.actorLabel, now);
+      if (payload.evidence.length) history = history.concat([{ time: now, action: `已上傳 ${payload.evidence.length} 份佐證`, user: actor.actorLabel }]);
       const nextItem = {
-        ...existing.item,
-        correctiveAction: payload.correctiveAction,
+        ...existing.item, correctiveAction: payload.correctiveAction,
         correctiveDueDate: payload.correctiveDueDate || existing.item.correctiveDueDate,
-        rootCause: payload.rootCause,
-        rootElimination: payload.rootElimination,
-        rootElimDueDate: payload.rootElimDueDate,
-        riskDesc: payload.riskDesc,
-        riskAcceptor: payload.riskAcceptor,
-        riskAcceptDate: payload.riskAcceptDate,
+        rootCause: payload.rootCause, rootElimination: payload.rootElimination,
+        rootElimDueDate: payload.rootElimDueDate, riskDesc: payload.riskDesc,
+        riskAcceptor: payload.riskAcceptor, riskAcceptDate: payload.riskAcceptDate,
         riskAssessDate: payload.riskAssessDate,
         evidence: (existing.item.evidence || []).concat(payload.evidence || []),
-        status: STATUSES.PROPOSED,
-        updatedAt: now,
-        history: nextHistory
+        status: STATUSES.PROPOSED, updatedAt: now, history
       };
       const updated = await updateCaseRecord(existing, nextItem);
-      await createAuditRow({
-        eventType: 'corrective_action.responded',
-        actorEmail: actor.actorMeta.actorEmail,
-        targetEmail: cleanText(updated.handlerEmail),
-        unitCode: cleanText(updated.handlerUnitCode),
-        recordId: updated.id,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          actorName: actor.actorMeta.actorName,
-          actorUsername: actor.actorMeta.actorUsername,
-          changes: buildCaseChanges(existing.item, updated)
-        })
-      });
-      await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: mapCaseForClient(updated),
-        contractVersion: CONTRACT_VERSION
-      }), origin);
-    } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to respond corrective action.'), origin);
-    }
+      await createAuditRow({ eventType: 'corrective_action.responded', actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(updated.handlerEmail), unitCode: cleanText(updated.handlerUnitCode), recordId: updated.id, occurredAt: now, payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, changes: buildCaseChanges(existing.item, updated) }) });
+      await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(updated), contractVersion: CONTRACT_VERSION }), origin);
+    } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to respond corrective action.'), origin); }
   }
 
   async function handleReview(req, res, origin, caseId) {
@@ -486,9 +401,7 @@ function createCorrectiveActionRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
       if (!existing) throw createError('Corrective action not found.', 404);
-      if (!requestAuthz.canReviewCorrectiveAction(authz, existing.item)) {
-        throw requestAuthz.createHttpError('You do not have permission to review this corrective action.', 403);
-      }
+      if (!requestAuthz.canReviewCorrectiveAction(authz, existing.item)) throw requestAuthz.createHttpError('Forbidden', 403);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.REVIEW);
       const payload = normalizeReviewPayload(envelope.payload);
@@ -496,64 +409,22 @@ function createCorrectiveActionRouter(deps) {
       const now = new Date().toISOString();
       const today = now.slice(0, 10);
       const actor = buildActor(authz, payload, authz.username);
-      let nextStatus = '';
-      let reviewResult = '';
+      let nextStatus = '', reviewResult = '';
       if (payload.decision === REVIEW_DECISIONS.START_REVIEW) {
-        if (existing.item.status !== STATUSES.PROPOSED) {
-          throw createError('Corrective action must be proposed before review starts.', 409);
-        }
-        nextStatus = STATUSES.REVIEWING;
-        reviewResult = '\u958b\u59cb\u5be9\u6838';
+        if (existing.item.status !== STATUSES.PROPOSED) throw createError('Must be proposed first.', 409);
+        nextStatus = STATUSES.REVIEWING; reviewResult = '開始審核';
       } else {
-        if (existing.item.status !== STATUSES.REVIEWING) {
-          throw createError('Corrective action is not in reviewing status.', 409);
-        }
-        if (payload.decision === REVIEW_DECISIONS.CLOSE) {
-          nextStatus = STATUSES.CLOSED;
-          reviewResult = '\u540c\u610f\u7d50\u6848';
-        } else if (payload.decision === REVIEW_DECISIONS.TRACKING) {
-          nextStatus = STATUSES.TRACKING;
-          reviewResult = '\u8f49\u6301\u7e8c\u8ffd\u8e64';
-        } else if (payload.decision === REVIEW_DECISIONS.RETURN) {
-          nextStatus = STATUSES.PENDING;
-          reviewResult = '\u9000\u56de\u66f4\u6b63';
-        }
+        if (existing.item.status !== STATUSES.REVIEWING) throw createError('Not in reviewing status.', 409);
+        if (payload.decision === REVIEW_DECISIONS.CLOSE) { nextStatus = STATUSES.CLOSED; reviewResult = '同意結案'; }
+        else if (payload.decision === REVIEW_DECISIONS.TRACKING) { nextStatus = STATUSES.TRACKING; reviewResult = '轉持續追蹤'; }
+        else if (payload.decision === REVIEW_DECISIONS.RETURN) { nextStatus = STATUSES.PENDING; reviewResult = '退回更正'; }
       }
       const history = appendHistory(existing.item.history, buildStatusHistory(nextStatus), actor.actorLabel, now);
-      const nextItem = {
-        ...existing.item,
-        status: nextStatus,
-        reviewResult,
-        reviewer: actor.actorLabel,
-        reviewDate: today,
-        updatedAt: now,
-        closedDate: nextStatus === STATUSES.CLOSED ? now : '',
-        pendingTracking: nextStatus === STATUSES.PENDING ? null : existing.item.pendingTracking,
-        history
-      };
+      const nextItem = { ...existing.item, status: nextStatus, reviewResult, reviewer: actor.actorLabel, reviewDate: today, updatedAt: now, closedDate: nextStatus === STATUSES.CLOSED ? now : '', pendingTracking: nextStatus === STATUSES.PENDING ? null : existing.item.pendingTracking, history };
       const updated = await updateCaseRecord(existing, nextItem);
-      await createAuditRow({
-        eventType: 'corrective_action.reviewed',
-        actorEmail: actor.actorMeta.actorEmail,
-        targetEmail: cleanText(updated.handlerEmail),
-        recordId: updated.id,
-        unitCode: cleanText(updated.handlerUnitCode),
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          actorName: actor.actorMeta.actorName,
-          actorUsername: actor.actorMeta.actorUsername,
-          decision: payload.decision,
-          changes: buildCaseChanges(existing.item, updated)
-        })
-      });
-      await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: mapCaseForClient(updated),
-        contractVersion: CONTRACT_VERSION
-      }), origin);
-    } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to review corrective action.'), origin);
-    }
+      await createAuditRow({ eventType: 'corrective_action.reviewed', actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(updated.handlerEmail), recordId: updated.id, unitCode: cleanText(updated.handlerUnitCode), occurredAt: now, payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, decision: payload.decision, changes: buildCaseChanges(existing.item, updated) }) });
+      await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(updated), contractVersion: CONTRACT_VERSION }), origin);
+    } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to review corrective action.'), origin); }
   }
 
   async function handleTrackingSubmit(req, res, origin, caseId) {
@@ -561,15 +432,9 @@ function createCorrectiveActionRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
       if (!existing) throw createError('Corrective action not found.', 404);
-      if (!requestAuthz.canRespondCorrectiveAction(authz, existing.item)) {
-        throw requestAuthz.createHttpError('You do not have permission to submit tracking for this corrective action.', 403);
-      }
-      if (existing.item.status !== STATUSES.TRACKING) {
-        throw createError('Corrective action is not in tracking status.', 409);
-      }
-      if (existing.item.pendingTracking) {
-        throw createError('There is already a pending tracking submission.', 409);
-      }
+      if (!requestAuthz.canRespondCorrectiveAction(authz, existing.item)) throw requestAuthz.createHttpError('Forbidden', 403);
+      if (existing.item.status !== STATUSES.TRACKING) throw createError('Not in tracking status.', 409);
+      if (existing.item.pendingTracking) throw createError('Already has pending tracking.', 409);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.TRACKING_SUBMIT);
       const payload = normalizeTrackingSubmitPayload(envelope.payload);
@@ -577,67 +442,16 @@ function createCorrectiveActionRouter(deps) {
       const now = new Date().toISOString();
       const actor = buildActor(authz, payload, existing.item.handlerName || authz.username);
       const round = Array.isArray(existing.item.trackings) ? existing.item.trackings.length + 1 : 1;
-      const pendingTracking = {
-        round,
-        tracker: payload.tracker,
-        trackDate: payload.trackDate,
-        execution: payload.execution,
-        trackNote: payload.trackNote,
-        result: payload.result,
-        nextTrackDate: payload.result === TRACKING_RESULTS.CONTINUE ? payload.nextTrackDate : '',
-        evidence: payload.evidence,
-        submittedAt: now
-      };
-      let nextHistory = appendHistory(existing.item.history, `\u63d0\u4ea4\u7b2c ${round} \u6b21\u8ffd\u8e64`, actor.actorLabel, now);
-      nextHistory = nextHistory.concat([{
-        time: now,
-        action: `\u8ffd\u8e64\u63d0\u5831\uff1a${payload.result}`,
-        user: actor.actorLabel
-      }]);
-      if (pendingTracking.nextTrackDate) {
-        nextHistory = nextHistory.concat([{
-          time: now,
-          action: `\u4e0b\u6b21\u8ffd\u8e64\u65e5\u671f\uff1a${pendingTracking.nextTrackDate}`,
-          user: actor.actorLabel
-        }]);
-      }
-      if (payload.evidence.length) {
-        nextHistory = nextHistory.concat([{
-          time: now,
-          action: `\u5df2\u4e0a\u50b3 ${payload.evidence.length} \u4efd\u8ffd\u8e64\u4f50\u8b49`,
-          user: actor.actorLabel
-        }]);
-      }
-      const nextItem = {
-        ...existing.item,
-        pendingTracking,
-        updatedAt: now,
-        history: nextHistory
-      };
+      const pendingTracking = { round, tracker: payload.tracker, trackDate: payload.trackDate, execution: payload.execution, trackNote: payload.trackNote, result: payload.result, nextTrackDate: payload.result === TRACKING_RESULTS.CONTINUE ? payload.nextTrackDate : '', evidence: payload.evidence, submittedAt: now };
+      let history = appendHistory(existing.item.history, `提交第 ${round} 次追蹤`, actor.actorLabel, now);
+      history = history.concat([{ time: now, action: `追蹤提報：${payload.result}`, user: actor.actorLabel }]);
+      if (pendingTracking.nextTrackDate) history = history.concat([{ time: now, action: `下次追蹤日期：${pendingTracking.nextTrackDate}`, user: actor.actorLabel }]);
+      if (payload.evidence.length) history = history.concat([{ time: now, action: `已上傳 ${payload.evidence.length} 份追蹤佐證`, user: actor.actorLabel }]);
+      const nextItem = { ...existing.item, pendingTracking, updatedAt: now, history };
       const updated = await updateCaseRecord(existing, nextItem);
-      await createAuditRow({
-        eventType: 'corrective_action.tracking_submitted',
-        actorEmail: actor.actorMeta.actorEmail,
-        targetEmail: cleanText(updated.handlerEmail),
-        recordId: updated.id,
-        unitCode: cleanText(updated.handlerUnitCode),
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          actorName: actor.actorMeta.actorName,
-          actorUsername: actor.actorMeta.actorUsername,
-          round,
-          result: payload.result,
-          changes: buildCaseChanges(existing.item, updated)
-        })
-      });
-      await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: mapCaseForClient(updated),
-        contractVersion: CONTRACT_VERSION
-      }), origin);
-    } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to submit tracking review.'), origin);
-    }
+      await createAuditRow({ eventType: 'corrective_action.tracking_submitted', actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(updated.handlerEmail), recordId: updated.id, unitCode: cleanText(updated.handlerUnitCode), occurredAt: now, payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, round, result: payload.result, changes: buildCaseChanges(existing.item, updated) }) });
+      await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(updated), contractVersion: CONTRACT_VERSION }), origin);
+    } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to submit tracking.'), origin); }
   }
 
   async function handleTrackingReview(req, res, origin, caseId) {
@@ -645,12 +459,8 @@ function createCorrectiveActionRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existing = await getEntryByCaseId(caseId);
       if (!existing) throw createError('Corrective action not found.', 404);
-      if (!requestAuthz.canReviewCorrectiveAction(authz, existing.item)) {
-        throw requestAuthz.createHttpError('You do not have permission to review tracking for this corrective action.', 403);
-      }
-      if (existing.item.status !== STATUSES.TRACKING || !existing.item.pendingTracking) {
-        throw createError('There is no pending tracking submission to review.', 409);
-      }
+      if (!requestAuthz.canReviewCorrectiveAction(authz, existing.item)) throw requestAuthz.createHttpError('Forbidden', 403);
+      if (existing.item.status !== STATUSES.TRACKING || !existing.item.pendingTracking) throw createError('No pending tracking to review.', 409);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ACTIONS.TRACKING_REVIEW);
       const payload = normalizeTrackingReviewPayload(envelope.payload);
@@ -660,123 +470,45 @@ function createCorrectiveActionRouter(deps) {
       const actor = buildActor(authz, payload, authz.username);
       const pending = existing.item.pendingTracking;
       const shouldClose = payload.decision === TRACKING_REVIEW_DECISIONS.CLOSE;
-      const finalResult = shouldClose ? '\u540c\u610f\u7d50\u6848' : '\u540c\u610f\u7e7c\u7e8c\u8ffd\u8e64';
-      const approvedTracking = {
-        ...pending,
-        requestedResult: pending.result,
-        result: finalResult,
-        decision: finalResult,
-        reviewer: actor.actorLabel,
-        reviewDate: today,
-        reviewedAt: now
-      };
+      const finalResult = shouldClose ? '同意結案' : '同意繼續追蹤';
+      const approvedTracking = { ...pending, requestedResult: pending.result, result: finalResult, decision: finalResult, reviewer: actor.actorLabel, reviewDate: today, reviewedAt: now };
       const nextRound = pending.round || ((existing.item.trackings || []).length + 1);
-      let nextHistory = appendHistory(existing.item.history, `\u5be9\u6838\u7b2c ${nextRound} \u6b21\u8ffd\u8e64`, actor.actorLabel, now);
-      nextHistory = nextHistory.concat([{
-        time: now,
-        action: finalResult,
-        user: actor.actorLabel
-      }]);
-      if (!shouldClose && pending.nextTrackDate) {
-        nextHistory = nextHistory.concat([{
-          time: now,
-          action: `\u4e0b\u6b21\u8ffd\u8e64\u65e5\u671f\uff1a${pending.nextTrackDate}`,
-          user: actor.actorLabel
-        }]);
-      }
+      let history = appendHistory(existing.item.history, `審核第 ${nextRound} 次追蹤`, actor.actorLabel, now);
+      history = history.concat([{ time: now, action: finalResult, user: actor.actorLabel }]);
+      if (!shouldClose && pending.nextTrackDate) history = history.concat([{ time: now, action: `下次追蹤日期：${pending.nextTrackDate}`, user: actor.actorLabel }]);
       const nextItem = {
-        ...existing.item,
-        trackings: (existing.item.trackings || []).concat([approvedTracking]),
-        pendingTracking: null,
-        status: shouldClose ? STATUSES.CLOSED : STATUSES.TRACKING,
-        reviewResult: finalResult,
-        reviewNextDate: shouldClose ? '' : cleanText(pending.nextTrackDate),
-        reviewer: actor.actorLabel,
-        reviewDate: today,
-        updatedAt: now,
-        closedDate: shouldClose ? now : '',
-        evidence: (existing.item.evidence || []).concat(Array.isArray(pending.evidence) ? pending.evidence : []),
-        history: nextHistory
+        ...existing.item, trackings: (existing.item.trackings || []).concat([approvedTracking]),
+        pendingTracking: null, status: shouldClose ? STATUSES.CLOSED : STATUSES.TRACKING,
+        reviewResult: finalResult, reviewNextDate: shouldClose ? '' : cleanText(pending.nextTrackDate),
+        reviewer: actor.actorLabel, reviewDate: today, updatedAt: now,
+        closedDate: shouldClose ? now : '', evidence: (existing.item.evidence || []).concat(Array.isArray(pending.evidence) ? pending.evidence : []),
+        history
       };
       const updated = await updateCaseRecord(existing, nextItem);
-      await createAuditRow({
-        eventType: 'corrective_action.tracking_reviewed',
-        actorEmail: actor.actorMeta.actorEmail,
-        targetEmail: cleanText(updated.handlerEmail),
-        recordId: updated.id,
-        unitCode: cleanText(updated.handlerUnitCode),
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          actorName: actor.actorMeta.actorName,
-          actorUsername: actor.actorMeta.actorUsername,
-          decision: payload.decision,
-          finalResult,
-          changes: buildCaseChanges(existing.item, updated)
-        })
-      });
-      await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: mapCaseForClient(updated),
-        contractVersion: CONTRACT_VERSION
-      }), origin);
-    } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to review tracking submission.'), origin);
-    }
+      await createAuditRow({ eventType: 'corrective_action.tracking_reviewed', actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(updated.handlerEmail), recordId: updated.id, unitCode: cleanText(updated.handlerUnitCode), occurredAt: now, payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, decision: payload.decision, finalResult, changes: buildCaseChanges(existing.item, updated) }) });
+      await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(updated), contractVersion: CONTRACT_VERSION }), origin);
+    } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to review tracking submission.'), origin); }
   }
 
   async function tryHandle(req, res, origin, url) {
     const pathname = cleanText(url && url.pathname);
-    if (pathname === '/api/corrective-actions/health') {
-      await handleHealth(req, res, origin);
-      return true;
-    }
-    if (pathname === '/api/corrective-actions' && req.method === 'GET') {
-      await handleList(req, res, origin, url);
-      return true;
-    }
-    if (pathname === '/api/corrective-actions' && req.method === 'POST') {
-      await handleCreate(req, res, origin);
-      return true;
-    }
-
+    if (pathname === '/api/corrective-actions/health') { await handleHealth(req, res, origin); return true; }
+    if (pathname === '/api/corrective-actions' && req.method === 'GET') { await handleList(req, res, origin, url); return true; }
+    if (pathname === '/api/corrective-actions' && req.method === 'POST') { await handleCreate(req, res, origin); return true; }
     const detailMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)$/);
-    if (detailMatch && req.method === 'GET') {
-      await handleDetail(req, res, origin, routeCaseId(detailMatch[1]));
-      return true;
-    }
-
+    if (detailMatch && req.method === 'GET') { await handleDetail(req, res, origin, routeCaseId(detailMatch[1])); return true; }
     const respondMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)\/respond$/);
-    if (respondMatch && req.method === 'POST') {
-      await handleRespond(req, res, origin, routeCaseId(respondMatch[1]));
-      return true;
-    }
-
+    if (respondMatch && req.method === 'POST') { await handleRespond(req, res, origin, routeCaseId(respondMatch[1])); return true; }
     const reviewMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)\/review$/);
-    if (reviewMatch && req.method === 'POST') {
-      await handleReview(req, res, origin, routeCaseId(reviewMatch[1]));
-      return true;
-    }
-
+    if (reviewMatch && req.method === 'POST') { await handleReview(req, res, origin, routeCaseId(reviewMatch[1])); return true; }
     const trackingSubmitMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)\/tracking-submit$/);
-    if (trackingSubmitMatch && req.method === 'POST') {
-      await handleTrackingSubmit(req, res, origin, routeCaseId(trackingSubmitMatch[1]));
-      return true;
-    }
-
+    if (trackingSubmitMatch && req.method === 'POST') { await handleTrackingSubmit(req, res, origin, routeCaseId(trackingSubmitMatch[1])); return true; }
     const trackingReviewMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)\/tracking-review$/);
-    if (trackingReviewMatch && req.method === 'POST') {
-      await handleTrackingReview(req, res, origin, routeCaseId(trackingReviewMatch[1]));
-      return true;
-    }
-
+    if (trackingReviewMatch && req.method === 'POST') { await handleTrackingReview(req, res, origin, routeCaseId(trackingReviewMatch[1])); return true; }
     return false;
   }
 
-  return {
-    tryHandle
-  };
+  return { tryHandle };
 }
 
-module.exports = {
-  createCorrectiveActionRouter
-};
+module.exports = { createCorrectiveActionRouter };

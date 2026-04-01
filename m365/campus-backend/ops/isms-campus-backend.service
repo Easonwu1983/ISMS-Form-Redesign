@@ -1,0 +1,40 @@
+[Unit]
+Description=ISMS Campus Backend (PostgreSQL)
+Documentation=https://github.com/your-org/ISMS-Form-Redesign
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=isms
+Group=isms
+WorkingDirectory=/opt/isms/ISMS-Form-Redesign
+ExecStart=/usr/bin/node m365/campus-backend/service-host.cjs
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=8787
+EnvironmentFile=-/opt/isms/ISMS-Form-Redesign/.runtime/env.production
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/isms/attachments /var/log/isms
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=isms-campus-backend
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,10 +1,13 @@
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
 const {
   CONTRACT_VERSION,
   ATTACHMENT_ACTIONS,
   cleanText,
   createError,
   generateAttachmentId,
-  mapDriveItemForClient,
   normalizeUploadPayload,
   sanitizeFileName,
   sanitizePathSegment,
@@ -14,212 +17,127 @@ const {
 const {
   summarizeAttachments
 } = require('./audit-diff.cjs');
+const db = require('./db.cjs');
 
-const GRAPH_ROOT = 'https://graph.microsoft.com/v1.0';
+/* ------------------------------------------------------------------ */
+/*  Filesystem helpers                                                 */
+/* ------------------------------------------------------------------ */
+
+function getAttachmentsDir() {
+  return cleanText(process.env.ATTACHMENTS_DIR) || path.join(process.cwd(), 'data', 'attachments');
+}
+
+function buildStoragePath(scope, ownerId, attachmentId, fileName) {
+  return path.join(
+    getAttachmentsDir(),
+    sanitizePathSegment(scope, 'misc'),
+    sanitizePathSegment(ownerId, 'unscoped'),
+    sanitizePathSegment(attachmentId, 'att'),
+    sanitizeFileName(fileName)
+  );
+}
+
+function buildRelativePath(scope, ownerId, attachmentId, fileName) {
+  return [
+    sanitizePathSegment(scope, 'misc'),
+    sanitizePathSegment(ownerId, 'unscoped'),
+    sanitizePathSegment(attachmentId, 'att'),
+    sanitizeFileName(fileName)
+  ].join('/');
+}
+
+/* ------------------------------------------------------------------ */
+/*  Row mapper                                                         */
+/* ------------------------------------------------------------------ */
+
+function mapRowToAttachment(row) {
+  if (!row) return null;
+  return {
+    attachmentId: row.attachment_id || '',
+    name: row.file_name || '',
+    size: Number(row.file_size || 0),
+    contentType: row.content_type || 'application/octet-stream',
+    scope: row.scope || '',
+    ownerId: row.owner_id || '',
+    recordType: row.record_type || '',
+    path: row.storage_path || '',
+    uploadedAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+    storage: 'local-fs'
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Display name normalization                                         */
+/* ------------------------------------------------------------------ */
+
+function normalizeAttachmentDisplayName(filename) {
+  const cleanName = cleanText(filename);
+  if (!cleanName) return 'attachment.bin';
+  const normalized = cleanName
+    .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
+    .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
+    .replace(/^([a-z0-9]{3,6}(?:[-_][a-z0-9]{3,}){2,})[-_]+/i, '')
+    .trim();
+  return normalized || cleanName;
+}
+
+function buildContentDisposition(filename, download) {
+  const cleanName = cleanText(filename) || 'attachment.bin';
+  const asciiFallback = cleanName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+  const encoded = encodeURIComponent(cleanName);
+  return `${download ? 'attachment' : 'inline'}; filename="${asciiFallback || 'attachment.bin'}"; filename*=UTF-8''${encoded}`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Router factory                                                     */
+/* ------------------------------------------------------------------ */
 
 function createAttachmentRouter(deps) {
-  const {
-    parseJsonBody,
-    writeJson,
-    writeBinary,
-    graphRequest,
-    resolveSiteId,
-    getDelegatedToken,
-    requestAuthz
-  } = deps;
-
-  const state = {
-    listMap: null,
-    drive: null,
-    list: null
-  };
-
-  function getEnv(name, fallback) {
-    const value = cleanText(process.env[name]);
-    return value || fallback || '';
-  }
-
-  function getLibraryName() {
-    return getEnv('ATTACHMENTS_LIBRARY', 'ISMSAttachments');
-  }
-
-  function getAuditListName() {
-    return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
-  }
-
-  async function fetchListMap() {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl,list`);
-    return new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
-  }
-
-  async function resolveLibraryList() {
-    if (state.list) return state.list;
-    const listName = getLibraryName();
-    if (!state.listMap || !state.listMap.has(listName)) {
-      state.listMap = await fetchListMap();
-    }
-    let list = state.listMap.get(listName);
-    if (!list) {
-      state.listMap = await fetchListMap();
-      list = state.listMap.get(listName);
-    }
-    if (!list) {
-      throw createError(`SharePoint library not found: ${listName}`, 500);
-    }
-    state.list = list;
-    return list;
-  }
-
-  async function resolveDrive() {
-    if (state.drive) return state.drive;
-    const siteId = await resolveSiteId();
-    const list = await resolveLibraryList();
-    state.drive = await graphRequest('GET', `/sites/${siteId}/lists/${list.id}/drive?$select=id,name,webUrl,driveType`);
-    return state.drive;
-  }
-
-  async function resolveAuditList() {
-    const listName = getAuditListName();
-    if (!state.listMap || !state.listMap.has(listName)) {
-      state.listMap = await fetchListMap();
-    }
-    let list = state.listMap.get(listName);
-    if (!list) {
-      state.listMap = await fetchListMap();
-      list = state.listMap.get(listName);
-    }
-    if (!list) {
-      throw createError(`SharePoint list not found: ${listName}`, 500);
-    }
-    return list;
-  }
+  const { parseJsonBody, writeJson, writeBinary, requestAuthz } = deps;
 
   async function createAuditRow(input) {
-    const siteId = await resolveSiteId();
-    const list = await resolveAuditList();
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: {
-        Title: cleanText(input.recordId || input.eventType || 'audit'),
-        EventType: cleanText(input.eventType),
-        ActorEmail: cleanText(input.actorEmail),
-        TargetEmail: cleanText(input.targetEmail),
-        UnitCode: cleanText(input.unitCode),
-        RecordId: cleanText(input.recordId),
-        OccurredAt: cleanText(input.occurredAt) || new Date().toISOString(),
-        PayloadJson: cleanText(input.payloadJson)
-      }
-    });
-  }
-
-  async function rawGraphResponse(method, pathOrUrl, body, headers) {
-    const { accessToken } = await getDelegatedToken();
-    const targetUrl = /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : GRAPH_ROOT + pathOrUrl;
-    const response = await fetch(targetUrl, {
-      method,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-        ...(headers || {})
-      },
-      body
-    });
-    if (!response.ok) {
-      const contentType = cleanText(response.headers.get('content-type'));
-      if (contentType.includes('application/json')) {
-        const json = await response.json();
-        const error = new Error(cleanText(json && json.error && json.error.message) || `Graph request failed with HTTP ${response.status}`);
-        error.statusCode = response.status >= 500 ? 502 : 500;
-        throw error;
-      }
-      const text = await response.text();
-      const error = new Error(cleanText(text) || `Graph request failed with HTTP ${response.status}`);
-      error.statusCode = response.status >= 500 ? 502 : 500;
-      throw error;
-    }
-    return response;
-  }
-
-  async function rawGraphRequest(method, pathOrUrl, body, headers) {
-    const response = await rawGraphResponse(method, pathOrUrl, body, headers);
-    const contentType = cleanText(response.headers.get('content-type'));
-    if (response.status === 204) return null;
-    if (contentType.includes('application/json')) {
-      const json = await response.json();
-      return json;
-    }
-    const text = await response.text();
-    return text;
-  }
-
-  function buildContentDisposition(filename, download) {
-    const cleanName = cleanText(filename) || 'attachment.bin';
-    const asciiFallback = cleanName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
-    const encoded = encodeURIComponent(cleanName);
-    return `${download ? 'attachment' : 'inline'}; filename="${asciiFallback || 'attachment.bin'}"; filename*=UTF-8''${encoded}`;
-  }
-
-  function normalizeAttachmentDisplayName(filename) {
-    const cleanName = cleanText(filename);
-    if (!cleanName) return 'attachment.bin';
-    const normalized = cleanName
-      .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
-      .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
-      .replace(/^([a-z0-9]{3,6}(?:[-_][a-z0-9]{3,}){2,})[-_]+/i, '')
-      .trim();
-    return normalized || cleanName;
-  }
-
-  function buildDrivePath(payload, attachmentId) {
-    const safeFileName = sanitizeFileName(payload.fileName);
-    return [
-      sanitizePathSegment(payload.scope, 'misc'),
-      sanitizePathSegment(payload.ownerId, 'unscoped'),
-      sanitizePathSegment(attachmentId, 'att'),
-      safeFileName
-    ].join('/');
-  }
-
-  async function getDriveItem(itemId) {
-    const siteId = await resolveSiteId();
-    const drive = await resolveDrive();
-    return rawGraphRequest('GET', `/sites/${siteId}/drives/${drive.id}/items/${encodeURIComponent(cleanText(itemId))}?$select=id,name,size,webUrl,lastModifiedDateTime,parentReference,file,@microsoft.graph.downloadUrl`, undefined, {});
+    await db.query(`
+      INSERT INTO ops_audit (title, event_type, actor_email, target_email, unit_code, record_id, occurred_at, payload_json)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      cleanText(input.recordId || input.eventType || 'audit'),
+      cleanText(input.eventType),
+      cleanText(input.actorEmail),
+      cleanText(input.targetEmail || ''),
+      cleanText(input.unitCode || ''),
+      cleanText(input.recordId),
+      cleanText(input.occurredAt) || new Date().toISOString(),
+      cleanText(input.payloadJson)
+    ]);
   }
 
   async function buildHealth() {
-    const siteId = await resolveSiteId();
-    const { decoded, mode } = await getDelegatedToken();
-    const health = {
-      ok: true,
-      ready: true,
-      contractVersion: CONTRACT_VERSION,
-      repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
-      actor: {
-        tokenMode: cleanText(mode) || 'delegated-cli',
-        appId: cleanText(decoded.appid || decoded.azp),
-        upn: cleanText(decoded.upn),
-        scopes: cleanText(decoded.scp),
-        roles: Array.isArray(decoded.roles) ? decoded.roles.join(',') : ''
-      },
-      site: { id: siteId }
-    };
+    const dbHealth = await db.healthCheck();
+    const attachDir = getAttachmentsDir();
+    let fsOk = false;
     try {
-      health.library = await resolveLibraryList();
-      health.drive = await resolveDrive();
-    } catch (error) {
-      health.ok = false;
-      health.ready = false;
-      health.message = cleanText(error && error.message) || 'Attachment library is not ready.';
+      await fs.promises.access(attachDir, fs.constants.W_OK);
+      fsOk = true;
+    } catch (_) {
+      // directory does not exist or is not writable
+      try {
+        await fs.promises.mkdir(attachDir, { recursive: true });
+        fsOk = true;
+      } catch (_) { /* still not ok */ }
     }
-    return health;
+    return {
+      ok: dbHealth.ok && fsOk,
+      ready: dbHealth.ok && fsOk,
+      contractVersion: CONTRACT_VERSION,
+      repository: 'postgresql+local-fs',
+      database: { ok: dbHealth.ok, latencyMs: dbHealth.latencyMs },
+      filesystem: { ok: fsOk, path: attachDir }
+    };
   }
 
   async function handleHealth(_req, res, origin) {
     try {
-      await writeJson(res, {
-        status: 200,
-        jsonBody: await buildHealth()
-      }, origin);
+      await writeJson(res, { status: 200, jsonBody: await buildHealth() }, origin);
     } catch (error) {
       await writeJson(res, {
         status: 500,
@@ -228,66 +146,104 @@ function createAttachmentRouter(deps) {
     }
   }
 
-  async function handleUpload(req, res, origin) {
+  async function saveFileToDisk(storagePath, contentBuffer) {
+    const dir = path.dirname(storagePath);
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(storagePath, contentBuffer);
+  }
+
+  async function insertAttachmentMetadata(attachmentId, payload, fileSize, relativePath) {
+    await db.query(`
+      INSERT INTO attachments (
+        attachment_id, scope, owner_id, record_type,
+        file_name, content_type, file_size, storage_path,
+        backend_mode, record_source, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [
+      cleanText(attachmentId),
+      cleanText(payload.scope),
+      cleanText(payload.ownerId),
+      cleanText(payload.recordType),
+      cleanText(payload.fileName),
+      cleanText(payload.contentType) || 'application/octet-stream',
+      fileSize,
+      relativePath,
+      'pg-campus-backend',
+      'frontend',
+      new Date().toISOString()
+    ]);
+  }
+
+  async function handleUploadCore(req, res, origin, isPublic) {
     try {
-      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      let authz = null;
+      if (!isPublic) {
+        authz = await requestAuthz.requireAuthenticatedUser(req);
+      }
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ATTACHMENT_ACTIONS.UPLOAD);
       const payload = normalizeUploadPayload(envelope.payload);
+
+      if (isPublic) {
+        if (cleanText(payload.scope) !== 'unit-contact-authorization-doc') throw createError('Forbidden', 403);
+        if (cleanText(payload.recordType) !== 'unit-contact-application') throw createError('Forbidden', 403);
+      }
+
       validateUploadPayload(payload);
-      const siteId = await resolveSiteId();
-      const drive = await resolveDrive();
       const attachmentId = cleanText(payload.attachmentId) || generateAttachmentId('att');
-      const drivePath = buildDrivePath(payload, attachmentId);
       const contentBuffer = Buffer.from(payload.contentBase64, 'base64');
-      const encodedPath = drivePath.split('/').map((segment) => encodeURIComponent(segment)).join('/');
-      const item = await rawGraphRequest(
-        'PUT',
-        `/sites/${siteId}/drives/${drive.id}/root:/${encodedPath}:/content`,
-        contentBuffer,
-        {
-          'Content-Type': cleanText(payload.contentType) || 'application/octet-stream'
-        }
-      );
+      const relativePath = buildRelativePath(payload.scope, payload.ownerId, attachmentId, payload.fileName);
+      const storagePath = buildStoragePath(payload.scope, payload.ownerId, attachmentId, payload.fileName);
+
+      await saveFileToDisk(storagePath, contentBuffer);
+      await insertAttachmentMetadata(attachmentId, payload, contentBuffer.length, relativePath);
+
+      const clientItem = {
+        attachmentId,
+        name: cleanText(payload.fileName),
+        size: contentBuffer.length,
+        contentType: cleanText(payload.contentType) || 'application/octet-stream',
+        scope: cleanText(payload.scope),
+        ownerId: cleanText(payload.ownerId),
+        recordType: cleanText(payload.recordType),
+        path: relativePath,
+        uploadedAt: new Date().toISOString(),
+        storage: 'local-fs'
+      };
+
       await writeJson(res, {
         status: 201,
-        jsonBody: {
-          ok: true,
-          item: mapDriveItemForClient(item, {
-            attachmentId,
-            scope: payload.scope,
-            ownerId: payload.ownerId,
-            recordType: payload.recordType,
-            path: drivePath,
-            contentType: payload.contentType,
-            uploadedAt: new Date().toISOString()
-          }),
-          contractVersion: CONTRACT_VERSION
-        }
+        jsonBody: { ok: true, item: clientItem, contractVersion: CONTRACT_VERSION }
       }, origin);
-      const actor = requestAuthz.buildActorDetails(authz);
+
+      const eventType = isPublic ? 'unit_contact.authorization_doc_public_uploaded' : 'attachment.uploaded';
+      const actorEmail = isPublic
+        ? cleanText(payload.ownerId)
+        : (authz ? requestAuthz.buildActorDetails(authz).actorEmail : '');
+
       await createAuditRow({
-        eventType: 'attachment.uploaded',
-        actorEmail: actor.actorEmail,
-        unitCode: cleanText(actor.actorActiveUnit || actor.actorUnit),
+        eventType,
+        actorEmail,
+        targetEmail: isPublic ? cleanText(payload.ownerId) : '',
+        unitCode: isPublic ? '' : cleanText(authz && requestAuthz.buildActorDetails(authz).actorActiveUnit || ''),
         recordId: attachmentId,
         occurredAt: new Date().toISOString(),
         payloadJson: JSON.stringify({
-          actorUsername: actor.actorUsername,
           ownerId: payload.ownerId,
           recordType: payload.recordType,
           scope: payload.scope,
           fileName: payload.fileName,
           contentType: payload.contentType,
-          fileSize: Number(payload.size || contentBuffer.length || 0),
-          storedPath: drivePath,
+          fileSize: contentBuffer.length,
+          storedPath: relativePath,
+          publicUpload: isPublic,
           attachment: summarizeAttachments([{
             attachmentId,
             name: payload.fileName,
-            size: Number(payload.size || contentBuffer.length || 0)
+            size: contentBuffer.length
           }])
         })
-      });
+      }).catch((err) => console.warn('[attachment] audit write failed:', err && err.message));
     } catch (error) {
       await writeJson(res, {
         status: Number(error && error.statusCode) || 500,
@@ -296,96 +252,27 @@ function createAttachmentRouter(deps) {
     }
   }
 
+  async function handleUpload(req, res, origin) {
+    return handleUploadCore(req, res, origin, false);
+  }
+
   async function handlePublicUpload(req, res, origin) {
-    try {
-      const envelope = await parseJsonBody(req);
-      validateActionEnvelope(envelope, ATTACHMENT_ACTIONS.UPLOAD);
-      const payload = normalizeUploadPayload(envelope.payload);
-      if (cleanText(payload.scope) !== 'unit-contact-authorization-doc') {
-        throw createError('Forbidden', 403);
-      }
-      if (cleanText(payload.recordType) !== 'unit-contact-application') {
-        throw createError('Forbidden', 403);
-      }
-      validateUploadPayload(payload);
-      const siteId = await resolveSiteId();
-      const drive = await resolveDrive();
-      const attachmentId = cleanText(payload.attachmentId) || generateAttachmentId('att');
-      const drivePath = buildDrivePath(payload, attachmentId);
-      const contentBuffer = Buffer.from(payload.contentBase64, 'base64');
-      const encodedPath = drivePath.split('/').map((segment) => encodeURIComponent(segment)).join('/');
-      const item = await rawGraphRequest(
-        'PUT',
-        `/sites/${siteId}/drives/${drive.id}/root:/${encodedPath}:/content`,
-        contentBuffer,
-        {
-          'Content-Type': cleanText(payload.contentType) || 'application/octet-stream'
-        }
-      );
-      await writeJson(res, {
-        status: 201,
-        jsonBody: {
-          ok: true,
-          item: mapDriveItemForClient(item, {
-            attachmentId,
-            scope: payload.scope,
-            ownerId: payload.ownerId,
-            recordType: payload.recordType,
-            path: drivePath,
-            contentType: payload.contentType,
-            uploadedAt: new Date().toISOString()
-          }),
-          contractVersion: CONTRACT_VERSION
-        }
-      }, origin);
-      await createAuditRow({
-        eventType: 'unit_contact.authorization_doc_public_uploaded',
-        actorEmail: cleanText(payload.ownerId),
-        targetEmail: cleanText(payload.ownerId),
-        unitCode: '',
-        recordId: attachmentId,
-        occurredAt: new Date().toISOString(),
-        payloadJson: JSON.stringify({
-          ownerId: cleanText(payload.ownerId),
-          recordType: cleanText(payload.recordType),
-          scope: cleanText(payload.scope),
-          fileName: payload.fileName,
-          contentType: payload.contentType,
-          fileSize: Number(payload.size || contentBuffer.length || 0),
-          storedPath: drivePath,
-          publicUpload: true,
-          attachment: summarizeAttachments([{
-            attachmentId,
-            name: payload.fileName,
-            size: Number(payload.size || contentBuffer.length || 0)
-          }])
-        })
-      });
-    } catch (error) {
-      await writeJson(res, {
-        status: Number(error && error.statusCode) || 500,
-        jsonBody: { ok: false, error: cleanText(error && error.message) || 'Failed to upload attachment.' }
-      }, origin);
-    }
+    return handleUploadCore(req, res, origin, true);
   }
 
   async function handleDetail(req, res, origin, itemId) {
     try {
       await requestAuthz.requireAuthenticatedUser(req);
-      const item = await getDriveItem(itemId);
-      const clientItem = {
-        ...(item || {}),
-        name: normalizeAttachmentDisplayName(cleanText(item && item.name))
-      };
+      const row = await db.queryOne(
+        `SELECT * FROM attachments WHERE attachment_id = $1`,
+        [cleanText(itemId)]
+      );
+      if (!row) throw createError('Attachment not found', 404);
+      const item = mapRowToAttachment(row);
+      item.name = normalizeAttachmentDisplayName(item.name);
       await writeJson(res, {
         status: 200,
-        jsonBody: {
-          ok: true,
-          item: mapDriveItemForClient(clientItem, {
-            path: cleanText(item && item.parentReference && item.parentReference.path)
-          }),
-          contractVersion: CONTRACT_VERSION
-        }
+        jsonBody: { ok: true, item, contractVersion: CONTRACT_VERSION }
       }, origin);
     } catch (error) {
       await writeJson(res, {
@@ -398,25 +285,33 @@ function createAttachmentRouter(deps) {
   async function handleContent(req, res, origin, itemId, url) {
     try {
       await requestAuthz.requireAuthenticatedUser(req);
-      const siteId = await resolveSiteId();
-      const drive = await resolveDrive();
-      const item = await getDriveItem(itemId);
-      const response = await rawGraphResponse(
-        'GET',
-        `/sites/${siteId}/drives/${drive.id}/items/${encodeURIComponent(cleanText(itemId))}/content`,
-        undefined,
-        { Accept: '*/*' }
+      const row = await db.queryOne(
+        `SELECT * FROM attachments WHERE attachment_id = $1`,
+        [cleanText(itemId)]
       );
-      const contentType = cleanText(response.headers.get('content-type')) || cleanText(item && item.file && item.file.mimeType) || 'application/octet-stream';
+      if (!row) throw createError('Attachment not found', 404);
+
+      const relativePath = cleanText(row.storage_path);
+      const storagePath = path.join(getAttachmentsDir(), relativePath);
+
+      try {
+        await fs.promises.access(storagePath, fs.constants.R_OK);
+      } catch (_) {
+        throw createError('Attachment file not found on disk', 404);
+      }
+
       const download = cleanText(url && url.searchParams && url.searchParams.get('download')) === '1';
-      const payload = Buffer.from(await response.arrayBuffer());
+      const contentType = cleanText(row.content_type) || 'application/octet-stream';
+      const displayName = normalizeAttachmentDisplayName(cleanText(row.file_name));
+      const payload = await fs.promises.readFile(storagePath);
+
       await writeBinary(res, {
         status: 200,
         path: '/api/attachments/content',
         body: payload,
         headers: {
           'Content-Type': contentType,
-          'Content-Disposition': buildContentDisposition(normalizeAttachmentDisplayName(cleanText(item && item.name)), download)
+          'Content-Disposition': buildContentDisposition(displayName, download)
         }
       }, origin);
     } catch (error) {
@@ -432,17 +327,28 @@ function createAttachmentRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ATTACHMENT_ACTIONS.DELETE);
-      const siteId = await resolveSiteId();
-      const drive = await resolveDrive();
-      await rawGraphRequest('DELETE', `/sites/${siteId}/drives/${drive.id}/items/${encodeURIComponent(cleanText(itemId))}`);
+
+      const row = await db.queryOne(
+        `SELECT * FROM attachments WHERE attachment_id = $1`,
+        [cleanText(itemId)]
+      );
+      if (!row) throw createError('Attachment not found', 404);
+
+      // Delete from DB
+      await db.query(`DELETE FROM attachments WHERE attachment_id = $1`, [cleanText(itemId)]);
+
+      // Delete from disk (best-effort)
+      const relativePath = cleanText(row.storage_path);
+      if (relativePath) {
+        const storagePath = path.join(getAttachmentsDir(), relativePath);
+        fs.promises.unlink(storagePath).catch(() => {});
+      }
+
       await writeJson(res, {
         status: 200,
-        jsonBody: {
-          ok: true,
-          deletedId: cleanText(itemId),
-          contractVersion: CONTRACT_VERSION
-        }
+        jsonBody: { ok: true, deletedId: cleanText(itemId), contractVersion: CONTRACT_VERSION }
       }, origin);
+
       const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
         eventType: 'attachment.deleted',
@@ -454,7 +360,7 @@ function createAttachmentRouter(deps) {
           actorUsername: actor.actorUsername,
           deletedAttachmentId: cleanText(itemId)
         })
-      });
+      }).catch((err) => console.warn('[attachment] audit write failed:', err && err.message));
     } catch (error) {
       await writeJson(res, {
         status: Number(error && error.statusCode) || 500,
@@ -489,11 +395,7 @@ function createAttachmentRouter(deps) {
     return Promise.resolve(false);
   }
 
-  return {
-    tryHandle
-  };
+  return { tryHandle };
 }
 
-module.exports = {
-  createAttachmentRouter
-};
+module.exports = { createAttachmentRouter };

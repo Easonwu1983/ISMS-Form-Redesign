@@ -62,31 +62,22 @@ The request and response contract stays aligned with:
 
 ## Prerequisites
 
-1. Sign in on the campus host with CLI for Microsoft 365 using the site-owner account.
-2. Ensure the required SharePoint site and lists already exist.
-3. Keep the SharePoint site id or URL available in environment variables or local backend config.
+1. PostgreSQL 17 installed and running on the campus host.
+2. Database `isms_db` created with user `isms_user` (see `migrations/001-initial-schema.sql`).
+3. Graph Mail token available for email notifications (interim — SMTP migration pending).
 
 ## Environment Variables
 
-- `PORT`
-- `UNIT_CONTACT_ALLOWED_ORIGINS`
-- `UNIT_CONTACT_SHAREPOINT_SITE_ID`
-- `UNIT_CONTACT_SHAREPOINT_SITE_URL`
-- `UNIT_CONTACT_APPLICATIONS_LIST`
-- `UNIT_CONTACT_UNITADMINS_LIST`
-- `UNIT_CONTACT_AUDIT_LIST`
-- `CORRECTIVE_ACTIONS_LIST`
-- `CHECKLISTS_LIST`
-- `TRAINING_FORMS_LIST`
-- `TRAINING_ROSTERS_LIST`
-- `SYSTEM_USERS_LIST`
-- `ATTACHMENTS_LIBRARY`
+- `PORT` — HTTP server port (default: 8787)
+- `UNIT_CONTACT_ALLOWED_ORIGINS` — comma-separated CORS origins
+- `AUTH_SESSION_SECRET` — session signing secret
+- `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD` — PostgreSQL connection
+- `PG_POOL_MIN`, `PG_POOL_MAX` — connection pool size (default: 2 / 10)
+- `ATTACHMENTS_DIR` — local filesystem path for uploaded files
+- `GRAPH_MAIL_SENDER_UPN` — Graph Mail sender UPN (interim)
+- `M365_A3_TOKEN_MODE` — token mode for Graph Mail (interim)
 
-The backend can also reuse the local-only file:
-
-- [C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\.local-secrets\m365-a3-backend.json](C:\Users\MOECISH\Desktop\ai-isms\ISMS-Form-Redesign\.local-secrets\m365-a3-backend.json)
-
-for `siteId` and `sharePointSiteUrl`.
+All settings can be provided via `runtime.local.json` (see `runtime.sample.json`).
 
 ## Start
 

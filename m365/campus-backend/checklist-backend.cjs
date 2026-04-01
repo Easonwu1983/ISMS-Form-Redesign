@@ -1,5 +1,4 @@
-const fs = require('fs');
-const path = require('path');
+'use strict';
 
 const {
   ACTIONS,
@@ -8,789 +7,204 @@ const {
   buildErrorResponse,
   buildJsonResponse,
   cleanText,
-  createChecklistRecord,
   createError,
   mapChecklistForClient,
-  mapChecklistToGraphFields,
-  mapGraphFieldsToChecklist,
   normalizeChecklistPayload,
-  parseChecklistId,
+  summarizeChecklists,
   validateActionEnvelope,
   validateChecklistPayload
 } = require('../azure-function/checklist-api/src/shared/contract');
-const {
-  buildFieldChanges,
-  summarizeChecklistResults
-} = require('./audit-diff.cjs');
+const db = require('./db.cjs');
+
+function mapRowToChecklist(row) {
+  if (!row) return null;
+  let results = {};
+  try {
+    results = row.results_json && typeof row.results_json === 'string'
+      ? JSON.parse(row.results_json)
+      : (row.results_json || {});
+  } catch (_) { /* ignore */ }
+  const answeredCount = results && typeof results === 'object'
+    ? Object.keys(results).filter((k) => {
+        const val = results[k];
+        return val && (val.compliance || val.execution || val.evidence);
+      }).length
+    : 0;
+  return {
+    id: row.checklist_id || '',
+    documentNo: row.document_no || '',
+    checklistSeq: row.checklist_seq || 0,
+    unit: row.unit || '',
+    unitCode: row.unit_code || '',
+    fillerName: row.filler_name || '',
+    fillerUsername: row.filler_username || '',
+    fillDate: row.fill_date ? new Date(row.fill_date).toISOString() : '',
+    auditYear: row.audit_year || '',
+    supervisorName: row.supervisor_name || '',
+    supervisorTitle: row.supervisor_title || '',
+    signStatus: row.sign_status || '待簽核',
+    signDate: row.sign_date ? new Date(row.sign_date).toISOString() : '',
+    supervisorNote: row.supervisor_note || '',
+    results,
+    summary: {
+      total: Number(row.summary_total) || 0,
+      conform: Number(row.summary_conform) || 0,
+      partial: Number(row.summary_partial) || 0,
+      nonConform: Number(row.summary_non_conform) || 0,
+      na: Number(row.summary_na) || 0
+    },
+    answeredCount,
+    status: row.status || '草稿',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : '',
+    backendMode: row.backend_mode || '',
+    recordSource: row.record_source || ''
+  };
+}
+
+const CHECKLIST_SELECT = `
+  SELECT id, checklist_id, document_no, checklist_seq, unit, unit_code,
+         filler_name, filler_username, fill_date, audit_year,
+         supervisor_name, supervisor_title, sign_status, sign_date,
+         supervisor_note, results_json,
+         summary_total, summary_conform, summary_partial, summary_non_conform, summary_na,
+         status, backend_mode, record_source, created_at, updated_at
+  FROM checklists
+`;
 
 function createChecklistRouter(deps) {
-  const {
-    parseJsonBody,
-    writeJson,
-    graphRequest,
-    resolveSiteId,
-    getDelegatedToken,
-    requestAuthz
-  } = deps;
-
-  const state = {
-    listMap: null,
-    entriesCache: null,
-    entriesCacheAt: 0,
-    cacheVersion: 0,
-    entriesPromise: null,
-    entriesPrewarmQueued: false,
-    queryCache: new Map(),
-    summaryCache: new Map(),
-    unfilteredSummary: null,
-    unfilteredSummarySeed: null
-  };
-  const CHECKLIST_CACHE_TTL_MS = 120000;
-  const CHECKLIST_PREWARM_DELAY_MS = 5000;
-  const CHECKLIST_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-  const CHECKLIST_QUERY_CACHE_MAX = 80;
-  const CHECKLIST_SUMMARY_CACHE_MAX = 48;
-
-  function getEnv(name, fallback) {
-    const value = cleanText(process.env[name]);
-    return value || fallback || '';
-  }
-
-  function routeChecklistId(value) {
-    return decodeURIComponent(String(value || '').trim());
-  }
-
-  function actorLabel(payload, fallback) {
-    return cleanText(payload && (payload.actorName || payload.actorUsername || payload.fillerName || payload.fillerUsername)) || fallback || 'system';
-  }
-
-  function buildChecklistSnapshot(item) {
-    if (!item) return null;
-    const resultSummary = summarizeChecklistResults(item.results);
-    return {
-      id: cleanText(item.id),
-      unit: cleanText(item.unit),
-      auditYear: cleanText(item.auditYear),
-      fillerUsername: cleanText(item.fillerUsername),
-      status: cleanText(item.status),
-      signStatus: cleanText(item.signStatus),
-      answeredCount: Number(item.answeredCount || 0),
-      evidenceFileCount: resultSummary.evidenceFileCount
-    };
-  }
-
-  function buildChecklistChanges(beforeItem, afterItem) {
-    const beforeSummary = summarizeChecklistResults(beforeItem && beforeItem.results);
-    const afterSummary = summarizeChecklistResults(afterItem && afterItem.results);
-    return buildFieldChanges(beforeItem, afterItem, [
-      'unit',
-      'auditYear',
-      'fillerName',
-      'fillerUsername',
-      'supervisorName',
-      'supervisorTitle',
-      'signStatus',
-      'signDate',
-      'status',
-      { key: 'answeredCount', kind: 'number' },
-      { label: 'summaryTotal', kind: 'number', get: function (item) { return item && item.summary && item.summary.total; } },
-      { label: 'summaryConform', kind: 'number', get: function (item) { return item && item.summary && item.summary.conform; } },
-      { label: 'summaryPartial', kind: 'number', get: function (item) { return item && item.summary && item.summary.partial; } },
-      { label: 'summaryNonConform', kind: 'number', get: function (item) { return item && item.summary && item.summary.nonConform; } },
-      { label: 'summaryNa', kind: 'number', get: function (item) { return item && item.summary && item.summary.na; } },
-      { label: 'evidenceFileCount', kind: 'number', get: function (item) { return item === beforeItem ? beforeSummary.evidenceFileCount : afterSummary.evidenceFileCount; } }
-    ]);
-  }
-
-  function compareChecklistRows(left, right) {
-    return cleanText(right && right.item && right.item.updatedAt).localeCompare(cleanText(left && left.item && left.item.updatedAt));
-  }
-
-  function sortChecklistRows(rows) {
-    return (Array.isArray(rows) ? rows : []).slice().sort(compareChecklistRows);
-  }
-
-  async function fetchListMap() {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
-    return new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
-  }
-
-  async function resolveNamedList(name) {
-    const listName = cleanText(name);
-    if (!state.listMap || !state.listMap.has(listName)) {
-      state.listMap = await fetchListMap();
-    }
-    let list = state.listMap.get(listName);
-    if (!list) {
-      state.listMap = await fetchListMap();
-      list = state.listMap.get(listName);
-    }
-    if (!list) {
-      throw createError(`SharePoint list not found: ${listName}`, 500);
-    }
-    return list;
-  }
-
-  function getChecklistsListName() {
-    return getEnv('CHECKLISTS_LIST', 'Checklists');
-  }
-
-  function getChecklistSnapshotPath() {
-    return path.join(process.cwd(), 'logs', 'campus-backend', 'checklists-cache.json');
-  }
-
-  function getAuditListName() {
-    return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
-  }
-
-  function logChecklistCache(message, details) {
-    const suffix = details && typeof details === 'object'
-      ? Object.entries(details)
-        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-        .join(' ')
-      : '';
-    console.log(`[checklists] ${message}${suffix ? ` ${suffix}` : ''}`);
-  }
-
-  function cloneJson(value) {
-    return value && typeof value === 'object'
-      ? JSON.parse(JSON.stringify(value))
-      : value;
-  }
-
-  function hasActiveChecklistFilters(filters) {
-    const target = filters && typeof filters === 'object' ? filters : {};
-    return !!(
-      cleanText(target.status)
-      || cleanText(target.statusBucket)
-      || cleanText(target.unit)
-      || cleanText(target.auditYear)
-      || cleanText(target.fillerUsername)
-      || cleanText(target.q)
-    );
-  }
-
-  function rebuildChecklistDerivedState(rows) {
-    const items = (Array.isArray(rows) ? rows : [])
-      .map((entry) => entry && entry.item)
-      .filter(Boolean);
-    state.unfilteredSummary = summarizeChecklistItems(items);
-    state.unfilteredSummarySeed = state.unfilteredSummary
-      ? {
-          ok: true,
-          items: [],
-          total: Number(state.unfilteredSummary.total || 0),
-          summary: cloneJson(state.unfilteredSummary),
-          generatedAt: new Date().toISOString(),
-          contractVersion: CONTRACT_VERSION
-        }
-      : null;
-  }
-
-  function buildChecklistSummaryOnlyFastResponse(url, filters, cacheReason) {
-    if (!state.unfilteredSummarySeed) return null;
-    const total = Number(state.unfilteredSummarySeed.total || 0);
-    const page = buildChecklistPageMeta(url, total);
-    return {
-      ...state.unfilteredSummarySeed,
-      page: {
-        ...page,
-        returned: 0,
-        pageStart: 0,
-        pageEnd: 0
-      },
-      filters: {
-        ...(filters || {}),
-        summaryOnly: '1'
-      },
-      cache: {
-        query: 'hit',
-        summaryOnly: true,
-        reason: String(cacheReason || 'unfiltered-summary')
-      }
-    };
-  }
-
-  function trimQueryCache(cache, maxEntries) {
-    const target = cache instanceof Map ? cache : null;
-    const safeMaxEntries = Math.max(1, Number(maxEntries) || 12);
-    if (!target) return;
-    while (target.size > safeMaxEntries) {
-      const oldestKey = target.keys().next().value;
-      if (!oldestKey) break;
-      target.delete(oldestKey);
-    }
-  }
-
-  function readQueryCache(cache, cacheKey) {
-    if (!(cache instanceof Map)) return { body: null, reason: 'disabled' };
-    if (!cacheKey || !cache.has(cacheKey)) return { body: null, reason: 'missing' };
-    const cached = cache.get(cacheKey);
-    cache.delete(cacheKey);
-    cache.set(cacheKey, cached);
-    return {
-      body: cloneJson(cached),
-      reason: 'hit'
-    };
-  }
-
-  function writeQueryCache(cache, cacheKey, value, maxEntries) {
-    if (!(cache instanceof Map) || !cacheKey) return cloneJson(value);
-    cache.set(cacheKey, cloneJson(value));
-    trimQueryCache(cache, maxEntries);
-    return cloneJson(value);
-  }
-
-  function buildChecklistQueryCacheKey(authz, url, cacheVersion) {
-    const safeAuthz = authz && typeof authz === 'object' ? authz : {};
-    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
-      ? safeAuthz.authorizedUnits.map((value) => cleanText(value)).filter(Boolean).sort()
-      : [];
-    const reviewUnits = Array.isArray(safeAuthz.reviewUnits)
-      ? safeAuthz.reviewUnits.map((value) => cleanText(value)).filter(Boolean).sort()
-      : [];
-    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
-    return [
-      String(cacheVersion || 0).trim(),
-      String(safeAuthz.username || '').trim(),
-      String(safeAuthz.role || '').trim(),
-      String(safeAuthz.primaryUnit || '').trim(),
-      String(safeAuthz.activeUnit || '').trim(),
-      authorizedUnits.join('|'),
-      reviewUnits.join('|'),
-      String(params.get('status') || '').trim(),
-      String(params.get('statusBucket') || '').trim(),
-      String(params.get('unit') || '').trim(),
-      String(params.get('auditYear') || '').trim(),
-      String(params.get('fillerUsername') || '').trim(),
-      String(params.get('q') || '').trim(),
-      String(params.get('summaryOnly') || '').trim(),
-      String(params.get('limit') || '').trim(),
-      String(params.get('offset') || '').trim()
-    ].join('::');
-  }
-
-  function buildChecklistSummaryCacheKey(authz, url, cacheVersion) {
-    const safeAuthz = authz && typeof authz === 'object' ? authz : {};
-    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
-      ? safeAuthz.authorizedUnits.map((value) => cleanText(value)).filter(Boolean).sort()
-      : [];
-    const reviewUnits = Array.isArray(safeAuthz.reviewUnits)
-      ? safeAuthz.reviewUnits.map((value) => cleanText(value)).filter(Boolean).sort()
-      : [];
-    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
-    return [
-      String(cacheVersion || 0).trim(),
-      String(safeAuthz.username || '').trim(),
-      String(safeAuthz.role || '').trim(),
-      String(safeAuthz.primaryUnit || '').trim(),
-      String(safeAuthz.activeUnit || '').trim(),
-      authorizedUnits.join('|'),
-      reviewUnits.join('|'),
-      String(params.get('status') || '').trim(),
-      String(params.get('statusBucket') || '').trim(),
-      String(params.get('unit') || '').trim(),
-      String(params.get('auditYear') || '').trim(),
-      String(params.get('fillerUsername') || '').trim(),
-      String(params.get('q') || '').trim()
-    ].join('::');
-  }
-
-  async function resolveChecklistsList() {
-    return resolveNamedList(getChecklistsListName());
-  }
-
-  async function resolveAuditList() {
-    return resolveNamedList(getAuditListName());
-  }
-
-  function parsePositiveInteger(value) {
-    const cleanValue = cleanText(value);
-    if (!cleanValue) return null;
-    const parsed = Number(cleanValue);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return Math.floor(parsed);
-  }
-
-  function buildChecklistPageMeta(url, total) {
-    const rawLimit = parsePositiveInteger(url && url.searchParams && url.searchParams.get('limit'));
-    const rawOffset = parsePositiveInteger(url && url.searchParams && url.searchParams.get('offset')) || 0;
-    const safeTotal = Math.max(Number(total) || 0, 0);
-    const limit = rawLimit ? Math.min(rawLimit, 200) : safeTotal;
-    const safeOffset = Math.min(Math.max(rawOffset, 0), safeTotal);
-    const returned = limit > 0 ? Math.max(Math.min(limit, safeTotal - safeOffset), 0) : 0;
-    const paged = !!rawLimit || safeOffset > 0;
-    const pageCount = rawLimit && limit > 0 ? Math.ceil(safeTotal / limit) : (safeTotal > 0 ? 1 : 0);
-    const currentPage = rawLimit && limit > 0 && safeTotal > 0 ? Math.floor(safeOffset / limit) + 1 : (safeTotal > 0 ? 1 : 0);
-    return {
-      offset: safeOffset,
-      limit,
-      total: safeTotal,
-      returned,
-      pageCount,
-      currentPage,
-      hasPrev: safeOffset > 0,
-      hasNext: rawLimit ? (safeOffset + limit) < safeTotal : false,
-      prevOffset: rawLimit ? Math.max(safeOffset - limit, 0) : 0,
-      nextOffset: rawLimit && (safeOffset + limit) < safeTotal ? safeOffset + limit : safeOffset,
-      paged
-    };
-  }
-
-  function restoreChecklistCacheSnapshot() {
-    try {
-      const snapshotPath = getChecklistSnapshotPath();
-      if (!fs.existsSync(snapshotPath)) return false;
-      const raw = fs.readFileSync(snapshotPath, 'utf8').replace(/^\uFEFF/, '');
-      if (!raw.trim()) return false;
-      const parsed = JSON.parse(raw);
-      const rows = Array.isArray(parsed && parsed.rows) ? parsed.rows : [];
-      const loadedAt = Number(parsed && parsed.loadedAt);
-      if (!rows.length || !Number.isFinite(loadedAt)) return false;
-      const ageMs = Date.now() - loadedAt;
-      if (ageMs > CHECKLIST_SNAPSHOT_MAX_AGE_MS) {
-        logChecklistCache('snapshot skipped', { reason: 'expired', ageMs });
-        return false;
-      }
-      state.entriesCache = sortChecklistRows(rows);
-      state.entriesCacheAt = Date.now();
-      rebuildChecklistDerivedState(state.entriesCache);
-      logChecklistCache('snapshot restored', {
-        rows: state.entriesCache.length,
-        ageMs
-      });
-      return true;
-    } catch (error) {
-      logChecklistCache('snapshot restore failed', {
-        message: cleanText(error && error.message) || 'unknown error'
-      });
-      return false;
-    }
-  }
-
-  async function persistChecklistCacheSnapshot(rows, loadedAt) {
-    const payload = {
-      loadedAt: Number(loadedAt) || Date.now(),
-      rows: Array.isArray(rows) ? rows : []
-    };
-    const snapshotPath = getChecklistSnapshotPath();
-    fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
-    const tempPath = `${snapshotPath}.tmp`;
-    await fs.promises.writeFile(tempPath, JSON.stringify(payload), 'utf8');
-    await fs.promises.rename(tempPath, snapshotPath);
-    logChecklistCache('snapshot saved', {
-      rows: payload.rows.length,
-      loadedAt: payload.loadedAt
-    });
-  }
-
-  function primeChecklistCacheInBackground(reason, delayMs, forceRefresh) {
-    if ((!forceRefresh && state.entriesCache) || state.entriesPromise || state.entriesPrewarmQueued) {
-      return false;
-    }
-    const safeDelay = Number.isFinite(delayMs) && delayMs >= 0 ? delayMs : 0;
-    state.entriesPrewarmQueued = true;
-    logChecklistCache('prewarm queued', {
-      reason: cleanText(reason) || 'unknown',
-      delayMs: safeDelay
-    });
-    setTimeout(() => {
-      state.entriesPrewarmQueued = false;
-      listAllEntries({ forceRefresh: !!forceRefresh })
-        .then((rows) => {
-          logChecklistCache('prewarm ready', {
-            reason: cleanText(reason) || 'unknown',
-            rows: Array.isArray(rows) ? rows.length : 0
-          });
-        })
-        .catch((error) => {
-          logChecklistCache('prewarm failed', {
-            reason: cleanText(reason) || 'unknown',
-            message: cleanText(error && error.message) || 'unknown error'
-          });
-        });
-    }, safeDelay);
-    return true;
-  }
-
-  function invalidateChecklistCache() {
-    state.entriesCache = null;
-    state.entriesCacheAt = 0;
-    state.entriesPromise = null;
-    state.cacheVersion += 1;
-    state.queryCache.clear();
-    state.summaryCache.clear();
-    state.unfilteredSummary = null;
-    state.unfilteredSummarySeed = null;
-  }
-
-  async function listAllEntries(options) {
-    const forceRefresh = !!(options && options.forceRefresh);
-    if (!forceRefresh && Array.isArray(state.entriesCache)) {
-      if ((Date.now() - state.entriesCacheAt) >= CHECKLIST_CACHE_TTL_MS && !state.entriesPromise) {
-        primeChecklistCacheInBackground('ttl-expired', 0, true);
-      }
-      return state.entriesCache.slice();
-    }
-    if (state.entriesPromise) {
-      return state.entriesPromise.then((rows) => Array.isArray(rows) ? rows.slice() : []);
-    }
-    const siteId = await resolveSiteId();
-    const list = await resolveChecklistsList();
-    state.entriesPromise = (async () => {
-      const rows = [];
-      let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-      while (nextUrl) {
-        const body = await graphRequest('GET', nextUrl);
-        const batch = Array.isArray(body && body.value) ? body.value : [];
-        rows.push(...batch.map((entry) => ({
-          listItemId: cleanText(entry && entry.id),
-          item: mapGraphFieldsToChecklist(entry && entry.fields ? entry.fields : {})
-        })));
-        nextUrl = cleanText(body && body['@odata.nextLink']);
-      }
-      state.entriesCache = sortChecklistRows(rows);
-      state.entriesCacheAt = Date.now();
-      rebuildChecklistDerivedState(state.entriesCache);
-      persistChecklistCacheSnapshot(state.entriesCache, state.entriesCacheAt).catch((error) => {
-        logChecklistCache('snapshot write failed', {
-          message: cleanText(error && error.message) || 'unknown error'
-        });
-      });
-      return state.entriesCache;
-    })();
-    try {
-      const rows = await state.entriesPromise;
-      return Array.isArray(rows) ? rows.slice() : [];
-    } finally {
-      state.entriesPromise = null;
-    }
-  }
-
-  async function getEntryByChecklistId(checklistId) {
-    const target = cleanText(checklistId);
-    if (!target) throw createError('\u7f3a\u5c11\u6aa2\u6838\u8868\u7de8\u865f\u3002', 400);
-    const rows = await listAllEntries();
-    return rows.find((entry) => entry.item.id === target) || null;
-  }
-
-  async function findDuplicateChecklist(unit, auditYear, excludeId) {
-    const targetUnit = cleanText(unit);
-    const targetYear = cleanText(auditYear);
-    const skipId = cleanText(excludeId);
-    if (!targetUnit || !targetYear) return null;
-    const rows = await listAllEntries();
-    return rows.find((entry) => (
-      entry.item.unit === targetUnit
-      && entry.item.auditYear === targetYear
-      && entry.item.id !== skipId
-    )) || null;
-  }
-
-  async function upsertChecklist(existingEntry, nextItem) {
-    const siteId = await resolveSiteId();
-    const list = await resolveChecklistsList();
-    const normalized = createChecklistRecord(nextItem, nextItem.status, nextItem.updatedAt || new Date().toISOString());
-    if (existingEntry) {
-      await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapChecklistToGraphFields(normalized));
-      invalidateChecklistCache();
-      return { created: false, item: normalized };
-    }
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: mapChecklistToGraphFields(normalized)
-    });
-    invalidateChecklistCache();
-    return { created: true, item: normalized };
-  }
-
-  async function deleteChecklistEntriesByYear(auditYear) {
-    const targetYear = cleanText(auditYear);
-    if (!targetYear) {
-      throw createError('缺少年度。', 400);
-    }
-    const siteId = await resolveSiteId();
-    const list = await resolveChecklistsList();
-    const rows = await listAllEntries();
-    const matches = rows.filter((entry) => cleanText(entry && entry.item && entry.item.auditYear) === targetYear);
-    for (const entry of matches) {
-      await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${entry.listItemId}`);
-    }
-    invalidateChecklistCache();
-    return matches;
-  }
+  const { parseJsonBody, writeJson, requestAuthz } = deps;
 
   async function createAuditRow(input) {
-    const siteId = await resolveSiteId();
-    const list = await resolveAuditList();
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: {
-        Title: cleanText(input.recordId || input.eventType || 'audit'),
-        EventType: cleanText(input.eventType),
-        ActorEmail: cleanText(input.actorEmail),
-        TargetEmail: cleanText(input.targetEmail),
-        UnitCode: cleanText(input.unitCode),
-        RecordId: cleanText(input.recordId),
-        OccurredAt: cleanText(input.occurredAt) || new Date().toISOString(),
-        PayloadJson: cleanText(input.payloadJson)
-      }
-    });
+    try {
+      await db.query(`
+        INSERT INTO ops_audit (title, event_type, actor_email, target_email, unit_code, record_id, occurred_at, payload_json)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [
+        cleanText(input.recordId || input.eventType || 'audit'),
+        cleanText(input.eventType),
+        cleanText(input.actorEmail),
+        cleanText(input.targetEmail),
+        cleanText(input.unitCode),
+        cleanText(input.recordId),
+        cleanText(input.occurredAt) || new Date().toISOString(),
+        cleanText(input.payloadJson)
+      ]);
+    } catch (error) {
+      console.error('[checklists] failed to create audit row', String(error && error.message || error));
+    }
   }
 
-  function filterItems(items, url) {
-    const filters = readChecklistFilters(url);
-    return items.filter((entry) => matchesChecklistFilters(entry, filters));
-  }
-
-  function readChecklistFilters(url) {
-    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
+  function readFilters(url) {
+    const sp = url && url.searchParams ? url.searchParams : new URLSearchParams();
+    const limit = Math.max(1, Math.min(200, Number(sp.get('limit')) || 50));
+    const offset = Math.max(0, Number(sp.get('offset')) || 0);
     return {
-      status: cleanText(params.get('status')),
-      statusBucket: cleanText(params.get('statusBucket')),
-      unit: cleanText(params.get('unit')),
-      auditYear: cleanText(params.get('auditYear')),
-      fillerUsername: cleanText(params.get('fillerUsername')),
-      q: cleanText(params.get('q')).toLowerCase()
+      status: cleanText(sp.get('status')),
+      unit: cleanText(sp.get('unit')),
+      auditYear: cleanText(sp.get('auditYear')),
+      keyword: cleanText(sp.get('keyword')).toLowerCase(),
+      summaryOnly: cleanText(sp.get('summaryOnly')) === '1',
+      limit,
+      offset
     };
   }
 
-  function matchesChecklistFilters(entry, filters) {
-    const item = entry && typeof entry === 'object' ? entry : {};
-    const activeFilters = filters && typeof filters === 'object' ? filters : {};
-    if (activeFilters.status && item.status !== activeFilters.status) return false;
-    if (activeFilters.statusBucket) {
-      const derivedBucket = getChecklistStatusBucketKey(item);
-      if (derivedBucket !== activeFilters.statusBucket) return false;
+  function buildPage(total, limit, offset, returnedCount) {
+    const safeTotal = Math.max(0, Number(total) || 0);
+    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+    const pageCount = safeTotal > 0 ? Math.max(1, Math.ceil(safeTotal / safeLimit)) : 0;
+    const safeOffset = safeTotal > 0
+      ? Math.min(Math.max(0, Number(offset) || 0), Math.max(0, (pageCount - 1) * safeLimit))
+      : 0;
+    const currentPage = safeTotal > 0 ? Math.floor(safeOffset / safeLimit) + 1 : 0;
+    const hasPrev = safeOffset > 0;
+    const hasNext = safeTotal > 0 && (safeOffset + safeLimit) < safeTotal;
+    return {
+      offset: safeOffset, limit: safeLimit, total: safeTotal, pageCount, currentPage,
+      hasPrev, hasNext,
+      prevOffset: hasPrev ? Math.max(0, safeOffset - safeLimit) : 0,
+      nextOffset: hasNext ? safeOffset + safeLimit : safeOffset,
+      pageStart: returnedCount ? safeOffset + 1 : 0,
+      pageEnd: returnedCount ? safeOffset + returnedCount : 0
+    };
+  }
+
+  async function queryChecklists(filters, authz) {
+    const isAdmin = requestAuthz.isAdmin(authz);
+    const conditions = [];
+    const params = [];
+    let idx = 0;
+
+    if (!isAdmin) {
+      const userUnits = Array.isArray(authz.authorizedUnits) ? authz.authorizedUnits : [];
+      const username = cleanText(authz.username).toLowerCase();
+      if (userUnits.length) {
+        idx++; params.push(userUnits);
+        idx++; params.push(username);
+        conditions.push(`(unit = ANY($${idx - 1}) OR LOWER(filler_username) = $${idx})`);
+      } else {
+        idx++; conditions.push(`LOWER(filler_username) = $${idx}`); params.push(username);
+      }
     }
-    if (activeFilters.unit && item.unit !== activeFilters.unit) return false;
-    if (activeFilters.auditYear && item.auditYear !== activeFilters.auditYear) return false;
-    if (activeFilters.fillerUsername && item.fillerUsername !== activeFilters.fillerUsername) return false;
-    if (activeFilters.q) {
-      const haystack = [
-        item.id,
-        item.unit,
-        item.fillerName,
-        item.fillerUsername,
-        item.auditYear
-      ].join(' ').toLowerCase();
-      if (!haystack.includes(activeFilters.q)) return false;
+    if (filters.status) { idx++; conditions.push(`status = $${idx}`); params.push(filters.status); }
+    if (filters.unit) { idx++; conditions.push(`unit = $${idx}`); params.push(filters.unit); }
+    if (filters.auditYear) { idx++; conditions.push(`audit_year = $${idx}`); params.push(filters.auditYear); }
+    if (filters.keyword) {
+      idx++;
+      conditions.push(`(LOWER(filler_name) LIKE $${idx} OR LOWER(unit) LIKE $${idx} OR LOWER(checklist_id) LIKE $${idx})`);
+      params.push(`%${filters.keyword}%`);
     }
-    return true;
-  }
 
-  function getChecklistStatusBucketKey(entry) {
-    const normalizedStatus = cleanText(entry && entry.status).toLowerCase();
-    const summary = entry && entry.summary && typeof entry.summary === 'object' ? entry.summary : {};
-    const answered = Number(summary.conform || 0)
-      + Number(summary.partial || 0)
-      + Number(summary.nonConform || 0)
-      + Number(summary.na || 0);
-    if (normalizedStatus === STATUSES.SUBMITTED) return 'closed';
-    return (answered > 0 || Number(summary.total || 0) > 0 || (entry && (entry.updatedAt || entry.fillDate)))
-      ? 'pending_export'
-      : 'editing';
-  }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const countResult = await db.queryOne(`SELECT COUNT(*)::int AS total FROM checklists ${where}`, params);
+    const total = countResult ? countResult.total : 0;
 
-  function summarizeChecklistItems(items) {
-    return (Array.isArray(items) ? items : []).reduce((result, entry) => {
-      result.total += 1;
-      const bucket = getChecklistStatusBucketKey(entry);
-      if (bucket === 'closed') result.closed += 1;
-      else if (bucket === 'pending_export') result.pendingExport += 1;
-      else result.editing += 1;
-      return result;
-    }, {
-      total: 0,
-      editing: 0,
-      pendingExport: 0,
-      closed: 0
-    });
-  }
-
-  function summarizeChecklistRows(rows, authz, filters) {
-    return (Array.isArray(rows) ? rows : []).reduce((result, row) => {
-      const item = row && row.item;
-      if (!item) return result;
-      if (!matchesChecklistFilters(item, filters)) return result;
-      if (!requestAuthz.canAccessChecklist(authz, item)) return result;
-      result.total += 1;
-      const bucket = getChecklistStatusBucketKey(item);
-      if (bucket === 'closed') result.closed += 1;
-      else if (bucket === 'pending_export') result.pendingExport += 1;
-      else result.editing += 1;
-      return result;
-    }, {
-      total: 0,
-      editing: 0,
-      pendingExport: 0,
-      closed: 0
-    });
+    const pageParams = [...params];
+    idx++; pageParams.push(filters.limit);
+    idx++; pageParams.push(filters.offset);
+    const rows = await db.queryAll(
+      CHECKLIST_SELECT + ` ${where} ORDER BY fill_date DESC, id DESC LIMIT $${idx - 1} OFFSET $${idx}`,
+      pageParams
+    );
+    return { items: rows.map(mapRowToChecklist), total };
   }
 
   async function buildHealth() {
-    const siteId = await resolveSiteId();
-    const { decoded, mode } = await getDelegatedToken();
-    const health = {
-      ok: true,
-      ready: true,
+    const dbHealth = await db.healthCheck();
+    return {
+      ok: dbHealth.ok, ready: dbHealth.ok,
       contractVersion: CONTRACT_VERSION,
-      repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
-      actor: {
-        tokenMode: cleanText(mode) || 'delegated-cli',
-        appId: cleanText(decoded.appid || decoded.azp),
-        upn: cleanText(decoded.upn),
-        scopes: cleanText(decoded.scp),
-        roles: Array.isArray(decoded.roles) ? decoded.roles.join(',') : ''
-      },
-      site: {
-        id: siteId
-      }
+      repository: 'postgresql',
+      database: { ok: dbHealth.ok, latencyMs: dbHealth.latencyMs }
     };
-    try {
-      health.list = await resolveChecklistsList();
-    } catch (error) {
-      health.ok = false;
-      health.ready = false;
-      health.message = cleanText(error && error.message) || 'Checklists list is not ready.';
-    }
-    return health;
-  }
-
-  function assertEditable(existing) {
-    if (existing && existing.item.status === STATUSES.SUBMITTED) {
-      throw createError('\u6aa2\u6838\u8868\u5df2\u6b63\u5f0f\u9001\u51fa\uff0c\u7121\u6cd5\u518d\u4fee\u6539\u3002', 409);
-    }
   }
 
   async function handleHealth(_req, res, origin) {
     try {
-      const health = await buildHealth();
-      if (!state.entriesCache && !state.entriesPromise) {
-        primeChecklistCacheInBackground('health-check', 0, false);
-      }
-      await writeJson(res, buildJsonResponse(200, health), origin);
+      await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read checklist backend health.', 500), origin);
     }
   }
 
   async function handleList(req, res, origin, url) {
-    const startedAt = Date.now();
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const summaryOnly = cleanText(url && url.searchParams && url.searchParams.get('summaryOnly')) === '1';
-      const filters = readChecklistFilters(url);
-      const canUseUnfilteredSummary = summaryOnly && requestAuthz.isAdmin(authz) && !hasActiveChecklistFilters(filters);
-      if (canUseUnfilteredSummary && state.unfilteredSummarySeed) {
-        logChecklistCache('summary fast path hit', {
-          username: authz.username,
-          total: Number(state.unfilteredSummarySeed.total || 0),
-          durationMs: Date.now() - startedAt
-        });
-        await writeJson(res, buildJsonResponse(200, buildChecklistSummaryOnlyFastResponse(url, filters, 'unfiltered-summary')), origin);
-        return;
-      }
-      const summaryCacheKey = summaryOnly ? buildChecklistSummaryCacheKey(authz, url, state.cacheVersion || 0) : '';
-      if (summaryOnly) {
-        const summaryLookup = readQueryCache(state.summaryCache, summaryCacheKey);
-        const summaryCached = summaryLookup && summaryLookup.body;
-        if (summaryCached) {
-          logChecklistCache('summary cache hit', {
-            username: authz.username,
-            total: summaryCached.total,
-            durationMs: Date.now() - startedAt
-          });
-          await writeJson(res, buildJsonResponse(200, summaryCached), origin);
-          return;
-        }
-      }
-      const cacheKey = buildChecklistQueryCacheKey(authz, url, state.cacheVersion || 0);
-      const cacheLookup = readQueryCache(state.queryCache, cacheKey);
-      const cached = cacheLookup && cacheLookup.body;
-      if (cached) {
-        logChecklistCache('query cache hit', {
-          username: authz.username,
-          total: cached.total,
-          returnedRows: cached.page && cached.page.returned,
-          limit: cached.page && cached.page.limit,
-          offset: cached.page && cached.page.offset,
-          durationMs: Date.now() - startedAt
-        });
-        await writeJson(res, buildJsonResponse(200, {
-          ...cached,
-          cache: {
-            query: 'hit',
-            summaryOnly,
-            reason: 'hit'
-          }
-        }), origin);
-        return;
-      }
-      const rows = await listAllEntries();
-      const versionKey = state.cacheVersion || 0;
-      const resolvedCacheKey = buildChecklistQueryCacheKey(authz, url, versionKey);
-      const items = summaryOnly
-        ? []
-        : filterItems(rows.map((entry) => entry.item), filters)
-        .filter((entry) => requestAuthz.canAccessChecklist(authz, entry));
-      const summary = summaryOnly
-        ? summarizeChecklistRows(rows, authz, filters)
-        : summarizeChecklistItems(items);
-      const total = Number(summary && summary.total || items.length || 0);
-      const page = buildChecklistPageMeta(url, total);
-      const visibleItems = page.paged
-        ? items.slice(page.offset, page.offset + page.limit)
-        : items;
-      const responsePage = summaryOnly
-        ? {
-            ...page,
-            returned: 0,
-            pageStart: 0,
-            pageEnd: 0
-          }
-        : page;
-      const responseBody = {
+      const filters = readFilters(url);
+      const result = await queryChecklists(filters, authz);
+      const summary = summarizeChecklists(result.items);
+      const page = buildPage(result.total, filters.limit, filters.offset, result.items.length);
+
+      await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        items: summaryOnly ? [] : visibleItems.map(mapChecklistForClient),
-        total: total,
-        summary: summary,
-        page: responsePage,
-        filters: {
-          ...filters,
-          summaryOnly: summaryOnly ? '1' : ''
-        },
-        generatedAt: new Date().toISOString(),
-        cache: {
-          query: 'computed',
-          summaryOnly,
-          reason: cacheLookup && cacheLookup.reason || 'computed'
-        },
+        items: filters.summaryOnly ? [] : result.items.map(mapChecklistForClient),
+        total: result.total, summary,
+        page: filters.summaryOnly
+          ? { ...page, returned: 0, pageStart: 0, pageEnd: 0 }
+          : page,
         contractVersion: CONTRACT_VERSION
-      };
-      let cachedBody = writeQueryCache(state.queryCache, resolvedCacheKey, responseBody, CHECKLIST_QUERY_CACHE_MAX);
-      if (summaryOnly) {
-        const summaryCacheBody = {
-          ...cachedBody,
-          cache: {
-            query: 'hit',
-            summaryOnly: true,
-            reason: 'summary-hit'
-          }
-        };
-        cachedBody = writeQueryCache(state.summaryCache, summaryCacheKey, summaryCacheBody, CHECKLIST_SUMMARY_CACHE_MAX);
-      }
-      logChecklistCache('list served', {
-        username: authz.username,
-        totalRows: rows.length,
-        visibleRows: total,
-        returnedRows: visibleItems.length,
-        paged: page.paged,
-        limit: page.limit,
-        offset: page.offset,
-        cacheHit: false,
-        durationMs: Date.now() - startedAt
-      });
-      await writeJson(res, buildJsonResponse(200, cachedBody), origin);
+      }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to list checklists.', 500), origin);
     }
@@ -799,169 +213,165 @@ function createChecklistRouter(deps) {
   async function handleDetail(req, res, origin, checklistId) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const existing = await getEntryByChecklistId(checklistId);
-      if (!existing) {
-        throw createError('\u627e\u4e0d\u5230\u6307\u5b9a\u7684\u6aa2\u6838\u8868\u3002', 404);
-      }
-      if (!requestAuthz.canAccessChecklist(authz, existing.item)) {
-        throw requestAuthz.createHttpError('You do not have access to this checklist', 403);
-      }
+      const row = await db.queryOne(CHECKLIST_SELECT + ` WHERE checklist_id = $1`, [checklistId]);
+      if (!row) throw createError('Checklist not found', 404);
+      const item = mapRowToChecklist(row);
+      if (!requestAuthz.canAccessChecklist(authz, item)) throw createError('Forbidden', 403);
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: mapChecklistForClient(existing.item),
-        contractVersion: CONTRACT_VERSION
+        ok: true, item: mapChecklistForClient(item), contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read checklist detail.', 500), origin);
     }
   }
 
-  async function writeChecklist(req, res, origin, checklistId, action, status) {
+  async function writeChecklist(req, res, origin, checklistId, action) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const existing = await getEntryByChecklistId(checklistId);
-      assertEditable(existing);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, action);
-      const payload = normalizeChecklistPayload(envelope.payload);
-      if (cleanText(checklistId) !== cleanText(payload.id)) {
-        throw createError('\u8def\u7531\u7de8\u865f\u8207 payload \u7de8\u865f\u4e0d\u4e00\u81f4\u3002', 400);
+      const incoming = normalizeChecklistPayload(envelope.payload);
+      const existing = await db.queryOne(CHECKLIST_SELECT + ` WHERE checklist_id = $1`, [checklistId]);
+      const existingItem = existing ? mapRowToChecklist(existing) : null;
+
+      if (existingItem && !requestAuthz.canEditChecklist(authz, existingItem)) {
+        throw createError('Forbidden', 403);
       }
-      if (existing && !requestAuthz.canEditChecklist(authz, existing.item)) {
-        throw requestAuthz.createHttpError('You do not have permission to edit this checklist', 403);
-      }
-      if (!existing) {
-        const intendedUnit = cleanText(payload.unit);
-        if (!(requestAuthz.isAdmin(authz) || requestAuthz.hasUnitAccess(authz, intendedUnit) || requestAuthz.matchesUsername(authz, payload.fillerUsername))) {
-          throw requestAuthz.createHttpError('You do not have permission to create a checklist for this unit', 403);
-        }
-      }
-      validateChecklistPayload(payload, {
-        requireSubmittedState: status === STATUSES.SUBMITTED
-      });
-      const duplicate = await findDuplicateChecklist(payload.unit, payload.auditYear, payload.id);
-      if (duplicate) {
-        throw createError('\u672c\u5e74\u5ea6\u8a72\u55ae\u4f4d\u5df2\u5b58\u5728\u6aa2\u6838\u8868\uff0c\u8acb\u6539\u70ba\u7e8c\u586b\u6216\u67e5\u770b\u65e2\u6709\u7d00\u9304\u3002', 409);
-      }
+
       const now = new Date().toISOString();
-      const actorDisplay = actorLabel(payload, payload.fillerName);
-      const nextItem = createChecklistRecord({
-        ...payload,
-        createdAt: existing ? existing.item.createdAt : payload.createdAt
-      }, status, now);
-      const stored = await upsertChecklist(existing, nextItem);
-      const parsedId = parseChecklistId(stored.item.id);
+      const status = action === (ACTIONS.SUBMIT || 'SUBMIT') ? (STATUSES.SUBMITTED || '已送出') : (STATUSES.DRAFT || '草稿');
+      const resultsJson = JSON.stringify(incoming.results || {});
+      const summary = incoming.summary || { total: 0, conform: 0, partial: 0, nonConform: 0, na: 0 };
+
+      if (existing) {
+        await db.query(`
+          UPDATE checklists SET
+            unit = $2, unit_code = $3, filler_name = $4, filler_username = $5,
+            fill_date = $6, audit_year = $7, supervisor_name = $8, supervisor_title = $9,
+            sign_status = $10, sign_date = $11, supervisor_note = $12,
+            results_json = $13, summary_total = $14, summary_conform = $15,
+            summary_partial = $16, summary_non_conform = $17, summary_na = $18,
+            status = $19, backend_mode = $20, record_source = $21, updated_at = $22
+          WHERE checklist_id = $1
+        `, [
+          checklistId,
+          cleanText(incoming.unit), cleanText(incoming.unitCode),
+          cleanText(incoming.fillerName), cleanText(incoming.fillerUsername),
+          incoming.fillDate || now, cleanText(incoming.auditYear),
+          cleanText(incoming.supervisorName), cleanText(incoming.supervisorTitle),
+          cleanText(incoming.signStatus) || '待簽核', incoming.signDate || null,
+          cleanText(incoming.supervisorNote),
+          resultsJson, summary.total || 0, summary.conform || 0,
+          summary.partial || 0, summary.nonConform || 0, summary.na || 0,
+          status, 'pg-campus-backend', 'frontend', now
+        ]);
+      } else {
+        await db.query(`
+          INSERT INTO checklists (
+            checklist_id, unit, unit_code, filler_name, filler_username,
+            fill_date, audit_year, supervisor_name, supervisor_title,
+            sign_status, sign_date, supervisor_note,
+            results_json, summary_total, summary_conform,
+            summary_partial, summary_non_conform, summary_na,
+            status, backend_mode, record_source, created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        `, [
+          checklistId,
+          cleanText(incoming.unit), cleanText(incoming.unitCode),
+          cleanText(incoming.fillerName), cleanText(incoming.fillerUsername),
+          incoming.fillDate || now, cleanText(incoming.auditYear),
+          cleanText(incoming.supervisorName), cleanText(incoming.supervisorTitle),
+          cleanText(incoming.signStatus) || '待簽核', incoming.signDate || null,
+          cleanText(incoming.supervisorNote),
+          resultsJson, summary.total || 0, summary.conform || 0,
+          summary.partial || 0, summary.nonConform || 0, summary.na || 0,
+          status, 'pg-campus-backend', 'frontend', now, now
+        ]);
+      }
+
+      const savedRow = await db.queryOne(CHECKLIST_SELECT + ` WHERE checklist_id = $1`, [checklistId]);
+      const savedItem = mapRowToChecklist(savedRow);
+
       const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
-        eventType: status === STATUSES.SUBMITTED ? 'checklist.submitted' : 'checklist.draft_saved',
-        actorEmail: actor.actorEmail,
-        unitCode: cleanText(stored.item.unitCode) || cleanText(parsedId && parsedId.unitCode),
-        recordId: stored.item.id,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          actorName: actor.actorName,
-          actorUsername: actor.actorUsername,
-          actorLabel: actorDisplay,
-          snapshot: existing ? null : buildChecklistSnapshot(stored.item),
-          changes: buildChecklistChanges(existing && existing.item, stored.item)
+        eventType: existing ? `checklist.${action}` : 'checklist.created',
+        actorEmail: actor.actorEmail, targetEmail: '',
+        unitCode: cleanText(incoming.unitCode), recordId: checklistId,
+        occurredAt: now, payloadJson: JSON.stringify({
+          action, actorName: actor.actorName, actorUsername: actor.actorUsername
         })
       });
-      await writeJson(res, buildJsonResponse(stored.created ? 201 : 200, {
-        ok: true,
-        item: mapChecklistForClient(stored.item),
-        contractVersion: CONTRACT_VERSION
+
+      await writeJson(res, buildJsonResponse(existing ? 200 : 201, {
+        ok: true, item: mapChecklistForClient(savedItem), contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
-      const fallbackMessage = status === STATUSES.SUBMITTED
-        ? 'Failed to submit checklist.'
-        : 'Failed to save checklist draft.';
-      await writeJson(res, buildErrorResponse(error, fallbackMessage), origin);
+      await writeJson(res, buildErrorResponse(error, `Failed to ${action} checklist.`, 500), origin);
     }
   }
 
-  async function deleteChecklistYear(req, res, origin, auditYear) {
+  async function handleDeleteYear(req, res, origin, auditYear) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      requestAuthz.requireAdmin(authz, 'Only highest admin can delete checklist years.');
+      requestAuthz.requireAdmin(authz, 'Only admin can delete checklists by year');
       const envelope = await parseJsonBody(req);
-      validateActionEnvelope(envelope, ACTIONS.DELETE_YEAR);
-      const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
-      const targetYear = cleanText(auditYear || payload.auditYear);
-      if (!targetYear) throw createError('缺少年度。', 400);
-      const deletedEntries = await deleteChecklistEntriesByYear(targetYear);
+      validateActionEnvelope(envelope, ACTIONS.DELETE_YEAR || 'DELETE_YEAR');
+
+      const result = await db.query(
+        `DELETE FROM checklists WHERE audit_year = $1 RETURNING checklist_id`,
+        [cleanText(auditYear)]
+      );
+      const deletedCount = result.rowCount || 0;
+      const deletedIds = result.rows.map((r) => r.checklist_id);
+
       const now = new Date().toISOString();
       const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
-        eventType: 'checklist.year_deleted',
-        actorEmail: actor.actorEmail,
-        unitCode: '',
-        recordId: 'CHECKLIST-YEAR-' + targetYear,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          actorName: actor.actorName,
-          actorUsername: actor.actorUsername,
-          year: targetYear,
-          deletedCount: deletedEntries.length,
-          deletedItems: deletedEntries.map((entry) => buildChecklistSnapshot(entry.item))
+        eventType: 'checklist.delete-year',
+        actorEmail: actor.actorEmail, targetEmail: '',
+        unitCode: '', recordId: auditYear,
+        occurredAt: now, payloadJson: JSON.stringify({
+          action: 'DELETE_YEAR', auditYear, deletedCount, deletedIds,
+          actorName: actor.actorName, actorUsername: actor.actorUsername
         })
       });
+
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        deletedCount: deletedEntries.length,
-        deletedIds: deletedEntries.map((entry) => cleanText(entry.item && entry.item.id)).filter(Boolean),
-        contractVersion: CONTRACT_VERSION
+        ok: true, auditYear, deletedCount, contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
-      await writeJson(res, buildErrorResponse(error, 'Failed to delete checklist year.', 500), origin);
+      await writeJson(res, buildErrorResponse(error, 'Failed to delete checklists by year.', 500), origin);
     }
   }
 
-  async function tryHandle(req, res, origin, url) {
-    const pathname = cleanText(url && url.pathname);
-    if (pathname === '/api/checklists/health') {
-      await handleHealth(req, res, origin);
-      return true;
-    }
-    if (pathname === '/api/checklists' && req.method === 'GET') {
-      await handleList(req, res, origin, url);
-      return true;
-    }
+  function tryHandle(req, res, origin, url) {
+    const detailMatch = url.pathname.match(/^\/api\/checklists\/([^/]+)\/?$/);
+    const saveDraftMatch = url.pathname.match(/^\/api\/checklists\/([^/]+)\/save-draft\/?$/);
+    const submitMatch = url.pathname.match(/^\/api\/checklists\/([^/]+)\/submit\/?$/);
+    const deleteYearMatch = url.pathname.match(/^\/api\/checklists\/year\/([^/]+)\/?$/);
 
-    const detailMatch = pathname.match(/^\/api\/checklists\/([^/]+)$/);
-    if (detailMatch && req.method === 'GET') {
-      await handleDetail(req, res, origin, routeChecklistId(detailMatch[1]));
-      return true;
+    if (url.pathname === '/api/checklists/health' && req.method === 'GET') {
+      return handleHealth(req, res, origin).then(() => true);
     }
-
-    const saveDraftMatch = pathname.match(/^\/api\/checklists\/([^/]+)\/save-draft$/);
+    if (url.pathname === '/api/checklists' && req.method === 'GET') {
+      return handleList(req, res, origin, url).then(() => true);
+    }
     if (saveDraftMatch && req.method === 'POST') {
-      await writeChecklist(req, res, origin, routeChecklistId(saveDraftMatch[1]), ACTIONS.SAVE_DRAFT, STATUSES.DRAFT);
-      return true;
+      return writeChecklist(req, res, origin, decodeURIComponent(saveDraftMatch[1]), ACTIONS.SAVE_DRAFT || 'SAVE_DRAFT').then(() => true);
     }
-
-    const submitMatch = pathname.match(/^\/api\/checklists\/([^/]+)\/submit$/);
     if (submitMatch && req.method === 'POST') {
-      await writeChecklist(req, res, origin, routeChecklistId(submitMatch[1]), ACTIONS.SUBMIT, STATUSES.SUBMITTED);
-      return true;
+      return writeChecklist(req, res, origin, decodeURIComponent(submitMatch[1]), ACTIONS.SUBMIT || 'SUBMIT').then(() => true);
     }
-
-    const deleteYearMatch = pathname.match(/^\/api\/checklists\/year\/([^/]+)$/);
-    if (deleteYearMatch && req.method === 'DELETE') {
-      await deleteChecklistYear(req, res, origin, routeChecklistId(deleteYearMatch[1]));
-      return true;
+    if (deleteYearMatch && req.method === 'POST') {
+      return handleDeleteYear(req, res, origin, decodeURIComponent(deleteYearMatch[1])).then(() => true);
     }
-
-    return false;
+    if (detailMatch && req.method === 'GET' && !detailMatch[1].includes('/')) {
+      return handleDetail(req, res, origin, decodeURIComponent(detailMatch[1])).then(() => true);
+    }
+    return Promise.resolve(false);
   }
 
-  restoreChecklistCacheSnapshot();
-  primeChecklistCacheInBackground('router-startup', CHECKLIST_PREWARM_DELAY_MS, true);
-
-  return {
-    tryHandle
-  };
+  return { tryHandle };
 }
 
-module.exports = {
-  createChecklistRouter
-};
+module.exports = { createChecklistRouter };

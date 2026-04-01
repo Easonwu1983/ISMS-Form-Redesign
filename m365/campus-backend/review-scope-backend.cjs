@@ -1,3 +1,5 @@
+'use strict';
+
 const {
   ACTIONS,
   CONTRACT_VERSION,
@@ -6,8 +8,6 @@ const {
   cleanText,
   createError,
   createReviewScopeRecord,
-  mapGraphFieldsToReviewScope,
-  mapReviewScopeToGraphFields,
   normalizeReplacePayload,
   validateActionEnvelope,
   validateReplacePayload
@@ -15,126 +15,66 @@ const {
 const {
   buildMembershipDiff
 } = require('./audit-diff.cjs');
+const db = require('./db.cjs');
+
+function mapRowToReviewScope(row) {
+  if (!row) return null;
+  return {
+    id: row.review_scope_key || '',
+    username: row.username || '',
+    unit: row.unit_value || '',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : '',
+    backendMode: row.backend_mode || '',
+    recordSource: row.record_source || ''
+  };
+}
 
 function createReviewScopeRouter(deps) {
-  const {
-    parseJsonBody,
-    writeJson,
-    graphRequest,
-    resolveSiteId,
-    getDelegatedToken,
-    requestAuthz
-  } = deps;
-
-  const state = {
-    listMap: null,
-    listColumnsMap: new Map()
-  };
-
-  function getEnv(name, fallback) {
-    const value = cleanText(process.env[name]);
-    return value || fallback || '';
-  }
-
-  function getReviewScopesListName() {
-    return getEnv('REVIEW_SCOPES_LIST', 'UnitReviewScopes');
-  }
-
-  function getAuditListName() {
-    return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
-  }
-
-  async function fetchListMap() {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
-    return new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
-  }
-
-  async function resolveNamedList(name) {
-    const listName = cleanText(name);
-    if (!state.listMap || !state.listMap.has(listName)) {
-      state.listMap = await fetchListMap();
-    }
-    let list = state.listMap.get(listName);
-    if (!list) {
-      state.listMap = await fetchListMap();
-      list = state.listMap.get(listName);
-    }
-    if (!list) {
-      throw createError(`SharePoint list not found: ${listName}`, 500);
-    }
-    return list;
-  }
-
-  async function resolveReviewScopesList() {
-    return resolveNamedList(getReviewScopesListName());
-  }
-
-  async function resolveAuditList() {
-    return resolveNamedList(getAuditListName());
-  }
-
-  async function fetchListColumnNames(listId) {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists/${listId}/columns?$select=name`);
-    return new Set((Array.isArray(body && body.value) ? body.value : []).map((entry) => cleanText(entry && entry.name)).filter(Boolean));
-  }
-
-  async function resolveListColumnNames(listId) {
-    const cleanListId = cleanText(listId);
-    if (!cleanListId) return new Set();
-    if (!state.listColumnsMap.has(cleanListId)) {
-      state.listColumnsMap.set(cleanListId, await fetchListColumnNames(cleanListId));
-    }
-    return state.listColumnsMap.get(cleanListId);
-  }
-
-  function filterFieldsForExistingColumns(fields, existingNames) {
-    const allowed = existingNames instanceof Set ? existingNames : new Set();
-    return Object.entries(fields || {}).reduce((result, [key, value]) => {
-      if (key === 'Title' || allowed.has(key)) result[key] = value;
-      return result;
-    }, {});
-  }
+  const { parseJsonBody, writeJson, requestAuthz } = deps;
 
   async function listAllEntries() {
-    const siteId = await resolveSiteId();
-    const list = await resolveReviewScopesList();
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      rows.push(...batch.map((entry) => ({
-        listItemId: cleanText(entry && entry.id),
-        item: mapGraphFieldsToReviewScope(entry && entry.fields ? entry.fields : {})
-      })));
-      nextUrl = cleanText(body && body['@odata.nextLink']);
-    }
-    return rows;
+    const rows = await db.queryAll(`
+      SELECT id, review_scope_key, username, unit_value,
+             created_at, updated_at, backend_mode, record_source
+      FROM unit_review_scopes
+      ORDER BY username, unit_value
+    `);
+    return rows.map((row) => ({
+      listItemId: String(row.id),
+      item: mapRowToReviewScope(row)
+    }));
   }
 
   async function listEntriesByUsername(username) {
     const target = cleanText(username).toLowerCase();
-    const rows = await listAllEntries();
-    return rows.filter((entry) => cleanText(entry.item.username).toLowerCase() === target);
+    const rows = await db.queryAll(`
+      SELECT id, review_scope_key, username, unit_value,
+             created_at, updated_at, backend_mode, record_source
+      FROM unit_review_scopes
+      WHERE LOWER(username) = $1
+      ORDER BY unit_value
+    `, [target]);
+    return rows.map((row) => ({
+      listItemId: String(row.id),
+      item: mapRowToReviewScope(row)
+    }));
   }
 
   async function createAuditRow(input) {
-    const siteId = await resolveSiteId();
-    const list = await resolveAuditList();
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: {
-        Title: cleanText(input.recordId || input.eventType || 'audit'),
-        EventType: cleanText(input.eventType),
-        ActorEmail: cleanText(input.actorEmail),
-        TargetEmail: cleanText(input.targetEmail),
-        UnitCode: cleanText(input.unitCode),
-        RecordId: cleanText(input.recordId),
-        OccurredAt: cleanText(input.occurredAt) || new Date().toISOString(),
-        PayloadJson: cleanText(input.payloadJson)
-      }
-    });
+    await db.query(`
+      INSERT INTO ops_audit (title, event_type, actor_email, target_email, unit_code, record_id, occurred_at, payload_json)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      cleanText(input.recordId || input.eventType || 'audit'),
+      cleanText(input.eventType),
+      cleanText(input.actorEmail),
+      cleanText(input.targetEmail),
+      cleanText(input.unitCode),
+      cleanText(input.recordId),
+      cleanText(input.occurredAt) || new Date().toISOString(),
+      cleanText(input.payloadJson)
+    ]);
   }
 
   function filterItems(items, url) {
@@ -161,43 +101,20 @@ function createReviewScopeRouter(deps) {
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right, 'zh-Hant'))
       .map((unit) => ({
-        id: `${username}::${unit}`,
-        username,
-        unit,
-        createdAt: '',
-        updatedAt: '',
-        backendMode: 'a3-campus-backend',
-        recordSource: 'authz-cache'
+        id: `${username}::${unit}`, username, unit,
+        createdAt: '', updatedAt: '',
+        backendMode: 'pg-campus-backend', recordSource: 'authz-cache'
       }));
   }
 
   async function buildHealth() {
-    const siteId = await resolveSiteId();
-    const { decoded, mode } = await getDelegatedToken();
-    const health = {
-      ok: true,
-      ready: true,
+    const dbHealth = await db.healthCheck();
+    return {
+      ok: dbHealth.ok, ready: dbHealth.ok,
       contractVersion: CONTRACT_VERSION,
-      repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
-      actor: {
-        tokenMode: cleanText(mode) || 'delegated-cli',
-        appId: cleanText(decoded.appid || decoded.azp),
-        upn: cleanText(decoded.upn),
-        scopes: cleanText(decoded.scp),
-        roles: Array.isArray(decoded.roles) ? decoded.roles.join(',') : ''
-      },
-      site: {
-        id: siteId
-      }
+      repository: 'postgresql',
+      database: { ok: dbHealth.ok, latencyMs: dbHealth.latencyMs }
     };
-    try {
-      health.list = await resolveReviewScopesList();
-    } catch (error) {
-      health.ok = false;
-      health.ready = false;
-      health.message = cleanText(error && error.message) || 'Review scope list is not ready.';
-    }
-    return health;
   }
 
   async function handleHealth(_req, res, origin) {
@@ -213,36 +130,18 @@ function createReviewScopeRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       if (!requestAuthz.isAdmin(authz)) {
         await writeJson(res, buildJsonResponse(200, {
-          ok: true,
-          items: buildScopedItemsFromAuthz(authz),
-          contractVersion: CONTRACT_VERSION
+          ok: true, items: buildScopedItemsFromAuthz(authz), contractVersion: CONTRACT_VERSION
         }), origin);
         return;
       }
       const rows = await listAllEntries();
-      const scopedUrl = new URL(url.toString());
-      const items = filterItems(rows.map((entry) => entry.item), scopedUrl);
+      const items = filterItems(rows.map((entry) => entry.item), new URL(url.toString()));
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        items,
-        contractVersion: CONTRACT_VERSION
+        ok: true, items, contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to list review scopes.', 500), origin);
     }
-  }
-
-  async function deleteEntry(listId, listItemId) {
-    const siteId = await resolveSiteId();
-    await graphRequest('DELETE', `/sites/${siteId}/lists/${listId}/items/${listItemId}`);
-  }
-
-  async function createEntry(listId, record) {
-    const siteId = await resolveSiteId();
-    const columnNames = await resolveListColumnNames(listId);
-    await graphRequest('POST', `/sites/${siteId}/lists/${listId}/items`, {
-      fields: filterFieldsForExistingColumns(mapReviewScopeToGraphFields(record), columnNames)
-    });
   }
 
   async function handleReplace(req, res, origin) {
@@ -254,22 +153,28 @@ function createReviewScopeRouter(deps) {
       const payload = validateReplacePayload(envelope.payload);
       const normalized = normalizeReplacePayload(payload);
       const existingEntries = await listEntriesByUsername(normalized.username);
-      const list = await resolveReviewScopesList();
       const existingUnits = new Set(existingEntries.map((entry) => cleanText(entry.item.unit)));
       const nextUnits = new Set(normalized.units);
       const now = new Date().toISOString();
 
-      for (const entry of existingEntries) {
-        if (!nextUnits.has(cleanText(entry.item.unit))) {
-          await deleteEntry(list.id, entry.listItemId);
+      await db.transaction(async (client) => {
+        // Delete removed scopes
+        for (const entry of existingEntries) {
+          if (!nextUnits.has(cleanText(entry.item.unit))) {
+            await client.query(`DELETE FROM unit_review_scopes WHERE id = $1`, [Number(entry.listItemId)]);
+          }
         }
-      }
-
-      for (const unit of normalized.units) {
-        if (!existingUnits.has(unit)) {
-          await createEntry(list.id, createReviewScopeRecord(normalized, unit, now));
+        // Insert new scopes
+        for (const unit of normalized.units) {
+          if (!existingUnits.has(unit)) {
+            const scopeKey = `${cleanText(normalized.username)}::${cleanText(unit)}`;
+            await client.query(`
+              INSERT INTO unit_review_scopes (review_scope_key, username, unit_value, backend_mode, record_source, created_at, updated_at)
+              VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `, [scopeKey, cleanText(normalized.username), cleanText(unit), 'pg-campus-backend', 'frontend', now, now]);
+          }
         }
-      }
+      });
 
       const actor = requestAuthz.buildActorDetails(authz);
       await createAuditRow({
@@ -280,23 +185,16 @@ function createReviewScopeRouter(deps) {
         recordId: normalized.username,
         occurredAt: now,
         payloadJson: JSON.stringify({
-          username: normalized.username,
-          units: normalized.units,
+          username: normalized.username, units: normalized.units,
           membership: buildMembershipDiff(Array.from(existingUnits), normalized.units),
-          actorName: actor.actorName,
-          actorUsername: actor.actorUsername
+          actorName: actor.actorName, actorUsername: actor.actorUsername
         })
       });
 
       const nextRows = await listEntriesByUsername(normalized.username);
-      if (requestAuthz && typeof requestAuthz.clearReviewUnitsCache === 'function') {
-        requestAuthz.clearReviewUnitsCache(normalized.username);
-      }
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        username: normalized.username,
-        items: nextRows.map((entry) => entry.item),
-        contractVersion: CONTRACT_VERSION
+        ok: true, username: normalized.username,
+        items: nextRows.map((entry) => entry.item), contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to replace review scopes.', 500), origin);
@@ -316,11 +214,7 @@ function createReviewScopeRouter(deps) {
     return Promise.resolve(false);
   }
 
-  return {
-    tryHandle
-  };
+  return { tryHandle };
 }
 
-module.exports = {
-  createReviewScopeRouter
-};
+module.exports = { createReviewScopeRouter };

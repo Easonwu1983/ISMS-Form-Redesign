@@ -1,3 +1,5 @@
+'use strict';
+
 const {
   CONTRACT_VERSION,
   USER_ACTIONS,
@@ -8,9 +10,7 @@ const {
   createError,
   createSystemUserRecord,
   generatePassword,
-  mapGraphFieldsToSystemUser,
   mapSystemUserForClient,
-  mapSystemUserToGraphFields,
   normalizeSystemUserPayload,
   readStoredPasswordState,
   validateActionEnvelope,
@@ -18,8 +18,7 @@ const {
   validateSystemUserPayload
 } = require('../azure-function/system-user-api/src/shared/contract');
 const {
-  STATUSES: CORRECTIVE_ACTION_STATUSES,
-  mapGraphFieldsToCase
+  STATUSES: CORRECTIVE_ACTION_STATUSES
 } = require('../azure-function/corrective-action-api/src/shared/contract');
 const {
   CONTRACT_VERSION: AUTH_CONTRACT_VERSION,
@@ -55,28 +54,67 @@ const {
 const {
   buildHtmlDocument
 } = require('./graph-mailer.cjs');
+const db = require('./db.cjs');
+const { mapRowToSystemUser } = require('./request-authz.cjs').createRequestAuthz ? { mapRowToSystemUser: null } : {};
+
+function mapRowToUser(row) {
+  if (!row) return null;
+  const parseUnits = (v) => {
+    if (Array.isArray(v)) return v.filter(Boolean);
+    if (typeof v === 'string') return v.split(/\r?\n|,|;|\|/).map(s => s.trim()).filter(Boolean);
+    return [];
+  };
+  return {
+    username: row.username || '',
+    password: row.password || '',
+    name: row.display_name || '',
+    email: row.email || '',
+    role: row.role || '',
+    securityRoles: parseUnits(row.security_roles_json),
+    primaryUnit: row.primary_unit || '',
+    authorizedUnits: parseUnits(row.authorized_units_json),
+    scopeUnits: parseUnits(row.authorized_units_json),
+    unit: row.primary_unit || '',
+    units: parseUnits(row.authorized_units_json),
+    activeUnit: row.active_unit || '',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : '',
+    passwordChangedAt: row.password_changed_at ? new Date(row.password_changed_at).toISOString() : '',
+    resetTokenExpiresAt: row.reset_token_expires_at ? new Date(row.reset_token_expires_at).toISOString() : '',
+    resetRequestedAt: row.reset_requested_at ? new Date(row.reset_requested_at).toISOString() : '',
+    mustChangePassword: row.must_change_password || false,
+    sessionVersion: row.session_version || 1,
+    backendMode: row.backend_mode || '',
+    recordSource: row.record_source || '',
+    passwordSecret: row.password_secret || '',
+    failedAttempts: row.failed_attempts || 0,
+    lockedUntil: row.locked_until || null
+  };
+}
+
+const USER_SELECT = `
+  SELECT id, username, password, password_secret, display_name, email, role,
+         security_roles_json, primary_unit, authorized_units_json, active_unit,
+         created_at, updated_at, password_changed_at, reset_token_expires_at,
+         reset_requested_at, must_change_password, session_version,
+         failed_attempts, locked_until, backend_mode, record_source
+  FROM system_users
+`;
 
 function createSystemUserRouter(deps) {
   const {
     parseJsonBody,
     writeJson,
-    graphRequest,
-    resolveSiteId,
-    getDelegatedToken,
     sendGraphMail,
     requestAuthz
   } = deps;
 
+  // Keep getDelegatedToken and graphRequest for sendGraphMail only (interim)
+  const graphRequest = deps.graphRequest;
+  const getDelegatedToken = deps.getDelegatedToken;
+
   const state = {
-    listMap: null,
-    listColumnsMap: new Map(),
-    loginFailures: new Map(),
     resetRequests: new Map(),
-    usersCache: null,
-    usersCacheAt: 0,
-    usersCachePromise: null,
-    usersQueryCache: new Map(),
-    legacyPasswordMigrationPromise: null,
     legacyPasswordMigrationDone: false,
     legacyPasswordMigrationCount: 0
   };
@@ -123,14 +161,6 @@ function createSystemUserRouter(deps) {
     return Number.isFinite(raw) && raw > 0 ? raw : 3;
   }
 
-  function getUsersCacheTtlMs() {
-    return readNonNegativeEnvNumber('SYSTEM_USERS_CACHE_TTL_MS', 5 * 60 * 1000);
-  }
-
-  function getUsersQueryCacheTtlMs() {
-    return readNonNegativeEnvNumber('SYSTEM_USERS_QUERY_CACHE_TTL_MS', 30000);
-  }
-
   function isTrustedProxyAddress(address) {
     const value = cleanText(address);
     if (!value) return false;
@@ -152,96 +182,97 @@ function createSystemUserRouter(deps) {
     return remoteAddress;
   }
 
-  function buildLoginFailureKey(username) {
-    return cleanText(username).toLowerCase();
-  }
+  // ── Login lockout (now DB-backed) ─────────────────────────
 
-  function getLoginFailureState(username) {
-    const key = buildLoginFailureKey(username);
-    const entry = state.loginFailures.get(key);
-    if (!entry) return { key, failedCount: 0, lockedUntil: '' };
-    const lockUntil = cleanText(entry.lockedUntil);
-    if (lockUntil) {
-      const lockUntilMs = Date.parse(lockUntil);
-      if (!Number.isFinite(lockUntilMs) || lockUntilMs <= Date.now()) {
-        state.loginFailures.delete(key);
-        return { key, failedCount: 0, lockedUntil: '' };
-      }
+  async function getLoginFailureState(username) {
+    const target = cleanText(username).toLowerCase();
+    if (!target) return { failedCount: 0, lockedUntil: '' };
+    const row = await db.queryOne(
+      `SELECT failed_attempts, locked_until FROM system_users WHERE LOWER(username) = $1`,
+      [target]
+    );
+    if (!row) return { failedCount: 0, lockedUntil: '' };
+    const lockedUntil = row.locked_until ? new Date(row.locked_until) : null;
+    if (lockedUntil && lockedUntil.getTime() <= Date.now()) {
+      await db.query(
+        `UPDATE system_users SET failed_attempts = 0, locked_until = NULL WHERE LOWER(username) = $1`,
+        [target]
+      );
+      return { failedCount: 0, lockedUntil: '' };
     }
     return {
-      key,
-      failedCount: Number.isFinite(Number(entry.failedCount)) ? Number(entry.failedCount) : 0,
-      lockedUntil: lockUntil
+      failedCount: Number(row.failed_attempts) || 0,
+      lockedUntil: lockedUntil ? lockedUntil.toISOString() : ''
     };
   }
 
-  function registerFailedLogin(username) {
-    const snapshot = getLoginFailureState(username);
-    const failedCount = snapshot.failedCount + 1;
+  async function registerFailedLogin(username) {
+    const target = cleanText(username).toLowerCase();
     const maxAttempts = getLoginMaxFailedAttempts();
-    const lockedUntil = failedCount >= maxAttempts
-      ? new Date(Date.now() + getLoginLockoutMs()).toISOString()
-      : '';
-    const next = {
+    const row = await db.queryOne(`
+      UPDATE system_users
+      SET failed_attempts = COALESCE(failed_attempts, 0) + 1,
+          locked_until = CASE
+            WHEN COALESCE(failed_attempts, 0) + 1 >= $2
+            THEN NOW() + ($3 || ' milliseconds')::interval
+            ELSE locked_until
+          END
+      WHERE LOWER(username) = $1
+      RETURNING failed_attempts, locked_until
+    `, [target, maxAttempts, String(getLoginLockoutMs())]);
+    if (!row) {
+      return { failedCount: 1, lockedUntil: '', remainingAttempts: maxAttempts - 1, isLocked: false };
+    }
+    const failedCount = Number(row.failed_attempts) || 0;
+    const lockedUntil = row.locked_until ? new Date(row.locked_until).toISOString() : '';
+    return {
       failedCount,
       lockedUntil,
-      updatedAt: new Date().toISOString()
-    };
-    state.loginFailures.set(snapshot.key, next);
-    return {
-      ...next,
       remainingAttempts: Math.max(0, maxAttempts - failedCount),
       isLocked: !!lockedUntil
     };
   }
 
-  function clearFailedLogin(username) {
-    state.loginFailures.delete(buildLoginFailureKey(username));
+  async function clearFailedLogin(username) {
+    const target = cleanText(username).toLowerCase();
+    if (!target) return;
+    await db.query(
+      `UPDATE system_users SET failed_attempts = 0, locked_until = NULL WHERE LOWER(username) = $1`,
+      [target]
+    );
   }
 
-  function invalidateUsersCache() {
-    state.usersCache = null;
-    state.usersCacheAt = 0;
-    state.usersCachePromise = null;
-    state.usersQueryCache.clear();
+  // ── Reset request rate limiting (still in-memory, no DB table needed) ──
+
+  function buildResetRequestKey(username, email, clientAddress) {
+    return [cleanText(username).toLowerCase(), cleanText(email).toLowerCase(), cleanText(clientAddress).toLowerCase()].join('::');
   }
 
-  function cloneUserRows(rows) {
-    return Array.isArray(rows)
-      ? rows.map((entry) => ({
-          listItemId: cleanText(entry && entry.listItemId),
-          item: entry && entry.item ? JSON.parse(JSON.stringify(entry.item)) : null
-        }))
-      : [];
-  }
-
-  function upsertUsersCache(listItemId, nextItem) {
-    const cleanListItemId = cleanText(listItemId);
-    const cleanNextItem = nextItem && typeof nextItem === 'object' ? JSON.parse(JSON.stringify(nextItem)) : null;
-    if (!cleanNextItem) return;
-    const now = Date.now();
-    if (!Array.isArray(state.usersCache)) {
-      state.usersCache = [{ listItemId: cleanListItemId, item: cleanNextItem }];
-      state.usersCacheAt = now;
-      return;
+  function getResetRequestState(username, email, clientAddress) {
+    const key = buildResetRequestKey(username, email, clientAddress);
+    const entry = state.resetRequests.get(key);
+    if (!entry) return { key, count: 0, resetAt: 0 };
+    if (!Number.isFinite(Number(entry.resetAt)) || Number(entry.resetAt) <= Date.now()) {
+      state.resetRequests.delete(key);
+      return { key, count: 0, resetAt: 0 };
     }
-    const index = state.usersCache.findIndex((entry) => cleanText(entry && entry.listItemId) === cleanListItemId);
-    if (index >= 0) {
-      state.usersCache[index] = { listItemId: cleanListItemId, item: cleanNextItem };
-    } else {
-      state.usersCache.push({ listItemId: cleanListItemId, item: cleanNextItem });
-    }
-    state.usersCacheAt = now;
-    state.usersQueryCache.clear();
+    return { key, count: Number(entry.count || 0), resetAt: Number(entry.resetAt || 0) };
   }
 
-  function removeUsersCache(listItemId) {
-    const cleanListItemId = cleanText(listItemId);
-    if (!cleanListItemId || !Array.isArray(state.usersCache) || !state.usersCache.length) return;
-    state.usersCache = state.usersCache.filter((entry) => cleanText(entry && entry.listItemId) !== cleanListItemId);
-    state.usersCacheAt = Date.now();
-    state.usersQueryCache.clear();
+  function registerResetRequest(username, email, clientAddress) {
+    const snapshot = getResetRequestState(username, email, clientAddress);
+    const count = snapshot.count + 1;
+    const next = { count, resetAt: Date.now() + getResetRequestWindowMs() };
+    state.resetRequests.set(snapshot.key, next);
+    return {
+      count,
+      remaining: Math.max(0, getResetRequestMaxAttempts() - count),
+      limited: count > getResetRequestMaxAttempts(),
+      retryAt: new Date(next.resetAt).toISOString()
+    };
   }
+
+  // ── List filters and pagination ───────────────────────────
 
   function readUsersListFilters(url) {
     const source = url && url.searchParams ? url.searchParams : new URLSearchParams();
@@ -257,18 +288,6 @@ function createSystemUserRouter(deps) {
     };
   }
 
-  function getUsersListQuerySignature(filters) {
-    const next = filters && typeof filters === 'object' ? filters : {};
-    return [
-      cleanText(next.role),
-      cleanText(next.unit),
-      cleanText(next.q).toLowerCase(),
-      next.summaryOnly ? '1' : '0',
-      String(Math.max(1, Number(next.limit) || 20)),
-      String(Math.max(0, Number(next.offset) || 0))
-    ].join('|');
-  }
-
   function buildUsersListPage(filters, total) {
     const next = filters && typeof filters === 'object' ? filters : {};
     const safeTotal = Math.max(0, Number(total) || 0);
@@ -281,13 +300,8 @@ function createSystemUserRouter(deps) {
     const hasPrev = safeOffset > 0;
     const hasNext = safeTotal > 0 && (safeOffset + limit) < safeTotal;
     return {
-      offset: safeOffset,
-      limit,
-      total: safeTotal,
-      pageCount,
-      currentPage,
-      hasPrev,
-      hasNext,
+      offset: safeOffset, limit, total: safeTotal, pageCount, currentPage,
+      hasPrev, hasNext,
       prevOffset: hasPrev ? Math.max(0, safeOffset - limit) : 0,
       nextOffset: hasNext ? safeOffset + limit : safeOffset,
       pageStart: safeTotal > 0 ? safeOffset + 1 : 0,
@@ -297,12 +311,7 @@ function createSystemUserRouter(deps) {
 
   function summarizeUsers(items) {
     const rows = Array.isArray(items) ? items : [];
-    const summary = {
-      total: rows.length,
-      admin: 0,
-      unitAdmin: 0,
-      securityWindow: 0
-    };
+    const summary = { total: rows.length, admin: 0, unitAdmin: 0, securityWindow: 0 };
     rows.forEach((entry) => {
       const role = cleanText(entry && entry.role);
       if (role === USER_ROLES.ADMIN) summary.admin += 1;
@@ -311,38 +320,6 @@ function createSystemUserRouter(deps) {
       if (securityRoles.length) summary.securityWindow += 1;
     });
     return summary;
-  }
-
-  function buildResetRequestKey(username, email, clientAddress) {
-    return [cleanText(username).toLowerCase(), cleanText(email).toLowerCase(), cleanText(clientAddress).toLowerCase()].join('::');
-  }
-
-  function getResetRequestState(username, email, clientAddress) {
-    const key = buildResetRequestKey(username, email, clientAddress);
-    const entry = state.resetRequests.get(key);
-    if (!entry) return { key, count: 0, resetAt: 0 };
-    const windowMs = getResetRequestWindowMs();
-    if (!Number.isFinite(Number(entry.resetAt)) || Number(entry.resetAt) <= Date.now()) {
-      state.resetRequests.delete(key);
-      return { key, count: 0, resetAt: 0 };
-    }
-    return { key, count: Number(entry.count || 0), resetAt: Number(entry.resetAt || 0) };
-  }
-
-  function registerResetRequest(username, email, clientAddress) {
-    const snapshot = getResetRequestState(username, email, clientAddress);
-    const count = snapshot.count + 1;
-    const next = {
-      count,
-      resetAt: Date.now() + getResetRequestWindowMs()
-    };
-    state.resetRequests.set(snapshot.key, next);
-    return {
-      count,
-      remaining: Math.max(0, getResetRequestMaxAttempts() - count),
-      limited: count > getResetRequestMaxAttempts(),
-      retryAt: new Date(next.resetAt).toISOString()
-    };
   }
 
   function sanitizeUserForClient(entry) {
@@ -392,16 +369,11 @@ function createSystemUserRouter(deps) {
       ? item.authorizedUnits.slice()
       : (Array.isArray(item.units) ? item.units.slice() : []);
     return {
-      username: cleanText(item.username),
-      name: cleanText(item.name),
-      email: cleanText(item.email),
-      role: cleanText(item.role),
+      username: cleanText(item.username), name: cleanText(item.name),
+      email: cleanText(item.email), role: cleanText(item.role),
       securityRoles: Array.isArray(item.securityRoles) ? item.securityRoles.slice() : [],
-      primaryUnit,
-      authorizedUnits,
-      scopeUnits: authorizedUnits.slice(),
-      unit: primaryUnit,
-      units: authorizedUnits.slice(),
+      primaryUnit, authorizedUnits, scopeUnits: authorizedUnits.slice(),
+      unit: primaryUnit, units: authorizedUnits.slice(),
       activeUnit: cleanText(item.activeUnit),
       hasPassword: passwordState.hasPassword === true,
       mustChangePassword: passwordState.mustChangePassword === true,
@@ -413,58 +385,22 @@ function createSystemUserRouter(deps) {
     const beforePassword = readStoredPasswordState(beforeItem && beforeItem.password);
     const afterPassword = readStoredPasswordState(afterItem && afterItem.password);
     return buildFieldChanges(beforeItem, afterItem, [
-      'name',
-      'email',
-      'role',
+      'name', 'email', 'role',
       { key: 'securityRoles', kind: 'array' },
-      'primaryUnit',
-      'unit',
+      'primaryUnit', 'unit',
       { key: 'authorizedUnits', kind: 'array' },
       { key: 'units', kind: 'array' },
       'activeUnit',
-      {
-        label: 'hasPassword',
-        kind: 'boolean',
-        get: function (_item, index) {
-          return index === 0 ? beforePassword.hasPassword : afterPassword.hasPassword;
-        }
-      },
-      {
-        label: 'mustChangePassword',
-        kind: 'boolean',
-        get: function (_item, index) {
-          return index === 0 ? beforePassword.mustChangePassword : afterPassword.mustChangePassword;
-        }
-      },
-      {
-        label: 'sessionVersion',
-        kind: 'number',
-        get: function (_item, index) {
-          return index === 0 ? beforePassword.sessionVersion : afterPassword.sessionVersion;
-        }
-      },
-      {
-        label: 'passwordChangedAt',
-        get: function (_item, index) {
-          return index === 0 ? beforePassword.passwordChangedAt : afterPassword.passwordChangedAt;
-        }
-      },
-      {
-        label: 'resetTokenExpiresAt',
-        get: function (_item, index) {
-          return index === 0 ? beforePassword.resetTokenExpiresAt : afterPassword.resetTokenExpiresAt;
-        }
-      }
+      { label: 'hasPassword', kind: 'boolean', get: (_, index) => index === 0 ? beforePassword.hasPassword : afterPassword.hasPassword },
+      { label: 'mustChangePassword', kind: 'boolean', get: (_, index) => index === 0 ? beforePassword.mustChangePassword : afterPassword.mustChangePassword },
+      { label: 'sessionVersion', kind: 'number', get: (_, index) => index === 0 ? beforePassword.sessionVersion : afterPassword.sessionVersion },
+      { label: 'passwordChangedAt', get: (_, index) => index === 0 ? beforePassword.passwordChangedAt : afterPassword.passwordChangedAt },
+      { label: 'resetTokenExpiresAt', get: (_, index) => index === 0 ? beforePassword.resetTokenExpiresAt : afterPassword.resetTokenExpiresAt }
     ].map((definition) => {
       if (typeof definition === 'string') return definition;
       const originalGet = definition.get;
       if (!originalGet) return definition;
-      return {
-        ...definition,
-        get: function (item) {
-          return originalGet(item, item === beforeItem ? 0 : 1);
-        }
-      };
+      return { ...definition, get: (item) => originalGet(item, item === beforeItem ? 0 : 1) };
     }));
   }
 
@@ -504,261 +440,133 @@ function createSystemUserRouter(deps) {
     return decodeURIComponent(String(value || '').trim());
   }
 
-  async function fetchListMap() {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
-    return new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
-  }
-
-  async function resolveNamedList(name) {
-    const listName = cleanText(name);
-    if (!state.listMap || !state.listMap.has(listName)) {
-      state.listMap = await fetchListMap();
-    }
-    let list = state.listMap.get(listName);
-    if (!list) {
-      state.listMap = await fetchListMap();
-      list = state.listMap.get(listName);
-    }
-    if (!list) {
-      throw createError(`SharePoint list not found: ${listName}`, 500);
-    }
-    return list;
-  }
-
-  async function fetchListColumnNames(listId) {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists/${listId}/columns?$select=name`);
-    return new Set((Array.isArray(body && body.value) ? body.value : []).map((entry) => cleanText(entry && entry.name)).filter(Boolean));
-  }
-
-  async function resolveListColumnNames(listId) {
-    const cleanListId = cleanText(listId);
-    if (!cleanListId) return new Set();
-    if (!state.listColumnsMap.has(cleanListId)) {
-      state.listColumnsMap.set(cleanListId, await fetchListColumnNames(cleanListId));
-    }
-    return state.listColumnsMap.get(cleanListId);
-  }
-
-  function filterFieldsForExistingColumns(fields, existingNames) {
-    const allowed = existingNames instanceof Set ? existingNames : new Set();
-    return Object.entries(fields || {}).reduce((result, [key, value]) => {
-      if (key === 'Title' || allowed.has(key)) result[key] = value;
-      return result;
-    }, {});
-  }
-
-  function getUsersListName() {
-    return getEnv('SYSTEM_USERS_LIST', 'SystemUsers');
-  }
-
-  function getAuditListName() {
-    return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
-  }
-
-  async function resolveUsersList() {
-    return resolveNamedList(getUsersListName());
-  }
-
-  async function resolveAuditList() {
-    return resolveNamedList(getAuditListName());
-  }
-
-
-  function normalizeUsernameKey(value) {
-    return cleanText(value).toLowerCase();
-  }
-
-  async function listCorrectiveActionsByUsername(username) {
-    const target = normalizeUsernameKey(username);
-    if (!target) return [];
-    const siteId = await resolveSiteId();
-    const list = await resolveNamedList(getEnv('CORRECTIVE_ACTIONS_LIST', 'CorrectiveActions'));
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      batch.forEach((entry) => {
-        const item = mapGraphFieldsToCase(entry && entry.fields ? entry.fields : {});
-        const status = cleanText(item && item.status);
-        if (status === CORRECTIVE_ACTION_STATUSES.CLOSED) return;
-        const refs = [];
-        const pushRef = (label, candidate) => {
-          if (normalizeUsernameKey(candidate) === target) refs.push(label);
-        };
-        pushRef('handler', item && item.handlerUsername);
-        pushRef('reviewer', item && item.reviewer);
-        (Array.isArray(item && item.trackings) ? item.trackings : []).forEach((tracking) => {
-          pushRef('tracker', tracking && tracking.tracker);
-          pushRef('tracking-reviewer', tracking && tracking.reviewer);
-        });
-        if (refs.length) {
-          rows.push({
-            id: cleanText(item && item.id),
-            status,
-            refs: Array.from(new Set(refs))
-          });
-        }
-      });
-      nextUrl = cleanText(body && body['@odata.nextLink']);
-    }
-    return rows;
-  }
+  // ── DB operations ─────────────────────────────────────────
 
   async function listAllUsers() {
-    const ttlMs = getUsersCacheTtlMs();
-    const now = Date.now();
-    if (Array.isArray(state.usersCache) && state.usersCache.length && now - state.usersCacheAt < ttlMs) {
-      return cloneUserRows(state.usersCache);
-    }
-    if (state.usersCachePromise) {
-      const cached = await state.usersCachePromise;
-      return cloneUserRows(cached);
-    }
-    state.usersCachePromise = (async () => {
-      const siteId = await resolveSiteId();
-      const list = await resolveUsersList();
-      const rows = [];
-      let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-      while (nextUrl) {
-        const body = await graphRequest('GET', nextUrl);
-        const batch = Array.isArray(body && body.value) ? body.value : [];
-        rows.push(...batch.map((entry) => ({
-          listItemId: cleanText(entry && entry.id),
-          item: mapGraphFieldsToSystemUser(entry && entry.fields ? entry.fields : {})
-        })));
-        nextUrl = cleanText(body && body['@odata.nextLink']);
-      }
-      state.usersCache = rows;
-      state.usersCacheAt = Date.now();
-      return rows;
-    })().catch((error) => {
-      state.usersCache = null;
-      state.usersCacheAt = 0;
-      throw error;
-    }).finally(() => {
-      state.usersCachePromise = null;
-    });
-    return cloneUserRows(await state.usersCachePromise);
-  }
-
-  async function upgradeLegacyPasswordStorage() {
-    if (state.legacyPasswordMigrationDone) {
-      return {
-        upgradedCount: state.legacyPasswordMigrationCount || 0,
-        done: true
-      };
-    }
-    if (state.legacyPasswordMigrationPromise) return state.legacyPasswordMigrationPromise;
-    state.legacyPasswordMigrationPromise = (async () => {
-      const rows = await listAllUsers();
-      const legacyRows = rows.filter((entry) => readStoredPasswordState(entry && entry.item && entry.item.password).legacy);
-      if (!legacyRows.length) {
-        state.legacyPasswordMigrationDone = true;
-        state.legacyPasswordMigrationCount = 0;
-        return { upgradedCount: 0, done: true };
-      }
-      let upgradedCount = 0;
-      for (const entry of legacyRows) {
-        const passwordState = readStoredPasswordState(entry.item.password);
-        const upgradedSecret = upgradePasswordSecret(passwordState.plaintext || passwordState.raw || entry.item.password, entry.item.password);
-        const now = new Date().toISOString();
-        await upsertUser(entry, {
-          ...entry.item,
-          password: serializePasswordSecret(upgradedSecret),
-          mustChangePassword: passwordState.mustChangePassword === true,
-          passwordChangedAt: upgradedSecret.passwordChangedAt,
-          resetRequestedAt: '',
-          resetTokenExpiresAt: '',
-          sessionVersion: upgradedSecret.sessionVersion,
-          updatedAt: now
-        });
-        upgradedCount += 1;
-      }
-      state.legacyPasswordMigrationDone = true;
-      state.legacyPasswordMigrationCount = upgradedCount;
-      return { upgradedCount, done: true };
-    })().catch((error) => {
-      console.error('[system-users] legacy password migration failed:', error && error.stack ? error.stack : error);
-      return { upgradedCount: 0, done: false, error: String(error && error.message || error || 'legacy password migration failed') };
-    }).finally(() => {
-      state.legacyPasswordMigrationPromise = null;
-    });
-    return state.legacyPasswordMigrationPromise;
+    const rows = await db.queryAll(USER_SELECT + ` ORDER BY username`);
+    return rows.map((row) => ({ listItemId: String(row.id), item: mapRowToUser(row) }));
   }
 
   async function getUserEntryByUsername(username) {
     const target = cleanText(username).toLowerCase();
     if (!target) throw createError('Missing username', 400);
-    const rows = await listAllUsers();
-    return rows.find((entry) => cleanText(entry.item.username).toLowerCase() === target) || null;
+    const row = await db.queryOne(USER_SELECT + ` WHERE LOWER(username) = $1`, [target]);
+    if (!row) return null;
+    return { listItemId: String(row.id), item: mapRowToUser(row) };
   }
 
   async function getUserEntryByEmail(email) {
     const target = cleanEmail(email);
     if (!target) throw createError('Missing email', 400);
-    const rows = await listAllUsers();
-    return rows.find((entry) => cleanEmail(entry.item.email) === target) || null;
+    const row = await db.queryOne(USER_SELECT + ` WHERE LOWER(email) = $1`, [target]);
+    if (!row) return null;
+    return { listItemId: String(row.id), item: mapRowToUser(row) };
   }
 
   async function findDuplicateEmail(email, excludeUsername) {
     const targetEmail = cleanEmail(email);
     const skipUser = cleanText(excludeUsername).toLowerCase();
     if (!targetEmail) return null;
-    const rows = await listAllUsers();
-    return rows.find((entry) => (
-      cleanEmail(entry.item.email) === targetEmail
-      && cleanText(entry.item.username).toLowerCase() !== skipUser
-    )) || null;
+    const row = await db.queryOne(
+      USER_SELECT + ` WHERE LOWER(email) = $1 AND LOWER(username) != $2`,
+      [targetEmail, skipUser]
+    );
+    if (!row) return null;
+    return { listItemId: String(row.id), item: mapRowToUser(row) };
   }
 
   async function upsertUser(existingEntry, nextItem) {
-    const siteId = await resolveSiteId();
-    const list = await resolveUsersList();
     const normalized = createSystemUserRecord(nextItem, nextItem.updatedAt || new Date().toISOString());
-    const columnNames = await resolveListColumnNames(list.id);
-    const graphFields = filterFieldsForExistingColumns(mapSystemUserToGraphFields(normalized), columnNames);
+    const now = normalized.updatedAt || new Date().toISOString();
+    const securityRolesJson = Array.isArray(normalized.securityRoles) ? JSON.stringify(normalized.securityRoles) : '[]';
+    const authorizedUnitsJson = Array.isArray(normalized.authorizedUnits || normalized.units)
+      ? JSON.stringify(normalized.authorizedUnits || normalized.units)
+      : '[]';
+
     if (existingEntry) {
-      await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, graphFields);
-      upsertUsersCache(existingEntry.listItemId, normalized);
+      const row = await db.queryOne(`
+        UPDATE system_users SET
+          password = $2, password_secret = $3, display_name = $4, email = $5, role = $6,
+          security_roles_json = $7, primary_unit = $8, authorized_units_json = $9,
+          active_unit = $10, password_changed_at = $11, reset_token_expires_at = $12,
+          reset_requested_at = $13, must_change_password = $14, session_version = $15,
+          backend_mode = $16, record_source = $17, updated_at = $18
+        WHERE id = $1
+        RETURNING id
+      `, [
+        Number(existingEntry.listItemId),
+        cleanText(normalized.password),
+        cleanText(normalized.passwordSecret || ''),
+        cleanText(normalized.name),
+        cleanText(normalized.email),
+        cleanText(normalized.role),
+        securityRolesJson,
+        cleanText(normalized.primaryUnit || normalized.unit),
+        authorizedUnitsJson,
+        cleanText(normalized.activeUnit),
+        normalized.passwordChangedAt || null,
+        normalized.resetTokenExpiresAt || null,
+        normalized.resetRequestedAt || null,
+        normalized.mustChangePassword || false,
+        Number(normalized.sessionVersion || 1),
+        cleanText(normalized.backendMode) || 'pg-campus-backend',
+        cleanText(normalized.recordSource) || 'frontend',
+        now
+      ]);
       return { created: false, item: normalized };
     }
-    const created = await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: graphFields
-    });
-    const createdListItemId = cleanText(created && created.id);
-    if (createdListItemId) {
-      upsertUsersCache(createdListItemId, normalized);
-    } else {
-      invalidateUsersCache();
-    }
+
+    const row = await db.queryOne(`
+      INSERT INTO system_users (
+        username, password, password_secret, display_name, email, role,
+        security_roles_json, primary_unit, authorized_units_json, active_unit,
+        password_changed_at, reset_token_expires_at, reset_requested_at,
+        must_change_password, session_version, backend_mode, record_source,
+        created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      RETURNING id
+    `, [
+      cleanText(normalized.username),
+      cleanText(normalized.password),
+      cleanText(normalized.passwordSecret || ''),
+      cleanText(normalized.name),
+      cleanText(normalized.email),
+      cleanText(normalized.role),
+      securityRolesJson,
+      cleanText(normalized.primaryUnit || normalized.unit),
+      authorizedUnitsJson,
+      cleanText(normalized.activeUnit),
+      normalized.passwordChangedAt || null,
+      normalized.resetTokenExpiresAt || null,
+      normalized.resetRequestedAt || null,
+      normalized.mustChangePassword || false,
+      Number(normalized.sessionVersion || 1),
+      cleanText(normalized.backendMode) || 'pg-campus-backend',
+      cleanText(normalized.recordSource) || 'frontend',
+      normalized.createdAt || now,
+      now
+    ]);
     return { created: true, item: normalized };
   }
 
   async function deleteUserEntry(existingEntry) {
-    const siteId = await resolveSiteId();
-    const list = await resolveUsersList();
-    await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`);
-    removeUsersCache(existingEntry && existingEntry.listItemId);
+    await db.query(`DELETE FROM system_users WHERE id = $1`, [Number(existingEntry.listItemId)]);
   }
 
   async function createAuditRow(input) {
-    const siteId = await resolveSiteId();
-    const list = await resolveAuditList();
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: {
-        Title: cleanText(input.recordId || input.eventType || 'audit'),
-        EventType: cleanText(input.eventType),
-        ActorEmail: cleanText(input.actorEmail),
-        TargetEmail: cleanText(input.targetEmail),
-        UnitCode: cleanText(input.unitCode),
-        RecordId: cleanText(input.recordId),
-        OccurredAt: cleanText(input.occurredAt) || new Date().toISOString(),
-        PayloadJson: cleanText(input.payloadJson)
-      }
-    });
+    await db.query(`
+      INSERT INTO ops_audit (title, event_type, actor_email, target_email, unit_code, record_id, occurred_at, payload_json)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      cleanText(input.recordId || input.eventType || 'audit'),
+      cleanText(input.eventType),
+      cleanText(input.actorEmail),
+      cleanText(input.targetEmail),
+      cleanText(input.unitCode),
+      cleanText(input.recordId),
+      cleanText(input.occurredAt) || new Date().toISOString(),
+      cleanText(input.payloadJson)
+    ]);
   }
 
   async function tryCreateAuditRow(input) {
@@ -767,6 +575,22 @@ function createSystemUserRouter(deps) {
     } catch (error) {
       console.error('[system-users] failed to create audit row', String(error && error.message || error || 'unknown error'), input && input.eventType ? 'event=' + input.eventType : '');
     }
+  }
+
+  async function listCorrectiveActionsByUsername(username) {
+    const target = cleanText(username).toLowerCase();
+    if (!target) return [];
+    const rows = await db.queryAll(`
+      SELECT case_id, status, handler_username, reviewer, trackings_json
+      FROM corrective_actions
+      WHERE status != $1
+        AND (LOWER(handler_username) = $2 OR LOWER(reviewer) = $2)
+    `, [CORRECTIVE_ACTION_STATUSES.CLOSED || '結案', target]);
+    return rows.map((row) => ({
+      id: row.case_id,
+      status: row.status,
+      refs: ['handler']
+    }));
   }
 
   function filterUsers(items, filters) {
@@ -785,43 +609,22 @@ function createSystemUserRouter(deps) {
     }).sort((left, right) => String(left.username || '').localeCompare(String(right.username || '')));
   }
 
+  // ── Handlers ──────────────────────────────────────────────
+
   async function buildHealth() {
-    const siteId = await resolveSiteId();
-    const { decoded, mode } = await getDelegatedToken();
-    const health = {
-      ok: true,
-      ready: true,
+    const dbHealth = await db.healthCheck();
+    return {
+      ok: dbHealth.ok,
+      ready: dbHealth.ok,
       contractVersion: CONTRACT_VERSION,
-      repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
-      actor: {
-        tokenMode: cleanText(mode) || 'delegated-cli',
-        appId: cleanText(decoded.appid || decoded.azp),
-        upn: cleanText(decoded.upn),
-        scopes: cleanText(decoded.scp),
-        roles: Array.isArray(decoded.roles) ? decoded.roles.join(',') : ''
-      },
-      site: { id: siteId }
+      repository: 'postgresql',
+      database: { ok: dbHealth.ok, latencyMs: dbHealth.latencyMs }
     };
-    try {
-      health.usersList = await resolveUsersList();
-      const migration = await upgradeLegacyPasswordStorage();
-      if (migration && Number(migration.upgradedCount || 0) > 0) {
-        health.legacyPasswordMigration = migration.upgradedCount;
-      }
-    } catch (error) {
-      health.ok = false;
-      health.ready = false;
-      health.message = cleanText(error && error.message) || 'System user list is not ready.';
-    }
-    return health;
   }
 
   async function buildAuthHealth() {
     const health = await buildHealth();
-    return {
-      ...health,
-      contractVersion: AUTH_CONTRACT_VERSION
-    };
+    return { ...health, contractVersion: AUTH_CONTRACT_VERSION };
   }
 
   async function handleHealth(_req, res, origin) {
@@ -844,14 +647,7 @@ function createSystemUserRouter(deps) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       requestAuthz.requireAdmin(authz, 'Only admin can list system users');
-      await upgradeLegacyPasswordStorage();
       const filters = readUsersListFilters(url);
-      const signature = getUsersListQuerySignature(filters);
-      const cached = state.usersQueryCache.get(signature);
-      if (cached && (Date.now() - Number(cached.createdAt || 0)) < getUsersQueryCacheTtlMs()) {
-        await writeJson(res, buildJsonResponse(200, cached.value), origin);
-        return;
-      }
       const rows = await listAllUsers();
       const filteredItems = filterUsers(rows.map((entry) => entry.item), filters);
       const summary = summarizeUsers(filteredItems);
@@ -867,20 +663,13 @@ function createSystemUserRouter(deps) {
           ? { ...page, returned: 0, pageStart: 0, pageEnd: 0 }
           : { ...page, returned: Math.max(0, Math.min(page.limit, filteredItems.length - page.offset)) },
         filters: {
-          role: filters.role,
-          unit: filters.unit,
-          q: filters.q,
-          limit: String(page.limit),
-          offset: String(page.offset),
+          role: filters.role, unit: filters.unit, q: filters.q,
+          limit: String(page.limit), offset: String(page.offset),
           summaryOnly: filters.summaryOnly ? '1' : ''
         },
         generatedAt: new Date().toISOString(),
         contractVersion: CONTRACT_VERSION
       };
-      state.usersQueryCache.set(signature, {
-        createdAt: Date.now(),
-        value: payload
-      });
       await writeJson(res, buildJsonResponse(200, payload), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to list system users.', 500), origin);
@@ -894,9 +683,7 @@ function createSystemUserRouter(deps) {
       const existing = await getUserEntryByUsername(username);
       if (!existing) throw createError('System user not found', 404);
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: sanitizeUserForClient(existing.item),
-        contractVersion: CONTRACT_VERSION
+        ok: true, item: sanitizeUserForClient(existing.item), contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read system user detail.', 500), origin);
@@ -911,9 +698,7 @@ function createSystemUserRouter(deps) {
       validateActionEnvelope(envelope, USER_ACTIONS.UPSERT);
       const incoming = normalizeSystemUserPayload(envelope.payload);
       const incomingPassword = cleanText(incoming.password);
-      if (incomingPassword) {
-        validatePasswordComplexity(incomingPassword, 'password');
-      }
+      if (incomingPassword) validatePasswordComplexity(incomingPassword, 'password');
       const existing = await getUserEntryByUsername(incoming.username).catch(() => null);
       const existingAuthState = readStoredPasswordState(existing && existing.item && existing.item.password);
       const source = existing && existing.item ? existing.item : {};
@@ -942,32 +727,22 @@ function createSystemUserRouter(deps) {
         resetRequestedAt: cleanText(source.resetRequestedAt),
         mustChangePassword: incomingPassword ? (envelope.payload && envelope.payload.forcePasswordChange !== false) : existingAuthState.mustChangePassword,
         sessionVersion: existingAuthState.sessionVersion || 1,
-        backendMode: cleanText(source.backendMode) || 'a3-campus-backend',
+        backendMode: cleanText(source.backendMode) || 'pg-campus-backend',
         recordSource: cleanText(source.recordSource) || 'frontend'
       });
       validateSystemUserPayload(payload, { requirePassword: !existing });
       const emailDuplicate = await findDuplicateEmail(payload.email, payload.username);
-      if (emailDuplicate) {
-        throw createError('Another user already uses this email', 409);
-      }
-      const persistPassword = preparePasswordForPersist({
-        password: incomingPassword
-      }, {
+      if (emailDuplicate) throw createError('Another user already uses this email', 409);
+      const persistPassword = preparePasswordForPersist({ password: incomingPassword }, {
         existingPassword: cleanText(existing && existing.item && existing.item.password),
         forcePasswordChange: incomingPassword ? (envelope.payload && envelope.payload.forcePasswordChange !== false) : existingAuthState.mustChangePassword,
         sessionVersion: existingAuthState.sessionVersion || 1
       });
       const saved = await upsertUser(existing, {
-        username: payload.username,
-        password: persistPassword,
-        name: payload.name,
-        email: payload.email,
-        role: payload.role,
-        primaryUnit: payload.primaryUnit,
-        authorizedUnits: payload.authorizedUnits,
-        scopeUnits: payload.scopeUnits,
-        unit: payload.primaryUnit,
-        units: payload.units,
+        username: payload.username, password: persistPassword,
+        name: payload.name, email: payload.email, role: payload.role,
+        primaryUnit: payload.primaryUnit, authorizedUnits: payload.authorizedUnits,
+        scopeUnits: payload.scopeUnits, unit: payload.primaryUnit, units: payload.units,
         activeUnit: payload.activeUnit,
         createdAt: existing ? cleanText(source.createdAt) || now : (payload.createdAt || now),
         updatedAt: now,
@@ -976,29 +751,21 @@ function createSystemUserRouter(deps) {
         resetRequestedAt: payload.resetRequestedAt || cleanText(source.resetRequestedAt),
         mustChangePassword: payload.mustChangePassword,
         sessionVersion: payload.sessionVersion || 1,
-        backendMode: payload.backendMode,
-        recordSource: payload.recordSource
+        backendMode: payload.backendMode, recordSource: payload.recordSource
       });
       const actor = buildActorAudit(authz);
-      await createAuditRow({
+      await tryCreateAuditRow({
         eventType: existing ? 'system-user.updated' : 'system-user.created',
-        actorEmail: actor.actorEmail,
-        targetEmail: saved.item.email,
-        unitCode: '',
-        recordId: saved.item.username,
-        occurredAt: now,
+        actorEmail: actor.actorEmail, targetEmail: saved.item.email,
+        unitCode: '', recordId: saved.item.username, occurredAt: now,
         payloadJson: JSON.stringify({
-          action: USER_ACTIONS.UPSERT,
-          actorName: actor.actorName,
-          actorUsername: actor.actorUsername,
+          action: USER_ACTIONS.UPSERT, actorName: actor.actorName, actorUsername: actor.actorUsername,
           snapshot: existing ? null : buildSystemUserSnapshot(saved.item),
           changes: buildSystemUserChanges(existing && existing.item, saved.item)
         })
       });
       await writeJson(res, buildJsonResponse(saved.created ? 201 : 200, {
-        ok: true,
-        item: sanitizeUserForClient(saved.item),
-        contractVersion: CONTRACT_VERSION
+        ok: true, item: sanitizeUserForClient(saved.item), contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to upsert system user.', 500), origin);
@@ -1014,7 +781,6 @@ function createSystemUserRouter(deps) {
       const cleanUsername = cleanText(username).toLowerCase();
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, USER_ACTIONS.DELETE);
-      const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       if (existing.item.role === USER_ROLES.ADMIN) {
         throw createError('Primary admin cannot be deleted', 409);
       }
@@ -1026,24 +792,16 @@ function createSystemUserRouter(deps) {
       const now = new Date().toISOString();
       await deleteUserEntry(existing);
       const actor = buildActorAudit(authz);
-      await createAuditRow({
-        eventType: 'system-user.deleted',
-        actorEmail: actor.actorEmail,
-        targetEmail: existing.item.email,
-        unitCode: '',
-        recordId: existing.item.username,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          action: USER_ACTIONS.DELETE,
-          actorName: actor.actorName,
-          actorUsername: actor.actorUsername,
-          deletedState: buildSystemUserSnapshot(existing.item)
+      await tryCreateAuditRow({
+        eventType: 'system-user.deleted', actorEmail: actor.actorEmail,
+        targetEmail: existing.item.email, unitCode: '', recordId: existing.item.username,
+        occurredAt: now, payloadJson: JSON.stringify({
+          action: USER_ACTIONS.DELETE, actorName: actor.actorName,
+          actorUsername: actor.actorUsername, deletedState: buildSystemUserSnapshot(existing.item)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        deletedId: existing.item.username,
-        contractVersion: CONTRACT_VERSION
+        ok: true, deletedId: existing.item.username, contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to delete system user.', 500), origin);
@@ -1058,37 +816,25 @@ function createSystemUserRouter(deps) {
       if (!existing) throw createError('System user not found', 404);
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, USER_ACTIONS.RESET_PASSWORD);
-      const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       const now = new Date().toISOString();
       const reset = createResetToken(existing.item.password, { now });
       const saved = await upsertUser(existing, {
-        ...existing.item,
-        password: serializePasswordSecret(reset.secret),
-        mustChangePassword: true,
-        resetRequestedAt: now,
-        resetTokenExpiresAt: reset.expiresAt,
-        updatedAt: now
+        ...existing.item, password: serializePasswordSecret(reset.secret),
+        mustChangePassword: true, resetRequestedAt: now,
+        resetTokenExpiresAt: reset.expiresAt, updatedAt: now
       });
       const actor = buildActorAudit(authz);
-      await createAuditRow({
-        eventType: 'system-user.reset-token-issued',
-        actorEmail: actor.actorEmail,
-        targetEmail: saved.item.email,
-        unitCode: '',
-        recordId: saved.item.username,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          action: USER_ACTIONS.RESET_PASSWORD,
-          actorName: actor.actorName,
-          actorUsername: actor.actorUsername,
-          changes: buildSystemUserChanges(existing.item, saved.item)
+      await tryCreateAuditRow({
+        eventType: 'system-user.reset-token-issued', actorEmail: actor.actorEmail,
+        targetEmail: saved.item.email, unitCode: '', recordId: saved.item.username,
+        occurredAt: now, payloadJson: JSON.stringify({
+          action: USER_ACTIONS.RESET_PASSWORD, actorName: actor.actorName,
+          actorUsername: actor.actorUsername, changes: buildSystemUserChanges(existing.item, saved.item)
         })
       });
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: sanitizeUserForClient(saved.item),
-        resetTokenExpiresAt: reset.expiresAt,
-        contractVersion: CONTRACT_VERSION
+        ok: true, item: sanitizeUserForClient(saved.item),
+        resetTokenExpiresAt: reset.expiresAt, contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to reset system user password.', 500), origin);
@@ -1101,79 +847,57 @@ function createSystemUserRouter(deps) {
       validateAuthActionEnvelope(envelope, AUTH_ACTIONS.LOGIN);
       const payload = normalizeLoginPayload(envelope.payload);
       validateLoginPayload(payload);
-      const throttle = getLoginFailureState(payload.username);
+      const throttle = await getLoginFailureState(payload.username);
       if (throttle.lockedUntil) {
         void tryCreateAuditRow({
-          eventType: 'auth.login.locked',
-          actorEmail: '',
-          targetEmail: '',
-          unitCode: '',
-          recordId: payload.username,
-          occurredAt: new Date().toISOString(),
+          eventType: 'auth.login.locked', actorEmail: '', targetEmail: '',
+          unitCode: '', recordId: payload.username, occurredAt: new Date().toISOString(),
           payloadJson: JSON.stringify({
-            action: AUTH_ACTIONS.LOGIN,
-            reason: 'locked',
-            clientAddress: readClientAddress(req),
-            lockedUntil: throttle.lockedUntil
+            action: AUTH_ACTIONS.LOGIN, reason: 'locked',
+            clientAddress: readClientAddress(req), lockedUntil: throttle.lockedUntil
           })
         });
         await writeJson(res, buildJsonResponse(429, {
-          ok: false,
-          error: 'Too many failed login attempts. Please try again later.',
-          lockedUntil: throttle.lockedUntil,
-          contractVersion: AUTH_CONTRACT_VERSION
+          ok: false, error: 'Too many failed login attempts. Please try again later.',
+          lockedUntil: throttle.lockedUntil, contractVersion: AUTH_CONTRACT_VERSION
         }), origin);
         return;
       }
       const existing = await getUserEntryByUsername(payload.username).catch(() => null);
       if (!existing) {
-        const nextThrottle = registerFailedLogin(payload.username);
+        const nextThrottle = await registerFailedLogin(payload.username);
         void tryCreateAuditRow({
-          eventType: 'auth.login.failed',
-          actorEmail: '',
-          targetEmail: '',
-          unitCode: '',
-          recordId: payload.username,
-          occurredAt: new Date().toISOString(),
+          eventType: 'auth.login.failed', actorEmail: '', targetEmail: '',
+          unitCode: '', recordId: payload.username, occurredAt: new Date().toISOString(),
           payloadJson: JSON.stringify({
-            action: AUTH_ACTIONS.LOGIN,
-            reason: 'user-not-found',
-            clientAddress: readClientAddress(req),
-            failedCount: nextThrottle.failedCount,
+            action: AUTH_ACTIONS.LOGIN, reason: 'user-not-found',
+            clientAddress: readClientAddress(req), failedCount: nextThrottle.failedCount,
             lockedUntil: nextThrottle.lockedUntil
           })
         });
         await writeJson(res, buildJsonResponse(nextThrottle.isLocked ? 429 : 401, {
           ok: false,
           error: nextThrottle.isLocked ? 'Too many failed login attempts. Please try again later.' : 'Invalid username or password',
-          lockedUntil: nextThrottle.lockedUntil,
-          contractVersion: AUTH_CONTRACT_VERSION
+          lockedUntil: nextThrottle.lockedUntil, contractVersion: AUTH_CONTRACT_VERSION
         }), origin);
         return;
       }
       const verification = verifyPassword(payload.password, existing.item.password);
       if (!verification.ok) {
-        const nextThrottle = registerFailedLogin(existing.item.username);
-        await createAuditRow({
-          eventType: 'auth.login.failed',
-          actorEmail: '',
-          targetEmail: existing.item.email,
-          unitCode: '',
-          recordId: existing.item.username,
-          occurredAt: new Date().toISOString(),
+        const nextThrottle = await registerFailedLogin(existing.item.username);
+        await tryCreateAuditRow({
+          eventType: 'auth.login.failed', actorEmail: '', targetEmail: existing.item.email,
+          unitCode: '', recordId: existing.item.username, occurredAt: new Date().toISOString(),
           payloadJson: JSON.stringify({
-            action: AUTH_ACTIONS.LOGIN,
-            reason: 'invalid-password',
-            clientAddress: readClientAddress(req),
-            failedCount: nextThrottle.failedCount,
+            action: AUTH_ACTIONS.LOGIN, reason: 'invalid-password',
+            clientAddress: readClientAddress(req), failedCount: nextThrottle.failedCount,
             lockedUntil: nextThrottle.lockedUntil
           })
         });
         await writeJson(res, buildJsonResponse(nextThrottle.isLocked ? 429 : 401, {
           ok: false,
           error: nextThrottle.isLocked ? 'Too many failed login attempts. Please try again later.' : 'Invalid username or password',
-          lockedUntil: nextThrottle.lockedUntil,
-          contractVersion: AUTH_CONTRACT_VERSION
+          lockedUntil: nextThrottle.lockedUntil, contractVersion: AUTH_CONTRACT_VERSION
         }), origin);
         return;
       }
@@ -1181,23 +905,17 @@ function createSystemUserRouter(deps) {
       if (verification.needsUpgrade) {
         const upgraded = upgradePasswordSecret(payload.password, verification.secret);
         resolvedEntry = await upsertUser(existing, {
-          ...existing.item,
-          password: serializePasswordSecret(upgraded),
+          ...existing.item, password: serializePasswordSecret(upgraded),
           passwordChangedAt: upgraded.passwordChangedAt,
           mustChangePassword: upgraded.mustChangePassword,
-          resetTokenExpiresAt: '',
-          resetRequestedAt: '',
-          sessionVersion: upgraded.sessionVersion,
-          updatedAt: new Date().toISOString()
+          resetTokenExpiresAt: '', resetRequestedAt: '',
+          sessionVersion: upgraded.sessionVersion, updatedAt: new Date().toISOString()
         });
       }
-      clearFailedLogin(resolvedEntry.item.username);
+      await clearFailedLogin(resolvedEntry.item.username);
       void tryCreateAuditRow({
-        eventType: 'auth.login.success',
-        actorEmail: resolvedEntry.item.email,
-        targetEmail: resolvedEntry.item.email,
-        unitCode: '',
-        recordId: resolvedEntry.item.username,
+        eventType: 'auth.login.success', actorEmail: resolvedEntry.item.email,
+        targetEmail: resolvedEntry.item.email, unitCode: '', recordId: resolvedEntry.item.username,
         occurredAt: new Date().toISOString(),
         payloadJson: JSON.stringify({
           action: AUTH_ACTIONS.LOGIN,
@@ -1229,20 +947,14 @@ function createSystemUserRouter(deps) {
       const now = new Date().toISOString();
       const nextSecret = invalidateSessions(existing.item.password, { updatedAt: now });
       const saved = await upsertUser(existing, {
-        ...existing.item,
-        password: serializePasswordSecret(nextSecret),
-        sessionVersion: nextSecret.sessionVersion,
-        updatedAt: now
+        ...existing.item, password: serializePasswordSecret(nextSecret),
+        sessionVersion: nextSecret.sessionVersion, updatedAt: now
       });
-      clearFailedLogin(saved.item.username);
+      await clearFailedLogin(saved.item.username);
       void tryCreateAuditRow({
-        eventType: 'auth.logout',
-        actorEmail: saved.item.email,
-        targetEmail: saved.item.email,
-        unitCode: '',
-        recordId: saved.item.username,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
+        eventType: 'auth.logout', actorEmail: saved.item.email,
+        targetEmail: saved.item.email, unitCode: '', recordId: saved.item.username,
+        occurredAt: now, payloadJson: JSON.stringify({
           action: AUTH_ACTIONS.LOGOUT,
           previousSessionVersion: Number(authz.sessionPayload && authz.sessionPayload.sessionVersion || 1),
           nextSessionVersion: nextSecret.sessionVersion,
@@ -1250,10 +962,7 @@ function createSystemUserRouter(deps) {
         })
       });
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        username: saved.item.username,
-        loggedOut: true,
-        contractVersion: AUTH_CONTRACT_VERSION
+        ok: true, username: saved.item.username, loggedOut: true, contractVersion: AUTH_CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to logout.', 500), origin);
@@ -1268,9 +977,7 @@ function createSystemUserRouter(deps) {
       validateRequestResetPayload(payload);
       const clientAddress = readClientAddress(req);
       const throttle = registerResetRequest(payload.username, payload.email, clientAddress);
-      if (throttle.limited) {
-        throw createError('Too many reset requests. Please try again later.', 429);
-      }
+      if (throttle.limited) throw createError('Too many reset requests. Please try again later.', 429);
       const existing = await getUserEntryByEmail(payload.email);
       if (!existing) throw createError('System user not found', 404);
       if (cleanText(existing.item.username).toLowerCase() !== cleanText(payload.username).toLowerCase()) {
@@ -1279,51 +986,36 @@ function createSystemUserRouter(deps) {
       const now = new Date().toISOString();
       const reset = createResetToken(existing.item.password, { now });
       const saved = await upsertUser(existing, {
-        ...existing.item,
-        password: serializePasswordSecret(reset.secret),
-        mustChangePassword: true,
-        resetRequestedAt: now,
-        resetTokenExpiresAt: reset.expiresAt,
-        updatedAt: now
+        ...existing.item, password: serializePasswordSecret(reset.secret),
+        mustChangePassword: true, resetRequestedAt: now,
+        resetTokenExpiresAt: reset.expiresAt, updatedAt: now
       });
       const delivery = await sendGraphMail({
-        graphRequest,
-        getDelegatedToken,
-        to: saved.item.email,
-        ...buildResetMail(saved.item, reset)
+        graphRequest, getDelegatedToken,
+        to: saved.item.email, ...buildResetMail(saved.item, reset)
       });
-      await createAuditRow({
+      await tryCreateAuditRow({
         eventType: 'auth.reset-token-issued',
         actorEmail: cleanText(payload.actorEmail || payload.email),
-        targetEmail: saved.item.email,
-        unitCode: '',
-        recordId: saved.item.username,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
+        targetEmail: saved.item.email, unitCode: '', recordId: saved.item.username,
+        occurredAt: now, payloadJson: JSON.stringify({
           action: AUTH_ACTIONS.REQUEST_RESET,
           actorName: cleanText(payload.actorName),
           changes: buildSystemUserChanges(existing.item, saved.item)
         })
       });
-      await createAuditRow({
+      await tryCreateAuditRow({
         eventType: delivery.sent ? 'auth.reset-email-sent' : 'auth.reset-email-failed',
         actorEmail: cleanText(payload.actorEmail || payload.email),
-        targetEmail: saved.item.email,
-        unitCode: '',
-        recordId: saved.item.username,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
+        targetEmail: saved.item.email, unitCode: '', recordId: saved.item.username,
+        occurredAt: now, payloadJson: JSON.stringify({
           action: AUTH_ACTIONS.REQUEST_RESET,
-          actorName: cleanText(payload.actorName),
-          delivery
+          actorName: cleanText(payload.actorName), delivery
         })
       });
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        item: sanitizeUserForClient(saved.item),
-        resetTokenExpiresAt: reset.expiresAt,
-        delivery,
-        contractVersion: AUTH_CONTRACT_VERSION
+        ok: true, item: sanitizeUserForClient(saved.item),
+        resetTokenExpiresAt: reset.expiresAt, delivery, contractVersion: AUTH_CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to reset password by email.', 500), origin);
@@ -1344,25 +1036,16 @@ function createSystemUserRouter(deps) {
       const nextSecret = changePassword(existing.item.password, payload.newPassword, { mustChangePassword: false });
       const now = new Date().toISOString();
       const saved = await upsertUser(existing, {
-        ...existing.item,
-        password: serializePasswordSecret(nextSecret),
-        mustChangePassword: false,
-        passwordChangedAt: nextSecret.passwordChangedAt,
-        resetRequestedAt: '',
-        resetTokenExpiresAt: '',
-        sessionVersion: nextSecret.sessionVersion,
-        updatedAt: now
+        ...existing.item, password: serializePasswordSecret(nextSecret),
+        mustChangePassword: false, passwordChangedAt: nextSecret.passwordChangedAt,
+        resetRequestedAt: '', resetTokenExpiresAt: '',
+        sessionVersion: nextSecret.sessionVersion, updatedAt: now
       });
-      await createAuditRow({
-        eventType: 'auth.reset-password.completed',
-        actorEmail: saved.item.email,
-        targetEmail: saved.item.email,
-        unitCode: '',
-        recordId: saved.item.username,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
-          action: AUTH_ACTIONS.REDEEM_RESET,
-          changes: buildSystemUserChanges(existing.item, saved.item)
+      await tryCreateAuditRow({
+        eventType: 'auth.reset-password.completed', actorEmail: saved.item.email,
+        targetEmail: saved.item.email, unitCode: '', recordId: saved.item.username,
+        occurredAt: now, payloadJson: JSON.stringify({
+          action: AUTH_ACTIONS.REDEEM_RESET, changes: buildSystemUserChanges(existing.item, saved.item)
         })
       });
       await writeJson(res, buildJsonResponse(200, buildLoginPayload(saved.item)), origin);
@@ -1394,23 +1077,15 @@ function createSystemUserRouter(deps) {
       const nextSecret = changePassword(existing.item.password, payload.newPassword, { mustChangePassword: false });
       const now = new Date().toISOString();
       const saved = await upsertUser(existing, {
-        ...existing.item,
-        password: serializePasswordSecret(nextSecret),
-        mustChangePassword: false,
-        passwordChangedAt: nextSecret.passwordChangedAt,
-        resetRequestedAt: '',
-        resetTokenExpiresAt: '',
-        sessionVersion: nextSecret.sessionVersion,
-        updatedAt: now
+        ...existing.item, password: serializePasswordSecret(nextSecret),
+        mustChangePassword: false, passwordChangedAt: nextSecret.passwordChangedAt,
+        resetRequestedAt: '', resetTokenExpiresAt: '',
+        sessionVersion: nextSecret.sessionVersion, updatedAt: now
       });
-      await createAuditRow({
-        eventType: 'auth.password-changed',
-        actorEmail: saved.item.email,
-        targetEmail: saved.item.email,
-        unitCode: '',
-        recordId: saved.item.username,
-        occurredAt: now,
-        payloadJson: JSON.stringify({
+      await tryCreateAuditRow({
+        eventType: 'auth.password-changed', actorEmail: saved.item.email,
+        targetEmail: saved.item.email, unitCode: '', recordId: saved.item.username,
+        occurredAt: now, payloadJson: JSON.stringify({
           action: AUTH_ACTIONS.CHANGE_PASSWORD,
           changes: buildSystemUserChanges(existing.item, saved.item)
         })
@@ -1466,6 +1141,10 @@ function createSystemUserRouter(deps) {
       return handleChangePassword(req, res, origin).then(() => true);
     }
     return Promise.resolve(false);
+  }
+
+  function invalidateUsersCache() {
+    // no-op: no cache needed with PG
   }
 
   return {

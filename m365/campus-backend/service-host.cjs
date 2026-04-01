@@ -49,43 +49,20 @@ function applyEnvFromConfig(config) {
   if (Array.isArray(config.allowedOrigins) && !process.env.UNIT_CONTACT_ALLOWED_ORIGINS) {
     process.env.UNIT_CONTACT_ALLOWED_ORIGINS = config.allowedOrigins.join(',');
   }
-  if (config.sharePointSiteId && !process.env.UNIT_CONTACT_SHAREPOINT_SITE_ID) {
-    process.env.UNIT_CONTACT_SHAREPOINT_SITE_ID = String(config.sharePointSiteId);
+  // Note: SharePoint site/list config removed — all data now in PostgreSQL.
+  // Graph Mail token config (M365_A3_TOKEN_MODE) kept for interim mail sending.
+  if (config.postgres && typeof config.postgres === 'object') {
+    const pg = config.postgres;
+    if (pg.host && !process.env.PG_HOST) process.env.PG_HOST = String(pg.host);
+    if (pg.port && !process.env.PG_PORT) process.env.PG_PORT = String(pg.port);
+    if (pg.database && !process.env.PG_DATABASE) process.env.PG_DATABASE = String(pg.database);
+    if (pg.user && !process.env.PG_USER) process.env.PG_USER = String(pg.user);
+    if (pg.password && !process.env.PG_PASSWORD) process.env.PG_PASSWORD = String(pg.password);
+    if (pg.poolMin && !process.env.PG_POOL_MIN) process.env.PG_POOL_MIN = String(pg.poolMin);
+    if (pg.poolMax && !process.env.PG_POOL_MAX) process.env.PG_POOL_MAX = String(pg.poolMax);
   }
-  if (config.sharePointSiteUrl && !process.env.UNIT_CONTACT_SHAREPOINT_SITE_URL) {
-    process.env.UNIT_CONTACT_SHAREPOINT_SITE_URL = String(config.sharePointSiteUrl);
-  }
-  if (config.lists && typeof config.lists === 'object') {
-    if (config.lists.applications && !process.env.UNIT_CONTACT_APPLICATIONS_LIST) {
-      process.env.UNIT_CONTACT_APPLICATIONS_LIST = String(config.lists.applications);
-    }
-    if (config.lists.unitAdmins && !process.env.UNIT_CONTACT_UNITADMINS_LIST) {
-      process.env.UNIT_CONTACT_UNITADMINS_LIST = String(config.lists.unitAdmins);
-    }
-    if (config.lists.audit && !process.env.UNIT_CONTACT_AUDIT_LIST) {
-      process.env.UNIT_CONTACT_AUDIT_LIST = String(config.lists.audit);
-    }
-    if (config.lists.correctiveActions && !process.env.CORRECTIVE_ACTIONS_LIST) {
-      process.env.CORRECTIVE_ACTIONS_LIST = String(config.lists.correctiveActions);
-    }
-    if (config.lists.checklists && !process.env.CHECKLISTS_LIST) {
-      process.env.CHECKLISTS_LIST = String(config.lists.checklists);
-    }
-    if (config.lists.trainingForms && !process.env.TRAINING_FORMS_LIST) {
-      process.env.TRAINING_FORMS_LIST = String(config.lists.trainingForms);
-    }
-    if (config.lists.trainingRosters && !process.env.TRAINING_ROSTERS_LIST) {
-      process.env.TRAINING_ROSTERS_LIST = String(config.lists.trainingRosters);
-    }
-    if (config.lists.systemUsers && !process.env.SYSTEM_USERS_LIST) {
-      process.env.SYSTEM_USERS_LIST = String(config.lists.systemUsers);
-    }
-    if (config.lists.reviewScopes && !process.env.REVIEW_SCOPES_LIST) {
-      process.env.REVIEW_SCOPES_LIST = String(config.lists.reviewScopes);
-    }
-  }
-  if (config.attachmentsLibrary && !process.env.ATTACHMENTS_LIBRARY) {
-    process.env.ATTACHMENTS_LIBRARY = String(config.attachmentsLibrary);
+  if (config.attachmentsDir && !process.env.ATTACHMENTS_DIR) {
+    process.env.ATTACHMENTS_DIR = String(config.attachmentsDir);
   }
   const mailSenderUpn = String(
     config.mailSenderUpn
@@ -159,10 +136,13 @@ const server = startServer(Number(process.env.PORT || 8787));
 
 function shutdown(signal) {
   console.log(`service-host received ${signal}, shutting down`);
-  server.close(() => {
-    console.log('service-host stopped');
-    disposeLogger();
-    process.exit(0);
+  const db = require('./db.cjs');
+  db.close().catch(() => {}).finally(() => {
+    server.close(() => {
+      console.log('service-host stopped');
+      disposeLogger();
+      process.exit(0);
+    });
   });
 }
 

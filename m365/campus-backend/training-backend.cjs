@@ -1,4 +1,6 @@
-﻿const {
+'use strict';
+
+const {
   CONTRACT_VERSION,
   FORM_ACTIONS,
   ROSTER_ACTIONS,
@@ -9,66 +11,96 @@
   createError,
   createTrainingFormRecord,
   createTrainingRosterRecord,
-  mapGraphFieldsToTrainingForm,
-  mapGraphFieldsToTrainingRoster,
   mapTrainingFormForClient,
-  mapTrainingFormToGraphFields,
   mapTrainingRosterForClient,
-  mapTrainingRosterToGraphFields,
   normalizeTrainingFormPayload,
   normalizeTrainingRosterPayload,
   validateActionEnvelope,
   validateTrainingFormPayload,
   validateTrainingRosterPayload
 } = require('../azure-function/training-api/src/shared/contract');
-const fs = require('fs');
-const path = require('path');
 
 const {
   buildFieldChanges,
   summarizeAttachments
 } = require('./audit-diff.cjs');
+const db = require('./db.cjs');
+
+/* ------------------------------------------------------------------ */
+/*  Row → domain mappers                                               */
+/* ------------------------------------------------------------------ */
+
+function parseJsonField(value, fallback) {
+  if (value === null || value === undefined) return fallback !== undefined ? fallback : null;
+  if (typeof value === 'string') {
+    try { return JSON.parse(value); } catch (_) { return fallback !== undefined ? fallback : null; }
+  }
+  return value;
+}
+
+function mapRowToForm(row) {
+  if (!row) return null;
+  const records = parseJsonField(row.records_json, []);
+  const summary = parseJsonField(row.summary_json, {});
+  const signedFiles = parseJsonField(row.signed_files_json, []);
+  const history = parseJsonField(row.history_json, []);
+  return {
+    id: row.form_id || '',
+    documentNo: row.document_no || '',
+    formSeq: row.form_seq != null ? Number(row.form_seq) : null,
+    unit: row.unit || '',
+    unitCode: row.unit_code || '',
+    statsUnit: row.stats_unit || '',
+    fillerName: row.filler_name || '',
+    fillerUsername: row.filler_username || '',
+    submitterPhone: row.submitter_phone || '',
+    submitterEmail: row.submitter_email || '',
+    fillDate: row.fill_date || '',
+    trainingYear: row.training_year || '',
+    status: row.status || '',
+    records,
+    summary,
+    signedFiles,
+    returnReason: row.return_reason || '',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : '',
+    stepOneSubmittedAt: row.step_one_submitted_at ? new Date(row.step_one_submitted_at).toISOString() : '',
+    printedAt: row.printed_at ? new Date(row.printed_at).toISOString() : '',
+    signoffUploadedAt: row.signoff_uploaded_at ? new Date(row.signoff_uploaded_at).toISOString() : '',
+    submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : '',
+    history,
+    backendMode: row.backend_mode || 'pg-campus-backend',
+    recordSource: row.record_source || 'frontend'
+  };
+}
+
+function mapRowToRoster(row) {
+  if (!row) return null;
+  return {
+    id: row.roster_id || '',
+    unit: row.unit || '',
+    statsUnit: row.stats_unit || '',
+    l1Unit: row.l1_unit || '',
+    name: row.name || '',
+    unitName: row.unit_name || '',
+    identity: row.identity || '',
+    jobTitle: row.job_title || '',
+    source: row.source || 'import',
+    createdBy: row.created_by || '',
+    createdByUsername: row.created_by_username || '',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : '',
+    backendMode: row.backend_mode || 'pg-campus-backend',
+    recordSource: row.record_source || 'frontend'
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Router factory                                                     */
+/* ------------------------------------------------------------------ */
 
 function createTrainingRouter(deps) {
-  const {
-    parseJsonBody,
-    writeJson,
-    graphRequest,
-    resolveSiteId,
-    getDelegatedToken,
-    requestAuthz
-  } = deps;
-
-  const state = {
-    listMap: null,
-    nextRosterSequence: null,
-    rosterSequenceLock: Promise.resolve(),
-    formsCache: null,
-    formsCacheAt: 0,
-    formsCachePromise: null,
-    formsQueryCache: new Map(),
-    formsSummaryCache: new Map(),
-    formsUnfilteredSummarySeed: null,
-    formsUnfilteredSummaryBody: null,
-    rostersCache: null,
-    rostersCacheAt: 0,
-    rostersCachePromise: null,
-    rostersPrewarmQueued: false,
-    rostersQueryCache: new Map()
-  };
-  const TRAINING_ROSTERS_PREWARM_DELAY_MS = 15000;
-  const TRAINING_ROSTERS_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-  const TRAINING_FORMS_QUERY_CACHE_MS = 60000;
-  const TRAINING_FORMS_QUERY_CACHE_MAX = 48;
-  const TRAINING_FORMS_SUMMARY_CACHE_MS = 120000;
-  const TRAINING_FORMS_SUMMARY_CACHE_MAX = 32;
-  const TRAINING_ROSTERS_QUERY_CACHE_MS = 60000;
-  const TRAINING_ROSTERS_QUERY_CACHE_MAX = 24;
-
-  function getEnv(name, fallback) {
-    const value = cleanText(process.env[name]);
-    return value || fallback || '';
-  }
+  const { parseJsonBody, writeJson, requestAuthz } = deps;
 
   function routeId(value) {
     return decodeURIComponent(String(value || '').trim());
@@ -85,6 +117,8 @@ function createTrainingRouter(deps) {
       user: cleanText(user) || 'system'
     }]);
   }
+
+  /* ---------- snapshots / diffs for audit ---------- */
 
   function buildTrainingFormSnapshot(item) {
     if (!item) return null;
@@ -103,50 +137,16 @@ function createTrainingRouter(deps) {
     const beforeSigned = summarizeAttachments(beforeItem && beforeItem.signedFiles);
     const afterSigned = summarizeAttachments(afterItem && afterItem.signedFiles);
     return buildFieldChanges(beforeItem, afterItem, [
-      'unit',
-      'trainingYear',
-      'fillerName',
-      'fillerUsername',
-      'submitterPhone',
-      'submitterEmail',
-      'fillDate',
-      'status',
-      'returnReason',
-      'stepOneSubmittedAt',
-      'printedAt',
-      'signoffUploadedAt',
-      'submittedAt',
-      { label: 'recordsCount', kind: 'number', get: function (item) { return Array.isArray(item && item.records) ? item.records.length : 0; } },
-      { label: 'activeCount', kind: 'number', get: function (item) { return item && item.summary && item.summary.activeCount; } },
-      { label: 'completedCount', kind: 'number', get: function (item) { return item && item.summary && item.summary.completedCount; } },
-      { label: 'incompleteCount', kind: 'number', get: function (item) { return item && item.summary && item.summary.incompleteCount; } },
-      { label: 'signedFileCount', kind: 'number', get: function (item) { return item === beforeItem ? beforeSigned.count : afterSigned.count; } }
+      'unit', 'trainingYear', 'fillerName', 'fillerUsername',
+      'submitterPhone', 'submitterEmail', 'fillDate', 'status',
+      'returnReason', 'stepOneSubmittedAt', 'printedAt',
+      'signoffUploadedAt', 'submittedAt',
+      { label: 'recordsCount', kind: 'number', get: (item) => Array.isArray(item && item.records) ? item.records.length : 0 },
+      { label: 'activeCount', kind: 'number', get: (item) => item && item.summary && item.summary.activeCount },
+      { label: 'completedCount', kind: 'number', get: (item) => item && item.summary && item.summary.completedCount },
+      { label: 'incompleteCount', kind: 'number', get: (item) => item && item.summary && item.summary.incompleteCount },
+      { label: 'signedFileCount', kind: 'number', get: (item) => item === beforeItem ? beforeSigned.count : afterSigned.count }
     ]);
-  }
-
-  function cloneJson(value) {
-    return value && typeof value === 'object'
-      ? JSON.parse(JSON.stringify(value))
-      : value;
-  }
-
-  function createTrainingJsonResponse(body) {
-    return {
-      status: 200,
-      jsonBody: body,
-      jsonPayload: JSON.stringify(body)
-    };
-  }
-
-  function trimQueryCache(cache, maxEntries) {
-    const target = cache instanceof Map ? cache : null;
-    const safeMaxEntries = Math.max(1, Number(maxEntries) || 12);
-    if (!target) return;
-    while (target.size > safeMaxEntries) {
-      const oldestKey = target.keys().next().value;
-      if (!oldestKey) break;
-      target.delete(oldestKey);
-    }
   }
 
   function buildTrainingRosterSnapshot(item) {
@@ -163,283 +163,48 @@ function createTrainingRouter(deps) {
 
   function buildTrainingRosterChanges(beforeItem, afterItem) {
     return buildFieldChanges(beforeItem, afterItem, [
-      'unit',
-      'statsUnit',
-      'l1Unit',
-      'name',
-      'unitName',
-      'identity',
-      'jobTitle',
-      'source',
-      'createdBy',
-      'createdByUsername'
+      'unit', 'statsUnit', 'l1Unit', 'name', 'unitName',
+      'identity', 'jobTitle', 'source', 'createdBy', 'createdByUsername'
     ]);
   }
 
-  function compareTrainingRosterRows(left, right) {
-    const leftBroken = isTrainingRosterRowBroken(left);
-    const rightBroken = isTrainingRosterRowBroken(right);
-    if (leftBroken !== rightBroken) {
-      return leftBroken ? 1 : -1;
-    }
-    const leftUnit = cleanText(left && left.item && left.item.unit);
-    const rightUnit = cleanText(right && right.item && right.item.unit);
-    if (leftUnit !== rightUnit) {
-      return leftUnit.localeCompare(rightUnit);
-    }
-    const leftName = cleanText(left && left.item && left.item.name);
-    const rightName = cleanText(right && right.item && right.item.name);
-    if (leftName !== rightName) {
-      return leftName.localeCompare(rightName);
-    }
-    return cleanText(left && left.item && left.item.id).localeCompare(cleanText(right && right.item && right.item.id));
+  /* ---------- logging ---------- */
+
+  function logTraining(tag, message, details) {
+    const suffix = details && typeof details === 'object'
+      ? Object.entries(details).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(' ')
+      : '';
+    console.log(`[${tag}] ${message}${suffix ? ` ${suffix}` : ''}`);
   }
 
-  function sortTrainingRosterRows(rows) {
-    return (Array.isArray(rows) ? rows : []).slice().sort(compareTrainingRosterRows);
+  /* ---------- audit helper ---------- */
+
+  async function createAuditRow(input) {
+    await db.query(`
+      INSERT INTO ops_audit (title, event_type, actor_email, target_email, unit_code, record_id, occurred_at, payload_json)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      cleanText(input.recordId || input.eventType || 'audit'),
+      cleanText(input.eventType),
+      cleanText(input.actorEmail),
+      cleanText(input.targetEmail),
+      cleanText(input.unitCode),
+      cleanText(input.recordId),
+      cleanText(input.occurredAt) || new Date().toISOString(),
+      cleanText(input.payloadJson)
+    ]);
   }
 
-  function hasTrainingDisplayCorruption(value) {
-    const text = cleanText(value);
-    if (!text) return false;
-    if (/\?{3,}/.test(text)) return true;
-    return /(\uFFFD|銵|摮貉|銝剖|蝟餌絞|撣唾|瑼Ｘ)/.test(text);
-  }
-
-  function isTrainingRosterRowBroken(entry) {
-    const item = entry && entry.item ? entry.item : {};
-    const name = cleanText(item.name);
-    if (/^DBG-\d+/i.test(name)) return true;
-    return [item.unit, item.statsUnit, item.unitName, item.identity, item.jobTitle].some(hasTrainingDisplayCorruption);
-  }
-
-  async function fetchListMap() {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
-    return new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
-  }
-
-  async function resolveNamedList(name) {
-    const listName = cleanText(name);
-    if (!state.listMap || !state.listMap.has(listName)) {
-      state.listMap = await fetchListMap();
-    }
-    let list = state.listMap.get(listName);
-    if (!list) {
-      state.listMap = await fetchListMap();
-      list = state.listMap.get(listName);
-    }
-    if (!list) {
-      throw createError(`SharePoint list not found: ${listName}`, 500);
-    }
-    return list;
-  }
-
-  function getTrainingFormsListName() {
-    return getEnv('TRAINING_FORMS_LIST', 'TrainingForms');
-  }
-
-  function getTrainingRostersListName() {
-    return getEnv('TRAINING_ROSTERS_LIST', 'TrainingRosters');
-  }
-
-  function getTrainingRostersSnapshotPath() {
-    return path.join(process.cwd(), 'logs', 'campus-backend', 'training-rosters-cache.json');
-  }
-
-  function readNonNegativeEnvNumber(name, fallback) {
-    const raw = cleanText(process.env[name]);
-    if (!raw) return fallback;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-  }
-
-  function getTrainingListCacheTtlMs() {
-    return readNonNegativeEnvNumber('TRAINING_LIST_CACHE_TTL_MS', 30 * 1000);
-  }
-
-  function getTrainingListCacheHit(cacheAt) {
-    const ttlMs = getTrainingListCacheTtlMs();
-    if (ttlMs <= 0) return false;
-    return !!cacheAt && (Date.now() - cacheAt) < ttlMs;
-  }
-
-  function invalidateTrainingListCaches() {
-    state.formsCache = null;
-    state.formsCacheAt = 0;
-    state.formsCachePromise = null;
-    state.formsUnfilteredSummarySeed = null;
-    state.formsUnfilteredSummaryBody = null;
-    if (state.formsQueryCache instanceof Map) {
-      state.formsQueryCache.clear();
-    }
-    if (state.formsSummaryCache instanceof Map) {
-      state.formsSummaryCache.clear();
-    }
-    state.rostersCache = null;
-    state.rostersCacheAt = 0;
-    state.rostersCachePromise = null;
-    if (state.rostersQueryCache instanceof Map) {
-      state.rostersQueryCache.clear();
-    }
-  }
-
-  function restoreRostersCacheSnapshot() {
-    try {
-      const snapshotPath = getTrainingRostersSnapshotPath();
-      if (!fs.existsSync(snapshotPath)) return false;
-      const raw = fs.readFileSync(snapshotPath, 'utf8').replace(/^\uFEFF/, '');
-      if (!raw.trim()) return false;
-      const parsed = JSON.parse(raw);
-      const rows = Array.isArray(parsed && parsed.rows) ? parsed.rows : [];
-      const loadedAt = Number(parsed && parsed.loadedAt);
-      if (!rows.length || !Number.isFinite(loadedAt)) return false;
-      const ageMs = Date.now() - loadedAt;
-      if (ageMs > TRAINING_ROSTERS_SNAPSHOT_MAX_AGE_MS) {
-        logTrainingRoster('snapshot skipped', {
-          reason: 'expired',
-          ageMs
-        });
-        return false;
-      }
-      state.rostersCache = sortTrainingRosterRows(rows);
-      state.rostersCacheAt = Date.now();
-      if (state.rostersQueryCache instanceof Map) {
-        state.rostersQueryCache.clear();
-      }
-      logTrainingRoster('snapshot restored', {
-        rows: state.rostersCache.length,
-        ageMs
-      });
-      return true;
-    } catch (error) {
-      logTrainingRoster('snapshot restore failed', {
-        message: cleanText(error && error.message) || 'unknown error'
-      });
-      return false;
-    }
-  }
-
-  async function persistRostersCacheSnapshot(rows, loadedAt) {
-    const payload = {
-      loadedAt: Number(loadedAt) || Date.now(),
-      rows: Array.isArray(rows) ? rows : []
-    };
-    const snapshotPath = getTrainingRostersSnapshotPath();
-    fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
-    const tempPath = `${snapshotPath}.tmp`;
-    await fs.promises.writeFile(tempPath, JSON.stringify(payload), 'utf8');
-    await fs.promises.rename(tempPath, snapshotPath);
-    logTrainingRoster('snapshot saved', {
-      rows: payload.rows.length,
-      loadedAt: payload.loadedAt
+  function queueAuditRow(input, label) {
+    void createAuditRow(input).catch((error) => {
+      console.warn('[training-backend] audit row write failed' + (label ? ` for ${label}` : ''), error && error.message ? error.message : error);
     });
   }
 
-  function primeRostersCacheInBackground(reason, delayMs, forceRefresh) {
-    if ((!forceRefresh && state.rostersCache) || state.rostersCachePromise || state.rostersPrewarmQueued) {
-      return false;
-    }
-    const safeDelay = Number.isFinite(delayMs) && delayMs >= 0 ? delayMs : 0;
-    state.rostersPrewarmQueued = true;
-    logTrainingRoster('prewarm queued', {
-      reason: cleanText(reason) || 'unknown',
-      delayMs: safeDelay
-    });
-    setTimeout(() => {
-      state.rostersPrewarmQueued = false;
-      listAllRosters({ forceRefresh: !!forceRefresh })
-        .then((rows) => {
-          logTrainingRoster('prewarm ready', {
-            reason: cleanText(reason) || 'unknown',
-            rows: Array.isArray(rows) ? rows.length : 0
-          });
-        })
-        .catch((error) => {
-          logTrainingRoster('prewarm failed', {
-            reason: cleanText(reason) || 'unknown',
-            message: cleanText(error && error.message) || 'unknown error'
-          });
-        });
-    }, safeDelay);
-    return true;
-  }
-
-  function getAuditListName() {
-    return getEnv('UNIT_CONTACT_AUDIT_LIST', 'OpsAudit');
-  }
-
-  function logTrainingRoster(message, details) {
-    const suffix = details && typeof details === 'object'
-      ? Object.entries(details)
-        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-        .join(' ')
-      : '';
-    console.log(`[training-rosters] ${message}${suffix ? ` ${suffix}` : ''}`);
-  }
-
-  function logTrainingForms(message, details) {
-    const suffix = details && typeof details === 'object'
-      ? Object.entries(details)
-        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-        .join(' ')
-      : '';
-    console.log(`[training-forms] ${message}${suffix ? ` ${suffix}` : ''}`);
-  }
-
-  async function resolveTrainingFormsList() {
-    return resolveNamedList(getTrainingFormsListName());
-  }
-
-  async function resolveTrainingRostersList() {
-    return resolveNamedList(getTrainingRostersListName());
-  }
-
-  async function resolveAuditList() {
-    return resolveNamedList(getAuditListName());
-  }
-
-  function parsePositiveInteger(value) {
-    const cleanValue = cleanText(value);
-    if (!cleanValue) return null;
-    const parsed = Number(cleanValue);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return Math.floor(parsed);
-  }
-
-  function buildRosterPageMeta(url, total) {
-    const rawLimit = parsePositiveInteger(url && url.searchParams && url.searchParams.get('limit'));
-    const rawOffset = parsePositiveInteger(url && url.searchParams && url.searchParams.get('offset')) || 0;
-    const safeTotal = Math.max(Number(total) || 0, 0);
-    const limit = rawLimit ? Math.min(rawLimit, 500) : safeTotal;
-    const safeOffset = Math.min(Math.max(rawOffset, 0), safeTotal);
-    const returned = limit > 0 ? Math.max(Math.min(limit, safeTotal - safeOffset), 0) : 0;
-    const paged = !!rawLimit || safeOffset > 0;
-    const pageCount = rawLimit && limit > 0 ? Math.ceil(safeTotal / limit) : (safeTotal > 0 ? 1 : 0);
-    const currentPage = rawLimit && limit > 0 && safeTotal > 0 ? Math.floor(safeOffset / limit) + 1 : (safeTotal > 0 ? 1 : 0);
-    return {
-      offset: safeOffset,
-      limit,
-      total: safeTotal,
-      returned,
-      pageCount,
-      currentPage,
-      hasPrev: safeOffset > 0,
-      hasNext: rawLimit ? (safeOffset + limit) < safeTotal : false,
-      prevOffset: rawLimit ? Math.max(safeOffset - limit, 0) : 0,
-      nextOffset: rawLimit && (safeOffset + limit) < safeTotal ? safeOffset + limit : safeOffset,
-      paged
-    };
-  }
+  /* ---------- forms: summary helpers ---------- */
 
   function summarizeTrainingForms(items) {
-    const summary = {
-      total: 0,
-      draft: 0,
-      pending: 0,
-      submitted: 0,
-      returned: 0
-    };
+    const summary = { total: 0, draft: 0, pending: 0, submitted: 0, returned: 0 };
     (Array.isArray(items) ? items : []).forEach((item) => {
       const status = cleanText(item && item.status);
       summary.total += 1;
@@ -450,6 +215,303 @@ function createTrainingRouter(deps) {
     });
     return summary;
   }
+
+  /* ---------- forms: query ---------- */
+
+  const FORM_SELECT = `
+    SELECT id, form_id, document_no, form_seq, unit, unit_code, stats_unit,
+           filler_name, filler_username, submitter_phone, submitter_email,
+           fill_date, training_year, status, records_json, summary_json,
+           signed_files_json, return_reason, created_at, updated_at,
+           step_one_submitted_at, printed_at, signoff_uploaded_at,
+           submitted_at, history_json, backend_mode, record_source
+    FROM training_forms
+  `;
+
+  async function queryForms(filters, authz) {
+    const conditions = [];
+    const params = [];
+    let idx = 0;
+
+    if (filters.status) { idx++; conditions.push(`status = $${idx}`); params.push(filters.status); }
+    if (filters.unit) { idx++; conditions.push(`unit = $${idx}`); params.push(filters.unit); }
+    if (filters.statsUnit) { idx++; conditions.push(`stats_unit = $${idx}`); params.push(filters.statsUnit); }
+    if (filters.trainingYear) { idx++; conditions.push(`training_year = $${idx}`); params.push(filters.trainingYear); }
+    if (filters.fillerUsername) { idx++; conditions.push(`LOWER(filler_username) = $${idx}`); params.push(filters.fillerUsername.toLowerCase()); }
+    if (filters.q) {
+      idx++;
+      conditions.push(`(
+        LOWER(form_id) LIKE $${idx} OR LOWER(unit) LIKE $${idx}
+        OR LOWER(stats_unit) LIKE $${idx} OR LOWER(filler_name) LIKE $${idx}
+        OR LOWER(filler_username) LIKE $${idx} OR LOWER(training_year) LIKE $${idx}
+      )`);
+      params.push(`%${filters.q.toLowerCase()}%`);
+    }
+
+    // Non-admin authorization filter
+    if (!requestAuthz.isAdmin(authz)) {
+      const unitList = Array.isArray(authz.authorizedUnits) ? authz.authorizedUnits.filter(Boolean) : [];
+      const username = cleanText(authz.username).toLowerCase();
+      if (unitList.length > 0) {
+        idx++;
+        conditions.push(`(unit = ANY($${idx}) OR LOWER(filler_username) = $${idx + 1})`);
+        params.push(unitList);
+        idx++;
+        params.push(username);
+      } else {
+        idx++;
+        conditions.push(`LOWER(filler_username) = $${idx}`);
+        params.push(username);
+      }
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const rows = await db.queryAll(`${FORM_SELECT} ${where} ORDER BY updated_at DESC, id DESC`, params);
+    return rows.map(mapRowToForm);
+  }
+
+  async function getFormById(formId) {
+    const target = cleanText(formId);
+    if (!target) throw createError('Missing training form id', 400);
+    const row = await db.queryOne(`${FORM_SELECT} WHERE form_id = $1`, [target]);
+    if (!row) return null;
+    return { dbId: row.id, item: mapRowToForm(row) };
+  }
+
+  async function findDuplicateForm(unit, trainingYear, excludeId) {
+    const targetUnit = cleanText(unit);
+    const targetYear = cleanText(trainingYear);
+    const skipId = cleanText(excludeId);
+    if (!targetUnit || !targetYear) return null;
+    const row = await db.queryOne(
+      `SELECT id, form_id FROM training_forms WHERE unit = $1 AND training_year = $2 AND form_id != $3 LIMIT 1`,
+      [targetUnit, targetYear, skipId]
+    );
+    return row ? { dbId: row.id, item: { id: row.form_id, unit: targetUnit, trainingYear: targetYear } } : null;
+  }
+
+  async function upsertForm(existing, nextItem) {
+    const now = nextItem.updatedAt || new Date().toISOString();
+    const normalized = createTrainingFormRecord(nextItem, nextItem.status, now);
+    if (existing) {
+      await db.query(`
+        UPDATE training_forms SET
+          document_no=$1, form_seq=$2, unit=$3, unit_code=$4, stats_unit=$5,
+          filler_name=$6, filler_username=$7, submitter_phone=$8, submitter_email=$9,
+          fill_date=$10, training_year=$11, status=$12, records_json=$13, summary_json=$14,
+          signed_files_json=$15, return_reason=$16, step_one_submitted_at=$17,
+          printed_at=$18, signoff_uploaded_at=$19, submitted_at=$20, history_json=$21,
+          backend_mode=$22, record_source=$23, updated_at=$24
+        WHERE id = $25
+      `, [
+        normalized.documentNo, normalized.formSeq, normalized.unit, normalized.unitCode,
+        normalized.statsUnit, normalized.fillerName, normalized.fillerUsername,
+        normalized.submitterPhone, normalized.submitterEmail, normalized.fillDate || null,
+        normalized.trainingYear, normalized.status,
+        JSON.stringify(normalized.records || []), JSON.stringify(normalized.summary || {}),
+        JSON.stringify(normalized.signedFiles || []), normalized.returnReason,
+        normalized.stepOneSubmittedAt || null, normalized.printedAt || null,
+        normalized.signoffUploadedAt || null, normalized.submittedAt || null,
+        JSON.stringify(normalized.history || []),
+        'pg-campus-backend', normalized.recordSource || 'frontend', now,
+        existing.dbId
+      ]);
+      return { created: false, item: normalized };
+    }
+    await db.query(`
+      INSERT INTO training_forms (
+        form_id, document_no, form_seq, unit, unit_code, stats_unit,
+        filler_name, filler_username, submitter_phone, submitter_email,
+        fill_date, training_year, status, records_json, summary_json,
+        signed_files_json, return_reason, step_one_submitted_at,
+        printed_at, signoff_uploaded_at, submitted_at, history_json,
+        backend_mode, record_source, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+    `, [
+      normalized.id, normalized.documentNo, normalized.formSeq, normalized.unit,
+      normalized.unitCode, normalized.statsUnit, normalized.fillerName,
+      normalized.fillerUsername, normalized.submitterPhone, normalized.submitterEmail,
+      normalized.fillDate || null, normalized.trainingYear, normalized.status,
+      JSON.stringify(normalized.records || []), JSON.stringify(normalized.summary || {}),
+      JSON.stringify(normalized.signedFiles || []), normalized.returnReason,
+      normalized.stepOneSubmittedAt || null, normalized.printedAt || null,
+      normalized.signoffUploadedAt || null, normalized.submittedAt || null,
+      JSON.stringify(normalized.history || []),
+      'pg-campus-backend', normalized.recordSource || 'frontend',
+      normalized.createdAt || now, now
+    ]);
+    return { created: true, item: normalized };
+  }
+
+  async function deleteFormById(dbId) {
+    await db.query(`DELETE FROM training_forms WHERE id = $1`, [dbId]);
+  }
+
+  /* ---------- rosters: query ---------- */
+
+  const ROSTER_SELECT = `
+    SELECT id, roster_id, unit, stats_unit, l1_unit, name, unit_name,
+           identity, job_title, source::text AS source, created_by,
+           created_by_username, created_at, updated_at,
+           backend_mode, record_source
+    FROM training_rosters
+  `;
+
+  async function queryRosters(filters, authz, pagination) {
+    const conditions = [];
+    const params = [];
+    let idx = 0;
+
+    if (filters.unit) { idx++; conditions.push(`unit = $${idx}`); params.push(filters.unit); }
+    if (filters.statsUnit) { idx++; conditions.push(`stats_unit = $${idx}`); params.push(filters.statsUnit); }
+    if (filters.source) { idx++; conditions.push(`source::text = $${idx}`); params.push(filters.source); }
+    if (filters.q) {
+      idx++;
+      conditions.push(`(
+        LOWER(roster_id) LIKE $${idx} OR LOWER(unit) LIKE $${idx}
+        OR LOWER(stats_unit) LIKE $${idx} OR LOWER(name) LIKE $${idx}
+        OR LOWER(unit_name) LIKE $${idx} OR LOWER(identity) LIKE $${idx}
+        OR LOWER(job_title) LIKE $${idx}
+      )`);
+      params.push(`%${filters.q.toLowerCase()}%`);
+    }
+
+    // Non-admin authorization filter
+    if (!requestAuthz.isAdmin(authz)) {
+      const unitList = Array.isArray(authz.authorizedUnits) ? authz.authorizedUnits.filter(Boolean) : [];
+      if (unitList.length > 0) {
+        idx++;
+        conditions.push(`unit = ANY($${idx})`);
+        params.push(unitList);
+      } else {
+        conditions.push('FALSE');
+      }
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Count
+    const countResult = await db.queryOne(`SELECT COUNT(*)::int AS total FROM training_rosters ${where}`, params);
+    const total = countResult ? countResult.total : 0;
+
+    // Items
+    const limit = pagination.limit || total || 500;
+    const offset = pagination.offset || 0;
+    idx++;
+    params.push(limit);
+    idx++;
+    params.push(offset);
+    const rows = await db.queryAll(`${ROSTER_SELECT} ${where} ORDER BY unit, name, roster_id LIMIT $${idx - 1} OFFSET $${idx}`, params);
+    return { items: rows.map(mapRowToRoster), total };
+  }
+
+  async function getRosterById(rosterId) {
+    const target = cleanText(rosterId);
+    if (!target) throw createError('Missing training roster id', 400);
+    const row = await db.queryOne(`${ROSTER_SELECT} WHERE roster_id = $1`, [target]);
+    if (!row) return null;
+    return { dbId: row.id, item: mapRowToRoster(row) };
+  }
+
+  async function getRosterEntriesById(rosterId) {
+    const target = cleanText(rosterId);
+    if (!target) throw createError('Missing training roster id', 400);
+    const rows = await db.queryAll(`${ROSTER_SELECT} WHERE roster_id = $1`, [target]);
+    return rows.map((row) => ({ dbId: row.id, item: mapRowToRoster(row) }));
+  }
+
+  async function findDuplicateRoster(unit, name, excludeId) {
+    const targetUnit = cleanText(unit);
+    const targetName = cleanText(name).toLowerCase();
+    const skipId = cleanText(excludeId);
+    if (!targetUnit || !targetName) return null;
+    const row = await db.queryOne(
+      `SELECT id, roster_id FROM training_rosters WHERE unit = $1 AND LOWER(name) = $2 AND roster_id != $3 LIMIT 1`,
+      [targetUnit, targetName, skipId]
+    );
+    return row ? { dbId: row.id, item: { id: row.roster_id, unit: targetUnit, name: targetName } } : null;
+  }
+
+  async function generateNextRosterId() {
+    const result = await db.queryOne(`SELECT nextval('seq_roster_id') AS val`);
+    const seq = Number(result.val);
+    return `RST-${String(seq).padStart(4, '0')}`;
+  }
+
+  async function allocateNextRosterIds(count) {
+    if (count <= 0) return [];
+    const ids = [];
+    for (let i = 0; i < count; i++) {
+      ids.push(await generateNextRosterId());
+    }
+    return ids;
+  }
+
+  async function upsertRoster(existing, nextItem) {
+    const now = nextItem.updatedAt || new Date().toISOString();
+    const normalized = createTrainingRosterRecord(nextItem, now);
+    if (existing) {
+      await db.query(`
+        UPDATE training_rosters SET
+          unit=$1, stats_unit=$2, l1_unit=$3, name=$4, unit_name=$5,
+          identity=$6, job_title=$7, source=$8, created_by=$9,
+          created_by_username=$10, backend_mode=$11, record_source=$12, updated_at=$13
+        WHERE id = $14
+      `, [
+        normalized.unit, normalized.statsUnit, normalized.l1Unit,
+        normalized.name, normalized.unitName, normalized.identity,
+        normalized.jobTitle, normalized.source, normalized.createdBy,
+        normalized.createdByUsername, 'pg-campus-backend',
+        normalized.recordSource || 'frontend', now,
+        existing.dbId
+      ]);
+      return { created: false, item: normalized };
+    }
+    await db.query(`
+      INSERT INTO training_rosters (
+        roster_id, unit, stats_unit, l1_unit, name, unit_name,
+        identity, job_title, source, created_by, created_by_username,
+        backend_mode, record_source, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+    `, [
+      normalized.id, normalized.unit, normalized.statsUnit, normalized.l1Unit,
+      normalized.name, normalized.unitName, normalized.identity,
+      normalized.jobTitle, normalized.source, normalized.createdBy,
+      normalized.createdByUsername, 'pg-campus-backend',
+      normalized.recordSource || 'frontend',
+      normalized.createdAt || now, now
+    ]);
+    return { created: true, item: normalized };
+  }
+
+  async function deleteRosterById(dbId) {
+    await db.query(`DELETE FROM training_rosters WHERE id = $1`, [dbId]);
+  }
+
+  /* ---------- pagination helper ---------- */
+
+  function buildRosterPageMeta(url, total) {
+    const rawLimit = Number(url && url.searchParams && url.searchParams.get('limit'));
+    const rawOffset = Number(url && url.searchParams && url.searchParams.get('offset')) || 0;
+    const safeTotal = Math.max(Number(total) || 0, 0);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : safeTotal;
+    const safeOffset = Math.min(Math.max(rawOffset, 0), safeTotal);
+    const paged = !!(rawLimit > 0) || safeOffset > 0;
+    const pageCount = rawLimit && limit > 0 ? Math.ceil(safeTotal / limit) : (safeTotal > 0 ? 1 : 0);
+    const currentPage = rawLimit && limit > 0 && safeTotal > 0 ? Math.floor(safeOffset / limit) + 1 : (safeTotal > 0 ? 1 : 0);
+    const returned = limit > 0 ? Math.max(Math.min(limit, safeTotal - safeOffset), 0) : 0;
+    return {
+      offset: safeOffset, limit, total: safeTotal, returned,
+      pageCount, currentPage,
+      hasPrev: safeOffset > 0,
+      hasNext: rawLimit ? (safeOffset + limit) < safeTotal : false,
+      prevOffset: rawLimit ? Math.max(safeOffset - limit, 0) : 0,
+      nextOffset: rawLimit && (safeOffset + limit) < safeTotal ? safeOffset + limit : safeOffset,
+      paged
+    };
+  }
+
+  /* ---------- form filters parser ---------- */
 
   function readTrainingFormFilters(url) {
     const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
@@ -463,720 +525,60 @@ function createTrainingRouter(deps) {
     };
   }
 
-  function matchesTrainingFormFilters(entry, filters) {
-    const item = entry && typeof entry === 'object' ? entry : {};
-    const activeFilters = filters && typeof filters === 'object' ? filters : {};
-    if (activeFilters.status && item.status !== activeFilters.status) return false;
-    if (activeFilters.unit && item.unit !== activeFilters.unit) return false;
-    if (activeFilters.statsUnit && item.statsUnit !== activeFilters.statsUnit) return false;
-    if (activeFilters.trainingYear && item.trainingYear !== activeFilters.trainingYear) return false;
-    if (activeFilters.fillerUsername && item.fillerUsername !== activeFilters.fillerUsername) return false;
-    if (activeFilters.q) {
-      const haystack = [
-        item.id,
-        item.unit,
-        item.statsUnit,
-        item.fillerName,
-        item.fillerUsername,
-        item.trainingYear
-      ].join(' ').toLowerCase();
-      if (!haystack.includes(activeFilters.q)) return false;
-    }
-    return true;
-  }
-
-  function summarizeTrainingFormRows(rows, authz, filters) {
-    const summary = {
-      total: 0,
-      draft: 0,
-      pending: 0,
-      submitted: 0,
-      returned: 0
-    };
-    (Array.isArray(rows) ? rows : []).forEach((row) => {
-      const item = row && row.item;
-      if (!item) return;
-      if (!matchesTrainingFormFilters(item, filters)) return;
-      if (!requestAuthz.canAccessTrainingForm(authz, item)) return;
-      summary.total += 1;
-      if (item.status === FORM_STATUSES.DRAFT) summary.draft += 1;
-      if (item.status === FORM_STATUSES.PENDING_SIGNOFF) summary.pending += 1;
-      if (item.status === FORM_STATUSES.SUBMITTED) summary.submitted += 1;
-      if (item.status === FORM_STATUSES.RETURNED) summary.returned += 1;
-    });
-    return summary;
-  }
-
-  function hasActiveTrainingFormFilters(filters) {
-    const safeFilters = filters && typeof filters === 'object' ? filters : {};
-    return !!(
-      safeFilters.status
-      || safeFilters.unit
-      || safeFilters.statsUnit
-      || safeFilters.trainingYear
-      || safeFilters.fillerUsername
-      || safeFilters.q
-    );
-  }
-
-  function buildTrainingSummaryOnlyFastResponse(url, filters, cacheReason) {
-    if (state.formsUnfilteredSummaryBody && !hasActiveTrainingFormFilters(filters)) {
-      return state.formsUnfilteredSummaryBody;
-    }
-    if (!state.formsUnfilteredSummarySeed) return null;
-    const total = Number(state.formsUnfilteredSummarySeed.total || 0);
+  function readRosterFilters(url) {
     return {
-      ok: true,
-      items: [],
-      summary: {
-        ...state.formsUnfilteredSummarySeed,
-        total
-      },
-      total,
-      filters: {
-        ...(filters || {}),
-        summaryOnly: '1'
-      },
-      generatedAt: new Date().toISOString(),
-      cache: {
-        query: 'hit',
-        summaryOnly: true,
-        reason: cacheReason || 'unfiltered-summary'
-      },
-      contractVersion: CONTRACT_VERSION
+      unit: cleanText(url.searchParams.get('unit')),
+      statsUnit: cleanText(url.searchParams.get('statsUnit')),
+      source: cleanText(url.searchParams.get('source')),
+      q: cleanText(url.searchParams.get('q')).toLowerCase()
     };
   }
 
-  function buildFormQuerySignature(authz, url) {
-    const safeAuthz = authz && typeof authz === 'object' ? authz : {};
-    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
-      ? safeAuthz.authorizedUnits.map((value) => cleanText(value)).filter(Boolean).sort()
-      : [];
-    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
-    return [
-      String(state.formsCacheAt || 0).trim(),
-      String(safeAuthz.username || '').trim(),
-      String(safeAuthz.role || '').trim(),
-      authorizedUnits.join('|'),
-      String(params.get('status') || '').trim(),
-      String(params.get('unit') || '').trim(),
-      String(params.get('statsUnit') || '').trim(),
-      String(params.get('trainingYear') || '').trim(),
-      String(params.get('fillerUsername') || '').trim(),
-      String(params.get('q') || '').trim().toLowerCase(),
-      String(params.get('summaryOnly') || '').trim()
-    ].join('::');
-  }
-
-  function buildFormSummarySignature(authz, url) {
-    const safeAuthz = authz && typeof authz === 'object' ? authz : {};
-    const authorizedUnits = Array.isArray(safeAuthz.authorizedUnits)
-      ? safeAuthz.authorizedUnits.map((value) => cleanText(value)).filter(Boolean).sort()
-      : [];
-    const params = url && url.searchParams ? url.searchParams : new URLSearchParams();
-    return [
-      String(state.formsCacheAt || 0).trim(),
-      String(safeAuthz.username || '').trim(),
-      String(safeAuthz.role || '').trim(),
-      authorizedUnits.join('|'),
-      String(params.get('status') || '').trim(),
-      String(params.get('unit') || '').trim(),
-      String(params.get('statsUnit') || '').trim(),
-      String(params.get('trainingYear') || '').trim(),
-      String(params.get('fillerUsername') || '').trim(),
-      String(params.get('q') || '').trim().toLowerCase()
-    ].join('::');
-  }
-
-  function readFormsQueryCache(cacheKey) {
-    if (!(state.formsQueryCache instanceof Map)) return { body: null, reason: 'disabled' };
-    if (!cacheKey) return { body: null, reason: 'empty-key' };
-    if (!state.formsQueryCache.has(cacheKey)) return { body: null, reason: 'missing' };
-    const cached = state.formsQueryCache.get(cacheKey);
-    if (!cached || typeof cached !== 'object' || !cached.body) {
-      state.formsQueryCache.delete(cacheKey);
-      return { body: null, reason: 'invalid' };
-    }
-    if (Number(cached.cacheAt || 0) !== Number(state.formsCacheAt || 0)) {
-      state.formsQueryCache.delete(cacheKey);
-      return { body: null, reason: 'cache-version-mismatch' };
-    }
-    if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_FORMS_QUERY_CACHE_MS) {
-      state.formsQueryCache.delete(cacheKey);
-      return { body: null, reason: 'expired' };
-    }
-    state.formsQueryCache.delete(cacheKey);
-    state.formsQueryCache.set(cacheKey, cached);
-    return {
-      body: cached.body,
-      reason: 'hit'
-    };
-  }
-
-  function writeFormsQueryCache(cacheKey, body) {
-    if (!(state.formsQueryCache instanceof Map) || !cacheKey) return body;
-    state.formsQueryCache.set(cacheKey, {
-      loadedAt: Date.now(),
-      cacheAt: Number(state.formsCacheAt || 0),
-      body
-    });
-    trimQueryCache(state.formsQueryCache, TRAINING_FORMS_QUERY_CACHE_MAX);
-    return body;
-  }
-
-  function readFormsSummaryCache(cacheKey) {
-    if (!(state.formsSummaryCache instanceof Map)) return { body: null, response: null, reason: 'disabled' };
-    if (!cacheKey) return { body: null, response: null, reason: 'empty-key' };
-    if (!state.formsSummaryCache.has(cacheKey)) return { body: null, response: null, reason: 'missing' };
-    const cached = state.formsSummaryCache.get(cacheKey);
-    if (!cached || typeof cached !== 'object' || !cached.body) {
-      state.formsSummaryCache.delete(cacheKey);
-      return { body: null, response: null, reason: 'invalid' };
-    }
-    if (Number(cached.cacheAt || 0) !== Number(state.formsCacheAt || 0)) {
-      state.formsSummaryCache.delete(cacheKey);
-      return { body: null, response: null, reason: 'cache-version-mismatch' };
-    }
-    if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_FORMS_SUMMARY_CACHE_MS) {
-      state.formsSummaryCache.delete(cacheKey);
-      return { body: null, response: null, reason: 'expired' };
-    }
-    state.formsSummaryCache.delete(cacheKey);
-    state.formsSummaryCache.set(cacheKey, cached);
-    return {
-      body: cached.body,
-      response: cached.response || null,
-      reason: 'hit'
-    };
-  }
-
-  function writeFormsSummaryCache(cacheKey, body) {
-    if (!(state.formsSummaryCache instanceof Map) || !cacheKey) return body;
-    const cachedBody = body && typeof body === 'object'
-      ? { ...body }
-      : body;
-    if (cachedBody && typeof cachedBody === 'object') {
-      const currentCache = cachedBody.cache && typeof cachedBody.cache === 'object'
-        ? cachedBody.cache
-        : {};
-      cachedBody.cache = {
-        ...currentCache,
-        query: 'hit',
-        summaryOnly: true,
-        reason: currentCache.reason === 'unfiltered-summary'
-          ? 'unfiltered-summary-hit'
-          : 'summary-hit'
-      };
-    }
-    state.formsSummaryCache.set(cacheKey, {
-      loadedAt: Date.now(),
-      cacheAt: Number(state.formsCacheAt || 0),
-      body: cachedBody,
-      response: createTrainingJsonResponse(cachedBody)
-    });
-    trimQueryCache(state.formsSummaryCache, TRAINING_FORMS_SUMMARY_CACHE_MAX);
-    return cachedBody;
-  }
-
-  async function listAllForms() {
-    if (Array.isArray(state.formsCache) && getTrainingListCacheHit(state.formsCacheAt)) {
-      return state.formsCache.slice();
-    }
-    if (state.formsCachePromise) {
-      return state.formsCachePromise.then((rows) => Array.isArray(rows) ? rows.slice() : []);
-    }
-    state.formsCachePromise = (async function loadForms() {
-    const siteId = await resolveSiteId();
-    const list = await resolveTrainingFormsList();
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      rows.push(...batch.map((entry) => ({
-        listItemId: cleanText(entry && entry.id),
-        item: mapGraphFieldsToTrainingForm(entry && entry.fields ? entry.fields : {})
-      })));
-      nextUrl = cleanText(body && body['@odata.nextLink']);
-    }
-      state.formsCache = rows.slice();
-      state.formsCacheAt = Date.now();
-      state.formsUnfilteredSummarySeed = summarizeTrainingForms(rows.map((entry) => entry && entry.item).filter(Boolean));
-      state.formsUnfilteredSummaryBody = {
-        ok: true,
-        items: [],
-        summary: {
-          ...state.formsUnfilteredSummarySeed,
-          total: Number(state.formsUnfilteredSummarySeed && state.formsUnfilteredSummarySeed.total || 0)
-        },
-        total: Number(state.formsUnfilteredSummarySeed && state.formsUnfilteredSummarySeed.total || 0),
-        filters: {
-          summaryOnly: '1'
-        },
-        generatedAt: new Date(state.formsCacheAt).toISOString(),
-        cache: {
-          query: 'hit',
-          summaryOnly: true,
-          reason: 'unfiltered-summary-hit'
-        },
-        contractVersion: CONTRACT_VERSION
-      };
-      if (state.formsQueryCache instanceof Map) {
-        state.formsQueryCache.clear();
-      }
-      return rows;
-    })();
-    try {
-      const rows = await state.formsCachePromise;
-      return Array.isArray(rows) ? rows.slice() : [];
-    } finally {
-      state.formsCachePromise = null;
-    }
-  }
-
-  async function listAllRosters(options) {
-    const forceRefresh = !!(options && options.forceRefresh);
-    if (!forceRefresh && Array.isArray(state.rostersCache)) {
-      if (!getTrainingListCacheHit(state.rostersCacheAt) && !state.rostersCachePromise) {
-        primeRostersCacheInBackground('ttl-expired', 0, true);
-      }
-      return state.rostersCache.slice();
-    }
-    if (state.rostersCachePromise) {
-      return state.rostersCachePromise.then((rows) => Array.isArray(rows) ? rows.slice() : []);
-    }
-    state.rostersCachePromise = (async function loadRosters() {
-    const siteId = await resolveSiteId();
-    const list = await resolveTrainingRostersList();
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      rows.push(...batch.map((entry) => ({
-        listItemId: cleanText(entry && entry.id),
-        item: mapGraphFieldsToTrainingRoster(entry && entry.fields ? entry.fields : {})
-      })));
-      nextUrl = cleanText(body && body['@odata.nextLink']);
-    }
-      state.rostersCache = sortTrainingRosterRows(rows);
-      state.rostersCacheAt = Date.now();
-      if (state.rostersQueryCache instanceof Map) {
-        state.rostersQueryCache.clear();
-      }
-      persistRostersCacheSnapshot(state.rostersCache, state.rostersCacheAt).catch((error) => {
-        logTrainingRoster('snapshot write failed', {
-          message: cleanText(error && error.message) || 'unknown error'
-        });
-      });
-      return rows;
-    })();
-    try {
-      const rows = await state.rostersCachePromise;
-      return Array.isArray(rows) ? rows.slice() : [];
-    } finally {
-      state.rostersCachePromise = null;
-    }
-  }
-
-  function parseRosterSequence(rosterId) {
-    const match = cleanText(rosterId).match(/^RST-(\d+)$/i);
-    return match ? Number(match[1]) : 0;
-  }
-
-  async function withRosterSequenceLock(work) {
-    const task = typeof work === 'function' ? work : async function noop() {};
-    const previous = state.rosterSequenceLock;
-    let release;
-    state.rosterSequenceLock = new Promise((resolve) => {
-      release = resolve;
-    });
-    await previous;
-    try {
-      return await task();
-    } finally {
-      release();
-    }
-  }
-
-  function reserveKnownRosterSequence(rosterId) {
-    const sequence = parseRosterSequence(rosterId);
-    if (!sequence) return;
-    const nextCandidate = sequence + 1;
-    if (!Number.isFinite(state.nextRosterSequence) || state.nextRosterSequence < nextCandidate) {
-      state.nextRosterSequence = nextCandidate;
-    }
-  }
-
-  async function generateNextRosterId() {
-    return withRosterSequenceLock(async function reserveNextRosterId() {
-      const rows = await listAllRosters();
-      const existingIds = new Set(rows
-        .map((entry) => cleanText(entry && entry.item && entry.item.id))
-        .filter(Boolean));
-      const maxExisting = rows.reduce((max, entry) => {
-        return Math.max(max, parseRosterSequence(entry && entry.item && entry.item.id));
-      }, 0);
-      let nextValue = Number.isFinite(state.nextRosterSequence) && state.nextRosterSequence > 0
-        ? state.nextRosterSequence
-        : (maxExisting + 1);
-      if (nextValue <= maxExisting) nextValue = maxExisting + 1;
-      let candidate = `RST-${String(nextValue).padStart(4, '0')}`;
-      while (existingIds.has(candidate)) {
-        nextValue += 1;
-        candidate = `RST-${String(nextValue).padStart(4, '0')}`;
-      }
-      state.nextRosterSequence = nextValue + 1;
-      return candidate;
-    });
-  }
-
-  async function getFormEntryById(formId) {
-    const target = cleanText(formId);
-    if (!target) throw createError('Missing training form id', 400);
-    const rows = await listAllForms();
-    return rows.find((entry) => entry.item.id === target) || null;
-  }
-
-  async function getRosterEntryById(rosterId) {
-    const target = cleanText(rosterId);
-    if (!target) throw createError('Missing training roster id', 400);
-    const rows = await listAllRosters();
-    return rows.find((entry) => entry.item.id === target) || null;
-  }
-
-  async function getRosterEntriesById(rosterId) {
-    const target = cleanText(rosterId);
-    if (!target) throw createError('Missing training roster id', 400);
-    const rows = await listAllRosters();
-    return rows.filter((entry) => entry.item.id === target);
-  }
-
-  async function findDuplicateForm(unit, trainingYear, excludeId) {
-    const targetUnit = cleanText(unit);
-    const targetYear = cleanText(trainingYear);
-    const skipId = cleanText(excludeId);
-    if (!targetUnit || !targetYear) return null;
-    const rows = await listAllForms();
-    return rows.find((entry) => (
-      entry.item.unit === targetUnit
-      && entry.item.trainingYear === targetYear
-      && entry.item.id !== skipId
-    )) || null;
-  }
-
-  async function findDuplicateRoster(unit, name, excludeId) {
-    const targetUnit = cleanText(unit);
-    const targetName = cleanText(name).toLowerCase();
-    const skipId = cleanText(excludeId);
-    if (!targetUnit || !targetName) return null;
-    const rows = await listAllRosters();
-    return rows.find((entry) => (
-      entry.item.unit === targetUnit
-      && cleanText(entry.item.name).toLowerCase() === targetName
-      && entry.item.id !== skipId
-    )) || null;
-  }
-
-  function buildRosterLookupKey(unit, name) {
-    return `${cleanText(unit)}::${cleanText(name).toLowerCase()}`;
-  }
-
-  async function allocateNextRosterIds(count) {
-    const total = Number(count || 0);
-    if (total <= 0) return [];
-    return withRosterSequenceLock(async function reserveNextRosterIds() {
-      const rows = await listAllRosters();
-      const existingIds = new Set(rows
-        .map((entry) => cleanText(entry && entry.item && entry.item.id))
-        .filter(Boolean));
-      const maxExisting = rows.reduce((max, entry) => {
-        return Math.max(max, parseRosterSequence(entry && entry.item && entry.item.id));
-      }, 0);
-      let nextValue = Number.isFinite(state.nextRosterSequence) && state.nextRosterSequence > 0
-        ? state.nextRosterSequence
-        : (maxExisting + 1);
-      if (nextValue <= maxExisting) nextValue = maxExisting + 1;
-      const reserved = [];
-      while (reserved.length < total) {
-        const candidate = `RST-${String(nextValue).padStart(4, '0')}`;
-        if (!existingIds.has(candidate)) {
-          existingIds.add(candidate);
-          reserved.push(candidate);
-        }
-        nextValue += 1;
-      }
-      state.nextRosterSequence = nextValue;
-      return reserved;
-    });
-  }
-
-  async function upsertForm(existingEntry, nextItem) {
-    const siteId = await resolveSiteId();
-    const list = await resolveTrainingFormsList();
-    const normalized = createTrainingFormRecord(nextItem, nextItem.status, nextItem.updatedAt || new Date().toISOString());
-    if (existingEntry) {
-      await graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapTrainingFormToGraphFields(normalized));
-      invalidateTrainingListCaches();
-      return { created: false, item: normalized };
-    }
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: mapTrainingFormToGraphFields(normalized)
-    });
-    invalidateTrainingListCaches();
-    return { created: true, item: normalized };
-  }
-
-  async function upsertRoster(existingEntry, nextItem) {
-    const siteId = await resolveSiteId();
-    const list = await resolveTrainingRostersList();
-    const normalized = createTrainingRosterRecord(nextItem, nextItem.updatedAt || new Date().toISOString());
-    if (existingEntry) {
-      await withRetryableRosterWrite(() => graphRequest('PATCH', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}/fields`, mapTrainingRosterToGraphFields(normalized)), `patch:${existingEntry.listItemId}`);
-      invalidateTrainingListCaches();
-      return { created: false, item: normalized };
-    }
-    await withRetryableRosterWrite(() => graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: mapTrainingRosterToGraphFields(normalized)
-    }), `post:${normalized.id}`);
-    invalidateTrainingListCaches();
-    return { created: true, item: normalized };
-  }
-
-  function isRetryableRosterWriteError(error) {
-    const statusCode = Number(error && error.statusCode || 0);
-    const message = String(error && error.message || '').toLowerCase();
-    return statusCode === 429
-      || statusCode === 502
-      || statusCode === 503
-      || statusCode === 504
-      || message.includes('too many requests')
-      || message.includes('throttle')
-      || message.includes('temporarily unavailable')
-      || message.includes('service unavailable')
-      || message.includes('gateway')
-      || message.includes('timeout');
-  }
-
-  async function withRetryableRosterWrite(task, label) {
-    const delays = [0, 300, 900];
-    let lastError = null;
-    for (let attempt = 0; attempt < delays.length; attempt += 1) {
-      if (attempt > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
-      }
-      try {
-        return await task(attempt);
-      } catch (error) {
-        lastError = error;
-        if (!isRetryableRosterWriteError(error) || attempt === delays.length - 1) {
-          throw error;
-        }
-        console.warn('[training-backend] retrying roster write' + (label ? ` for ${label}` : ''), {
-          attempt: attempt + 1,
-          message: cleanText(error && error.message) || String(error)
-        });
-      }
-    }
-    throw lastError;
-  }
-
-  async function runLimitedConcurrency(items, concurrency, worker) {
-    const list = Array.isArray(items) ? items : [];
-    const limit = Math.max(1, Math.min(Number(concurrency) || 1, list.length || 1));
-    const results = new Array(list.length);
-    let index = 0;
-    const runners = Array.from({ length: limit }, async () => {
-      while (index < list.length) {
-        const currentIndex = index++;
-        try {
-          results[currentIndex] = await worker(list[currentIndex], currentIndex);
-        } catch (error) {
-          results[currentIndex] = { error };
-        }
-      }
-    });
-    await Promise.all(runners);
-    return results;
-  }
-
-  async function deleteFormEntry(existingEntry) {
-    const siteId = await resolveSiteId();
-    const list = await resolveTrainingFormsList();
-    await graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`);
-    invalidateTrainingListCaches();
-  }
-
-  async function deleteRosterEntry(existingEntry) {
-    const siteId = await resolveSiteId();
-    const list = await resolveTrainingRostersList();
-    await withRetryableRosterWrite(() => graphRequest('DELETE', `/sites/${siteId}/lists/${list.id}/items/${existingEntry.listItemId}`), `delete:${existingEntry.listItemId}`);
-    invalidateTrainingListCaches();
-  }
-
-  async function createAuditRow(input) {
-    const siteId = await resolveSiteId();
-    const list = await resolveAuditList();
-    await graphRequest('POST', `/sites/${siteId}/lists/${list.id}/items`, {
-      fields: {
-        Title: cleanText(input.recordId || input.eventType || 'audit'),
-        EventType: cleanText(input.eventType),
-        ActorEmail: cleanText(input.actorEmail),
-        TargetEmail: cleanText(input.targetEmail),
-        UnitCode: cleanText(input.unitCode),
-        RecordId: cleanText(input.recordId),
-        OccurredAt: cleanText(input.occurredAt) || new Date().toISOString(),
-        PayloadJson: cleanText(input.payloadJson)
-      }
-    });
-  }
-
-  function queueAuditRow(input, label) {
-    void createAuditRow(input).catch((error) => {
-      console.warn('[training-backend] audit row write failed' + (label ? ` for ${label}` : ''), error && error.message ? error.message : error);
-    });
-  }
-
-  function filterForms(items, filtersOrUrl) {
-    const filters = filtersOrUrl && typeof filtersOrUrl === 'object' && filtersOrUrl.searchParams
-      ? readTrainingFormFilters(filtersOrUrl)
-      : (filtersOrUrl && typeof filtersOrUrl === 'object' ? filtersOrUrl : {});
-    return items.filter((entry) => matchesTrainingFormFilters(entry, filters))
-      .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
-  }
-
-  function filterRosters(items, url) {
-    const unit = cleanText(url.searchParams.get('unit'));
-    const statsUnit = cleanText(url.searchParams.get('statsUnit'));
-    const source = cleanText(url.searchParams.get('source'));
-    const query = cleanText(url.searchParams.get('q')).toLowerCase();
-    return items.filter((entry) => {
-      if (unit && entry.unit !== unit) return false;
-      if (statsUnit && entry.statsUnit !== statsUnit) return false;
-      if (source && entry.source !== source) return false;
-      if (query) {
-        const haystack = [
-          entry.id,
-          entry.unit,
-          entry.statsUnit,
-          entry.name,
-          entry.unitName,
-          entry.identity,
-          entry.jobTitle
-        ].join(' ').toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-      return true;
-    });
-  }
-
-  function getRosterQuerySignature(url) {
-    return [
-      cleanText(url && url.searchParams && url.searchParams.get('q')).toLowerCase(),
-      cleanText(url && url.searchParams && url.searchParams.get('source')),
-      cleanText(url && url.searchParams && url.searchParams.get('unit')),
-      cleanText(url && url.searchParams && url.searchParams.get('statsUnit'))
-    ].join('::');
-  }
-
-  function getRosterQueryCache(signature) {
-    if (!signature || !(state.rostersQueryCache instanceof Map)) return null;
-    const cached = state.rostersQueryCache.get(signature);
-    if (!cached || !Array.isArray(cached.items)) return null;
-    if (Number(cached.cacheAt || 0) !== Number(state.rostersCacheAt || 0)) return null;
-    if ((Date.now() - Number(cached.loadedAt || 0)) >= TRAINING_ROSTERS_QUERY_CACHE_MS) return null;
-    return cached.items;
-  }
-
-  function setRosterQueryCache(signature, items) {
-    if (!signature || !(state.rostersQueryCache instanceof Map)) return;
-    state.rostersQueryCache.set(signature, {
-      loadedAt: Date.now(),
-      cacheAt: Number(state.rostersCacheAt || 0),
-      items: Array.isArray(items) ? items : []
-    });
-    while (state.rostersQueryCache.size > TRAINING_ROSTERS_QUERY_CACHE_MAX) {
-      const oldestKey = state.rostersQueryCache.keys().next().value;
-      if (!oldestKey) break;
-      state.rostersQueryCache.delete(oldestKey);
-    }
-  }
-
-  async function buildHealth() {
-    const siteId = await resolveSiteId();
-    const { decoded, mode } = await getDelegatedToken();
-    const health = {
-      ok: true,
-      ready: true,
-      contractVersion: CONTRACT_VERSION,
-      repository: mode === 'app-only' ? 'sharepoint-app-only' : 'sharepoint-delegated-cli',
-      actor: {
-        tokenMode: cleanText(mode) || 'delegated-cli',
-        appId: cleanText(decoded.appid || decoded.azp),
-        upn: cleanText(decoded.upn),
-        scopes: cleanText(decoded.scp),
-        roles: Array.isArray(decoded.roles) ? decoded.roles.join(',') : ''
-      },
-      site: {
-        id: siteId
-      }
-    };
-    try {
-      health.formsList = await resolveTrainingFormsList();
-      health.rostersList = await resolveTrainingRostersList();
-    } catch (error) {
-      health.ok = false;
-      health.ready = false;
-      health.message = cleanText(error && error.message) || 'Training lists are not ready.';
-    }
-    return health;
-  }
+  /* ---------- status assertions ---------- */
 
   function assertEditable(existing) {
     if (existing && existing.item.status === FORM_STATUSES.SUBMITTED) {
       throw createError('Submitted training forms cannot be edited directly.', 409);
     }
   }
-
   function assertCanFinalize(existing) {
     if (!existing) throw createError('Training form not found', 404);
-    if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) {
-      throw createError('Only pending-signoff forms can be finalized.', 409);
-    }
+    if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) throw createError('Only pending-signoff forms can be finalized.', 409);
   }
-
   function assertCanReturn(existing) {
     if (!existing) throw createError('Training form not found', 404);
-    if (existing.item.status !== FORM_STATUSES.SUBMITTED) {
-      throw createError('Only submitted forms can be returned.', 409);
-    }
+    if (existing.item.status !== FORM_STATUSES.SUBMITTED) throw createError('Only submitted forms can be returned.', 409);
   }
-
   function assertCanUndo(existing) {
     if (!existing) throw createError('Training form not found', 404);
-    if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) {
-      throw createError('Only pending-signoff forms can be undone.', 409);
-    }
+    if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) throw createError('Only pending-signoff forms can be undone.', 409);
   }
-
   function assertCanMarkPrinted(existing) {
     if (!existing) throw createError('Training form not found', 404);
-    if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) {
-      throw createError('Only pending-signoff forms can be marked as printed.', 409);
-    }
+    if (existing.item.status !== FORM_STATUSES.PENDING_SIGNOFF) throw createError('Only pending-signoff forms can be marked as printed.', 409);
+  }
+
+  /* ---------- health ---------- */
+
+  async function buildHealth() {
+    const dbHealth = await db.healthCheck();
+    return {
+      ok: dbHealth.ok, ready: dbHealth.ok,
+      contractVersion: CONTRACT_VERSION,
+      repository: 'postgresql',
+      database: { ok: dbHealth.ok, latencyMs: dbHealth.latencyMs }
+    };
   }
 
   async function handleHealth(_req, res, origin) {
     try {
-      const health = await buildHealth();
-      if (!state.rostersCache && !state.rostersCachePromise) {
-        primeRostersCacheInBackground('health-check', 0, false);
-      }
-      await writeJson(res, buildJsonResponse(200, health), origin);
+      await writeJson(res, buildJsonResponse(200, await buildHealth()), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to read training backend health.', 500), origin);
     }
   }
+
+  /* ---------- form list ---------- */
 
   async function handleFormList(req, res, origin, url) {
     try {
@@ -1184,133 +586,39 @@ function createTrainingRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const summaryOnly = String(url.searchParams.get('summaryOnly') || '').trim() === '1';
       const filters = readTrainingFormFilters(url);
-      const summaryCacheKey = summaryOnly ? buildFormSummarySignature(authz, url) : '';
-      const canUseUnfilteredSummary = summaryOnly && requestAuthz.isAdmin(authz) && !hasActiveTrainingFormFilters(filters);
-      if (canUseUnfilteredSummary && state.formsUnfilteredSummarySeed) {
-        const fastSummaryLookup = readFormsSummaryCache(summaryCacheKey);
-        const fastSummaryCached = fastSummaryLookup && fastSummaryLookup.body;
-        if (fastSummaryCached) {
-          logTrainingForms('unfiltered summary cache hit', {
-            username: authz.username,
-            total: fastSummaryCached.total,
-            durationMs: Date.now() - startedAt
-          });
-          if (fastSummaryLookup && fastSummaryLookup.response) {
-            await writeJson(res, fastSummaryLookup.response, origin);
-          } else {
-            await writeJson(res, buildJsonResponse(200, fastSummaryCached), origin);
-          }
-          return;
-        }
-        const responseBody = buildTrainingSummaryOnlyFastResponse(url, filters, 'unfiltered-summary');
-        if (responseBody) {
-          const cachedFastBody = writeFormsSummaryCache(summaryCacheKey, responseBody);
-          logTrainingForms('unfiltered summary hit', {
-            username: authz.username,
-            total: cachedFastBody.total,
-            durationMs: Date.now() - startedAt
-          });
-          await writeJson(res, buildJsonResponse(200, cachedFastBody), origin);
-          return;
-        }
-      }
-      if (summaryOnly) {
-        const summaryLookup = readFormsSummaryCache(summaryCacheKey);
-        const summaryCached = summaryLookup && summaryLookup.body;
-        if (summaryCached) {
-          logTrainingForms('summary cache hit', {
-            username: authz.username,
-            total: summaryCached.total,
-            durationMs: Date.now() - startedAt
-          });
-          if (summaryLookup && summaryLookup.response) {
-            await writeJson(res, summaryLookup.response, origin);
-          } else {
-            await writeJson(res, buildJsonResponse(200, summaryCached), origin);
-          }
-          return;
-        }
-      }
-      const cacheKey = buildFormQuerySignature(authz, url);
-      const cacheLookup = readFormsQueryCache(cacheKey);
-      const cached = cacheLookup && cacheLookup.body;
-      if (cached) {
-        logTrainingForms('query cache hit', {
-          username: authz.username,
-          total: cached.total,
-          summaryOnly,
-          durationMs: Date.now() - startedAt
-        });
-        await writeJson(res, buildJsonResponse(200, {
-          ...cached,
-          cache: {
-            query: 'hit',
-            summaryOnly,
-            reason: 'hit'
-          }
-        }), origin);
-        return;
-      }
-      const rows = await listAllForms();
-      logTrainingForms('query cache miss', {
+
+      const items = await queryForms(filters, authz);
+      const summary = summarizeTrainingForms(items);
+
+      logTraining('training-forms', 'list served', {
         username: authz.username,
-        totalRows: rows.length,
+        total: summary.total,
         summaryOnly,
-        cacheReason: cacheLookup && cacheLookup.reason || 'unknown',
-        cacheSize: state.formsQueryCache instanceof Map ? state.formsQueryCache.size : 0,
         durationMs: Date.now() - startedAt
       });
-      const generatedAt = new Date().toISOString();
-      const items = summaryOnly
-        ? []
-        : filterForms(rows.map((entry) => entry.item), filters)
-          .filter((entry) => requestAuthz.canAccessTrainingForm(authz, entry));
-      const summary = summaryOnly
-        ? summarizeTrainingFormRows(rows, authz, filters)
-        : summarizeTrainingForms(items);
-      const responseBody = {
+
+      await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        items: items.map(mapTrainingFormForClient),
-        summary: summary,
-        total: Number(summary && summary.total || items.length || 0),
-        filters: {
-          ...filters,
-          summaryOnly: summaryOnly ? '1' : ''
-        },
-        generatedAt: generatedAt,
-        cache: {
-          query: 'computed',
-          summaryOnly,
-          reason: cacheLookup && cacheLookup.reason || 'computed'
-        },
+        items: summaryOnly ? [] : items.map(mapTrainingFormForClient),
+        summary,
+        total: summary.total,
+        filters: { ...filters, summaryOnly: summaryOnly ? '1' : '' },
+        generatedAt: new Date().toISOString(),
+        cache: { query: 'direct-sql', summaryOnly },
         contractVersion: CONTRACT_VERSION
-      };
-      let cachedBody = writeFormsQueryCache(cacheKey, responseBody);
-      if (summaryOnly) {
-        cachedBody = writeFormsSummaryCache(summaryCacheKey, cachedBody);
-      }
-      logTrainingForms('list served', {
-        username: authz.username,
-        totalRows: rows.length,
-        visibleRows: items.length,
-        submitted: summary && summary.submitted,
-        pending: summary && summary.pending,
-        summaryOnly,
-        durationMs: Date.now() - startedAt
-      });
-      await writeJson(res, buildJsonResponse(200, cachedBody), origin);
+      }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to list training forms.', 500), origin);
     }
   }
 
+  /* ---------- form detail ---------- */
+
   async function handleFormDetail(req, res, origin, formId) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const existing = await getFormEntryById(formId);
-      if (!existing) {
-        throw createError('Training form not found', 404);
-      }
+      const existing = await getFormById(formId);
+      if (!existing) throw createError('Training form not found', 404);
       if (!requestAuthz.canAccessTrainingForm(authz, existing.item)) {
         throw requestAuthz.createHttpError('You do not have access to this training form', 403);
       }
@@ -1324,10 +632,12 @@ function createTrainingRouter(deps) {
     }
   }
 
+  /* ---------- form generic write ---------- */
+
   async function writeTrainingForm(req, res, origin, formId, action, options) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const existing = await getFormEntryById(formId);
+      const existing = await getFormById(formId);
       if (typeof options.assertBefore === 'function') {
         options.assertBefore(existing);
       } else {
@@ -1350,9 +660,7 @@ function createTrainingRouter(deps) {
       }
       validateTrainingFormPayload(payload, options.validation || {});
       const duplicate = await findDuplicateForm(payload.unit, payload.trainingYear, payload.id);
-      if (duplicate) {
-        throw createError('Another training form already exists for this unit and year', 409);
-      }
+      if (duplicate) throw createError('Another training form already exists for this unit and year', 409);
 
       const actor = actorLabel(payload, (existing && existing.item && existing.item.fillerName) || payload.fillerName);
       const actorMeta = requestAuthz.buildActorDetails(authz);
@@ -1377,6 +685,7 @@ function createTrainingRouter(deps) {
       }
       const nextItem = createTrainingFormRecord(nextItemInput, nextStatus, now);
       const saved = await upsertForm(existing, nextItem);
+
       queueAuditRow({
         eventType: options.eventType,
         actorEmail: actorMeta.actorEmail,
@@ -1402,13 +711,13 @@ function createTrainingRouter(deps) {
     }
   }
 
+  /* ---------- form delete ---------- */
+
   async function handleFormDelete(req, res, origin, formId) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const existing = await getFormEntryById(formId);
-      if (!existing) {
-        throw createError('Training form not found', 404);
-      }
+      const existing = await getFormById(formId);
+      if (!existing) throw createError('Training form not found', 404);
       if (!requestAuthz.canManageTrainingForm(authz, existing.item)) {
         throw requestAuthz.createHttpError('You do not have permission to delete this training form', 403);
       }
@@ -1416,7 +725,7 @@ function createTrainingRouter(deps) {
       validateActionEnvelope(envelope, FORM_ACTIONS.DELETE);
       const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       const now = new Date().toISOString();
-      await deleteFormEntry(existing);
+      await deleteFormById(existing.dbId);
       const actor = requestAuthz.buildActorDetails(authz);
       queueAuditRow({
         eventType: 'training.form_deleted',
@@ -1433,56 +742,40 @@ function createTrainingRouter(deps) {
         })
       });
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        deletedId: existing.item.id,
-        contractVersion: CONTRACT_VERSION
+        ok: true, deletedId: existing.item.id, contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to delete training form.', 500), origin);
     }
   }
 
+  /* ---------- roster list ---------- */
+
   async function handleRosterList(req, res, origin, url) {
     const startedAt = Date.now();
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const cacheState = Array.isArray(state.rostersCache)
-        ? (state.rostersCachePromise ? 'stale-while-refresh' : (getTrainingListCacheHit(state.rostersCacheAt) ? 'fresh' : 'stale'))
-        : (state.rostersCachePromise ? 'promise-only' : 'miss');
-      const rows = await listAllRosters();
-      const filterStartedAt = Date.now();
-      const querySignature = getRosterQuerySignature(url);
-      let filteredItems = getRosterQueryCache(querySignature);
-      let queryCacheState = 'hit';
-      if (!filteredItems) {
-        filteredItems = filterRosters(rows.map((entry) => entry.item), url);
-        setRosterQueryCache(querySignature, filteredItems);
-        queryCacheState = 'computed';
-      }
-      const items = filteredItems.filter((entry) => requestAuthz.canManageTrainingRoster(authz, entry));
-      const filterDurationMs = Date.now() - filterStartedAt;
-      const page = buildRosterPageMeta(url, items.length);
-      const visibleItems = page.paged
-        ? items.slice(page.offset, page.offset + page.limit)
-        : items;
-      logTrainingRoster('list served', {
+      const filters = readRosterFilters(url);
+      const rawLimit = Number(url.searchParams.get('limit'));
+      const rawOffset = Number(url.searchParams.get('offset')) || 0;
+      const pagination = {
+        limit: Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 0,
+        offset: Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0
+      };
+      const result = await queryRosters(filters, authz, pagination);
+      const page = buildRosterPageMeta(url, result.total);
+
+      logTraining('training-rosters', 'list served', {
         username: authz.username,
-        cacheState,
-        totalRows: rows.length,
-        visibleRows: items.length,
-        returnedRows: visibleItems.length,
-        paged: page.paged,
-        limit: page.limit,
-        offset: page.offset,
-        querySignature,
-        queryCacheState,
-        filterDurationMs,
+        total: result.total,
+        returned: result.items.length,
         durationMs: Date.now() - startedAt
       });
+
       await writeJson(res, buildJsonResponse(200, {
         ok: true,
-        items: visibleItems.map(mapTrainingRosterForClient),
-        total: items.length,
+        items: result.items.map(mapTrainingRosterForClient),
+        total: result.total,
         page,
         contractVersion: CONTRACT_VERSION
       }), origin);
@@ -1490,6 +783,8 @@ function createTrainingRouter(deps) {
       await writeJson(res, buildErrorResponse(error, 'Failed to list training rosters.', 500), origin);
     }
   }
+
+  /* ---------- roster upsert (single) ---------- */
 
   async function handleRosterUpsert(req, res, origin) {
     try {
@@ -1499,22 +794,17 @@ function createTrainingRouter(deps) {
       const payload = normalizeTrainingRosterPayload(envelope.payload);
       validateTrainingRosterPayload(payload);
       const now = new Date().toISOString();
-      const existingById = cleanText(payload.id) ? await getRosterEntryById(payload.id) : null;
+      const existingById = cleanText(payload.id) ? await getRosterById(payload.id) : null;
       const duplicateEntry = await findDuplicateRoster(payload.unit, payload.name, payload.id);
       const authorizedExistingById = existingById && requestAuthz.canManageTrainingRoster(authz, existingById.item)
-        ? existingById
-        : null;
+        ? existingById : null;
       const existing = duplicateEntry || authorizedExistingById || null;
       const targetRoster = existing ? existing.item : payload;
       if (!requestAuthz.canManageTrainingRoster(authz, targetRoster)) {
         throw requestAuthz.createHttpError('You do not have permission to manage this training roster', 403);
       }
-      const actor = actorLabel(payload, payload.createdBy || payload.name);
       const actorMeta = requestAuthz.buildActorDetails(authz);
-      const nextRosterId = existing
-        ? existing.item.id
-        : await generateNextRosterId();
-      reserveKnownRosterSequence(nextRosterId);
+      const nextRosterId = existing ? existing.item.id : await generateNextRosterId();
       const nextItem = createTrainingRosterRecord({
         ...(existing ? existing.item : {}),
         ...payload,
@@ -1532,7 +822,7 @@ function createTrainingRouter(deps) {
         occurredAt: now,
         payloadJson: JSON.stringify({
           action: ROSTER_ACTIONS.UPSERT,
-          actor,
+          actor: actorLabel(payload, payload.createdBy || payload.name),
           actorUsername: actorMeta.actorUsername,
           snapshot: existing ? null : buildTrainingRosterSnapshot(nextItem),
           changes: buildTrainingRosterChanges(existing && existing.item, nextItem)
@@ -1548,6 +838,12 @@ function createTrainingRouter(deps) {
     }
   }
 
+  /* ---------- roster upsert batch ---------- */
+
+  function buildRosterLookupKey(unit, name) {
+    return `${cleanText(unit)}::${cleanText(name).toLowerCase()}`;
+  }
+
   async function handleRosterUpsertBatch(req, res, origin) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
@@ -1555,23 +851,22 @@ function createTrainingRouter(deps) {
       validateActionEnvelope(envelope, ROSTER_ACTIONS.UPSERT_BATCH);
       const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       const rawItems = Array.isArray(payload.items) ? payload.items : [];
-      if (!rawItems.length) {
-        throw createError('Training roster batch is empty', 400);
-      }
-      if (rawItems.length > 200) {
-        throw createError('Training roster batch exceeds the 200 item limit', 400);
-      }
+      if (!rawItems.length) throw createError('Training roster batch is empty', 400);
+      if (rawItems.length > 200) throw createError('Training roster batch exceeds the 200 item limit', 400);
 
       const actorMeta = requestAuthz.buildActorDetails(authz);
       const actorName = cleanText(payload.actorName) || actorMeta.actorName;
       const actorUsername = cleanText(payload.actorUsername) || actorMeta.actorUsername;
       const now = new Date().toISOString();
-      const rosterRows = await listAllRosters();
+
+      // Pre-load existing rosters for lookup
+      const allRosterRows = await db.queryAll(`${ROSTER_SELECT} ORDER BY unit, name`);
       const rosterById = new Map();
       const rosterByKey = new Map();
-      rosterRows.forEach((entry) => {
-        const rosterId = cleanText(entry && entry.item && entry.item.id);
-        const key = buildRosterLookupKey(entry && entry.item && entry.item.unit, entry && entry.item && entry.item.name);
+      allRosterRows.forEach((row) => {
+        const entry = { dbId: row.id, item: mapRowToRoster(row) };
+        const rosterId = cleanText(entry.item.id);
+        const key = buildRosterLookupKey(entry.item.unit, entry.item.name);
         if (rosterId && !rosterById.has(rosterId)) rosterById.set(rosterId, entry);
         if (key && !rosterByKey.has(key)) rosterByKey.set(key, entry);
       });
@@ -1585,113 +880,122 @@ function createTrainingRouter(deps) {
         try {
           const normalized = normalizeTrainingRosterPayload({
             ...(rawItem && typeof rawItem === 'object' ? rawItem : {}),
-            actorName,
-            actorUsername
+            actorName, actorUsername
           });
           validateTrainingRosterPayload(normalized);
           const key = buildRosterLookupKey(normalized.unit, normalized.name);
-          if (requestKeys.has(key)) {
-            summary.skipped += 1;
-            return;
-          }
+          if (requestKeys.has(key)) { summary.skipped += 1; return; }
           requestKeys.add(key);
           const explicitId = cleanText(normalized.id);
           const existing = (explicitId && rosterById.get(explicitId)) || rosterByKey.get(key) || null;
           const target = existing ? existing.item : normalized;
           if (!requestAuthz.canManageTrainingRoster(authz, target)) {
             summary.failed += 1;
-            errors.push(`\u7b2c ${index + 1} \u7b46\u8cc7\u6599\u6c92\u6709\u6b0a\u9650\u7ba1\u7406\u5c0d\u61c9\u540d\u55ae`);
+            errors.push(`第 ${index + 1} 筆資料沒有權限管理對應名單`);
             return;
           }
           plans.push({ existing, item: normalized, key });
         } catch (error) {
           summary.failed += 1;
-          errors.push(cleanText(error && error.message) || `\u7b2c ${index + 1} \u7b46\u8cc7\u6599\u8655\u7406\u5931\u6557`);
+          errors.push(cleanText(error && error.message) || `第 ${index + 1} 筆資料處理失敗`);
         }
       });
 
-      const newIds = await allocateNextRosterIds(plans.filter((plan) => !plan.existing).length);
+      const newIds = await allocateNextRosterIds(plans.filter((p) => !p.existing).length);
       let newIndex = 0;
       plans.forEach((plan) => {
-        if (!plan.existing) {
-          plan.nextRosterId = newIds[newIndex++];
-        } else {
-          plan.nextRosterId = plan.existing.item.id;
-        }
+        plan.nextRosterId = plan.existing ? plan.existing.item.id : newIds[newIndex++];
       });
+
       const items = [];
-      const concurrency = Math.max(1, Math.min(3, plans.length || 1));
-      const results = await runLimitedConcurrency(plans, concurrency, async (plan) => {
-        try {
-          const existing = plan.existing;
-          const nextRosterId = plan.nextRosterId || (existing ? existing.item.id : '');
-          reserveKnownRosterSequence(nextRosterId);
-          const nextItem = createTrainingRosterRecord({
-            ...(existing ? existing.item : {}),
-            ...plan.item,
-            id: nextRosterId,
-            createdBy: cleanText(plan.item.createdBy) || (existing && existing.item && existing.item.createdBy) || actorName,
-            createdByUsername: cleanText(plan.item.createdByUsername) || (existing && existing.item && existing.item.createdByUsername) || actorUsername,
-            createdAt: existing ? existing.item.createdAt : (plan.item.createdAt || now),
-            updatedAt: now
-          }, now);
-          const saved = await upsertRoster(existing, nextItem);
-          const mapped = mapTrainingRosterForClient(saved.item);
-          if (saved.created) {
-            summary.added += 1;
-          } else {
-            summary.updated += 1;
+      await db.transaction(async (client) => {
+        for (const plan of plans) {
+          try {
+            const existing = plan.existing;
+            const nextRosterId = plan.nextRosterId;
+            const nextItem = createTrainingRosterRecord({
+              ...(existing ? existing.item : {}),
+              ...plan.item,
+              id: nextRosterId,
+              createdBy: cleanText(plan.item.createdBy) || (existing && existing.item.createdBy) || actorName,
+              createdByUsername: cleanText(plan.item.createdByUsername) || (existing && existing.item.createdByUsername) || actorUsername,
+              createdAt: existing ? existing.item.createdAt : (plan.item.createdAt || now),
+              updatedAt: now
+            }, now);
+
+            if (existing) {
+              await client.query(`
+                UPDATE training_rosters SET
+                  unit=$1, stats_unit=$2, l1_unit=$3, name=$4, unit_name=$5,
+                  identity=$6, job_title=$7, source=$8, created_by=$9,
+                  created_by_username=$10, backend_mode=$11, record_source=$12, updated_at=$13
+                WHERE id = $14
+              `, [
+                nextItem.unit, nextItem.statsUnit, nextItem.l1Unit,
+                nextItem.name, nextItem.unitName, nextItem.identity,
+                nextItem.jobTitle, nextItem.source, nextItem.createdBy,
+                nextItem.createdByUsername, 'pg-campus-backend',
+                nextItem.recordSource || 'frontend', now,
+                existing.dbId
+              ]);
+              summary.updated += 1;
+            } else {
+              await client.query(`
+                INSERT INTO training_rosters (
+                  roster_id, unit, stats_unit, l1_unit, name, unit_name,
+                  identity, job_title, source, created_by, created_by_username,
+                  backend_mode, record_source, created_at, updated_at
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+              `, [
+                nextItem.id, nextItem.unit, nextItem.statsUnit, nextItem.l1Unit,
+                nextItem.name, nextItem.unitName, nextItem.identity,
+                nextItem.jobTitle, nextItem.source, nextItem.createdBy,
+                nextItem.createdByUsername, 'pg-campus-backend',
+                nextItem.recordSource || 'frontend',
+                nextItem.createdAt || now, now
+              ]);
+              summary.added += 1;
+            }
+            items.push(mapTrainingRosterForClient(nextItem));
+
+            queueAuditRow({
+              eventType: 'training.roster_upserted',
+              actorEmail: actorMeta.actorEmail,
+              targetEmail: '',
+              unitCode: '',
+              recordId: nextItem.id || nextItem.name,
+              occurredAt: now,
+              payloadJson: JSON.stringify({
+                action: ROSTER_ACTIONS.UPSERT_BATCH,
+                actor: actorName || actorLabel(plan.item, plan.item.createdBy || plan.item.name),
+                actorUsername,
+                snapshot: existing ? null : buildTrainingRosterSnapshot(nextItem),
+                changes: buildTrainingRosterChanges(existing && existing.item, nextItem)
+              })
+            });
+          } catch (error) {
+            summary.failed += 1;
+            errors.push(cleanText(error && error.message) || `處理 ${cleanText(plan.item.name) || '名單'} 失敗`);
           }
-          queueAuditRow({
-            eventType: 'training.roster_upserted',
-            actorEmail: actorMeta.actorEmail,
-            targetEmail: '',
-            unitCode: '',
-            recordId: nextItem.id || nextItem.name,
-            occurredAt: now,
-            payloadJson: JSON.stringify({
-              action: ROSTER_ACTIONS.UPSERT_BATCH,
-              actor: actorName || actorLabel(plan.item, plan.item.createdBy || plan.item.name),
-              actorUsername,
-              snapshot: existing ? null : buildTrainingRosterSnapshot(nextItem),
-              changes: buildTrainingRosterChanges(existing && existing.item, nextItem)
-            })
-          });
-          return { ok: true, item: mapped };
-        } catch (error) {
-          summary.failed += 1;
-          return { ok: false, error: cleanText(error && error.message) || `?臬 ${cleanText(plan && plan.item && plan.item.name) || '鈭箏'} 憭望?` };
         }
-      });
-      results.forEach((result) => {
-        if (!result) return;
-        if (result.ok && result.item) {
-          items.push(result.item);
-          return;
-        }
-        if (result.error) errors.push(result.error);
       });
 
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        items,
-        summary,
-        errors,
-        contractVersion: CONTRACT_VERSION
+        ok: true, items, summary, errors, contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to batch upsert training rosters.', 500), origin);
     }
   }
 
+  /* ---------- roster delete ---------- */
+
   async function handleRosterDelete(req, res, origin, rosterId) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const existingEntries = await getRosterEntriesById(rosterId);
       const existing = existingEntries[0] || null;
-      if (!existing) {
-        throw createError('Training roster not found', 404);
-      }
+      if (!existing) throw createError('Training roster not found', 404);
       if (existingEntries.some((entry) => !requestAuthz.canManageTrainingRoster(authz, entry.item))) {
         throw requestAuthz.createHttpError('You do not have permission to delete this training roster', 403);
       }
@@ -1700,7 +1004,7 @@ function createTrainingRouter(deps) {
       const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
       const now = new Date().toISOString();
       for (const entry of existingEntries) {
-        await deleteRosterEntry(entry);
+        await deleteRosterById(entry.dbId);
       }
       const actor = requestAuthz.buildActorDetails(authz);
       queueAuditRow({
@@ -1719,15 +1023,14 @@ function createTrainingRouter(deps) {
         })
       });
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        deletedId: existing.item.id,
-        deletedCount: existingEntries.length,
-        contractVersion: CONTRACT_VERSION
+        ok: true, deletedId: existing.item.id, deletedCount: existingEntries.length, contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to delete training roster.', 500), origin);
     }
   }
+
+  /* ---------- roster delete batch ---------- */
 
   async function handleRosterDeleteBatch(req, res, origin) {
     try {
@@ -1735,25 +1038,16 @@ function createTrainingRouter(deps) {
       const envelope = await parseJsonBody(req);
       validateActionEnvelope(envelope, ROSTER_ACTIONS.DELETE_BATCH);
       const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
-      const rawIds = Array.isArray(payload.ids)
-        ? payload.ids
-        : (Array.isArray(payload.rosterIds) ? payload.rosterIds : []);
-      const ids = Array.from(new Set(rawIds.map((value) => cleanText(value)).filter(Boolean)));
-      if (!ids.length) {
-        throw createError('Training roster ids are required', 400);
-      }
-      if (ids.length > 200) {
-        throw createError('Training roster batch exceeds the 200 item limit', 400);
-      }
+      const rawIds = Array.isArray(payload.ids) ? payload.ids : (Array.isArray(payload.rosterIds) ? payload.rosterIds : []);
+      const ids = Array.from(new Set(rawIds.map((v) => cleanText(v)).filter(Boolean)));
+      if (!ids.length) throw createError('Training roster ids are required', 400);
+      if (ids.length > 200) throw createError('Training roster batch exceeds the 200 item limit', 400);
 
       const matchedEntries = [];
       const skippedIds = [];
-      for (const rosterId of ids) {
-        const entries = await getRosterEntriesById(rosterId);
-        if (!entries.length) {
-          skippedIds.push(rosterId);
-          continue;
-        }
+      for (const rid of ids) {
+        const entries = await getRosterEntriesById(rid);
+        if (!entries.length) { skippedIds.push(rid); continue; }
         if (entries.some((entry) => !requestAuthz.canManageTrainingRoster(authz, entry.item))) {
           throw requestAuthz.createHttpError('You do not have permission to delete this training roster', 403);
         }
@@ -1761,16 +1055,19 @@ function createTrainingRouter(deps) {
       }
 
       const uniqueEntries = [];
-      const seenListItemIds = new Set();
+      const seenDbIds = new Set();
       matchedEntries.forEach((entry) => {
-        const key = cleanText(entry && entry.listItemId);
-        if (!key || seenListItemIds.has(key)) return;
-        seenListItemIds.add(key);
+        if (seenDbIds.has(entry.dbId)) return;
+        seenDbIds.add(entry.dbId);
         uniqueEntries.push(entry);
       });
 
       const now = new Date().toISOString();
-      await Promise.all(uniqueEntries.map((entry) => deleteRosterEntry(entry)));
+      await db.transaction(async (client) => {
+        for (const entry of uniqueEntries) {
+          await client.query(`DELETE FROM training_rosters WHERE id = $1`, [entry.dbId]);
+        }
+      });
 
       const actor = requestAuthz.buildActorDetails(authz);
       queueAuditRow({
@@ -1792,16 +1089,14 @@ function createTrainingRouter(deps) {
       });
 
       await writeJson(res, buildJsonResponse(200, {
-        ok: true,
-        deletedIds: ids,
-        deletedCount: uniqueEntries.length,
-        skippedIds,
-        contractVersion: CONTRACT_VERSION
+        ok: true, deletedIds: ids, deletedCount: uniqueEntries.length, skippedIds, contractVersion: CONTRACT_VERSION
       }), origin);
     } catch (error) {
       await writeJson(res, buildErrorResponse(error, 'Failed to delete training rosters.', 500), origin);
     }
   }
+
+  /* ---------- draft history helper ---------- */
 
   function buildDraftHistory(existingItem, actor, now) {
     if (existingItem && existingItem.status === FORM_STATUSES.RETURNED) {
@@ -1809,6 +1104,8 @@ function createTrainingRouter(deps) {
     }
     return appendHistory(existingItem && existingItem.history, existingItem ? 'Training form draft updated' : 'Training form draft created', actor, now);
   }
+
+  /* ---------- route dispatcher ---------- */
 
   function tryHandle(req, res, origin, url) {
     const formCollectionMatch = url.pathname.match(/^\/api\/training\/forms\/?$/);
@@ -1835,42 +1132,23 @@ function createTrainingRouter(deps) {
       if (actionName === 'save-draft') {
         return writeTrainingForm(req, res, origin, formId, FORM_ACTIONS.SAVE_DRAFT, {
           validation: { requireRecords: true },
-          resolveStatus: function (existing) {
-            return existing && existing.item.status === FORM_STATUSES.RETURNED
-              ? FORM_STATUSES.RETURNED
-              : FORM_STATUSES.DRAFT;
-          },
-          transformItem: function (item, existingItem) {
+          resolveStatus: (existing) => existing && existing.item.status === FORM_STATUSES.RETURNED ? FORM_STATUSES.RETURNED : FORM_STATUSES.DRAFT,
+          transformItem: (item, existingItem) => {
             if (existingItem && existingItem.status === FORM_STATUSES.RETURNED) {
-              return {
-                ...item,
-                returnReason: item.returnReason || existingItem.returnReason || ''
-              };
+              return { ...item, returnReason: item.returnReason || existingItem.returnReason || '' };
             }
             return item;
           },
-          buildHistory: function (existingItem, _payload, actor, now) {
-            return buildDraftHistory(existingItem, actor, now);
-          },
+          buildHistory: (existingItem, _payload, actor, now) => buildDraftHistory(existingItem, actor, now),
           eventType: 'training.form_saved'
         }).then(() => true);
       }
       if (actionName === 'submit-step-one') {
         return writeTrainingForm(req, res, origin, formId, FORM_ACTIONS.SUBMIT_STEP_ONE, {
           validation: { requireRecords: true },
-          resolveStatus: function () {
-            return FORM_STATUSES.PENDING_SIGNOFF;
-          },
-          transformItem: function (item, _existingItem, _payload, now) {
-            return {
-              ...item,
-              returnReason: '',
-              stepOneSubmittedAt: now
-            };
-          },
-          buildHistory: function (existingItem, _payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, 'Training step one submitted', actor, now);
-          },
+          resolveStatus: () => FORM_STATUSES.PENDING_SIGNOFF,
+          transformItem: (item, _existingItem, _payload, now) => ({ ...item, returnReason: '', stepOneSubmittedAt: now }),
+          buildHistory: (existingItem, _payload, actor, now) => appendHistory(existingItem && existingItem.history, 'Training step one submitted', actor, now),
           eventType: 'training.form_step_one_submitted'
         }).then(() => true);
       }
@@ -1878,20 +1156,9 @@ function createTrainingRouter(deps) {
         return writeTrainingForm(req, res, origin, formId, FORM_ACTIONS.MARK_PRINTED, {
           assertBefore: assertCanMarkPrinted,
           validation: { requireRecords: true },
-          resolveStatus: function (existing) {
-            return existing && existing.item && existing.item.status
-              ? existing.item.status
-              : FORM_STATUSES.PENDING_SIGNOFF;
-          },
-          transformItem: function (item, existingItem, _payload, now) {
-            return {
-              ...item,
-              printedAt: cleanText(item.printedAt) || (existingItem && existingItem.printedAt) || now
-            };
-          },
-          buildHistory: function (existingItem, _payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, 'Training print sheet generated', actor, now);
-          },
+          resolveStatus: (existing) => existing && existing.item && existing.item.status ? existing.item.status : FORM_STATUSES.PENDING_SIGNOFF,
+          transformItem: (item, existingItem, _payload, now) => ({ ...item, printedAt: cleanText(item.printedAt) || (existingItem && existingItem.printedAt) || now }),
+          buildHistory: (existingItem, _payload, actor, now) => appendHistory(existingItem && existingItem.history, 'Training print sheet generated', actor, now),
           eventType: 'training.form_printed'
         }).then(() => true);
       }
@@ -1899,19 +1166,9 @@ function createTrainingRouter(deps) {
         return writeTrainingForm(req, res, origin, formId, FORM_ACTIONS.FINALIZE, {
           assertBefore: assertCanFinalize,
           validation: { requireRecords: true, requireSignedFiles: true },
-          resolveStatus: function () {
-            return FORM_STATUSES.SUBMITTED;
-          },
-          transformItem: function (item, _existingItem, _payload, now) {
-            return {
-              ...item,
-              signoffUploadedAt: now,
-              submittedAt: now
-            };
-          },
-          buildHistory: function (existingItem, _payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, 'Training form finalized', actor, now);
-          },
+          resolveStatus: () => FORM_STATUSES.SUBMITTED,
+          transformItem: (item, _existingItem, _payload, now) => ({ ...item, signoffUploadedAt: now, submittedAt: now }),
+          buildHistory: (existingItem, _payload, actor, now) => appendHistory(existingItem && existingItem.history, 'Training form finalized', actor, now),
           eventType: 'training.form_finalized'
         }).then(() => true);
       }
@@ -1919,12 +1176,8 @@ function createTrainingRouter(deps) {
         return writeTrainingForm(req, res, origin, formId, FORM_ACTIONS.RETURN, {
           assertBefore: assertCanReturn,
           validation: { requireRecords: true, requireReturnReason: true },
-          resolveStatus: function () {
-            return FORM_STATUSES.RETURNED;
-          },
-          buildHistory: function (existingItem, payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, 'Training form returned: ' + cleanText(payload.returnReason), actor, now);
-          },
+          resolveStatus: () => FORM_STATUSES.RETURNED,
+          buildHistory: (existingItem, payload, actor, now) => appendHistory(existingItem && existingItem.history, 'Training form returned: ' + cleanText(payload.returnReason), actor, now),
           eventType: 'training.form_returned'
         }).then(() => true);
       }
@@ -1932,28 +1185,16 @@ function createTrainingRouter(deps) {
         return writeTrainingForm(req, res, origin, formId, FORM_ACTIONS.UNDO, {
           assertBefore: assertCanUndo,
           validation: { requireRecords: true },
-          resolveStatus: function () {
-            return FORM_STATUSES.DRAFT;
-          },
-          transformItem: function (item) {
-            return {
-              ...item,
-              stepOneSubmittedAt: '',
-              printedAt: '',
-              signoffUploadedAt: '',
-              submittedAt: '',
-              returnReason: ''
-            };
-          },
-          buildHistory: function (existingItem, _payload, actor, now) {
-            return appendHistory(existingItem && existingItem.history, 'Training form undone back to draft', actor, now);
-          },
+          resolveStatus: () => FORM_STATUSES.DRAFT,
+          transformItem: (item) => ({ ...item, stepOneSubmittedAt: '', printedAt: '', signoffUploadedAt: '', submittedAt: '', returnReason: '' }),
+          buildHistory: (existingItem, _payload, actor, now) => appendHistory(existingItem && existingItem.history, 'Training form undone back to draft', actor, now),
           eventType: 'training.form_undone'
         }).then(() => true);
       }
       if (actionName === 'delete') {
         return handleFormDelete(req, res, origin, formId).then(() => true);
-      }    }
+      }
+    }
     if (rosterCollectionMatch && req.method === 'GET') {
       return handleRosterList(req, res, origin, url).then(() => true);
     }
@@ -1972,16 +1213,7 @@ function createTrainingRouter(deps) {
     return Promise.resolve(false);
   }
 
-  restoreRostersCacheSnapshot();
-  primeRostersCacheInBackground('router-startup', TRAINING_ROSTERS_PREWARM_DELAY_MS, true);
-
-  return {
-    tryHandle
-  };
+  return { tryHandle };
 }
 
-module.exports = {
-  createTrainingRouter
-};
-
-
+module.exports = { createTrainingRouter };

@@ -1,21 +1,20 @@
 {
-    "port":  8787,
-    "allowedOrigins":  [
-                           "https://YOUR-CAMPUS-HOST"
-                       ],
-    "sharePointSiteId":  "ntums365.sharepoint.com,8c29bc46-e7a8-445f-84cf-6dc48609bca8,f9096dd2-df76-4e86-9986-a121bffaee87",
-    "sharePointSiteUrl":  "https://ntums365.sharepoint.com/sites/ISMSFormsWorkspace",
-    "lists":  {
-                  "applications":  "UnitContactApplications",
-                  "unitAdmins":  "UnitAdmins",
-                  "audit":  "OpsAudit",
-                  "correctiveActions":  "CorrectiveActions",
-                  "checklists":  "Checklists",
-    "trainingForms":  "TrainingForms",
-    "trainingRosters":  "TrainingRosters",
-    "systemUsers":  "SystemUsers",
-    "reviewScopes":  "UnitReviewScopes"
-  },
-    "attachmentsLibrary": "ISMSAttachments",
-    "logDir":  "C:\\ProgramData\\ISMSFormRedesign\\logs"
+    "port": 8787,
+    "allowedOrigins": [
+        "https://YOUR-CAMPUS-HOST"
+    ],
+    "tokenMode": "delegated-cli",
+    "mailSenderUpn": "isms-noreply@your-domain.edu.tw",
+    "authSessionSecret": "CHANGE-ME-random-string-32-chars",
+    "postgres": {
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "isms_db",
+        "user": "isms_user",
+        "password": "YOUR_PG_PASSWORD",
+        "poolMin": 2,
+        "poolMax": 10
+    },
+    "attachmentsDir": "/var/lib/isms/attachments",
+    "logDir": "/var/log/isms/campus-backend"
 }

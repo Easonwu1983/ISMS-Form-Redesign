@@ -1,13 +1,12 @@
+'use strict';
+
 const {
-  USER_ROLES,
-  mapGraphFieldsToSystemUser
+  USER_ROLES
 } = require('../azure-function/system-user-api/src/shared/contract');
-const {
-  mapGraphFieldsToReviewScope
-} = require('../azure-function/review-scope-api/src/shared/contract');
 const {
   verifySessionToken
 } = require('./auth-security.cjs');
+const db = require('./db.cjs');
 
 function cleanText(value) {
   return String(value || '').trim();
@@ -49,19 +48,37 @@ function decodeHeaderUnit(value) {
   }
 }
 
-function createRequestAuthz(deps) {
-  const {
-    graphRequest,
-    resolveSiteId
-  } = deps;
-
-  const state = {
-    listMap: null,
-    reviewUnitsCache: new Map()
+function mapRowToSystemUser(row) {
+  if (!row) return null;
+  return {
+    username: row.username || '',
+    password: row.password || '',
+    name: row.display_name || '',
+    email: row.email || '',
+    role: row.role || '',
+    securityRoles: parseUnits(row.security_roles_json),
+    primaryUnit: row.primary_unit || '',
+    authorizedUnits: parseUnits(row.authorized_units_json),
+    scopeUnits: parseUnits(row.authorized_units_json),
+    unit: row.primary_unit || '',
+    units: parseUnits(row.authorized_units_json),
+    activeUnit: row.active_unit || '',
+    createdAt: row.created_at || '',
+    updatedAt: row.updated_at || '',
+    passwordChangedAt: row.password_changed_at || '',
+    resetTokenExpiresAt: row.reset_token_expires_at || '',
+    resetRequestedAt: row.reset_requested_at || '',
+    mustChangePassword: row.must_change_password || false,
+    sessionVersion: row.session_version || 1,
+    backendMode: row.backend_mode || '',
+    recordSource: row.record_source || '',
+    passwordSecret: row.password_secret || '',
+    failedAttempts: row.failed_attempts || 0,
+    lockedUntil: row.locked_until || null
   };
-  const REVIEW_SCOPE_CACHE_MS = 10000;
-  const REVIEW_SCOPE_CACHE_MAX = 64;
+}
 
+function createRequestAuthz() {
   function getEnv(name, fallback) {
     const value = cleanText(process.env[name]);
     return value || fallback || '';
@@ -72,104 +89,64 @@ function createRequestAuthz(deps) {
     throw new Error('AUTH_SESSION_SECRET is required for request authorization.');
   }
 
-  async function fetchListMap() {
-    const siteId = await resolveSiteId();
-    const body = await graphRequest('GET', `/sites/${siteId}/lists?$select=id,displayName,webUrl`);
-    return new Map((Array.isArray(body && body.value) ? body.value : []).map((entry) => [cleanText(entry.displayName), entry]));
-  }
-
-  async function resolveNamedList(name) {
-    const listName = cleanText(name);
-    if (!state.listMap || !state.listMap.has(listName)) {
-      state.listMap = await fetchListMap();
-    }
-    let list = state.listMap.get(listName);
-    if (!list) {
-      state.listMap = await fetchListMap();
-      list = state.listMap.get(listName);
-    }
-    if (!list) throw createHttpError(`SharePoint list not found: ${listName}`, 500);
-    return list;
-  }
-
-  async function listMappedEntries(listName, mapper) {
-    const siteId = await resolveSiteId();
-    const list = await resolveNamedList(listName);
-    const rows = [];
-    let nextUrl = `/sites/${siteId}/lists/${list.id}/items?$expand=fields&$top=200`;
-    while (nextUrl) {
-      const body = await graphRequest('GET', nextUrl);
-      const batch = Array.isArray(body && body.value) ? body.value : [];
-      rows.push(...batch.map((entry) => ({
-        listItemId: cleanText(entry && entry.id),
-        item: mapper(entry && entry.fields ? entry.fields : {})
-      })));
-      nextUrl = cleanText(body && body['@odata.nextLink']);
-    }
-    return rows;
-  }
-
   async function listSystemUsers() {
-    return listMappedEntries(getEnv('SYSTEM_USERS_LIST', 'SystemUsers'), mapGraphFieldsToSystemUser);
+    const rows = await db.queryAll(`
+      SELECT id, username, password, password_secret, display_name, email, role,
+             security_roles_json, primary_unit, authorized_units_json, active_unit,
+             created_at, updated_at, password_changed_at, reset_token_expires_at,
+             reset_requested_at, must_change_password, session_version,
+             failed_attempts, locked_until, backend_mode, record_source
+      FROM system_users
+    `);
+    return rows.map((row) => ({
+      listItemId: String(row.id),
+      item: mapRowToSystemUser(row)
+    }));
   }
 
   async function listReviewScopes() {
-    return listMappedEntries(getEnv('REVIEW_SCOPES_LIST', 'UnitReviewScopes'), mapGraphFieldsToReviewScope);
-  }
-
-  function getCachedReviewUnits(username) {
-    const cacheKey = cleanLower(username);
-    if (!cacheKey) return null;
-    const cached = state.reviewUnitsCache.get(cacheKey);
-    if (!cached || !Number.isFinite(cached.loadedAt)) return null;
-    if ((Date.now() - cached.loadedAt) >= REVIEW_SCOPE_CACHE_MS) {
-      state.reviewUnitsCache.delete(cacheKey);
-      return null;
-    }
-    return parseUnits(cached.units);
-  }
-
-  function setCachedReviewUnits(username, units) {
-    const cacheKey = cleanLower(username);
-    if (!cacheKey) return;
-    state.reviewUnitsCache.set(cacheKey, {
-      loadedAt: Date.now(),
-      units: parseUnits(units)
-    });
-    if (state.reviewUnitsCache.size > REVIEW_SCOPE_CACHE_MAX) {
-      const firstKey = state.reviewUnitsCache.keys().next().value;
-      if (firstKey) state.reviewUnitsCache.delete(firstKey);
-    }
-  }
-
-  function clearReviewUnitsCache(username) {
-    const cacheKey = cleanLower(username);
-    if (cacheKey) {
-      state.reviewUnitsCache.delete(cacheKey);
-      return;
-    }
-    state.reviewUnitsCache.clear();
+    const rows = await db.queryAll(`
+      SELECT id, review_scope_key, username, unit_value,
+             created_at, updated_at, backend_mode, record_source
+      FROM unit_review_scopes
+    `);
+    return rows.map((row) => ({
+      listItemId: String(row.id),
+      item: {
+        id: row.review_scope_key || '',
+        username: row.username || '',
+        unit: row.unit_value || '',
+        createdAt: row.created_at || '',
+        updatedAt: row.updated_at || '',
+        backendMode: row.backend_mode || '',
+        recordSource: row.record_source || ''
+      }
+    }));
   }
 
   async function getSystemUserEntryByUsername(username) {
     const target = cleanLower(username);
     if (!target) return null;
-    const rows = await listSystemUsers();
-    return rows.find((entry) => cleanLower(entry.item && entry.item.username) === target) || null;
+    const row = await db.queryOne(`
+      SELECT id, username, password, password_secret, display_name, email, role,
+             security_roles_json, primary_unit, authorized_units_json, active_unit,
+             created_at, updated_at, password_changed_at, reset_token_expires_at,
+             reset_requested_at, must_change_password, session_version,
+             failed_attempts, locked_until, backend_mode, record_source
+      FROM system_users
+      WHERE LOWER(username) = $1
+    `, [target]);
+    if (!row) return null;
+    return { listItemId: String(row.id), item: mapRowToSystemUser(row) };
   }
 
   async function listReviewUnitsByUsername(username) {
     const target = cleanLower(username);
     if (!target) return [];
-    const cached = getCachedReviewUnits(target);
-    if (cached) return cached;
-    const rows = await listReviewScopes();
-    const units = rows
-      .filter((entry) => cleanLower(entry.item && entry.item.username) === target)
-      .map((entry) => cleanText(entry.item && entry.item.unit))
-      .filter(Boolean);
-    setCachedReviewUnits(target, units);
-    return units;
+    const rows = await db.queryAll(`
+      SELECT unit_value FROM unit_review_scopes WHERE LOWER(username) = $1
+    `, [target]);
+    return rows.map((r) => cleanText(r.unit_value)).filter(Boolean);
   }
 
   function resolveActiveUnit(req, user) {
@@ -332,6 +309,10 @@ function createRequestAuthz(deps) {
     };
   }
 
+  function clearReviewUnitsCache() {
+    // no-op: PG queries are fast enough, no cache needed
+  }
+
   return {
     USER_ROLES,
     cleanText,
@@ -356,7 +337,9 @@ function createRequestAuthz(deps) {
     canManageTrainingForm,
     canManageTrainingRoster,
     buildActorDetails,
-    clearReviewUnitsCache
+    clearReviewUnitsCache,
+    getSystemUserEntryByUsername,
+    mapRowToSystemUser
   };
 }
 
