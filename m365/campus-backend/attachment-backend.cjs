@@ -296,6 +296,79 @@ function createAttachmentRouter(deps) {
     }
   }
 
+  async function handlePublicUpload(req, res, origin) {
+    try {
+      const envelope = await parseJsonBody(req);
+      validateActionEnvelope(envelope, ATTACHMENT_ACTIONS.UPLOAD);
+      const payload = normalizeUploadPayload(envelope.payload);
+      if (cleanText(payload.scope) !== 'unit-contact-authorization-doc') {
+        throw createError('Forbidden', 403);
+      }
+      if (cleanText(payload.recordType) !== 'unit-contact-application') {
+        throw createError('Forbidden', 403);
+      }
+      validateUploadPayload(payload);
+      const siteId = await resolveSiteId();
+      const drive = await resolveDrive();
+      const attachmentId = cleanText(payload.attachmentId) || generateAttachmentId('att');
+      const drivePath = buildDrivePath(payload, attachmentId);
+      const contentBuffer = Buffer.from(payload.contentBase64, 'base64');
+      const encodedPath = drivePath.split('/').map((segment) => encodeURIComponent(segment)).join('/');
+      const item = await rawGraphRequest(
+        'PUT',
+        `/sites/${siteId}/drives/${drive.id}/root:/${encodedPath}:/content`,
+        contentBuffer,
+        {
+          'Content-Type': cleanText(payload.contentType) || 'application/octet-stream'
+        }
+      );
+      await writeJson(res, {
+        status: 201,
+        jsonBody: {
+          ok: true,
+          item: mapDriveItemForClient(item, {
+            attachmentId,
+            scope: payload.scope,
+            ownerId: payload.ownerId,
+            recordType: payload.recordType,
+            path: drivePath,
+            contentType: payload.contentType,
+            uploadedAt: new Date().toISOString()
+          }),
+          contractVersion: CONTRACT_VERSION
+        }
+      }, origin);
+      await createAuditRow({
+        eventType: 'unit_contact.authorization_doc_public_uploaded',
+        actorEmail: cleanText(payload.ownerId),
+        targetEmail: cleanText(payload.ownerId),
+        unitCode: '',
+        recordId: attachmentId,
+        occurredAt: new Date().toISOString(),
+        payloadJson: JSON.stringify({
+          ownerId: cleanText(payload.ownerId),
+          recordType: cleanText(payload.recordType),
+          scope: cleanText(payload.scope),
+          fileName: payload.fileName,
+          contentType: payload.contentType,
+          fileSize: Number(payload.size || contentBuffer.length || 0),
+          storedPath: drivePath,
+          publicUpload: true,
+          attachment: summarizeAttachments([{
+            attachmentId,
+            name: payload.fileName,
+            size: Number(payload.size || contentBuffer.length || 0)
+          }])
+        })
+      });
+    } catch (error) {
+      await writeJson(res, {
+        status: Number(error && error.statusCode) || 500,
+        jsonBody: { ok: false, error: cleanText(error && error.message) || 'Failed to upload attachment.' }
+      }, origin);
+    }
+  }
+
   async function handleDetail(req, res, origin, itemId) {
     try {
       await requestAuthz.requireAuthenticatedUser(req);
@@ -397,6 +470,9 @@ function createAttachmentRouter(deps) {
 
     if (url.pathname === '/api/attachments/health' && req.method === 'GET') {
       return handleHealth(req, res, origin).then(() => true);
+    }
+    if (url.pathname === '/api/attachments/public-upload' && req.method === 'POST') {
+      return handlePublicUpload(req, res, origin).then(() => true);
     }
     if (url.pathname === '/api/attachments/upload' && req.method === 'POST') {
       return handleUpload(req, res, origin).then(() => true);

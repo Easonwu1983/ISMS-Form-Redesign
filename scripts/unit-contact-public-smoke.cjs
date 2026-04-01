@@ -19,6 +19,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
   attachDiagnostics(page, results);
+  const authDocPath = path.resolve(__dirname, '..', 'dist', 'cloudflare-pages', 'unit-contact-authorization-template.pdf');
 
   try {
     await resetApp(page);
@@ -30,7 +31,7 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
       await gotoHash(page, 'apply-unit-contact', { handleUnsaved: false });
       await page.waitForSelector('[data-testid="unit-contact-apply-form"]', { timeout: 15000 });
       const title = await page.locator('.page-title').first().textContent();
-      if (!String(title || '').includes('填寫單位、聯絡方式與資安角色後送出')) {
+      if (!String(title || '').includes('申請單位管理員')) {
         throw new Error('apply title mismatch: ' + title);
       }
       return 'public application form visible';
@@ -71,6 +72,8 @@ const RESULT_PATH = path.join(OUT_DIR, 'unit-contact-public-smoke.json');
       await page.fill('[data-testid="unit-contact-extension"]', '61234');
       await page.fill('[data-testid="unit-contact-email"]', uniqueEmail);
       await page.fill('[data-testid="unit-contact-note"]', 'public smoke');
+      await page.setInputFiles('#uca-authorization-doc', authDocPath);
+      await page.waitForSelector('.unit-contact-file-name', { timeout: 15000 });
       await page.click('[data-testid="unit-contact-submit"]');
       await page.waitForURL(/#apply-unit-contact-success\//, { timeout: 15000 });
       createdId = await page.locator('.unit-contact-summary-grid strong').first().textContent();

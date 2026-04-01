@@ -167,6 +167,21 @@
         });
       }
 
+      async function requestPublicAttachmentJson(path, options) {
+        const endpoint = opts.getAttachmentsEndpoint();
+        if (!endpoint) throw new Error('未設定 attachmentsEndpoint');
+        const suffix = String(path || '').trim();
+        const url = suffix ? (endpoint + suffix) : endpoint;
+        return requestJson(url, {
+          ...(options || {}),
+          headers: {
+            'X-ISMS-Contract-Version': contracts.attachments,
+            ...opts.getAttachmentsSharedHeaders(),
+            ...(((options || {}).headers) || {})
+          }
+        });
+      }
+
       async function requestAttachmentBlob(path, options) {
         const endpoint = opts.getAttachmentsEndpoint();
         if (!endpoint) throw new Error('未設定 attachmentsEndpoint');
@@ -292,6 +307,7 @@
         if (!contentBase64) throw new Error('附件內容轉換失敗');
         const descriptor = entry && typeof entry === 'object' ? entry : {};
         const opts2 = options && typeof options === 'object' ? options : {};
+        const publicUpload = !!opts2.publicUpload;
         const resolvedFileName = (() => {
           if (typeof opts2.buildFileName === 'function') {
             const built = String(opts2.buildFileName(descriptor, entry, blob) || '').trim();
@@ -303,7 +319,7 @@
           }
           return String(descriptor.name || (entry && entry.file && entry.file.name) || 'attachment.bin').trim();
         })();
-        const body = await requestAttachmentJson('/upload', {
+        const body = await (publicUpload ? requestPublicAttachmentJson('/public-upload', {
           method: 'POST',
           body: {
             action: actions.upload,
@@ -317,7 +333,21 @@
               recordType: String(opts2.recordType || descriptor.recordType || opts2.scope || descriptor.scope || '').trim()
             }
           }
-        });
+        }) : requestAttachmentJson('/upload', {
+          method: 'POST',
+          body: {
+            action: actions.upload,
+            payload: {
+              attachmentId: String(descriptor.attachmentId || '').trim(),
+              fileName: resolvedFileName,
+              contentType: String(descriptor.type || descriptor.contentType || blob.type || 'application/octet-stream').trim(),
+              contentBase64: contentBase64,
+              scope: String(opts2.scope || descriptor.scope || '').trim(),
+              ownerId: String(opts2.ownerId || descriptor.ownerId || '').trim(),
+              recordType: String(opts2.recordType || descriptor.recordType || opts2.scope || descriptor.scope || '').trim()
+            }
+          }
+        }));
         return normalizeRemoteAttachmentDescriptor(body && body.item || {}, {
           ...descriptor,
           scope: String(opts2.scope || descriptor.scope || '').trim(),
@@ -332,6 +362,7 @@
         requestReviewScopeJson: requestReviewScopeJson,
         requestAuditTrailJson: requestAuditTrailJson,
         requestAttachmentJson: requestAttachmentJson,
+        requestPublicAttachmentJson: requestPublicAttachmentJson,
         requestAttachmentBlob: requestAttachmentBlob,
         requestSameOriginBlob: requestSameOriginBlob,
         readBlobAsDataUrl: readBlobAsDataUrl,

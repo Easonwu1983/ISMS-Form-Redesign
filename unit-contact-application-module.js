@@ -838,6 +838,7 @@
           }
 
           const uploadedAuthDoc = await submitAttachmentUpload({ file: authDocFile, name: authDocFile.name, type: authDocFile.type }, {
+            publicUpload: true,
             scope: 'unit-contact-authorization-doc',
             ownerId: applicantEmail,
             recordType: 'unit-contact-application',
