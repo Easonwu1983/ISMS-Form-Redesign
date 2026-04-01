@@ -155,21 +155,24 @@ function createAuditTrailRouter(deps) {
 
     const items = rows.map(mapRowToAuditEntry);
 
-    // Get all items for summary (without pagination)
-    let summary;
-    if (conditions.length) {
-      const allRows = await db.queryAll(`
-        SELECT event_type, actor_email, target_email, unit_code, record_id, occurred_at, title
-        FROM ops_audit ${where}
-      `, params.slice(0, params.length - 2));
-      summary = summarizeAuditEntries(allRows.map(mapRowToAuditEntry));
-    } else {
-      const allRows = await db.queryAll(`
-        SELECT event_type, actor_email, target_email, unit_code, record_id, occurred_at, title
-        FROM ops_audit
-      `);
-      summary = summarizeAuditEntries(allRows.map(mapRowToAuditEntry));
-    }
+    // Compute summary via SQL aggregation (avoids loading all rows)
+    const summaryParams = params.slice(0, params.length - 2);
+    const summaryMeta = await db.queryOne(`
+      SELECT COUNT(*)::int AS total,
+             COUNT(DISTINCT actor_email)::int AS actor_count,
+             MAX(occurred_at) AS latest_occurred_at
+      FROM ops_audit ${where}`, summaryParams);
+    const eventTypeRows = await db.queryAll(`
+      SELECT event_type, COUNT(*)::int AS cnt
+      FROM ops_audit ${where}
+      GROUP BY event_type ORDER BY cnt DESC, event_type`, summaryParams);
+    const summary = {
+      total: summaryMeta ? summaryMeta.total : 0,
+      actorCount: summaryMeta ? summaryMeta.actor_count : 0,
+      latestOccurredAt: summaryMeta && summaryMeta.latest_occurred_at
+        ? new Date(summaryMeta.latest_occurred_at).toISOString() : '',
+      eventTypes: eventTypeRows.map((r) => ({ eventType: r.event_type || 'unknown', count: r.cnt }))
+    };
 
     return { items, total, summary };
   }

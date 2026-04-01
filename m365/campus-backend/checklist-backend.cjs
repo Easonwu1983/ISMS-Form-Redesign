@@ -167,8 +167,13 @@ function createChecklistRouter(deps) {
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const countResult = await db.queryOne(`SELECT COUNT(*)::int AS total FROM checklists ${where}`, params);
-    const total = countResult ? countResult.total : 0;
+    const summaryResult = await db.queryOne(`
+      SELECT COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE status = '草稿')::int AS draft,
+             COUNT(*) FILTER (WHERE status = '已送出')::int AS submitted
+      FROM checklists ${where}`, params);
+    const total = summaryResult ? summaryResult.total : 0;
+    const dbSummary = { total, draft: summaryResult ? summaryResult.draft : 0, submitted: summaryResult ? summaryResult.submitted : 0 };
 
     const pageParams = [...params];
     idx++; pageParams.push(filters.limit);
@@ -177,7 +182,7 @@ function createChecklistRouter(deps) {
       CHECKLIST_SELECT + ` ${where} ORDER BY fill_date DESC, id DESC LIMIT $${idx - 1} OFFSET $${idx}`,
       pageParams
     );
-    return { items: rows.map(mapRowToChecklist), total };
+    return { items: rows.map(mapRowToChecklist), total, summary: dbSummary };
   }
 
   async function buildHealth() {
@@ -203,7 +208,7 @@ function createChecklistRouter(deps) {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
       const filters = readFilters(url);
       const result = await queryChecklists(filters, authz);
-      const summary = summarizeChecklists(result.items);
+      const summary = result.summary || summarizeChecklists(result.items);
       const page = buildPage(result.total, filters.limit, filters.offset, result.items.length);
 
       await writeJson(res, buildJsonResponse(200, {

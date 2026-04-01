@@ -859,8 +859,11 @@ function createTrainingRouter(deps) {
       const actorUsername = cleanText(payload.actorUsername) || actorMeta.actorUsername;
       const now = new Date().toISOString();
 
-      // Pre-load existing rosters for lookup
-      const allRosterRows = await db.queryAll(`${ROSTER_SELECT} ORDER BY unit, name`);
+      // Pre-load existing rosters scoped to relevant units only
+      const batchUnits = [...new Set(rawItems.map((r) => cleanText(r && r.unit)).filter(Boolean))];
+      const allRosterRows = batchUnits.length
+        ? await db.queryAll(`${ROSTER_SELECT} WHERE unit = ANY($1) ORDER BY unit, name`, [batchUnits])
+        : [];
       const rosterById = new Map();
       const rosterByKey = new Map();
       allRosterRows.forEach((row) => {

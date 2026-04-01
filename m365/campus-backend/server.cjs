@@ -2,6 +2,7 @@ const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { URL } = require('url');
 
 const {
@@ -146,19 +147,38 @@ function buildSecurityHeaders(pathname) {
   return headers;
 }
 
+const GZIP_MIN_BYTES = 1024;
+
+function acceptsGzip(req) {
+  const ae = String((req && req.headers && req.headers['accept-encoding']) || '');
+  return /\bgzip\b/i.test(ae);
+}
+
 async function writeJson(res, response, origin) {
   const payload = typeof response.jsonPayload === 'string'
     ? response.jsonPayload
     : JSON.stringify(response.jsonBody || {});
-  const headers = {
+  const baseHeaders = {
     ...(response.headers || {}),
     ...buildCorsHeaders(origin),
     ...buildSecurityHeaders(response.path || '/api'),
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(payload)
+    'Content-Type': 'application/json; charset=utf-8'
   };
-  res.writeHead(response.status || 200, headers);
-  res.end(payload);
+
+  const req = res && res.__ismsReq;
+  const payloadBytes = Buffer.byteLength(payload);
+  if (req && acceptsGzip(req) && payloadBytes >= GZIP_MIN_BYTES) {
+    const compressed = zlib.gzipSync(payload);
+    baseHeaders['Content-Encoding'] = 'gzip';
+    baseHeaders['Content-Length'] = compressed.length;
+    baseHeaders['Vary'] = 'Accept-Encoding';
+    res.writeHead(response.status || 200, baseHeaders);
+    res.end(compressed);
+  } else {
+    baseHeaders['Content-Length'] = payloadBytes;
+    res.writeHead(response.status || 200, baseHeaders);
+    res.end(payload);
+  }
 }
 
 async function writeBinary(res, response, origin) {
@@ -1437,13 +1457,22 @@ function createServer() {
       ? crypto.randomUUID()
       : crypto.randomBytes(16).toString('hex');
     req.__ismsRequestId = requestId;
+    res.__ismsReq = req;
     res.setHeader('x-request-id', requestId);
     const origin = cleanText(req.headers.origin);
     const url = new URL(req.url, `http://${req.headers.host}`);
     res.once('finish', () => {
       if (!String(url.pathname || '').startsWith('/api/')) return;
       const durationMs = Date.now() - startedAt;
-      console.log(`[http] requestId=${requestId} method=${req.method} path=${url.pathname} status=${res.statusCode} durationMs=${durationMs}`);
+      const clientIp = readClientAddress(req) || '-';
+      console.log(JSON.stringify({
+        level: 'info', type: 'http',
+        requestId, method: req.method, path: url.pathname,
+        status: res.statusCode, durationMs, clientIp,
+        contentLength: Number(res.getHeader('content-length') || 0),
+        gzip: !!res.getHeader('content-encoding'),
+        ts: new Date().toISOString()
+      }));
     });
 
     if (req.method === 'OPTIONS') {
