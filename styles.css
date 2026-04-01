@@ -10719,3 +10719,149 @@ tbody tr:hover {
     min-height: 100vh;
   }
 }
+
+/* ========================================
+   Dark Mode
+   ======================================== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-card: #1e293b;
+    --bg-card-hover: #263548;
+    --bg-input: #1a2536;
+    --bg-sidebar: #15202e;
+    --bg-login: #0f172a;
+
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-heading: #f1f5f9;
+
+    --accent-primary: #60a5fa;
+    --accent-primary-hover: #93bbfd;
+    --accent-light: #1e3a5f;
+    --accent-gradient: linear-gradient(135deg, #3b82f6, #2563eb);
+    --accent-glow: 0 6px 18px rgba(59, 130, 246, 0.3);
+
+    --border-color: #334155;
+    --border-subtle: #1e293b;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  .sidebar {
+    background: var(--bg-sidebar);
+    border-right-color: var(--border-color);
+  }
+
+  .header {
+    background: var(--bg-secondary);
+    border-bottom-color: var(--border-color);
+  }
+
+  .card,
+  .dashboard-chart-panel,
+  .dashboard-table-panel,
+  .review-table-card,
+  .detail-section,
+  .detail-history-section {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+  }
+
+  .card:hover {
+    background: var(--bg-card-hover);
+  }
+
+  input,
+  select,
+  textarea,
+  .form-input,
+  .form-select,
+  .form-textarea {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+  }
+
+  table,
+  .table-wrapper {
+    background: var(--bg-card);
+  }
+
+  thead th {
+    background: var(--bg-secondary);
+    color: var(--text-heading);
+    border-bottom-color: var(--border-color);
+  }
+
+  tbody td {
+    border-bottom-color: var(--border-color);
+  }
+
+  tbody tr:hover td {
+    background: var(--bg-card-hover);
+  }
+
+  .modal-content {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+
+  .modal-backdrop {
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  .toast {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+
+  .page-header {
+    background: var(--bg-card);
+    border-bottom-color: var(--border-color);
+  }
+
+  .btn {
+    border-color: var(--border-color);
+  }
+
+  .btn-secondary {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+  }
+
+  .sidebar-nav-item:hover,
+  .sidebar-nav-item.is-active {
+    background: var(--accent-light);
+  }
+
+  .login-card {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+  }
+
+  .detail-grid dt {
+    color: var(--text-secondary);
+  }
+
+  .detail-grid dd {
+    color: var(--text-primary);
+  }
+
+  a {
+    color: var(--accent-primary);
+  }
+
+  ::selection {
+    background: var(--accent-primary);
+    color: #ffffff;
+  }
+}
