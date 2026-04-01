@@ -909,6 +909,9 @@ async function provisionUnitContactSystemUser(application) {
   };
   validateSystemUserPayload(systemUserPayload, { requirePassword: !existingUserEntry });
   const userWrite = await upsertSystemUser(existingUserEntry, systemUserPayload);
+  if (systemUserRouter && typeof systemUserRouter.invalidateUsersCache === 'function') {
+    systemUserRouter.invalidateUsersCache();
+  }
   return {
     loginUsername,
     initialPassword,

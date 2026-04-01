@@ -1469,7 +1469,8 @@ function createSystemUserRouter(deps) {
   }
 
   return {
-    tryHandle
+    tryHandle,
+    invalidateUsersCache
   };
 }
 
