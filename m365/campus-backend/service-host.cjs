@@ -113,11 +113,33 @@ function installFileLogger(logDir) {
   };
 }
 
+function validateRequiredEnv() {
+  const required = [
+    { key: 'AUTH_SESSION_SECRET', hint: 'Set authSessionSecret in runtime.local.json or AUTH_SESSION_SECRET env var' },
+    { key: 'PG_DATABASE', hint: 'Set postgres.database in runtime.local.json or PG_DATABASE env var' },
+    { key: 'PG_USER', hint: 'Set postgres.user in runtime.local.json or PG_USER env var' },
+    { key: 'PG_PASSWORD', hint: 'Set postgres.password in runtime.local.json or PG_PASSWORD env var' }
+  ];
+  const missing = required.filter((r) => !String(process.env[r.key] || '').trim());
+  if (missing.length) {
+    const lines = missing.map((r) => `  - ${r.key}: ${r.hint}`);
+    console.error('FATAL: Missing required environment variables:\n' + lines.join('\n'));
+    process.exit(1);
+  }
+  // Validate session secret strength
+  const secret = String(process.env.AUTH_SESSION_SECRET || '');
+  if (secret.length < 16) {
+    console.error('FATAL: AUTH_SESSION_SECRET must be at least 16 characters for adequate security.');
+    process.exit(1);
+  }
+}
+
 process.chdir(projectRoot);
 
 const runtimeConfigPath = resolveRuntimeConfigPath();
 const runtimeConfig = loadRuntimeConfig(runtimeConfigPath);
 applyEnvFromConfig(runtimeConfig);
+validateRequiredEnv();
 const { startServer } = require('./server.cjs');
 
 const logDir = path.resolve(runtimeConfig.logDir || path.join(projectRoot, 'logs', 'campus-backend'));

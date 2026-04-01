@@ -62,6 +62,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 const APPLY_RATE_LIMIT_WINDOW_MS = Number(process.env.UNIT_CONTACT_APPLY_WINDOW_MS || 15 * 60 * 1000);
 const APPLY_RATE_LIMIT_MAX_REQUESTS = Number(process.env.UNIT_CONTACT_APPLY_MAX_REQUESTS || 5);
 const MAX_JSON_BODY_BYTES = Number(process.env.UNIT_CONTACT_MAX_JSON_BODY_BYTES || 1024 * 1024);
+const MAX_UPLOAD_BODY_BYTES = Number(process.env.MAX_UPLOAD_BODY_BYTES || 14 * 1024 * 1024); // ~10MB file after base64 overhead
 const applyThrottle = new Map();
 
 function cleanText(value) {
@@ -85,13 +86,14 @@ function createHttpError(message, statusCode) {
   return error;
 }
 
-function parseJsonBody(req) {
+function parseJsonBody(req, maxBytes) {
+  const limit = Number(maxBytes) > 0 ? Number(maxBytes) : MAX_JSON_BODY_BYTES;
   return new Promise((resolve, reject) => {
     const chunks = [];
     let totalBytes = 0;
     req.on('data', (chunk) => {
       totalBytes += Buffer.byteLength(chunk);
-      if (totalBytes > MAX_JSON_BODY_BYTES) {
+      if (totalBytes > limit) {
         req.destroy(createHttpError('Request body too large', 413));
         return;
       }
@@ -111,6 +113,10 @@ function parseJsonBody(req) {
   });
 }
 
+function parseUploadBody(req) {
+  return parseJsonBody(req, MAX_UPLOAD_BODY_BYTES);
+}
+
 function buildCorsHeaders(origin) {
   const allowedOrigins = getAllowedOrigins();
   const headers = {
@@ -126,15 +132,18 @@ function buildCorsHeaders(origin) {
 }
 
 function buildSecurityHeaders(pathname) {
-  const path = cleanText(pathname) || '/';
-  return {
+  const p = cleanText(pathname) || '/';
+  const headers = {
     'x-frame-options': 'DENY',
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'no-referrer',
     'permissions-policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()',
-    'cache-control': path.startsWith('/api/') ? 'no-store, no-cache, must-revalidate' : 'no-store',
-    'pragma': 'no-cache'
+    'cache-control': p.startsWith('/api/') ? 'no-store, no-cache, must-revalidate' : 'no-store',
+    'pragma': 'no-cache',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains',
+    'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   };
+  return headers;
 }
 
 async function writeJson(res, response, origin) {
@@ -1054,7 +1063,7 @@ const reviewScopeRouter = createReviewScopeRouter({
 });
 
 const attachmentRouter = createAttachmentRouter({
-  parseJsonBody, writeJson, writeBinary, requestAuthz
+  parseJsonBody, parseUploadBody, writeJson, writeBinary, requestAuthz
 });
 
 const systemUserRouter = createSystemUserRouter({

@@ -92,8 +92,45 @@ function buildContentDisposition(filename, download) {
 /*  Router factory                                                     */
 /* ------------------------------------------------------------------ */
 
+const MAX_ATTACHMENT_BYTES = Number(process.env.MAX_ATTACHMENT_SIZE_BYTES || 10 * 1024 * 1024); // 10 MB
+
+const ALLOWED_EXTENSIONS = new Set([
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.odt', '.ods', '.odp', '.csv', '.txt', '.rtf',
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg',
+  '.zip', '.7z'
+]);
+
+const ALLOWED_CONTENT_TYPES = new Set([
+  'application/pdf',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.oasis.opendocument.text', 'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.oasis.opendocument.presentation',
+  'text/csv', 'text/plain', 'application/rtf',
+  'image/png', 'image/jpeg', 'image/gif', 'image/bmp', 'image/webp', 'image/svg+xml',
+  'application/zip', 'application/x-7z-compressed',
+  'application/octet-stream'
+]);
+
+function validateFileConstraints(fileName, contentType, sizeBytes) {
+  if (sizeBytes > MAX_ATTACHMENT_BYTES) {
+    throw createError(`File size (${(sizeBytes / 1024 / 1024).toFixed(1)} MB) exceeds maximum allowed size (${(MAX_ATTACHMENT_BYTES / 1024 / 1024).toFixed(0)} MB).`, 413);
+  }
+  const ext = String(path.extname(fileName) || '').toLowerCase();
+  if (ext && !ALLOWED_EXTENSIONS.has(ext)) {
+    throw createError(`File type "${ext}" is not allowed. Allowed: ${Array.from(ALLOWED_EXTENSIONS).join(', ')}`, 415);
+  }
+  const ct = String(contentType || '').toLowerCase().split(';')[0].trim();
+  if (ct && ct !== 'application/octet-stream' && !ALLOWED_CONTENT_TYPES.has(ct)) {
+    throw createError(`Content type "${ct}" is not allowed.`, 415);
+  }
+}
+
 function createAttachmentRouter(deps) {
-  const { parseJsonBody, writeJson, writeBinary, requestAuthz } = deps;
+  const { parseJsonBody, parseUploadBody, writeJson, writeBinary, requestAuthz } = deps;
+  const parseAttachmentBody = typeof parseUploadBody === 'function' ? parseUploadBody : parseJsonBody;
 
   async function createAuditRow(input) {
     await db.query(`
@@ -180,7 +217,7 @@ function createAttachmentRouter(deps) {
       if (!isPublic) {
         authz = await requestAuthz.requireAuthenticatedUser(req);
       }
-      const envelope = await parseJsonBody(req);
+      const envelope = await parseAttachmentBody(req);
       validateActionEnvelope(envelope, ATTACHMENT_ACTIONS.UPLOAD);
       const payload = normalizeUploadPayload(envelope.payload);
 
@@ -192,6 +229,7 @@ function createAttachmentRouter(deps) {
       validateUploadPayload(payload);
       const attachmentId = cleanText(payload.attachmentId) || generateAttachmentId('att');
       const contentBuffer = Buffer.from(payload.contentBase64, 'base64');
+      validateFileConstraints(payload.fileName, payload.contentType, contentBuffer.length);
       const relativePath = buildRelativePath(payload.scope, payload.ownerId, attachmentId, payload.fileName);
       const storagePath = buildStoragePath(payload.scope, payload.ownerId, attachmentId, payload.fileName);
 
