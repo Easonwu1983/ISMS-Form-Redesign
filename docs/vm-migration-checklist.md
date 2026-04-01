@@ -26,6 +26,9 @@
    - `curl http://140.112.97.150/unit-contact-authorization-template.pdf -I`
    - `node scripts/vm-entry-smoke.cjs`
    - `ISMS_LIVE_BASE=http://140.112.97.150 node scripts/campus-live-regression-smoke.cjs`
+   - 若這輪動到帳號或申請流程，再跑：
+     - `node scripts/unit-contact-public-smoke.cjs`
+     - `node scripts/unit-contact-admin-review-smoke.cjs`
    - Pages 同步後再跑：`node scripts/formal-production-smoke.cjs`
 
 ## 完成條件
@@ -48,3 +51,9 @@
 - `training-rosters` 會先讀取 `logs/campus-backend/training-rosters-cache.json`，再背景刷新 SharePoint 全量快取。
 - `checklists` 會先讀取 `logs/campus-backend/checklists-cache.json`，再背景刷新 SharePoint 全量快取。
 - `unit-governance` 會保存在 `logs/campus-backend/unit-governance-store.json`，校內 VM 上不同瀏覽器共用同一份治理設定。
+- VM 主機已安裝 PostgreSQL `18.3`，cluster 為 `18/main`，監聽 `127.0.0.1:5432`。
+- 若帳號流程回歸，先檢查：
+  - `renderLogin()` 是否在輸入後又切 panel
+  - `system-users` / `unit-contact-review` paged client 是否已 hydrate
+  - public attachment upload route 是否可用
+  - `system-users` cache invalidation 是否在 `通過並啟用` 後生效

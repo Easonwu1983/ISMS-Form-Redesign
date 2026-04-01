@@ -1,62 +1,50 @@
-﻿# 開機檢查
+# 開機檢查
+
+## 每次接手先做
 
 1. `git status --short`
-2. 若本輪動到 shell / CSS / bundle / asset loader，先跑：`node scripts/build-app-core-assets.cjs`
-3. 若準備發 Pages，先刷新本機 root manifest：`node scripts/build-version-info.cjs campus-host > deploy-manifest.json`
-4. 確認 `.runtime/runtime.local.host.json`：`tokenMode: "app-only"`、`mailSenderUpn: "easonwu@m365.ntu.edu.tw"`、UTF-8 無 BOM
-5. 先確認正式鏈：
-   - `curl http://140.112.97.150/api/unit-contact/health`
-   - `curl http://140.112.97.150/deploy-manifest.json`
-   - `curl https://isms-campus-portal.pages.dev/deploy-manifest.json`
-   - `node scripts/formal-production-smoke.cjs`
-   - 先看單一報告：`logs/formal-production/latest-release-report.md`（先看 `Metrics / Coverage / Cache Signals / Cache Miss Reasons / Warm State / Latency Hotspots / Layers / Unstable Steps`；`Cache Signals` 裡重點看 `apiCacheHits / apiCacheMisses`）
-   - 需要分層定位時再跑：
-     - `node scripts/formal-production-health-smoke.cjs`
-     - `logs/formal-production/latest-health.json`
-     - `node scripts/formal-production-api-smoke.cjs`
-     - `logs/formal-production/latest-api.json`
-     - `node scripts/formal-production-browser-smoke.cjs`
-     - `logs/formal-production/latest-browser.json`
-     - `node scripts/formal-production-visual-smoke.cjs`
-     - `logs/formal-production/latest-visual.json`
-6. 只有做本機開發驗證時，才啟動本機 stack：`node m365/campus-backend/service-host.cjs .runtime/runtime.local.host.json`
-7. 只有做本機開發驗證時，才啟動 gateway：`powershell -ExecutionPolicy Bypass -File scripts/start-host-campus-gateway.ps1`
+2. 看 `logs/formal-production/latest-release-report.md`
+3. 看 [Start Here](./start-here.md)
+4. 若本輪會動到 `shell / CSS / bundle / asset-loader`，先記住要跑 `node scripts/build-app-core-assets.cjs`
 
-## 這份清單的固定假設
+## 固定事實
 
+- 正式主站：`http://140.112.97.150/`
+- Pages：`https://isms-campus-portal.pages.dev/`
 - 正式部署入口：`useradmin@140.112.97.150`
 - VM repo：`/srv/isms-form-redesign`
-- Pages smoke 不和平行 full smoke 一起跑
-- 本機 `8088` 不作為正式判準
+- service user：`ismsbackend`
+- 本機 `8088`：只做開發驗證
 
-## 固定值
+## 先確認正式鏈
 
-- 唯一最高管理者：`easonwu`
-- 核准寄信模式：`app-only`
-- 校內 VM：`140.112.97.150`
-- 正式主站：校內 VM
-- Pages：備援頁
-- 本機 `8088`：僅開發驗證
+- `curl http://140.112.97.150/api/unit-contact/health`
+- `curl http://140.112.97.150/deploy-manifest.json`
+- `curl https://isms-campus-portal.pages.dev/deploy-manifest.json`
+- `node scripts/formal-production-smoke.cjs`
 
-## 目前先看哪裡
+## 帳號與申請流程如果有動到，先記住要驗
 
-每次接手先只看：
+- `node scripts/unit-contact-public-smoke.cjs`
+- `node scripts/unit-contact-admin-review-smoke.cjs`
 
-1. `logs/formal-production/latest-release-report.md`
-2. `docs/optimization-gap-list.md`
-3. `git status --short`
+## 已知帳號流程坑
 
-如果正式鏈是綠的，下一輪優先看這些熱點：
+- 登入頁第一次輸入不穩：原因通常是 local bootstrap 太早切 panel
+- `帳號管理` / `單位管理人申請` 噴 `paged client unavailable`：原因通常是 paged client 還沒 hydrate
+- 公開申請授權附件上傳失敗：要檢查 public upload route
+- `通過並啟用` 後看不到新帳號：要檢查 `system-users` cache invalidation
 
-- `visual:desktop:dashboard`
-- `visual:desktop:unit-review`
-- `checklist:list-loaded`
-- `visual:public-desktop:unit-contact-apply`
-- `unit-admin:login`
+## VM 額外狀態
+
+- PostgreSQL 已安裝到主機層
+- 版本：`18.3`
+- cluster：`18/main`
+- 監聽：`127.0.0.1:5432`
 
 ## 開機時最容易漏掉的事
 
 - Pages 發佈前一定先刷新本機 root `deploy-manifest.json`
-- shell / CSS / bundle / asset-loader 有變更時一定先跑 `node scripts/build-app-core-assets.cjs`
-- 只做前端靜態檔調整時，不要順手重啟 backend / caddy
-- 看到大量未追蹤 `tmp_*`、報告檔、extract 檔時，直接忽略；只關心 tracked 變更
+- `cloudflare-pages-regression-smoke.cjs` 不要和平行 full smoke 一起跑
+- 大量 `tmp_*`、extract、報表檔通常都是 untracked 暫存，先忽略
+
