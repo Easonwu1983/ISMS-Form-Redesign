@@ -306,7 +306,10 @@
       if (moduleApi && typeof moduleApi.getBootstrapRetryDelays === 'function') {
         return moduleApi.getBootstrapRetryDelays(delays);
       }
-      return (Array.isArray(delays) && delays.length ? delays : [80, 160, 320, 640]).slice();
+      const fallback = typeof window !== 'undefined' && Array.isArray(window.__ISMS_BOOTSTRAP_RETRY_DELAYS__)
+        ? window.__ISMS_BOOTSTRAP_RETRY_DELAYS__
+        : [];
+      return Array.isArray(delays) && delays.length ? delays.slice() : fallback.slice();
     }
 
     function createAdminCollectionPage(limit) {

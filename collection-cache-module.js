@@ -1,6 +1,9 @@
 (function () {
   window.createCollectionCacheModule = function createCollectionCacheModule() {
     const DEFAULT_BOOTSTRAP_RETRY_DELAYS = Object.freeze([80, 160, 320, 640]);
+    if (typeof window !== 'undefined') {
+      window.__ISMS_BOOTSTRAP_RETRY_DELAYS__ = DEFAULT_BOOTSTRAP_RETRY_DELAYS;
+    }
 
     function cloneObject(value) {
       return value && typeof value === 'object' ? { ...value } : {};
@@ -16,6 +19,10 @@
           return delay > 0;
         });
       return normalized.length ? normalized : DEFAULT_BOOTSTRAP_RETRY_DELAYS.slice();
+    }
+
+    function getDefaultBootstrapRetryDelays() {
+      return DEFAULT_BOOTSTRAP_RETRY_DELAYS.slice();
     }
 
     function createPage(limit) {
@@ -369,6 +376,7 @@
 
     return {
       cloneObject: cloneObject,
+      getDefaultBootstrapRetryDelays: getDefaultBootstrapRetryDelays,
       getBootstrapRetryDelays: getBootstrapRetryDelays,
       createPage: createPage,
       createRemoteCollectionState: createRemoteCollectionState,
