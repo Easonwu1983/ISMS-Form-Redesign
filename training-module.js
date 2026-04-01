@@ -146,40 +146,20 @@
       let trainingAccessProfileListenerInstalled = false;
       let trainingRowsStateVersion = 0;
       let trainingRowsFilterCache = { signature: '', rows: [] };
-      const TRAINING_MANUAL_ROSTER_DRAFT_CACHE_KEY = 'rows';
-      const trainingManualRosterDraftCache = createTrainingBoundedCacheStore({
-        maxEntries: 1,
-        defaultTtlMs: 0
-      });
       const TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY = '__TRAINING_MANUAL_ROSTER_DRAFTS__';
-      function getTrainingManualRosterDraftCacheRows() {
-        const hit = trainingManualRosterDraftCache && typeof trainingManualRosterDraftCache.get === 'function'
-          ? trainingManualRosterDraftCache.get(TRAINING_MANUAL_ROSTER_DRAFT_CACHE_KEY)
-          : null;
-        return hit && Array.isArray(hit.value) ? hit.value.slice() : null;
-      }
-      function setTrainingManualRosterDraftCacheRows(rows) {
-        if (!trainingManualRosterDraftCache || typeof trainingManualRosterDraftCache.set !== 'function') return;
-        trainingManualRosterDraftCache.set(TRAINING_MANUAL_ROSTER_DRAFT_CACHE_KEY, Array.isArray(rows) ? rows.slice() : []);
-      }
       function readTrainingManualRosterDraftStorage() {
-        const cachedRows = getTrainingManualRosterDraftCacheRows();
-        if (cachedRows) return cachedRows;
         try {
           if (typeof window === 'undefined' || !window.sessionStorage) return [];
           const raw = window.sessionStorage.getItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY);
           if (!raw) return [];
           const parsed = JSON.parse(raw);
-          const rows = Array.isArray(parsed) ? parsed : [];
-          setTrainingManualRosterDraftCacheRows(rows);
-          return rows;
+          return Array.isArray(parsed) ? parsed : [];
         } catch (_) {
           return [];
         }
       }
       function writeTrainingManualRosterDraftStorage(rows) {
         const normalizedRows = Array.isArray(rows) ? rows.slice() : [];
-        setTrainingManualRosterDraftCacheRows(normalizedRows);
         try {
           if (typeof window === 'undefined' || !window.sessionStorage) return;
           window.sessionStorage.setItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY, JSON.stringify(normalizedRows));
@@ -498,9 +478,6 @@
       trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
       trainingRowsFilterCache = { signature: '', rows: [] };
       lastTrainingRosterFocusState = null;
-      if (trainingManualRosterDraftCache && typeof trainingManualRosterDraftCache.clear === 'function') {
-        trainingManualRosterDraftCache.clear();
-      }
       try {
         if (typeof window !== 'undefined' && window.sessionStorage) {
           window.sessionStorage.removeItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY);

@@ -169,7 +169,7 @@ function normalizeApplyPayload(payload) {
     authorizationDocAttachmentId: cleanText(payload && payload.authorizationDocAttachmentId),
     authorizationDocFileName: cleanText(payload && payload.authorizationDocFileName),
     authorizationDocContentType: cleanText(payload && payload.authorizationDocContentType),
-    authorizationDocSize: Number(payload && payload.authorizationDocSize || 0),
+    authorizationDocSize: Number((payload && payload.authorizationDocSize) || 0),
     authorizationDocUploadedAt: cleanText(payload && payload.authorizationDocUploadedAt),
     authorizationDocDriveItemId: cleanText(payload && payload.authorizationDocDriveItemId)
   };
@@ -331,7 +331,7 @@ function createApplicationRecord(payload, sequence, now) {
     authorizationDocDriveItemId: payload.authorizationDocDriveItemId || '',
     authorizationDocFileName: payload.authorizationDocFileName || '',
     authorizationDocContentType: payload.authorizationDocContentType || '',
-    authorizationDocSize: Number(payload.authorizationDocSize || 0),
+    authorizationDocSize: Number((payload.authorizationDocSize) || 0),
     authorizationDocUploadedAt: payload.authorizationDocUploadedAt || ''
   });
 }

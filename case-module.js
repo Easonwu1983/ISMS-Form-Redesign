@@ -1136,7 +1136,7 @@
     </div>`;
     scheduleRefreshIcons();
     bindCopyButtons();
-    Promise.all(evidenceMounts.map((entry) => mountCaseEvidenceList(entry.id, entry.files, entry.emptyText))).then(() => {
+    Promise.allSettled(evidenceMounts.map((entry) => mountCaseEvidenceList(entry.id, entry.files, entry.emptyText))).then(() => {
       scheduleRefreshIcons();
     });
   }

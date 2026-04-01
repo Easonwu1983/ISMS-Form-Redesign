@@ -3069,7 +3069,7 @@
           resultsEl.innerHTML = '<div class="unit-chip-picker-empty">找不到符合條件的單位</div>';
           return;
         }
-        resultsEl.innerHTML = matches.map((entry) => '<button type="button" class="unit-cascade-search-option unit-chip-picker-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(entry.category || '') + (entry.code ? ' · ' + entry.code : '') + '</span></button>').join('');
+        resultsEl.innerHTML = matches.map((entry) => '<button type="button" class="unit-cascade-search-option unit-chip-picker-option" data-unit-value="' + esc(entry.value) + '"><span class="unit-cascade-search-option-title">' + esc(entry.fullLabel) + '</span><span class="unit-cascade-search-option-meta">' + esc(entry.category || '') + (entry.code ? ' · ' + esc(entry.code) : '') + '</span></button>').join('');
       };
       const addValue = (value) => {
         const next = String(value || '').trim();
