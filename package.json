@@ -63,12 +63,17 @@
         "build:cloudflare:pages": "node scripts/build-cloudflare-pages-package.cjs",
         "build:core:assets": "node scripts/build-app-core-assets.cjs",
         "test:cloudflare:health": "node scripts/cloudflare-live-health-check.cjs",
-        "test:cloudflare:smoke": "node scripts/cloudflare-pages-regression-smoke.cjs"
+        "test:cloudflare:smoke": "node scripts/cloudflare-pages-regression-smoke.cjs",
+        "lint": "eslint . --ext .js,.cjs --max-warnings 50",
+        "lint:fix": "eslint . --ext .js,.cjs --fix",
+        "lint:backend": "eslint m365/campus-backend --ext .cjs --max-warnings 20",
+        "lint:frontend": "eslint *.js --max-warnings 30"
     },
     "devDependencies": {
         "@axe-core/playwright": "^4.11.1",
         "axe-core": "^4.11.1",
         "esbuild": "^0.27.4",
+        "eslint": "^8.57.1",
         "playwright": "1.58.2",
         "purgecss": "^8.0.0"
     },

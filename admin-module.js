@@ -58,6 +58,7 @@
       initUnitCascade,
       registerActionHandlers,
       closeModalRoot,
+      openConfirmDialog,
       getUnitContactApplication,
       requestUnitContactAuthorizationDocument
     } = deps;
@@ -3321,7 +3322,10 @@
       return;
     }
     const label = `${user.name || user.username || cleanUsername}（${cleanUsername}）`;
-    if (!window.confirm(`確定要刪除 ${label} 嗎？此操作無法復原。`)) return;
+    const confirmed = typeof openConfirmDialog === 'function'
+      ? await openConfirmDialog(`確定要刪除 ${label} 嗎？此操作無法復原。`, { title: '刪除使用者', confirmLabel: '刪除', confirmClass: 'btn-danger', kicker: '警告' })
+      : window.confirm(`確定要刪除 ${label} 嗎？此操作無法復原。`);
+    if (!confirmed) return;
     try {
       const currentFilters = { ...systemUsersState.filters };
       await submitUserDelete(cleanUsername, { username: cleanUsername });
@@ -4066,7 +4070,10 @@
       toast('目前沒有孤兒附件可清除', 'info');
       return;
     }
-    if (!confirm(`確定清除 ${health.orphanAttachments} 筆孤兒附件嗎？這不會影響仍被單據引用的檔案。`)) return;
+    const pruneConfirmed = typeof openConfirmDialog === 'function'
+      ? await openConfirmDialog(`確定清除 ${health.orphanAttachments} 筆孤兒附件嗎？這不會影響仍被單據引用的檔案。`, { title: '清除孤兒附件', confirmLabel: '清除', confirmClass: 'btn-danger', kicker: '警告' })
+      : confirm(`確定清除 ${health.orphanAttachments} 筆孤兒附件嗎？這不會影響仍被單據引用的檔案。`);
+    if (!pruneConfirmed) return;
     const result = await pruneOrphanAttachments();
     toast(`已清除 ${result.removedCount} 筆孤兒附件，釋放 ${formatSchemaBytes(result.removedBytes)}`);
     renderSchemaHealth();
@@ -4215,12 +4222,15 @@
     refreshIcons();
   }
 
-  function handleClearLoginLogs() {
+  async function handleClearLoginLogs() {
     if (!canManageUsers()) {
       toast('僅最高管理員可清除登入紀錄', 'error');
       return;
     }
-    if (!confirm('確定要清除所有登入紀錄嗎？')) return;
+    const clearConfirmed = typeof openConfirmDialog === 'function'
+      ? await openConfirmDialog('確定要清除所有登入紀錄嗎？', { title: '清除登入紀錄', confirmLabel: '清除', confirmClass: 'btn-danger', kicker: '警告' })
+      : confirm('確定要清除所有登入紀錄嗎？');
+    if (!clearConfirmed) return;
     clearLoginLogs();
     toast('登入紀錄已清除');
     renderLoginLog();

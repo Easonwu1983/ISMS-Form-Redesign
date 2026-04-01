@@ -353,6 +353,7 @@
         initUnitCascade,
         registerActionHandlers,
         closeModalRoot,
+        openConfirmDialog,
         getUnitContactApplication
       };
     },

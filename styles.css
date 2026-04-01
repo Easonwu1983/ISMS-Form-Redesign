@@ -1146,10 +1146,11 @@ body {
 }
 
 .badge-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  position: relative;
 }
 
 .badge-created .badge-dot {
@@ -1158,30 +1159,53 @@ body {
 
 .badge-pending .badge-dot {
   background: #d3942f;
+  border-radius: 0;
+  transform: rotate(45deg);
 }
 
+.badge-responding .badge-dot,
 .badge-responded .badge-dot {
   background: #9263ce;
+  border-radius: 2px;
 }
 
 .badge-reviewing .badge-dot {
   background: #b18c31;
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
 }
 
 .badge-closed .badge-dot {
   background: #4ba16d;
+  clip-path: polygon(20% 45%, 0% 65%, 35% 100%, 100% 20%, 80% 0%, 35% 70%);
+  width: 10px;
+  height: 10px;
 }
 
 .badge-proposed .badge-dot {
   background: #7083c8;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px #7083c8, inset 0 0 0 3px white;
 }
 
 .badge-tracking .badge-dot {
   background: #cb7d5f;
+  clip-path: polygon(50% 0%, 65% 35%, 100% 35%, 72% 58%, 82% 95%, 50% 72%, 18% 95%, 28% 58%, 0% 35%, 35% 35%);
+  width: 10px;
+  height: 10px;
 }
 
 .badge-overdue .badge-dot {
   background: #dc7676;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  width: 10px;
+  height: 10px;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .badge-role {
@@ -10863,5 +10887,83 @@ tbody tr:hover {
   ::selection {
     background: var(--accent-primary);
     color: #ffffff;
+  }
+
+  .badge-created {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #93bbfd;
+  }
+
+  .badge-pending {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+  }
+
+  .badge-responded {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.3);
+    color: #c084fc;
+  }
+
+  .badge-reviewing {
+    background: rgba(234, 179, 8, 0.15);
+    border-color: rgba(234, 179, 8, 0.3);
+    color: #fde047;
+  }
+
+  .badge-closed {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #86efac;
+  }
+
+  .badge-overdue {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+  }
+
+  .badge-tracking {
+    background: rgba(251, 146, 60, 0.15);
+    border-color: rgba(251, 146, 60, 0.3);
+    color: #fdba74;
+  }
+
+  .badge-proposed {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
+  }
+
+  .modal-card,
+  .modal {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+
+  .modal-kicker {
+    color: var(--accent-primary);
+  }
+
+  .modal-title {
+    color: var(--text-heading);
+  }
+
+  .modal-message {
+    color: var(--text-secondary);
+  }
+
+  .modal-close-btn {
+    background: var(--bg-input);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+  }
+
+  .modal-close-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
   }
 }
