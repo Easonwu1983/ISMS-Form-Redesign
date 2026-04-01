@@ -703,7 +703,6 @@
       const form = document.getElementById('unit-contact-apply-form');
       const submitButton = form.querySelector('[data-testid="unit-contact-submit"]');
       scheduleUnitContactPostPaint(function () {
-        ensureUnitCascadeControl();
         const coreShell = document.querySelector('[data-unit-contact-core-shell]');
         if (coreShell && !coreShell.dataset.hydrated) {
           coreShell.innerHTML = buildApplyCoreContent();
@@ -714,6 +713,7 @@
         }
         scheduleUnitContactPostPaint(function () {
           if (!document.getElementById('unit-contact-apply-form')) return;
+          ensureUnitCascadeControl();
           authorizedScopePicker = ensureAuthorizedScopePicker() || authorizedScopePicker;
           ensureAuthorizationDocumentSection(form);
           const roleShell = document.querySelector('[data-unit-contact-role-shell]');

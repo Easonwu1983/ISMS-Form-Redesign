@@ -675,7 +675,7 @@ function createTrainingRouter(deps) {
       response: createTrainingJsonResponse(cachedBody)
     });
     trimQueryCache(state.formsSummaryCache, TRAINING_FORMS_SUMMARY_CACHE_MAX);
-    return cloneJson(cachedBody);
+    return cachedBody;
   }
 
   async function listAllForms() {

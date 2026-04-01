@@ -1115,10 +1115,14 @@
       contentEl.innerHTML = `<div class="card checklist-empty-card cl-list-empty-state" hidden><div class="empty-state checklist-empty-state"><div class="empty-state-icon">${ic('clipboard-list')}</div><div class="empty-state-title">目前沒有符合條件的檢核資料</div><div class="empty-state-desc">請先調整關鍵字、狀態或年度篩選，再重新查詢。</div></div></div>`
         + html;
       refreshChecklistListDomCache(contentEl, renderSignature);
-      refreshIcons();
-      bindCopyButtons();
       setChecklistListRouteState('ready');
       applyChecklistKeywordFilter();
+      window.setTimeout(() => {
+        if (checklistListRenderCache.signature !== renderSignature) return;
+        if (contentEl.dataset.checklistRenderSignature !== renderSignature) return;
+        refreshIcons();
+        bindCopyButtons();
+      }, 0);
     }
 
     function syncChecklistListToolbarState() {
@@ -1297,12 +1301,6 @@
         const shellViewSnapshot = getChecklistListViewSnapshot(shellSnapshot.items);
         renderChecklistListContent(shellItems, shellSnapshot, shellViewSnapshot);
         syncChecklistListToolbarState();
-        window.setTimeout(() => {
-          if (renderGeneration !== checklistListRenderGeneration) return;
-          if (!String(window.location.hash || '').startsWith('#checklist')) return;
-          refreshIcons();
-          bindCopyButtons();
-        }, 0);
       }, 0);
       const remotePagePromise = prefetchedRemotePageResult
         ? Promise.resolve(prefetchedRemotePageResult)
@@ -1327,12 +1325,6 @@
         updateChecklistListShellChrome(listSummary, remotePage);
         renderChecklistListContent(checklists, snapshot, viewSnapshot);
         syncChecklistListToolbarState();
-        window.setTimeout(() => {
-          if (renderGeneration !== checklistListRenderGeneration) return;
-          if (!String(window.location.hash || '').startsWith('#checklist')) return;
-          refreshIcons();
-          bindCopyButtons();
-        }, 0);
       }).catch((error) => {
         window.__ismsWarn('checklist list remote page load failed', error);
       });
@@ -1350,12 +1342,6 @@
           const localViewSnapshot = getChecklistListViewSnapshot(snapshot.items);
           renderChecklistListContent(checklists, snapshot, localViewSnapshot);
           syncChecklistListToolbarState();
-          window.setTimeout(() => {
-            if (renderGeneration !== checklistListRenderGeneration) return;
-            if (!String(window.location.hash || '').startsWith('#checklist')) return;
-            refreshIcons();
-            bindCopyButtons();
-          }, 0);
         }, 0);
       } else {
         viewSnapshot = getChecklistListViewSnapshot(snapshot.items);
@@ -1368,12 +1354,6 @@
           if (!String(window.location.hash || '').startsWith('#checklist')) return;
           renderChecklistListContent(checklists, snapshot, viewSnapshot);
           syncChecklistListToolbarState();
-          window.setTimeout(() => {
-            if (renderGeneration !== checklistListRenderGeneration) return;
-            if (!String(window.location.hash || '').startsWith('#checklist')) return;
-            refreshIcons();
-            bindCopyButtons();
-          }, 0);
         }, 0);
       }
     }
@@ -1684,7 +1664,9 @@
       </div>
       <button type="button" class="btn btn-secondary checklist-draft-floating" id="cl-save-draft-floating" data-testid="checklist-save-draft-floating">${ic('save', 'icon-sm')} \u66ab\u5b58\u8349\u7a3f</button>
     </div>`;
-    refreshIcons();
+    window.setTimeout(() => {
+      refreshIcons();
+    }, 0);
     applyTestIds({
       'cl-filler': 'checklist-filler',
       'cl-date': 'checklist-date',
@@ -1745,7 +1727,9 @@
           renderChecklistEvidenceFiles(itemId, true);
         }
       });
-      refreshIcons();
+      window.setTimeout(() => {
+        refreshIcons();
+      }, 0);
     }
 
     function initializeChecklistEvidenceInputs(editable = true) {
@@ -2147,8 +2131,10 @@
         actionsClass: 'checklist-file-actions'
       });
     }));
-    refreshIcons();
-    bindCopyButtons();
+    window.setTimeout(() => {
+      refreshIcons();
+      bindCopyButtons();
+    }, 0);
   }
 
   function getChecklistManageTotalItems() {
@@ -2222,7 +2208,9 @@
       <div id="cm-sections-wrap" data-checklist-route="manage" data-checklist-route-state="shell">${sectHtml}</div>
     </div>`;
 
-    refreshIcons();
+    window.setTimeout(() => {
+      refreshIcons();
+    }, 0);
     setChecklistRouteState('manage', 'ready');
   }
 
@@ -2233,7 +2221,9 @@
     const totalItems = getChecklistManageTotalItems();
     const subtitle = document.querySelector('.page-subtitle');
     if (subtitle) subtitle.textContent = `目前共有 ${getChecklistSectionsState().length} 個類別、${totalItems} 個題目可管理。`;
-    refreshIcons();
+    window.setTimeout(() => {
+      refreshIcons();
+    }, 0);
   }
 
   function _cmModal(title, bodyHtml, onSave) {
@@ -2260,7 +2250,9 @@
     </div>`;
     bindChecklistPageEvent(document.getElementById('cm-modal-bg'), 'click', e => { if (e.target === e.currentTarget) closeModalRoot(); });
     bindChecklistPageEvent(document.getElementById('cm-modal-form'), 'submit', e => { e.preventDefault(); onSave(); closeModalRoot(); _cmRefreshSections(); });
-    refreshIcons();
+    window.setTimeout(() => {
+      refreshIcons();
+    }, 0);
   }
 
   function _cmNextItemId(si) {

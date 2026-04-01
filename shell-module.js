@@ -346,11 +346,11 @@
       if (typeof window !== 'undefined') {
         window.__APP_READY__ = false;
       }
-      var needsLocalBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
-      var bootstrapPanelDisplay = needsLocalBootstrap ? 'block' : 'none';
-      var loginPanelDisplay = needsLocalBootstrap ? 'none' : 'block';
-      var bootstrapAutoFocus = needsLocalBootstrap ? 'autofocus' : '';
-      var loginAutoFocus = needsLocalBootstrap ? '' : 'autofocus';
+      var authMode = getAuthMode();
+      var bootstrapPanelDisplay = 'none';
+      var loginPanelDisplay = 'block';
+      var bootstrapAutoFocus = '';
+      var loginAutoFocus = authMode === 'm365-api' ? 'autofocus' : '';
       var textMap = {
         skip: '\u8df3\u5230\u4e3b\u8981\u5167\u5bb9',
         title: '\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71',
@@ -417,6 +417,37 @@
         '</main></div><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div>';
       if (typeof window !== 'undefined') {
         window.__APP_READY__ = true;
+        if (authMode !== 'm365-api' && typeof window.setTimeout === 'function') {
+          window.setTimeout(function () {
+            try {
+              if (typeof hasLocalUsers !== 'function') return;
+              var bootstrapPanel = document.getElementById('bootstrap-panel');
+              var loginPanel = document.getElementById('login-panel');
+              if (!bootstrapPanel || !loginPanel) return;
+              var active = typeof document !== 'undefined' ? document.activeElement : null;
+              if (active && active !== document.body) {
+                if (typeof active.closest === 'function' && (active.closest('#login-form') || active.closest('#bootstrap-form'))) {
+                  return;
+                }
+              }
+              if (hasLocalUsers()) {
+                var loginUser = document.getElementById('login-user');
+                if (loginUser && typeof loginUser.focus === 'function' && document.activeElement === document.body) {
+                  loginUser.focus({ preventScroll: true });
+                }
+                return;
+              }
+              bootstrapPanel.style.display = 'block';
+              loginPanel.style.display = 'none';
+              var bootstrapName = document.getElementById('bootstrap-name');
+              if (bootstrapName && typeof bootstrapName.focus === 'function') {
+                bootstrapName.focus({ preventScroll: true });
+              }
+            } catch (error) {
+              if (window.__ismsWarn) window.__ismsWarn('login bootstrap check failed', error);
+            }
+          }, 0);
+        }
       }
 
       function buildChangePanelHtml() {

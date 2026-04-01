@@ -537,7 +537,6 @@
       + buildCaseCard('<span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', recentShell, { cardClass: 'dashboard-panel dashboard-table-panel' })
         + '</div></div>';
 
-    scheduleRefreshIcons();
     scheduleDashboardHydration(function () {
       if (renderToken !== dashboardRenderToken) return;
       var items = getVisibleItems();
@@ -621,8 +620,10 @@
       '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + listSnapshot.total + ' 筆，顯示 ' + listSnapshot.filteredCount + ' 筆</p></div>' + createBtn + '</div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
       buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', listSnapshot.rows), { cardClass: 'case-table-card' }) + '</div>';
-    scheduleRefreshIcons();
-    bindCopyButtons();
+    window.setTimeout(function () {
+      scheduleRefreshIcons();
+      bindCopyButtons();
+    }, 0);
     let searchRenderTimer = null;
     const scheduleRenderList = function () {
       if (searchRenderTimer) window.clearTimeout(searchRenderTimer);
