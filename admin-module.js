@@ -3457,6 +3457,29 @@
     }, { once: true });
     popup.addEventListener('beforeunload', revoke, { once: true });
   }
+  function buildUnitContactReviewAttachmentBlock(item, id) {
+    if (!(item && item.hasAuthorizationDoc)) return '';
+    const fileName = cleanText(item.authorizationDocFileName) || '授權同意書';
+    const uploadedAt = fmtTime(item.authorizationDocUploadedAt);
+    const sizeText = Number(item.authorizationDocSize || 0) > 0 ? ` · ${formatSchemaBytes(item.authorizationDocSize)}` : '';
+    return `<div class="unit-contact-review-attachment"><div class="unit-contact-review-attachment-copy"><div class="unit-contact-review-attachment-label">附件</div><div class="unit-contact-review-attachment-title">${esc(fileName)}</div><div class="unit-contact-review-attachment-meta">${uploadedAt ? `上傳：${esc(uploadedAt)}` : '已上傳'}${esc(sizeText)}</div></div><button type="button" class="btn btn-sm btn-secondary unit-contact-review-attachment-action" data-action="admin.unitContactViewAuthDoc" data-id="${esc(id)}" data-applicant-email="${esc(item && item.applicantEmail || '')}">${ic('file-search', 'icon-sm')} 檢視附件</button></div>`;
+  }
+
+  function buildUnitContactReviewActions(item, id, status) {
+    const buttons = [];
+    if (status === 'pending_review' || status === 'returned') {
+      buttons.push(`<button type="button" class="btn btn-sm btn-primary review-action-primary" data-action="admin.unitContactApprove" data-id="${esc(id)}">${ic('badge-check', 'icon-sm')} 通過並啟用</button>`);
+      buttons.push(`<button type="button" class="btn btn-sm btn-secondary review-action-secondary" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
+      buttons.push(`<button type="button" class="btn btn-sm btn-danger review-action-danger" data-action="admin.unitContactReject" data-id="${esc(id)}">${ic('x-circle', 'icon-sm')} 拒絕</button>`);
+    } else if (status === 'approved' || status === 'activation_pending' || status === 'active') {
+      buttons.push(`<button type="button" class="btn btn-sm btn-primary review-action-primary" data-action="admin.unitContactResendActivation" data-id="${esc(id)}">${ic('mail', 'icon-sm')} 重新寄送登入資訊</button>`);
+      if (status !== 'active') {
+        buttons.push(`<button type="button" class="btn btn-sm btn-secondary review-action-secondary" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
+      }
+    }
+    return buttons;
+  }
+
   function renderUnitContactReviewRows(items) {
     const rows = Array.isArray(items) ? items : [];
     if (!rows.length) {
@@ -3465,21 +3488,12 @@
     return rows.map((item) => {
       const id = String(item && item.id || '').trim();
       const status = String(item && item.status || '').trim();
-      const actionButtons = [];
-      if (status === 'pending_review' || status === 'returned') {
-        actionButtons.push(`<button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactApprove" data-id="${esc(id)}">${ic('badge-check', 'icon-sm')} 通過並啟用</button>`);
-        actionButtons.push(`<button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
-        actionButtons.push(`<button type="button" class="btn btn-sm btn-danger" data-action="admin.unitContactReject" data-id="${esc(id)}">${ic('x-circle', 'icon-sm')} 拒絕</button>`);
-      } else if (status === 'approved' || status === 'activation_pending' || status === 'active') {
-        if (item && item.hasAuthorizationDoc) {
-          actionButtons.push(`<button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactViewAuthDoc" data-id="${esc(id)}" data-applicant-email="${esc(item && item.applicantEmail || '')}">${ic('file-search', 'icon-sm')} 檢視授權同意書</button>`);
-        }
-        actionButtons.push(`<button type="button" class="btn btn-sm btn-secondary" data-action="admin.unitContactResendActivation" data-id="${esc(id)}">${ic('mail', 'icon-sm')} 重新寄送登入資訊</button>`);
-        if (status !== 'active') {
-          actionButtons.push(`<button type="button" class="btn btn-sm btn-ghost" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
-        }
-      }
-      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.applicantEmail || '—')}</div><div class="review-card-subtitle review-card-subtitle--top-4">資安角色：${esc(formatSecurityRolesSummary(item && item.securityRoles))}</div></td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="review-actions review-actions--unit-contact">${actionButtons.join('')}</div></td></tr>`;
+      const attachmentBlock = buildUnitContactReviewAttachmentBlock(item, id);
+      const actionButtons = buildUnitContactReviewActions(item, id, status);
+      const actionClass = status === 'pending_review' || status === 'returned'
+        ? 'review-actions review-actions--unit-contact review-actions--unit-contact--review'
+        : 'review-actions review-actions--unit-contact review-actions--unit-contact--maintenance';
+      return `<tr><td><div class="review-unit-name">${esc(id)}</div><div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.unitValue || '未指定單位')}</div></td><td>${esc(item && item.applicantName || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(item && item.applicantEmail || '—')}</div><div class="review-card-subtitle review-card-subtitle--top-4">資安角色：${esc(formatSecurityRolesSummary(item && item.securityRoles))}</div>${attachmentBlock}</td><td>${esc(item && item.extensionNumber || '—')}</td><td>${unitContactStatusBadge(item)}</td><td>${esc(item && item.reviewComment || '—')}</td><td>${esc(fmtTime(item && (item.updatedAt || item.submittedAt)) || '—')}</td><td><div class="${actionClass}">${actionButtons.join('')}</div></td></tr>`;
     }).join('');
   }
 

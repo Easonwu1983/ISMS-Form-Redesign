@@ -5564,6 +5564,85 @@ tbody td:first-child {
   gap: 8px;
 }
 
+.review-actions--unit-contact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 260px;
+}
+
+.review-actions--unit-contact .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.review-actions--unit-contact--review {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.review-actions--unit-contact--review .review-action-primary {
+  grid-column: 1 / -1;
+}
+
+.review-actions--unit-contact--review .review-action-secondary,
+.review-actions--unit-contact--review .review-action-danger {
+  min-width: 0;
+}
+
+.review-actions--unit-contact--maintenance {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.review-actions--unit-contact--maintenance .review-action-primary {
+  grid-column: 1 / -1;
+}
+
+.unit-contact-review-attachment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(219, 231, 244, 0.95);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(242, 247, 253, 0.96));
+}
+
+.unit-contact-review-attachment-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.unit-contact-review-attachment-label {
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #7a8da8;
+  text-transform: uppercase;
+}
+
+.unit-contact-review-attachment-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unit-contact-review-attachment-meta {
+  font-size: 0.78rem;
+  color: #6f8197;
+  line-height: 1.4;
+}
+
+.unit-contact-review-attachment-action {
+  align-self: center;
+  white-space: nowrap;
+}
+
 .review-table-card tbody tr {
   cursor: default;
 }
@@ -9846,7 +9925,18 @@ tbody tr:hover {
 
 
 @media (max-width: 1520px) {
-  .review-actions--unit-contact {
+  .review-actions--unit-contact,
+  .review-actions--unit-contact--review {
+    grid-template-columns: 1fr;
+  }
+
+  .review-actions--unit-contact .review-action-primary,
+  .review-actions--unit-contact .review-action-secondary,
+  .review-actions--unit-contact .review-action-danger {
+    grid-column: auto;
+  }
+
+  .unit-contact-review-attachment {
     grid-template-columns: 1fr;
   }
 }
