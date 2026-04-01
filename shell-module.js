@@ -649,10 +649,17 @@
         window.requestAnimationFrame(function () {
           var activeUser = currentUser();
           if (activeUser && activeUser.mustChangePassword) return;
-          var shouldBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
-          if (shouldBootstrap === needsLocalBootstrap) return;
-          needsLocalBootstrap = shouldBootstrap;
-          switchPanel(shouldBootstrap ? 'bootstrap-panel' : 'login-panel');
+          var runBootstrapCheck = function () {
+            var shouldBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
+            if (shouldBootstrap === needsLocalBootstrap) return;
+            needsLocalBootstrap = shouldBootstrap;
+            switchPanel(shouldBootstrap ? 'bootstrap-panel' : 'login-panel');
+          };
+          if (typeof window.setTimeout === 'function') {
+            window.setTimeout(runBootstrapCheck, 0);
+          } else {
+            runBootstrapCheck();
+          }
         });
       }
 

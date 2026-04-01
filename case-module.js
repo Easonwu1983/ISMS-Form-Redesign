@@ -538,7 +538,6 @@
         + '</div></div>';
 
     scheduleRefreshIcons();
-    bindCopyButtons();
     scheduleDashboardHydration(function () {
       if (renderToken !== dashboardRenderToken) return;
       var items = getVisibleItems();

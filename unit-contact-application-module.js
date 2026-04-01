@@ -29,7 +29,7 @@
     const AUTHORIZATION_TEMPLATE_URL = 'unit-contact-authorization-template.pdf';
     const AUTHORIZATION_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
     const AUTHORIZATION_UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
-    const UNIT_CONTACT_POST_PAINT_DELAY_MS = 120;
+    const UNIT_CONTACT_POST_PAINT_DELAY_MS = 0;
     const SECURITY_ROLE_OPTIONS = [
       '一級單位資安窗口',
       '二級單位資安窗口'
