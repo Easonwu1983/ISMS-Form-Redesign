@@ -346,7 +346,11 @@
       if (typeof window !== 'undefined') {
         window.__APP_READY__ = false;
       }
-      var needsLocalBootstrap = false;
+      var needsLocalBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
+      var bootstrapPanelDisplay = needsLocalBootstrap ? 'block' : 'none';
+      var loginPanelDisplay = needsLocalBootstrap ? 'none' : 'block';
+      var bootstrapAutoFocus = needsLocalBootstrap ? 'autofocus' : '';
+      var loginAutoFocus = needsLocalBootstrap ? '' : 'autofocus';
       var textMap = {
         skip: '\u8df3\u5230\u4e3b\u8981\u5167\u5bb9',
         title: '\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71',
@@ -406,8 +410,8 @@
       document.body.innerHTML = '<a class="skip-link" href="#app">' + textMap.skip + '</a><div class="login-page" tabindex="0"><main class="login-card" id="app" tabindex="-1" role="main" aria-labelledby="login-page-title">' +
         '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1 id="login-page-title">' + textMap.title + '</h1><p>' + textMap.subtitle + '</p></div>' +
         '<div class="login-error" id="login-error" data-testid="login-error" role="alert" aria-live="assertive" aria-atomic="true">' + textMap.loginError + '</div>' +
-        '<div id="bootstrap-panel" style="display:none"><div class="login-entry-card login-entry-card--setup"><div class="login-entry-eyebrow">Setup</div><h2 class="login-entry-title">' + textMap.setupTitle + '</h2><p class="login-entry-text">' + textMap.setupText + '</p><form class="login-form" id="bootstrap-form"><div class="form-group"><label class="form-label">' + textMap.adminName + '</label><input type="text" class="form-input" id="bootstrap-name" autocomplete="name" placeholder="' + textMap.placeholderName + '" value="' + textMap.defaultAdminName + '" required></div><div class="form-group"><label class="form-label">' + textMap.adminUser + '</label><input type="text" class="form-input" id="bootstrap-user" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required></div><div class="form-group"><label class="form-label">' + textMap.email + '</label><input type="email" class="form-input" id="bootstrap-email" autocomplete="email" placeholder="' + textMap.placeholderEmail + '" required></div><div class="form-group"><label class="form-label">' + textMap.initPassword + '</label><input type="password" class="form-input" id="bootstrap-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><button type="submit" class="login-btn">' + textMap.createAdmin + '</button></form></div></div>' +
-        '<div id="login-panel" style="display:block"><form class="login-form" id="login-form" data-testid="login-form"><div class="form-group"><label class="form-label">' + textMap.account + '</label><input type="text" class="form-input" id="login-user" data-testid="login-user" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required autofocus></div><div class="form-group"><label class="form-label">' + textMap.password + '</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" autocomplete="current-password" placeholder="' + textMap.password + '" required></div><button type="submit" class="login-btn" data-testid="login-submit">' + textMap.loginAction + ' ' + ic('arrow-right', 'icon-sm') + '</button></form>' +
+        '<div id="bootstrap-panel" style="display:' + bootstrapPanelDisplay + '"><div class="login-entry-card login-entry-card--setup"><div class="login-entry-eyebrow">Setup</div><h2 class="login-entry-title">' + textMap.setupTitle + '</h2><p class="login-entry-text">' + textMap.setupText + '</p><form class="login-form" id="bootstrap-form"><div class="form-group"><label class="form-label">' + textMap.adminName + '</label><input type="text" class="form-input" id="bootstrap-name" autocomplete="name" placeholder="' + textMap.placeholderName + '" value="' + textMap.defaultAdminName + '" required ' + bootstrapAutoFocus + '></div><div class="form-group"><label class="form-label">' + textMap.adminUser + '</label><input type="text" class="form-input" id="bootstrap-user" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required></div><div class="form-group"><label class="form-label">' + textMap.email + '</label><input type="email" class="form-input" id="bootstrap-email" autocomplete="email" placeholder="' + textMap.placeholderEmail + '" required></div><div class="form-group"><label class="form-label">' + textMap.initPassword + '</label><input type="password" class="form-input" id="bootstrap-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><button type="submit" class="login-btn">' + textMap.createAdmin + '</button></form></div></div>' +
+        '<div id="login-panel" style="display:' + loginPanelDisplay + '"><form class="login-form" id="login-form" data-testid="login-form"><div class="form-group"><label class="form-label">' + textMap.account + '</label><input type="text" class="form-input" id="login-user" data-testid="login-user" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required ' + loginAutoFocus + '></div><div class="form-group"><label class="form-label">' + textMap.password + '</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" autocomplete="current-password" placeholder="' + textMap.password + '" required></div><button type="submit" class="login-btn" data-testid="login-submit">' + textMap.loginAction + ' ' + ic('arrow-right', 'icon-sm') + '</button></form>' +
         '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h2 class="login-entry-title">' + textMap.firstUseTitle + '</h2><p class="login-entry-text">' + textMap.firstUseText + '</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">' + textMap.applyUnitContact + '</a><a class="btn btn-secondary" href="#apply-unit-contact-status">' + textMap.checkProgress + '</a></div></div><p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.forgotPassword + '</a></p></div>' +
         '<div id="auth-secondary-panels"></div>' +
         '</main></div><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div>';
@@ -643,24 +647,6 @@
         document.getElementById('change-username').value = loggedInUser.username || '';
         var currentPasswordInput = document.getElementById('change-current-password');
         if (currentPasswordInput) currentPasswordInput.focus();
-      }
-
-      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-        window.requestAnimationFrame(function () {
-          var activeUser = currentUser();
-          if (activeUser && activeUser.mustChangePassword) return;
-          var runBootstrapCheck = function () {
-            var shouldBootstrap = getAuthMode() !== 'm365-api' && !hasLocalUsers();
-            if (shouldBootstrap === needsLocalBootstrap) return;
-            needsLocalBootstrap = shouldBootstrap;
-            switchPanel(shouldBootstrap ? 'bootstrap-panel' : 'login-panel');
-          };
-          if (typeof window.setTimeout === 'function') {
-            window.setTimeout(runBootstrapCheck, 0);
-          } else {
-            runBootstrapCheck();
-          }
-        });
       }
 
       if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {

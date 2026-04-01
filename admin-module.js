@@ -1025,6 +1025,35 @@
         : null;
     }
 
+    function waitForPagedClient(getClient, timeoutMs) {
+      const timeout = Math.max(250, Number(timeoutMs) || 2500);
+      const startedAt = Date.now();
+      return new Promise((resolve) => {
+        const tick = () => {
+          let client = null;
+          try {
+            client = typeof getClient === 'function' ? getClient() : null;
+          } catch (_) {
+            client = null;
+          }
+          if (client) {
+            resolve(client);
+            return;
+          }
+          if ((Date.now() - startedAt) >= timeout) {
+            resolve(null);
+            return;
+          }
+          if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+            window.setTimeout(tick, 50);
+            return;
+          }
+          resolve(null);
+        };
+        tick();
+      });
+    }
+
     function getSharedPagerModule() {
       return typeof window !== 'undefined' && window.__ISMS_PAGER__ && typeof window.__ISMS_PAGER__ === 'object'
         ? window.__ISMS_PAGER__
@@ -3160,7 +3189,6 @@
 
     async function fetchUsersForAdminView(fetchOptions) {
       const remoteOpts = fetchOptions || {};
-      const client = getSystemUsersPagedClient();
       const signature = JSON.stringify(systemUsersState.filters);
       const now = Date.now();
       if (!remoteOpts.force && visibleUsersCache.items.length && visibleUsersCache.signature === signature && (now - Number(visibleUsersCache.fetchedAt || 0)) < 30000) {
@@ -3173,10 +3201,11 @@
         };
       }
       if (!remoteOpts.force && visibleUsersCache.promise) return visibleUsersCache.promise;
-      const pending = (client
-        ? client(systemUsersState.filters)
-        : Promise.reject(new Error('system users paged client unavailable'))
-      ).then((response) => {
+      const client = await waitForPagedClient(getSystemUsersPagedClient, 2500);
+      if (!client) {
+        throw new Error('system users paged client unavailable');
+      }
+      const pending = client(systemUsersState.filters).then((response) => {
         const items = Array.isArray(response && response.items) ? response.items : [];
         const summary = normalizeSystemUsersSummary(response && response.summary, response && response.total);
         const page = response && response.page ? response.page : buildAdminCollectionPage(systemUsersState.filters, response && response.total, 20, 200);
@@ -3590,7 +3619,6 @@
     refreshIcons();
     async function fetchApplicationsForAdminView(fetchOptions) {
       const remoteOpts = fetchOptions || {};
-      const client = getUnitContactApplicationsPagedClient();
       const signature = JSON.stringify(unitContactReviewState.filters);
       const now = Date.now();
       if (!remoteOpts.force && visibleApplicationsCache.items.length && visibleApplicationsCache.signature === signature && (now - Number(visibleApplicationsCache.fetchedAt || 0)) < 30000) {
@@ -3603,10 +3631,11 @@
         };
       }
       if (!remoteOpts.force && visibleApplicationsCache.promise) return visibleApplicationsCache.promise;
-      const pending = (client
-        ? client(unitContactReviewState.filters)
-        : Promise.reject(new Error('unit contact applications paged client unavailable'))
-      ).then((response) => {
+      const client = await waitForPagedClient(getUnitContactApplicationsPagedClient, 2500);
+      if (!client) {
+        throw new Error('unit contact applications paged client unavailable');
+      }
+      const pending = client(unitContactReviewState.filters).then((response) => {
         const items = Array.isArray(response && response.items) ? response.items : [];
         const summary = normalizeUnitContactReviewSummary(response && response.summary, response && response.total);
         const page = response && response.page ? response.page : buildAdminCollectionPage(unitContactReviewState.filters, response && response.total, 50, 100);
