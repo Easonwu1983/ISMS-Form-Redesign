@@ -5651,11 +5651,36 @@ tbody td:first-child {
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(242, 247, 255, 0.95));
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.unit-contact-review-actions--review {
+  border-color: rgba(59, 130, 246, 0.24);
+  background: linear-gradient(180deg, rgba(247, 250, 255, 0.99), rgba(240, 246, 255, 0.96));
+}
+
+.unit-contact-review-actions--maintenance {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: linear-gradient(180deg, rgba(247, 255, 251, 0.99), rgba(238, 250, 245, 0.96));
+}
+
+.unit-contact-review-actions:hover,
+.unit-contact-review-actions:focus-within {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+  border-color: rgba(37, 99, 235, 0.26);
 }
 
 .unit-contact-review-actions-header {
   display: grid;
   gap: 6px;
+}
+
+.unit-contact-review-actions-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .unit-contact-review-actions-kicker {
@@ -5666,6 +5691,21 @@ tbody td:first-child {
   color: var(--text-muted);
 }
 
+.unit-contact-review-actions-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .unit-contact-review-actions-note {
   font-size: 0.8rem;
   line-height: 1.55;
@@ -5674,6 +5714,37 @@ tbody td:first-child {
 
 .review-table-card tbody tr {
   cursor: default;
+}
+
+.review-actions--unit-contact .btn {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.review-actions--unit-contact .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+}
+
+.review-actions--unit-contact .btn:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.35);
+  outline-offset: 2px;
+}
+
+.unit-contact-review-attachment {
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background-color 160ms ease;
+}
+
+.unit-contact-review-attachment:hover,
+.unit-contact-review-attachment:focus-within {
+  border-color: rgba(59, 130, 246, 0.18);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  transform: translateY(-1px);
+}
+
+.unit-contact-review-attachment-action:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.35);
+  outline-offset: 2px;
 }
 
 .review-history-list {

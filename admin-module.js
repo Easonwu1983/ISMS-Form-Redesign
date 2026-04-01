@@ -3475,6 +3475,12 @@
     return '<div class="unit-contact-review-actions-note">請先確認申請內容與附件，再選擇審核動作。</div>';
   }
 
+  function getUnitContactReviewActionStatusLabel(status) {
+    if (status === 'pending_review' || status === 'returned') return '待審核';
+    if (status === 'approved' || status === 'activation_pending' || status === 'active') return '已啟用';
+    return '其他狀態';
+  }
+
   function buildUnitContactReviewActions(item, id, status) {
     const buttons = [];
     if (status === 'pending_review' || status === 'returned') {
@@ -3487,7 +3493,10 @@
         buttons.push(`<button type="button" class="btn btn-sm btn-secondary review-action-secondary" data-action="admin.unitContactReturn" data-id="${esc(id)}">${ic('undo-2', 'icon-sm')} 退回</button>`);
       }
     }
-    return `<div class="unit-contact-review-actions"><div class="unit-contact-review-actions-header"><div class="unit-contact-review-actions-kicker">審核操作</div>${buildUnitContactReviewActionNote(status)}</div><div class="review-actions review-actions--unit-contact ${status === 'pending_review' || status === 'returned' ? 'review-actions--unit-contact--review' : 'review-actions--unit-contact--maintenance'}">${buttons.join('')}</div></div>`;
+    const reviewModeClass = status === 'pending_review' || status === 'returned'
+      ? 'unit-contact-review-actions--review'
+      : 'unit-contact-review-actions--maintenance';
+    return `<div class="unit-contact-review-actions ${reviewModeClass}" data-review-status="${esc(status)}"><div class="unit-contact-review-actions-header"><div class="unit-contact-review-actions-topline"><div class="unit-contact-review-actions-kicker">審核操作</div><span class="unit-contact-review-actions-chip">${esc(getUnitContactReviewActionStatusLabel(status))}</span></div>${buildUnitContactReviewActionNote(status)}</div><div class="review-actions review-actions--unit-contact ${status === 'pending_review' || status === 'returned' ? 'review-actions--unit-contact--review' : 'review-actions--unit-contact--maintenance'}">${buttons.join('')}</div></div>`;
   }
 
   function renderUnitContactReviewRows(items) {
