@@ -236,12 +236,17 @@ function createRequestAuthz() {
     return cleanLower(authz && authz.username) === cleanLower(username);
   }
 
+  function getAccessUnits(authz) {
+    if (!authz) return [];
+    return parseUnits(authz.authorizedUnits || authz.scopeUnits || authz.user && authz.user.authorizedUnits);
+  }
+
   function hasUnitAccess(authz, unit) {
     if (!authz) return false;
     const target = cleanText(unit);
     if (!target) return isAdmin(authz);
     if (isAdmin(authz)) return true;
-    return parseUnits(authz.authorizedUnits || authz.scopeUnits || authz.user && authz.user.authorizedUnits).includes(target);
+    return getAccessUnits(authz).includes(target);
   }
 
   function hasReviewScope(authz, unit) {
@@ -340,6 +345,7 @@ function createRequestAuthz() {
     isUnitAdmin,
     isViewer,
     matchesUsername,
+    getAccessUnits,
     hasUnitAccess,
     hasReviewScope,
     canAccessCorrectiveAction,

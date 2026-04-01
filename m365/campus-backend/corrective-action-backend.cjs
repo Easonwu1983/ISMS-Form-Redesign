@@ -290,25 +290,51 @@ function createCorrectiveActionRouter(deps) {
   async function handleList(req, res, origin, url) {
     try {
       const authz = await requestAuthz.requireAuthenticatedUser(req);
-      const rows = await db.queryAll(CASE_SELECT + ` ORDER BY updated_at DESC`);
-      const items = rows.map(mapRowToCase)
-        .filter((entry) => requestAuthz.canAccessCorrectiveAction(authz, entry));
-      // Apply filters
+      // Push filters to SQL to avoid full table scan
+      const conditions = [];
+      const params = [];
+      let idx = 0;
+
+      // Authorization filter (push to SQL when possible)
+      if (!requestAuthz.isAdmin(authz)) {
+        const accessUnits = requestAuthz.getAccessUnits ? requestAuthz.getAccessUnits(authz) : [];
+        const username = authz.username || '';
+        const orClauses = [];
+        if (username) {
+          idx++; orClauses.push(`handler_username = $${idx}`); params.push(username);
+          idx++; orClauses.push(`proposer_username = $${idx}`); params.push(username);
+        }
+        if (accessUnits.length > 0) {
+          idx++; orClauses.push(`handler_unit = ANY($${idx})`); params.push(accessUnits);
+        }
+        if (orClauses.length > 0) {
+          conditions.push(`(${orClauses.join(' OR ')})`);
+        }
+      }
+
+      // User-supplied filters
       const status = cleanText(url.searchParams.get('status'));
       const handlerUnit = cleanText(url.searchParams.get('handlerUnit'));
       const handlerUsername = cleanText(url.searchParams.get('handlerUsername'));
       const query = cleanText(url.searchParams.get('q')).toLowerCase();
-      const filtered = items.filter((entry) => {
-        if (status && entry.status !== status) return false;
-        if (handlerUnit && entry.handlerUnit !== handlerUnit) return false;
-        if (handlerUsername && entry.handlerUsername !== handlerUsername) return false;
-        if (query) {
-          const haystack = [entry.id, entry.proposerName, entry.handlerName, entry.problemDesc, entry.deficiencyType, entry.source].join(' ').toLowerCase();
-          if (!haystack.includes(query)) return false;
-        }
-        return true;
-      });
-      await writeJson(res, buildJsonResponse(200, { ok: true, items: filtered.map(mapCaseForClient), contractVersion: CONTRACT_VERSION }), origin);
+
+      if (status) { idx++; conditions.push(`status = $${idx}`); params.push(status); }
+      if (handlerUnit) { idx++; conditions.push(`handler_unit = $${idx}`); params.push(handlerUnit); }
+      if (handlerUsername) { idx++; conditions.push(`handler_username = $${idx}`); params.push(handlerUsername); }
+      if (query) {
+        idx++;
+        conditions.push(`(
+          LOWER(case_id) LIKE $${idx} OR LOWER(proposer_name) LIKE $${idx}
+          OR LOWER(handler_name) LIKE $${idx} OR LOWER(problem_description) LIKE $${idx}
+          OR LOWER(deficiency_type) LIKE $${idx} OR LOWER(source) LIKE $${idx}
+        )`);
+        params.push(`%${query}%`);
+      }
+
+      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+      const rows = await db.queryAll(CASE_SELECT + ` ${where} ORDER BY updated_at DESC`, params);
+      const items = rows.map(mapRowToCase);
+      await writeJson(res, buildJsonResponse(200, { ok: true, items: items.map(mapCaseForClient), contractVersion: CONTRACT_VERSION }), origin);
     } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to list corrective actions.', 500), origin); }
   }
 

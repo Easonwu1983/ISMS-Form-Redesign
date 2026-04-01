@@ -162,8 +162,22 @@
         const normalizedRows = Array.isArray(rows) ? rows.slice() : [];
         try {
           if (typeof window === 'undefined' || !window.sessionStorage) return;
-          window.sessionStorage.setItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY, JSON.stringify(normalizedRows));
-        } catch (_) { }
+          var payload = JSON.stringify(normalizedRows);
+          // Warn if approaching sessionStorage limits (5MB typical)
+          if (payload.length > 3 * 1024 * 1024) {
+            if (window.__ismsWarn) window.__ismsWarn('Training roster draft approaching storage limit (' + Math.round(payload.length / 1024) + ' KB)');
+          }
+          window.sessionStorage.setItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY, payload);
+        } catch (quotaError) {
+          // Quota exceeded — try to trim oldest entries and retry
+          try {
+            var trimmed = normalizedRows.slice(-Math.max(Math.floor(normalizedRows.length / 2), 50));
+            window.sessionStorage.setItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY, JSON.stringify(trimmed));
+            if (window.__ismsWarn) window.__ismsWarn('Training roster draft trimmed due to storage quota (' + normalizedRows.length + ' → ' + trimmed.length + ' rows)');
+          } catch (_) {
+            if (window.__ismsWarn) window.__ismsWarn('Training roster draft storage quota exceeded, unable to save');
+          }
+        }
       }
       function syncTrainingManualRosterDraftStorage(nextRows) {
         const map = new Map();
@@ -1030,6 +1044,11 @@
     function refreshTrainingRosterDomCache(contentEl, signature) {
       if (!contentEl) return;
       const rows = Array.from(contentEl.querySelectorAll('tr[data-roster-id]'));
+      // Skip DOM caching if row count is very large (> 2000) to avoid excessive memory use
+      if (rows.length > 2000) {
+        trainingRosterDomCache = { signature: '', contentEl: null, rows: [], groupSelectAll: [], rowsByGroup: new Map(), selectedCountLabel: null, deleteSelectedButton: null };
+        return;
+      }
       const groupSelectAll = Array.from(contentEl.querySelectorAll('.training-roster-group-select-all'));
       const rowsByGroup = new Map();
       rows.forEach((row) => {

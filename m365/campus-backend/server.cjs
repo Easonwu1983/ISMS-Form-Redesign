@@ -168,7 +168,9 @@ async function writeJson(res, response, origin) {
   const req = res && res.__ismsReq;
   const payloadBytes = Buffer.byteLength(payload);
   if (req && acceptsGzip(req) && payloadBytes >= GZIP_MIN_BYTES) {
-    const compressed = zlib.gzipSync(payload);
+    const compressed = await new Promise((resolve, reject) => {
+      zlib.gzip(payload, (err, result) => err ? reject(err) : resolve(result));
+    });
     baseHeaders['Content-Encoding'] = 'gzip';
     baseHeaders['Content-Length'] = compressed.length;
     baseHeaders['Vary'] = 'Accept-Encoding';
@@ -491,8 +493,28 @@ async function listApplicationsForAdmin(filters) {
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const countResult = await db.queryOne(`SELECT COUNT(*)::int AS total FROM unit_contact_applications ${where}`, params);
-  const total = countResult ? countResult.total : 0;
+  // Single query for count + summary using FILTER aggregates (eliminates extra round-trip)
+  const summaryResult = await db.queryOne(
+    `SELECT COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status = '${STATUSES.PENDING_REVIEW}')::int AS "pendingReview",
+      COUNT(*) FILTER (WHERE status = '${STATUSES.APPROVED}')::int AS "approved",
+      COUNT(*) FILTER (WHERE status = '${STATUSES.ACTIVATION_PENDING}')::int AS "activationPending",
+      COUNT(*) FILTER (WHERE status = '${STATUSES.ACTIVE}')::int AS "active",
+      COUNT(*) FILTER (WHERE status = '${STATUSES.RETURNED}')::int AS "returned",
+      COUNT(*) FILTER (WHERE status = '${STATUSES.REJECTED}')::int AS "rejected"
+    FROM unit_contact_applications ${where}`,
+    params
+  );
+  const total = summaryResult ? summaryResult.total : 0;
+  const summary = summaryResult ? {
+    total,
+    pendingReview: summaryResult.pendingReview || 0,
+    approved: summaryResult.approved || 0,
+    activationPending: summaryResult.activationPending || 0,
+    active: summaryResult.active || 0,
+    returned: summaryResult.returned || 0,
+    rejected: summaryResult.rejected || 0
+  } : { total: 0, pendingReview: 0, approved: 0, activationPending: 0, active: 0, returned: 0, rejected: 0 };
 
   const page = buildAdminApplicationPage(nextFilters, total);
   idx++;
@@ -504,13 +526,6 @@ async function listApplicationsForAdmin(filters) {
     params
   );
   const items = rows.map(mapRowToApplication);
-
-  // Summary needs all matching items counts
-  const allRows = await db.queryAll(
-    `SELECT status FROM unit_contact_applications ${where}`,
-    params.slice(0, params.length - 2)
-  );
-  const summary = summarizeAdminApplications(allRows);
 
   return {
     items,

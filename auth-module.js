@@ -37,6 +37,7 @@
       if (!/[a-z]/.test(value)) throw new Error('密碼至少需包含一個英文小寫字母');
       if (!/[A-Z]/.test(value)) throw new Error('密碼至少需包含一個英文大寫字母');
       if (!/[0-9]/.test(value)) throw new Error('密碼至少需包含一個數字');
+      if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(value)) throw new Error('密碼至少需包含一個特殊符號（如 !@#$%）');
     }
 
     async function hashLocalPassword(password) {
@@ -57,14 +58,15 @@
       const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ';
       const lower = 'abcdefghjkmnpqrstuvwxyz';
       const digits = '23456789';
-      const all = upper + lower + digits;
+      const special = '!@#$%&*_+-=';
+      const all = upper + lower + digits + special;
       const randomChar = function (charset) {
         const bytes = new Uint32Array(1);
         window.crypto.getRandomValues(bytes);
         return charset[bytes[0] % charset.length];
       };
-      const chars = [randomChar(upper), randomChar(lower), randomChar(digits)];
-      while (chars.length < 10) chars.push(randomChar(all));
+      const chars = [randomChar(upper), randomChar(lower), randomChar(digits), randomChar(special)];
+      while (chars.length < 8) chars.push(randomChar(all));
       for (let index = chars.length - 1; index > 0; index -= 1) {
         const bytes = new Uint32Array(1);
         window.crypto.getRandomValues(bytes);
@@ -370,8 +372,17 @@
           queueLoginLog(cleanUsername, remoteUser, true);
           return session;
         } catch (error) {
-          queueLoginLog(cleanUsername, null, false);
-          throw error;
+          // Infrastructure errors (e.g. "未設定 authEndpoint") → fall through to local login.
+          // Actual authentication failures (4xx) should still throw.
+          var msg = (error && (error.message || '')) || '';
+          var isInfraError = /未設定|authEndpoint|network|ECONNREFUSED|fetch failed|Failed to fetch/i.test(msg);
+          if (!isInfraError) {
+            queueLoginLog(cleanUsername, null, false);
+            throw error;
+          }
+          if (typeof window !== 'undefined' && window.__ismsWarn) {
+            window.__ismsWarn('login backend unavailable, falling back to local', error);
+          }
         }
       }
 
@@ -527,12 +538,19 @@
       const newPw = String(input.newPassword || '').trim();
       validateLocalPasswordComplexity(newPw);
       if (typeof changePasswordWithBackend === 'function') {
-        const auth = currentUser();
-        const user = await changePasswordWithBackend({
-          ...input,
-          sessionToken: auth && auth.sessionToken
-        });
-        return user ? writeAuthSession(user, { notify: true, reason: 'password-changed' }) : null;
+        try {
+          const auth = currentUser();
+          const user = await changePasswordWithBackend({
+            ...input,
+            sessionToken: auth && auth.sessionToken
+          });
+          return user ? writeAuthSession(user, { notify: true, reason: 'password-changed' }) : null;
+        } catch (backendError) {
+          // Fall through to local password change if backend is unavailable
+          if (typeof window !== 'undefined' && window.__ismsWarn) {
+            window.__ismsWarn('changePassword backend failed, falling back to local', backendError);
+          }
+        }
       }
       const matched = findUser(input.username);
       if (!matched || !(await verifyLocalPassword(matched, String(input.currentPassword || '')))) return null;

@@ -156,8 +156,17 @@
       return appendScript('vendor/lucide.min.js', 'lucide');
     }
 
+    function loadScriptsParallel(specs) {
+      if (!Array.isArray(specs) || !specs.length) return Promise.resolve([]);
+      return Promise.all(specs.map(function (spec) {
+        if (typeof spec === 'string') return appendScript(spec);
+        return appendScript(spec.path || spec.src, spec.globalKey || spec.options);
+      }));
+    }
+
     return {
       appendScript: appendScript,
+      loadScriptsParallel: loadScriptsParallel,
       ensureXlsxLoaded: ensureXlsxLoaded,
       ensureLucideLoaded: ensureLucideLoaded
     };

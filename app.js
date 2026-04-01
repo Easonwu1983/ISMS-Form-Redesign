@@ -554,8 +554,9 @@
     if (checklistModulePromise) return checklistModulePromise;
     checklistModulePromise = ensureChecklistModuleScript().then(function () {
       return getChecklistModule();
-    }).finally(function () {
+    }).catch(function (error) {
       checklistModulePromise = null;
+      throw error;
     });
     return checklistModulePromise;
   }
@@ -677,8 +678,9 @@
     if (trainingModulePromise) return trainingModulePromise;
     trainingModulePromise = ensureTrainingModuleScript().then(function () {
       return getTrainingModule();
-    }).finally(function () {
+    }).catch(function (error) {
       trainingModulePromise = null;
+      throw error;
     });
     return trainingModulePromise;
   }
@@ -2624,8 +2626,9 @@
     if (unitContactApplicationModulePromise) return unitContactApplicationModulePromise;
     unitContactApplicationModulePromise = ensureUnitContactApplicationModuleScript().then(function () {
       return getUnitContactApplicationModule();
-    }).finally(function () {
+    }).catch(function (error) {
       unitContactApplicationModulePromise = null;
+      throw error;
     });
     return unitContactApplicationModulePromise;
   }
@@ -2984,7 +2987,14 @@
     return persisted;
   }
   async function migrateStoredAttachments(entries, options) {
-    if (getAttachmentsMode() !== 'm365-api') return getAttachmentModule().migrateStoredAttachments(entries, options);
+    if (getAttachmentsMode() !== 'm365-api') {
+      try {
+        return getAttachmentModule().migrateStoredAttachments(entries, options);
+      } catch (moduleError) {
+        // attachment-module.js may not be loaded yet during early bootstrap
+        return { changed: false, files: Array.isArray(entries) ? entries : [], errors: [] };
+      }
+    }
     const list = Array.isArray(entries) ? entries : [];
     let changed = false;
     const files = [];

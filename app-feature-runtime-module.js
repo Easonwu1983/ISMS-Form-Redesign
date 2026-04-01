@@ -26,9 +26,13 @@
           : Promise.resolve();
         state[promiseKey] = start.then(function () {
           return resolveFeature(factoryName, scriptName, stateKey, globalSlot, configBuilder);
-        }).finally(function () {
+        }).catch(function (error) {
+          // Clear promise on failure so retry is possible
           state[promiseKey] = null;
+          throw error;
         });
+        // Don't clear on success — state[stateKey] will be set by resolveFeature,
+        // so subsequent calls hit the fast path above
         return state[promiseKey];
       }
 

@@ -156,11 +156,26 @@ console.log('service-host starting', {
 
 const server = startServer(Number(process.env.PORT || 8787));
 
+let shuttingDown = false;
 function shutdown(signal) {
-  console.log(`service-host received ${signal}, shutting down`);
-  const db = require('./db.cjs');
-  db.close().catch(() => {}).finally(() => {
-    server.close(() => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`service-host received ${signal}, shutting down gracefully`);
+  const shutdownTimeout = setTimeout(() => {
+    console.error('service-host shutdown timed out after 10s, forcing exit');
+    disposeLogger();
+    process.exit(1);
+  }, 10000);
+  shutdownTimeout.unref();
+  server.close(() => {
+    console.log('service-host http server closed');
+    const db = require('./db.cjs');
+    db.close().then(() => {
+      console.log('service-host database pool closed');
+    }).catch((err) => {
+      console.error('service-host db close error', err && err.message || err);
+    }).finally(() => {
+      clearTimeout(shutdownTimeout);
       console.log('service-host stopped');
       disposeLogger();
       process.exit(0);

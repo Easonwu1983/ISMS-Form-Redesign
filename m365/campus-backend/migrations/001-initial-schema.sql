@@ -310,6 +310,7 @@ CREATE INDEX idx_applications_status ON unit_contact_applications (status);
 CREATE INDEX idx_applications_applicant_email ON unit_contact_applications (applicant_email);
 CREATE INDEX idx_applications_unit_code ON unit_contact_applications (unit_code);
 CREATE INDEX idx_applications_submitted_at ON unit_contact_applications (submitted_at DESC);
+CREATE INDEX idx_applications_updated_at ON unit_contact_applications (updated_at DESC);
 
 -- unit_admins
 CREATE INDEX idx_unit_admins_email ON unit_admins (email);
@@ -325,8 +326,10 @@ CREATE INDEX idx_checklists_filler_username ON checklists (filler_username);
 -- corrective_actions
 CREATE INDEX idx_corrective_actions_status ON corrective_actions (status);
 CREATE INDEX idx_corrective_actions_proposer_unit ON corrective_actions (proposer_unit);
+CREATE INDEX idx_corrective_actions_proposer_username ON corrective_actions (proposer_username);
 CREATE INDEX idx_corrective_actions_handler_unit ON corrective_actions (handler_unit);
 CREATE INDEX idx_corrective_actions_handler_username ON corrective_actions (handler_username);
+CREATE INDEX idx_corrective_actions_updated_at ON corrective_actions (updated_at DESC);
 
 -- training_forms
 CREATE INDEX idx_training_forms_unit ON training_forms (unit);

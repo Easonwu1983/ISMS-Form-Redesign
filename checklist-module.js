@@ -2025,6 +2025,39 @@
       bindChecklistPageEvent(document.getElementById('cl-save-draft'), 'click', saveChecklistDraft);
       bindChecklistPageEvent(document.getElementById('cl-save-draft-inline'), 'click', saveChecklistDraft);
       bindChecklistPageEvent(document.getElementById('cl-save-draft-floating'), 'click', saveChecklistDraft);
+
+      // Auto-save every 60 seconds when form is dirty
+      var checklistAutoSaveTimer = null;
+      var checklistAutoSaveDirty = false;
+      function scheduleAutoSave() {
+        checklistAutoSaveDirty = true;
+        if (checklistAutoSaveTimer) return;
+        checklistAutoSaveTimer = setTimeout(function () {
+          checklistAutoSaveTimer = null;
+          if (!checklistAutoSaveDirty) return;
+          checklistAutoSaveDirty = false;
+          saveChecklistDraft().catch(function (err) {
+            if (window.__ismsWarn) window.__ismsWarn('Checklist auto-save failed', err);
+          });
+        }, 60000);
+      }
+      bindChecklistPageEvent(checklistForm, 'input', scheduleAutoSave);
+      bindChecklistPageEvent(checklistForm, 'change', scheduleAutoSave);
+      registerChecklistPageCleanup(function () {
+        if (checklistAutoSaveTimer) { clearTimeout(checklistAutoSaveTimer); checklistAutoSaveTimer = null; }
+      });
+
+      // Offline detection — show warning when network drops
+      function onChecklistOffline() { toast('\u7db2\u8def\u5df2\u4e2d\u65b7\uff0c\u8acb\u5148\u5132\u5b58\u8349\u7a3f\u907f\u514d\u8cc7\u6599\u907a\u5931\u3002', 'error'); }
+      function onChecklistOnline() { toast('\u7db2\u8def\u5df2\u6062\u5fa9\u9023\u7dda', 'info'); }
+      if (typeof window !== 'undefined') {
+        window.addEventListener('offline', onChecklistOffline);
+        window.addEventListener('online', onChecklistOnline);
+        registerChecklistPageCleanup(function () {
+          window.removeEventListener('offline', onChecklistOffline);
+          window.removeEventListener('online', onChecklistOnline);
+        });
+      }
     }
     setChecklistRouteState('fill', 'ready');
   }
