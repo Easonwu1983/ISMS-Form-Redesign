@@ -2869,6 +2869,11 @@ body.modal-open {
   max-width: 520px;
 }
 
+.modal-card--wide,
+.modal[aria-labelledby="user-modal-title"] {
+  width: min(92vw, 680px);
+}
+
 .modal-card--prompt {
   max-width: 560px;
 }
