@@ -285,18 +285,18 @@
     (window.requestAnimationFrame || window.setTimeout)(function () {
       appendStylesheetChain([purgedStylesheet, minifiedStylesheet, 'styles.css']);
     }, 0);
-    // Preload feature bundles so they're cached when needed
-    var featureBundles = [
-      'feature-bundles/admin-feature.js',
-      'feature-bundles/case-feature.js',
-      'feature-bundles/checklist-feature.js',
-      'feature-bundles/training-feature.js',
-      'feature-bundles/unit-contact-application-feature.js'
-    ];
-    featureBundles.forEach(function (bundlePath) {
-      var src = bundlePath + (versionSuffix ? '?v=' + versionSuffix : '');
-      appendLink('prefetch', src, 'script');
-    });
+    // Prefetch feature bundles after main load completes
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        ['admin-feature','case-feature','checklist-feature','training-feature','unit-contact-application-feature'].forEach(function (name) {
+          var link = document.createElement('link');
+          link.rel = 'prefetch';
+          link.as = 'script';
+          link.href = 'feature-bundles/' + name + '.js' + (versionSuffix ? '?v=' + versionSuffix : '');
+          document.head.appendChild(link);
+        });
+      }, 1000);
+    }, { once: true });
     assets.unshift('units.js');
     loadNextScript();
   }
