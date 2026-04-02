@@ -1416,7 +1416,7 @@
       password: String(incoming.password || (existing && existing.password) || '').trim()
     });
     if (!requestPayload.username) throw new Error('缺少帳號');
-    if (!requestPayload.password && !existing) throw new Error('缺少密碼');
+    if (!requestPayload.password && !existing && !incoming.skipPasswordCheck) throw new Error('缺少密碼');
     validateSystemUserPayload(requestPayload, { requirePassword: !existing });
     if (getSystemUsersMode() !== 'm365-api') {
       const localPayload = {

@@ -3473,6 +3473,7 @@
         securityRoles
       };
       if (pw) payload.password = pw;
+      if (isE) payload.skipPasswordCheck = true;
       try {
         if (!isE && findUser(un)) { toast('帳號已存在', 'error'); return; }
         const currentFilters = { ...systemUsersState.filters };
