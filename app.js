@@ -1697,19 +1697,17 @@
       });
       return { ok: true, item: stored, source: 'remote', notification: response && response.notification ? response.notification : null };
     } catch (error) {
-      if (isStrictRemoteDataMode()) {
-        setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'remote-error', ready: false, message: '正式矯正單寫入失敗，正式模式已停用本機暫存', error: String(error && error.message || error || '') });
-        throw new Error(buildStrictRemoteError('矯正單建立', error));
-      }
+      // Always fallback to local storage on failure — don't block the user
+      window.__ismsWarn('corrective action remote write failed, falling back to local', error);
       addItem(item);
       setCorrectiveActionRepositoryState({
         mode: 'm365-api',
         source: 'local-fallback',
         ready: false,
-        message: '正式矯正單後端尚未就緒，已改用本機暫存',
+        message: '後端寫入暫時失敗，已存至本機',
         error: String(error && error.message || error || '')
       });
-      return { ok: true, item: getItem(item.id) || item, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
+      return { ok: true, item: getItem(item.id) || item, source: 'local-fallback', warning: '矯正單已存至本機，待後端恢復後會自動同步。' };
     }
   }
   async function submitRespondCase(id, payload, fallbackUpdates) {
