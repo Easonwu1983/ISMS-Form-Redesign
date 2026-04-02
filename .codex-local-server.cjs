@@ -4,7 +4,7 @@ const path = require('path');
 const { getBuildInfo } = require('./scripts/build-version-info.cjs');
 
 const root = process.cwd();
-const port = 8080;
+const port = Number(process.env.PORT) || 8080;
 const host = '127.0.0.1';
 const buildInfo = getBuildInfo('codex-local-server', root);
 const mime = {

@@ -744,7 +744,7 @@
 
       var headerEl = document.getElementById('header');
       if (!headerEl) return;
-      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context" hidden><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout">登出</button></div>';
+      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context" hidden><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout"><span class="btn-logout-icon">' + ic('log-out') + '</span><span class="btn-logout-text">登出</span></button></div>';
 
       var switcher = document.getElementById('header-unit-switch');
       if (switcher) {
@@ -803,15 +803,25 @@
       renderHeader();
       closeSidebar();
       setRouteLoadingState(true);
-      Promise.resolve(getRouteMeta(page).render(route.param))
-        .then(function () {
-          syncHeaderRouteContext(page);
-          focusRouteContent();
-        })
-        .catch(function (error) {
-          window.__ismsError('route render failed:', error);
-          toast('\u9801\u9762\u8f09\u5165\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66', 'error');
-        })
+      var renderAttempt = 0;
+      function attemptRender() {
+        return Promise.resolve(getRouteMeta(page).render(route.param))
+          .then(function () {
+            syncHeaderRouteContext(page);
+            focusRouteContent();
+          })
+          .catch(function (error) {
+            var msg = error && error.message ? error.message : String(error);
+            window.__ismsError('route render failed (attempt ' + (renderAttempt + 1) + '):', msg, error && error.stack);
+            // Auto-retry once on module loading errors (not loaded / Failed to load)
+            if (renderAttempt === 0 && /not loaded|Failed to load|尚未載入/i.test(msg)) {
+              renderAttempt = 1;
+              return new Promise(function (resolve) { setTimeout(resolve, 800); }).then(attemptRender);
+            }
+            toast('\u9801\u9762\u8f09\u5165\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66', 'error');
+          });
+      }
+      attemptRender()
         .finally(function () {
           setRouteLoadingState(false);
           refreshIcons();

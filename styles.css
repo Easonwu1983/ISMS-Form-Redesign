@@ -528,21 +528,33 @@ body {
 }
 
 .btn-logout {
-  padding: 6px 14px;
-  background: transparent;
-  border: 1.5px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
   border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  color: #dc2626;
   font-family: inherit;
   font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
+.btn-logout-icon {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
 .btn-logout:hover {
-  border-color: #c6d7ee;
-  color: var(--accent-primary);
-  background: #eef4ff;
+  border-color: #f87171;
+  color: #b91c1c;
+  background: #fee2e2;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
 }
 
 .header-menu-btn {
@@ -4992,8 +5004,8 @@ body {
 }
 
 .btn-logout {
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  background: rgba(254, 242, 242, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .header-menu-btn {
@@ -6579,16 +6591,17 @@ body {
   min-height: 34px;
   padding: 0 14px;
   border-radius: 12px;
-  background: #ffffff;
-  border-color: var(--border-color);
+  background: #fef2f2;
+  border-color: #fca5a5;
   box-shadow: none;
   font-size: 0.78rem;
   font-weight: 700;
-  color: #61758d;
+  color: #dc2626;
 }
 
 .btn-logout:hover {
-  background: #f5f9ff;
+  background: #fee2e2;
+  border-color: #f87171;
 }
 
 .sidebar {
