@@ -3346,10 +3346,11 @@
       toast('最高管理者無法刪除', 'error');
       return;
     }
-    const label = `${user.name || user.username || cleanUsername}（${cleanUsername}）`;
+    const displayName = user.name || user.username || cleanUsername;
+    const label = `${displayName}（${cleanUsername}）`;
     const confirmed = typeof openConfirmDialog === 'function'
-      ? await openConfirmDialog(`確定要刪除 ${label} 嗎？此操作無法復原。`, { title: '刪除使用者', confirmLabel: '刪除', confirmClass: 'btn-danger', kicker: '警告' })
-      : window.confirm(`確定要刪除 ${label} 嗎？此操作無法復原。`);
+      ? await openConfirmDialog(`即將刪除「${label}」的系統帳號。\n\n刪除後該使用者將無法登入，且相關操作紀錄仍會保留。此操作無法復原。`, { title: '停用並刪除帳號', confirmLabel: '確認刪除', confirmClass: 'btn-danger', kicker: '注意' })
+      : window.confirm(`即將刪除「${label}」的系統帳號。刪除後該使用者將無法登入。此操作無法復原。`);
     if (!confirmed) return;
     try {
       const currentFilters = { ...systemUsersState.filters };
@@ -3361,9 +3362,9 @@
       }
       dispatchAdminCacheInvalidationScopes(['system-users', 'audit-trail'], 'user-deleted');
       await renderUsers({ filters: currentFilters, forceRemote: true });
-      toast(`已刪除 ${label}`);
+      toast(`已成功刪除「${displayName}」的帳號`);
     } catch (error) {
-      toast(String(error && error.message || error || '刪除失敗'), 'error');
+      toast(String(error && error.message || error || '刪除帳號失敗，請稍後再試'), 'error');
     }
   }
 
