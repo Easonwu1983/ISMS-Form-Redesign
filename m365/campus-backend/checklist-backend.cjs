@@ -252,6 +252,13 @@ function createChecklistRouter(deps) {
       if (existingItem && !requestAuthz.canEditChecklist(authz, existingItem)) {
         throw createError('Forbidden', 403);
       }
+      // New checklist: verify user has access to the target unit
+      if (!existingItem && !requestAuthz.isAdmin(authz)) {
+        const targetUnit = cleanText(incoming.unit);
+        if (targetUnit && !requestAuthz.hasUnitAccess(authz, targetUnit)) {
+          throw createError('You do not have access to create a checklist for this unit', 403);
+        }
+      }
 
       const now = new Date().toISOString();
       const status = action === (ACTIONS.SUBMIT || 'SUBMIT') ? (STATUSES.SUBMITTED || '已送出') : (STATUSES.DRAFT || '草稿');

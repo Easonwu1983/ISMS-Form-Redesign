@@ -302,14 +302,26 @@ function createAttachmentRouter(deps) {
     return handleUploadCore(req, res, origin, true);
   }
 
+  function canAccessAttachment(authz, row) {
+    if (!authz || !row) return false;
+    if (requestAuthz.isAdmin(authz)) return true;
+    const ownerScope = cleanText(row.scope);
+    const ownerId = cleanText(row.owner_id);
+    if (ownerScope === 'unit-contact-authorization-doc') return true;
+    if (ownerId && requestAuthz.matchesUsername(authz, ownerId)) return true;
+    if (ownerId && requestAuthz.hasUnitAccess(authz, ownerId)) return true;
+    return false;
+  }
+
   async function handleDetail(req, res, origin, itemId) {
     try {
-      await requestAuthz.requireAuthenticatedUser(req);
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const row = await db.queryOne(
         `SELECT * FROM attachments WHERE attachment_id = $1`,
         [cleanText(itemId)]
       );
       if (!row) throw createError('Attachment not found', 404);
+      if (!canAccessAttachment(authz, row)) throw createError('Forbidden', 403);
       const item = mapRowToAttachment(row);
       item.name = normalizeAttachmentDisplayName(item.name);
       await writeJson(res, {
@@ -326,12 +338,13 @@ function createAttachmentRouter(deps) {
 
   async function handleContent(req, res, origin, itemId, url) {
     try {
-      await requestAuthz.requireAuthenticatedUser(req);
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
       const row = await db.queryOne(
         `SELECT * FROM attachments WHERE attachment_id = $1`,
         [cleanText(itemId)]
       );
       if (!row) throw createError('Attachment not found', 404);
+      if (!canAccessAttachment(authz, row)) throw createError('Forbidden', 403);
 
       const relativePath = cleanText(row.storage_path);
       const storagePath = path.join(getAttachmentsDir(), relativePath);
@@ -375,6 +388,14 @@ function createAttachmentRouter(deps) {
         [cleanText(itemId)]
       );
       if (!row) throw createError('Attachment not found', 404);
+
+      // Only admin or owner can delete
+      if (!requestAuthz.isAdmin(authz)) {
+        const ownerId = cleanText(row.owner_id);
+        if (!ownerId || !requestAuthz.matchesUsername(authz, ownerId)) {
+          throw createError('Only the owner or admin can delete this attachment', 403);
+        }
+      }
 
       // Delete from DB
       await db.query(`DELETE FROM attachments WHERE attachment_id = $1`, [cleanText(itemId)]);

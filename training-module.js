@@ -3079,7 +3079,9 @@
     if (!active || typeof active.closest !== 'function') return null;
     const row = active.closest('tr[data-roster-id]');
     if (!row) return null;
-    const rows = Array.from(document.querySelectorAll('tr[data-roster-id]'));
+    const rows = (trainingRosterDomCache.signature && Array.isArray(trainingRosterDomCache.rows) && trainingRosterDomCache.rows.length)
+      ? trainingRosterDomCache.rows
+      : Array.from(document.querySelectorAll('tr[data-roster-id]'));
     const rowIndex = rows.indexOf(row);
     const rowId = String(row.dataset.rosterId || '').trim();
     if (!rowId) return null;
@@ -3170,7 +3172,9 @@
 
   function restoreTrainingRosterFocusState(state) {
     if (!state) return false;
-    const rows = Array.from(document.querySelectorAll('tr[data-roster-id]'));
+    const rows = (trainingRosterDomCache.signature && Array.isArray(trainingRosterDomCache.rows) && trainingRosterDomCache.rows.length)
+      ? trainingRosterDomCache.rows
+      : Array.from(document.querySelectorAll('tr[data-roster-id]'));
     if (!rows.length) return false;
     const rowId = String(state.rowId || '').trim();
     let row = rowId ? rows.find((entry) => String(entry.dataset.rosterId || '').trim() === rowId) : null;
