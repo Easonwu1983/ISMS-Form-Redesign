@@ -274,7 +274,6 @@
 
     async function runSessionHeartbeat(options) {
       const deps = buildSessionDeps(options);
-      if (deps.getAuthMode() !== 'm365-api') return;
       const user = deps.currentUser();
       if (!user || !String(user.sessionToken || '').trim()) {
         clearSessionHeartbeat();
@@ -286,8 +285,7 @@
         if (!verifiedUser) {
           sessionStorage.removeItem(deps.AUTH_KEY);
           sessionExpiryReminderKey = '';
-          deps.toast('登入狀態已失效，請重新登入。', 'error');
-          await deps.logout();
+          deps.toast('登入狀態已失效，請點選重新登入。', 'error');
           return;
         }
         sessionStorage.setItem(deps.AUTH_KEY, JSON.stringify(verifiedUser));
@@ -298,8 +296,7 @@
         if (statusCode === 401 || statusCode === 403 || message === '登入狀態已失效，請重新登入。') {
           sessionStorage.removeItem(deps.AUTH_KEY);
           sessionExpiryReminderKey = '';
-          deps.toast('登入狀態已失效，請重新登入。', 'error');
-          await deps.logout();
+          deps.toast('登入狀態已失效，請點選登出後重新登入。', 'error');
           return;
         }
         window.__ismsWarn('session heartbeat failed', error);
@@ -309,7 +306,6 @@
     function ensureSessionHeartbeat(options) {
       const deps = buildSessionDeps(options);
       if (typeof window === 'undefined') return;
-      if (deps.getAuthMode() !== 'm365-api') return;
       const user = deps.currentUser();
       const heartbeatKey = user
         ? [
