@@ -2884,6 +2884,10 @@ body.modal-open {
   min-width: 120px;
   padding: 10px 24px;
   font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .modal-card--prompt {
