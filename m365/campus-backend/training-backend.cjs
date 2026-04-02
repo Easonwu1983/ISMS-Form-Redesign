@@ -376,12 +376,13 @@ function createTrainingRouter(deps) {
       params.push(`%${filters.q.toLowerCase()}%`);
     }
 
-    // Non-admin authorization filter
+    // Non-admin authorization filter: match unit OR stats_unit so unit admins
+    // can see rosters imported by the admin for their authorized scope.
     if (!requestAuthz.isAdmin(authz)) {
       const unitList = Array.isArray(authz.authorizedUnits) ? authz.authorizedUnits.filter(Boolean) : [];
       if (unitList.length > 0) {
         idx++;
-        conditions.push(`unit = ANY($${idx})`);
+        conditions.push(`(unit = ANY($${idx}) OR stats_unit = ANY($${idx}))`);
         params.push(unitList);
       } else {
         conditions.push('FALSE');

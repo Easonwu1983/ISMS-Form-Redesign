@@ -95,13 +95,16 @@
         }
       }
 
+      function safeGetSessionAuthHeaders() {
+        try { return opts.getSessionAuthHeaders() || {}; } catch (_) { return {}; }
+      }
       async function requestSystemUserJson(url, options) {
         return requestJson(url, {
           ...(options || {}),
           headers: {
             'X-ISMS-Contract-Version': contracts.systemUsers,
             ...opts.getSystemUsersSharedHeaders(),
-            ...opts.getSessionAuthHeaders(),
+            ...safeGetSessionAuthHeaders(),
             ...(((options || {}).headers) || {})
           }
         });
@@ -192,7 +195,7 @@
           headers: {
             'X-ISMS-Contract-Version': contracts.attachments,
             ...opts.getAttachmentsSharedHeaders(),
-            ...opts.getSessionAuthHeaders(),
+            ...safeGetSessionAuthHeaders(),
             ...(((options || {}).headers) || {})
           }
         });
@@ -202,7 +205,7 @@
         return requestBlob(url, {
           ...(options || {}),
           headers: {
-            ...opts.getSessionAuthHeaders(),
+            ...safeGetSessionAuthHeaders(),
             ...(((options || {}).headers) || {})
           }
         });

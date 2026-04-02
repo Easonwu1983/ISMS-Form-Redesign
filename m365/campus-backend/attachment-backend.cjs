@@ -71,8 +71,12 @@ function mapRowToAttachment(row) {
 /* ------------------------------------------------------------------ */
 
 function normalizeAttachmentDisplayName(filename) {
-  const cleanName = cleanText(filename);
+  let cleanName = cleanText(filename);
   if (!cleanName) return 'attachment.bin';
+  // Decode URL-encoded filenames (e.g. %E5%A0%B1%E5%91%8A.pdf → 報告.pdf)
+  if (/%[0-9A-Fa-f]{2}/.test(cleanName)) {
+    try { cleanName = decodeURIComponent(cleanName); } catch (_) {}
+  }
   const normalized = cleanName
     .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
     .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')

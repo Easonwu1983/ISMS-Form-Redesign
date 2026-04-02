@@ -562,9 +562,10 @@
 
     function buildHeaders(extraHeaders, options) {
       const opts = options && typeof options === 'object' ? options : {};
-      const sessionHeaders = typeof getSessionAuthHeaders === 'function'
-        ? (getSessionAuthHeaders() || {})
-        : {};
+      let sessionHeaders = {};
+      if (typeof getSessionAuthHeaders === 'function') {
+        try { sessionHeaders = getSessionAuthHeaders() || {}; } catch (_) { sessionHeaders = {}; }
+      }
       const sharedHeaders = opts.sharedHeaders && typeof opts.sharedHeaders === 'object'
         ? Object.entries(opts.sharedHeaders).reduce((result, [key, value]) => {
             const name = String(key || '').trim();

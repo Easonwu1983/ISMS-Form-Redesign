@@ -975,6 +975,14 @@
     const single = normalizeRemoteSystemUserRecord(body && (body.item || body.data || body.result || body));
     return single ? [single] : [];
   }
+  function assertSessionNotExpired() {
+    var user = currentUser();
+    if (!user) return;
+    var expiresRaw = Date.parse(String(user.sessionExpiresAt || '').trim());
+    if (Number.isFinite(expiresRaw) && Date.now() >= expiresRaw) {
+      throw new Error('登入狀態已過期，請重新登入後再執行操作。');
+    }
+  }
   function getSessionAuthHeaders() {
     const user = currentUser();
     if (!user) return {};
@@ -1410,11 +1418,12 @@
     const incoming = payload && typeof payload === 'object' ? payload : {};
     const username = String(incoming.username || '').trim();
     const existing = username ? findUser(username) : null;
+    const incomingPasswordValue = String(incoming.password || '').trim();
     const requestPayload = normalizeUserRecord({
       ...(existing || {}),
       ...incoming,
       username: username,
-      password: String(incoming.password || (existing && existing.password) || '').trim()
+      password: incomingPasswordValue || (existing && !incoming.skipPasswordCheck ? String(existing.password || '').trim() : '')
     });
     if (!requestPayload.username) throw new Error('缺少帳號');
     if (!requestPayload.password && !existing && !incoming.skipPasswordCheck) throw new Error('缺少密碼');
@@ -1744,6 +1753,7 @@
       return { ok: true, deletedId: caseId, source: 'local' };
     }
     try {
+      assertSessionNotExpired();
       var headers = getSessionAuthHeaders();
       headers['Content-Type'] = 'application/json';
       var resp = await fetch('/api/corrective-actions/' + encodeURIComponent(caseId) + '/delete', {
@@ -1755,6 +1765,9 @@
       deleteCorrectiveActionFromStore(caseId);
       return { ok: true, deletedId: caseId, source: 'remote' };
     } catch (error) {
+      if (isStrictRemoteDataMode()) {
+        throw new Error(buildStrictRemoteError('矯正單刪除', error));
+      }
       deleteCorrectiveActionFromStore(caseId);
       return { ok: true, deletedId: caseId, source: 'local-fallback', warning: String(error && error.message || '') };
     }
@@ -2147,10 +2160,9 @@
         merged.push(item);
       });
     }
-    const latestStore = loadTrainingStore();
-    latestStore.forms = merged;
-    saveTrainingStore(latestStore);
-    return latestStore.forms.slice();
+    store.forms = merged;
+    saveTrainingStore(store);
+    return store.forms.slice();
   }
   function mergeRemoteTrainingRostersIntoStore(items, options) {
     const strict = !!(options && options.strict);
@@ -2192,10 +2204,9 @@
         mergedById.set(id, item);
       }
     });
-    const latestStore = loadTrainingStore();
-    latestStore.rosters = Array.from(mergedById.values());
-    saveTrainingStore(latestStore);
-    return latestStore.rosters.slice();
+    store.rosters = Array.from(mergedById.values());
+    saveTrainingStore(store);
+    return store.rosters.slice();
   }
   function upsertTrainingFormInStore(item) {
     if (!item || !item.id) return null;
@@ -2307,6 +2318,7 @@
     if (!user) {
       return setTrainingRepositoryState({ ready: false, source: 'auth-pending', message: '登入後才會同步教育訓練名單', error: '' });
     }
+    const syncStartedAt = Date.now();
     try {
       const health = await getTrainingHealthCached(client, !!opts.force);
       if (health && health.ready === false) {

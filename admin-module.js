@@ -69,7 +69,7 @@
         : window.confirm('確定要重新寄送登入資訊嗎？');
       if (!confirmed) return;
       try {
-        await reviewUnitContactApplication({ id: applicationId, status: 'resend_activation' });
+        await activateUnitContactApplication({ id: applicationId, resend: true });
         toast('已重新寄送登入資訊', 'success');
       } catch (error) {
         toast(String(error && error.message || error || '寄送失敗'), 'error');
@@ -3486,7 +3486,7 @@
         if (!isE && findUser(un)) { toast('帳號已存在', 'error'); return; }
         const currentFilters = { ...systemUsersState.filters };
         await submitUserUpsert({ username: un, ...payload });
-        await syncUsersFromM365({ silent: true });
+        try { await syncUsersFromM365({ silent: true }); } catch (syncErr) { window.__ismsWarn('使用者同步失敗（非致命）', syncErr); }
         if (rl === ROLES.UNIT_ADMIN) {
           await submitReviewScopeReplace({
             username: un,
@@ -3494,7 +3494,7 @@
             actorName: currentUser() && currentUser().name,
             actorEmail: currentUser() && currentUser().email
           });
-          await syncReviewScopesFromM365({ silent: true });
+          try { await syncReviewScopesFromM365({ silent: true }); } catch (syncErr) { window.__ismsWarn('審核範圍同步失敗（非致命）', syncErr); }
         }
         toast(isE ? '使用者已更新' : '使用者已新增');
         dispatchAdminCacheInvalidationScopes(['system-users', 'audit-trail'], isE ? 'user-updated' : 'user-created');
@@ -3503,6 +3503,7 @@
         refreshIcons();
       } catch (error) {
         toast(String(error && error.message || error || '使用者儲存失敗'), 'error');
+        try { renderUsers({ filters: systemUsersState.filters, forceRemote: true }); } catch (_) {}
       }
     });
   }

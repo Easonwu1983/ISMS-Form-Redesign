@@ -881,17 +881,48 @@
       return units.includes(candidate) ? candidate : units[0];
     }
 
+    function expandFirstLevelWindowScope(units, securityRoles) {
+      if (!Array.isArray(securityRoles) || !securityRoles.includes('一級單位資安窗口')) return units;
+      var structure = typeof window !== 'undefined' && typeof window.getUnitStructure_ === 'function' ? window.getUnitStructure_() : null;
+      if (!structure || typeof structure !== 'object') return units;
+      var expanded = new Set(units);
+      units.forEach(function (unit) {
+        var cleanUnit = String(unit || '').trim();
+        if (!cleanUnit) return;
+        // If the unit itself is a parent (一級) with children, add all children
+        if (Array.isArray(structure[cleanUnit])) {
+          structure[cleanUnit].forEach(function (child) { if (child) expanded.add(child); });
+          return;
+        }
+        // If the unit is a child (二級), find its parent and add parent + all siblings
+        var parentKeys = Object.keys(structure);
+        for (var i = 0; i < parentKeys.length; i++) {
+          var parent = parentKeys[i];
+          if (Array.isArray(structure[parent]) && structure[parent].indexOf(cleanUnit) >= 0) {
+            expanded.add(parent);
+            structure[parent].forEach(function (child) { if (child) expanded.add(child); });
+            break;
+          }
+        }
+      });
+      return Array.from(expanded);
+    }
+
     function getAccessProfile(user) {
       installAccessProfileCacheInvalidation();
       const cacheKey = buildUserCacheKey(user, ['username', 'role', 'primaryUnit', 'unit', 'authorizedUnits', 'scopeUnits', 'units', 'reviewUnits', 'reviewScopes', 'reviewScopeUnits', 'securityRoles', 'activeUnit', 'name', 'email', 'sessionToken', 'sessionExpiresAt']);
       return getCachedUserList(ACCESS_PROFILE_CACHE, cacheKey, function () {
         const role = normalizeUserRole(user?.role);
         const primaryUnit = String(user?.primaryUnit || user?.unit || '').trim();
-        const authorizedUnits = normalizeAuthorizedUnits(user);
+        let authorizedUnits = normalizeAuthorizedUnits(user);
         const reviewUnits = getReviewUnits(user);
+        const securityRoles = parseSecurityRoles(user?.securityRoles);
+        // Bug 7+8: 一級單位資安窗口 should see entire parent scope
+        if (role !== ROLES.ADMIN) {
+          authorizedUnits = expandFirstLevelWindowScope(authorizedUnits, securityRoles);
+        }
         const scopeUnits = Array.from(new Set([primaryUnit, ...authorizedUnits].map((entry) => String(entry || '').trim()).filter(Boolean)));
         const activeUnit = role === ROLES.ADMIN ? '' : getActiveUnit({ ...user, units: authorizedUnits });
-        const securityRoles = parseSecurityRoles(user?.securityRoles);
         return {
           ...user,
           role,

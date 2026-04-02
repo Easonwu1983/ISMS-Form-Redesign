@@ -110,11 +110,15 @@
     }
 
     function normalizeLegacyAttachmentName(name) {
-      const clean = String(name || '').replace(/^\uFEFF/, '').trim();
+      let clean = String(name || '').replace(/^\uFEFF/, '').trim();
       if (!clean) return '';
+      // Decode URL-encoded filenames (e.g. %E5%A0%B1%E5%91%8A.pdf → 報告.pdf)
+      if (/%[0-9A-Fa-f]{2}/.test(clean)) {
+        try { clean = decodeURIComponent(clean); } catch (_) {}
+      }
       return clean
-        .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
-        .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){2,}(?:[-_]+)/i, '')
+        .replace(/^(?:att|trn|chk|car|uca)(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
+        .replace(/^[a-z]{3,6}(?:[-_][a-z0-9]{4,}){1,}(?:[-_]+)/i, '')
         .trim() || clean;
     }
 

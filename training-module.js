@@ -1738,6 +1738,7 @@
       try {
         await renderTrainingRoster({
           skipSync: true,
+          forceRemotePage: true,
           restoreFocusState
         });
       } catch (error) {
@@ -1747,6 +1748,7 @@
           await new Promise((resolve) => setTimeout(resolve, TRAINING_ROUTE_SETTLE_DELAY_MS));
           await renderTrainingRoster({
             skipSync: true,
+            forceRemotePage: true,
             restoreFocusState
           });
         } catch (retryError) {
@@ -1992,7 +1994,11 @@
     const lockedUserUnit = user.activeUnit || user.primaryUnit || user.unit || '';
     const unitPrefill = id && String(id).startsWith('unit:') ? String(id).slice(5).trim() : '';
     let existing = unitPrefill ? null : (id ? getTrainingForm(id) : null);
-    const unitValue = existing ? existing.unit : (unitPrefill || (isAdmin(user) ? (user.primaryUnit || user.activeUnit || user.unit || getTrainingUnits()[0] || '') : (user.activeUnit || user.primaryUnit || user.unit)));
+    let unitValue = existing ? existing.unit : (unitPrefill || (isAdmin(user) ? (user.primaryUnit || user.activeUnit || user.unit || getTrainingUnits()[0] || '') : (user.activeUnit || user.primaryUnit || user.unit)));
+    const authorizedUnits = Array.isArray(user.authorizedUnits) ? user.authorizedUnits : [];
+    if (!isAdmin(user) && authorizedUnits.length && unitValue && !authorizedUnits.includes(unitValue)) {
+      unitValue = authorizedUnits[0];
+    }
     const isUnitLocked = !!existing || !isAdmin(user);
     const takeoverDraft = !!(existing && existing.fillerUsername && existing.fillerUsername !== user.username && isUnitAdmin());
     let rowsState = sortTrainingRosterEntries(existing ? (existing.records || []) : []);
@@ -2051,12 +2057,22 @@
     }
 
     const trainingForm = document.getElementById('training-form');
+    if (!trainingForm) {
+      toast('頁面載入異常，請重新整理', 'error');
+      navigate('training');
+      return;
+    }
     const trainingFeedback = document.getElementById('training-feedback');
     const trainingDraftStatus = document.getElementById('training-draft-status');
     const trainingAddPersonButton = document.getElementById('training-add-person');
     const trainingSaveDraftButton = document.getElementById('training-save-draft');
     const trainingSubmitButton = trainingForm.querySelector('[data-testid="training-submit"]');
     clearUnsavedChangesGuard();
+
+    function getTrainingUnitValue() {
+      var el = document.getElementById('tr-unit');
+      return el ? el.value : '';
+    }
 
     function markTrainingDirty() {
       trainingRowsStateVersion += 1;
@@ -2115,7 +2131,7 @@
             row.completedProfessional = '';
           }
           if (field === 'isInfoStaff') row.completedProfessional = row.isInfoStaff === '否' ? '不適用' : '';
-          rowsState[idx] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
+          rowsState[idx] = normalizeTrainingRecordRow(row, getTrainingUnitValue());
           markTrainingDirty();
           scheduleTrainingRowsRender();
           return;
@@ -2124,7 +2140,7 @@
           const idx = resolveTrainingRowIndex(target);
           const field = String(target.dataset.field || '').trim();
           if (!rowsState[idx] || !field) return;
-          rowsState[idx] = normalizeTrainingRecordRow({ ...rowsState[idx], [field]: target.value }, document.getElementById('tr-unit').value);
+          rowsState[idx] = normalizeTrainingRecordRow({ ...rowsState[idx], [field]: target.value }, getTrainingUnitValue());
           persistEditableRosterRow(rowsState[idx]);
           rowsState = sortTrainingRosterEntries(rowsState);
           markTrainingDirty();
@@ -2163,7 +2179,7 @@
           const value = String(binaryButton.dataset.value || '').trim();
           row[field] = row[field] === value ? '' : value;
           if (field === 'completedProfessional' && row.isInfoStaff !== '是') row.completedProfessional = row.isInfoStaff === '否' ? '不適用' : '';
-          rowsState[idx] = normalizeTrainingRecordRow(row, document.getElementById('tr-unit').value);
+          rowsState[idx] = normalizeTrainingRecordRow(row, getTrainingUnitValue());
           markTrainingDirty();
           scheduleTrainingRowsRender();
           return;
@@ -2225,9 +2241,9 @@
 
     function readPendingManualRosterPayload(currentUnit) {
       return {
-        currentUnit: currentUnit || document.getElementById('tr-unit').value,
+        currentUnit: currentUnit || getTrainingUnitValue(),
         name: document.getElementById('tr-new-name').value.trim(),
-        unitName: document.getElementById('tr-new-unit-name').value.trim() || getTrainingJobUnit(currentUnit || document.getElementById('tr-unit').value),
+        unitName: document.getElementById('tr-new-unit-name').value.trim() || getTrainingJobUnit(currentUnit || getTrainingUnitValue()),
         identity: document.getElementById('tr-new-identity').value.trim(),
         jobTitle: document.getElementById('tr-new-job-title').value.trim()
       };
@@ -2580,7 +2596,7 @@
     }
 
     function collectRecords() {
-      const unit = document.getElementById('tr-unit').value;
+      const unit = getTrainingUnitValue();
       return rowsState.map((row) => normalizeTrainingRecordRow({
         ...row,
         unit,
@@ -2590,7 +2606,7 @@
     }
 
     function validateSubmitPayload(records) {
-      const unit = document.getElementById('tr-unit').value;
+      const unit = getTrainingUnitValue();
       const phone = document.getElementById('tr-phone').value.trim();
       const email = document.getElementById('tr-email').value.trim();
       const year = document.getElementById('tr-year').value.trim();
@@ -2619,7 +2635,7 @@
         }
       }
       const now = new Date().toISOString();
-      const currentUnit = document.getElementById('tr-unit').value;
+      const currentUnit = getTrainingUnitValue();
       const pendingManualRoster = readPendingManualRosterPayload(currentUnit);
       if (pendingManualRoster.name) {
         try {
@@ -2761,7 +2777,7 @@
         } else if (bulkGeneralValue) {
           nextRow.completedGeneral = bulkGeneralValue;
         }
-          const normalized = normalizeTrainingRecordRow(nextRow, document.getElementById('tr-unit').value);
+          const normalized = normalizeTrainingRecordRow(nextRow, getTrainingUnitValue());
           if (normalized.source === 'manual') rememberTrainingManualRosterRow(normalized);
           return normalized;
         });
@@ -2771,7 +2787,7 @@
     });
 
     bindTrainingPageEvent(trainingAddPersonButton, 'click', async () => {
-      const currentUnit = document.getElementById('tr-unit').value;
+      const currentUnit = getTrainingUnitValue();
       if (!readPendingManualRosterPayload(currentUnit).name) {
         toast('請輸入要新增的人員姓名', 'error');
         return;
@@ -2797,7 +2813,7 @@
     syncStatsUnitField(unitValue);
     updateTrainingDraftStatus(existing);
     clearTrainingFeedback();
-      const immediateUnit = document.getElementById('tr-unit') ? document.getElementById('tr-unit').value : unitValue;
+      const immediateUnit = document.getElementById('tr-unit') ? getTrainingUnitValue() : unitValue;
       rowsState = mergeTrainingRows(immediateUnit, [
         ...(existing ? (existing.records || []) : []),
         ...getPreservedTrainingRosterRows()
@@ -2820,7 +2836,7 @@
         }
       });
       if (!document.getElementById('training-form')) return;
-      const activeUnit = document.getElementById('tr-unit') ? document.getElementById('tr-unit').value : unitValue;
+      const activeUnit = document.getElementById('tr-unit') ? getTrainingUnitValue() : unitValue;
       if (!id && !isAdmin() && lockedUserUnit) {
         const duplicateDraft = findExistingTrainingFormForUnitYear(lockedUserUnit, defaultTrainingYear);
         if (duplicateDraft && isTrainingVisible(duplicateDraft)) {
@@ -3592,7 +3608,7 @@
         importWrap.classList.toggle('is-hidden');
       });
     }
-    if (useRemoteRosters && keywordInput) {
+    if (keywordInput) {
       let keywordTimer = null;
       registerTrainingPageCleanup(() => {
         if (keywordTimer) {
@@ -3600,16 +3616,34 @@
           keywordTimer = null;
         }
       });
-      bindTrainingPageEvent(keywordInput, 'input', () => {
-        if (keywordTimer) window.clearTimeout(keywordTimer);
-        keywordTimer = window.setTimeout(() => {
-          keywordTimer = null;
-          rerenderRemoteRosterPage({
-            q: keywordInput.value || '',
-            offset: '0'
-          });
-        }, 220);
-      });
+      if (useRemoteRosters) {
+        bindTrainingPageEvent(keywordInput, 'input', () => {
+          if (keywordTimer) window.clearTimeout(keywordTimer);
+          keywordTimer = window.setTimeout(() => {
+            keywordTimer = null;
+            rerenderRemoteRosterPage({
+              q: keywordInput.value || '',
+              offset: '0'
+            });
+          }, 220);
+        });
+      } else {
+        bindTrainingPageEvent(keywordInput, 'input', () => {
+          if (keywordTimer) window.clearTimeout(keywordTimer);
+          keywordTimer = window.setTimeout(() => {
+            keywordTimer = null;
+            const keyword = String(keywordInput.value || '').trim().toLowerCase();
+            const allRows = Array.from(document.querySelectorAll('tr[data-roster-id]'));
+            allRows.forEach((row) => {
+              if (!keyword) { row.style.display = ''; return; }
+              const name = String(row.dataset.rosterName || '').toLowerCase();
+              const unit = String(row.dataset.rosterUnit || '').toLowerCase();
+              const text = String(row.textContent || '').toLowerCase();
+              row.style.display = (name.includes(keyword) || unit.includes(keyword) || text.includes(keyword)) ? '' : 'none';
+            });
+          }, 150);
+        });
+      }
     }
     if (useRemoteRosters && sourceSelect) {
       bindTrainingPageEvent(sourceSelect, 'change', () => {
@@ -3730,6 +3764,7 @@
         await renderTrainingRoster({
           skipSync: true,
           deferFullRender: true,
+          forceRemotePage: true,
           restoreFocusState: preferredFocusRow ? {
             kind: 'delete',
             rowId: String(preferredFocusRow.id || '').trim(),
@@ -4012,6 +4047,7 @@
       await renderTrainingRoster({
         skipSync: true,
         deferFullRender: true,
+        forceRemotePage: true,
         rosterIds: importedRosterIds,
         rosterNames: importedRosterNames,
         rosterUnits: importedRosterUnits
