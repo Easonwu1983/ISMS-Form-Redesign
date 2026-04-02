@@ -391,9 +391,24 @@ async function updateApplicationRecord(applicationId, updates) {
     error.statusCode = 404;
     throw error;
   }
+  const STATUS_LABELS = {
+    pending_review: '待審核', returned: '退回補件', approved: '審核通過',
+    rejected: '未核准', activation_pending: '待建帳', active: '已啟用'
+  };
+  const STATUS_DETAILS = {
+    pending_review: '申請已送出，請等待管理者審核。審核通過後會直接啟用帳號並寄送登入資訊。',
+    returned: '申請資料需要補充，請依退回意見修正後重新送出。',
+    approved: '申請已通過審核，系統正在自動建帳並寄送登入資訊。',
+    rejected: '申請未通過審核，請聯繫系統管理者確認原因。',
+    activation_pending: '系統已開始建立帳號，登入帳號會使用申請時的電子郵件。',
+    active: '帳號已啟用，請使用申請時的電子郵件與初始密碼登入系統。'
+  };
+  const nextStatus = cleanText(updates.status) || cleanText(entry.application.status);
   const nextRecord = {
     ...entry.application,
     ...updates,
+    statusLabel: STATUS_LABELS[nextStatus] || cleanText(updates.statusLabel) || entry.application.statusLabel,
+    statusDetail: STATUS_DETAILS[nextStatus] || cleanText(updates.statusDetail) || entry.application.statusDetail,
     updatedAt: new Date().toISOString()
   };
 
