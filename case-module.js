@@ -529,8 +529,12 @@
     var user = currentUser();
     var showAuditProgress = user && user.role === ROLES.ADMIN;
     var auditSlotIds = { filingStat: 'audit-filing-stat', trainingStat: 'audit-training-stat', pendingStat: 'audit-pending-stat', filing: 'audit-filing-slot', training: 'audit-training-slot' };
+    var currentAuditYear = String(new Date().getFullYear() - 1911);
+    var auditYearOptions = [currentAuditYear, String(Number(currentAuditYear) - 1), String(Number(currentAuditYear) - 2)].map(function (y) {
+      return '<option value="' + y + '"' + (y === currentAuditYear ? ' selected' : '') + '>' + y + ' 年度</option>';
+    }).join('');
     var auditProgressHtml = showAuditProgress ? (
-      '<section class="dashboard-audit-progress"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('shield-check', 'icon-sm') + ' 年度稽核進度總覽</h2></div>'
+      '<section class="dashboard-audit-progress"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('shield-check', 'icon-sm') + ' 年度稽核進度總覽</h2><select class="form-select" id="audit-year-select" style="width:auto;margin-left:12px;font-size:.88rem">' + auditYearOptions + '</select></div>'
       + '<div class="stats-grid stats-grid--audit">'
       + '<div class="stat-card total"><div class="stat-icon">' + ic('clipboard-list') + '</div><div class="stat-value" id="' + auditSlotIds.filingStat + '">—</div><div class="stat-label">年度填報</div></div>'
       + '<div class="stat-card closed"><div class="stat-icon">' + ic('graduation-cap') + '</div><div class="stat-value" id="' + auditSlotIds.trainingStat + '">—</div><div class="stat-label">訓練達成率</div></div>'
@@ -637,7 +641,8 @@
 
     // Audit progress hydration (admin only, parallel to CAR hydration)
     if (showAuditProgress && typeof fetchDashboardSummary === 'function') {
-      fetchDashboardSummary().then(function (result) {
+      var selectedYear = (document.getElementById('audit-year-select') || {}).value || currentAuditYear;
+      fetchDashboardSummary({ auditYear: selectedYear, trainingYear: selectedYear }).then(function (result) {
         if (renderToken !== dashboardRenderToken) return;
         if (!result || !result.ok || !result.data) {
           var errSlot = document.getElementById(auditSlotIds.filing);
@@ -699,9 +704,54 @@
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待處理</span><strong class="dashboard-panel-pill-value" style="' + (pendingTotal > 0 ? 'color:#ef4444' : '') + '">' + pendingTotal + ' 項</strong></div>'
             + '</div></div>';
         }
+        // Show toast notification for pending items
+        if (pendingTotal > 0) {
+          toast('您有 ' + pendingTotal + ' 項待處理事項需要關注', 'info');
+        }
         scheduleRefreshIcons();
+
+        // Bind year selector change
+        var yearSelect = document.getElementById('audit-year-select');
+        if (yearSelect) {
+          yearSelect.addEventListener('change', function () {
+            renderDashboard();
+          });
+        }
       }).catch(function () {});
     }
+  }
+
+  function exportCaseListCsv() {
+    var items = getVisibleItems();
+    if (!items.length) { toast('沒有可匯出的矯正單資料', 'error'); return; }
+    var headers = ['單號', '缺失種類', '來源', '分類', '狀態', '提報單位', '提報人', '處理單位', '處理人', '處理人郵件', '問題說明', '矯正措施', '預定完成日', '下次追蹤', '開立日期', '結案日期'];
+    var rows = items.map(function (item) {
+      return [
+        item.id, item.deficiencyType, item.source,
+        Array.isArray(item.category) ? item.category.join('、') : '',
+        item.status, item.proposerUnit, item.proposerName,
+        item.handlerUnit, item.handlerName, item.handlerEmail,
+        String(item.problemDesc || '').replace(/[\r\n]+/g, ' '),
+        String(item.correctiveAction || '').replace(/[\r\n]+/g, ' '),
+        item.correctiveDueDate ? item.correctiveDueDate.slice(0, 10) : '',
+        item.reviewNextDate ? item.reviewNextDate.slice(0, 10) : '',
+        item.createdAt ? item.createdAt.slice(0, 10) : '',
+        item.closedDate ? item.closedDate.slice(0, 10) : ''
+      ];
+    });
+    var bom = '\uFEFF';
+    var csvContent = bom + headers.join(',') + '\n' + rows.map(function (row) {
+      return row.map(function (cell) { return '"' + String(cell || '').replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\n');
+    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'ISMS_矯正單_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+    toast('已匯出 ' + items.length + ' 筆矯正單', 'success');
   }
 
   var curFilter = '全部', curSearch = '';
@@ -709,13 +759,16 @@
     var items = getVisibleItems(); var filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); var listSnapshot = getCachedCaseListSnapshot(items); var filtered = listSnapshot.filtered;
     var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
+    var exportBtn = '<button type="button" class="btn btn-secondary" id="case-export-csv">' + ic('download', 'icon-sm') + ' 匯出 CSV</button>';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
-      '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + listSnapshot.total + ' 筆，顯示 ' + listSnapshot.filteredCount + ' 筆</p></div>' + createBtn + '</div>' +
+      '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + listSnapshot.total + ' 筆，顯示 ' + listSnapshot.filteredCount + ' 筆</p></div><div class="page-header-actions">' + exportBtn + createBtn + '</div></div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
       buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', listSnapshot.rows), { cardClass: 'case-table-card' }) + '</div>';
     window.setTimeout(function () {
       scheduleRefreshIcons();
       bindCopyButtons();
+      var exportCsvBtn = document.getElementById('case-export-csv');
+      if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportCaseListCsv);
     }, 0);
     let searchRenderTimer = null;
     const scheduleRenderList = function () {

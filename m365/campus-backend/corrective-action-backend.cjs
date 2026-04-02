@@ -161,6 +161,47 @@ function createCorrectiveActionRouter(deps) {
     ]);
   }
 
+  function buildStatusChangeMail(item, oldStatus, newStatus, actorLabel) {
+    var portalUrl = cleanText(process.env.ISMS_PORTAL_URL) || 'https://isms-campus-portal.pages.dev/';
+    var statusLabels = {
+      '待矯正': '等待您提交矯正措施',
+      '已提案': '處理人已提交矯正措施，等待管理者審核',
+      '審核中': '管理者正在審核',
+      '追蹤中': '審核通過，需要追蹤成效',
+      '結案': '矯正單已結案',
+      '退回': '已退回，請重新修改矯正措施'
+    };
+    var actionHint = statusLabels[newStatus] || '狀態已更新';
+    return {
+      subject: 'ISMS 矯正單狀態更新：' + cleanText(item && item.id) + ' → ' + newStatus,
+      html: buildHtmlDocument([
+        '您好，',
+        '您相關的矯正單狀態已更新：',
+        '單號：' + cleanText(item && item.id),
+        '所屬單位：' + cleanText(item && item.handlerUnit),
+        '狀態：' + oldStatus + ' → ' + newStatus,
+        '說明：' + actionHint,
+        '操作者：' + (actorLabel || '系統'),
+        '系統入口：' + portalUrl,
+        '請登入系統查看詳情。'
+      ])
+    };
+  }
+
+  async function trySendStatusChangeMail(item, oldStatus, newStatus, actorLabel, recipientEmail) {
+    if (!recipientEmail) return { sent: false, reason: 'no-recipient' };
+    try {
+      return await sendGraphMail({
+        graphRequest, getDelegatedToken,
+        to: recipientEmail,
+        ...buildStatusChangeMail(item, oldStatus, newStatus, actorLabel)
+      });
+    } catch (err) {
+      console.warn('[corrective-actions] status change mail failed:', String(err && err.message || err));
+      return { sent: false, reason: 'send-failed', error: String(err && err.message || err) };
+    }
+  }
+
   function buildAssignmentMail(item) {
     const portalUrl = cleanText(process.env.ISMS_PORTAL_URL) || 'https://isms-campus-portal.pages.dev/';
     return {
@@ -418,6 +459,8 @@ function createCorrectiveActionRouter(deps) {
       };
       const updated = await updateCaseRecord(existing, nextItem);
       await createAuditRow({ eventType: 'corrective_action.responded', actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(updated.handlerEmail), unitCode: cleanText(updated.handlerUnitCode), recordId: updated.id, occurredAt: now, payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, changes: buildCaseChanges(existing.item, updated) }) });
+      // Notify admin that handler has responded
+      trySendStatusChangeMail(updated, STATUSES.PENDING, STATUSES.PROPOSED, actor.actorLabel, cleanText(process.env.ISMS_ADMIN_EMAIL));
       await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(updated), contractVersion: CONTRACT_VERSION }), origin);
     } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to respond corrective action.'), origin); }
   }
@@ -449,6 +492,8 @@ function createCorrectiveActionRouter(deps) {
       const nextItem = { ...existing.item, status: nextStatus, reviewResult, reviewer: actor.actorLabel, reviewDate: today, updatedAt: now, closedDate: nextStatus === STATUSES.CLOSED ? now : '', pendingTracking: nextStatus === STATUSES.PENDING ? null : existing.item.pendingTracking, history };
       const updated = await updateCaseRecord(existing, nextItem);
       await createAuditRow({ eventType: 'corrective_action.reviewed', actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(updated.handlerEmail), recordId: updated.id, unitCode: cleanText(updated.handlerUnitCode), occurredAt: now, payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, decision: payload.decision, changes: buildCaseChanges(existing.item, updated) }) });
+      // Notify handler about review result
+      trySendStatusChangeMail(updated, existing.item.status, nextStatus, actor.actorLabel, cleanText(updated.handlerEmail));
       await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(updated), contractVersion: CONTRACT_VERSION }), origin);
     } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to review corrective action.'), origin); }
   }
@@ -476,6 +521,8 @@ function createCorrectiveActionRouter(deps) {
       const nextItem = { ...existing.item, pendingTracking, updatedAt: now, history };
       const updated = await updateCaseRecord(existing, nextItem);
       await createAuditRow({ eventType: 'corrective_action.tracking_submitted', actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(updated.handlerEmail), recordId: updated.id, unitCode: cleanText(updated.handlerUnitCode), occurredAt: now, payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, round, result: payload.result, changes: buildCaseChanges(existing.item, updated) }) });
+      // Notify admin that tracking has been submitted
+      trySendStatusChangeMail(updated, STATUSES.TRACKING, '追蹤中（已提交追蹤報告）', actor.actorLabel, cleanText(process.env.ISMS_ADMIN_EMAIL));
       await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(updated), contractVersion: CONTRACT_VERSION }), origin);
     } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to submit tracking.'), origin); }
   }
@@ -512,6 +559,8 @@ function createCorrectiveActionRouter(deps) {
       };
       const updated = await updateCaseRecord(existing, nextItem);
       await createAuditRow({ eventType: 'corrective_action.tracking_reviewed', actorEmail: actor.actorMeta.actorEmail, targetEmail: cleanText(updated.handlerEmail), recordId: updated.id, unitCode: cleanText(updated.handlerUnitCode), occurredAt: now, payloadJson: JSON.stringify({ actorName: actor.actorMeta.actorName, actorUsername: actor.actorMeta.actorUsername, decision: payload.decision, finalResult, changes: buildCaseChanges(existing.item, updated) }) });
+      // Notify handler about tracking review result
+      trySendStatusChangeMail(updated, STATUSES.TRACKING, shouldClose ? STATUSES.CLOSED : STATUSES.TRACKING, actor.actorLabel, cleanText(updated.handlerEmail));
       await writeJson(res, buildJsonResponse(200, { ok: true, item: mapCaseForClient(updated), contractVersion: CONTRACT_VERSION }), origin);
     } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to review tracking submission.'), origin); }
   }
