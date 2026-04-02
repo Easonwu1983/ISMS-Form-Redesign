@@ -8177,6 +8177,10 @@ tbody tr:hover {
   backdrop-filter: blur(12px);
 }
 
+.unit-chip-picker-results[hidden] {
+  display: none !important;
+}
+
 .unit-chip-picker-option {
   border: none;
 }
@@ -8185,7 +8189,7 @@ tbody tr:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  min-height: 40px;
+  min-height: 0;
   align-items: center;
 }
 
