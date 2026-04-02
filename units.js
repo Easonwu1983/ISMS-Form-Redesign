@@ -11,8 +11,22 @@
   function installUnitApi(payload) {
     const safePayload = payload && typeof payload === 'object' ? payload : {};
     const UNIT_GROUPS = Array.isArray(safePayload.unitGroups) ? safePayload.unitGroups : [];
-    const UNIT_STRUCTURE = safePayload.unitStructure && typeof safePayload.unitStructure === 'object' ? safePayload.unitStructure : {};
     const UNIT_CATALOG = Array.isArray(safePayload.unitCatalog) ? safePayload.unitCatalog : [];
+    // Build unitStructure dynamically from catalog (parent → children mapping)
+    const UNIT_STRUCTURE = (function () {
+      var base = safePayload.unitStructure && typeof safePayload.unitStructure === 'object' ? safePayload.unitStructure : {};
+      var built = {};
+      Object.keys(base).forEach(function (k) { if (Array.isArray(base[k])) built[k] = base[k].slice(); });
+      UNIT_CATALOG.forEach(function (entry) {
+        if (!entry || entry.isTop || !entry.topName || !entry.childName) return;
+        var parent = String(entry.topName || '').trim();
+        var child = String(entry.childName || '').trim();
+        if (!parent || !child) return;
+        if (!built[parent]) built[parent] = [];
+        if (built[parent].indexOf(child) === -1) built[parent].push(child);
+      });
+      return built;
+    })();
     const UNIT_META_BY_VALUE = safePayload.unitMetaByValue && typeof safePayload.unitMetaByValue === 'object' ? safePayload.unitMetaByValue : {};
 
     global.__OFFICIAL_UNIT_DATA__ = safePayload;
