@@ -3492,7 +3492,7 @@
   }
   function buildUnitContactReviewAttachmentBlock(item, id) {
     if (!(item && item.hasAuthorizationDoc)) return '';
-    const fileName = cleanText(item.authorizationDocFileName) || '授權同意書';
+    const fileName = String(item.authorizationDocFileName || '').trim() || '授權同意書';
     const uploadedAt = fmtTime(item.authorizationDocUploadedAt);
     const sizeText = Number(item.authorizationDocSize || 0) > 0 ? ` · ${formatSchemaBytes(item.authorizationDocSize)}` : '';
     return `<div class="unit-contact-review-attachment"><div class="unit-contact-review-attachment-copy"><div class="unit-contact-review-attachment-label">附件</div><div class="unit-contact-review-attachment-title">${esc(fileName)}</div><div class="unit-contact-review-attachment-meta">${uploadedAt ? `上傳：${esc(uploadedAt)}` : '已上傳'}${esc(sizeText)}</div></div><button type="button" class="btn btn-sm btn-secondary unit-contact-review-attachment-action" data-action="admin.unitContactViewAuthDoc" data-id="${esc(id)}" data-applicant-email="${esc(item && item.applicantEmail || '')}">${ic('file-search', 'icon-sm')} 檢視附件</button></div>`;
