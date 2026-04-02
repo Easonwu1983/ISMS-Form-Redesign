@@ -182,6 +182,14 @@
       return Number.isFinite(revision) && revision >= 0 ? Math.floor(revision) : 0;
     }
 
+    var CROSS_TAB_SYNC_KEYS = null;
+    function getCrossTabSyncKeys() {
+      if (!CROSS_TAB_SYNC_KEYS) {
+        CROSS_TAB_SYNC_KEYS = new Set([AUTH_KEY, DATA_KEY, TRAINING_KEY, CHECKLIST_KEY, UNIT_REVIEW_KEY, UNIT_CONTACT_APP_KEY]);
+      }
+      return CROSS_TAB_SYNC_KEYS;
+    }
+
     function installStorageCacheInvalidation() {
       if (storageListenerInstalled || typeof window === 'undefined' || !window.addEventListener) return;
       window.addEventListener('storage', function (event) {
@@ -194,6 +202,22 @@
         }
         removeStorageCacheEntry(event.key);
         touchStore(event.key);
+        // Cross-tab sync: notify UI to re-render when critical data changes from another tab
+        if (getCrossTabSyncKeys().has(event.key)) {
+          try {
+            window.dispatchEvent(new CustomEvent('isms:cross-tab-sync', {
+              detail: { key: event.key, source: 'storage-event' }
+            }));
+          } catch (_) {}
+          // If auth was changed in another tab, trigger access profile refresh
+          if (event.key === AUTH_KEY) {
+            try {
+              window.dispatchEvent(new CustomEvent('isms:access-profile-changed', {
+                detail: { source: 'cross-tab-sync' }
+              }));
+            } catch (_) {}
+          }
+        }
       });
       storageListenerInstalled = true;
     }
