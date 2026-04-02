@@ -563,7 +563,7 @@ async function listApplicationsForAdmin(filters) {
 /* ------------------------------------------------------------------ */
 
 const GLOBAL_RATE_LIMIT_WINDOW_MS = Number(process.env.API_RATE_LIMIT_WINDOW_MS) || 60_000;
-const GLOBAL_RATE_LIMIT_MAX_REQUESTS = Number(process.env.API_RATE_LIMIT_MAX_REQUESTS) || 120;
+const GLOBAL_RATE_LIMIT_MAX_REQUESTS = Number(process.env.API_RATE_LIMIT_MAX_REQUESTS) || 600;
 const globalRateLimitStore = new Map();
 
 function checkGlobalRateLimit(req) {
