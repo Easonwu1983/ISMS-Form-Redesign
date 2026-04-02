@@ -182,7 +182,7 @@
     let releaseSystemUsersVirtualScroll = null;
     let releaseSystemUsersVirtualResize = null;
     const DEFAULT_UNIT_CONTACT_REVIEW_FILTERS = Object.freeze({
-      status: 'pending_review',
+      status: '',
       keyword: '',
       email: '',
       limit: '50',
@@ -3564,7 +3564,7 @@
   function renderUnitContactReviewRows(items) {
     const rows = Array.isArray(items) ? items : [];
     if (!rows.length) {
-      return `<tr><td colspan="7"><div class="empty-state review-empty review-empty--compact"><div class="empty-state-title">目前沒有符合條件的申請</div><div class="empty-state-desc">請調整篩選條件，或等待新的申請送出。</div></div></td></tr>`;
+      return `<tr><td colspan="7"><div class="empty-state review-empty review-empty--compact"><div class="empty-state-title">目前沒有申請紀錄</div><div class="empty-state-desc">尚無申請資料，或可調整上方篩選條件查看其他狀態。</div></div></td></tr>`;
     }
     return rows.map((item) => {
       const id = String(item && item.id || '').trim();
