@@ -613,6 +613,7 @@ body {
   padding: 10px 16px;
   border-bottom: 1px solid var(--border-color);
   height: 56px;
+  min-height: 0;
   max-height: 56px;
   overflow: hidden;
   display: flex;
@@ -6647,6 +6648,7 @@ body {
 .sidebar-logo {
   position: relative;
   height: 56px !important;
+  min-height: 0 !important;
   max-height: 56px !important;
   padding: 10px 16px;
   display: flex !important;
