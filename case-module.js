@@ -864,13 +864,34 @@
     function renderHandlerOptionsByUnit(unit) {
       const prevSelected = handlerName.value;
       const filtered = filterUsersByUnit(unit);
-      handlerName.innerHTML = '<option value="">\u8acb\u9078\u64c7\u8655\u7406\u4eba\u54e1</option>' + filtered.map((entry) => {
+      var optionsHtml = '<option value="">\u8acb\u9078\u64c7\u8655\u7406\u4eba\u54e1</option>';
+      optionsHtml += filtered.map((entry) => {
         const username = String(entry.username || '').trim();
         const displayName = String(entry.name || entry.username || entry.email || '\u672a\u547d\u540d\u5e33\u865f').trim();
         const unitLabel = formatUserUnitSummary(entry);
         return `<option value="${esc(username)}" data-display-name="${esc(displayName)}" data-username="${esc(username)}" data-email="${esc(entry.email || '')}">${esc(displayName)}\uFF08${esc(unitLabel)}\uFF09</option>`;
       }).join('');
-      if (prevSelected && filtered.some((entry) => String(entry.username || '').trim() === prevSelected)) handlerName.value = prevSelected;
+      if (filtered.length === 0 && unit) {
+        optionsHtml += '<option value="" disabled>\u2500\u2500 \u8a72\u55ae\u4f4d\u76ee\u524d\u7121\u7ba1\u7406\u54e1 \u2500\u2500</option>';
+      }
+      // Always show all users as fallback
+      if (unit) {
+        var allOther = users.filter(function(entry) {
+          var un = String(entry.username || '').trim().toLowerCase();
+          return un !== currentUsername && !filtered.some(function(f) { return String(f.username || '').trim() === un; });
+        });
+        if (allOther.length > 0) {
+          optionsHtml += '<option value="" disabled>\u2500\u2500 \u5176\u4ed6\u55ae\u4f4d\u4eba\u54e1 \u2500\u2500</option>';
+          optionsHtml += allOther.map(function(entry) {
+            var username = String(entry.username || '').trim();
+            var displayName = String(entry.name || entry.username || entry.email || '\u672a\u547d\u540d').trim();
+            var unitLabel = formatUserUnitSummary(entry);
+            return '<option value="' + esc(username) + '" data-display-name="' + esc(displayName) + '" data-username="' + esc(username) + '" data-email="' + esc(entry.email || '') + '">' + esc(displayName) + '\uFF08' + esc(unitLabel) + '\uFF09</option>';
+          }).join('');
+        }
+      }
+      handlerName.innerHTML = optionsHtml;
+      if (prevSelected && handlerName.querySelector('option[value="' + prevSelected + '"]')) handlerName.value = prevSelected;
       else handlerName.value = '';
       updateHandlerEmail();
     }
