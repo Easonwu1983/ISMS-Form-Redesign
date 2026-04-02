@@ -1052,7 +1052,7 @@
     }
 
     function waitForPagedClient(getClient, timeoutMs) {
-      const timeout = Math.max(250, Number(timeoutMs) || 2500);
+      const timeout = Math.max(100, Number(timeoutMs) || 800);
       const startedAt = Date.now();
       return new Promise((resolve) => {
         const tick = () => {
@@ -1071,7 +1071,7 @@
             return;
           }
           if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
-            window.setTimeout(tick, 50);
+            window.setTimeout(tick, 25);
             return;
           }
           resolve(null);
@@ -3210,8 +3210,10 @@
       const visibleUsersCache = renderUsers._remoteViewCache || (renderUsers._remoteViewCache = systemUsersCollectionBundle.viewCache || createAdminRemoteViewCache(DEFAULT_SYSTEM_USERS_FILTERS));
     systemUsersState.filters = normalizePagedFilters({ ...systemUsersState.filters, ...(opts.filters || opts) }, DEFAULT_SYSTEM_USERS_FILTERS);
     systemUsersState.loading = true;
-      app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div><button class="btn btn-primary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div><div class="card review-loading-card">正在讀取系統帳號清單...</div></div>`;
-    refreshIcons();
+    if (!visibleUsersCache.items.length) {
+      app.innerHTML = `<div class="animate-in"><div class="page-header"><div><h1 class="page-title">帳號管理</h1><p class="page-subtitle">管理角色、主要歸屬單位與多單位授權範圍</p></div></div><div class="card review-loading-card">正在讀取系統帳號清單...</div></div>`;
+      refreshIcons();
+    }
 
     async function fetchUsersForAdminView(fetchOptions) {
       const remoteOpts = fetchOptions || {};
@@ -3227,7 +3229,7 @@
         };
       }
       if (!remoteOpts.force && visibleUsersCache.promise) return visibleUsersCache.promise;
-      const client = await waitForPagedClient(getSystemUsersPagedClient, 2500);
+      const client = await waitForPagedClient(getSystemUsersPagedClient, 800);
       if (!client) {
         throw new Error('system users paged client unavailable');
       }
@@ -3662,7 +3664,7 @@
         };
       }
       if (!remoteOpts.force && visibleApplicationsCache.promise) return visibleApplicationsCache.promise;
-      const client = await waitForPagedClient(getUnitContactApplicationsPagedClient, 2500);
+      const client = await waitForPagedClient(getUnitContactApplicationsPagedClient, 800);
       if (!client) {
         throw new Error('unit contact applications paged client unavailable');
       }
