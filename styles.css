@@ -610,8 +610,11 @@ body {
 
 
 .sidebar-logo {
-  padding: 14px 18px 12px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border-color);
+  height: 56px;
+  max-height: 56px;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -6643,10 +6646,10 @@ body {
 
 .sidebar-logo {
   position: relative;
-  height: 56px;
+  height: 56px !important;
+  max-height: 56px !important;
   padding: 10px 16px;
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  display: flex !important;
   align-items: center;
   gap: 10px;
   background: linear-gradient(180deg, #fcfdff 0%, #f8fbfe 100%);
