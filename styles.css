@@ -2602,33 +2602,7 @@ tbody td:first-child {
   background: var(--border-color);
 }
 
-.timeline-item {
-  position: relative;
-  padding-bottom: 20px;
-}
-
-.timeline-item::before {
-  content: '';
-  position: absolute;
-  left: -24px;
-  top: 6px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent-primary);
-  border: 2px solid white;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
-}
-
-.timeline-item:last-child {
-  padding-bottom: 0;
-}
-
-.timeline-time {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-bottom: 2px;
-}
+/* .timeline-item — consolidated to single definition at line ~11026 */
 
 .timeline-text {
   font-size: 0.88rem;

@@ -162,9 +162,6 @@ let overdueCheckTimer = null;
 function scheduleOverdueCheck() {
   // Run first check 10 minutes after startup, then every 24 hours
   overdueCheckTimer = setTimeout(function runOverdueCheck() {
-    var port = Number(process.env.PORT || 8787);
-    var http = require('http');
-    // Self-call the overdue-check API (needs admin auth, so do DB check directly)
     var db = require('./db.cjs');
     db.queryAll("SELECT case_id, handler_email, handler_unit, handler_name, corrective_due_date, status FROM corrective_actions WHERE status NOT IN ('結案') AND corrective_due_date < NOW() AND corrective_due_date IS NOT NULL").then(function (rows) {
       console.log('[overdue-schedule] Daily check: found ' + (rows || []).length + ' overdue items.');
@@ -172,6 +169,7 @@ function scheduleOverdueCheck() {
       console.warn('[overdue-schedule] Check failed:', String(err && err.message || err));
     });
     overdueCheckTimer = setTimeout(runOverdueCheck, OVERDUE_CHECK_INTERVAL_MS);
+    overdueCheckTimer.unref();
   }, 10 * 60 * 1000);
   overdueCheckTimer.unref();
 }
