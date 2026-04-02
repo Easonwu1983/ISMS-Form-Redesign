@@ -2,6 +2,9 @@
   'use strict';
 
   function clone(value) {
+    if (typeof structuredClone === 'function') {
+      try { return structuredClone(value); } catch (_) {}
+    }
     return JSON.parse(JSON.stringify(value));
   }
 

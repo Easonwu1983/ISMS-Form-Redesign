@@ -537,6 +537,7 @@
       }).join('') + '</div>';
     }
 
+    var iconRefreshScheduled = false;
     function refreshIcons() {
       const lucideApi = window.lucide;
       if (!lucideApi || typeof lucideApi.createIcons !== 'function') {
@@ -558,8 +559,11 @@
         window.clearTimeout(iconRetryTimer);
         iconRetryTimer = null;
       }
+      if (iconRefreshScheduled) return;
+      iconRefreshScheduled = true;
       const raf = window.requestAnimationFrame || function (callback) { return window.setTimeout(callback, 0); };
       raf(function () {
+        iconRefreshScheduled = false;
         lucideApi.createIcons();
       });
     }

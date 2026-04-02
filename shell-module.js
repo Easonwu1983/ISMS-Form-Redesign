@@ -690,12 +690,17 @@
     }
 
 
+    var lastSidebarKey = '';
+    var lastHeaderKey = '';
     function renderSidebar() {
       var u = getShellAccessProfile();
       if (!u) return;
       var items = getVisibleItems();
       var pendingCount = items.filter(function (item) { return item.status === STATUSES.PENDING || isOverdue(item); }).length;
       var route = getRoute();
+      var sidebarKey = route.page + '|' + pendingCount + '|' + u.role + '|' + (u.activeUnit || '');
+      if (sidebarKey === lastSidebarKey && document.getElementById('sidebar') && document.getElementById('sidebar').innerHTML) return;
+      lastSidebarKey = sidebarKey;
       var nav = '<div class="sidebar-section"><div class="sidebar-section-title">主選單</div>' +
         '<a class="nav-item ' + (route.page === 'dashboard' ? 'active' : '') + '" href="#dashboard"><span class="nav-icon">' + ic('pie-chart') + '</span>儀表板</a>' +
         '<a class="nav-item ' + (route.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>矯正單列表' + (pendingCount ? '<span class="nav-badge">' + pendingCount + '</span>' : '') + '</a>' +
@@ -733,6 +738,9 @@
       var u = getShellAccessProfile();
       if (!u) return;
       var route = getRoute();
+      var headerKey = route.page + '|' + u.role + '|' + (u.activeUnit || '') + '|' + u.name;
+      if (headerKey === lastHeaderKey && document.getElementById('header') && document.getElementById('header').innerHTML) return;
+      lastHeaderKey = headerKey;
       var switchHtml = '';
       if (canSwitchAuthorizedUnit(u)) {
         switchHtml = '<label class="header-scope-switch"><span class="header-scope-label">目前單位</span><select class="form-select header-scope-select" id="header-unit-switch" aria-label="切換目前單位">' +
@@ -852,6 +860,8 @@
     }
 
     function renderApp() {
+      lastSidebarKey = '';
+      lastHeaderKey = '';
       if (typeof teardownPageRuntime === 'function') teardownPageRuntime();
       if (typeof window !== 'undefined') {
         window.__APP_READY__ = false;

@@ -270,6 +270,9 @@
 
     function cloneStoreValue(value) {
       if (value === null || value === undefined) return value;
+      if (typeof structuredClone === 'function') {
+        try { return structuredClone(value); } catch (_) {}
+      }
       return JSON.parse(JSON.stringify(value));
     }
 
@@ -446,7 +449,7 @@
     function migrateChecklistTemplateStoreToV1(payload) {
       return Array.isArray(payload) && payload.length
         ? payload
-        : JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS));
+        : cloneDefaultChecklistSections();
     }
 
     function migrateUnitContactApplicationStoreToV1(payload) {
@@ -1206,6 +1209,9 @@
     }
 
     function cloneDefaultChecklistSections() {
+      if (typeof structuredClone === 'function') {
+        try { return structuredClone(DEFAULT_CHECKLIST_SECTIONS); } catch (_) {}
+      }
       return JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS));
     }
 

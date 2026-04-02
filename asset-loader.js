@@ -98,6 +98,9 @@
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value == null) {
       return value;
     }
+    if (typeof structuredClone === 'function') {
+      try { return structuredClone(value); } catch (_) {}
+    }
     try {
       return JSON.parse(JSON.stringify(value));
     } catch (_) {
