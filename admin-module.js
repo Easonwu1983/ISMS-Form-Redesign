@@ -1035,24 +1035,27 @@
       };
     }
 
+    var cachedSystemUsersClient = null;
+    var cachedUnitContactClient = null;
+
     function getSystemUsersPagedClient() {
-      if (typeof listSystemUsersPaged === 'function') return listSystemUsersPaged;
+      if (cachedSystemUsersClient) return cachedSystemUsersClient;
+      if (typeof listSystemUsersPaged === 'function') { cachedSystemUsersClient = listSystemUsersPaged; return cachedSystemUsersClient; }
       const client = getAdminApiClient();
-      return client && typeof client.listSystemUsersPaged === 'function'
-        ? client.listSystemUsersPaged.bind(client)
-        : null;
+      if (client && typeof client.listSystemUsersPaged === 'function') { cachedSystemUsersClient = client.listSystemUsersPaged.bind(client); return cachedSystemUsersClient; }
+      return null;
     }
 
     function getUnitContactApplicationsPagedClient() {
-      if (typeof listUnitContactApplicationsPaged === 'function') return listUnitContactApplicationsPaged;
+      if (cachedUnitContactClient) return cachedUnitContactClient;
+      if (typeof listUnitContactApplicationsPaged === 'function') { cachedUnitContactClient = listUnitContactApplicationsPaged; return cachedUnitContactClient; }
       const client = getAdminApiClient();
-      return client && typeof client.listUnitContactApplicationsPaged === 'function'
-        ? client.listUnitContactApplicationsPaged.bind(client)
-        : null;
+      if (client && typeof client.listUnitContactApplicationsPaged === 'function') { cachedUnitContactClient = client.listUnitContactApplicationsPaged.bind(client); return cachedUnitContactClient; }
+      return null;
     }
 
     function waitForPagedClient(getClient, timeoutMs) {
-      const timeout = Math.max(100, Number(timeoutMs) || 800);
+      const timeout = Math.max(50, Number(timeoutMs) || 400);
       const startedAt = Date.now();
       return new Promise((resolve) => {
         const tick = () => {
