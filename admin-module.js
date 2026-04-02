@@ -63,6 +63,31 @@
       requestUnitContactAuthorizationDocument
     } = deps;
 
+    async function promptActivationInfo(applicationId, opts) {
+      var confirmed = typeof openConfirmDialog === 'function'
+        ? await openConfirmDialog('確定要重新寄送登入資訊給此申請人嗎？', { title: '重新寄送', confirmLabel: '寄送', confirmClass: 'btn-primary', kicker: '操作確認' })
+        : window.confirm('確定要重新寄送登入資訊嗎？');
+      if (!confirmed) return;
+      try {
+        await reviewUnitContactApplication({ id: applicationId, status: 'resend_activation' });
+        toast('已重新寄送登入資訊', 'success');
+      } catch (error) {
+        toast(String(error && error.message || error || '寄送失敗'), 'error');
+      }
+    }
+
+    async function promptReviewComment(title, placeholder, confirmLabel, callback) {
+      if (typeof openConfirmDialog === 'function') {
+        var confirmed = await openConfirmDialog(placeholder, { title: title, confirmLabel: confirmLabel, confirmClass: 'btn-primary', kicker: '審核操作' });
+        if (!confirmed) return;
+        callback('');
+      } else {
+        var comment = window.prompt(title + '\n' + placeholder);
+        if (comment === null) return;
+        callback(comment.trim());
+      }
+    }
+
     function formatAuditOccurredAt(value) {
       const input = String(value || '').trim();
       if (!input) return '—';
