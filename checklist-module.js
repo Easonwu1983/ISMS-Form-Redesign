@@ -1302,8 +1302,8 @@
         renderChecklistListContent(shellItems, shellSnapshot, shellViewSnapshot);
         syncChecklistListToolbarState();
       }, 0);
-      const remotePagePromise = prefetchedRemotePageResult
-        ? Promise.resolve(prefetchedRemotePageResult)
+      const remotePagePromise = opts.prefetchedRemotePageResult
+        ? Promise.resolve(opts.prefetchedRemotePageResult)
         : loadChecklistRemotePage(remoteFilters, { force: !!opts.forceRemotePage });
       remotePagePromise.then((remotePageResult) => {
         if (renderGeneration !== checklistListRenderGeneration) return;
