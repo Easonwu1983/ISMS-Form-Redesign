@@ -6617,7 +6617,7 @@ body {
 
 .sidebar-logo {
   position: relative;
-  height: var(--header-height);
+  min-height: 56px;
   padding: 12px 16px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
