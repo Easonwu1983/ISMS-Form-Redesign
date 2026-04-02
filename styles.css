@@ -2874,6 +2874,18 @@ body.modal-open {
   width: min(92vw, 680px);
 }
 
+.modal[aria-labelledby="user-modal-title"] .form-actions {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.modal[aria-labelledby="user-modal-title"] .form-actions .btn {
+  min-width: 120px;
+  padding: 10px 24px;
+  font-size: 0.9rem;
+}
+
 .modal-card--prompt {
   max-width: 560px;
 }
