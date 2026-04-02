@@ -757,7 +757,7 @@ async function upsertSystemUser(existingEntry, nextItem) {
   if (existingEntry) {
     await db.query(`
       UPDATE system_users SET
-        password=$1, name=$2, email=$3, role=$4,
+        password=$1, display_name=$2, email=$3, role=$4,
         security_roles_json=$5, primary_unit=$6, authorized_units_json=$7,
         scope_units_json=$8, unit=$9, units_json=$10, active_unit=$11,
         must_change_password=$12, backend_mode=$13, record_source=$14, updated_at=$15
@@ -779,7 +779,7 @@ async function upsertSystemUser(existingEntry, nextItem) {
   }
   await db.query(`
     INSERT INTO system_users (
-      username, password, name, email, role,
+      username, password, display_name, email, role,
       security_roles_json, primary_unit, authorized_units_json,
       scope_units_json, unit, units_json, active_unit,
       must_change_password, backend_mode, record_source, created_at, updated_at
@@ -844,7 +844,7 @@ async function provisionUnitContactSystemUser(application) {
   const systemUserPayload = {
     username: loginUsername,
     password: nextPasswordSecret,
-    name: cleanText(application && application.applicantName),
+    name: cleanText(application && application.applicantName) || cleanText(application && application.applicantEmail) || 'Unknown',
     email: cleanText(application && application.applicantEmail),
     role: USER_ROLES.UNIT_ADMIN,
     securityRoles: Array.isArray(application && application.securityRoles) ? application.securityRoles : [],
