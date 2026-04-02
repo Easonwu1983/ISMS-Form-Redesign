@@ -3394,7 +3394,7 @@
       <div class="form-group"><label class="form-label">額外授權資源範圍</label>${buildUnitMultiSelectControl('u-units', extraUnits, '請輸入單位名稱', '可搜尋並加入額外授權的資源範圍。')}</div>
       <div class="form-group"><label class="form-label">審核資源範圍</label>${buildUnitMultiSelectControl('u-review-units', reviewUnits, '請輸入單位名稱', '僅單位管理員可設定，留空表示沿用既有規則。')}</div>
       <div class="form-group"><label class="form-label ${isE ? '' : 'form-required'}">${isE ? '密碼（留空不修改）' : '密碼'}</label><input type="text" class="form-input" id="u-pass" ${isE ? '' : 'required'}></div>
-      <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? ic('save', 'icon-sm') + ' 儲存' : ic('plus', 'icon-sm') + ' 新增'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div>
+      <div class="form-actions"><button type="submit" class="btn btn-primary">${isE ? '儲存' : '新增'}</button><button type="button" class="btn btn-secondary" data-dismiss-modal>取消</button></div>
     </form></div></div>`;
 
     initUnitCascade('u-unit', primaryUnit, { disabled: false, registerCleanup: registerAdminPageCleanup });
