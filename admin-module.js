@@ -3499,8 +3499,8 @@
   }
 
   async function openUnitContactAuthorizationDocumentPreview(applicationId, email) {
-    const response = await requestUnitContactAuthorizationDocument(applicationId, { email });
-    const blob = await response.blob();
+    const result = await requestUnitContactAuthorizationDocument(applicationId, { email });
+    const blob = result && result.blob ? result.blob : (result instanceof Blob ? result : await result.blob());
     const blobUrl = URL.createObjectURL(blob);
     const popup = window.open(blobUrl, '_blank', 'noopener,noreferrer');
     if (!popup) {
@@ -4438,7 +4438,7 @@
       renderUnitContactReview({ ...DEFAULT_UNIT_CONTACT_REVIEW_FILTERS }, { forceRemote: true });
     },
     unitContactApprove: function ({ dataset }) {
-      promptReviewComment('審核通過並直接啟用', '可補充首次登入提醒或處理說明。', '確認通過', async function (reviewComment) {
+      promptReviewComment('審核通過並啟用帳號', '確認後系統將自動建立帳號並寄送登入資訊給申請人，此操作無法復原。', '確認通過並啟用', async function (reviewComment) {
         try {
           const currentFilters = { ...unitContactReviewState.filters };
           const result = await reviewUnitContactApplication({
@@ -4455,7 +4455,7 @@
       });
     },
     unitContactReturn: function ({ dataset }) {
-      promptReviewComment('退回補件', '請填寫需要補充或修正的內容。', '確認退回', async function (reviewComment) {
+      promptReviewComment('退回補件通知', '申請人將收到退回通知信，請確認是否退回此申請。', '確認退回', async function (reviewComment) {
         try {
           const currentFilters = { ...unitContactReviewState.filters };
           const result = await reviewUnitContactApplication({
@@ -4472,7 +4472,7 @@
       });
     },
     unitContactReject: function ({ dataset }) {
-      promptReviewComment('未核准', '請填寫未核准原因。', '確認未核准', async function (reviewComment) {
+      promptReviewComment('不予核准', '申請人將收到未核准通知信，確認後此申請將標記為未核准。', '確認不予核准', async function (reviewComment) {
         try {
           const currentFilters = { ...unitContactReviewState.filters };
           const result = await reviewUnitContactApplication({
