@@ -1,0 +1,13 @@
+{
+  "builtAt": "2026-04-02T12:42:04.388Z",
+  "versionKey": "627f8cfa57ef",
+  "buildInfo": {
+    "platform": "campus-host",
+    "builtAt": "2026-04-02T12:42:04.388Z",
+    "commit": "627f8cfa57ef97d0b27b1188bc880ebc80fa0bcc",
+    "shortCommit": "627f8cfa57ef",
+    "branch": "main",
+    "describe": "627f8cf-dirty",
+    "versionKey": "627f8cfa57ef"
+  }
+}
