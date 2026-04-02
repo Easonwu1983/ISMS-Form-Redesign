@@ -63,7 +63,7 @@ ALTER TABLE system_users
 -- Prevent duplicate applications from same email to same unit
 CREATE UNIQUE INDEX IF NOT EXISTS idx_applications_email_unit_active
   ON unit_contact_applications (LOWER(applicant_email), unit_value)
-  WHERE status IN ('pending_review', 'approved', 'activation_pending', 'active');
+  WHERE status IN ('pending_review', 'approved', 'activation_pending');
 
 -- Enforce unique email on system_users (case-insensitive)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_system_users_email_unique
