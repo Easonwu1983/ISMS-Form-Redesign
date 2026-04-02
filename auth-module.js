@@ -315,7 +315,7 @@
       if (expiresAt) {
         const expiresAtMs = Date.parse(expiresAt);
         if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
-          // Session expired — show warning but don't auto-clear
+          clearAuthSessionStorage();
           if (!window.__ismsSessionExpiredWarned) {
             window.__ismsSessionExpiredWarned = true;
             setTimeout(function () {
@@ -324,12 +324,14 @@
                 var toast = document.createElement('div');
                 toast.className = 'toast toast-error';
                 toast.setAttribute('role', 'alert');
-                toast.textContent = '登入已逾時，請重新登入以繼續操作。';
+                toast.textContent = '登入已逾時，頁面將自動跳轉至登入畫面。';
                 tc.appendChild(toast);
-                setTimeout(function () { try { tc.removeChild(toast); } catch (_) {} }, 8000);
+                setTimeout(function () { try { tc.removeChild(toast); } catch (_) {} }, 4000);
               }
+              setTimeout(function () { window.location.hash = '#'; window.location.reload(); }, 2000);
             }, 100);
           }
+          return null;
         }
       }
       const normalized = normalizeUserRecord(user);
