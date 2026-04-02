@@ -1004,24 +1004,30 @@
       };
       const shouldNotify = document.getElementById('f-notify').checked;
       const hEmail = document.getElementById('f-hemail').value;
-      const createResult = await submitCreateCase(item);
-      const storedItem = createResult && createResult.item ? createResult.item : item;
-      debugFlow('create', 'submit success', { id: item.id, notify: shouldNotify, handlerEmail: hEmail || '' });
-      if (createResult && createResult.notification && createResult.notification.sent) {
-        item.history.push({ time: now, action: `系統寄送指派通知至 ${hEmail}`, user: '系統' });
-        updateItem(item.id, { history: item.history });
-        toast(`矯正單 ${item.id} 已建立，並已寄送通知至 ${hEmail}`);
-      } else if (shouldNotify && hEmail) {
-        const notifyError = createResult && createResult.notification && createResult.notification.error
-          ? `，但通知寄送失敗：${createResult.notification.error}`
-          : '，但通知尚未成功寄出';
-        toast(`矯正單 ${item.id} 已建立${notifyError}`, 'warning');
-      } else {
-        toast(`矯正單 ${item.id} 已建立完成`);
+      try {
+        const createResult = await submitCreateCase(item);
+        const storedItem = createResult && createResult.item ? createResult.item : item;
+        debugFlow('create', 'submit success', { id: item.id, notify: shouldNotify, handlerEmail: hEmail || '' });
+        if (createResult && createResult.notification && createResult.notification.sent) {
+          item.history.push({ time: now, action: `系統寄送指派通知至 ${hEmail}`, user: '系統' });
+          updateItem(item.id, { history: item.history });
+          toast(`矯正單 ${item.id} 已建立，並已寄送通知至 ${hEmail}`);
+        } else if (shouldNotify && hEmail) {
+          const notifyError = createResult && createResult.notification && createResult.notification.error
+            ? `，但通知寄送失敗：${createResult.notification.error}`
+            : '，但通知尚未成功寄出';
+          toast(`矯正單 ${item.id} 已建立${notifyError}`, 'warning');
+        } else {
+          toast(`矯正單 ${item.id} 已建立完成`);
+        }
+        if (createResult && createResult.warning) toast(createResult.warning, 'info');
+        clearUnsavedChangesGuard();
+        navigate('detail/' + storedItem.id);
+      } catch (submitError) {
+        debugFlow('create', 'submit failed', { message: submitError.message || '' });
+        setCreateFeedback('error', '矯正單建立失敗', [String(submitError && submitError.message || submitError || '請稍後再試')]);
+        toast('矯正單建立失敗：' + String(submitError && submitError.message || '請稍後再試'), 'error');
       }
-      if (createResult && createResult.warning) toast(createResult.warning, 'info');
-      clearUnsavedChangesGuard();
-      navigate('detail/' + storedItem.id);
     });
     bindCasePageEvent(createForm, 'input', function () {
       clearCreateFeedback();
