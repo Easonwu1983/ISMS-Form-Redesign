@@ -692,6 +692,7 @@
 
     var lastSidebarKey = '';
     var lastHeaderKey = '';
+    var routeRenderGeneration = 0;
     function renderSidebar() {
       var u = getShellAccessProfile();
       if (!u) return;
@@ -811,14 +812,18 @@
       renderHeader();
       closeSidebar();
       setRouteLoadingState(true);
+      var thisGeneration = ++routeRenderGeneration;
       var renderAttempt = 0;
       function attemptRender() {
+        if (thisGeneration !== routeRenderGeneration) return Promise.resolve();
         return Promise.resolve(getRouteMeta(page).render(route.param))
           .then(function () {
+            if (thisGeneration !== routeRenderGeneration) return;
             syncHeaderRouteContext(page);
             focusRouteContent();
           })
           .catch(function (error) {
+            if (thisGeneration !== routeRenderGeneration) return;
             var msg = error && error.message ? error.message : String(error);
             window.__ismsError('route render failed (attempt ' + (renderAttempt + 1) + '):', msg, error && error.stack);
             // Auto-retry once on module loading errors (not loaded / Failed to load)
@@ -831,6 +836,7 @@
       }
       attemptRender()
         .finally(function () {
+          if (thisGeneration !== routeRenderGeneration) return;
           setRouteLoadingState(false);
           refreshIcons();
         });
