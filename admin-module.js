@@ -3126,7 +3126,7 @@
           return;
         }
         const tokens = text.split(/\s+/).map((part) => String(part || '').trim().toLowerCase()).filter(Boolean);
-        const matches = UNIT_SEARCH_ENTRIES.filter((entry) => !state.has(entry.value) && tokens.every((token) => entry.searchText.toLowerCase().includes(token))).slice(0, 8);
+        const matches = UNIT_SEARCH_ENTRIES.filter((entry) => !state.has(entry.value) && tokens.every((token) => entry.searchText.toLowerCase().includes(token))).slice(0, 20);
         resultsEl.hidden = false;
         if (!matches.length) {
           resultsEl.innerHTML = '<div class="unit-chip-picker-empty">找不到符合條件的單位</div>';

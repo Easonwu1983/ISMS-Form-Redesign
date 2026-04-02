@@ -803,7 +803,7 @@
         const tokens = text.split(/\s+/).map((part) => normalizeUnitSearchText(part)).filter(Boolean);
         const matches = searchEntries
           .filter((entry) => tokens.every((token) => entry.searchText.includes(token)))
-          .slice(0, 8);
+          .slice(0, 20);
         if (!matches.length) {
           searchResultsEl.hidden = false;
           setSearchExpanded(true);
