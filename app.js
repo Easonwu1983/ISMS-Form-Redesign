@@ -421,6 +421,7 @@
         syncCorrectiveActionsFromM365,
         syncUsersFromM365,
         submitCreateCase,
+        submitDeleteCase,
         submitRespondCase,
         submitReviewDecision,
         submitTrackingSubmission,
@@ -1610,6 +1611,12 @@
     saveData(data);
     return item;
   }
+  function deleteCorrectiveActionFromStore(caseId) {
+    if (!caseId) return;
+    const data = loadData();
+    data.items = (data.items || []).filter(function (entry) { return entry.id !== caseId; });
+    saveData(data);
+  }
   function persistLocalCorrectiveActionUpdate(id, updates) {
     updateItem(id, updates);
     return getItem(id);
@@ -1728,6 +1735,28 @@
       const stored = persistLocalCorrectiveActionUpdate(id, fallbackUpdates);
       setCorrectiveActionRepositoryState({ mode: 'm365-api', source: 'local-fallback', ready: false, message: '正式矯正單後端尚未就緒，已改用本機暫存', error: String(error && error.message || error || '') });
       return { ok: true, item: stored, source: 'local-fallback', warning: buildCorrectiveActionFallbackWarning(error) };
+    }
+  }
+  async function submitDeleteCase(caseId) {
+    const client = getM365ApiClient();
+    if (client.getCorrectiveActionMode() !== 'm365-api') {
+      deleteCorrectiveActionFromStore(caseId);
+      return { ok: true, deletedId: caseId, source: 'local' };
+    }
+    try {
+      var headers = getSessionAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      var resp = await fetch('/api/corrective-actions/' + encodeURIComponent(caseId) + '/delete', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ action: 'corrective-action.delete', payload: { id: caseId } })
+      });
+      if (!resp.ok) { var errBody = await resp.json().catch(function() { return {}; }); throw new Error(errBody.message || 'Delete failed'); }
+      deleteCorrectiveActionFromStore(caseId);
+      return { ok: true, deletedId: caseId, source: 'remote' };
+    } catch (error) {
+      deleteCorrectiveActionFromStore(caseId);
+      return { ok: true, deletedId: caseId, source: 'local-fallback', warning: String(error && error.message || '') };
     }
   }
   async function submitReviewDecision(id, payload, fallbackUpdates) {

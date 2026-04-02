@@ -61,6 +61,7 @@
       syncCorrectiveActionsFromM365,
       syncUsersFromM365,
       submitCreateCase,
+      submitDeleteCase,
       submitRespondCase,
       submitReviewDecision,
       submitTrackingSubmission,
@@ -1088,6 +1089,9 @@
       btns += `<button class="btn btn-success" data-testid="case-tracking-approve-close" data-action="case.reviewTracking" data-id="${item.id}" data-decision="close">${ic('check', 'icon-sm')} 同意結案</button>`;
       btns += `<button class="btn btn-warning" data-testid="case-tracking-approve-continue" data-action="case.reviewTracking" data-id="${item.id}" data-decision="continue">${ic('refresh-cw', 'icon-sm')} 同意繼續追蹤</button>`;
     }
+    if (canManageUsers()) {
+      btns += `<button class="btn btn-danger" data-testid="case-delete" data-action="case.deleteCase" data-id="${item.id}">${ic('trash-2', 'icon-sm')} 刪除矯正單</button>`;
+    }
 
     const evidenceMounts = [];
     const mainEvidenceSlotId = 'case-evidence-main';
@@ -1715,6 +1719,23 @@ function renderTracking(id) {
     },
     reviewTracking: function ({ dataset }) {
       handleReviewTracking(dataset.id, dataset.decision);
+    },
+    deleteCase: async function ({ dataset }) {
+      var caseId = dataset.id;
+      if (!caseId) return;
+      var item = getItem(caseId);
+      var label = item ? (item.id + '（' + (item.handlerUnit || '') + '）') : caseId;
+      var confirmed = typeof openConfirmDialog === 'function'
+        ? await openConfirmDialog('即將刪除「' + label + '」矯正單。\n\n刪除後相關操作紀錄仍會保留於操作軌跡。此操作無法復原。', { title: '刪除矯正單', confirmLabel: '確認刪除', confirmClass: 'btn-danger', kicker: '注意' })
+        : window.confirm('確定要刪除矯正單 ' + label + ' 嗎？此操作無法復原。');
+      if (!confirmed) return;
+      try {
+        await submitDeleteCase(caseId);
+        toast('已成功刪除矯正單「' + caseId + '」');
+        navigate('list');
+      } catch (error) {
+        toast('刪除失敗：' + String(error && error.message || error || ''), 'error');
+      }
     }
   });
 

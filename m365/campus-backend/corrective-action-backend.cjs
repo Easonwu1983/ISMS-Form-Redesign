@@ -516,6 +516,24 @@ function createCorrectiveActionRouter(deps) {
     } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to review tracking submission.'), origin); }
   }
 
+  async function handleDelete(req, res, origin, caseId) {
+    try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only administrators can delete corrective actions.');
+      const existing = await getEntryByCaseId(caseId);
+      if (!existing) throw createError('Corrective action not found.', 404);
+      await db.query('DELETE FROM corrective_actions WHERE case_id = $1', [caseId]);
+      const now = new Date().toISOString();
+      await createAuditRow({
+        eventType: 'corrective_action.deleted', actorEmail: cleanText(authz && authz.user && authz.user.email),
+        targetEmail: '', unitCode: cleanText(existing.item && existing.item.handlerUnitCode),
+        recordId: caseId, occurredAt: now,
+        payloadJson: JSON.stringify({ snapshot: buildCaseSnapshot(existing.item) })
+      });
+      await writeJson(res, buildJsonResponse(200, { ok: true, deletedId: caseId, contractVersion: CONTRACT_VERSION }), origin);
+    } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to delete corrective action.'), origin); }
+  }
+
   async function tryHandle(req, res, origin, url) {
     const pathname = cleanText(url && url.pathname);
     if (pathname === '/api/corrective-actions/health') { await handleHealth(req, res, origin); return true; }
@@ -523,6 +541,8 @@ function createCorrectiveActionRouter(deps) {
     if (pathname === '/api/corrective-actions' && req.method === 'POST') { await handleCreate(req, res, origin); return true; }
     const detailMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)$/);
     if (detailMatch && req.method === 'GET') { await handleDetail(req, res, origin, routeCaseId(detailMatch[1])); return true; }
+    const deleteMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)\/delete$/);
+    if (deleteMatch && req.method === 'POST') { await handleDelete(req, res, origin, routeCaseId(deleteMatch[1])); return true; }
     const respondMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)\/respond$/);
     if (respondMatch && req.method === 'POST') { await handleRespond(req, res, origin, routeCaseId(respondMatch[1])); return true; }
     const reviewMatch = pathname.match(/^\/api\/corrective-actions\/([^/]+)\/review$/);
