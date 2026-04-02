@@ -39,7 +39,7 @@ ALTER TABLE attachments RENAME COLUMN file_path TO storage_path;
 
 -- add missing columns
 ALTER TABLE attachments ADD COLUMN IF NOT EXISTS backend_mode VARCHAR(30);
-ALTER TABLE attachments ADD COLUMN IF NOT EXISTS record_source VARCHAR(20);
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS record_source VARCHAR(50);
 
 -- ── unit_contact_applications: relax NOT NULL for migration flexibility ──
 

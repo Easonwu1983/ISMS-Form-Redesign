@@ -121,7 +121,7 @@ CREATE TABLE checklists (
   summary_na      INTEGER NOT NULL DEFAULT 0,
   status          checklist_status NOT NULL DEFAULT '草稿',
   backend_mode    VARCHAR(30),
-  record_source   VARCHAR(20),
+  record_source   VARCHAR(50),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -170,7 +170,7 @@ CREATE TABLE corrective_actions (
   history_json    JSONB NOT NULL DEFAULT '[]'::jsonb,
   closed_date     TIMESTAMPTZ,
   backend_mode    VARCHAR(30),
-  record_source   VARCHAR(20),
+  record_source   VARCHAR(50),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -206,7 +206,7 @@ CREATE TABLE training_forms (
   submitted_at    TIMESTAMPTZ,
   history_json    JSONB NOT NULL DEFAULT '[]'::jsonb,
   backend_mode    VARCHAR(30),
-  record_source   VARCHAR(20),
+  record_source   VARCHAR(50),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -227,7 +227,7 @@ CREATE TABLE training_rosters (
   created_by      VARCHAR(100),
   created_by_username VARCHAR(100),
   backend_mode    VARCHAR(30),
-  record_source   VARCHAR(20),
+  record_source   VARCHAR(50),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -254,7 +254,7 @@ CREATE TABLE system_users (
   failed_attempts INTEGER NOT NULL DEFAULT 0,
   locked_until    TIMESTAMPTZ,
   backend_mode    VARCHAR(30),
-  record_source   VARCHAR(20),
+  record_source   VARCHAR(50),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -267,7 +267,7 @@ CREATE TABLE unit_review_scopes (
   username        VARCHAR(100) NOT NULL,
   unit_value      VARCHAR(100) NOT NULL,
   backend_mode    VARCHAR(30),
-  record_source   VARCHAR(20),
+  record_source   VARCHAR(50),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
