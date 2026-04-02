@@ -3648,8 +3648,10 @@
     unitContactReviewState.filters = normalizePagedFilters({ ...unitContactReviewState.filters, ...(nextFilters || {}) }, DEFAULT_UNIT_CONTACT_REVIEW_FILTERS);
     unitContactReviewState.loading = true;
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1><p class="page-subtitle">集中處理單位管理人申請，通過後會直接啟用帳號並寄送登入資訊。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card review-loading-card">正在讀取申請資料...</div></div>`;
-    refreshIcons();
+    if (!visibleApplicationsCache.items.length) {
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位管理人申請</div><h1 class="page-title">申請審核與登入資訊追蹤</h1></div></div><div class="card review-loading-card">正在讀取申請資料...</div></div>`;
+      refreshIcons();
+    }
     async function fetchApplicationsForAdminView(fetchOptions) {
       const remoteOpts = fetchOptions || {};
       const signature = JSON.stringify(unitContactReviewState.filters);
@@ -3772,8 +3774,10 @@
       unitGovernanceState.loading = true;
     const isStaleRender = beginAdminRouteRender(unitGovernanceState, "#unit-review");
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1><p class="page-subtitle">可為一級單位設定獨立或合併填報模式，並快速檢視轄下二級單位的填報關聯。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card review-loading-card">正在整理單位治理資料...</div></div>`;
-    refreshIcons();
+    if (!unitGovernanceState.items || !unitGovernanceState.items.length) {
+      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">單位治理</div><h1 class="page-title">填報模式與授權設定</h1></div></div><div class="card review-loading-card">正在整理單位治理資料...</div></div>`;
+      refreshIcons();
+    }
     try {
         const result = await listGovernanceItemsForAdmin(unitGovernanceState.filters);
         if (isStaleRender()) return;
@@ -3962,7 +3966,9 @@
     const resolvedFilters = { ...DEFAULT_SECURITY_WINDOW_FILTERS, ...securityWindowState.filters };
     let response;
     try {
-      app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1><p class="page-subtitle">盤點全校各單位的資安窗口配置，依行政單位、學術單位、中心 / 研究單位分層顯示，僅最高管理者可檢視。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>${ic('loader-circle', 'icon-sm')} 載入中</button></div></div><div class="card review-loading-card">正在載入資安窗口盤點資料...</div></div>`;
+      if (!securityWindowState.items || !securityWindowState.items.length) {
+        app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">系統管理</div><h1 class="page-title">資安窗口</h1></div></div><div class="card review-loading-card">正在載入資安窗口盤點資料...</div></div>`;
+      }
       refreshIcons();
       response = await fetchSecurityWindowInventoryFromSource(resolvedFilters, opts);
       if (isStaleRender()) return;
