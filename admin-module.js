@@ -4144,7 +4144,26 @@
           });
         }
       } else {
-        state = await loadAuditTrailData(resolvedFilters);
+        // Don't block rendering — show empty shell, load in background
+        state = {
+          filters: resolvedFilters,
+          items: [],
+          summary: { total: 0, actorCount: 0, latestOccurredAt: '', eventTypes: [] },
+          page: { total: 0, returned: 0, limit: 50, offset: 0, hasNext: false, hasPrev: false },
+          health: auditTrailState.health || null,
+          lastLoadedAt: '',
+          filterSignature,
+          loading: true
+        };
+        Object.assign(auditTrailState, state);
+        loadAuditTrailData(resolvedFilters).then(function () {
+          if (document.getElementById('audit-filter-form')) {
+            renderAuditTrail(resolvedFilters);
+          }
+        }).catch(function (error) {
+          window.__ismsWarn('audit trail initial load failed', error);
+          toast('操作軌跡載入失敗：' + String(error && error.message || error || ''), 'error');
+        });
       }
     } catch (error) {
       app.innerHTML = `<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">稽核追蹤</div><h1 class="page-title">操作稽核軌跡</h1><p class="page-subtitle">無法讀取後端稽核資料。</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" data-action="admin.refreshAuditTrail">${ic('refresh-cw', 'icon-sm')} 重試</button></div></div><div class="card"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">稽核軌跡後端尚未就緒</div><div class="empty-state-desc">${esc(String(error && error.message || error || '讀取失敗'))}</div></div></div></div>`;

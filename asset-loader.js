@@ -285,6 +285,18 @@
     (window.requestAnimationFrame || window.setTimeout)(function () {
       appendStylesheetChain([purgedStylesheet, minifiedStylesheet, 'styles.css']);
     }, 0);
+    // Preload feature bundles so they're cached when needed
+    var featureBundles = [
+      'feature-bundles/admin-feature.js',
+      'feature-bundles/case-feature.js',
+      'feature-bundles/checklist-feature.js',
+      'feature-bundles/training-feature.js',
+      'feature-bundles/unit-contact-application-feature.js'
+    ];
+    featureBundles.forEach(function (bundlePath) {
+      var src = bundlePath + (versionSuffix ? '?v=' + versionSuffix : '');
+      appendLink('prefetch', src, 'script');
+    });
     assets.unshift('units.js');
     loadNextScript();
   }

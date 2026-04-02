@@ -885,6 +885,19 @@
       document.body.innerHTML = '<a class="skip-link" href="#app">\u8df3\u5230\u4e3b\u8981\u5167\u5bb9</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div>' + (showTransitionOverlay ? renderAppTransitionOverlay() : '');
       if (typeof window !== 'undefined') {
         window.__APP_READY__ = true;
+        // Preload all feature modules in background after app shell is ready
+        if (!window.__featurePreloadStarted) {
+          window.__featurePreloadStarted = true;
+          setTimeout(function () {
+            var preloads = ['feature-bundles/admin-feature.js', 'feature-bundles/case-feature.js', 'feature-bundles/checklist-feature.js', 'feature-bundles/training-feature.js', 'feature-bundles/unit-contact-application-feature.js'];
+            preloads.forEach(function (src) {
+              var link = document.createElement('link');
+              link.rel = 'modulepreload';
+              link.href = src + (window.__ISMS_VERSION_SUFFIX__ ? '?v=' + window.__ISMS_VERSION_SUFFIX__ : '');
+              document.head.appendChild(link);
+            });
+          }, 500);
+        }
       }
       if (typeof window !== 'undefined' && window.__REMOTE_BOOTSTRAP_STATE__ === 'ready') {
         handleRoute(u);
