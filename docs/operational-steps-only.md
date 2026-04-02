@@ -10,6 +10,16 @@
 
 ## 推送與 VM 同步
 
+### 方法 A：自動化腳本（推薦）
+
+1. `git push origin main`
+2. `powershell -ExecutionPolicy Bypass -File .runtime/tools/vm-deploy.ps1`
+   - 腳本會自動：git pull → 產生 deploy-manifest.json → 重啟 services → health check
+   - 使用 Renci.SshNet DLL（位於 `.runtime/tools/sshnet/runtime/`）
+   - 憑證檔：`.runtime/tools/.vm-credential`
+
+### 方法 B：手動 SSH
+
 1. `git push origin main`
 2. `ssh useradmin@140.112.97.150`
 3. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend git -C /srv/isms-form-redesign pull --ff-only origin main`
@@ -36,10 +46,27 @@
 2. `node scripts/formal-production-smoke.cjs`
 3. 看 `logs/formal-production/latest-release-report.md`
 
+## 本地預覽測試
+
+1. 啟動本地靜態伺服器：`node .codex-local-server.cjs`（預設 port 8080）
+   - 可用環境變數覆蓋 port：`PORT=8090 node .codex-local-server.cjs`
+2. Claude Code Preview 設定在 `.claude/launch.json`（port 8090）
+3. 後端本地測試：`node m365/campus-backend/server.cjs`（port 8787）
+
+## 資料庫連線（PostgreSQL）
+
+- 主機：VM `127.0.0.1:5432`（僅本機存取）
+- 資料庫：`isms_db`
+- 使用者：`isms_user`
+- Schema migration：`m365/campus-backend/migrations/001-initial-schema.sql`
+- 連線模組：`m365/campus-backend/db.cjs`（pg.Pool）
+- 設定來源：`service-host.cjs` 讀取 `runtime.local.json` 的 `postgres` 區塊
+
 ## 不要做
 
 - 不要走 guest `127.0.0.1:2222`
 - 不要把 Pages smoke 和 full smoke 平行跑
 - 不要在純前端改動時重啟 backend / caddy
 - 不要把 `styles.min.css` / `styles.purged.min.css` 當成異常
+- 不要把 `.runtime/tools/.vm-credential` 加入 git
 

@@ -9,17 +9,42 @@
 
 ## 目標主機
 
-- IP：`140.112.97.150`
-- SSH 帳號：`useradmin`
-- repo：`/srv/isms-form-redesign`
-- service user：`ismsbackend`
+| 項目 | 值 |
+|------|-----|
+| IP | `140.112.97.150` |
+| SSH 帳號 | `useradmin` |
+| repo | `/srv/isms-form-redesign` |
+| service user | `ismsbackend` |
+| Node.js | LTS |
+| reverse proxy | Caddy (`caddy.service`) |
+| backend service | `isms-unit-contact-backend.service` |
+| PostgreSQL | 17（`127.0.0.1:5432`，DB: `isms_db`，User: `isms_user`） |
 
 ## 更新步驟
+
+### 方法 A：自動化腳本（推薦）
+
+從本機 Windows 執行：
+
+```
+powershell -ExecutionPolicy Bypass -File .runtime/tools/vm-deploy.ps1
+```
+
+腳本自動完成：SSH 連線 → `git pull` → 產生 `deploy-manifest.json` → 重啟 services → health check。
+
+依賴：
+- `.runtime/tools/sshnet/runtime/*.dll`（Renci.SshNet）
+- `.runtime/tools/.vm-credential`（VM 密碼）
+
+### 方法 B：手動 SSH
 
 1. `ssh useradmin@140.112.97.150`
 2. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend git -C /srv/isms-form-redesign pull --ff-only origin main`
 3. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend bash -lc 'cd /srv/isms-form-redesign && node scripts/build-version-info.cjs campus-vm | tee deploy-manifest.json > /dev/null'`
 4. 只有 backend / runtime 變更時才跑：`echo 'P@ss_w0rD' | sudo -S systemctl restart isms-unit-contact-backend.service caddy.service`
+
+### 驗證
+
 5. 檢查：
    - `curl http://140.112.97.150/api/unit-contact/health`
    - `curl http://140.112.97.150/deploy-manifest.json`
@@ -51,7 +76,11 @@
 - `training-rosters` 會先讀取 `logs/campus-backend/training-rosters-cache.json`，再背景刷新 SharePoint 全量快取。
 - `checklists` 會先讀取 `logs/campus-backend/checklists-cache.json`，再背景刷新 SharePoint 全量快取。
 - `unit-governance` 會保存在 `logs/campus-backend/unit-governance-store.json`，校內 VM 上不同瀏覽器共用同一份治理設定。
-- VM 主機已安裝 PostgreSQL `18.3`，cluster 為 `18/main`，監聽 `127.0.0.1:5432`。
+- PostgreSQL 17 已安裝，監聽 `127.0.0.1:5432`，資料庫 `isms_db`，使用者 `isms_user`。
+- 資料遷移方向：M365 SharePoint → PostgreSQL（進行中）。
+- DB 連線模組：`m365/campus-backend/db.cjs`（pg.Pool）。
+- Schema migration：`m365/campus-backend/migrations/001-initial-schema.sql`。
+- DB 設定：`runtime.local.json` → `postgres` 區塊，由 `service-host.cjs` 讀取。
 - 若帳號流程回歸，先檢查：
   - `renderLogin()` 是否在輸入後又切 panel
   - `system-users` / `unit-contact-review` paged client 是否已 hydrate

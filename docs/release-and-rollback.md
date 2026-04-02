@@ -48,6 +48,16 @@
 
 ## 校內 VM 同步
 
+### 方法 A：自動化腳本（推薦）
+
+從本機執行，一鍵完成 git pull + manifest + restart + health check：
+
+```
+powershell -ExecutionPolicy Bypass -File .runtime/tools/vm-deploy.ps1
+```
+
+### 方法 B：手動 SSH
+
 1. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend git -C /srv/isms-form-redesign pull --ff-only origin main`
 2. `echo 'P@ss_w0rD' | sudo -S -u ismsbackend bash -lc 'cd /srv/isms-form-redesign && node scripts/build-version-info.cjs campus-vm | tee deploy-manifest.json > /dev/null'`
 3. 只有 backend / runtime 變更時才跑：`echo 'P@ss_w0rD' | sudo -S systemctl restart isms-unit-contact-backend.service caddy.service`
