@@ -11106,3 +11106,34 @@ tbody tr:hover {
 @media (max-width: 600px) {
   .kanban-board { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Mobile Corrective Action Cards ── */
+@media (max-width: 768px) {
+  .case-table-card table { display: none; }
+  .case-table-card .table-wrapper { overflow: visible; }
+  .case-table-card .table-wrapper::before {
+    content: '提示：手機版顯示卡片式，橫向可查看完整表格';
+    display: block;
+    font-size: .78rem;
+    color: var(--text-secondary);
+    padding: 8px 0;
+    text-align: center;
+  }
+  .page-header { flex-direction: column; gap: 12px; }
+  .page-header-actions { width: 100%; display: flex; gap: 8px; }
+  .page-header-actions .btn { flex: 1; justify-content: center; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .dashboard-hero-grid { flex-direction: column; }
+  .dashboard-hero-side { width: 100%; }
+  .dashboard-focus-card { margin-top: 16px; }
+}
+
+/* ── Mobile General Improvements ── */
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .stat-card { padding: 16px; }
+  .stat-value { font-size: 1.4rem; }
+  .main-content { padding: 12px 8px 20px; }
+  .card { border-radius: 10px; }
+  .sidebar { width: 280px; }
+}

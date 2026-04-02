@@ -182,8 +182,8 @@ function createCorrectiveActionRouter(deps) {
         '狀態：' + oldStatus + ' → ' + newStatus,
         '說明：' + actionHint,
         '操作者：' + (actorLabel || '系統'),
-        '系統入口：' + portalUrl,
-        '請登入系統查看詳情。'
+        '直接查看：' + portalUrl + '#detail/' + cleanText(item && item.id),
+        '系統入口：' + portalUrl
       ])
     };
   }
@@ -211,8 +211,9 @@ function createCorrectiveActionRouter(deps) {
         '您有一筆新的矯正單指派待處理。',
         `單號：${cleanText(item && item.id)}`, `所屬單位：${cleanText(item && item.handlerUnit)}`,
         `缺失類型：${cleanText(item && item.deficiencyType)}`, `問題說明：${cleanText(item && item.problemDesc)}`,
-        `預定完成日：${cleanText(item && item.correctiveDueDate)}`, `系統入口：${portalUrl}`,
-        '請登入系統查看並填寫矯正措施。'
+        `預定完成日：${cleanText(item && item.correctiveDueDate)}`,
+        `直接處理：${portalUrl}#detail/${cleanText(item && item.id)}`,
+        `系統入口：${portalUrl}`
       ])
     };
   }

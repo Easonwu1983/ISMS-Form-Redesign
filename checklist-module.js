@@ -2001,7 +2001,9 @@
         }));
         if (missing.length > 0) {
           debugFlow('checklist', 'submit blocked by unanswered items', { count: missing.length, first: missing[0] });
-          toast(`\u4ecd\u6709 ${missing.length} \u500b\u67e5\u6aa2\u9805\u76ee\u5c1a\u672a\u586b\u7b54`, 'error');
+          var missingPreview = missing.slice(0, 3).join('、');
+          var moreText = missing.length > 3 ? ('…等共 ' + missing.length + ' 題') : '';
+          toast('尚有 ' + missing.length + ' 題未填答：' + missingPreview + moreText + '。已自動跳轉到第一題。', 'error');
           revealChecklistItem(missing[0]);
           return;
         }

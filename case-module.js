@@ -740,9 +740,11 @@
         if (filingSlot) {
           filingSlot.classList.remove('dashboard-card-loading');
           filingSlot.removeAttribute('aria-busy');
+          var filingLight = filingPct >= 80 ? '#22c55e' : (filingPct >= 50 ? '#f59e0b' : '#ef4444');
+          var filingLightLabel = filingPct >= 80 ? '進度良好' : (filingPct >= 50 ? '需要催辦' : '嚴重落後');
           filingSlot.innerHTML = '<div style="padding:16px 20px">'
-            + '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:.9rem;color:var(--text-secondary)">' + esc(String(subU)) + ' / ' + esc(String(totalU)) + ' 個單位已送出</span><strong style="color:var(--accent-primary)">' + filingPct + '%</strong></div>'
-            + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + filingPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,#3b82f6,#2563eb);transition:width .6s ease"></div></div>'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + filingLight + '"></span><span style="font-size:.82rem;color:' + filingLight + ';font-weight:600">' + filingLightLabel + '</span></div><span style="font-size:.9rem;color:var(--text-secondary)">' + esc(String(subU)) + ' / ' + esc(String(totalU)) + ' 個單位已送出</span><strong style="color:var(--accent-primary)">' + filingPct + '%</strong></div>'
+            + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + filingPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,' + filingLight + ',' + filingLight + ');transition:width .6s ease"></div></div>'
             + '<div style="display:flex;gap:20px;margin-top:14px;flex-wrap:wrap">'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已送出</span><strong class="dashboard-panel-pill-value">' + esc(String(cl.submittedCount || subU)) + '</strong></div>'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">草稿中</span><strong class="dashboard-panel-pill-value">' + esc(String(cl.draftCount || 0)) + '</strong></div>'
@@ -762,9 +764,11 @@
           var retF = Number(tr.returnedForms) || 0;
           var totalF = Number(tr.totalForms) || 0;
           var tPct = totalF > 0 ? Math.round(compF / totalF * 100) : 0;
+          var trainLight = tPct >= 80 ? '#22c55e' : (tPct >= 50 ? '#f59e0b' : '#ef4444');
+          var trainLightLabel = tPct >= 80 ? '達標' : (tPct >= 50 ? '進行中' : '需注意');
           trainingSlot.innerHTML = '<div style="padding:16px 20px">'
-            + '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:.9rem;color:var(--text-secondary)">全校訓練完成率</span><strong style="color:var(--accent-primary)">' + tPct + '%</strong></div>'
-            + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + tPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,#22c55e,#16a34a);transition:width .6s ease"></div></div>'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + trainLight + '"></span><span style="font-size:.82rem;color:' + trainLight + ';font-weight:600">' + trainLightLabel + '</span></div><span style="font-size:.9rem;color:var(--text-secondary)">全校訓練完成率</span><strong style="color:var(--accent-primary)">' + tPct + '%</strong></div>'
+            + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + tPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,' + trainLight + ',' + trainLight + ');transition:width .6s ease"></div></div>'
             + '<div style="display:flex;gap:20px;margin-top:14px;flex-wrap:wrap">'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已完成</span><strong class="dashboard-panel-pill-value">' + compF + '</strong></div>'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">填報中</span><strong class="dashboard-panel-pill-value">' + (draftF + pendF) + '</strong></div>'

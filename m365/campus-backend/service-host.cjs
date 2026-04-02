@@ -160,18 +160,19 @@ const server = startServer(Number(process.env.PORT || 8787));
 const OVERDUE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 let overdueCheckTimer = null;
 function scheduleOverdueCheck() {
-  // Run first check 5 minutes after startup
+  // Run first check 10 minutes after startup, then every 24 hours
   overdueCheckTimer = setTimeout(function runOverdueCheck() {
-    try {
-      const { createCorrectiveActionRouter } = require('./corrective-action-backend.cjs');
-      // The router's checkOverdueAndNotify is exposed but requires the full router context.
-      // For now, just log that the schedule is active.
-      console.log('[overdue-schedule] Daily overdue check triggered. Use POST /api/overdue-check to run manually.');
-    } catch (err) {
+    var port = Number(process.env.PORT || 8787);
+    var http = require('http');
+    // Self-call the overdue-check API (needs admin auth, so do DB check directly)
+    var db = require('./db.cjs');
+    db.queryAll("SELECT case_id, handler_email, handler_unit, handler_name, corrective_due_date, status FROM corrective_actions WHERE status NOT IN ('結案') AND corrective_due_date < NOW() AND corrective_due_date IS NOT NULL").then(function (rows) {
+      console.log('[overdue-schedule] Daily check: found ' + (rows || []).length + ' overdue items.');
+    }).catch(function (err) {
       console.warn('[overdue-schedule] Check failed:', String(err && err.message || err));
-    }
+    });
     overdueCheckTimer = setTimeout(runOverdueCheck, OVERDUE_CHECK_INTERVAL_MS);
-  }, 5 * 60 * 1000);
+  }, 10 * 60 * 1000);
   overdueCheckTimer.unref();
 }
 scheduleOverdueCheck();
