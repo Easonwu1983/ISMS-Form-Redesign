@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@backend/*": ["m365/campus-backend/*"]
+    }
+  },
+  "include": [
+    "*.js",
+    "m365/campus-backend/*.cjs",
+    "m365/azure-function/*/src/shared/*.js",
+    "scripts/*.cjs",
+    "tests/*.cjs"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "feature-bundles",
+    "app-core.bundle.min.js",
+    "*.min.js"
+  ]
+}

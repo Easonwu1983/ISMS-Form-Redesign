@@ -1607,6 +1607,25 @@ function createServer() {
         return;
       }
 
+      // ── Server stats endpoint (admin only) ──
+      if (url.pathname === '/api/server-stats' && req.method === 'GET') {
+        try {
+          const authz = await requestAuthz.requireAuthenticatedUser(req);
+          requestAuthz.requireAdmin(authz, 'Only admin can view server stats');
+          const uptime = process.uptime();
+          const mem = process.memoryUsage();
+          await writeJson(res, buildJsonResponse(200, {
+            ok: true,
+            uptime: Math.round(uptime),
+            uptimeHuman: Math.floor(uptime / 3600) + 'h ' + Math.floor((uptime % 3600) / 60) + 'm',
+            memory: { rss: Math.round(mem.rss / 1024 / 1024) + 'MB', heap: Math.round(mem.heapUsed / 1024 / 1024) + 'MB', heapTotal: Math.round(mem.heapTotal / 1024 / 1024) + 'MB' },
+            nodeVersion: process.version,
+            platform: process.platform
+          }), origin);
+        } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to read server stats.', 500), origin); }
+        return;
+      }
+
       // ── Audit report PDF download (admin only) ──
       if (url.pathname === '/api/audit-report/pdf' && req.method === 'GET') {
         try {

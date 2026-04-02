@@ -129,6 +129,21 @@
   window.__ismsWarn = function () { emitRuntimeLog('warn', arguments); };
   window.__ismsError = function () { emitRuntimeLog('error', arguments); };
 
+  // ── Observability: global error handler + route tracking ──
+  window.onerror = function (msg, src, line, col) {
+    try { window.__ismsError('[unhandled]', msg, src + ':' + line + ':' + col); } catch (_) {}
+  };
+  window.addEventListener('unhandledrejection', function (event) {
+    try { window.__ismsError('[promise]', String(event && event.reason && event.reason.message || event && event.reason || 'unknown')); } catch (_) {}
+  });
+  // Route tracking: log page views
+  window.addEventListener('hashchange', function () {
+    try {
+      var page = (window.location.hash || '#dashboard').slice(1).split('/')[0];
+      window.__ismsLog('[page]', page, new Date().toISOString());
+    } catch (_) {}
+  });
+
   function normalizeAssetPath(assetPath) {
     return String(assetPath || '').replace(/^\.?\//, '').replace(/\?.*$/, '');
   }

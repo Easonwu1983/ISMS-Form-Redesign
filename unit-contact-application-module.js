@@ -371,14 +371,24 @@
       card.id = 'uca-authorization-doc-card';
       card.innerHTML = ''
         + '<div class="section-header">' + ic('file-text', 'icon-sm') + ' 授權同意書</div>'
-        + '<div class="form-hint unit-contact-auth-doc-note">請先下載授權同意書 PDF，經單位主管簽章後再上傳。</div>'
-        + '<div class="form-actions unit-contact-auth-doc-actions">'
+        + '<div class="form-hint unit-contact-auth-doc-note">請先下載授權同意書，經單位主管簽章後再上傳（可用手機拍照）。</div>'
+        + '<div class="form-actions unit-contact-auth-doc-actions" style="display:flex;gap:10px;flex-wrap:wrap">'
         + '<button type="button" class="btn btn-secondary" data-action="unit-contact-download-auth-template">' + ic('download', 'icon-sm') + ' 下載同意書（PDF）</button>'
+        + '<button type="button" class="btn btn-ghost" id="uca-show-example" style="font-size:.85rem">' + ic('eye', 'icon-sm') + ' 查看範例</button>'
+        + '</div>'
+        + '<div id="uca-example-preview" style="display:none;margin:12px 0;padding:12px;background:#f8fafc;border:1px solid var(--border-color);border-radius:8px">'
+        + '<p style="font-size:.82rem;color:var(--text-secondary);margin:0 0 8px">範例：同意書填寫完成後應包含以下內容</p>'
+        + '<div style="font-size:.82rem;color:#475569;line-height:1.6">✅ 單位名稱<br>✅ 申請人姓名與職稱<br>✅ 資安窗口角色勾選<br>✅ 單位主管簽章（或電子簽名）<br>✅ 日期</div>'
         + '</div>'
         + '<div class="form-group unit-contact-auth-doc-field">'
         + '<label class="form-label form-required" id="uca-authorization-doc-label" for="uca-authorization-doc">上傳主管簽章之授權同意書</label>'
-        + '<input type="file" class="form-input" id="uca-authorization-doc" aria-describedby="uca-authorization-doc-help uca-authorization-doc-error" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" data-testid="unit-contact-authorization-doc-input">'
-        + '<div class="form-hint" id="uca-authorization-doc-help">僅支援 PDF、JPG、PNG，檔案大小上限 5MB。</div>'
+        + '<div class="auth-doc-dropzone" id="uca-dropzone" style="border:2px dashed #cbd5e1;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s">'
+        + '<div style="margin-bottom:8px">' + ic('upload-cloud', 'icon-lg') + '</div>'
+        + '<div style="font-weight:600;margin-bottom:4px">拖拉檔案到此處上傳</div>'
+        + '<div style="font-size:.82rem;color:var(--text-secondary)">或點擊選擇檔案 · 支援手機拍照</div>'
+        + '<div style="font-size:.78rem;color:var(--text-secondary);margin-top:4px">PDF、JPG、PNG，上限 5MB</div>'
+        + '</div>'
+        + '<input type="file" class="form-input" id="uca-authorization-doc" aria-describedby="uca-authorization-doc-help uca-authorization-doc-error" accept="' + esc(AUTHORIZATION_UPLOAD_ACCEPT) + '" capture="environment" data-testid="unit-contact-authorization-doc-input" style="display:none">'
         + '<div class="form-error-message" id="uca-authorization-doc-error" hidden></div>'
         + '<div class="unit-contact-auth-doc-preview" id="uca-authorization-doc-preview"><span class="unit-contact-file-empty">尚未選擇檔案</span></div>'
         + '</div>';
@@ -389,7 +399,28 @@
         form.appendChild(card);
       }
       bindPageEvent(card.querySelector('[data-action="unit-contact-download-auth-template"]'), 'click', downloadAuthorizationTemplate);
+      var exampleBtn = card.querySelector('#uca-show-example');
+      var examplePreview = card.querySelector('#uca-example-preview');
+      if (exampleBtn && examplePreview) {
+        bindPageEvent(exampleBtn, 'click', function () {
+          examplePreview.style.display = examplePreview.style.display === 'none' ? '' : 'none';
+          exampleBtn.textContent = examplePreview.style.display === 'none' ? '查看範例' : '隱藏範例';
+        });
+      }
       const input = card.querySelector('#uca-authorization-doc');
+      var dropzone = card.querySelector('#uca-dropzone');
+      if (dropzone && input) {
+        bindPageEvent(dropzone, 'click', function () { input.click(); });
+        bindPageEvent(dropzone, 'dragover', function (e) { e.preventDefault(); dropzone.style.borderColor = '#3b82f6'; dropzone.style.background = '#eff6ff'; });
+        bindPageEvent(dropzone, 'dragleave', function () { dropzone.style.borderColor = '#cbd5e1'; dropzone.style.background = ''; });
+        bindPageEvent(dropzone, 'drop', function (e) {
+          e.preventDefault(); dropzone.style.borderColor = '#cbd5e1'; dropzone.style.background = '';
+          if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+            input.files = e.dataTransfer.files;
+            renderAuthorizationDocumentSelection();
+          }
+        });
+      }
       bindPageEvent(input, 'change', renderAuthorizationDocumentSelection);
       bindPageEvent(card, 'click', function (event) {
         const button = event.target && event.target.closest ? event.target.closest('[data-action="unit-contact-clear-auth-doc"]') : null;
