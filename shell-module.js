@@ -134,6 +134,7 @@
       if (!/[a-z]/.test(value)) return '密碼至少需要一個小寫英文字母';
       if (!/[A-Z]/.test(value)) return '密碼至少需要一個大寫英文字母';
       if (!/[0-9]/.test(value)) return '密碼至少需要一個數字';
+      if (!/[!@#$%&*_+\-=]/.test(value)) return '密碼至少需要一個特殊符號（如 !@#$%&*）';
       return '';
     }
 
@@ -365,7 +366,7 @@
         placeholderName: '\u8acb\u8f38\u5165\u7ba1\u7406\u54e1\u59d3\u540d',
         placeholderUser: '\u8acb\u8f38\u5165\u767b\u5165\u5e33\u865f',
         placeholderEmail: '\u8acb\u8f38\u5165\u96fb\u5b50\u90f5\u4ef6',
-        placeholderPassword: '\u81f3\u5c11 8 \u78bc\uff0c\u542b\u5927\u5c0f\u5beb\u8207\u6578\u5b57',
+        placeholderPassword: '\u81f3\u5c11 8 \u78bc\uff0c\u542b\u5927\u5c0f\u5beb\u3001\u6578\u5b57\u8207\u7279\u6b8a\u7b26\u865f',
         defaultAdminName: '\u672c\u6a5f\u7ba1\u7406\u54e1',
         createAdmin: '\u5efa\u7acb\u672c\u6a5f\u7ba1\u7406\u54e1',
         account: '\u5e33\u865f',
@@ -377,7 +378,7 @@
         checkProgress: '\u67e5\u8a62\u9032\u5ea6',
         forgotPassword: '\u5fd8\u8a18\u5bc6\u78bc\uff1f',
         changeTitle: '\u9996\u6b21\u767b\u5165\u9700\u8b8a\u66f4\u5bc6\u78bc',
-        passwordRule: '\u5bc6\u78bc\u9700\u81f3\u5c11 8 \u78bc\uff0c\u4e26\u5305\u542b\u82f1\u6587\u5927\u5beb\u3001\u82f1\u6587\u5c0f\u5beb\u8207\u6578\u5b57\u3002',
+        passwordRule: '\u5bc6\u78bc\u9700\u81f3\u5c11 8 \u78bc\uff0c\u4e26\u5305\u542b\u82f1\u6587\u5927\u5beb\u3001\u82f1\u6587\u5c0f\u5beb\u3001\u6578\u5b57\u8207\u7279\u6b8a\u7b26\u865f\uff08\u5982 !@#$%&*\uff09\u3002',
         changeError: '\u5bc6\u78bc\u8b8a\u66f4\u5931\u6557',
         currentPassword: '\u76ee\u524d\u5bc6\u78bc',
         newPassword: '\u65b0\u5bc6\u78bc',

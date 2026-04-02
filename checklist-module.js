@@ -1866,6 +1866,18 @@
       const supervisorNameValue = document.getElementById('cl-supervisor-name').value.trim();
       const supervisorTitleValue = document.getElementById('cl-supervisor-title').value.trim();
       const unitValue = checklistUnitLocked ? (u.activeUnit || document.getElementById('cl-unit').value) : document.getElementById('cl-unit').value;
+      if (!isAdmin(u) && authorizedUnits.length > 0) {
+        const unitParts = typeof splitUnitValue === 'function' ? splitUnitValue(unitValue) : { parent: unitValue, child: '' };
+        const isAuthorized = authorizedUnits.some(function (au) {
+          if (au === unitValue) return true;
+          var auParts = typeof splitUnitValue === 'function' ? splitUnitValue(au) : { parent: au, child: '' };
+          return auParts.parent && auParts.parent === unitParts.parent;
+        });
+        if (!isAuthorized) {
+          toast('您只能填寫授權單位的檢核表（' + authorizedUnits.join('、') + '）', 'error');
+          return null;
+        }
+      }
       const fillDateValue = document.getElementById('cl-date').value;
       const auditYearValue = requireChecklistAuditYearValue(document.getElementById('cl-year').value);
       return {
