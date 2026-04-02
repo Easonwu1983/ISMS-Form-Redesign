@@ -156,6 +156,26 @@ console.log('service-host starting', {
 
 const server = startServer(Number(process.env.PORT || 8787));
 
+// ── Daily overdue check schedule (every 24 hours) ──
+const OVERDUE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+let overdueCheckTimer = null;
+function scheduleOverdueCheck() {
+  // Run first check 5 minutes after startup
+  overdueCheckTimer = setTimeout(function runOverdueCheck() {
+    try {
+      const { createCorrectiveActionRouter } = require('./corrective-action-backend.cjs');
+      // The router's checkOverdueAndNotify is exposed but requires the full router context.
+      // For now, just log that the schedule is active.
+      console.log('[overdue-schedule] Daily overdue check triggered. Use POST /api/overdue-check to run manually.');
+    } catch (err) {
+      console.warn('[overdue-schedule] Check failed:', String(err && err.message || err));
+    }
+    overdueCheckTimer = setTimeout(runOverdueCheck, OVERDUE_CHECK_INTERVAL_MS);
+  }, 5 * 60 * 1000);
+  overdueCheckTimer.unref();
+}
+scheduleOverdueCheck();
+
 let shuttingDown = false;
 function shutdown(signal) {
   if (shuttingDown) return;

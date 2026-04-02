@@ -14,11 +14,11 @@
   - [x] 教育訓練概覽面板（完成率進度條 + 各狀態明細）
   - [x] 僅管理者可見，單位管理員看原有畫面
 
-- [ ] **前端打包現代化**
-  - [ ] 評估 Vite / esbuild 取代手動 bundle 串接
-  - [ ] 自動 tree-shaking + code splitting + hash 快取
-  - [ ] 自動 sourcemap 方便 debug
-  - [ ] 預估效果：首屏載入快 40-50%
+- [x] **前端打包現代化** — 已使用 esbuild
+  - [x] esbuild 自動 tree-shaking + code splitting（build-app-core-assets.cjs）
+  - [x] 5 個 feature bundle + core bundle + CSS purge
+  - [x] npm run build 一鍵建置 + 版本 key
+  - [x] asset-loader.js 自動 fallback（bundle → legacy modules）
 
 - [x] **檢核表填報體驗優化** — 已有完整實作
   - [x] 9 大類 accordion 分區（可收合展開）+ 側邊目錄導航
@@ -43,7 +43,7 @@
   - [x] 教育訓練匯出 CSV：已有（exportTrainingSummaryCsv / exportTrainingDetailCsv）
 
 - [x] **報表與匯出**
-  - [ ] 年度稽核報告 PDF — 需 PDF 庫（pdfmake），後續版本
+  - [x] 年度稽核報告 PDF：GET /api/audit-report/pdf?auditYear=115（pdfmake）
   - [x] 矯正單追蹤報表 CSV（列表頁匯出，含狀態/單位/處理人/日期）
   - [x] 教育訓練匯出（已有 exportTrainingSummaryCsv + exportTrainingDetailCsv）
   - [x] 資安窗口盤點匯出 JSON（已有 #security-window 匯出按鈕）
@@ -60,8 +60,8 @@
 - [x] **多年度支援**
   - [x] 儀表板年度選擇器（可切換 113/114/115 年度查看進度）
   - [x] 後端 API 支援 auditYear/trainingYear 參數
-  - [ ] 年度結算：一鍵封存（需另外開發）
-  - [ ] 歷史資料比較報表（需另外開發）
+  - [x] 年度結算查詢 API：GET /api/audit-year/summary
+  - [ ] 一鍵封存（需確認業務規則後開發）
 
 - [ ] **權限精細化** — 需完整規劃（影響 DB schema + 全部授權邏輯）
   - [ ] 新增「審核者」角色（只能審核不能開單）
@@ -83,10 +83,11 @@
 - [x] **合約版本同步** — 9 個 contract.js + 前端版本
   - [x] 全部統一為 `2026-04-02`（後端 9 個 + 前端 m365-api-client + app.js）
 
-- [ ] **測試覆蓋** — 需安裝 Jest（`npm i -D jest`）
-  - [ ] 核心函式加 Jest 單元測試（contract.js 的 validate 函式）
-  - [ ] API 端點加整合測試（supertest + test DB）
-  - [ ] 權限矩陣加端對端測試（playwright）
+- [x] **測試覆蓋** — Jest 已安裝並通過
+  - [x] 核心函式 Jest 單元測試（25 tests，涵蓋 5 個 contract 模組）
+  - [x] npm run test:unit 一鍵執行
+  - [ ] API 端點整合測試（supertest + test DB，後續擴充）
+  - [ ] 權限矩陣端對端測試（playwright，後續擴充）
   - [x] 已有：scripts/ 下 25+ 個 smoke/regression 測試腳本
 
 ---

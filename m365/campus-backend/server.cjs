@@ -1527,6 +1527,68 @@ function createServer() {
     }
 
     try {
+      // ── Audit report PDF download (admin only) ──
+      if (url.pathname === '/api/audit-report/pdf' && req.method === 'GET') {
+        try {
+          const authz = await requestAuthz.requireAuthenticatedUser(req);
+          requestAuthz.requireAdmin(authz, 'Only admin can download audit report');
+          const auditYear = cleanText(url.searchParams && url.searchParams.get('auditYear')) || String(new Date().getFullYear() - 1911);
+          // Reuse dashboard summary queries
+          const [checklistStats, trainingStats, pendingApps, pendingCases] = await Promise.all([
+            db.queryOne(`SELECT COUNT(DISTINCT unit) FILTER (WHERE status = '已送出')::int AS submitted_units, COUNT(DISTINCT unit)::int AS total_filing_units, COUNT(*) FILTER (WHERE status = '草稿')::int AS draft_count FROM checklists WHERE audit_year = $1`, [auditYear]),
+            db.queryOne(`SELECT COUNT(*)::int AS total_forms, COUNT(*) FILTER (WHERE status = '已完成填報')::int AS completed_forms, COUNT(*) FILTER (WHERE status = '暫存')::int AS draft_forms, COUNT(*) FILTER (WHERE status = '待簽核')::int AS pending_forms, COUNT(*) FILTER (WHERE status = '退回更正')::int AS returned_forms, COALESCE(AVG(completion_rate),0)::numeric(5,2) AS avg_completion_rate FROM training_forms WHERE training_year = $1`, [auditYear]),
+            db.queryOne(`SELECT COUNT(*) FILTER (WHERE status = 'pending_review')::int AS pending_review, COUNT(*) FILTER (WHERE status = 'activation_pending')::int AS activation_pending FROM unit_contact_applications`),
+            db.queryOne(`SELECT COUNT(*) FILTER (WHERE status = '待矯正')::int AS pending_correction, COUNT(*) FILTER (WHERE status = '已提案')::int AS proposed, COUNT(*) FILTER (WHERE status = '追蹤中')::int AS tracking, COUNT(*) FILTER (WHERE status NOT IN ('結案'))::int AS open_total FROM corrective_actions`)
+          ]);
+          const cs = checklistStats || {}; const ts = trainingStats || {}; const pa = pendingApps || {}; const pc = pendingCases || {};
+          const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 163);
+          const data = {
+            checklist: { totalUnits, submittedUnits: Number(cs.submitted_units) || 0, notFiledUnits: totalUnits - (Number(cs.submitted_units) || 0), draftCount: Number(cs.draft_count) || 0, auditYear },
+            training: { completedForms: Number(ts.completed_forms) || 0, draftForms: Number(ts.draft_forms) || 0, pendingForms: Number(ts.pending_forms) || 0, returnedForms: Number(ts.returned_forms) || 0, avgCompletionRate: Number(ts.avg_completion_rate) || 0 },
+            pending: { applicationsPendingReview: Number(pa.pending_review) || 0, activationPending: Number(pa.activation_pending) || 0, correctivePending: Number(pc.pending_correction) || 0, correctiveProposed: Number(pc.proposed) || 0, correctiveTracking: Number(pc.tracking) || 0, correctiveOpenTotal: Number(pc.open_total) || 0, totalPendingItems: (Number(pa.pending_review) || 0) + (Number(pa.activation_pending) || 0) + (Number(pc.pending_correction) || 0) + (Number(pc.proposed) || 0) + (Number(pc.tracking) || 0) }
+          };
+          const { generateAuditReportPdf } = require(require('path').join(__dirname, '..', '..', 'scripts', 'generate-audit-report-pdf.cjs'));
+          const pdfBuffer = await generateAuditReportPdf(data);
+          await writeBinary(res, { status: 200, path: '/api/audit-report/pdf', body: pdfBuffer, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="ISMS-audit-report-' + auditYear + '.pdf"' } }, origin);
+        } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to generate audit report PDF.', 500), origin); }
+        return;
+      }
+
+      // ── Overdue check endpoint (admin only) ──
+      if (url.pathname === '/api/overdue-check' && req.method === 'POST') {
+        try {
+          const authz = await requestAuthz.requireAuthenticatedUser(req);
+          requestAuthz.requireAdmin(authz, 'Only admin can trigger overdue check');
+          const result = await correctiveActionRouter.checkOverdueAndNotify();
+          await writeJson(res, buildJsonResponse(200, { ok: true, ...result }), origin);
+        } catch (error) { await writeJson(res, buildErrorResponse(error, 'Overdue check failed.', 500), origin); }
+        return;
+      }
+
+      // ── Year-end settlement endpoint (admin only) ──
+      if (url.pathname === '/api/audit-year/summary' && req.method === 'GET') {
+        try {
+          const authz = await requestAuthz.requireAuthenticatedUser(req);
+          requestAuthz.requireAdmin(authz, 'Only admin can view year summary');
+          const years = await db.queryAll(`
+            SELECT DISTINCT audit_year, COUNT(*)::int AS checklist_count,
+              COUNT(*) FILTER (WHERE status = '已送出')::int AS submitted
+            FROM checklists GROUP BY audit_year ORDER BY audit_year DESC LIMIT 10
+          `);
+          const trainingYears = await db.queryAll(`
+            SELECT DISTINCT training_year, COUNT(*)::int AS form_count,
+              COUNT(*) FILTER (WHERE status = '已完成填報')::int AS completed
+            FROM training_forms GROUP BY training_year ORDER BY training_year DESC LIMIT 10
+          `);
+          await writeJson(res, buildJsonResponse(200, {
+            ok: true,
+            checklistYears: (years || []).map(function (r) { return { year: r.audit_year, total: r.checklist_count, submitted: r.submitted }; }),
+            trainingYears: (trainingYears || []).map(function (r) { return { year: r.training_year, total: r.form_count, completed: r.completed }; })
+          }), origin);
+        } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to load year summary.', 500), origin); }
+        return;
+      }
+
       // ── Dashboard summary endpoint (admin only) ──
       if (url.pathname === '/api/dashboard/summary' && req.method === 'GET') {
         try {

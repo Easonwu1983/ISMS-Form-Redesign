@@ -603,7 +603,52 @@ function createCorrectiveActionRouter(deps) {
     return false;
   }
 
-  return { tryHandle };
+  // ── Overdue check (can be called by cron or API) ──
+  async function checkOverdueAndNotify() {
+    try {
+      const rows = await db.queryAll(`
+        SELECT case_id, handler_name, handler_email, handler_unit, corrective_due_date, status
+        FROM corrective_actions
+        WHERE status NOT IN ('結案')
+          AND corrective_due_date < NOW()
+          AND corrective_due_date IS NOT NULL
+        ORDER BY corrective_due_date
+      `);
+      if (!rows || !rows.length) { console.log('[overdue-check] No overdue items.'); return { checked: 0, notified: 0 }; }
+      console.log('[overdue-check] Found ' + rows.length + ' overdue items.');
+      let notified = 0;
+      for (const row of rows) {
+        var email = cleanText(row.handler_email);
+        if (!email) continue;
+        var result = await trySendStatusChangeMail(
+          { id: row.case_id, handlerUnit: row.handler_unit, handlerName: row.handler_name },
+          row.status, '已逾期', '系統自動提醒', email
+        );
+        if (result && result.sent) notified++;
+      }
+      // Also notify admin
+      var adminEmail = cleanText(process.env.ISMS_ADMIN_EMAIL);
+      if (adminEmail && rows.length > 0) {
+        await sendGraphMail({
+          graphRequest, getDelegatedToken, to: adminEmail,
+          subject: 'ISMS 逾期提醒：' + rows.length + ' 筆矯正單已逾期',
+          html: buildHtmlDocument([
+            '您好，', '目前有 ' + rows.length + ' 筆矯正單已超過預定完成日：',
+            ...rows.slice(0, 10).map(function (r) { return r.case_id + '（' + cleanText(r.handler_unit) + ' ' + cleanText(r.handler_name) + '）'; }),
+            rows.length > 10 ? '...及其他 ' + (rows.length - 10) + ' 筆' : '',
+            '請登入系統查看並追蹤。'
+          ])
+        }).catch(function () {});
+      }
+      console.log('[overdue-check] Notified: ' + notified + '/' + rows.length);
+      return { checked: rows.length, notified };
+    } catch (error) {
+      console.error('[overdue-check] Failed:', String(error && error.message || error));
+      return { checked: 0, notified: 0, error: String(error && error.message || error) };
+    }
+  }
+
+  return { tryHandle, checkOverdueAndNotify };
 }
 
 module.exports = { createCorrectiveActionRouter };
