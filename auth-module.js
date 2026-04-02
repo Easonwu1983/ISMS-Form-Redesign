@@ -315,8 +315,21 @@
       if (expiresAt) {
         const expiresAtMs = Date.parse(expiresAt);
         if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
-          clearAuthSessionStorage();
-          return null;
+          // Session expired — show warning but don't auto-clear
+          if (!window.__ismsSessionExpiredWarned) {
+            window.__ismsSessionExpiredWarned = true;
+            setTimeout(function () {
+              var tc = document.getElementById('toast-container');
+              if (tc) {
+                var toast = document.createElement('div');
+                toast.className = 'toast toast-error';
+                toast.setAttribute('role', 'alert');
+                toast.textContent = '登入已逾時，請重新登入以繼續操作。';
+                tc.appendChild(toast);
+                setTimeout(function () { try { tc.removeChild(toast); } catch (_) {} }, 8000);
+              }
+            }, 100);
+          }
         }
       }
       const normalized = normalizeUserRecord(user);

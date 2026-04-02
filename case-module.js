@@ -591,6 +591,12 @@
       if (pendingStat) pendingStat.textContent = String(pending);
       if (overdueStat) overdueStat.textContent = String(overdue);
       if (closedStat) closedStat.textContent = String(closedM);
+      var heroPending = document.getElementById(heroMetaIds.pending);
+      var heroOverdue = document.getElementById(heroMetaIds.overdue);
+      var heroClosed = document.getElementById(heroMetaIds.closed);
+      if (heroPending) heroPending.textContent = String(pending);
+      if (heroOverdue) heroOverdue.textContent = String(overdue);
+      if (heroClosed) heroClosed.textContent = String(closedM);
       var focusTextEl = document.getElementById(heroMetaIds.focusText);
       if (focusTextEl) focusTextEl.textContent = focusLine;
       var nextDueEl = document.getElementById(heroMetaIds.nextDue);

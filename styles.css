@@ -6656,12 +6656,11 @@ body {
 }
 
 .sidebar-brand-text h1 {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 800;
-  line-height: 1.08;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
+  white-space: normal;
+  overflow: visible;
 }
 
 .sidebar-brand-text p {
