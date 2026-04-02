@@ -60,6 +60,7 @@
       initUnitCascade,
       syncCorrectiveActionsFromM365,
       syncUsersFromM365,
+      fetchDashboardSummary,
       submitCreateCase,
       submitDeleteCase,
       submitRespondCase,
@@ -525,7 +526,24 @@
       + '<div class="dashboard-focus-item"><span>最新處理人</span><strong id="' + heroMetaIds.latestHandler + '">—</strong></div>'
       + '</div></div>';
 
+    var user = currentUser();
+    var showAuditProgress = user && user.role === ROLES.ADMIN;
+    var auditSlotIds = { filingStat: 'audit-filing-stat', trainingStat: 'audit-training-stat', pendingStat: 'audit-pending-stat', filing: 'audit-filing-slot', training: 'audit-training-slot' };
+    var auditProgressHtml = showAuditProgress ? (
+      '<section class="dashboard-audit-progress"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('shield-check', 'icon-sm') + ' 年度稽核進度總覽</h2></div>'
+      + '<div class="stats-grid stats-grid--audit">'
+      + '<div class="stat-card total"><div class="stat-icon">' + ic('clipboard-list') + '</div><div class="stat-value" id="' + auditSlotIds.filingStat + '">—</div><div class="stat-label">年度填報</div></div>'
+      + '<div class="stat-card closed"><div class="stat-icon">' + ic('graduation-cap') + '</div><div class="stat-value" id="' + auditSlotIds.trainingStat + '">—</div><div class="stat-label">訓練達成率</div></div>'
+      + '<div class="stat-card overdue"><div class="stat-icon">' + ic('bell-ring') + '</div><div class="stat-value" id="' + auditSlotIds.pendingStat + '">—</div><div class="stat-label">待處理事項</div></div>'
+      + '</div>'
+      + '<div class="dashboard-grid dashboard-grid--audit">'
+      + '<div class="card dashboard-panel"><div class="card-header"><span class="card-title">年度填報進度</span></div><div id="' + auditSlotIds.filing + '" class="dashboard-card-loading" aria-busy="true">正在載入填報進度…</div></div>'
+      + '<div class="card dashboard-panel"><div class="card-header"><span class="card-title">教育訓練概覽</span></div><div id="' + auditSlotIds.training + '" class="dashboard-card-loading" aria-busy="true">正在載入訓練資料…</div></div>'
+      + '</div></section>'
+    ) : '';
+
     document.getElementById('app').innerHTML = '<div class="animate-in">'
+        + auditProgressHtml
         + '<section class="dashboard-hero dashboard-hero--integrated"><h1 class="sr-only" data-route-heading="true">儀表板</h1><div class="dashboard-hero-grid"><div class="dashboard-hero-copy dashboard-hero-copy--integrated"><p class="dashboard-hero-text dashboard-hero-text--lead">集中掌握矯正單進度、逾期風險與最近活動，讓主管與承辦人可以在同一個入口快速判斷優先順序。</p><div class="dashboard-meta-row">' + heroMeta + '</div><div class="dashboard-hero-actions">' + createBtn + '</div></div>' + heroSide + '</div></section>'
       + '<div class="stats-grid">'
       + buildCaseStatCard('total', 'files', '—', '矯正單總數')
@@ -616,6 +634,74 @@
         bindCopyButtons(recentSlot);
       }, 0);
     });
+
+    // Audit progress hydration (admin only, parallel to CAR hydration)
+    if (showAuditProgress && typeof fetchDashboardSummary === 'function') {
+      fetchDashboardSummary().then(function (result) {
+        if (renderToken !== dashboardRenderToken) return;
+        if (!result || !result.ok || !result.data) {
+          var errSlot = document.getElementById(auditSlotIds.filing);
+          if (errSlot) { errSlot.classList.remove('dashboard-card-loading'); errSlot.innerHTML = '<div class="empty-state empty-state--compact"><div class="empty-state-title">無法載入稽核進度</div></div>'; }
+          return;
+        }
+        var d = result.data;
+        var cl = d.checklist || {};
+        var tr = d.training || {};
+        var pd = d.pending || {};
+        var totalU = Number(cl.totalUnits) || 163;
+        var subU = Number(cl.submittedUnits) || 0;
+        var filingPct = totalU > 0 ? Math.round(subU / totalU * 100) : 0;
+        var avgRate = Number(tr.avgCompletionRate) || 0;
+        var pendingTotal = Number(pd.totalPendingItems) || 0;
+
+        // Update stat cards
+        var fs = document.getElementById(auditSlotIds.filingStat);
+        if (fs) fs.textContent = subU + '/' + totalU;
+        var ts2 = document.getElementById(auditSlotIds.trainingStat);
+        if (ts2) ts2.textContent = avgRate + '%';
+        var ps = document.getElementById(auditSlotIds.pendingStat);
+        if (ps) ps.textContent = String(pendingTotal);
+
+        // Filing progress panel
+        var filingSlot = document.getElementById(auditSlotIds.filing);
+        if (filingSlot) {
+          filingSlot.classList.remove('dashboard-card-loading');
+          filingSlot.removeAttribute('aria-busy');
+          filingSlot.innerHTML = '<div style="padding:16px 20px">'
+            + '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:.9rem;color:var(--text-secondary)">' + esc(String(subU)) + ' / ' + esc(String(totalU)) + ' 個單位已送出</span><strong style="color:var(--accent-primary)">' + filingPct + '%</strong></div>'
+            + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + filingPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,#3b82f6,#2563eb);transition:width .6s ease"></div></div>'
+            + '<div style="display:flex;gap:20px;margin-top:14px;flex-wrap:wrap">'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已送出</span><strong class="dashboard-panel-pill-value">' + esc(String(cl.submittedCount || subU)) + '</strong></div>'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">草稿中</span><strong class="dashboard-panel-pill-value">' + esc(String(cl.draftCount || 0)) + '</strong></div>'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">未填報</span><strong class="dashboard-panel-pill-value">' + esc(String(cl.notFiledUnits || (totalU - subU))) + '</strong></div>'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">稽核年度</span><strong class="dashboard-panel-pill-value">' + esc(cl.auditYear || '') + '</strong></div>'
+            + '</div></div>';
+        }
+
+        // Training overview panel
+        var trainingSlot = document.getElementById(auditSlotIds.training);
+        if (trainingSlot) {
+          trainingSlot.classList.remove('dashboard-card-loading');
+          trainingSlot.removeAttribute('aria-busy');
+          var compF = Number(tr.completedForms) || 0;
+          var draftF = Number(tr.draftForms) || 0;
+          var pendF = Number(tr.pendingForms) || 0;
+          var retF = Number(tr.returnedForms) || 0;
+          var totalF = Number(tr.totalForms) || 0;
+          var tPct = totalF > 0 ? Math.round(compF / totalF * 100) : 0;
+          trainingSlot.innerHTML = '<div style="padding:16px 20px">'
+            + '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:.9rem;color:var(--text-secondary)">全校訓練完成率</span><strong style="color:var(--accent-primary)">' + tPct + '%</strong></div>'
+            + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + tPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,#22c55e,#16a34a);transition:width .6s ease"></div></div>'
+            + '<div style="display:flex;gap:20px;margin-top:14px;flex-wrap:wrap">'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已完成</span><strong class="dashboard-panel-pill-value">' + compF + '</strong></div>'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">填報中</span><strong class="dashboard-panel-pill-value">' + (draftF + pendF) + '</strong></div>'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">退回更正</span><strong class="dashboard-panel-pill-value">' + retF + '</strong></div>'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待處理</span><strong class="dashboard-panel-pill-value" style="' + (pendingTotal > 0 ? 'color:#ef4444' : '') + '">' + pendingTotal + ' 項</strong></div>'
+            + '</div></div>';
+        }
+        scheduleRefreshIcons();
+      }).catch(function () {});
+    }
   }
 
   var curFilter = '全部', curSearch = '';

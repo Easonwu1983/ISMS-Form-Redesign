@@ -1527,6 +1527,93 @@ function createServer() {
     }
 
     try {
+      // ── Dashboard summary endpoint (admin only) ──
+      if (url.pathname === '/api/dashboard/summary' && req.method === 'GET') {
+        try {
+          const authz = await requestAuthz.requireAuthenticatedUser(req);
+          requestAuthz.requireAdmin(authz, 'Only admin can access dashboard summary');
+          const auditYear = cleanText(url.searchParams && url.searchParams.get('auditYear')) || String(new Date().getFullYear() - 1911);
+          const trainingYear = cleanText(url.searchParams && url.searchParams.get('trainingYear')) || auditYear;
+
+          const [checklistStats, trainingStats, trainingByUnit, pendingApps, pendingCases] = await Promise.all([
+            db.queryOne(`SELECT
+              COUNT(DISTINCT unit) FILTER (WHERE status = '已送出')::int AS submitted_units,
+              COUNT(DISTINCT unit)::int AS total_filing_units,
+              COUNT(*)::int AS total_checklists,
+              COUNT(*) FILTER (WHERE status = '草稿')::int AS draft_count,
+              COUNT(*) FILTER (WHERE status = '已送出')::int AS submitted_count
+              FROM checklists WHERE audit_year = $1`, [auditYear]),
+            db.queryOne(`SELECT
+              COUNT(*)::int AS total_forms,
+              COUNT(*) FILTER (WHERE status = '已完成填報')::int AS completed_forms,
+              COUNT(*) FILTER (WHERE status = '暫存')::int AS draft_forms,
+              COUNT(*) FILTER (WHERE status = '待簽核')::int AS pending_forms,
+              COUNT(*) FILTER (WHERE status = '退回更正')::int AS returned_forms,
+              COALESCE(AVG(completion_rate), 0)::numeric(5,2) AS avg_completion_rate
+              FROM training_forms WHERE training_year = $1`, [trainingYear]),
+            db.queryAll(`SELECT stats_unit, status, COUNT(*)::int AS form_count,
+              COALESCE(AVG(completion_rate), 0)::numeric(5,2) AS avg_rate
+              FROM training_forms WHERE training_year = $1
+              GROUP BY stats_unit, status ORDER BY stats_unit`, [trainingYear]),
+            db.queryOne(`SELECT
+              COUNT(*) FILTER (WHERE status = 'pending_review')::int AS pending_review,
+              COUNT(*) FILTER (WHERE status = 'activation_pending')::int AS activation_pending
+              FROM unit_contact_applications`),
+            db.queryOne(`SELECT
+              COUNT(*) FILTER (WHERE status = '待矯正')::int AS pending_correction,
+              COUNT(*) FILTER (WHERE status = '已提案')::int AS proposed,
+              COUNT(*) FILTER (WHERE status = '追蹤中')::int AS tracking,
+              COUNT(*) FILTER (WHERE status NOT IN ('結案'))::int AS open_total
+              FROM corrective_actions`)
+          ]);
+
+          const cs = checklistStats || {};
+          const ts = trainingStats || {};
+          const pa = pendingApps || {};
+          const pc = pendingCases || {};
+          const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 163);
+          const submittedUnits = Number(cs.submitted_units) || 0;
+          const pendingTotal = (Number(pa.pending_review) || 0) + (Number(pa.activation_pending) || 0)
+            + (Number(pc.pending_correction) || 0) + (Number(pc.proposed) || 0) + (Number(pc.tracking) || 0);
+
+          await writeJson(res, buildJsonResponse(200, {
+            checklist: {
+              totalUnits,
+              submittedUnits,
+              notFiledUnits: totalUnits - submittedUnits,
+              draftCount: Number(cs.draft_count) || 0,
+              submittedCount: Number(cs.submitted_count) || 0,
+              auditYear
+            },
+            training: {
+              totalForms: Number(ts.total_forms) || 0,
+              completedForms: Number(ts.completed_forms) || 0,
+              draftForms: Number(ts.draft_forms) || 0,
+              pendingForms: Number(ts.pending_forms) || 0,
+              returnedForms: Number(ts.returned_forms) || 0,
+              avgCompletionRate: Number(ts.avg_completion_rate) || 0,
+              trainingYear,
+              byStatsUnit: (trainingByUnit || []).map(function (r) {
+                return { statsUnit: r.stats_unit, status: r.status, formCount: Number(r.form_count) || 0, avgRate: Number(r.avg_rate) || 0 };
+              })
+            },
+            pending: {
+              applicationsPendingReview: Number(pa.pending_review) || 0,
+              activationPending: Number(pa.activation_pending) || 0,
+              correctivePending: Number(pc.pending_correction) || 0,
+              correctiveProposed: Number(pc.proposed) || 0,
+              correctiveTracking: Number(pc.tracking) || 0,
+              correctiveOpenTotal: Number(pc.open_total) || 0,
+              totalPendingItems: pendingTotal
+            },
+            generatedAt: new Date().toISOString()
+          }), origin);
+        } catch (error) {
+          await writeJson(res, buildErrorResponse(error, 'Failed to load dashboard summary.', 500), origin);
+        }
+        return;
+      }
+
       if (url.pathname === '/api/unit-contact/health') {
         if (req.method !== 'GET') {
           await writeJson(res, buildErrorResponse(createHttpError('Method Not Allowed', 405), 'Method Not Allowed', 405), origin);

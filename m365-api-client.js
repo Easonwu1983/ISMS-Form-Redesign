@@ -2224,7 +2224,14 @@
       upsertTrainingRoster,
       upsertTrainingRosterBatch,
       deleteTrainingRoster,
-      deleteTrainingRosterBatch
+      deleteTrainingRosterBatch,
+      getDashboardSummary: function (query) {
+        var endpoint = getCorrectiveActionsEndpoint().replace(/\/corrective-actions\/?$/, '/dashboard/summary');
+        var filters = query && typeof query === 'object' ? query : {};
+        var params = Object.entries(filters).filter(function (kv) { return cleanText(kv[1]); }).map(function (kv) { return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(kv[1]); }).join('&');
+        var url = params ? (endpoint + '?' + params) : endpoint;
+        return requestJson(url, { method: 'GET', sharedHeaders: getCorrectiveActionsSharedHeaders() });
+      }
     };
   };
 })();

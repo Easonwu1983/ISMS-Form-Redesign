@@ -420,6 +420,11 @@
         initUnitCascade,
         syncCorrectiveActionsFromM365,
         syncUsersFromM365,
+        fetchDashboardSummary: function (options) {
+          var client = getM365ApiClient();
+          if (typeof client.getDashboardSummary !== 'function') return Promise.resolve({ ok: false, data: null });
+          return client.getDashboardSummary(options).then(function (data) { return { ok: true, data: data }; }).catch(function (err) { return { ok: false, error: String(err && err.message || err || ''), data: null }; });
+        },
         submitCreateCase,
         submitDeleteCase,
         submitRespondCase,
