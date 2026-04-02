@@ -2225,6 +2225,13 @@
       upsertTrainingRosterBatch,
       deleteTrainingRoster,
       deleteTrainingRosterBatch,
+      getMyTasks: function (query) {
+        var endpoint = getCorrectiveActionsEndpoint().replace(/\/corrective-actions\/?$/, '/my-tasks');
+        var filters = query && typeof query === 'object' ? query : {};
+        var params = Object.entries(filters).filter(function (kv) { return cleanText(kv[1]); }).map(function (kv) { return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(kv[1]); }).join('&');
+        var url = params ? (endpoint + '?' + params) : endpoint;
+        return requestJson(url, { method: 'GET', sharedHeaders: getCorrectiveActionsSharedHeaders() });
+      },
       getDashboardSummary: function (query) {
         var endpoint = getCorrectiveActionsEndpoint().replace(/\/corrective-actions\/?$/, '/dashboard/summary');
         var filters = query && typeof query === 'object' ? query : {};

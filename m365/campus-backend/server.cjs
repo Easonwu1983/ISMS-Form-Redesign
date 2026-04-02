@@ -1527,6 +1527,86 @@ function createServer() {
     }
 
     try {
+      // ── My tasks endpoint (all authenticated users) ──
+      if (url.pathname === '/api/my-tasks' && req.method === 'GET') {
+        try {
+          const authz = await requestAuthz.requireAuthenticatedUser(req);
+          const username = cleanText(authz.username);
+          const units = Array.isArray(authz.authorizedUnits) ? authz.authorizedUnits.filter(Boolean) : [];
+          const auditYear = cleanText(url.searchParams && url.searchParams.get('auditYear')) || String(new Date().getFullYear() - 1911);
+          const unitPlaceholders = units.map(function (_, i) { return '$' + (i + 2); });
+          const unitClause = unitPlaceholders.length ? 'unit = ANY($2)' : 'FALSE';
+
+          const [myChecklists, myTraining, myCases] = await Promise.all([
+            units.length ? db.queryAll('SELECT checklist_id, unit, status, audit_year FROM checklists WHERE ' + unitClause + ' AND audit_year = $1 ORDER BY updated_at DESC LIMIT 10', [auditYear].concat([units])) : Promise.resolve([]),
+            units.length ? db.queryAll('SELECT form_id, unit, status, training_year, completion_rate FROM training_forms WHERE ' + unitClause + ' AND training_year = $1 ORDER BY updated_at DESC LIMIT 10', [auditYear].concat([units])) : Promise.resolve([]),
+            db.queryAll("SELECT case_id, handler_unit, handler_name, status, corrective_due_date, deficiency_type FROM corrective_actions WHERE (LOWER(handler_username) = $1 OR handler_unit = ANY($2)) AND status NOT IN ('結案') ORDER BY corrective_due_date LIMIT 10", [username.toLowerCase(), units])
+          ]);
+
+          const draftChecklists = (myChecklists || []).filter(function (r) { return r.status === '草稿'; });
+          const submittedChecklists = (myChecklists || []).filter(function (r) { return r.status === '已送出'; });
+          const pendingCases = (myCases || []).filter(function (r) { return r.status === '待矯正'; });
+          const allOpenCases = myCases || [];
+          const draftTraining = (myTraining || []).filter(function (r) { return r.status === '暫存' || r.status === '退回更正'; });
+
+          var tasks = [];
+          if (!myChecklists.length) tasks.push({ type: 'checklist', priority: 'high', title: '尚未建立 ' + auditYear + ' 年度檢核表', action: '前往填報', route: '#checklist-fill' });
+          draftChecklists.forEach(function (c) { tasks.push({ type: 'checklist', priority: 'high', title: '檢核表草稿待送出（' + c.unit + '）', action: '繼續填報', route: '#checklist-fill/' + c.checklist_id }); });
+          pendingCases.forEach(function (c) { tasks.push({ type: 'corrective', priority: 'urgent', title: '矯正單待回覆：' + c.case_id, subtitle: c.handler_unit + ' · ' + (c.deficiency_type || ''), action: '填寫回覆', route: '#detail/' + c.case_id }); });
+          draftTraining.forEach(function (t) { tasks.push({ type: 'training', priority: 'medium', title: '教育訓練' + (t.status === '退回更正' ? '退回待修正' : '草稿中') + '（' + t.unit + '）', subtitle: '完成率 ' + (Number(t.completion_rate) || 0) + '%', action: '繼續填報', route: '#training-fill/' + t.form_id }); });
+          if (!myTraining.length && units.length) tasks.push({ type: 'training', priority: 'medium', title: '尚未建立 ' + auditYear + ' 年度教育訓練', action: '前往填報', route: '#training-fill' });
+
+          await writeJson(res, buildJsonResponse(200, {
+            ok: true, tasks: tasks,
+            summary: {
+              checklistStatus: submittedChecklists.length ? '已送出' : (draftChecklists.length ? '草稿中' : '未建立'),
+              openCases: allOpenCases.length,
+              pendingCases: pendingCases.length,
+              trainingStatus: (myTraining || []).some(function (t) { return t.status === '已完成填報'; }) ? '已完成' : (draftTraining.length ? '填報中' : '未建立')
+            },
+            units: units, auditYear: auditYear
+          }), origin);
+        } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to load my tasks.', 500), origin); }
+        return;
+      }
+
+      // ── Batch reminder endpoint (admin only) ──
+      if (url.pathname === '/api/batch-reminder' && req.method === 'POST') {
+        try {
+          const authz = await requestAuthz.requireAuthenticatedUser(req);
+          requestAuthz.requireAdmin(authz, 'Only admin can send batch reminders');
+          const envelope = await parseJsonBody(req);
+          const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
+          const auditYear = cleanText(payload.auditYear) || String(new Date().getFullYear() - 1911);
+          // Find all units that haven't submitted checklists
+          const submitted = await db.queryAll(`SELECT DISTINCT unit FROM checklists WHERE audit_year = $1 AND status = '已送出'`, [auditYear]);
+          const submittedUnits = new Set((submitted || []).map(function (r) { return cleanText(r.unit); }));
+          // Get all unit admin emails for non-submitted units
+          const allAdmins = await db.queryAll(`SELECT username, display_name, email, primary_unit FROM system_users WHERE role = '單位管理員'`);
+          const targets = (allAdmins || []).filter(function (u) { return u.email && u.primary_unit && !submittedUnits.has(cleanText(u.primary_unit)); });
+          let sent = 0;
+          const portalUrl = cleanText(process.env.ISMS_PORTAL_URL) || 'https://isms-campus-portal.pages.dev/';
+          for (const target of targets.slice(0, 50)) { // Cap at 50 to prevent spam
+            try {
+              await sendGraphMail({
+                graphRequest, getDelegatedToken, to: cleanText(target.email),
+                subject: 'ISMS 檢核表催辦通知：' + auditYear + ' 年度內稽檢核表尚未送出',
+                html: buildHtmlDocument([
+                  '您好，' + cleanText(target.display_name) + '：',
+                  '您負責的「' + cleanText(target.primary_unit) + '」尚未完成 ' + auditYear + ' 年度內稽檢核表。',
+                  '請儘速登入系統完成填報並送出。',
+                  '系統入口：' + portalUrl,
+                  '如有問題請聯繫資安管理中心。'
+                ])
+              });
+              sent++;
+            } catch (_) {}
+          }
+          await writeJson(res, buildJsonResponse(200, { ok: true, totalTargets: targets.length, sent, submittedUnits: submittedUnits.size, auditYear }), origin);
+        } catch (error) { await writeJson(res, buildErrorResponse(error, 'Batch reminder failed.', 500), origin); }
+        return;
+      }
+
       // ── Audit report PDF download (admin only) ──
       if (url.pathname === '/api/audit-report/pdf' && req.method === 'GET') {
         try {
@@ -1597,7 +1677,7 @@ function createServer() {
           const auditYear = cleanText(url.searchParams && url.searchParams.get('auditYear')) || String(new Date().getFullYear() - 1911);
           const trainingYear = cleanText(url.searchParams && url.searchParams.get('trainingYear')) || auditYear;
 
-          const [checklistStats, trainingStats, trainingByUnit, pendingApps, pendingCases] = await Promise.all([
+          const [checklistStats, trainingStats, trainingByUnit, checklistByUnit, pendingApps, pendingCases] = await Promise.all([
             db.queryOne(`SELECT
               COUNT(DISTINCT unit) FILTER (WHERE status = '已送出')::int AS submitted_units,
               COUNT(DISTINCT unit)::int AS total_filing_units,
@@ -1617,6 +1697,7 @@ function createServer() {
               COALESCE(AVG(completion_rate), 0)::numeric(5,2) AS avg_rate
               FROM training_forms WHERE training_year = $1
               GROUP BY stats_unit, status ORDER BY stats_unit`, [trainingYear]),
+            db.queryAll(`SELECT unit, status, COUNT(*)::int AS count FROM checklists WHERE audit_year = $1 GROUP BY unit, status ORDER BY unit`, [auditYear]),
             db.queryOne(`SELECT
               COUNT(*) FILTER (WHERE status = 'pending_review')::int AS pending_review,
               COUNT(*) FILTER (WHERE status = 'activation_pending')::int AS activation_pending
@@ -1645,7 +1726,8 @@ function createServer() {
               notFiledUnits: totalUnits - submittedUnits,
               draftCount: Number(cs.draft_count) || 0,
               submittedCount: Number(cs.submitted_count) || 0,
-              auditYear
+              auditYear,
+              byUnit: (checklistByUnit || []).map(function (r) { return { unit: r.unit, status: r.status, count: Number(r.count) || 0 }; })
             },
             training: {
               totalForms: Number(ts.total_forms) || 0,

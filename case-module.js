@@ -61,6 +61,7 @@
       syncCorrectiveActionsFromM365,
       syncUsersFromM365,
       fetchDashboardSummary,
+      fetchMyTasks,
       submitCreateCase,
       submitDeleteCase,
       submitRespondCase,
@@ -528,6 +529,8 @@
 
     var user = currentUser();
     var showAuditProgress = user && user.role === ROLES.ADMIN;
+    var showMyTasks = user && user.role !== ROLES.ADMIN;
+    var myTasksSlotId = 'my-tasks-slot';
     var auditSlotIds = { filingStat: 'audit-filing-stat', trainingStat: 'audit-training-stat', pendingStat: 'audit-pending-stat', filing: 'audit-filing-slot', training: 'audit-training-slot' };
     var currentAuditYear = String(new Date().getFullYear() - 1911);
     var auditYearOptions = [currentAuditYear, String(Number(currentAuditYear) - 1), String(Number(currentAuditYear) - 2)].map(function (y) {
@@ -546,8 +549,14 @@
       + '</div></section>'
     ) : '';
 
+    var myTasksHtml = showMyTasks ? (
+      '<section class="dashboard-my-tasks"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('list-checks', 'icon-sm') + ' 我的待辦事項</h2></div>'
+      + '<div id="' + myTasksSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入您的待辦事項…</div></section>'
+    ) : '';
+
     document.getElementById('app').innerHTML = '<div class="animate-in">'
         + auditProgressHtml
+        + myTasksHtml
         + '<section class="dashboard-hero dashboard-hero--integrated"><h1 class="sr-only" data-route-heading="true">儀表板</h1><div class="dashboard-hero-grid"><div class="dashboard-hero-copy dashboard-hero-copy--integrated"><p class="dashboard-hero-text dashboard-hero-text--lead">集中掌握矯正單進度、逾期風險與最近活動，讓主管與承辦人可以在同一個入口快速判斷優先順序。</p><div class="dashboard-meta-row">' + heroMeta + '</div><div class="dashboard-hero-actions">' + createBtn + '</div></div>' + heroSide + '</div></section>'
       + '<div class="stats-grid">'
       + buildCaseStatCard('total', 'files', '—', '矯正單總數')
@@ -640,6 +649,65 @@
     });
 
     // Audit progress hydration (admin only, parallel to CAR hydration)
+    // ── First-time user guide ──
+    var guideKey = '__isms_guide_shown_' + (user && user.username || 'anon');
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem(guideKey)) {
+      localStorage.setItem(guideKey, '1');
+      window.setTimeout(function () {
+        if (renderToken !== dashboardRenderToken) return;
+        if (showMyTasks) {
+          toast('歡迎！請先從「待辦事項」開始，完成您的檢核表填報。', 'info');
+          window.setTimeout(function () { toast('提示：左側選單可以查看矯正單和教育訓練統計。', 'info'); }, 3000);
+        } else {
+          toast('歡迎！儀表板顯示全校稽核進度。', 'info');
+          window.setTimeout(function () { toast('提示：向下滾動可查看矯正單狀態分布。', 'info'); }, 3000);
+        }
+      }, 1500);
+    }
+
+    // ── My Tasks hydration (unit admin only) ──
+    if (showMyTasks && typeof fetchMyTasks === 'function') {
+      fetchMyTasks().then(function (result) {
+        if (renderToken !== dashboardRenderToken) return;
+        var slot = document.getElementById(myTasksSlotId);
+        if (!slot) return;
+        slot.classList.remove('dashboard-card-loading');
+        slot.removeAttribute('aria-busy');
+        if (!result || !result.ok || !result.data) {
+          slot.innerHTML = '<div class="card" style="padding:20px"><div class="empty-state empty-state--compact"><div class="empty-state-title">無法載入待辦事項</div></div></div>';
+          return;
+        }
+        var tasks = Array.isArray(result.data.tasks) ? result.data.tasks : [];
+        var summary = result.data.summary || {};
+        if (!tasks.length) {
+          slot.innerHTML = '<div class="card" style="padding:24px"><div class="empty-state"><div class="empty-state-icon">' + ic('check-circle-2') + '</div><div class="empty-state-title">太棒了！目前沒有待辦事項</div><div class="empty-state-desc">所有檢核表已送出、矯正單已處理完畢。</div></div></div>';
+          scheduleRefreshIcons();
+          return;
+        }
+        var priorityIcons = { urgent: 'alert-circle', high: 'alert-triangle', medium: 'clock' };
+        var priorityColors = { urgent: '#ef4444', high: '#f59e0b', medium: '#3b82f6' };
+        var taskCards = tasks.map(function (t) {
+          var iconName = priorityIcons[t.priority] || 'circle';
+          var color = priorityColors[t.priority] || '#94a3b8';
+          return '<a href="' + esc(t.route || '#') + '" class="my-task-card" style="border-left:3px solid ' + color + '">'
+            + '<div class="my-task-icon" style="color:' + color + '">' + ic(iconName, 'icon-sm') + '</div>'
+            + '<div class="my-task-content"><div class="my-task-title">' + esc(t.title) + '</div>'
+            + (t.subtitle ? '<div class="my-task-subtitle">' + esc(t.subtitle) + '</div>' : '')
+            + '</div>'
+            + '<span class="my-task-action btn btn-sm btn-primary">' + esc(t.action || '處理') + '</span></a>';
+        }).join('');
+        var summaryHtml = '<div class="my-tasks-summary">'
+          + '<span class="my-tasks-chip ' + (summary.checklistStatus === '已送出' ? 'chip-success' : 'chip-warning') + '">' + ic(summary.checklistStatus === '已送出' ? 'check-circle-2' : 'file-edit', 'icon-xs') + ' 檢核表：' + esc(summary.checklistStatus || '未知') + '</span>'
+          + '<span class="my-tasks-chip ' + (summary.openCases > 0 ? 'chip-warning' : 'chip-success') + '">' + ic(summary.openCases > 0 ? 'alert-triangle' : 'check-circle-2', 'icon-xs') + ' 矯正單：' + (summary.openCases || 0) + ' 件開放</span>'
+          + '<span class="my-tasks-chip ' + (summary.trainingStatus === '已完成' ? 'chip-success' : 'chip-warning') + '">' + ic(summary.trainingStatus === '已完成' ? 'check-circle-2' : 'graduation-cap', 'icon-xs') + ' 教育訓練：' + esc(summary.trainingStatus || '未知') + '</span>'
+          + '</div>';
+        slot.innerHTML = '<div class="card" style="padding:0">'
+          + '<div style="padding:16px 20px;border-bottom:1px solid var(--border-color)">' + summaryHtml + '</div>'
+          + '<div class="my-tasks-list">' + taskCards + '</div></div>';
+        scheduleRefreshIcons();
+      }).catch(function () {});
+    }
+
     if (showAuditProgress && typeof fetchDashboardSummary === 'function') {
       var selectedYear = (document.getElementById('audit-year-select') || {}).value || currentAuditYear;
       fetchDashboardSummary({ auditYear: selectedYear, trainingYear: selectedYear }).then(function (result) {

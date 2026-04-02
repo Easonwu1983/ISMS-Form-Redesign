@@ -420,6 +420,11 @@
         initUnitCascade,
         syncCorrectiveActionsFromM365,
         syncUsersFromM365,
+        fetchMyTasks: function (options) {
+          var client = getM365ApiClient();
+          if (typeof client.getMyTasks !== 'function') return Promise.resolve({ ok: false, data: null });
+          return client.getMyTasks(options).then(function (d) { return { ok: true, data: d }; }).catch(function (e) { return { ok: false, error: String(e && e.message || e || ''), data: null }; });
+        },
         fetchDashboardSummary: function (options) {
           var client = getM365ApiClient();
           if (typeof client.getDashboardSummary !== 'function') return Promise.resolve({ ok: false, data: null });

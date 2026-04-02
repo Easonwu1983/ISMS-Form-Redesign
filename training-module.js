@@ -4061,7 +4061,11 @@
         toast('已自動定位到本次匯入的名單列', 'info');
       }
       if (fallbackWarning) toast(fallbackWarning, 'info');
-      if (importErrors.length) toast(importErrors[0], 'error');
+      if (importErrors.length) {
+        toast('匯入有 ' + importErrors.length + ' 筆錯誤', 'error');
+        importErrors.slice(0, 5).forEach(function (err, i) { toast('錯誤 ' + (i + 1) + '：' + err, 'error'); });
+        if (importErrors.length > 5) toast('...及其他 ' + (importErrors.length - 5) + ' 筆錯誤', 'info');
+      }
       });
     });
 
