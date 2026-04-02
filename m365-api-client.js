@@ -11,10 +11,10 @@
       getSessionAuthHeaders
     } = deps;
 
-    const CONTRACT_VERSION = '2026-03-20';
-    const CORRECTIVE_ACTIONS_CONTRACT_VERSION = '2026-03-12';
-    const CHECKLISTS_CONTRACT_VERSION = '2026-03-12';
-    const TRAINING_CONTRACT_VERSION = '2026-03-12';
+    const CONTRACT_VERSION = '2026-04-02';
+    const CORRECTIVE_ACTIONS_CONTRACT_VERSION = '2026-04-02';
+    const CHECKLISTS_CONTRACT_VERSION = '2026-04-02';
+    const TRAINING_CONTRACT_VERSION = '2026-04-02';
     const CORRECTIVE_ACTION_ACTIONS = {
       CREATE: 'corrective-action.create',
       RESPOND: 'corrective-action.respond',

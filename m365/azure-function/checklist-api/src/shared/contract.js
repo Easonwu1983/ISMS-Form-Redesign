@@ -1,4 +1,4 @@
-const CONTRACT_VERSION = '2026-03-12';
+const CONTRACT_VERSION = '2026-04-02';
 
 const ACTIONS = {
   LIST: 'checklist.list',

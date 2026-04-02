@@ -1,4 +1,4 @@
-﻿const CONTRACT_VERSION = '2026-03-14';
+﻿const CONTRACT_VERSION = '2026-04-02';
 
 function cleanText(value) {
   return String(value || '').trim();

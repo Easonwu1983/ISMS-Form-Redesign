@@ -609,18 +609,7 @@ body {
 }
 
 
-.sidebar-logo {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-color);
-  height: 56px;
-  min-height: 56px;
-  max-height: 56px;
-  flex-shrink: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+/* .sidebar-logo — consolidated to single definition at line ~6654 */
 
 .sidebar-brand-icon {
   flex-shrink: 0;
@@ -5062,18 +5051,7 @@ body {
   pointer-events: none;
 }
 
-.sidebar-logo {
-  position: relative;
-  padding: 10px 16px;
-  min-height: 56px;
-  height: 56px;
-  max-height: 56px;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid rgba(219, 231, 244, 0.96);
-  overflow: hidden;
-}
+/* .sidebar-logo — consolidated to single definition at line ~6654 */
 
 .sidebar-brand-icon {
   width: 32px;

@@ -869,15 +869,15 @@
     hideBusyState,
     runWithBusyState
   } = appUiBridge;
-  const SYSTEM_USERS_CONTRACT_VERSION = '2026-03-12';
-  const REVIEW_SCOPE_CONTRACT_VERSION = '2026-03-13';
-  const AUDIT_TRAIL_CONTRACT_VERSION = '2026-03-14';
+  const SYSTEM_USERS_CONTRACT_VERSION = '2026-04-02';
+  const REVIEW_SCOPE_CONTRACT_VERSION = '2026-04-02';
+  const AUDIT_TRAIL_CONTRACT_VERSION = '2026-04-02';
   const SYSTEM_USER_ACTIONS = {
     UPSERT: 'system-user.upsert',
     DELETE: 'system-user.delete',
     RESET_PASSWORD: 'system-user.reset-password'
   };
-  const AUTH_CONTRACT_VERSION = '2026-03-13';
+  const AUTH_CONTRACT_VERSION = '2026-04-02';
     const AUTH_ACTIONS = {
       LOGIN: 'auth.login',
       VERIFY: 'auth.verify',
@@ -889,7 +889,7 @@
     const REVIEW_SCOPE_ACTIONS = {
       REPLACE: 'review-scope.replace'
     };
-  const ATTACHMENT_CONTRACT_VERSION = '2026-03-13';
+  const ATTACHMENT_CONTRACT_VERSION = '2026-04-02';
   const ATTACHMENT_ACTIONS = {
     UPLOAD: 'attachment.upload',
     DELETE: 'attachment.delete'

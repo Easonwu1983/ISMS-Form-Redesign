@@ -1,4 +1,4 @@
-﻿const CONTRACT_VERSION = '2026-03-13';
+﻿const CONTRACT_VERSION = '2026-04-02';
 
 const AUTH_ACTIONS = {
   LOGIN: 'auth.login',

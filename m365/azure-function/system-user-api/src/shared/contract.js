@@ -1,7 +1,7 @@
 ﻿const crypto = require('crypto');
 
 
-const CONTRACT_VERSION = '2026-03-24';
+const CONTRACT_VERSION = '2026-04-02';
 
 const USER_ACTIONS = {
   LIST: 'system-user.list',

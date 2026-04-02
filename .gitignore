@@ -42,3 +42,15 @@ infra/cloudflare/cloudflared-config.generated.yml
 .runtime/cloudflare-quick-tunnel.out.log
 .runtime/cloudflare-quick-tunnel.err.log
 .runtime/cloudflare-quick-tunnel.url
+
+# Temporary/debug files
+tmp_*
+.tmp_*
+.tmp-*
+*.bg.err.log
+*.bg.out.log
+cloudflared-login.*
+pdf-extract.txt
+docx-extract.txt
+docx-extract-readable.txt
+units-data.min.json
