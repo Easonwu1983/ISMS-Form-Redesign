@@ -58,8 +58,7 @@
         var handler = window.__ismsAssetActions[key];
         if (typeof handler !== 'function') return;
         e.preventDefault();
-        e.stopPropagation();
-        handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) });
+        try { handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) }); } catch (_) {}
       }, true);
     }
     function bindActions(handlers) {
