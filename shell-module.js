@@ -818,21 +818,16 @@
       renderSidebar();
       renderHeader();
       closeSidebar();
-      // ── Route transition: fade out → skeleton → fade in ──
-      var appEl = document.getElementById('app');
-      if (appEl && appEl.innerHTML.length > 100) {
-        appEl.classList.add('route-fade-out');
-      }
-      setTimeout(function () {
-        if (appEl) {
-          appEl.classList.remove('route-fade-out');
-          if (!appEl.querySelector('.skeleton-container')) {
-            appEl.innerHTML = '<div class="skeleton-container"><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-grid"><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div></div></div>';
-          }
-        }
-      }, 130);
       setRouteLoadingState(true);
       var thisGeneration = ++routeRenderGeneration;
+      // ── Route transition: skeleton placeholder (only if render hasn't finished yet) ──
+      var appEl = document.getElementById('app');
+      setTimeout(function () {
+        if (thisGeneration !== routeRenderGeneration) return;
+        if (appEl && !appEl.querySelector('.skeleton-container') && !appEl.querySelector('.animate-in') && !appEl.querySelector('.page-title') && !appEl.querySelector('.dashboard-section-title')) {
+          appEl.innerHTML = '<div class="skeleton-container animate-in"><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-grid"><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div></div></div>';
+        }
+      }, 300);
       var renderAttempt = 0;
       function attemptRender() {
         if (thisGeneration !== routeRenderGeneration) return Promise.resolve();
