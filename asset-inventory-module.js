@@ -42,6 +42,150 @@
 
     const CIA_VALUE_MAP = { '\u666e': 1, '\u4e2d': 2, '\u9ad8': 3 };
 
+    // -- Complete control measures data (附表十) --
+    var APPENDIX10_DATA = [
+      { d: '存取控制', c: '帳號管理', l: '高', t: '應依機關規定之情況及條件，使用資通系統' },
+      { d: '存取控制', c: '帳號管理', l: '高', t: '監控資通系統帳號，如發現帳號違常使用時回報管理者' },
+      { d: '存取控制', c: '帳號管理', l: '高', t: '等級「中」之所有控制措施' },
+      { d: '存取控制', c: '帳號管理', l: '中', t: '機關應定義各系統之閒置時間或可使用期限與使用情況及條件' },
+      { d: '存取控制', c: '帳號管理', l: '中', t: '逾越機關所許可之閒置時間或可使用期限時，系統應自動將使用者登出' },
+      { d: '存取控制', c: '帳號管理', l: '中', t: '等級「普」之所有控制措施' },
+      { d: '存取控制', c: '帳號管理', l: '普', t: '建立帳號管理機制，包含帳號之申請、開通、停用及刪除之程序' },
+      { d: '存取控制', c: '帳號管理', l: '普', t: '已逾期之臨時或緊急帳號應刪除或禁用' },
+      { d: '存取控制', c: '帳號管理', l: '普', t: '資通系統閒置帳號應禁用' },
+      { d: '存取控制', c: '帳號管理', l: '普', t: '定期審核資通系統帳號之建立、修改、啟用、禁用及刪除' },
+      { d: '存取控制', c: '最小權限', l: '共通', t: '採最小權限原則，僅允許使用者依機關任務及業務功能完成指派任務所需之授權存取' },
+      { d: '存取控制', c: '遠端存取', l: '高', t: '資通系統遠端存取之來源應為機關已預先定義及管理之存取控制點' },
+      { d: '存取控制', c: '遠端存取', l: '高', t: '應定期審查機關所保留資通系統之遠端存取之設定' },
+      { d: '存取控制', c: '遠端存取', l: '高', t: '等級「普」之所有控制措施' },
+      { d: '存取控制', c: '遠端存取', l: '高、中', t: '每種遠端存取建立使用限制、連線需求及文件化' },
+      { d: '存取控制', c: '遠端存取', l: '高、中', t: '使用者之權限檢查作業應於伺服器端完成' },
+      { d: '存取控制', c: '遠端存取', l: '高、中', t: '應監控遠端存取機關內部網段或資通系統後臺之連線' },
+      { d: '存取控制', c: '遠端存取', l: '高、中', t: '應採用加密機制' },
+      { d: '存取控制', c: '遠端存取', l: '普', t: '對於每一種允許之遠端存取類型，均應先取得授權，建立使用限制' },
+      { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '訂定日誌之記錄時間週期及留存政策，並保留日誌至少六個月' },
+      { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '確保資通系統有記錄特定事件之功能，並決定應記錄之特定資通系統事件' },
+      { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '應記錄資通系統管理者帳號所執行之各項功能' },
+      { d: '事件日誌與可歸責', c: '日誌紀錄內容', l: '共通', t: '日誌應包含事件類型、發生時間、發生位置及使用者身分識別等資訊，採用單一日誌機制，確保輸出格式一致性' },
+      { d: '事件日誌與可歸責', c: '日誌儲存容量', l: '共通', t: '依據日誌儲存需求，配置所需之儲存容量' },
+      { d: '事件日誌與可歸責', c: '日誌處理失效之回應', l: '高', t: '規定需要即時因應之日誌處理失效事件，向特定人員發出警告' },
+      { d: '事件日誌與可歸責', c: '日誌處理失效之回應', l: '中', t: '資通系統於日誌處理失效時，失效後自動執行動作' },
+      { d: '事件日誌與可歸責', c: '時戳及校時', l: '共通', t: '使用系統內部時鐘產生日誌所需時戳，可對應UTC或GMT' },
+      { d: '事件日誌與可歸責', c: '時戳及校時', l: '共通', t: '系統內部時鐘定期與授權時間源同步' },
+      { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '高', t: '備份事件日誌至原系統外之其他系統' },
+      { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '高、中', t: '以邏輯或實體方式確保日誌完整' },
+      { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '普', t: '日誌之存取管理，僅限授權使用者' },
+      { d: '營運持續計畫', c: '系統備份', l: '高', t: '意外事故還原，建立資料備份還原驗證' },
+      { d: '營運持續計畫', c: '系統備份', l: '中', t: '系統中斷可從備份復原' },
+      { d: '營運持續計畫', c: '系統備份', l: '普', t: '定期備份，可含還原驗證' },
+      { d: '營運持續計畫', c: '系統備援', l: '高', t: '啟動備援作為' },
+      { d: '營運持續計畫', c: '系統備援', l: '中', t: '最大可容忍中斷時間內完成備援' },
+      { d: '營運持續計畫', c: '系統備援', l: '普', t: '定期從備援恢復至正常服務' },
+      { d: '識別與鑑別', c: '使用者之識別與鑑別', l: '共通', t: '識別及鑑別使用者，禁止使用共用帳號' },
+      { d: '識別與鑑別', c: '身分驗證管理', l: '高', t: '認證機制採多因子鑑別' },
+      { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '帳戶自動化程序之驗證及密碼變換確認' },
+      { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '使用預設密碼登入系統時，應於登入後立即變更' },
+      { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '帳號鎖定機制：登入驗證失敗達5次後，至少15分鐘內不允許繼續嘗試' },
+      { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '使用密碼進行驗證時，應強制最低密碼複雜度及效期限制' },
+      { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '密碼變更時，至少不可以與前三次使用過之密碼相同' },
+      { d: '識別與鑑別', c: '鑑別資訊回饋', l: '共通', t: '資通系統應遮蔽鑑別過程中之資訊' },
+      { d: '識別與鑑別', c: '加密模組鑑別', l: '高、中', t: '以密碼進行鑑別時，該密碼應加密或經雜湊處理後儲存' },
+      { d: '識別與鑑別', c: '非內部使用者之識別與鑑別', l: '共通', t: '資通系統應識別及鑑別非機關使用者' },
+      { d: '系統與服務獲得', c: '需求階段', l: '共通', t: '針對系統安全需求（含機密性、可用性、完整性）進行確認' },
+      { d: '系統與服務獲得', c: '設計階段', l: '高、中', t: '根據系統功能與要求，識別可能影響系統之威脅，進行風險分析及評估' },
+      { d: '系統與服務獲得', c: '開發階段', l: '高', t: '執行「原始碼品質」安全檢測' },
+      { d: '系統與服務獲得', c: '開發階段', l: '高、中', t: '以安全需求作為驗收點，避免常見漏洞' },
+      { d: '系統與服務獲得', c: '測試階段', l: '高', t: '執行「滲透測試」安全檢測' },
+      { d: '系統與服務獲得', c: '測試階段', l: '高、中', t: '執行「弱點掃描」安全檢測' },
+      { d: '系統與服務獲得', c: '部署與維運階段', l: '高', t: '版本異動及變更管理' },
+      { d: '系統與服務獲得', c: '部署與維運階段', l: '中', t: '部署環境規範' },
+      { d: '系統與服務獲得', c: '部署與維運階段', l: '普', t: '識別無授權行為、維護紀錄' },
+      { d: '系統與服務獲得', c: '委外階段', l: '共通', t: '開發委外需將系統發展生命週期各階段安全需求納入委外契約' },
+      { d: '系統與服務獲得', c: '獲得程序', l: '高、中', t: '開發、測試及正式作業環境隔離' },
+      { d: '系統與服務獲得', c: '獲得程序', l: '普', t: '識別使用第三方軟體、服務' },
+      { d: '系統與服務獲得', c: '系統文件', l: '共通', t: '應儲存管理系統發展生命週期之相關文件' },
+      { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '高', t: '使用公開國際標準加密、到期換憑、加密連線' },
+      { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '中', t: '加密金鑰或強度到期應汰換' },
+      { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '普', t: '資通系統傳輸應加密' },
+      { d: '系統與通訊保護', c: '資料儲存之安全', l: '共通', t: '資通系統應妥善儲存資料並以加密或其他適當方式儲存' },
+      { d: '系統與資訊完整性', c: '漏洞修復', l: '高', t: '定期確認相關漏洞修復之狀態' },
+      { d: '系統與資訊完整性', c: '漏洞修復', l: '中', t: '使用完整性驗證工具' },
+      { d: '系統與資訊完整性', c: '漏洞修復', l: '普', t: '定期檢查並更新，發現漏洞後修復' },
+      { d: '系統與資訊完整性', c: '資通系統監控', l: '高', t: '自動化工具監控進出流量，對特殊事件進行分析' },
+      { d: '系統與資訊完整性', c: '資通系統監控', l: '中', t: '監控資通系統偵測未授權連線' },
+      { d: '系統與資訊完整性', c: '資通系統監控', l: '普', t: '發現資通系統有被入侵跡象時，通報特定人員' },
+      { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '高', t: '完整性檢核工具偵測未授權變更' },
+      { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '中', t: '使用完整性驗證工具，發現違反完整性時通報' },
+      { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '普', t: '使用者輸入資料合法性檢查' }
+    ];
+
+    // -- Determine if a row applies to a given protection level --
+    function isApplicable(protLevel, rowLevel) {
+      if (!protLevel || !rowLevel) return true;
+      if (rowLevel === '共通') return true;
+      if (protLevel === '高') return true;
+      if (protLevel === '中') {
+        return rowLevel === '中' || rowLevel === '普' || rowLevel === '共通'
+          || rowLevel === '高、中' || rowLevel === '高、中、普';
+      }
+      if (protLevel === '普') {
+        return rowLevel === '普' || rowLevel === '共通' || rowLevel === '高、中、普';
+      }
+      return true;
+    }
+
+    // -- Build inline appendix10 checklist for IT system section --
+    function buildInlineAppendix10Checklist(protLevel, existingAssessments) {
+      var existing = {};
+      (existingAssessments || []).forEach(function(a) {
+        existing[a.dimension + '|' + a.code + '|' + a.control] = a;
+      });
+
+      var filtered = APPENDIX10_DATA.filter(function(row) {
+        return isApplicable(protLevel, row.l);
+      });
+
+      if (!protLevel) {
+        return '<div style="color:#888;padding:12px;">請先選擇「系統級別」以顯示對應的防護基準項目</div>';
+      }
+      if (filtered.length === 0) {
+        return '<div style="color:#888;padding:12px;">無適用項目</div>';
+      }
+
+      var html = '<div style="font-size:13px;color:#666;margin-bottom:8px;">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</div>';
+      html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+      html += '<thead><tr style="background:#f8f9fa;">'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:100px;">構面</th>'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:100px;">措施代碼</th>'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;">控制措施</th>'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:100px;text-align:center;">評估</th>'
+        + '</tr></thead><tbody>';
+
+      filtered.forEach(function(row, idx) {
+        var key = row.d + '|' + row.c + '|' + row.t;
+        var saved = existing[key] || {};
+        var isConform = saved.result === '符合';
+        var isNonConform = saved.result === '不符合';
+        var bgColor = isConform ? '#e8f5e9' : isNonConform ? '#ffebee' : '';
+
+        html += '<tr style="' + (bgColor ? 'background:' + bgColor + ';' : '') + '">'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;vertical-align:top;">' + esc(row.d) + '</td>'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;vertical-align:top;">' + esc(row.c) + '</td>'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;">' + esc(row.t) + '</td>'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">'
+          + '<select class="form-select" style="font-size:12px;padding:2px 4px;width:auto;min-width:80px;" name="a10_' + idx + '" data-a10-idx="' + idx + '">'
+          + '<option value="">--</option>'
+          + '<option value="符合"' + (isConform ? ' selected' : '') + '>符合</option>'
+          + '<option value="不符合"' + (isNonConform ? ' selected' : '') + '>不符合</option>'
+          + '</select>'
+          + '</td>'
+          + '</tr>';
+      });
+
+      html += '</tbody></table>';
+      return html;
+    }
+
     // -------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------
@@ -564,6 +708,22 @@
         }
       }
 
+      // Fetch existing appendix10 assessments if editing
+      var existingA10Assessments = [];
+      if (isEdit) {
+        try {
+          var a10Resp = await apiCall('GET', '/' + assetId + '/appendix10');
+          var a10Data = a10Resp && a10Resp.item ? a10Resp.item : a10Resp;
+          if (a10Data && a10Data.assessments) {
+            existingA10Assessments = a10Data.assessments;
+          } else if (Array.isArray(a10Data)) {
+            existingA10Assessments = a10Data;
+          }
+        } catch (_) {
+          // No existing appendix10 data — that's fine
+        }
+      }
+
       var a = asset || {};
       var user = currentUser() || {};
       var currentProtLevel = computeProtectionLevel(a.ciaC || '', a.ciaI || '', a.ciaA || '', a.ciaL || '');
@@ -817,31 +977,12 @@
         + '<label class="form-label">\u7cfb\u7d71\u529f\u80fd\u8aaa\u660e</label>'
         + '<textarea class="form-textarea" id="asset-sys-description" name="systemDescription" rows="2">' + esc(a.systemDescription || '') + '</textarea>'
         + '</div>'
-        + '<hr style="border:none;border-top:1px solid #e9ecef;margin:12px 0;">'
-        + '<div style="font-weight:600;margin-bottom:8px;">\u9632\u8b77\u63aa\u65bd</div>'
-        + '<div class="form-row">'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u5b58\u53d6\u63a7\u5236\u63aa\u65bd</label>'
-        + '<textarea class="form-textarea" id="asset-sys-access-control" name="itAccessControl" rows="2">' + esc(a.itAccessControl || '') + '</textarea>'
+        + '<hr style="border:none;border-top:1px solid #e9ecef;margin:16px 0;">'
+        + '<div style="font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px;">'
+        +   ic('clipboard-check') + ' \u9644\u8868\u5341 \u8cc7\u901a\u7cfb\u7d71\u9632\u8b77\u57fa\u6e96\uff08\u4f9d\u7cfb\u7d71\u7d1a\u5225\u81ea\u52d5\u7be9\u9078\uff09'
         + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u65e5\u8a8c\u7ba1\u7406\u63aa\u65bd</label>'
-        + '<textarea class="form-textarea" id="asset-sys-log-mgmt" name="itLogManagement" rows="2">' + esc(a.itLogManagement || '') + '</textarea>'
-        + '</div>'
-        + '</div>'
-        + '<div class="form-row">'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u60e1\u610f\u7a0b\u5f0f\u9632\u8b77</label>'
-        + '<textarea class="form-textarea" id="asset-sys-malware" name="itMalwareProtection" rows="2">' + esc(a.itMalwareProtection || '') + '</textarea>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u5f31\u9ede\u6aa2\u6e2c\u63aa\u65bd</label>'
-        + '<textarea class="form-textarea" id="asset-sys-vuln-mgmt" name="itVulnerabilityMgmt" rows="2">' + esc(a.itVulnerabilityMgmt || '') + '</textarea>'
-        + '</div>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u5176\u4ed6\u9632\u8b77\u63aa\u65bd</label>'
-        + '<textarea class="form-textarea" id="asset-sys-other" name="itOtherProtection" rows="2">' + esc(a.itOtherProtection || '') + '</textarea>'
+        + '<div id="asset-appendix10-inline">'
+        +   buildInlineAppendix10Checklist(a.systemLevel || '', existingA10Assessments)
         + '</div>'
         + '</div>';
 
@@ -1003,6 +1144,29 @@
           if (payload.ciaA) { payload.availability = payload.ciaA; delete payload.ciaA; }
           if (payload.ciaL) { payload.legalCompliance = payload.ciaL; delete payload.ciaL; }
 
+          // Remove inline appendix10 select fields from payload (they use name="a10_*")
+          Object.keys(payload).forEach(function(k) {
+            if (k.indexOf('a10_') === 0) delete payload[k];
+          });
+
+          // Collect inline appendix10 assessments
+          var a10Selects = form.querySelectorAll('[data-a10-idx]');
+          var a10Assessments = [];
+          var filteredA10Data = APPENDIX10_DATA.filter(function(row) {
+            return isApplicable(payload.systemLevel || '', row.l);
+          });
+          a10Selects.forEach(function(sel, i) {
+            if (sel.value && filteredA10Data[i]) {
+              a10Assessments.push({
+                dimension: filteredA10Data[i].d,
+                code: filteredA10Data[i].c,
+                control: filteredA10Data[i].t,
+                result: sel.value,
+                note: ''
+              });
+            }
+          });
+
           var endpoint = (CONFIG && CONFIG.assetInventoryEndpoint) || '/api/assets';
           var hiddenId = (document.getElementById('asset-id-hidden') || {}).value || '';
           var editMode = !!hiddenId;
@@ -1018,6 +1182,21 @@
               if (data.ok === false) {
                 toast('\u5132\u5b58\u5931\u6557\uff1a' + (data.message || '\u672a\u77e5\u932f\u8aa4'), 'error');
                 return;
+              }
+              // Save appendix10 assessments if this is an IT system with assessments
+              if (payload.isItSystem && a10Assessments.length > 0) {
+                var assetSavedId = data.id || hiddenId;
+                if (assetSavedId) {
+                  fetch(endpoint + '/' + assetSavedId + '/appendix10', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ payload: {
+                      protectionLevel: payload.systemLevel || '',
+                      assessments: a10Assessments
+                    }})
+                  });
+                }
               }
               toast(editMode ? '\u8cc7\u7522\u5df2\u66f4\u65b0' : '\u8cc7\u7522\u5df2\u65b0\u589e', 'success');
               window.location.hash = '#assets';
@@ -1042,9 +1221,26 @@
 
       function onFormChange(e) {
         var target = e.target;
-        if (!target || !target.id) return;
+        if (!target) return;
         var form = document.getElementById('asset-form');
         if (!form) return;
+
+        // Handle inline appendix10 assessment dropdown changes
+        if (target.getAttribute && target.getAttribute('data-a10-idx') !== null) {
+          var tr = target.closest('tr');
+          if (tr) {
+            if (target.value === '\u7b26\u5408') {
+              tr.style.background = '#e8f5e9';
+            } else if (target.value === '\u4e0d\u7b26\u5408') {
+              tr.style.background = '#ffebee';
+            } else {
+              tr.style.background = '';
+            }
+          }
+          return;
+        }
+
+        if (!target.id) return;
 
         switch (target.id) {
           // --- Category -> SubCategory cascade ---
@@ -1083,6 +1279,17 @@
           case 'asset-is-it-system': {
             var itDetails = document.getElementById('asset-it-system-details');
             if (itDetails) itDetails.style.display = target.checked ? '' : 'none';
+            break;
+          }
+
+          // --- isItSystem checkbox -> also reset inline checklist when toggled on ---
+
+          // --- System level change -> rebuild inline appendix10 checklist ---
+          case 'asset-sys-level': {
+            var a10Container = document.getElementById('asset-appendix10-inline');
+            if (a10Container) {
+              a10Container.innerHTML = buildInlineAppendix10Checklist(target.value || '', []);
+            }
             break;
           }
 
@@ -1310,97 +1517,7 @@
       var appEl = document.getElementById('app');
       if (!appEl) return;
 
-      // -- Complete control measures data (附表十) --
-      var APPENDIX10_DATA = [
-        { d: '存取控制', c: '帳號管理', l: '高', t: '應依機關規定之情況及條件，使用資通系統' },
-        { d: '存取控制', c: '帳號管理', l: '高', t: '監控資通系統帳號，如發現帳號違常使用時回報管理者' },
-        { d: '存取控制', c: '帳號管理', l: '高', t: '等級「中」之所有控制措施' },
-        { d: '存取控制', c: '帳號管理', l: '中', t: '機關應定義各系統之閒置時間或可使用期限與使用情況及條件' },
-        { d: '存取控制', c: '帳號管理', l: '中', t: '逾越機關所許可之閒置時間或可使用期限時，系統應自動將使用者登出' },
-        { d: '存取控制', c: '帳號管理', l: '中', t: '等級「普」之所有控制措施' },
-        { d: '存取控制', c: '帳號管理', l: '普', t: '建立帳號管理機制，包含帳號之申請、開通、停用及刪除之程序' },
-        { d: '存取控制', c: '帳號管理', l: '普', t: '已逾期之臨時或緊急帳號應刪除或禁用' },
-        { d: '存取控制', c: '帳號管理', l: '普', t: '資通系統閒置帳號應禁用' },
-        { d: '存取控制', c: '帳號管理', l: '普', t: '定期審核資通系統帳號之建立、修改、啟用、禁用及刪除' },
-        { d: '存取控制', c: '最小權限', l: '共通', t: '採最小權限原則，僅允許使用者依機關任務及業務功能完成指派任務所需之授權存取' },
-        { d: '存取控制', c: '遠端存取', l: '高', t: '資通系統遠端存取之來源應為機關已預先定義及管理之存取控制點' },
-        { d: '存取控制', c: '遠端存取', l: '高', t: '應定期審查機關所保留資通系統之遠端存取之設定' },
-        { d: '存取控制', c: '遠端存取', l: '高', t: '等級「普」之所有控制措施' },
-        { d: '存取控制', c: '遠端存取', l: '高、中', t: '每種遠端存取建立使用限制、連線需求及文件化' },
-        { d: '存取控制', c: '遠端存取', l: '高、中', t: '使用者之權限檢查作業應於伺服器端完成' },
-        { d: '存取控制', c: '遠端存取', l: '高、中', t: '應監控遠端存取機關內部網段或資通系統後臺之連線' },
-        { d: '存取控制', c: '遠端存取', l: '高、中', t: '應採用加密機制' },
-        { d: '存取控制', c: '遠端存取', l: '普', t: '對於每一種允許之遠端存取類型，均應先取得授權，建立使用限制' },
-        { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '訂定日誌之記錄時間週期及留存政策，並保留日誌至少六個月' },
-        { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '確保資通系統有記錄特定事件之功能，並決定應記錄之特定資通系統事件' },
-        { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '應記錄資通系統管理者帳號所執行之各項功能' },
-        { d: '事件日誌與可歸責', c: '日誌紀錄內容', l: '共通', t: '日誌應包含事件類型、發生時間、發生位置及使用者身分識別等資訊，採用單一日誌機制，確保輸出格式一致性' },
-        { d: '事件日誌與可歸責', c: '日誌儲存容量', l: '共通', t: '依據日誌儲存需求，配置所需之儲存容量' },
-        { d: '事件日誌與可歸責', c: '日誌處理失效之回應', l: '高', t: '規定需要即時因應之日誌處理失效事件，向特定人員發出警告' },
-        { d: '事件日誌與可歸責', c: '日誌處理失效之回應', l: '中', t: '資通系統於日誌處理失效時，失效後自動執行動作' },
-        { d: '事件日誌與可歸責', c: '時戳及校時', l: '共通', t: '使用系統內部時鐘產生日誌所需時戳，可對應UTC或GMT' },
-        { d: '事件日誌與可歸責', c: '時戳及校時', l: '共通', t: '系統內部時鐘定期與授權時間源同步' },
-        { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '高', t: '備份事件日誌至原系統外之其他系統' },
-        { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '高、中', t: '以邏輯或實體方式確保日誌完整' },
-        { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '普', t: '日誌之存取管理，僅限授權使用者' },
-        { d: '營運持續計畫', c: '系統備份', l: '高', t: '意外事故還原，建立資料備份還原驗證' },
-        { d: '營運持續計畫', c: '系統備份', l: '中', t: '系統中斷可從備份復原' },
-        { d: '營運持續計畫', c: '系統備份', l: '普', t: '定期備份，可含還原驗證' },
-        { d: '營運持續計畫', c: '系統備援', l: '高', t: '啟動備援作為' },
-        { d: '營運持續計畫', c: '系統備援', l: '中', t: '最大可容忍中斷時間內完成備援' },
-        { d: '營運持續計畫', c: '系統備援', l: '普', t: '定期從備援恢復至正常服務' },
-        { d: '識別與鑑別', c: '使用者之識別與鑑別', l: '共通', t: '識別及鑑別使用者，禁止使用共用帳號' },
-        { d: '識別與鑑別', c: '身分驗證管理', l: '高', t: '認證機制採多因子鑑別' },
-        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '帳戶自動化程序之驗證及密碼變換確認' },
-        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '使用預設密碼登入系統時，應於登入後立即變更' },
-        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '帳號鎖定機制：登入驗證失敗達5次後，至少15分鐘內不允許繼續嘗試' },
-        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '使用密碼進行驗證時，應強制最低密碼複雜度及效期限制' },
-        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '密碼變更時，至少不可以與前三次使用過之密碼相同' },
-        { d: '識別與鑑別', c: '鑑別資訊回饋', l: '共通', t: '資通系統應遮蔽鑑別過程中之資訊' },
-        { d: '識別與鑑別', c: '加密模組鑑別', l: '高、中', t: '以密碼進行鑑別時，該密碼應加密或經雜湊處理後儲存' },
-        { d: '識別與鑑別', c: '非內部使用者之識別與鑑別', l: '共通', t: '資通系統應識別及鑑別非機關使用者' },
-        { d: '系統與服務獲得', c: '需求階段', l: '共通', t: '針對系統安全需求（含機密性、可用性、完整性）進行確認' },
-        { d: '系統與服務獲得', c: '設計階段', l: '高、中', t: '根據系統功能與要求，識別可能影響系統之威脅，進行風險分析及評估' },
-        { d: '系統與服務獲得', c: '開發階段', l: '高', t: '執行「原始碼品質」安全檢測' },
-        { d: '系統與服務獲得', c: '開發階段', l: '高、中', t: '以安全需求作為驗收點，避免常見漏洞' },
-        { d: '系統與服務獲得', c: '測試階段', l: '高', t: '執行「滲透測試」安全檢測' },
-        { d: '系統與服務獲得', c: '測試階段', l: '高、中', t: '執行「弱點掃描」安全檢測' },
-        { d: '系統與服務獲得', c: '部署與維運階段', l: '高', t: '版本異動及變更管理' },
-        { d: '系統與服務獲得', c: '部署與維運階段', l: '中', t: '部署環境規範' },
-        { d: '系統與服務獲得', c: '部署與維運階段', l: '普', t: '識別無授權行為、維護紀錄' },
-        { d: '系統與服務獲得', c: '委外階段', l: '共通', t: '開發委外需將系統發展生命週期各階段安全需求納入委外契約' },
-        { d: '系統與服務獲得', c: '獲得程序', l: '高、中', t: '開發、測試及正式作業環境隔離' },
-        { d: '系統與服務獲得', c: '獲得程序', l: '普', t: '識別使用第三方軟體、服務' },
-        { d: '系統與服務獲得', c: '系統文件', l: '共通', t: '應儲存管理系統發展生命週期之相關文件' },
-        { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '高', t: '使用公開國際標準加密、到期換憑、加密連線' },
-        { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '中', t: '加密金鑰或強度到期應汰換' },
-        { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '普', t: '資通系統傳輸應加密' },
-        { d: '系統與通訊保護', c: '資料儲存之安全', l: '共通', t: '資通系統應妥善儲存資料並以加密或其他適當方式儲存' },
-        { d: '系統與資訊完整性', c: '漏洞修復', l: '高', t: '定期確認相關漏洞修復之狀態' },
-        { d: '系統與資訊完整性', c: '漏洞修復', l: '中', t: '使用完整性驗證工具' },
-        { d: '系統與資訊完整性', c: '漏洞修復', l: '普', t: '定期檢查並更新，發現漏洞後修復' },
-        { d: '系統與資訊完整性', c: '資通系統監控', l: '高', t: '自動化工具監控進出流量，對特殊事件進行分析' },
-        { d: '系統與資訊完整性', c: '資通系統監控', l: '中', t: '監控資通系統偵測未授權連線' },
-        { d: '系統與資訊完整性', c: '資通系統監控', l: '普', t: '發現資通系統有被入侵跡象時，通報特定人員' },
-        { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '高', t: '完整性檢核工具偵測未授權變更' },
-        { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '中', t: '使用完整性驗證工具，發現違反完整性時通報' },
-        { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '普', t: '使用者輸入資料合法性檢查' }
-      ];
-
-      // -- Determine if a row applies to a given protection level --
-      function isApplicable(protLevel, rowLevel) {
-        if (!protLevel || !rowLevel) return true;
-        if (rowLevel === '共通') return true;
-        if (protLevel === '高') return true;
-        if (protLevel === '中') {
-          return rowLevel === '中' || rowLevel === '普' || rowLevel === '共通'
-            || rowLevel === '高、中' || rowLevel === '高、中、普';
-        }
-        if (protLevel === '普') {
-          return rowLevel === '普' || rowLevel === '共通' || rowLevel === '高、中、普';
-        }
-        return true;
-      }
+      // APPENDIX10_DATA and isApplicable are now at module level
 
       // -- Collect unique dimension names for filter --
       var dimensionSet = {};
