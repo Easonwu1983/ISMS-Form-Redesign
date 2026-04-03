@@ -45,6 +45,28 @@
     // -------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------
+
+    // Custom action delegation — replaces registerActionHandlers which
+    // doesn't work across ESM feature-bundle scope boundaries.
+    var _actionHandlers = {};
+    var _delegationInstalled = false;
+    function bindActions(handlers) {
+      Object.keys(handlers).forEach(function (k) { _actionHandlers[k] = handlers[k]; });
+      if (_delegationInstalled) return;
+      _delegationInstalled = true;
+      document.addEventListener('click', function (e) {
+        var el = e.target.closest('[data-action]');
+        if (!el) return;
+        var action = el.getAttribute('data-action');
+        // support both "app.XXX" and "XXX" for flexibility
+        var handler = _actionHandlers[action] || _actionHandlers[action.replace(/^app\./, '')];
+        if (typeof handler !== 'function') return;
+        e.preventDefault();
+        e.stopPropagation();
+        handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) });
+      }, true); // capture phase to fire before other handlers
+    }
+
     function scheduleRefreshIcons() {
       if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
         window.requestAnimationFrame(refreshIcons);
@@ -303,7 +325,7 @@
       scheduleRefreshIcons();
 
       // Set up event handlers
-      registerActionHandlers('app', {
+      bindActions({
         createAsset: function () {
           navigate('asset-create');
         },
@@ -513,7 +535,7 @@
             + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
             + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
           scheduleRefreshIcons();
-          registerActionHandlers('app', { backToList: function () { navigate('assets'); } });
+          bindActions({ backToList: function () { navigate('assets'); } });
           return;
         }
       }
@@ -678,7 +700,7 @@
       scheduleRefreshIcons();
 
       // Register action handlers
-      registerActionHandlers('app', {
+      bindActions({
         backToList: function () {
           navigate('assets');
         },
@@ -835,7 +857,7 @@
           + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
           + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
         scheduleRefreshIcons();
-        registerActionHandlers('app', { backToList: function () { navigate('assets'); } });
+        bindActions({ backToList: function () { navigate('assets'); } });
         return;
       }
 
@@ -973,7 +995,7 @@
 
       scheduleRefreshIcons();
 
-      registerActionHandlers('app', {
+      bindActions({
         editThisAsset: function () {
           navigate('asset-edit', assetId);
         },
@@ -1124,7 +1146,7 @@
           + ic('alert-triangle') + '<p>載入失敗：' + esc(String(err && err.message || err)) + '</p>'
           + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
         scheduleRefreshIcons();
-        registerActionHandlers('app', {
+        bindActions({
           backToDetail: function () { navigate('asset-detail', assetId); }
         });
         return;
@@ -1321,7 +1343,7 @@
       });
 
       // -- Action handlers --
-      registerActionHandlers('app', {
+      bindActions({
         backToDetail: function () {
           navigate('asset-detail', assetId);
         },
@@ -1387,7 +1409,7 @@
           + ic('alert-triangle') + '<p>載入失敗：' + esc(String(err && err.message || err)) + '</p>'
           + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
         scheduleRefreshIcons();
-        registerActionHandlers('app', {
+        bindActions({
           backToDetail: function () { navigate('asset-detail', assetId); }
         });
         return;
@@ -1628,7 +1650,7 @@
       if (raImpactEl) addPageEventListener(raImpactEl, 'change', updateRiskDisplay);
 
       // -- Action handlers --
-      registerActionHandlers('app', {
+      bindActions({
         backToDetail: function () {
           navigate('asset-detail', assetId);
         },
@@ -1718,7 +1740,7 @@
           + ic('lock') + '<p>\u60a8\u6c92\u6709\u6b0a\u9650\u6aa2\u8996\u6b64\u9801\u9762\u3002</p>'
           + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
         scheduleRefreshIcons();
-        registerActionHandlers('app', { backToList: function () { navigate('assets'); } });
+        bindActions({ backToList: function () { navigate('assets'); } });
         return;
       }
 
@@ -1736,7 +1758,7 @@
 
       scheduleRefreshIcons();
 
-      registerActionHandlers('app', {
+      bindActions({
         backToList: function () {
           navigate('assets');
         }
@@ -1996,7 +2018,7 @@
       }
 
       // Action handlers
-      registerActionHandlers('app', {
+      bindActions({
         backToList: function () {
           navigate('assets');
         },
@@ -2198,7 +2220,7 @@
         return '<span class="badge badge-secondary"><span class="badge-dot"></span>' + esc(type) + '</span>';
       }
 
-      registerActionHandlers('app', {
+      bindActions({
         backToList: function () {
           navigate('assets');
         },
