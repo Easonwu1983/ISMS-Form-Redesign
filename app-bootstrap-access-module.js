@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppBootstrapAccessModule = function createAppBootstrapAccessModule() {
     let m365ApiClientApi = null;

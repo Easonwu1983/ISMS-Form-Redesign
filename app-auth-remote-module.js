@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppAuthRemoteModule = function createAppAuthRemoteModule() {
     function createAccess(options) {

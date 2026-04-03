@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppAttachmentMigrationModule = function createAppAttachmentMigrationModule() {
     function createAccess(options) {

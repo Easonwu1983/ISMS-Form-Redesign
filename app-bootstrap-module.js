@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppBootstrapModule = function createAppBootstrapModule() {
     function scheduleIdleTask(task, timeoutMs) {

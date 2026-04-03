@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createDataModule = function createDataModule(deps) {
     const {

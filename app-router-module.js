@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppRouterModule = function createAppRouterModule() {
     let lastStableHash = '';

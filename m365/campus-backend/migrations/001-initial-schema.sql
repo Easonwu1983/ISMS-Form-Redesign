@@ -1,39 +1,54 @@
 -- ============================================================
 -- ISMS PostgreSQL Schema — M365 SharePoint Migration
--- Version: 001-initial-schema
+-- Version: 001-initial-schema (idempotent)
 -- ============================================================
 
 BEGIN;
 
--- ── ENUM types ──────────────────────────────────────────────
+-- ── ENUM types (use DO block for idempotency) ──────────────
 
-CREATE TYPE application_status AS ENUM (
-  'pending_review', 'returned', 'approved', 'rejected',
-  'activation_pending', 'active'
-);
+DO $$ BEGIN
+  CREATE TYPE application_status AS ENUM (
+    'pending_review', 'returned', 'approved', 'rejected',
+    'activation_pending', 'active'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE contact_type AS ENUM ('primary', 'backup');
+DO $$ BEGIN CREATE TYPE contact_type AS ENUM ('primary', 'backup');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE unit_admin_status AS ENUM (
+DO $$ BEGIN CREATE TYPE unit_admin_status AS ENUM (
   'pending_activation', 'active', 'disabled', 'revoked'
 );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE checklist_sign_status AS ENUM ('待簽核', '已簽核');
-CREATE TYPE checklist_status AS ENUM ('草稿', '已送出');
+DO $$ BEGIN CREATE TYPE checklist_sign_status AS ENUM ('待簽核', '已簽核');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE corrective_deficiency_type AS ENUM ('主要缺失', '次要缺失', '觀察', '建議');
-CREATE TYPE corrective_status AS ENUM ('開立', '待矯正', '已提案', '審核中', '追蹤中', '結案');
+DO $$ BEGIN CREATE TYPE checklist_status AS ENUM ('草稿', '已送出');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE training_status AS ENUM ('暫存', '待簽核', '已完成填報', '退回更正');
-CREATE TYPE roster_source AS ENUM ('import', 'manual');
+DO $$ BEGIN CREATE TYPE corrective_deficiency_type AS ENUM ('主要缺失', '次要缺失', '觀察', '建議');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE user_role AS ENUM ('最高管理員', '單位管理員');
+DO $$ BEGIN CREATE TYPE corrective_status AS ENUM ('開立', '待矯正', '已提案', '審核中', '追蹤中', '結案');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE record_source AS ENUM ('frontend', 'manual', 'migration');
+DO $$ BEGIN CREATE TYPE training_status AS ENUM ('暫存', '待簽核', '已完成填報', '退回更正');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN CREATE TYPE roster_source AS ENUM ('import', 'manual');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN CREATE TYPE user_role AS ENUM ('最高管理員', '單位管理員');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN CREATE TYPE record_source AS ENUM ('frontend', 'manual', 'migration');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── 1. unit_contact_applications ────────────────────────────
 
-CREATE TABLE unit_contact_applications (
+CREATE TABLE IF NOT EXISTS unit_contact_applications (
   id              SERIAL PRIMARY KEY,
   title           VARCHAR(255),
   application_id  VARCHAR(20) NOT NULL UNIQUE,
@@ -76,7 +91,7 @@ CREATE TABLE unit_contact_applications (
 
 -- ── 2. unit_admins ──────────────────────────────────────────
 
-CREATE TABLE unit_admins (
+CREATE TABLE IF NOT EXISTS unit_admins (
   id              SERIAL PRIMARY KEY,
   title           VARCHAR(255),
   external_user_id VARCHAR(255),
@@ -97,7 +112,7 @@ CREATE TABLE unit_admins (
 
 -- ── 3. checklists ───────────────────────────────────────────
 
-CREATE TABLE checklists (
+CREATE TABLE IF NOT EXISTS checklists (
   id              SERIAL PRIMARY KEY,
   checklist_id    VARCHAR(30) NOT NULL UNIQUE,
   document_no     VARCHAR(30),
@@ -128,7 +143,7 @@ CREATE TABLE checklists (
 
 -- ── 4. corrective_actions ───────────────────────────────────
 
-CREATE TABLE corrective_actions (
+CREATE TABLE IF NOT EXISTS corrective_actions (
   id              SERIAL PRIMARY KEY,
   case_id         VARCHAR(30) NOT NULL UNIQUE,
   document_no     VARCHAR(30),
@@ -177,7 +192,7 @@ CREATE TABLE corrective_actions (
 
 -- ── 5. training_forms ───────────────────────────────────────
 
-CREATE TABLE training_forms (
+CREATE TABLE IF NOT EXISTS training_forms (
   id              SERIAL PRIMARY KEY,
   form_id         VARCHAR(30) NOT NULL UNIQUE,
   document_no     VARCHAR(30),
@@ -213,7 +228,7 @@ CREATE TABLE training_forms (
 
 -- ── 6. training_rosters ─────────────────────────────────────
 
-CREATE TABLE training_rosters (
+CREATE TABLE IF NOT EXISTS training_rosters (
   id              SERIAL PRIMARY KEY,
   roster_id       VARCHAR(50) NOT NULL UNIQUE,
   unit            VARCHAR(100) NOT NULL,
@@ -234,7 +249,7 @@ CREATE TABLE training_rosters (
 
 -- ── 7. system_users ─────────────────────────────────────────
 
-CREATE TABLE system_users (
+CREATE TABLE IF NOT EXISTS system_users (
   id              SERIAL PRIMARY KEY,
   username        VARCHAR(100) NOT NULL UNIQUE,
   password        VARCHAR(255),
@@ -261,7 +276,7 @@ CREATE TABLE system_users (
 
 -- ── 8. unit_review_scopes ───────────────────────────────────
 
-CREATE TABLE unit_review_scopes (
+CREATE TABLE IF NOT EXISTS unit_review_scopes (
   id              SERIAL PRIMARY KEY,
   review_scope_key VARCHAR(200) NOT NULL UNIQUE,
   username        VARCHAR(100) NOT NULL,
@@ -274,7 +289,7 @@ CREATE TABLE unit_review_scopes (
 
 -- ── 9. ops_audit ────────────────────────────────────────────
 
-CREATE TABLE ops_audit (
+CREATE TABLE IF NOT EXISTS ops_audit (
   id              SERIAL PRIMARY KEY,
   title           VARCHAR(255),
   event_type      VARCHAR(100) NOT NULL,
@@ -289,7 +304,7 @@ CREATE TABLE ops_audit (
 
 -- ── 10. attachments ─────────────────────────────────────────
 
-CREATE TABLE attachments (
+CREATE TABLE IF NOT EXISTS attachments (
   id              SERIAL PRIMARY KEY,
   attachment_id   VARCHAR(100) NOT NULL UNIQUE,
   scope           VARCHAR(30),
@@ -303,77 +318,67 @@ CREATE TABLE attachments (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── Indexes ─────────────────────────────────────────────────
+-- ── Indexes (all idempotent) ────────────────────────────────
 
--- unit_contact_applications
-CREATE INDEX idx_applications_status ON unit_contact_applications (status);
-CREATE INDEX idx_applications_applicant_email ON unit_contact_applications (applicant_email);
-CREATE INDEX idx_applications_unit_code ON unit_contact_applications (unit_code);
-CREATE INDEX idx_applications_submitted_at ON unit_contact_applications (submitted_at DESC);
-CREATE INDEX idx_applications_updated_at ON unit_contact_applications (updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_applications_status ON unit_contact_applications (status);
+CREATE INDEX IF NOT EXISTS idx_applications_applicant_email ON unit_contact_applications (applicant_email);
+CREATE INDEX IF NOT EXISTS idx_applications_unit_code ON unit_contact_applications (unit_code);
+CREATE INDEX IF NOT EXISTS idx_applications_submitted_at ON unit_contact_applications (submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_applications_updated_at ON unit_contact_applications (updated_at DESC);
 
--- unit_admins
-CREATE INDEX idx_unit_admins_email ON unit_admins (email);
-CREATE INDEX idx_unit_admins_unit_code ON unit_admins (unit_code);
-CREATE INDEX idx_unit_admins_status ON unit_admins (status);
+CREATE INDEX IF NOT EXISTS idx_unit_admins_email ON unit_admins (email);
+CREATE INDEX IF NOT EXISTS idx_unit_admins_unit_code ON unit_admins (unit_code);
+CREATE INDEX IF NOT EXISTS idx_unit_admins_status ON unit_admins (status);
 
--- checklists
-CREATE INDEX idx_checklists_unit_year ON checklists (unit, audit_year);
-CREATE INDEX idx_checklists_unit_code ON checklists (unit_code);
-CREATE INDEX idx_checklists_status ON checklists (status);
-CREATE INDEX idx_checklists_filler_username ON checklists (filler_username);
+CREATE INDEX IF NOT EXISTS idx_checklists_unit_year ON checklists (unit, audit_year);
+CREATE INDEX IF NOT EXISTS idx_checklists_unit_code ON checklists (unit_code);
+CREATE INDEX IF NOT EXISTS idx_checklists_status ON checklists (status);
+CREATE INDEX IF NOT EXISTS idx_checklists_filler_username ON checklists (filler_username);
 
--- corrective_actions
-CREATE INDEX idx_corrective_actions_status ON corrective_actions (status);
-CREATE INDEX idx_corrective_actions_proposer_unit ON corrective_actions (proposer_unit);
-CREATE INDEX idx_corrective_actions_proposer_username ON corrective_actions (proposer_username);
-CREATE INDEX idx_corrective_actions_handler_unit ON corrective_actions (handler_unit);
-CREATE INDEX idx_corrective_actions_handler_username ON corrective_actions (handler_username);
-CREATE INDEX idx_corrective_actions_updated_at ON corrective_actions (updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_corrective_actions_status ON corrective_actions (status);
+CREATE INDEX IF NOT EXISTS idx_corrective_actions_proposer_unit ON corrective_actions (proposer_unit);
+CREATE INDEX IF NOT EXISTS idx_corrective_actions_proposer_username ON corrective_actions (proposer_username);
+CREATE INDEX IF NOT EXISTS idx_corrective_actions_handler_unit ON corrective_actions (handler_unit);
+CREATE INDEX IF NOT EXISTS idx_corrective_actions_handler_username ON corrective_actions (handler_username);
+CREATE INDEX IF NOT EXISTS idx_corrective_actions_updated_at ON corrective_actions (updated_at DESC);
 
--- training_forms
-CREATE INDEX idx_training_forms_unit ON training_forms (unit);
-CREATE INDEX idx_training_forms_unit_code ON training_forms (unit_code);
-CREATE INDEX idx_training_forms_status ON training_forms (status);
-CREATE INDEX idx_training_forms_training_year ON training_forms (training_year);
-CREATE INDEX idx_training_forms_filler_username ON training_forms (filler_username);
+CREATE INDEX IF NOT EXISTS idx_training_forms_unit ON training_forms (unit);
+CREATE INDEX IF NOT EXISTS idx_training_forms_unit_code ON training_forms (unit_code);
+CREATE INDEX IF NOT EXISTS idx_training_forms_status ON training_forms (status);
+CREATE INDEX IF NOT EXISTS idx_training_forms_training_year ON training_forms (training_year);
+CREATE INDEX IF NOT EXISTS idx_training_forms_filler_username ON training_forms (filler_username);
 
--- training_rosters
-CREATE INDEX idx_training_rosters_unit ON training_rosters (unit);
-CREATE INDEX idx_training_rosters_name ON training_rosters (name);
-CREATE INDEX idx_training_rosters_identity ON training_rosters (identity);
+CREATE INDEX IF NOT EXISTS idx_training_rosters_unit ON training_rosters (unit);
+CREATE INDEX IF NOT EXISTS idx_training_rosters_name ON training_rosters (name);
+CREATE INDEX IF NOT EXISTS idx_training_rosters_identity ON training_rosters (identity);
 
--- system_users
-CREATE INDEX idx_system_users_email ON system_users (email);
-CREATE INDEX idx_system_users_role ON system_users (role);
+CREATE INDEX IF NOT EXISTS idx_system_users_email ON system_users (email);
+CREATE INDEX IF NOT EXISTS idx_system_users_role ON system_users (role);
 
--- unit_review_scopes
-CREATE INDEX idx_review_scopes_username ON unit_review_scopes (username);
-CREATE INDEX idx_review_scopes_unit_value ON unit_review_scopes (unit_value);
+CREATE INDEX IF NOT EXISTS idx_review_scopes_username ON unit_review_scopes (username);
+CREATE INDEX IF NOT EXISTS idx_review_scopes_unit_value ON unit_review_scopes (unit_value);
 
--- ops_audit
-CREATE INDEX idx_ops_audit_event_type ON ops_audit (event_type);
-CREATE INDEX idx_ops_audit_occurred_at ON ops_audit (occurred_at DESC);
-CREATE INDEX idx_ops_audit_record_id ON ops_audit (record_id);
-CREATE INDEX idx_ops_audit_actor_email ON ops_audit (actor_email);
+CREATE INDEX IF NOT EXISTS idx_ops_audit_event_type ON ops_audit (event_type);
+CREATE INDEX IF NOT EXISTS idx_ops_audit_occurred_at ON ops_audit (occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ops_audit_record_id ON ops_audit (record_id);
+CREATE INDEX IF NOT EXISTS idx_ops_audit_actor_email ON ops_audit (actor_email);
 
--- attachments
-CREATE INDEX idx_attachments_scope_owner ON attachments (scope, owner_id);
-CREATE INDEX idx_attachments_record_type ON attachments (record_type);
+CREATE INDEX IF NOT EXISTS idx_attachments_scope_owner ON attachments (scope, owner_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_record_type ON attachments (record_type);
 
 -- JSONB GIN indexes
-CREATE INDEX idx_applications_authorized_units ON unit_contact_applications USING GIN (authorized_units_json);
-CREATE INDEX idx_system_users_authorized_units ON system_users USING GIN (authorized_units_json);
-CREATE INDEX idx_system_users_security_roles ON system_users USING GIN (security_roles_json);
-CREATE INDEX idx_corrective_actions_category ON corrective_actions USING GIN (category_json);
+CREATE INDEX IF NOT EXISTS idx_applications_authorized_units ON unit_contact_applications USING GIN (authorized_units_json);
+CREATE INDEX IF NOT EXISTS idx_system_users_authorized_units ON system_users USING GIN (authorized_units_json);
+CREATE INDEX IF NOT EXISTS idx_system_users_security_roles ON system_users USING GIN (security_roles_json);
+CREATE INDEX IF NOT EXISTS idx_corrective_actions_category ON corrective_actions USING GIN (category_json);
 
--- ── Sequences for formatted IDs ─────────────────────────────
+-- ── Sequences (idempotent) ──────────────────────────────────
 
-CREATE SEQUENCE seq_application_id START WITH 1;
-CREATE SEQUENCE seq_checklist_id START WITH 1;
-CREATE SEQUENCE seq_case_id START WITH 1;
-CREATE SEQUENCE seq_training_form_id START WITH 1;
-CREATE SEQUENCE seq_roster_id START WITH 1;
+DO $$ BEGIN CREATE SEQUENCE seq_application_id START WITH 1; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE SEQUENCE seq_checklist_id START WITH 1; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE SEQUENCE seq_case_id START WITH 1; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE SEQUENCE seq_training_form_id START WITH 1; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE SEQUENCE seq_roster_id START WITH 1; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── Helper function: updated_at trigger ─────────────────────
 
@@ -385,27 +390,36 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Triggers (drop + create for idempotency)
+DROP TRIGGER IF EXISTS trg_applications_updated_at ON unit_contact_applications;
 CREATE TRIGGER trg_applications_updated_at BEFORE UPDATE ON unit_contact_applications
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_unit_admins_updated_at ON unit_admins;
 CREATE TRIGGER trg_unit_admins_updated_at BEFORE UPDATE ON unit_admins
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_checklists_updated_at ON checklists;
 CREATE TRIGGER trg_checklists_updated_at BEFORE UPDATE ON checklists
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_corrective_actions_updated_at ON corrective_actions;
 CREATE TRIGGER trg_corrective_actions_updated_at BEFORE UPDATE ON corrective_actions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_training_forms_updated_at ON training_forms;
 CREATE TRIGGER trg_training_forms_updated_at BEFORE UPDATE ON training_forms
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_training_rosters_updated_at ON training_rosters;
 CREATE TRIGGER trg_training_rosters_updated_at BEFORE UPDATE ON training_rosters
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_system_users_updated_at ON system_users;
 CREATE TRIGGER trg_system_users_updated_at BEFORE UPDATE ON system_users
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_review_scopes_updated_at ON unit_review_scopes;
 CREATE TRIGGER trg_review_scopes_updated_at BEFORE UPDATE ON unit_review_scopes
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppRouterRuntimeModule = function createAppRouterRuntimeModule() {
     function buildRouterDeps(options) {

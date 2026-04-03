@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppEntryRuntimeModule = function createAppEntryRuntimeModule() {
     function buildAppEntryDeps(options) {

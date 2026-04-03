@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppCoreModuleAccessModule = function createAppCoreModuleAccessModule() {
     function createAccess(deps) {

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppBridgeRuntimeModule = function createAppBridgeRuntimeModule() {
     function getWindowModule(state, key, factoryName, scriptName, globalSlot) {

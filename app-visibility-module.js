@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppVisibilityModule = function createAppVisibilityModule() {
     let visibleItemsCacheKey = '';

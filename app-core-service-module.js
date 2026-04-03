@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppCoreServiceModule = function createAppCoreServiceModule() {
     function getServiceRegistryModule(state, deps) {

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppFeatureRuntimeModule = function createAppFeatureRuntimeModule() {
     function createAccess(deps) {

@@ -1,3 +1,4 @@
+// @ts-check
 function cleanText(value) {
   return String(value || '').trim();
 }

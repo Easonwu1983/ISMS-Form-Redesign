@@ -1,3 +1,4 @@
+// @ts-check
 ﻿(function () {
   const BASE_CONFIG = {
     unitContactRequestTimeoutMs: 15000,

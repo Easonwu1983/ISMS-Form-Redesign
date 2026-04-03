@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppActionModule = function createAppActionModule() {
     const globalActionHandlers = Object.create(null);

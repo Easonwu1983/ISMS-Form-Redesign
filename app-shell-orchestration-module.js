@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppShellOrchestrationModule = function createAppShellOrchestrationModule() {
     function buildShellModuleDeps(deps) {

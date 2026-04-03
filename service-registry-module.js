@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createServiceRegistryModule = function createServiceRegistryModule() {
     function getBootstrapState() {

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createWorkflowSupportModule = function createWorkflowSupportModule(deps) {
     const {

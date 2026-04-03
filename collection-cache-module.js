@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createCollectionCacheModule = function createCollectionCacheModule() {
     const DEFAULT_BOOTSTRAP_RETRY_DELAYS = Object.freeze([80, 160, 320, 640]);

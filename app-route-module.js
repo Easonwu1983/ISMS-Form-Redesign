@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppRouteModule = function createAppRouteModule(deps) {
     const options = deps && typeof deps === 'object' ? deps : {};

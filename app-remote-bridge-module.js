@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppRemoteBridgeModule = function createAppRemoteBridgeModule() {
     function createAccess(options) {

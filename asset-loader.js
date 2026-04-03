@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   var initialBuildInfo = window.__APP_BUILD_INFO__ && typeof window.__APP_BUILD_INFO__ === 'object'
     ? window.__APP_BUILD_INFO__

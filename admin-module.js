@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAdminModule = function createAdminModule(deps) {
     const {

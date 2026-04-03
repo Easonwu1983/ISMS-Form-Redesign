@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppShellRuntimeModule = function createAppShellRuntimeModule() {
     function buildShellModuleDeps(deps) {

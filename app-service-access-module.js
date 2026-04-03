@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppServiceAccessModule = function createAppServiceAccessModule() {
     const cache = Object.create(null);

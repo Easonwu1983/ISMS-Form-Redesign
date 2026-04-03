@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppAuthSessionModule = function createAppAuthSessionModule() {
     let authenticatedBootstrapKey = '';

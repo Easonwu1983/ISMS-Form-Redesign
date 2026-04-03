@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createCacheInvalidationModule = function createCacheInvalidationModule() {
     const SCOPES = Object.freeze({

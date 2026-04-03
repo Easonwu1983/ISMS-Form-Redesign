@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAdminCollectionCacheModule = function createAdminCollectionCacheModule() {
     function getBaseModule() {

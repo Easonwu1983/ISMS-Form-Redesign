@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAttachmentModule = function createAttachmentModule(deps) {
     const {

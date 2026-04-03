@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppPageShellRuntimeModule = function createAppPageShellRuntimeModule() {
     function createAccess(options) {

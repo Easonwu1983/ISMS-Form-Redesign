@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppAuthSessionRuntimeModule = function createAppAuthSessionRuntimeModule() {
     function buildAuthSessionDeps(deps) {

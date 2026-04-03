@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAuthModule = function createAuthModule(deps) {
     const {

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createPolicyModule = function createPolicyModule(deps) {
     const {

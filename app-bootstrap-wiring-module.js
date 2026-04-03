@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppBootstrapWiringModule = function createAppBootstrapWiringModule() {
     function createWiring(options) {

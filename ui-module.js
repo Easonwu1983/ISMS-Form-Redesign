@@ -1,3 +1,4 @@
+// @ts-check
 ﻿(function () {
   function createPagerModule() {
     function escHtml(value) {

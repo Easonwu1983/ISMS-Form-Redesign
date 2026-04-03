@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppSupportBridgeModule = function createAppSupportBridgeModule() {
     function createAccess(options) {

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppRuntimeServiceModule = function createAppRuntimeServiceModule() {
     function createState() {

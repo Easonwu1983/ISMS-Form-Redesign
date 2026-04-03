@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createTrainingModule = function createTrainingModule(deps) {
     const {

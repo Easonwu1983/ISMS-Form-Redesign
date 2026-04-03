@@ -1,3 +1,4 @@
+// @ts-check
 const CONTRACT_VERSION = '2026-04-02';
 
 const FORM_ACTIONS = {

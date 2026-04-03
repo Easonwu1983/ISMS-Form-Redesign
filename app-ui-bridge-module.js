@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppUiBridgeModule = function createAppUiBridgeModule() {
     function createAccess(options) {

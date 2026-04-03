@@ -1,3 +1,4 @@
+// @ts-check
 ﻿(function () {
   window.createCaseModule = function createCaseModule(deps) {
     const {

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppStartRuntimeModule = function createAppStartRuntimeModule() {
     function createAccess(options) {

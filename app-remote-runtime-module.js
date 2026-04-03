@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppRemoteRuntimeModule = function createAppRemoteRuntimeModule() {
     function createAccess(deps) {

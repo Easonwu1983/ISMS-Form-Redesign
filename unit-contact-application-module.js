@@ -1,3 +1,4 @@
+// @ts-check
 ﻿(function () {
   window.createUnitContactApplicationModule = function createUnitContactApplicationModule(deps) {
     const {

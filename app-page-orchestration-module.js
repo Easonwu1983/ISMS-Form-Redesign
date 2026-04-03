@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppPageOrchestrationModule = function createAppPageOrchestrationModule() {
     function buildRouteWhitelist(deps) {

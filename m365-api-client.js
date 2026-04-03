@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createM365ApiClient = function createM365ApiClient(deps) {
     const {

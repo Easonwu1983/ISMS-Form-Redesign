@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppEntryModule = function createAppEntryModule() {
     function initializeCoreServices(deps, reason) {

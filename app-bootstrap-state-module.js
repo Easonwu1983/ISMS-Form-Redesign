@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   window.createAppBootstrapStateModule = function createAppBootstrapStateModule() {
     function getBootstrapCoordinator(deps) {
