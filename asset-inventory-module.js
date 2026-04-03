@@ -154,7 +154,7 @@
 
       var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
         + '<span style="font-size:13px;color:#666;">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</span>'
-        + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform" style="font-size:12px;padding:3px 10px;">' + ic('check-circle', 'icon-xs') + ' 全部符合</button>'
+        + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform" style="font-size:12px;padding:4px 12px;display:inline-flex;align-items:center;gap:4px;">' + ic('check-circle', 'icon-xs') + ' \u5168\u90e8\u7b26\u5408</button>'
         + '</div>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
       html += '<thead><tr style="background:#f8f9fa;">'
@@ -177,7 +177,7 @@
           + '<td style="padding:4px 8px;border:1px solid #dee2e6;vertical-align:top;">' + esc(row.c) + '</td>'
           + '<td style="padding:4px 8px;border:1px solid #dee2e6;">' + esc(row.t) + '</td>'
           + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">'
-          + '<select class="form-select" style="font-size:12px;padding:2px 4px;width:auto;min-width:80px;" name="a10_' + idx + '" data-a10-idx="' + idx + '">'
+          + '<select class="form-select" style="font-size:12px;padding:2px 4px;width:80px;margin:0 auto;display:block;text-align:center;text-align-last:center;" name="a10_' + idx + '" data-a10-idx="' + idx + '">'
           + '<option value="">--</option>'
           + '<option value="符合"' + (isConform ? ' selected' : '') + '>符合</option>'
           + '<option value="不符合"' + (isNonConform ? ' selected' : '') + '>不符合</option>'
