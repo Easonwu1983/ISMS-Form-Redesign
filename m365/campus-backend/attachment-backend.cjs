@@ -405,7 +405,7 @@ function createAttachmentRouter(deps) {
       const relativePath = cleanText(row.storage_path);
       if (relativePath) {
         const storagePath = path.join(getAttachmentsDir(), relativePath);
-        fs.promises.unlink(storagePath).catch(() => {});
+        fs.promises.unlink(storagePath).catch((err) => { console.warn('[attachment] Failed to delete file:', storagePath, err && err.message); });
       }
 
       await writeJson(res, {

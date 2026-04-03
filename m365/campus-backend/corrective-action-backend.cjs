@@ -163,8 +163,8 @@ function createCorrectiveActionRouter(deps) {
   }
 
   function buildStatusChangeMail(item, oldStatus, newStatus, actorLabel) {
-    var portalUrl = cleanText(process.env.ISMS_PORTAL_URL) || 'https://isms-campus-portal.pages.dev/';
-    var statusLabels = {
+    const portalUrl = cleanText(process.env.ISMS_PORTAL_URL) || 'https://isms-campus-portal.pages.dev/';
+    const statusLabels = {
       '待矯正': '等待您提交矯正措施',
       '已提案': '處理人已提交矯正措施，等待管理者審核',
       '審核中': '管理者正在審核',
@@ -172,7 +172,7 @@ function createCorrectiveActionRouter(deps) {
       '結案': '矯正單已結案',
       '退回': '已退回，請重新修改矯正措施'
     };
-    var actionHint = statusLabels[newStatus] || '狀態已更新';
+    const actionHint = statusLabels[newStatus] || '狀態已更新';
     return {
       subject: 'ISMS 矯正單狀態更新：' + cleanText(item && item.id) + ' → ' + newStatus,
       html: buildHtmlDocument([
@@ -627,16 +627,16 @@ function createCorrectiveActionRouter(deps) {
       console.log('[overdue-check] Found ' + rows.length + ' overdue items.');
       let notified = 0;
       for (const row of rows) {
-        var email = cleanText(row.handler_email);
+        const email = cleanText(row.handler_email);
         if (!email) continue;
-        var result = await trySendStatusChangeMail(
+        const result = await trySendStatusChangeMail(
           { id: row.case_id, handlerUnit: row.handler_unit, handlerName: row.handler_name },
           row.status, '已逾期', '系統自動提醒', email
         );
         if (result && result.sent) notified++;
       }
       // Also notify admin
-      var adminEmail = cleanText(process.env.ISMS_ADMIN_EMAIL);
+      const adminEmail = cleanText(process.env.ISMS_ADMIN_EMAIL);
       if (adminEmail && rows.length > 0) {
         await sendGraphMail({
           graphRequest, getDelegatedToken, to: adminEmail,

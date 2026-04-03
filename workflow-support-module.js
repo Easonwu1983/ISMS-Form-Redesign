@@ -570,6 +570,7 @@
       const html = buildTrainingPrintHtml(payload);
       const win = window.open('', '_blank', 'width=980,height=800');
       if (win) {
+        // document.write is safe here: writing to a blank popup, not the main document
         win.document.open();
         win.document.write(html);
         win.document.close();

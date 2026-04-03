@@ -1563,7 +1563,7 @@ function createServer() {
           const allOpenCases = myCases || [];
           const draftTraining = (myTraining || []).filter(function (r) { return r.status === '暫存' || r.status === '退回更正'; });
 
-          var tasks = [];
+          const tasks = [];
           if (!myChecklists.length) tasks.push({ type: 'checklist', priority: 'high', title: '尚未建立 ' + auditYear + ' 年度檢核表', action: '前往填報', route: '#checklist-fill' });
           draftChecklists.forEach(function (c) { tasks.push({ type: 'checklist', priority: 'high', title: '檢核表草稿待送出（' + c.unit + '）', action: '繼續填報', route: '#checklist-fill/' + c.checklist_id }); });
           pendingCases.forEach(function (c) { tasks.push({ type: 'corrective', priority: 'urgent', title: '矯正單待回覆：' + c.case_id, subtitle: c.handler_unit + ' · ' + (c.deficiency_type || ''), action: '填寫回覆', route: '#detail/' + c.case_id }); });

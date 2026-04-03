@@ -813,7 +813,7 @@
       }
       target.addEventListener(type, listener, options);
       return function () {
-        try { target.removeEventListener(type, listener, options); } catch (_) {}
+        try { target.removeEventListener(type, listener, options); } catch (_) { /* safe cleanup */ }
       };
     }
 

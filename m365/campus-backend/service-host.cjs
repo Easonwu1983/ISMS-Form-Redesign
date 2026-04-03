@@ -162,9 +162,9 @@ let healthFailCount = 0;
 const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const HEALTH_FAIL_THRESHOLD = 3;
 const healthWatchdog = setInterval(function () {
-  var port = Number(process.env.PORT || 8787);
-  var req = require('http').get('http://127.0.0.1:' + port + '/api/auth/health', { timeout: 10000 }, function (res) {
-    var data = '';
+  const port = Number(process.env.PORT || 8787);
+  const req = require('http').get('http://127.0.0.1:' + port + '/api/auth/health', { timeout: 10000 }, function (res) {
+    let data = '';
     res.on('data', function (c) { data += c; });
     res.on('end', function () {
       if (res.statusCode === 200) { healthFailCount = 0; }
@@ -199,7 +199,7 @@ try {
   // and written to ops_audit table instead.
   startAlertSchedule(function (opts) {
     // Write error summary to audit trail instead of sending email
-    var db = require('./db.cjs');
+    const db = require('./db.cjs');
     return db.query(
       'INSERT INTO ops_audit (title, event_type, actor_email, record_id, occurred_at, payload_json) VALUES ($1,$2,$3,$4,$5,$6)',
       ['error-alert', 'system.error_alert', 'system', 'error-alert-' + Date.now(), new Date().toISOString(), JSON.stringify({ subject: opts.subject, errorCount: (opts.html || '').split('<tr>').length - 2 })]
@@ -216,7 +216,7 @@ let overdueCheckTimer = null;
 function scheduleOverdueCheck() {
   // Run first check 10 minutes after startup, then every 24 hours
   overdueCheckTimer = setTimeout(function runOverdueCheck() {
-    var db = require('./db.cjs');
+    const db = require('./db.cjs');
     db.queryAll("SELECT case_id, handler_email, handler_unit, handler_name, corrective_due_date, status FROM corrective_actions WHERE status NOT IN ('結案') AND corrective_due_date < NOW() AND corrective_due_date IS NOT NULL").then(function (rows) {
       console.log('[overdue-schedule] Daily check: found ' + (rows || []).length + ' overdue items.');
     }).catch(function (err) {
@@ -234,6 +234,9 @@ function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`service-host received ${signal}, shutting down gracefully`);
+  // Clean up timers
+  clearInterval(healthWatchdog);
+  if (overdueCheckTimer) clearTimeout(overdueCheckTimer);
   const shutdownTimeout = setTimeout(() => {
     console.error('service-host shutdown timed out after 10s, forcing exit');
     disposeLogger();

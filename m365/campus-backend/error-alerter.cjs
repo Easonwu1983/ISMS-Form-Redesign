@@ -15,6 +15,7 @@ const ALERT_INTERVAL_MS = 15 * 60 * 1000; // 15 分鐘
 const MAX_ERRORS_PER_ALERT = 20;
 const DEDUP_WINDOW_MS = 60 * 60 * 1000; // 1 小時去重
 
+const MAX_BUFFER_SIZE = 500;
 /** @type {Array<{time: string, path: string, status: number, message: string, clientIp: string}>} */
 const errorBuffer = [];
 /** @type {Map<string, number>} */
@@ -30,6 +31,8 @@ function collectError(requestInfo) {
   const now = Date.now();
   // 去重：同一錯誤 1 小時內不重複收集
   if (sentHashes.has(hash) && now - sentHashes.get(hash) < DEDUP_WINDOW_MS) return;
+  // 防止記憶體無限增長
+  if (errorBuffer.length >= MAX_BUFFER_SIZE) errorBuffer.shift();
   errorBuffer.push({
     time: new Date().toISOString(),
     path: String(requestInfo.path || '').substring(0, 200),
@@ -63,15 +66,15 @@ function startAlertSchedule(sendMailFn) {
   if (alertTimer) return;
   alertTimer = setInterval(function () {
     if (!errorBuffer.length) return;
-    var adminEmail = String(process.env.ISMS_ADMIN_EMAIL || '').trim();
+    const adminEmail = String(process.env.ISMS_ADMIN_EMAIL || '').trim();
     if (!adminEmail) {
       console.log('[error-alerter] No ISMS_ADMIN_EMAIL configured, skipping alert for ' + errorBuffer.length + ' errors');
       errorBuffer.length = 0;
       return;
     }
-    var errors = errorBuffer.splice(0, MAX_ERRORS_PER_ALERT);
+    const errors = errorBuffer.splice(0, MAX_ERRORS_PER_ALERT);
     // 記錄已發送的 hash
-    var now = Date.now();
+    const now = Date.now();
     errors.forEach(function (e) { sentHashes.set(getErrorHash(e), now); });
     // 清理過期的 hash
     sentHashes.forEach(function (ts, key) { if (now - ts > DEDUP_WINDOW_MS) sentHashes.delete(key); });

@@ -156,7 +156,7 @@
     function safeRemoveStorage(storage, key) {
       try {
         if (storage && key) storage.removeItem(key);
-      } catch (_) { }
+      } catch (_) { /* storage may be unavailable in private browsing */ }
     }
 
     function parseJsonOrNull(raw) {
@@ -213,7 +213,7 @@
     function setAppTransitionFlag() {
       try {
         window.sessionStorage.setItem(AUTH_APP_TRANSITION_KEY, '1');
-      } catch (_) { }
+      } catch (_) { /* sessionStorage unavailable */ }
     }
 
     function consumeAppTransitionFlag() {

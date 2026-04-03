@@ -422,12 +422,12 @@
         syncCorrectiveActionsFromM365,
         syncUsersFromM365,
         fetchMyTasks: function (options) {
-          var client = getM365ApiClient();
+          const client = getM365ApiClient();
           if (typeof client.getMyTasks !== 'function') return Promise.resolve({ ok: false, data: null });
           return client.getMyTasks(options).then(function (d) { return { ok: true, data: d }; }).catch(function (e) { return { ok: false, error: String(e && e.message || e || ''), data: null }; });
         },
         fetchDashboardSummary: function (options) {
-          var client = getM365ApiClient();
+          const client = getM365ApiClient();
           if (typeof client.getDashboardSummary !== 'function') return Promise.resolve({ ok: false, data: null });
           return client.getDashboardSummary(options).then(function (data) { return { ok: true, data: data }; }).catch(function (err) { return { ok: false, error: String(err && err.message || err || ''), data: null }; });
         },
@@ -458,8 +458,8 @@
     ensureCaseModule
   } = appFeatureRuntime;
   function ensureFeatureScript(scriptNames) {
-    var loader = getRuntimeAssetLoaderModule();
-    var scripts = Array.isArray(scriptNames) ? scriptNames : [scriptNames];
+    const loader = getRuntimeAssetLoaderModule();
+    const scripts = Array.isArray(scriptNames) ? scriptNames : [scriptNames];
     return scripts.reduce(function (promise, scriptName) {
       return promise.then(function () {
         return loader.appendScript(scriptName);
@@ -468,7 +468,7 @@
   }
 
   function ensureFeatureBundle(bundlePath, fallbackScripts) {
-    var loader = getRuntimeAssetLoaderModule();
+    const loader = getRuntimeAssetLoaderModule();
     return loader.appendScript(bundlePath, { type: 'module' }).catch(function (error) {
       window.__ismsWarn('Falling back to legacy feature chain for', bundlePath, error && error.message ? error.message : error);
       return ensureFeatureScript(fallbackScripts);
@@ -1034,9 +1034,9 @@
     return single ? [single] : [];
   }
   function assertSessionNotExpired() {
-    var user = currentUser();
+    const user = currentUser();
     if (!user) return;
-    var expiresRaw = Date.parse(String(user.sessionExpiresAt || '').trim());
+    const expiresRaw = Date.parse(String(user.sessionExpiresAt || '').trim());
     if (Number.isFinite(expiresRaw) && Date.now() >= expiresRaw) {
       throw new Error('登入狀態已過期，請重新登入後再執行操作。');
     }
@@ -1812,14 +1812,14 @@
     }
     try {
       assertSessionNotExpired();
-      var headers = getSessionAuthHeaders();
+      const headers = getSessionAuthHeaders();
       headers['Content-Type'] = 'application/json';
-      var resp = await fetch('/api/corrective-actions/' + encodeURIComponent(caseId) + '/delete', {
+      const resp = await fetch('/api/corrective-actions/' + encodeURIComponent(caseId) + '/delete', {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({ action: 'corrective-action.delete', payload: { id: caseId } })
       });
-      if (!resp.ok) { var errBody = await resp.json().catch(function() { return {}; }); throw new Error(errBody.message || 'Delete failed'); }
+      if (!resp.ok) { const errBody = await resp.json().catch(function() { return {}; }); throw new Error(errBody.message || 'Delete failed'); }
       deleteCorrectiveActionFromStore(caseId);
       return { ok: true, deletedId: caseId, source: 'remote' };
     } catch (error) {
@@ -2973,7 +2973,7 @@
   function resetChecklistSections() { return saveChecklistSections(JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_SECTIONS))); }
 
   // Dynamic alias used throughout the fill/detail views
-  var CHECKLIST_SECTIONS;
+  let CHECKLIST_SECTIONS;
   function refreshChecklistSections() { CHECKLIST_SECTIONS = getChecklistSections(); }
   refreshChecklistSections();
 
@@ -3170,7 +3170,7 @@
 
   /* ─── m365ApiClient auto-initialization after login ─── */
   window.addEventListener('isms:access-profile-changed', function (e) {
-    var detail = e && e.detail;
+    const detail = e && e.detail;
     if (!detail || detail.reason !== 'login') return;
     try {
       getM365ApiClient();

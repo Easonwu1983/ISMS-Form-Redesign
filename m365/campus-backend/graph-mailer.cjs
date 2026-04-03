@@ -17,14 +17,14 @@ function buildHtmlDocument(lines) {
   const body = (Array.isArray(lines) ? lines : [])
     .map(function (line) {
       // Convert URLs to clickable links
-      var escaped = escapeHtml(line);
+      let escaped = escapeHtml(line);
       if (/https?:\/\//.test(line)) {
         escaped = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#2563eb">$1</a>');
       }
       return '<p>' + escaped + '</p>';
     })
     .join('');
-  var footer = '<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 16px"><p style="font-size:12px;color:#94a3b8">本信件由 ISMS 資訊安全管理系統自動發送，請勿直接回覆。<br><a href="' + escapeHtml(portalUrl) + '" style="color:#2563eb">登入系統</a></p>';
+  const footer = '<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 16px"><p style="font-size:12px;color:#94a3b8">本信件由 ISMS 資訊安全管理系統自動發送，請勿直接回覆。<br><a href="' + escapeHtml(portalUrl) + '" style="color:#2563eb">登入系統</a></p>';
   return '<!doctype html><html><body style="font-family:Segoe UI,Arial,sans-serif;color:#0f172a;line-height:1.7;max-width:600px;margin:0 auto;padding:20px">' + body + footer + '</body></html>';
 }
 
