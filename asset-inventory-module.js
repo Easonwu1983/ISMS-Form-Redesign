@@ -553,134 +553,354 @@
 
       var a = asset || {};
       var user = currentUser() || {};
-
-      // Build form sections
-      var basicHtml = buildFormGroup('\u8cc7\u7522\u7de8\u865f', buildTextInput('assetId', a.assetId || '', { placeholder: '\u7cfb\u7d71\u81ea\u52d5\u7522\u751f\u6216\u624b\u52d5\u8f38\u5165' }))
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u8cc7\u7522\u540d\u7a31', buildTextInput('assetName', a.assetName || '', { placeholder: '\u8acb\u8f38\u5165\u8cc7\u7522\u540d\u7a31' }))
-        + buildFormGroup('\u82f1\u6587\u540d\u7a31', buildTextInput('assetNameEn', a.assetNameEn || '', { placeholder: '\u82f1\u6587\u540d\u7a31\uff08\u9078\u586b\uff09' }))
-        + '</div>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u4e3b\u5206\u985e', buildSelect('category', buildCategorySelectOptions(a.category || '', true), { id: 'asset-form-category' }))
-        + buildFormGroup('\u5b50\u5206\u985e', buildSelect('subCategory', buildSubCategorySelectOptions(a.category || '', a.subCategory || '', true), { id: 'asset-form-subcategory' }))
-        + '</div>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u64c1\u6709\u8005', buildTextInput('ownerName', a.ownerName || user.displayName || ''))
-        + buildFormGroup('\u4fdd\u7ba1\u55ae\u4f4d', buildTextInput('ownerUnit', a.ownerUnit || user.unit || ''))
-        + '</div>'
-        + buildFormGroup('\u8cc7\u7522\u8aaa\u660e', buildTextarea('description', a.description || '', { rows: 3 }));
-
-      var locationHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u5b58\u653e\u4f4d\u7f6e', buildTextInput('location', a.location || ''))
-        + buildFormGroup('\u7db2\u8def\u4f4d\u5740 / IP', buildTextInput('networkAddress', a.networkAddress || ''))
-        + '</div>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u5ee0\u724c', buildTextInput('brand', a.brand || ''))
-        + buildFormGroup('\u578b\u865f', buildTextInput('model', a.model || ''))
-        + buildFormGroup('\u5e8f\u865f', buildTextInput('serialNumber', a.serialNumber || ''))
-        + '</div>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u6570\u91cf', buildTextInput('quantity', a.quantity || '1'))
-        + buildFormGroup('\u55ae\u4f4d', buildTextInput('quantityUnit', a.quantityUnit || '\u53f0'))
-        + '</div>';
-
-      var securityHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u5b58\u53d6\u63a7\u5236\u65b9\u5f0f', buildTextInput('accessControl', a.accessControl || ''))
-        + buildFormGroup('\u52a0\u5bc6\u65b9\u5f0f', buildTextInput('encryption', a.encryption || ''))
-        + '</div>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u5099\u4efd\u65b9\u5f0f', buildTextInput('backupMethod', a.backupMethod || ''))
-        + buildFormGroup('\u5099\u4efd\u983b\u7387', buildTextInput('backupFrequency', a.backupFrequency || ''))
-        + '</div>';
-
       var currentProtLevel = computeProtectionLevel(a.ciaC || '', a.ciaI || '', a.ciaA || '');
-      var ciaHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u6a5f\u5bc6\u6027 (C)', buildSelect('ciaC', buildSelectOptions(CIA_OPTIONS, a.ciaC || '', true), { id: 'asset-form-ciaC' }))
-        + buildFormGroup('\u5b8c\u6574\u6027 (I)', buildSelect('ciaI', buildSelectOptions(CIA_OPTIONS, a.ciaI || '', true), { id: 'asset-form-ciaI' }))
-        + buildFormGroup('\u53ef\u7528\u6027 (A)', buildSelect('ciaA', buildSelectOptions(CIA_OPTIONS, a.ciaA || '', true), { id: 'asset-form-ciaA' }))
+      var riskScore = computeRiskScore(a.riskLikelihood, a.riskImpact);
+      var riskLevel = getRiskLevel(riskScore);
+
+      // Helper to build a form card section
+      function formCard(sectionId, iconName, sectionTitle, subtitle, bodyHtml, opts) {
+        var o = opts || {};
+        var borderStyle = o.borderColor ? 'border-left:4px solid ' + o.borderColor + ';' : '';
+        var displayStyle = o.hidden ? 'display:none;' : '';
+        var bodyDisplay = o.collapsed ? 'display:none;' : '';
+        return '<div class="card" id="section-card-' + sectionId + '" style="margin-bottom:16px;' + borderStyle + displayStyle + '">'
+          + '<div class="section-header" style="padding:12px 16px;background:#f8f9fa;border-bottom:1px solid #e9ecef;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" data-action="app.toggleSection" data-target="section-' + sectionId + '">'
+          + '<span style="display:inline-flex;align-items:center;gap:8px;">'
+          + ic(iconName) + ' ' + esc(sectionTitle)
+          + (subtitle ? '<span style="font-size:12px;color:#6c757d;">\uff08' + esc(subtitle) + '\uff09</span>' : '')
+          + '</span>'
+          + '<span class="section-toggle-icon" style="transition:transform 0.2s;">' + (o.collapsed ? '\u25b8' : '\u25be') + '</span>'
+          + '</div>'
+          + '<div class="card-body" id="section-' + sectionId + '" style="padding:16px;' + bodyDisplay + '">'
+          + bodyHtml
+          + '</div>'
+          + '</div>';
+      }
+
+      // --- Section 1: Basic Information ---
+      var basicHtml = ''
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u8cc7\u7522\u7de8\u865f</label>'
+        + '<input type="text" class="form-input" id="asset-id-display" name="assetId" value="' + esc(a.assetId || '') + '" placeholder="\u7cfb\u7d71\u81ea\u52d5\u7522\u751f\u6216\u624b\u52d5\u8f38\u5165">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">\u8cc7\u7522\u540d\u7a31</label>'
+        + '<input type="text" class="form-input" id="asset-name" name="assetName" value="' + esc(a.assetName || '') + '" placeholder="\u8acb\u8f38\u5165\u8cc7\u7522\u540d\u7a31" required>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u82f1\u6587\u540d\u7a31</label>'
+        + '<input type="text" class="form-input" id="asset-name-en" name="assetNameEn" value="' + esc(a.assetNameEn || '') + '" placeholder="\u9078\u586b">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">\u4e3b\u5206\u985e</label>'
+        + '<select class="form-select" id="asset-category" name="category">' + buildCategorySelectOptions(a.category || '', true) + '</select>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5b50\u5206\u985e</label>'
+        + '<select class="form-select" id="asset-sub-category" name="subCategory">' + buildSubCategorySelectOptions(a.category || '', a.subCategory || '', true) + '</select>'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u64c1\u6709\u8005</label>'
+        + '<input type="text" class="form-input" id="asset-owner" name="ownerName" value="' + esc(a.ownerName || user.displayName || '') + '">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u4fdd\u7ba1\u55ae\u4f4d / \u4fdd\u7ba1\u4eba</label>'
+        + '<input type="text" class="form-input" id="asset-custodian" name="ownerUnit" value="' + esc(a.ownerUnit || user.unit || '') + '">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u8cc7\u7522\u8aaa\u660e</label>'
+        + '<textarea class="form-textarea" id="asset-description" name="description" rows="3" placeholder="\u7c21\u8981\u63cf\u8ff0\u8cc7\u7522\u7528\u9014\u6216\u5167\u5bb9">' + esc(a.description || '') + '</textarea>'
+        + '</div>';
+
+      // --- Section 2: Location & Specifications ---
+      var locationHtml = ''
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5b58\u653e\u4f4d\u7f6e\uff08\u5927\u6a13\uff09</label>'
+        + '<input type="text" class="form-input" id="asset-location-building" name="location" value="' + esc(a.location || '') + '" placeholder="\u4f8b\u5982\uff1a\u8cc7\u8a0a\u5927\u6a13 3F">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5b58\u653e\u4f4d\u7f6e\uff08\u623f\u9593\uff09</label>'
+        + '<input type="text" class="form-input" id="asset-location-room" name="locationRoom" value="' + esc(a.locationRoom || '') + '" placeholder="\u4f8b\u5982\uff1aA303 \u6a5f\u623f">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">IP \u4f4d\u5740</label>'
+        + '<input type="text" class="form-input" id="asset-ip" name="networkAddress" value="' + esc(a.networkAddress || '') + '" placeholder="\u4f8b\u5982\uff1a192.168.1.100">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u7db2\u57df\u540d\u7a31</label>'
+        + '<input type="text" class="form-input" id="asset-domain" name="domainName" value="' + esc(a.domainName || '') + '" placeholder="\u9078\u586b">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5ee0\u724c</label>'
+        + '<input type="text" class="form-input" id="asset-brand" name="brand" value="' + esc(a.brand || '') + '">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u578b\u865f</label>'
+        + '<input type="text" class="form-input" id="asset-model" name="model" value="' + esc(a.model || '') + '">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u6578\u91cf</label>'
+        + '<input type="number" class="form-input" id="asset-quantity" name="quantity" value="' + esc(a.quantity || '1') + '" min="1">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5e8f\u865f</label>'
+        + '<input type="text" class="form-input" name="serialNumber" value="' + esc(a.serialNumber || '') + '">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u55ae\u4f4d</label>'
+        + '<input type="text" class="form-input" name="quantityUnit" value="' + esc(a.quantityUnit || '\u53f0') + '">'
+        + '</div>'
+        + '</div>';
+
+      // --- Section 3: Security Settings ---
+      var securityHtml = ''
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5b58\u53d6\u63a7\u5236\u65b9\u5f0f</label>'
+        + '<input type="text" class="form-input" name="accessControl" value="' + esc(a.accessControl || '') + '" placeholder="\u4f8b\u5982\uff1a\u5e33\u5bc6\u63a7\u5236\u3001\u9580\u7981\u7ba1\u5236">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u52a0\u5bc6\u65b9\u5f0f</label>'
+        + '<input type="text" class="form-input" name="encryption" value="' + esc(a.encryption || '') + '" placeholder="\u4f8b\u5982\uff1aAES-256\u3001TLS 1.2">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5099\u4efd\u65b9\u5f0f</label>'
+        + '<input type="text" class="form-input" name="backupMethod" value="' + esc(a.backupMethod || '') + '">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5099\u4efd\u983b\u7387</label>'
+        + '<input type="text" class="form-input" name="backupFrequency" value="' + esc(a.backupFrequency || '') + '" placeholder="\u4f8b\u5982\uff1a\u6bcf\u65e5 / \u6bcf\u9031">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5bc6\u78bc\u662f\u5426\u5df2\u8b8a\u66f4</label>'
+        + '<select class="form-select" id="asset-password-changed" name="passwordChanged"><option value="">\u8acb\u9078\u64c7</option><option value="\u662f"' + (a.passwordChanged === '\u662f' ? ' selected' : '') + '>\u662f</option><option value="\u5426"' + (a.passwordChanged === '\u5426' ? ' selected' : '') + '>\u5426</option></select>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u662f\u5426\u958b\u653e\u9060\u7aef\u7dad\u8b77</label>'
+        + '<select class="form-select" id="asset-remote-maintenance" name="remoteMaintenance"><option value="">\u8acb\u9078\u64c7</option><option value="\u662f"' + (a.remoteMaintenance === '\u662f' ? ' selected' : '') + '>\u662f</option><option value="\u5426"' + (a.remoteMaintenance === '\u5426' ? ' selected' : '') + '>\u5426</option></select>'
+        + '</div>'
+        + '</div>';
+
+      // --- Section 4: CIA Classification ---
+      var ciaHtml = ''
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">\u6a5f\u5bc6\u6027 (C)</label>'
+        + '<select class="form-select" id="asset-cia-c" name="ciaC">' + buildSelectOptions(CIA_OPTIONS, a.ciaC || '', true) + '</select>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">\u5b8c\u6574\u6027 (I)</label>'
+        + '<select class="form-select" id="asset-cia-i" name="ciaI">' + buildSelectOptions(CIA_OPTIONS, a.ciaI || '', true) + '</select>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">\u53ef\u7528\u6027 (A)</label>'
+        + '<select class="form-select" id="asset-cia-a" name="ciaA">' + buildSelectOptions(CIA_OPTIONS, a.ciaA || '', true) + '</select>'
+        + '</div>'
         + '</div>'
         + '<div class="form-group">'
         + '<label class="form-label">\u9632\u8b77\u9700\u6c42\u7b49\u7d1a\uff08\u81ea\u52d5\u8a08\u7b97\uff09</label>'
-        + '<div id="asset-form-protection-level" class="form-control" style="background:#f5f5f5;font-weight:bold;">' + esc(currentProtLevel || '--') + '</div>'
+        + '<input type="text" class="form-input" id="asset-protection-level" value="' + esc(currentProtLevel || '--') + '" readonly style="background:#f5f5f5;font-weight:bold;">'
         + '</div>';
 
-      var piiHtml = '<div class="form-group">'
-        + buildCheckbox('hasPii', '\u6b64\u8cc7\u7522\u5305\u542b\u500b\u4eba\u8cc7\u6599', !!a.hasPii)
+      // --- Section 5: PII ---
+      var piiHtml = ''
+        + '<div class="form-group">'
+        + '<label class="form-check-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">'
+        + '<input type="checkbox" class="form-check-input" id="asset-has-pii" name="hasPii"' + (a.hasPii ? ' checked' : '') + '>'
+        + '<span>\u6b64\u8cc7\u7522\u5305\u542b\u500b\u4eba\u8cc7\u6599</span>'
+        + '</label>'
         + '</div>'
         + '<div id="asset-pii-details"' + (a.hasPii ? '' : ' style="display:none;"') + '>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u500b\u8cc7\u985e\u5225', buildTextInput('piiCategory', a.piiCategory || ''))
-        + buildFormGroup('\u500b\u8cc7\u7b46\u6578', buildTextInput('piiCount', a.piiCount || ''))
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u662f\u5426\u542b\u654f\u611f\u500b\u8cc7</label>'
+        + '<select class="form-select" id="asset-has-sensitive-pii" name="hasSensitivePii"><option value="">\u8acb\u9078\u64c7</option><option value="\u662f"' + (a.hasSensitivePii === '\u662f' ? ' selected' : '') + '>\u662f</option><option value="\u5426"' + (a.hasSensitivePii === '\u5426' ? ' selected' : '') + '>\u5426</option></select>'
         + '</div>'
-        + buildFormGroup('\u500b\u8cc7\u8aaa\u660e', buildTextarea('piiDescription', a.piiDescription || '', { rows: 2 }))
+        + '<div class="form-group">'
+        + '<label class="form-label">\u500b\u8cc7\u7b46\u6578</label>'
+        + '<input type="text" class="form-input" id="asset-pii-count" name="piiCount" value="' + esc(a.piiCount || '') + '" placeholder="\u4f8b\u5982\uff1a500 \u7b46">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u500b\u8cc7\u985e\u5225 / \u8aaa\u660e</label>'
+        + '<textarea class="form-textarea" name="piiDescription" rows="2" placeholder="\u4f8b\u5982\uff1a\u59d3\u540d\u3001\u8eab\u5206\u8b49\u5b57\u865f\u3001\u96fb\u8a71">' + esc(a.piiDescription || '') + '</textarea>'
+        + '</div>'
         + '</div>';
 
-      var versionHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u76e4\u9ede\u5e74\u5ea6', buildSelect('inventoryYear', buildYearOptions(a.inventoryYear || getCurrentRocYear())))
-        + buildFormGroup('\u7570\u52d5\u985e\u578b', buildSelect('changeType', buildSelectOptions(CHANGE_TYPE_OPTIONS, a.changeType || '', true)))
-        + buildFormGroup('\u72c0\u614b', buildSelect('status', buildSelectOptions(STATUS_OPTIONS, a.status || '\u586b\u5831\u4e2d', true)))
+      // --- Section 6: Version Management ---
+      var versionHtml = ''
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">\u76e4\u9ede\u5e74\u5ea6</label>'
+        + '<select class="form-select" id="asset-year" name="inventoryYear">' + buildYearOptions(a.inventoryYear || getCurrentRocYear()) + '</select>'
         + '</div>'
-        + buildFormGroup('\u7570\u52d5\u8aaa\u660e', buildTextarea('changeDescription', a.changeDescription || '', { rows: 2 }));
+        + '<div class="form-group">'
+        + '<label class="form-label">\u7570\u52d5\u985e\u578b</label>'
+        + '<select class="form-select" id="asset-change-type" name="changeType">' + buildSelectOptions(CHANGE_TYPE_OPTIONS, a.changeType || '', true) + '</select>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u72c0\u614b</label>'
+        + '<select class="form-select" id="asset-status" name="status">' + buildSelectOptions(STATUS_OPTIONS, a.status || '\u586b\u5831\u4e2d', true) + '</select>'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u7570\u52d5\u8aaa\u660e</label>'
+        + '<textarea class="form-textarea" name="changeDescription" rows="2">' + esc(a.changeDescription || '') + '</textarea>'
+        + '</div>';
 
-      var itSystemHtml = '<div class="form-group">'
-        + buildCheckbox('isItSystem', '\u6b64\u8cc7\u7522\u5c6c\u65bc\u8cc7\u901a\u5b89\u5168\u7cfb\u7d71', !!a.isItSystem)
+      // --- Section 7: IT System ---
+      var itSystemHtml = ''
+        + '<div class="form-group">'
+        + '<label class="form-check-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">'
+        + '<input type="checkbox" class="form-check-input" id="asset-is-it-system" name="isItSystem"' + (a.isItSystem ? ' checked' : '') + '>'
+        + '<span>\u6b64\u8cc7\u7522\u70ba\u8cc7\u901a\u7cfb\u7d71</span>'
+        + '</label>'
         + '</div>'
         + '<div id="asset-it-system-details"' + (a.isItSystem ? '' : ' style="display:none;"') + '>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u7cfb\u7d71\u7d1a\u5225', buildSelect('systemLevel', buildSelectOptions(['\u666e', '\u4e2d', '\u9ad8'], a.systemLevel || '', true)))
-        + buildFormGroup('\u7cfb\u7d71\u7c7b\u578b', buildTextInput('systemType', a.systemType || ''))
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u7cfb\u7d71\u7d1a\u5225</label>'
+        + '<select class="form-select" id="asset-sys-level" name="systemLevel">' + buildSelectOptions(['\u666e', '\u4e2d', '\u9ad8'], a.systemLevel || '', true) + '</select>'
         + '</div>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u7cfb\u7d71\u7dad\u904b\u5ee0\u5546', buildTextInput('systemVendor', a.systemVendor || ''))
-        + buildFormGroup('\u670d\u52d9\u5951\u7d04\u5230\u671f\u65e5', buildTextInput('contractExpiry', a.contractExpiry || '', { placeholder: 'YYYY-MM-DD' }))
+        + '<div class="form-group">'
+        + '<label class="form-label">\u7cfb\u7d71\u985e\u578b</label>'
+        + '<input type="text" class="form-input" id="asset-sys-type" name="systemType" value="' + esc(a.systemType || '') + '">'
         + '</div>'
-        + buildFormGroup('\u7cfb\u7d71\u529f\u80fd\u8aaa\u660e', buildTextarea('systemDescription', a.systemDescription || '', { rows: 2 }))
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u7cfb\u7d71\u7dad\u904b\u5ee0\u5546</label>'
+        + '<input type="text" class="form-input" id="asset-sys-vendor" name="systemVendor" value="' + esc(a.systemVendor || '') + '">'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u670d\u52d9\u5951\u7d04\u5230\u671f\u65e5</label>'
+        + '<input type="date" class="form-input" id="asset-sys-contract-expiry" name="contractExpiry" value="' + esc(a.contractExpiry || '') + '">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u7cfb\u7d71\u529f\u80fd\u8aaa\u660e</label>'
+        + '<textarea class="form-textarea" id="asset-sys-description" name="systemDescription" rows="2">' + esc(a.systemDescription || '') + '</textarea>'
+        + '</div>'
+        + '<hr style="border:none;border-top:1px solid #e9ecef;margin:12px 0;">'
+        + '<div style="font-weight:600;margin-bottom:8px;">\u9632\u8b77\u63aa\u65bd</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5b58\u53d6\u63a7\u5236\u63aa\u65bd</label>'
+        + '<textarea class="form-textarea" id="asset-sys-access-control" name="itAccessControl" rows="2">' + esc(a.itAccessControl || '') + '</textarea>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u65e5\u8a8c\u7ba1\u7406\u63aa\u65bd</label>'
+        + '<textarea class="form-textarea" id="asset-sys-log-mgmt" name="itLogManagement" rows="2">' + esc(a.itLogManagement || '') + '</textarea>'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u60e1\u610f\u7a0b\u5f0f\u9632\u8b77</label>'
+        + '<textarea class="form-textarea" id="asset-sys-malware" name="itMalwareProtection" rows="2">' + esc(a.itMalwareProtection || '') + '</textarea>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5f31\u9ede\u6aa2\u6e2c\u63aa\u65bd</label>'
+        + '<textarea class="form-textarea" id="asset-sys-vuln-mgmt" name="itVulnerabilityMgmt" rows="2">' + esc(a.itVulnerabilityMgmt || '') + '</textarea>'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5176\u4ed6\u9632\u8b77\u63aa\u65bd</label>'
+        + '<textarea class="form-textarea" id="asset-sys-other" name="itOtherProtection" rows="2">' + esc(a.itOtherProtection || '') + '</textarea>'
+        + '</div>'
         + '</div>';
 
-      var itProtectionHtml = '<div id="asset-it-protection-section"' + (a.isItSystem ? '' : ' style="display:none;"') + '>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u5b58\u53d6\u63a7\u5236\u63aa\u65bd', buildTextarea('itAccessControl', a.itAccessControl || '', { rows: 2 }))
-        + buildFormGroup('\u65e5\u8a8c\u7ba1\u7406\u63aa\u65bd', buildTextarea('itLogManagement', a.itLogManagement || '', { rows: 2 }))
-        + '</div>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u60e1\u610f\u7a0b\u5f0f\u9632\u8b77', buildTextarea('itMalwareProtection', a.itMalwareProtection || '', { rows: 2 }))
-        + buildFormGroup('\u5f31\u9ede\u6aa2\u6e2c\u63aa\u65bd', buildTextarea('itVulnerabilityMgmt', a.itVulnerabilityMgmt || '', { rows: 2 }))
-        + '</div>'
-        + buildFormGroup('\u5176\u4ed6\u9632\u8b77\u63aa\u65bd', buildTextarea('itOtherProtection', a.itOtherProtection || '', { rows: 2 }))
-        + '</div>';
-
-      var chinaBrandHtml = '<div class="form-group">'
-        + buildCheckbox('isChinaBrand', '\u6b64\u8cc7\u7522\u5c6c\u65bc\u5927\u9678\u5ee0\u724c\u7522\u54c1', !!a.isChinaBrand)
+      // --- Section 8: China Brand ---
+      var chinaBrandHtml = ''
+        + '<div class="form-group">'
+        + '<label class="form-check-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">'
+        + '<input type="checkbox" class="form-check-input" id="asset-is-china-brand" name="isChinaBrand"' + (a.isChinaBrand ? ' checked' : '') + '>'
+        + '<span>\u6b64\u8cc7\u7522\u70ba\u5927\u9678\u5ee0\u724c\u7522\u54c1</span>'
+        + '</label>'
         + '</div>'
         + '<div id="asset-china-brand-details"' + (a.isChinaBrand ? '' : ' style="display:none;"') + '>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u5ee0\u724c\u540d\u7a31', buildTextInput('chinaBrandName', a.chinaBrandName || ''))
-        + buildFormGroup('\u7522\u54c1\u578b\u865f', buildTextInput('chinaBrandModel', a.chinaBrandModel || ''))
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u5ee0\u724c\u540d\u7a31</label>'
+        + '<input type="text" class="form-input" id="asset-cn-brand" name="chinaBrandName" value="' + esc(a.chinaBrandName || '') + '">'
         + '</div>'
-        + buildFormGroup('\u66ff\u4ee3\u65b9\u6848\u8aaa\u660e', buildTextarea('chinaReplacementPlan', a.chinaReplacementPlan || '', { rows: 2 }))
-        + buildFormGroup('\u9810\u8a08\u6c70\u63db\u65e5\u671f', buildTextInput('chinaReplacementDate', a.chinaReplacementDate || '', { placeholder: 'YYYY-MM-DD' }))
+        + '<div class="form-group">'
+        + '<label class="form-label">\u7522\u54c1\u578b\u865f</label>'
+        + '<input type="text" class="form-input" id="asset-cn-model" name="chinaBrandModel" value="' + esc(a.chinaBrandModel || '') + '">'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u66ff\u4ee3\u65b9\u6848\u8aaa\u660e</label>'
+        + '<textarea class="form-textarea" id="asset-cn-replacement" name="chinaReplacementPlan" rows="2">' + esc(a.chinaReplacementPlan || '') + '</textarea>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u9810\u8a08\u6c70\u63db\u65e5\u671f</label>'
+        + '<input type="date" class="form-input" id="asset-cn-replacement-date" name="chinaReplacementDate" value="' + esc(a.chinaReplacementDate || '') + '">'
+        + '</div>'
         + '</div>';
 
-      var riskScore = computeRiskScore(a.riskLikelihood, a.riskImpact);
-      var riskLevel = getRiskLevel(riskScore);
-      var riskHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'
-        + buildFormGroup('\u53ef\u80fd\u6027 (1-3)', buildSelect('riskLikelihood', '<option value="">-- \u8acb\u9078\u64c7 --</option><option value="1"' + (String(a.riskLikelihood) === '1' ? ' selected' : '') + '>1 - \u4f4e</option><option value="2"' + (String(a.riskLikelihood) === '2' ? ' selected' : '') + '>2 - \u4e2d</option><option value="3"' + (String(a.riskLikelihood) === '3' ? ' selected' : '') + '>3 - \u9ad8</option>', { id: 'asset-form-riskLikelihood' }))
-        + buildFormGroup('\u885d\u64ca\u6027 (1-3)', buildSelect('riskImpact', '<option value="">-- \u8acb\u9078\u64c7 --</option><option value="1"' + (String(a.riskImpact) === '1' ? ' selected' : '') + '>1 - \u4f4e</option><option value="2"' + (String(a.riskImpact) === '2' ? ' selected' : '') + '>2 - \u4e2d</option><option value="3"' + (String(a.riskImpact) === '3' ? ' selected' : '') + '>3 - \u9ad8</option>', { id: 'asset-form-riskImpact' }))
+      // --- Section 9: Risk Assessment ---
+      var riskHtml = ''
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u53ef\u80fd\u6027 (1-3)</label>'
+        + '<select class="form-select" id="asset-risk-likelihood" name="riskLikelihood">'
+        + '<option value="">-- \u8acb\u9078\u64c7 --</option>'
+        + '<option value="1"' + (String(a.riskLikelihood) === '1' ? ' selected' : '') + '>1 - \u4f4e</option>'
+        + '<option value="2"' + (String(a.riskLikelihood) === '2' ? ' selected' : '') + '>2 - \u4e2d</option>'
+        + '<option value="3"' + (String(a.riskLikelihood) === '3' ? ' selected' : '') + '>3 - \u9ad8</option>'
+        + '</select>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u885d\u64ca\u6027 (1-3)</label>'
+        + '<select class="form-select" id="asset-risk-impact" name="riskImpact">'
+        + '<option value="">-- \u8acb\u9078\u64c7 --</option>'
+        + '<option value="1"' + (String(a.riskImpact) === '1' ? ' selected' : '') + '>1 - \u4f4e</option>'
+        + '<option value="2"' + (String(a.riskImpact) === '2' ? ' selected' : '') + '>2 - \u4e2d</option>'
+        + '<option value="3"' + (String(a.riskImpact) === '3' ? ' selected' : '') + '>3 - \u9ad8</option>'
+        + '</select>'
+        + '</div>'
         + '<div class="form-group">'
         + '<label class="form-label">\u98a8\u96aa\u5206\u6578</label>'
-        + '<div id="asset-form-risk-score" class="form-control" style="background:#f5f5f5;font-weight:bold;">' + (riskScore ? riskScore : '--') + '</div>'
+        + '<input type="text" class="form-input" id="asset-risk-score" value="' + (riskScore ? riskScore : '--') + '" readonly style="background:#f5f5f5;font-weight:bold;">'
         + '</div>'
         + '</div>'
         + '<div class="form-group">'
         + '<label class="form-label">\u98a8\u96aa\u7b49\u7d1a\uff08\u81ea\u52d5\u8a08\u7b97\uff09</label>'
-        + '<div id="asset-form-risk-level" style="font-weight:bold;padding:6px 0;">'
-        + (riskLevel ? '<span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel) + ' (' + RISK_LEVELS[riskLevel] + ')</span>' : '--')
+        + '<div id="asset-risk-level" style="font-weight:bold;padding:6px 0;">'
+        + (riskLevel ? '<span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel) + ' (' + (RISK_LEVELS[riskLevel] || '') + ')</span>' : '--')
         + '</div>'
         + '</div>'
-        + buildFormGroup('\u98a8\u96aa\u8655\u7406\u65b9\u5f0f', buildSelect('riskTreatment', buildSelectOptions(['\u964d\u4f4e', '\u79fb\u8f49', '\u63a5\u53d7', '\u8ff4\u907f'], a.riskTreatment || '', true)))
-        + buildFormGroup('\u6b98\u9918\u98a8\u96aa\u8aaa\u660e', buildTextarea('residualRiskNote', a.residualRiskNote || '', { rows: 2 }));
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u98a8\u96aa\u8655\u7406\u65b9\u5f0f</label>'
+        + '<select class="form-select" name="riskTreatment">' + buildSelectOptions(['\u964d\u4f4e', '\u79fb\u8f49', '\u63a5\u53d7', '\u8ff4\u907f'], a.riskTreatment || '', true) + '</select>'
+        + '</div>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u6b98\u9918\u98a8\u96aa\u8aaa\u660e</label>'
+        + '<textarea class="form-textarea" name="residualRiskNote" rows="2">' + esc(a.residualRiskNote || '') + '</textarea>'
+        + '</div>';
 
-      // Assemble full form
+      // ========== Assemble full form ==========
       appEl.innerHTML = '<div class="animate-in">'
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
         + '<h2>' + ic(isEdit ? 'edit' : 'plus-circle') + ' ' + esc(title) + '</h2>'
@@ -690,16 +910,17 @@
         + '</div>'
 
         + '<form id="asset-form" autocomplete="off">'
-        + buildCollapsibleSection('basic', '1. \u57fa\u672c\u8cc7\u6599', basicHtml, { open: true })
-        + buildCollapsibleSection('location', '2. \u4f4d\u7f6e\u8207\u898f\u683c', locationHtml, { open: false })
-        + buildCollapsibleSection('security', '3. \u5b89\u5168\u8a2d\u5b9a', securityHtml, { open: false })
-        + buildCollapsibleSection('cia', '4. CIA \u9632\u8b77\u9700\u6c42\u5206\u7d1a', ciaHtml, { open: true })
-        + buildCollapsibleSection('pii', '5. \u500b\u8cc7\u76f8\u95dc', piiHtml, { open: true })
-        + buildCollapsibleSection('version', '6. \u5e74\u5ea6\u7248\u672c\u7ba1\u7406', versionHtml, { open: true })
-        + buildCollapsibleSection('itSystem', '7. \u8cc7\u901a\u7cfb\u7d71\u5c08\u5c6c', itSystemHtml, { open: true, borderColor: '#3498db' })
-        + buildCollapsibleSection('itProtection', '8. \u9632\u8b77\u7b49\u7d1a\u8a55\u4f30', itProtectionHtml, { open: false, borderColor: '#3498db', hidden: !a.isItSystem })
-        + buildCollapsibleSection('chinaBrand', '9. \u5927\u9678\u5ee0\u724c', chinaBrandHtml, { open: true, borderColor: '#e67e22' })
-        + buildCollapsibleSection('risk', '10. \u98a8\u96aa\u8a55\u9451', riskHtml, { open: true, borderColor: '#27ae60' })
+        + '<input type="hidden" id="asset-id-hidden" name="_assetId" value="' + esc(isEdit ? assetId : '') + '">'
+
+        + formCard('basic', 'file-text', '1. \u57fa\u672c\u8cc7\u6599', '\u5fc5\u586b', basicHtml, { collapsed: false })
+        + formCard('location', 'map-pin', '2. \u4f4d\u7f6e\u8207\u898f\u683c', '\u786c\u9ad4\u4f4d\u7f6e\u3001\u7db2\u8def\u8cc7\u8a0a', locationHtml, { collapsed: true })
+        + formCard('security', 'shield', '3. \u5b89\u5168\u8a2d\u5b9a', '\u5b58\u53d6\u63a7\u5236\u3001\u5099\u4efd', securityHtml, { collapsed: true })
+        + formCard('cia', 'bar-chart-2', '4. CIA \u9632\u8b77\u9700\u6c42\u5206\u7d1a', '\u81ea\u52d5\u8a08\u7b97\u9632\u8b77\u7b49\u7d1a', ciaHtml, { collapsed: false })
+        + formCard('pii', 'user-check', '5. \u500b\u8cc7\u76f8\u95dc', '\u500b\u4eba\u8cc7\u6599', piiHtml, { collapsed: false })
+        + formCard('version', 'calendar', '6. \u5e74\u5ea6\u7248\u672c\u7ba1\u7406', '\u76e4\u9ede\u8207\u7570\u52d5', versionHtml, { collapsed: false })
+        + formCard('itSystem', 'server', '7. \u8cc7\u901a\u7cfb\u7d71\u5c08\u5c6c', '\u50c5\u8cc7\u901a\u7cfb\u7d71\u9700\u586b', itSystemHtml, { borderColor: '#1976D2', collapsed: false })
+        + formCard('chinaBrand', 'alert-circle', '8. \u5927\u9678\u5ee0\u724c', '\u50c5\u5927\u9678\u5ee0\u724c\u7522\u54c1\u9700\u586b', chinaBrandHtml, { borderColor: '#E65100', collapsed: false })
+        + formCard('risk', 'activity', '9. \u98a8\u96aa\u8a55\u9451', '\u53ef\u80fd\u6027 \u00d7 \u885d\u64ca\u6027', riskHtml, { borderColor: '#2E7D32', collapsed: false })
 
         + '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;padding-bottom:40px;">'
         + '<button type="button" class="btn btn-outline" data-action="app.backToList">\u53d6\u6d88</button>'
@@ -710,143 +931,166 @@
 
       scheduleRefreshIcons();
 
-      // Register action handlers
+      // ========== Action handlers ==========
       bindActions({
         backToList: function () {
           return '#assets';
         },
-        saveAsset: async function () {
+        toggleSection: function (ctx) {
+          var targetId = ctx.element && ctx.element.getAttribute('data-target');
+          if (!targetId) return;
+          var bodyEl = document.getElementById(targetId);
+          if (!bodyEl) return;
+          var isVisible = bodyEl.style.display !== 'none';
+          bodyEl.style.display = isVisible ? 'none' : '';
+          var iconSpan = ctx.element.querySelector('.section-toggle-icon');
+          if (iconSpan) {
+            iconSpan.textContent = isVisible ? '\u25b8' : '\u25be';
+          }
+        },
+        saveAsset: function () {
           var form = document.getElementById('asset-form');
           if (!form) return;
-          var values = readFormValues(form);
 
-          if (!values.assetName) {
+          // Read all fields
+          var payload = {};
+          var inputs = form.querySelectorAll('input, select, textarea');
+          for (var i = 0; i < inputs.length; i++) {
+            var el = inputs[i];
+            var name = el.getAttribute('name');
+            if (!name || name === '_assetId') continue;
+            if (el.type === 'checkbox') {
+              payload[name] = el.checked;
+            } else {
+              payload[name] = el.value;
+            }
+          }
+
+          // Validation
+          if (!payload.assetName) {
             toast('\u8acb\u8f38\u5165\u8cc7\u7522\u540d\u7a31', 'error');
+            var nameEl = document.getElementById('asset-name');
+            if (nameEl) nameEl.focus();
             return;
           }
-          if (!values.category) {
+          if (!payload.category) {
             toast('\u8acb\u9078\u64c7\u4e3b\u5206\u985e', 'error');
+            var catEl = document.getElementById('asset-category');
+            if (catEl) catEl.focus();
             return;
           }
 
-          try {
-            await runWithBusyState(async function () {
-              if (isEdit) {
-                await apiCall('POST', '/' + assetId, values);
-              } else {
-                await apiCall('POST', '', values);
+          var endpoint = (CONFIG && CONFIG.assetInventoryEndpoint) || '/api/assets';
+          var hiddenId = (document.getElementById('asset-id-hidden') || {}).value || '';
+          var editMode = !!hiddenId;
+          var url = endpoint + (editMode ? '/' + hiddenId : '');
+
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ payload: payload })
+          }).then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data.ok === false) {
+                toast('\u5132\u5b58\u5931\u6557\uff1a' + (data.message || '\u672a\u77e5\u932f\u8aa4'), 'error');
+                return;
               }
+              toast(editMode ? '\u8cc7\u7522\u5df2\u66f4\u65b0' : '\u8cc7\u7522\u5df2\u65b0\u589e', 'success');
+              window.location.hash = '#assets';
+            })
+            .catch(function (err) {
+              toast('\u5132\u5b58\u5931\u6557\uff1a' + String(err && err.message || err), 'error');
             });
-            toast(isEdit ? '\u8cc7\u7522\u5df2\u66f4\u65b0' : '\u8cc7\u7522\u5df2\u65b0\u589e', 'success');
-            return '#assets';
-          } catch (err) {
-            toast('\u5132\u5b58\u5931\u6557\uff1a' + String(err && err.message || err), 'error');
-          }
         }
       });
 
-      // Bind dynamic behaviors
-      bindFormDynamicBehaviors(a);
+      // ========== Dynamic form events via document-level delegation ==========
+      bindFormDynamicBehaviors();
     }
 
-    function bindFormDynamicBehaviors(asset) {
-      // Section toggle (collapse/expand)
-      var appEl = document.getElementById('app');
-      if (!appEl) return;
+    function bindFormDynamicBehaviors() {
+      // Use a single document-level change listener with delegation.
+      // We tag the listener so it can be identified if cleanup is needed.
+      var listenerKey = '__assetFormChangeListener';
+      if (window[listenerKey]) {
+        document.removeEventListener('change', window[listenerKey], true);
+      }
 
-      addPageEventListener(appEl, 'click', function (e) {
-        var header = e.target.closest && e.target.closest('[data-toggle-section]');
-        if (!header) return;
-        var sectionId = header.getAttribute('data-toggle-section');
-        var bodyEl = document.getElementById('asset-section-body-' + sectionId);
-        if (!bodyEl) return;
-        var isVisible = bodyEl.style.display !== 'none';
-        bodyEl.style.display = isVisible ? 'none' : '';
-        var iconSpan = header.querySelector('.section-toggle-icon');
-        if (iconSpan) {
-          iconSpan.innerHTML = ic(isVisible ? 'chevron-down' : 'chevron-up');
-          scheduleRefreshIcons();
+      function onFormChange(e) {
+        var target = e.target;
+        if (!target || !target.id) return;
+        var form = document.getElementById('asset-form');
+        if (!form) return;
+
+        switch (target.id) {
+          // --- Category -> SubCategory cascade ---
+          case 'asset-category': {
+            var subCatEl = document.getElementById('asset-sub-category');
+            if (subCatEl) {
+              subCatEl.innerHTML = buildSubCategorySelectOptions(target.value, '', true);
+            }
+            break;
+          }
+
+          // --- CIA -> Protection level auto-compute ---
+          case 'asset-cia-c':
+          case 'asset-cia-i':
+          case 'asset-cia-a': {
+            var cC = (document.getElementById('asset-cia-c') || {}).value || '';
+            var cI = (document.getElementById('asset-cia-i') || {}).value || '';
+            var cA = (document.getElementById('asset-cia-a') || {}).value || '';
+            var protLevel = computeProtectionLevel(cC, cI, cA);
+            var protEl = document.getElementById('asset-protection-level');
+            if (protEl) protEl.value = protLevel || '--';
+            break;
+          }
+
+          // --- hasPii checkbox -> toggle PII details ---
+          case 'asset-has-pii': {
+            var piiDetails = document.getElementById('asset-pii-details');
+            if (piiDetails) piiDetails.style.display = target.checked ? '' : 'none';
+            break;
+          }
+
+          // --- isItSystem checkbox -> toggle IT system section ---
+          case 'asset-is-it-system': {
+            var itDetails = document.getElementById('asset-it-system-details');
+            if (itDetails) itDetails.style.display = target.checked ? '' : 'none';
+            break;
+          }
+
+          // --- isChinaBrand checkbox -> toggle China brand section ---
+          case 'asset-is-china-brand': {
+            var cnDetails = document.getElementById('asset-china-brand-details');
+            if (cnDetails) cnDetails.style.display = target.checked ? '' : 'none';
+            break;
+          }
+
+          // --- Risk score auto-compute ---
+          case 'asset-risk-likelihood':
+          case 'asset-risk-impact': {
+            var lVal = (document.getElementById('asset-risk-likelihood') || {}).value || '';
+            var iVal = (document.getElementById('asset-risk-impact') || {}).value || '';
+            var score = computeRiskScore(lVal, iVal);
+            var scoreEl = document.getElementById('asset-risk-score');
+            if (scoreEl) scoreEl.value = score ? String(score) : '--';
+            var level = getRiskLevel(score);
+            var levelEl = document.getElementById('asset-risk-level');
+            if (levelEl) {
+              if (level) {
+                levelEl.innerHTML = '<span class="badge ' + getRiskBadgeClass(level) + '"><span class="badge-dot"></span>' + esc(level) + ' (' + (RISK_LEVELS[level] || '') + ')</span>';
+              } else {
+                levelEl.textContent = '--';
+              }
+            }
+            break;
+          }
         }
-      });
-
-      // Category -> SubCategory cascade
-      var categoryEl = document.getElementById('asset-form-category');
-      var subCategoryEl = document.getElementById('asset-form-subcategory');
-      if (categoryEl && subCategoryEl) {
-        addPageEventListener(categoryEl, 'change', function () {
-          subCategoryEl.innerHTML = buildSubCategorySelectOptions(categoryEl.value, '', true);
-        });
       }
 
-      // CIA -> Protection level auto-compute
-      var ciaCEl = document.getElementById('asset-form-ciaC');
-      var ciaIEl = document.getElementById('asset-form-ciaI');
-      var ciaAEl = document.getElementById('asset-form-ciaA');
-      var protLevelEl = document.getElementById('asset-form-protection-level');
-
-      function updateProtectionLevel() {
-        if (!ciaCEl || !ciaIEl || !ciaAEl || !protLevelEl) return;
-        var level = computeProtectionLevel(ciaCEl.value, ciaIEl.value, ciaAEl.value);
-        protLevelEl.textContent = level || '--';
-      }
-
-      if (ciaCEl) addPageEventListener(ciaCEl, 'change', updateProtectionLevel);
-      if (ciaIEl) addPageEventListener(ciaIEl, 'change', updateProtectionLevel);
-      if (ciaAEl) addPageEventListener(ciaAEl, 'change', updateProtectionLevel);
-
-      // hasPii toggle
-      var hasPiiCheckbox = appEl.querySelector('input[name="hasPii"]');
-      var piiDetailsEl = document.getElementById('asset-pii-details');
-      if (hasPiiCheckbox && piiDetailsEl) {
-        addPageEventListener(hasPiiCheckbox, 'change', function () {
-          piiDetailsEl.style.display = hasPiiCheckbox.checked ? '' : 'none';
-        });
-      }
-
-      // isItSystem toggle
-      var isItSystemCheckbox = appEl.querySelector('input[name="isItSystem"]');
-      var itSystemDetailsEl = document.getElementById('asset-it-system-details');
-      var itProtectionSectionEl = document.getElementById('asset-section-itProtection');
-      var itProtectionBodyEl = document.getElementById('asset-it-protection-section');
-      if (isItSystemCheckbox) {
-        addPageEventListener(isItSystemCheckbox, 'change', function () {
-          var show = isItSystemCheckbox.checked;
-          if (itSystemDetailsEl) itSystemDetailsEl.style.display = show ? '' : 'none';
-          if (itProtectionSectionEl) itProtectionSectionEl.style.display = show ? '' : 'none';
-          if (itProtectionBodyEl) itProtectionBodyEl.style.display = show ? '' : 'none';
-        });
-      }
-
-      // isChinaBrand toggle
-      var isChinaBrandCheckbox = appEl.querySelector('input[name="isChinaBrand"]');
-      var chinaBrandDetailsEl = document.getElementById('asset-china-brand-details');
-      if (isChinaBrandCheckbox && chinaBrandDetailsEl) {
-        addPageEventListener(isChinaBrandCheckbox, 'change', function () {
-          chinaBrandDetailsEl.style.display = isChinaBrandCheckbox.checked ? '' : 'none';
-        });
-      }
-
-      // Risk score auto-compute
-      var riskLikelihoodEl = document.getElementById('asset-form-riskLikelihood');
-      var riskImpactEl = document.getElementById('asset-form-riskImpact');
-      var riskScoreEl = document.getElementById('asset-form-risk-score');
-      var riskLevelEl = document.getElementById('asset-form-risk-level');
-
-      function updateRiskScore() {
-        if (!riskLikelihoodEl || !riskImpactEl || !riskScoreEl || !riskLevelEl) return;
-        var score = computeRiskScore(riskLikelihoodEl.value, riskImpactEl.value);
-        riskScoreEl.textContent = score ? String(score) : '--';
-        var level = getRiskLevel(score);
-        if (level) {
-          riskLevelEl.innerHTML = '<span class="badge ' + getRiskBadgeClass(level) + '"><span class="badge-dot"></span>' + esc(level) + ' (' + (RISK_LEVELS[level] || '') + ')</span>';
-        } else {
-          riskLevelEl.textContent = '--';
-        }
-        scheduleRefreshIcons();
-      }
-
-      if (riskLikelihoodEl) addPageEventListener(riskLikelihoodEl, 'change', updateRiskScore);
-      if (riskImpactEl) addPageEventListener(riskImpactEl, 'change', updateRiskScore);
+      window[listenerKey] = onFormChange;
+      document.addEventListener('change', onFormChange, true);
     }
 
     // -------------------------------------------------------
