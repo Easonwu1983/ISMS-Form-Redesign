@@ -19,7 +19,8 @@ const FEATURE_BUNDLE_CONFIG = {
   'case-feature': ['attachment-module.js', 'case-module.js'],
   'checklist-feature': ['attachment-module.js', 'checklist-module.js'],
   'training-feature': ['attachment-module.js', 'training-module.js'],
-  'unit-contact-application-feature': ['unit-contact-application-module.js']
+  'unit-contact-application-feature': ['unit-contact-application-module.js'],
+  'asset-inventory-feature': ['asset-inventory-module.js']
 };
 
 const PURGE_IGNORE_DIRS = new Set([
