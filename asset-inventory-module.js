@@ -387,6 +387,13 @@
       return 'badge-secondary';
     }
 
+    function statusBadge(status) {
+      if (status === '\u5df2\u5b8c\u6210') return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-size:0.8em;font-weight:600;">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>';
+      if (status === '\u586b\u5831\u4e2d') return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#fff3e0;color:#e65100;font-size:0.8em;font-weight:600;">' + ic('edit', 'icon-xs') + ' \u586b\u5831\u4e2d</span>';
+      if (status === '\u5f85\u7c3d\u6838') return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e3f2fd;color:#1565c0;font-size:0.8em;font-weight:600;">' + ic('clock', 'icon-xs') + ' \u5f85\u7c3d\u6838</span>';
+      return '<span style="color:#999;">' + esc(status || '\u2014') + '</span>';
+    }
+
     function getCategoryLabel(code) {
       var cat = CATEGORIES[code];
       return cat ? cat.label : code || '';
@@ -581,6 +588,14 @@
         + '</div>'
         + '</div></div>'
 
+        // Stats summary bar
+        + '<div class="stats-grid review-stats-grid" style="margin-bottom:16px;">'
+        + '<div class="stat-card"><div class="stat-value">' + ic('layers', 'icon-sm') + ' <span id="stat-total">-</span></div><div class="stat-label">\u8cc7\u7522\u7e3d\u6578</div></div>'
+        + '<div class="stat-card"><div class="stat-value">' + ic('server', 'icon-sm') + ' <span id="stat-it">-</span></div><div class="stat-label">\u8cc7\u901a\u7cfb\u7d71</div></div>'
+        + '<div class="stat-card"><div class="stat-value">' + ic('shield-alert', 'icon-sm') + ' <span id="stat-risk">-</span></div><div class="stat-label">\u9ad8\u98a8\u96aa</div></div>'
+        + '<div class="stat-card"><div class="stat-value">' + ic('check-circle', 'icon-sm') + ' <span id="stat-done">-</span></div><div class="stat-label">\u5df2\u5b8c\u6210</div></div>'
+        + '</div>'
+
         // Table
         + '<div class="card review-table-card">'
         + '<div class="card-header"><span class="card-title">\u8cc7\u7522\u6e05\u518a</span><span class="review-card-subtitle">\u8f09\u5165\u4e2d...</span></div>'
@@ -730,6 +745,16 @@
         var subtitleEl = document.querySelector('.review-card-subtitle');
         if (subtitleEl) subtitleEl.textContent = '\u5171 ' + items.length + ' \u7b46';
 
+        // Update stats summary bar
+        var totalCount = items.length;
+        var itCount = items.filter(function(i) { return i.isItSystem; }).length;
+        var riskCount = items.filter(function(i) { var r = i.riskData || {}; return (i.riskLevel || r.riskLevel) === '\u9ad8'; }).length;
+        var doneCount = items.filter(function(i) { return i.status === '\u5df2\u5b8c\u6210'; }).length;
+        var el1 = document.getElementById('stat-total'); if (el1) el1.textContent = totalCount;
+        var el2 = document.getElementById('stat-it'); if (el2) el2.textContent = itCount;
+        var el3 = document.getElementById('stat-risk'); if (el3) el3.textContent = riskCount;
+        var el4 = document.getElementById('stat-done'); if (el4) el4.textContent = doneCount;
+
         if (!items.length) {
           wrapper.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;">'
             + ic('inbox') + '<p>\u7121\u7b26\u5408\u689d\u4ef6\u7684\u8cc7\u7522\u8cc7\u6599</p>'
@@ -744,12 +769,12 @@
           var riskLevel = item.riskLevel || getRiskLevel(riskScore);
           var protLevel = item.protectionLevel || computeProtectionLevel(item.ciaC, item.ciaI, item.ciaA, item.ciaL);
           return '<tr>'
-            + '<td>' + esc(item.assetName || '') + '</td>'
-            + '<td>' + esc(getCategoryLabel(item.category)) + '</td>'
-            + '<td>' + esc(protLevel) + '</td>'
-            + '<td><span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel || '\u2014') + '</span></td>'
-            + '<td><span class="badge ' + getStatusBadgeClass(item.status) + '"><span class="badge-dot"></span>' + esc(item.status || '') + '</span></td>'
-            + '<td class="action-cell" style="white-space:nowrap;">'
+            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(item.assetName || '') + '</td>'
+            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(getCategoryLabel(item.category)) + '</td>'
+            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(protLevel) + '</td>'
+            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;"><span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel || '\u2014') + '</span></td>'
+            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + statusBadge(item.status) + '</td>'
+            + '<td class="action-cell" style="padding:10px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap;">'
             + '<button class="btn btn-sm btn-outline" data-action="app.editAsset" data-id="' + esc(item.id || '') + '" title="\u7de8\u8f2f">' + ic('edit') + '</button> '
             + '<button class="btn btn-sm btn-outline" data-action="app.viewAsset" data-id="' + esc(item.id || '') + '" title="\u6aa2\u8996">' + ic('eye') + '</button> '
             + '<button class="btn btn-sm btn-danger" data-action="app.deleteAsset" data-id="' + esc(item.id || '') + '" title="\u522a\u9664">' + ic('trash-2') + '</button>'
@@ -758,12 +783,12 @@
         }
 
         var tableHead = '<thead><tr>'
-          + '<th scope="col">\u8cc7\u7522\u540d\u7a31</th>'
-          + '<th scope="col">\u5206\u985e</th>'
-          + '<th scope="col">\u9632\u8b77\u7b49\u7d1a</th>'
-          + '<th scope="col">\u98a8\u96aa\u7b49\u7d1a</th>'
-          + '<th scope="col">\u72c0\u614b</th>'
-          + '<th scope="col">\u64cd\u4f5c</th>'
+          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u8cc7\u7522\u540d\u7a31</th>'
+          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u5206\u985e</th>'
+          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u9632\u8b77\u7b49\u7d1a</th>'
+          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u98a8\u96aa\u7b49\u7d1a</th>'
+          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u72c0\u614b</th>'
+          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u64cd\u4f5c</th>'
           + '</tr></thead>';
 
         // Admin sees grouped by unit; unit admin sees flat list
@@ -778,13 +803,13 @@
           unitNames.forEach(function (unitName, idx) {
             var unitItems = uniqueUnits[unitName];
             var unitCompleted = unitItems.every(function (it) { return it.status === '\u5df2\u5b8c\u6210'; });
-            var statusBadge = unitCompleted
-              ? '<span style="color:#2e7d32;font-weight:bold;">\u2713 \u5df2\u5b8c\u6210</span>'
+            var unitStatusLabel = unitCompleted
+              ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-size:0.8em;font-weight:600;">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
               : '<span style="color:#e65100;">' + unitItems.length + ' \u7b46\u8cc7\u7522</span>';
             groupedHtml += '<div class="card" style="margin-bottom:12px;border-radius:8px;overflow:hidden;">'
               + '<div style="padding:10px 16px;background:#f8f9fa;border-bottom:1px solid #e9ecef;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" data-action="app.toggleDashGroup" data-target="asset-group-' + idx + '">'
               + '<span style="font-weight:bold;">' + ic('building', 'icon-sm') + ' ' + esc(unitName) + '</span>'
-              + '<span style="display:flex;align-items:center;gap:8px;">' + statusBadge + ' <span>\u25be</span></span>'
+              + '<span style="display:flex;align-items:center;gap:8px;">' + unitStatusLabel + ' <span>\u25be</span></span>'
               + '</div>'
               + '<div id="asset-group-' + idx + '" style="padding:0;">'
               + '<table style="width:100%;border-collapse:collapse;">' + tableHead + '<tbody>';
@@ -797,7 +822,7 @@
           var rowsHtml = '';
           items.forEach(function (item) { rowsHtml += buildAssetRow(item); });
           wrapper.innerHTML = '<div class="table-wrapper" tabindex="0">'
-            + '<table>'
+            + '<table style="width:100%;border-collapse:collapse;">'
             + '<caption class="sr-only">\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a</caption>'
             + tableHead
             + '<tbody>' + rowsHtml + '</tbody>'
@@ -1664,7 +1689,7 @@
       var versionTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
         + detailRow('\u76e4\u9ede\u5e74\u5ea6', a.inventoryYear)
         + detailRow('\u7570\u52d5\u985e\u578b', a.changeType)
-        + detailBadgeRow('\u72c0\u614b', '<span class="badge ' + getStatusBadgeClass(a.status) + '"><span class="badge-dot"></span>' + esc(a.status || '') + '</span>')
+        + detailBadgeRow('\u72c0\u614b', statusBadge(a.status))
         + detailRow('\u7570\u52d5\u8aaa\u660e', a.changeDescription)
         + '</table>';
 
@@ -2492,11 +2517,11 @@
 
         // ── Stat cards ──
         var statsHtml = '<div class="stats-grid review-stats-grid">'
-          + '<div class="stat-card"><div class="stat-value" style="color:#2e7d32;">' + pct + '%</div><div class="stat-label">\u5b8c\u6210\u7387</div></div>'
-          + '<div class="stat-card"><div class="stat-value">' + completedCount + '/' + totalUnits + '</div><div class="stat-label">\u5df2\u5b8c\u6210/\u7e3d\u55ae\u4f4d</div></div>'
-          + '<div class="stat-card"><div class="stat-value">' + totalAssets + '</div><div class="stat-label">\u5168\u6821\u8cc7\u7522\u6578</div></div>'
-          + '<div class="stat-card"><div class="stat-value">' + totalItSys + '</div><div class="stat-label">\u8cc7\u901a\u7cfb\u7d71</div></div>'
-          + '<div class="stat-card"><div class="stat-value" style="color:#e74c3c;">' + totalHighRisk + '</div><div class="stat-label">\u9ad8\u98a8\u96aa</div></div>'
+          + '<div class="stat-card"><div class="stat-value" style="color:#2e7d32;">' + ic('trending-up', 'icon-sm') + ' ' + pct + '%</div><div class="stat-label">\u5b8c\u6210\u7387</div></div>'
+          + '<div class="stat-card"><div class="stat-value">' + ic('check-circle', 'icon-sm') + ' ' + completedCount + '/' + totalUnits + '</div><div class="stat-label">\u5df2\u5b8c\u6210/\u7e3d\u55ae\u4f4d</div></div>'
+          + '<div class="stat-card"><div class="stat-value">' + ic('layers', 'icon-sm') + ' ' + totalAssets + '</div><div class="stat-label">\u5168\u6821\u8cc7\u7522\u6578</div></div>'
+          + '<div class="stat-card"><div class="stat-value">' + ic('server', 'icon-sm') + ' ' + totalItSys + '</div><div class="stat-label">\u8cc7\u901a\u7cfb\u7d71</div></div>'
+          + '<div class="stat-card"><div class="stat-value" style="color:#e74c3c;">' + ic('alert-triangle', 'icon-sm') + ' ' + totalHighRisk + '</div><div class="stat-label">\u9ad8\u98a8\u96aa</div></div>'
           + '</div>';
 
         // ── Group units by category ──
@@ -2530,23 +2555,23 @@
             + '</div>'
             + '<div class="card-body" id="' + groupId + '" style="padding:0;">'
             + '<table style="width:100%;border-collapse:collapse;">'
-            + '<thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;">'
-            + '<th style="padding:10px 16px;text-align:left;">\u55ae\u4f4d\u540d\u7a31</th>'
-            + '<th style="padding:10px 12px;text-align:center;">\u72c0\u614b</th>'
-            + '<th style="padding:10px 12px;text-align:center;">\u8cc7\u7522\u6578</th>'
-            + '<th style="padding:10px 12px;text-align:center;">\u8cc7\u901a\u7cfb\u7d71</th>'
-            + '<th style="padding:10px 12px;text-align:center;">\u5927\u9678\u5ee0\u724c</th>'
-            + '<th style="padding:10px 12px;text-align:center;">\u9ad8\u98a8\u96aa</th>'
+            + '<thead><tr>'
+            + '<th style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u55ae\u4f4d\u540d\u7a31</th>'
+            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u72c0\u614b</th>'
+            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u8cc7\u7522\u6578</th>'
+            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u8cc7\u901a\u7cfb\u7d71</th>'
+            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u5927\u9678\u5ee0\u724c</th>'
+            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u9ad8\u98a8\u96aa</th>'
             + '</tr></thead><tbody>';
 
           units.forEach(function (u) {
-            var statusBadge = u.completed
-              ? '<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:#e8f5e9;color:#2e7d32;font-size:0.85em;font-weight:bold;">\u2713 \u5df2\u5b8c\u6210</span>'
-              : '<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:#ffebee;color:#c62828;font-size:0.85em;">\u2717 \u672a\u5b8c\u6210</span>';
+            var unitDashBadge = u.completed
+              ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-size:0.8em;font-weight:600;">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
+              : '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#ffebee;color:#c62828;font-size:0.8em;font-weight:600;">' + ic('x', 'icon-xs') + ' \u672a\u5b8c\u6210</span>';
             var rowBg = u.completed ? 'background:#f1f8e9;' : '';
             groupsHtml += '<tr style="border-bottom:1px solid #f0f0f0;' + rowBg + '">'
-              + '<td style="padding:10px 16px;' + (u.completed ? 'font-weight:bold;' : '') + '">' + esc(u.name) + '</td>'
-              + '<td style="padding:10px 12px;text-align:center;">' + statusBadge + '</td>'
+              + '<td style="padding:10px 12px;' + (u.completed ? 'font-weight:bold;' : '') + '">' + esc(u.name) + '</td>'
+              + '<td style="padding:10px 12px;text-align:center;">' + unitDashBadge + '</td>'
               + '<td style="padding:10px 12px;text-align:center;">' + (u.assets || '\u2014') + '</td>'
               + '<td style="padding:10px 12px;text-align:center;">' + (u.itSys || '\u2014') + '</td>'
               + '<td style="padding:10px 12px;text-align:center;">' + (u.cn || '\u2014') + '</td>'
@@ -2594,7 +2619,7 @@
         + '</div>'
 
         + '<div class="card review-table-card" style="margin-bottom:16px;">'
-        + '<div class="card-header"><span class="card-title">' + ic('file-text') + ' \u7bc4\u672c\u4e0b\u8f09</span></div>'
+        + '<div class="card-header"><span class="card-title">' + ic('file-text', 'icon-sm') + ' \u7bc4\u672c\u4e0b\u8f09</span></div>'
         + '<div class="card-body">'
         + '<p style="color:#666;font-size:0.9em;margin-bottom:12px;">\u8acb\u5148\u4e0b\u8f09 CSV \u7bc4\u672c\uff0c\u586b\u5beb\u5f8c\u518d\u4e0a\u50b3\u3002\u7bc4\u672c\u6b04\u4f4d\u5982\u4e0b\uff1a</p>'
         + '<div style="background:#f9f9f9;padding:10px;border-radius:4px;font-size:0.85em;overflow-x:auto;margin-bottom:12px;">'
@@ -2603,7 +2628,7 @@
         + '</div></div>'
 
         + '<div class="card review-table-card" style="margin-bottom:16px;">'
-        + '<div class="card-header"><span class="card-title">' + ic('upload-cloud') + ' \u4e0a\u50b3 CSV \u6a94\u6848</span></div>'
+        + '<div class="card-header"><span class="card-title">' + ic('upload', 'icon-sm') + ' \u4e0a\u50b3 CSV \u6a94\u6848</span></div>'
         + '<div class="card-body">'
         + '<div style="border:2px dashed #ccc;border-radius:8px;padding:30px;text-align:center;" id="batch-import-drop-zone">'
         + '<p style="color:#888;margin-bottom:8px;">\u9078\u64c7 CSV \u6a94\u6848</p>'
@@ -2697,15 +2722,15 @@
 
         var previewCount = Math.min(rows.length, 10);
         var headers = ['\u8cc7\u7522\u540d\u7a31', '\u4e3b\u5206\u985e', '\u5b50\u5206\u985e', '\u64c1\u6709\u8005', '\u4fdd\u7ba1\u55ae\u4f4d', '\u6a5f\u5bc6\u6027', '\u5b8c\u6574\u6027', '\u53ef\u7528\u6027', '\u8cc7\u901a\u7cfb\u7d71', '\u5927\u9678\u5ee0\u724c', '\u5099\u8a3b'];
-        var html = '<table><thead><tr>';
-        html += '<th scope="col">#</th>';
-        for (var hi = 0; hi < headers.length; hi++) { html += '<th scope="col" style="white-space:nowrap;">' + esc(headers[hi]) + '</th>'; }
+        var html = '<table style="width:100%;border-collapse:collapse;"><thead><tr>';
+        html += '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">#</th>';
+        for (var hi = 0; hi < headers.length; hi++) { html += '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">' + esc(headers[hi]) + '</th>'; }
         html += '</tr></thead><tbody>';
         for (var ri = 0; ri < previewCount; ri++) {
           var row = rows[ri];
-          html += '<tr><td>' + (ri + 1) + '</td>';
+          html += '<tr><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + (ri + 1) + '</td>';
           for (var ci = 0; ci < headers.length; ci++) {
-            html += '<td>' + esc(row[ci] || '') + '</td>';
+            html += '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(row[ci] || '') + '</td>';
           }
           html += '</tr>';
         }
@@ -2860,6 +2885,7 @@
         + '<div class="card review-table-card" style="margin-bottom:16px;">'
         + '<div class="card-body" style="padding:12px 16px;">'
         + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">'
+        + '<div style="display:flex;align-items:center;gap:6px;margin-right:4px;color:#555;">' + ic('calendar', 'icon-sm') + '</div>'
         + '<div class="form-group" style="margin-bottom:0;">'
         + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u57fa\u6e96\u5e74\u5ea6</label>'
         + '<select class="form-control" id="yc-base-year" style="min-width:100px;">'
@@ -2994,7 +3020,7 @@
             }
 
             var summaryHtml = '<div class="card review-table-card">'
-              + '<div class="card-header"><span class="card-title">\u6bd4\u5c0d\u7d50\u679c</span>'
+              + '<div class="card-header"><span class="card-title">' + ic('git-compare', 'icon-sm') + ' \u6bd4\u5c0d\u7d50\u679c</span>'
               + '<span class="review-card-subtitle">\u5171 ' + diffRows.length + ' \u7b46</span></div>'
               + '<div class="card-body">'
               + '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:0.9em;">'
@@ -3007,24 +3033,24 @@
               + '<div class="card-body" style="padding:0;">';
 
             var tableHtml = '<div class="table-wrapper" tabindex="0" style="overflow-x:auto;">'
-              + '<table>'
+              + '<table style="width:100%;border-collapse:collapse;">'
               + '<caption class="sr-only">\u5e74\u5ea6\u8cc7\u7522\u6bd4\u5c0d\u7d50\u679c</caption>'
               + '<thead><tr>'
-              + '<th scope="col">\u8cc7\u7522\u540d\u7a31</th>'
-              + '<th scope="col">\u5206\u985e</th>'
-              + '<th scope="col">\u57fa\u6e96\u5e74\u5ea6 CIA (' + esc(baseYear) + ')</th>'
-              + '<th scope="col">\u6bd4\u8f03\u5e74\u5ea6 CIA (' + esc(cmpYear) + ')</th>'
-              + '<th scope="col">\u7570\u52d5\u985e\u578b</th>'
+              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u8cc7\u7522\u540d\u7a31</th>'
+              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u5206\u985e</th>'
+              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u57fa\u6e96\u5e74\u5ea6 CIA (' + esc(baseYear) + ')</th>'
+              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u6bd4\u8f03\u5e74\u5ea6 CIA (' + esc(cmpYear) + ')</th>'
+              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u7570\u52d5\u985e\u578b</th>'
               + '</tr></thead><tbody>';
 
             for (var ri = 0; ri < diffRows.length; ri++) {
               var r = diffRows[ri];
               tableHtml += '<tr style="' + getChangeColor(r.changeType) + '">'
-                + '<td>' + esc(r.name) + '</td>'
-                + '<td>' + esc(r.category) + '</td>'
-                + '<td>' + esc(r.baseCIA) + '</td>'
-                + '<td>' + esc(r.cmpCIA) + '</td>'
-                + '<td>' + getChangeBadge(r.changeType) + '</td>'
+                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(r.name) + '</td>'
+                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(r.category) + '</td>'
+                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(r.baseCIA) + '</td>'
+                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(r.cmpCIA) + '</td>'
+                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + getChangeBadge(r.changeType) + '</td>'
                 + '</tr>';
             }
             tableHtml += '</tbody></table></div>'
