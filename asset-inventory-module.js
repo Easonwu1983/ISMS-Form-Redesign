@@ -928,26 +928,7 @@
         + '</div>'
         + '</div>';
 
-      // --- Section 6: Version Management ---
-      var versionHtml = ''
-        + '<div class="form-row">'
-        + '<div class="form-group">'
-        + '<label class="form-label form-required">\u76e4\u9ede\u5e74\u5ea6</label>'
-        + '<select class="form-select" id="asset-year" name="inventoryYear">' + buildYearOptions(a.inventoryYear || getCurrentRocYear()) + '</select>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u7570\u52d5\u985e\u578b</label>'
-        + '<select class="form-select" id="asset-change-type" name="changeType">' + buildSelectOptions(CHANGE_TYPE_OPTIONS, a.changeType || '', true) + '</select>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u72c0\u614b</label>'
-        + '<select class="form-select" id="asset-status" name="status">' + buildSelectOptions(STATUS_OPTIONS, a.status || '\u586b\u5831\u4e2d', true) + '</select>'
-        + '</div>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u7570\u52d5\u8aaa\u660e</label>'
-        + '<textarea class="form-textarea" name="changeDescription" rows="2">' + esc(a.changeDescription || '') + '</textarea>'
-        + '</div>';
+      // Section 6 (年度版本管理) removed — system auto-sets inventoryYear, changeType, status
 
       // --- Section 7: IT System ---
       var itSystemHtml = ''
@@ -1080,10 +1061,10 @@
         + formCard('security', 'shield', '3. \u5b89\u5168\u8a2d\u5b9a', '\u5b58\u53d6\u63a7\u5236\u3001\u5099\u4efd', securityHtml, { collapsed: true })
         + formCard('cia', 'bar-chart-2', '4. CIA \u9632\u8b77\u9700\u6c42\u5206\u7d1a', '\u81ea\u52d5\u8a08\u7b97\u9632\u8b77\u7b49\u7d1a', ciaHtml, { collapsed: false })
         + formCard('pii', 'user-check', '5. \u500b\u8cc7\u76f8\u95dc', '\u500b\u4eba\u8cc7\u6599', piiHtml, { collapsed: false })
-        + formCard('version', 'calendar', '6. \u5e74\u5ea6\u7248\u672c\u7ba1\u7406', '\u76e4\u9ede\u8207\u7570\u52d5', versionHtml, { collapsed: false })
-        + formCard('itSystem', 'server', '7. \u8cc7\u901a\u7cfb\u7d71\u5c08\u5c6c', '\u50c5\u8cc7\u901a\u7cfb\u7d71\u9700\u586b', itSystemHtml, { borderColor: '#1976D2', collapsed: false })
-        + formCard('chinaBrand', 'alert-circle', '8. \u5927\u9678\u5ee0\u724c', '\u50c5\u5927\u9678\u5ee0\u724c\u7522\u54c1\u9700\u586b', chinaBrandHtml, { borderColor: '#E65100', collapsed: false })
-        + formCard('risk', 'activity', '9. \u98a8\u96aa\u8a55\u9451', '\u53ef\u80fd\u6027 \u00d7 \u885d\u64ca\u6027', riskHtml, { borderColor: '#2E7D32', collapsed: false })
+        // Section 6 removed (auto-managed)
+        + formCard('itSystem', 'server', '6. \u8cc7\u901a\u7cfb\u7d71\u5c08\u5c6c', '\u50c5\u8cc7\u901a\u7cfb\u7d71\u9700\u586b', itSystemHtml, { borderColor: '#1976D2', collapsed: false })
+        + formCard('chinaBrand', 'alert-circle', '7. \u5927\u9678\u5ee0\u724c', '\u50c5\u5927\u9678\u5ee0\u724c\u7522\u54c1\u9700\u586b', chinaBrandHtml, { borderColor: '#E65100', collapsed: false })
+        + formCard('risk', 'activity', '8. \u98a8\u96aa\u8a55\u9451', '\u53ef\u80fd\u6027 \u00d7 \u885d\u64ca\u6027', riskHtml, { borderColor: '#2E7D32', collapsed: false })
 
         + '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;padding-bottom:40px;">'
         + '<button type="button" class="btn btn-outline" data-action="app.backToList">\u53d6\u6d88</button>'
@@ -1156,6 +1137,12 @@
           if (payload.ciaI) { payload.integrity = payload.ciaI; delete payload.ciaI; }
           if (payload.ciaA) { payload.availability = payload.ciaA; delete payload.ciaA; }
           if (payload.ciaL) { payload.legalCompliance = payload.ciaL; delete payload.ciaL; }
+
+          // Auto-set version fields (no longer user-facing)
+          var hiddenId = (document.getElementById('asset-id-hidden') || {}).value || '';
+          if (!payload.inventoryYear) payload.inventoryYear = getCurrentRocYear();
+          if (!payload.changeType) payload.changeType = hiddenId ? '\u4fee\u6539' : '\u65b0\u589e';
+          if (!payload.status) payload.status = '\u586b\u5831\u4e2d';
 
           // Remove inline appendix10 select fields from payload (they use name="a10_*")
           Object.keys(payload).forEach(function(k) {
@@ -1489,7 +1476,7 @@
         + buildCollapsibleSection('detail-cia', '4. CIA \u9632\u8b77\u9700\u6c42\u5206\u7d1a', ciaTable, { open: true })
         + buildCollapsibleSection('detail-pii', '5. \u500b\u8cc7\u76f8\u95dc', piiTable, { open: true })
         + buildCollapsibleSection('detail-version', '6. \u5e74\u5ea6\u7248\u672c\u7ba1\u7406', versionTable, { open: true })
-        + (a.isItSystem ? buildCollapsibleSection('detail-itSystem', '7. \u8cc7\u901a\u7cfb\u7d71\u5c08\u5c6c', itSystemTable, { open: true, borderColor: '#3498db' }) : '')
+        + (a.isItSystem ? buildCollapsibleSection('detail-itSystem', '6. \u8cc7\u901a\u7cfb\u7d71\u5c08\u5c6c', itSystemTable, { open: true, borderColor: '#3498db' }) : '')
         + (a.isItSystem ? buildCollapsibleSection('detail-itProtection', '8. \u9632\u8b77\u7b49\u7d1a\u8a55\u4f30', itProtectionTable, { open: true, borderColor: '#3498db' }) : '')
         + (a.isChinaBrand ? buildCollapsibleSection('detail-chinaBrand', '9. \u5927\u9678\u5ee0\u724c', chinaBrandTable, { open: true, borderColor: '#e67e22' }) : '')
         + buildCollapsibleSection('detail-risk', '10. \u98a8\u96aa\u8a55\u9451', riskTable, { open: true, borderColor: '#27ae60' })
