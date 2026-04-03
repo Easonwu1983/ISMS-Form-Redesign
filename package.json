@@ -70,7 +70,8 @@
         "lint:frontend": "eslint *.js --max-warnings 30",
         "build": "node scripts/build-app-core-assets.cjs && node -e \"const m=require('./scripts/build-version-info.cjs');const i=m.getBuildInfo('campus-host');require('fs').writeFileSync('deploy-manifest.json',JSON.stringify({builtAt:i.builtAt,versionKey:i.versionKey,buildInfo:i},null,2));console.log('Built version:',i.versionKey)\"",
         "build:version": "node -e \"const m=require('./scripts/build-version-info.cjs');const i=m.getBuildInfo('campus-host');require('fs').writeFileSync('deploy-manifest.json',JSON.stringify({builtAt:i.builtAt,versionKey:i.versionKey,buildInfo:i},null,2));console.log('Version:',i.versionKey)\"",
-        "test:unit": "npx jest tests/ --no-cache"
+        "test:unit": "npx jest tests/ --no-cache",
+        "typecheck": "npx tsc --noEmit"
     },
     "devDependencies": {
         "@axe-core/playwright": "^4.11.1",
@@ -84,6 +85,7 @@
     },
     "dependencies": {
         "docx": "^9.6.1",
+        "pdf-parse": "^2.4.5",
         "pdfmake": "^0.3.7",
         "pg": "^8.20.0"
     }

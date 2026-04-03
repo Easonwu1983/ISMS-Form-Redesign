@@ -1,4 +1,10 @@
-﻿const crypto = require('crypto');
+﻿// @ts-check
+/** @typedef {import('../../../../../types/contracts').SystemUser} SystemUser */
+/** @typedef {import('../../../../../types/contracts').SystemUserPayload} SystemUserPayload */
+/** @typedef {import('../../../../../types/contracts').UserRole} UserRole */
+/** @typedef {import('../../../../../types/contracts').SecurityRole} SecurityRole */
+
+const crypto = require('crypto');
 
 
 const CONTRACT_VERSION = '2026-04-02';
