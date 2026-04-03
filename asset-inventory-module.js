@@ -544,22 +544,27 @@
           var id = ctx.dataset && ctx.dataset.id;
           if (id) return '#asset-detail/' + id;
         },
-        deleteAsset: async function (ctx) {
+        deleteAsset: function (ctx) {
           var id = ctx.dataset && ctx.dataset.id;
           if (!id) return;
-          var confirmed = typeof openConfirmDialog === 'function'
-            ? await openConfirmDialog('\u78ba\u5b9a\u8981\u522a\u9664\u6b64\u8cc7\u7522\u55ce\uff1f\u6b64\u64cd\u4f5c\u7121\u6cd5\u5fa9\u539f\u3002', { title: '\u522a\u9664\u8cc7\u7522', confirmLabel: '\u78ba\u8a8d\u522a\u9664', confirmClass: 'btn-danger' })
-            : window.confirm('\u78ba\u5b9a\u8981\u522a\u9664\u6b64\u8cc7\u7522\u55ce\uff1f');
-          if (!confirmed) return;
-          try {
-            await runWithBusyState(async function () {
-              await apiCall('POST', '/' + id + '/delete');
+          if (!window.confirm('\u78ba\u5b9a\u8981\u522a\u9664\u6b64\u8cc7\u7522\u55ce\uff1f\u6b64\u64cd\u4f5c\u7121\u6cd5\u5fa9\u539f\u3002')) return;
+          var endpoint = (window.__M365_UNIT_CONTACT_CONFIG__ && window.__M365_UNIT_CONTACT_CONFIG__.assetInventoryEndpoint) || '/api/assets';
+          fetch(endpoint + '/' + id + '/delete', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          }).then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data.success) {
+                alert('\u5df2\u6210\u529f\u522a\u9664\u8cc7\u7522');
+                window.location.hash = '#assets';
+                window.location.reload();
+              } else {
+                alert('\u522a\u9664\u5931\u6557\uff1a' + (data.error || '\u672a\u77e5\u932f\u8aa4'));
+              }
+            }).catch(function (err) {
+              alert('\u522a\u9664\u5931\u6557\uff1a' + String(err && err.message || err));
             });
-            toast('\u5df2\u6210\u529f\u522a\u9664\u8cc7\u7522');
-            applyFiltersAndReload();
-          } catch (err) {
-            toast('\u522a\u9664\u5931\u6557\uff1a' + String(err && err.message || err), 'error');
-          }
         }
       });
 
