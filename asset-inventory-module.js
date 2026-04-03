@@ -536,17 +536,23 @@
       if (!appEl) return;
 
       appEl.innerHTML = '<div class="animate-in">'
-        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
-        + '<h2>' + ic('database') + ' \u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a</h2>'
-        + '<div class="page-header-actions" style="display:flex;gap:8px;flex-wrap:wrap;">'
+        + '<div class="page-header review-page-header page-header--integrated">'
+        + '<div>'
+        + '<div class="page-eyebrow">\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede</div>'
+        + '<h1 class="page-title">' + ic('database') + ' \u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a</h1>'
+        + '<p class="page-subtitle">\u7ba1\u7406\u672c\u55ae\u4f4d\u8cc7\u8a0a\u8cc7\u7522\uff0c\u4f9d\u5206\u985e\u3001CIA\u7b49\u7d1a\u3001\u98a8\u96aa\u9032\u884c\u76e4\u9ede\u8207\u8a55\u4f30\u3002</p>'
+        + '</div>'
+        + '<div class="review-header-actions">'
         + '<button class="btn btn-primary" data-action="app.createAsset">' + ic('plus') + ' \u65b0\u589e</button>'
-        + '<button class="btn btn-outline" data-action="app.exportAssets">' + ic('download') + ' \u532f\u51fa</button>'
-        + '<button class="btn btn-outline" data-action="app.submitAllAssets" style="color:#2e7d32;border-color:#2e7d32;">' + ic('check-circle') + ' \u5e74\u5ea6\u5df2\u76e4\u9ede\u5b8c\u6210</button>'
+        + '<button class="btn btn-secondary" data-action="app.exportAssets">' + ic('download') + ' \u532f\u51fa</button>'
+        + '<button class="btn btn-secondary" data-action="app.submitAllAssets" style="color:#2e7d32;border-color:#2e7d32;">' + ic('check-circle') + ' \u5e74\u5ea6\u5df2\u76e4\u9ede\u5b8c\u6210</button>'
         + '</div>'
         + '</div>'
 
         // Filter bar
-        + '<div class="filter-bar" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">'
+        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card-body" style="padding:12px 16px;">'
+        + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'
         + '<div class="form-group" style="margin-bottom:0;">'
         + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u5e74\u5ea6</label>'
         + '<select class="form-control" id="asset-filter-year" style="min-width:90px;">' + buildYearOptions(browseState.year) + '</select>'
@@ -570,14 +576,19 @@
         + '<input type="text" class="form-control" id="asset-filter-keyword" placeholder="\u8cc7\u7522\u540d\u7a31\u3001\u64c1\u6709\u8005..." value="' + esc(browseState.keyword) + '" style="min-width:160px;">'
         + '</div>'
         + '<div style="display:flex;align-items:flex-end;">'
-        + '<button class="btn btn-outline btn-sm" data-action="app.filterAssets" style="margin-top:auto;">' + ic('search') + ' \u67e5\u8a62</button>'
+        + '<button class="btn btn-secondary btn-sm" data-action="app.filterAssets" style="margin-top:auto;">' + ic('search') + ' \u67e5\u8a62</button>'
         + '</div>'
         + '</div>'
+        + '</div></div>'
 
         // Table
+        + '<div class="card review-table-card">'
+        + '<div class="card-header"><span class="card-title">\u8cc7\u7522\u6e05\u518a</span><span class="review-card-subtitle">\u8f09\u5165\u4e2d...</span></div>'
+        + '<div class="card-body" style="padding:0;">'
         + '<div id="asset-list-table-wrapper" style="overflow-x:auto;">'
         + '<div class="empty-state" style="padding:40px 0;text-align:center;">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div>'
         + '</div>'
+        + '</div></div>'
         + '</div>';
 
       scheduleRefreshIcons();
@@ -714,6 +725,10 @@
             return haystack.indexOf(keyword) !== -1;
           });
         }
+
+        // Update card subtitle with count
+        var subtitleEl = document.querySelector('.review-card-subtitle');
+        if (subtitleEl) subtitleEl.textContent = '\u5171 ' + items.length + ' \u7b46';
 
         if (!items.length) {
           wrapper.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;">'
@@ -2378,10 +2393,14 @@
       var year = getCurrentRocYear();
 
       appEl.innerHTML = '<div class="animate-in">'
-        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
-        + '<h2>' + ic('bar-chart-2') + ' \u8cc7\u7522\u76e4\u9ede\u7e3d\u89bd\u5100\u8868\u677f</h2>'
-        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '<div class="page-header review-page-header page-header--integrated">'
+        + '<div>'
+        + '<div class="page-eyebrow">\u7cfb\u7d71\u7ba1\u7406</div>'
+        + '<h1 class="page-title">' + ic('bar-chart-2') + ' \u8cc7\u7522\u76e4\u9ede\u7e3d\u89bd\u5100\u8868\u677f</h1>'
+        + '<p class="page-subtitle">\u5168\u6821\u5404\u55ae\u4f4d\u76e4\u9ede\u5b8c\u6210\u72c0\u614b\uff0c\u4f9d\u884c\u653f\u55ae\u4f4d\u3001\u5b78\u8853\u55ae\u4f4d\u3001\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d\u5206\u5c64\u986f\u793a\u3002</p>'
+        + '</div>'
+        + '<div class="review-header-actions">'
+        + '<button class="btn btn-secondary" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
         + '</div>'
         + '</div>'
         + '<div id="asset-dashboard-content">'
@@ -2471,42 +2490,13 @@
         var dashEl = document.getElementById('asset-dashboard-content');
         if (!dashEl) return;
 
-        // ── Beautiful stat cards ──
-        var statsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">'
-          // Main progress card - larger, green gradient
-          + '<div style="grid-column:span 2;background:linear-gradient(135deg,#2e7d32,#43a047);color:white;border-radius:12px;padding:24px;display:flex;align-items:center;gap:20px;">'
-          + '<div style="text-align:center;">'
-          + '<div style="font-size:2.5em;font-weight:bold;">' + pct + '%</div>'
-          + '<div style="font-size:0.9em;opacity:0.9;">\u5b8c\u6210\u7387</div>'
-          + '</div>'
-          + '<div style="flex:1;">'
-          + '<div style="font-size:1.1em;margin-bottom:8px;">\u5168\u6821\u76e4\u9ede\u9032\u5ea6 (' + esc(String(year)) + '\u5e74\u5ea6)</div>'
-          + '<div style="background:rgba(255,255,255,0.3);border-radius:6px;height:10px;overflow:hidden;">'
-          + '<div style="background:white;height:100%;width:' + pct + '%;border-radius:6px;transition:width 0.5s;"></div>'
-          + '</div>'
-          + '<div style="margin-top:6px;font-size:0.85em;opacity:0.9;">' + completedCount + ' / ' + totalUnits + ' \u55ae\u4f4d\u5df2\u5b8c\u6210</div>'
-          + '</div>'
-          + '</div>'
-          // Total assets card
-          + '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-left:4px solid #1976D2;">'
-          + '<div style="font-size:2em;font-weight:bold;color:#1976D2;">' + totalAssets + '</div>'
-          + '<div style="color:#666;font-size:0.9em;">\u5168\u6821\u8cc7\u7522\u7e3d\u6578</div>'
-          + '</div>'
-          // IT systems card
-          + '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-left:4px solid #00897B;">'
-          + '<div style="font-size:2em;font-weight:bold;color:#00897B;">' + totalItSys + '</div>'
-          + '<div style="color:#666;font-size:0.9em;">\u8cc7\u901a\u7cfb\u7d71\u6578</div>'
-          + '</div>'
-          // China brand card
-          + '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-left:4px solid #F57C00;">'
-          + '<div style="font-size:2em;font-weight:bold;color:#F57C00;">' + totalCn + '</div>'
-          + '<div style="color:#666;font-size:0.9em;">\u5927\u9678\u5ee0\u724c\u6578</div>'
-          + '</div>'
-          // High risk card
-          + '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-left:4px solid #D32F2F;">'
-          + '<div style="font-size:2em;font-weight:bold;color:#D32F2F;">' + totalHighRisk + '</div>'
-          + '<div style="color:#666;font-size:0.9em;">\u9ad8\u98a8\u96aa\u6578</div>'
-          + '</div>'
+        // ── Stat cards ──
+        var statsHtml = '<div class="stats-grid review-stats-grid">'
+          + '<div class="stat-card"><div class="stat-value" style="color:#2e7d32;">' + pct + '%</div><div class="stat-label">\u5b8c\u6210\u7387</div></div>'
+          + '<div class="stat-card"><div class="stat-value">' + completedCount + '/' + totalUnits + '</div><div class="stat-label">\u5df2\u5b8c\u6210/\u7e3d\u55ae\u4f4d</div></div>'
+          + '<div class="stat-card"><div class="stat-value">' + totalAssets + '</div><div class="stat-label">\u5168\u6821\u8cc7\u7522\u6578</div></div>'
+          + '<div class="stat-card"><div class="stat-value">' + totalItSys + '</div><div class="stat-label">\u8cc7\u901a\u7cfb\u7d71</div></div>'
+          + '<div class="stat-card"><div class="stat-value" style="color:#e74c3c;">' + totalHighRisk + '</div><div class="stat-label">\u9ad8\u98a8\u96aa</div></div>'
           + '</div>';
 
         // ── Group units by category ──
@@ -2533,26 +2523,11 @@
           var groupPct = units.length > 0 ? Math.round(groupCompleted / units.length * 100) : 0;
           var groupId = 'dash-group-' + idx;
 
-          groupsHtml += '<div class="card" style="margin-bottom:16px;border-radius:12px;overflow:hidden;">'
-            // Card header
-            + '<div style="padding:16px 20px;background:#f8f9fa;border-bottom:1px solid #e9ecef;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" '
-            + 'data-action="app.toggleDashGroup" data-target="' + groupId + '">'
-            + '<div>'
-            + '<span style="font-weight:bold;font-size:1.1em;">' + ic(cat.icon) + ' ' + esc(cat.label) + '</span>'
-            + '<span style="margin-left:12px;font-size:0.85em;color:#666;">'
-            + '\u5171 ' + units.length + ' \u500b\u55ae\u4f4d'
-            + '</span>'
+          groupsHtml += '<div class="card review-table-card" style="margin-bottom:16px;">'
+            + '<div class="card-header" style="cursor:pointer;" data-action="app.toggleDashGroup" data-target="' + groupId + '">'
+            + '<span class="card-title">' + ic(cat.icon) + ' ' + esc(cat.label) + '</span>'
+            + '<span class="review-card-subtitle">' + units.length + ' \u500b\u55ae\u4f4d \u00b7 ' + groupCompleted + ' \u5df2\u5b8c\u6210</span>'
             + '</div>'
-            + '<div style="display:flex;align-items:center;gap:12px;">'
-            + '<span style="font-size:0.85em;">'
-            + '<span style="color:#2e7d32;font-weight:bold;">' + groupCompleted + ' \u5df2\u5b8c\u6210</span> \u00b7 '
-            + '<span style="color:#c62828;">' + groupIncomplete + ' \u672a\u5b8c\u6210</span>'
-            + '</span>'
-            + '<span style="background:' + (groupPct >= 80 ? '#2e7d32' : groupPct >= 40 ? '#F57C00' : '#c62828') + ';color:white;padding:2px 8px;border-radius:10px;font-size:0.8em;">' + groupPct + '%</span>'
-            + '<span class="dash-group-arrow">\u25be</span>'
-            + '</div>'
-            + '</div>'
-            // Card body with table
             + '<div class="card-body" id="' + groupId + '" style="padding:0;">'
             + '<table style="width:100%;border-collapse:collapse;">'
             + '<thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;">'
@@ -2607,54 +2582,63 @@
       var TEMPLATE_HEADERS = '\u8cc7\u7522\u540d\u7a31,\u4e3b\u5206\u985e(PE/DC/DA/SW/HW/VM/BS),\u5b50\u5206\u985e,\u64c1\u6709\u8005,\u4fdd\u7ba1\u55ae\u4f4d,\u6a5f\u5bc6\u6027(\u666e/\u4e2d/\u9ad8),\u5b8c\u6574\u6027(\u666e/\u4e2d/\u9ad8),\u53ef\u7528\u6027(\u666e/\u4e2d/\u9ad8),\u662f\u5426\u8cc7\u901a\u7cfb\u7d71(\u662f/\u5426),\u662f\u5426\u5927\u9678\u5ee0\u724c(\u662f/\u5426),\u5099\u8a3b';
 
       appEl.innerHTML = '<div class="animate-in">'
-        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
-        + '<h2>' + ic('upload') + ' \u6279\u6b21\u532f\u5165\u8cc7\u7522</h2>'
-        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '<div class="page-header review-page-header page-header--integrated">'
+        + '<div>'
+        + '<div class="page-eyebrow">\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede</div>'
+        + '<h1 class="page-title">' + ic('upload') + ' \u6279\u6b21\u532f\u5165\u8cc7\u7522</h1>'
+        + '<p class="page-subtitle">\u4e0b\u8f09 CSV \u7bc4\u672c\uff0c\u586b\u5beb\u5f8c\u4e0a\u50b3\u5373\u53ef\u6279\u6b21\u5efa\u7acb\u8cc7\u7522\u3002</p>'
+        + '</div>'
+        + '<div class="review-header-actions">'
+        + '<button class="btn btn-secondary" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
         + '</div>'
         + '</div>'
 
-        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
-        + '<h4 style="margin-bottom:12px;">' + ic('file-text') + ' \u7bc4\u672c\u4e0b\u8f09</h4>'
+        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card-header"><span class="card-title">' + ic('file-text') + ' \u7bc4\u672c\u4e0b\u8f09</span></div>'
+        + '<div class="card-body">'
         + '<p style="color:#666;font-size:0.9em;margin-bottom:12px;">\u8acb\u5148\u4e0b\u8f09 CSV \u7bc4\u672c\uff0c\u586b\u5beb\u5f8c\u518d\u4e0a\u50b3\u3002\u7bc4\u672c\u6b04\u4f4d\u5982\u4e0b\uff1a</p>'
         + '<div style="background:#f9f9f9;padding:10px;border-radius:4px;font-size:0.85em;overflow-x:auto;margin-bottom:12px;">'
         + '<code>' + esc(TEMPLATE_HEADERS) + '</code></div>'
-        + '<button class="btn btn-outline btn-sm" data-action="app.downloadTemplate">' + ic('download') + ' \u4e0b\u8f09\u7bc4\u672c</button>'
-        + '</div>'
+        + '<button class="btn btn-secondary btn-sm" data-action="app.downloadTemplate">' + ic('download') + ' \u4e0b\u8f09\u7bc4\u672c</button>'
+        + '</div></div>'
 
-        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
-        + '<h4 style="margin-bottom:12px;">' + ic('upload-cloud') + ' \u4e0a\u50b3 CSV \u6a94\u6848</h4>'
-        + '<div style="border:2px dashed #ccc;border-radius:8px;padding:30px;text-align:center;margin-bottom:12px;" id="batch-import-drop-zone">'
+        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card-header"><span class="card-title">' + ic('upload-cloud') + ' \u4e0a\u50b3 CSV \u6a94\u6848</span></div>'
+        + '<div class="card-body">'
+        + '<div style="border:2px dashed #ccc;border-radius:8px;padding:30px;text-align:center;" id="batch-import-drop-zone">'
         + '<p style="color:#888;margin-bottom:8px;">\u9078\u64c7 CSV \u6a94\u6848</p>'
         + '<input type="file" accept=".csv" id="batch-import-file" style="display:inline-block;">'
         + '</div>'
-        + '</div>'
+        + '</div></div>'
 
         + '<div id="batch-import-preview" style="display:none;">'
-        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
-        + '<h4 style="margin-bottom:12px;">' + ic('eye') + ' \u9810\u89bd\uff08\u524d 10 \u7b46\uff09</h4>'
+        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card-header"><span class="card-title">' + ic('eye') + ' \u9810\u89bd\uff08\u524d 10 \u7b46\uff09</span></div>'
+        + '<div class="card-body">'
         + '<div id="batch-import-preview-table" style="overflow-x:auto;"></div>'
         + '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;">'
         + '<span id="batch-import-total" style="color:#666;font-size:0.9em;"></span>'
         + '<button class="btn btn-primary" data-action="app.confirmImport">' + ic('check') + ' \u78ba\u8a8d\u532f\u5165</button>'
         + '</div>'
-        + '</div>'
+        + '</div></div>'
         + '</div>'
 
         + '<div id="batch-import-progress" style="display:none;">'
-        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
-        + '<h4 style="margin-bottom:12px;">' + ic('loader') + ' \u532f\u5165\u4e2d...</h4>'
+        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card-header"><span class="card-title">' + ic('loader') + ' \u532f\u5165\u4e2d...</span></div>'
+        + '<div class="card-body">'
         + '<div style="background:#eee;border-radius:4px;overflow:hidden;height:24px;margin-bottom:8px;">'
         + '<div id="batch-import-progress-bar" style="background:#3498db;height:100%;width:0%;transition:width 0.3s;border-radius:4px;"></div>'
         + '</div>'
         + '<div id="batch-import-progress-text" style="font-size:0.9em;color:#666;"></div>'
-        + '</div>'
+        + '</div></div>'
         + '</div>'
 
         + '<div id="batch-import-result" style="display:none;">'
-        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
+        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card-body">'
         + '<div id="batch-import-result-content"></div>'
-        + '</div>'
+        + '</div></div>'
         + '</div>'
 
         + '</div>';
@@ -2862,14 +2846,19 @@
       var currentYear = getCurrentRocYear();
 
       appEl.innerHTML = '<div class="animate-in">'
-        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
-        + '<h2>' + ic('git-compare') + ' \u5e74\u5ea6\u8cc7\u7522\u6bd4\u5c0d</h2>'
-        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '<div class="page-header review-page-header page-header--integrated">'
+        + '<div>'
+        + '<div class="page-eyebrow">\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede</div>'
+        + '<h1 class="page-title">' + ic('git-compare') + ' \u5e74\u5ea6\u8cc7\u7522\u6bd4\u5c0d</h1>'
+        + '<p class="page-subtitle">\u6bd4\u8f03\u4e0d\u540c\u5e74\u5ea6\u7684\u8cc7\u7522\u6e05\u518a\u5dee\u7570\uff0c\u8ffd\u8e64\u65b0\u589e\u3001\u4fee\u6539\u8207\u522a\u9664\u3002</p>'
+        + '</div>'
+        + '<div class="review-header-actions">'
+        + '<button class="btn btn-secondary" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
         + '</div>'
         + '</div>'
 
-        + '<div class="card" style="padding:16px;margin-bottom:16px;">'
+        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card-body" style="padding:12px 16px;">'
         + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">'
         + '<div class="form-group" style="margin-bottom:0;">'
         + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u57fa\u6e96\u5e74\u5ea6</label>'
@@ -2885,7 +2874,7 @@
         + '</div>'
         + '<button class="btn btn-primary btn-sm" data-action="app.runComparison">' + ic('refresh-cw') + ' \u57f7\u884c\u6bd4\u5c0d</button>'
         + '</div>'
-        + '</div>'
+        + '</div></div>'
 
         + '<div id="yc-result">'
         + '<div class="empty-state" style="padding:40px 0;text-align:center;color:#888;">'
@@ -3004,12 +2993,18 @@
               else noChangeCount++;
             }
 
-            var summaryHtml = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:0.9em;">'
+            var summaryHtml = '<div class="card review-table-card">'
+              + '<div class="card-header"><span class="card-title">\u6bd4\u5c0d\u7d50\u679c</span>'
+              + '<span class="review-card-subtitle">\u5171 ' + diffRows.length + ' \u7b46</span></div>'
+              + '<div class="card-body">'
+              + '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:0.9em;">'
               + '<span style="color:#27ae60;">' + ic('plus-circle') + ' \u65b0\u589e: <strong>' + addCount + '</strong></span>'
               + '<span style="color:#f39c12;">' + ic('edit') + ' \u4fee\u6539: <strong>' + modCount + '</strong></span>'
               + '<span style="color:#e74c3c;">' + ic('minus-circle') + ' \u522a\u9664: <strong>' + delCount + '</strong></span>'
               + '<span style="color:#888;">' + ic('check') + ' \u7121\u7570\u52d5: <strong>' + noChangeCount + '</strong></span>'
-              + '</div>';
+              + '</div>'
+              + '</div>'
+              + '<div class="card-body" style="padding:0;">';
 
             var tableHtml = '<div class="table-wrapper" tabindex="0" style="overflow-x:auto;">'
               + '<table>'
@@ -3032,7 +3027,8 @@
                 + '<td>' + getChangeBadge(r.changeType) + '</td>'
                 + '</tr>';
             }
-            tableHtml += '</tbody></table></div>';
+            tableHtml += '</tbody></table></div>'
+              + '</div></div>';
 
             resultEl.innerHTML = summaryHtml + tableHtml;
             scheduleRefreshIcons();
