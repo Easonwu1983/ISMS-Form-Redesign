@@ -58,13 +58,20 @@
         var handler = window.__ismsAssetActions[key];
         if (typeof handler !== 'function') return;
         e.preventDefault();
-        try {
-          var result = handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) });
-          // If handler returns a hash string, navigate to it
-          if (typeof result === 'string' && result.charAt(0) === '#') {
-            window.location.hash = result;
-          }
-        } catch (_) {}
+        // Navigation actions — handle directly to avoid ESM bundle closure issues
+        var navRoutes = {
+          createAsset: '#asset-create',
+          backToList: '#assets'
+        };
+        var paramRoutes = {
+          editAsset: '#asset-edit/',
+          viewAsset: '#asset-detail/',
+          backToDetail: '#asset-detail/'
+        };
+        if (navRoutes[key]) { window.location.hash = navRoutes[key]; return; }
+        if (paramRoutes[key]) { var pid = (el.dataset && el.dataset.id) || ''; if (pid) window.location.hash = paramRoutes[key] + pid; return; }
+        // Non-navigation actions — call handler normally
+        try { handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) }); } catch (_) {}
       }, true);
     }
     function bindActions(handlers) {
