@@ -201,7 +201,7 @@
 
       var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
         + '<span style="font-size:13px;color:#666;">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</span>'
-        + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform" style="font-size:12px;padding:4px 12px;display:inline-flex;align-items:center;gap:4px;">' + ic('check-circle', 'icon-xs') + ' \u5168\u90e8\u7b26\u5408</button>'
+        + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform" style="font-size:12px;padding:5px 14px;line-height:1;"><span style="display:inline-flex;align-items:center;gap:5px;vertical-align:middle;">' + ic('check-circle', 'icon-xs') + '<span style="vertical-align:middle;">\u5168\u90e8\u7b26\u5408</span></span></button>'
         + '</div>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
       html += '<thead><tr style="background:#f8f9fa;">'
