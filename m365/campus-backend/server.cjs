@@ -140,8 +140,10 @@ function buildSecurityHeaders(pathname) {
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'no-referrer',
     'permissions-policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()',
-    'cache-control': p.startsWith('/api/') ? 'no-store, no-cache, must-revalidate' : 'no-store',
-    'pragma': 'no-cache',
+    'cache-control': p.startsWith('/api/')
+      ? 'no-store, no-cache, must-revalidate'
+      : (/\.(js|css|json|svg|png|jpg|ico|woff2?)(\?|$)/.test(p) ? 'public, max-age=86400, stale-while-revalidate=3600' : 'no-cache'),
+    'pragma': p.startsWith('/api/') ? 'no-cache' : '',
     'strict-transport-security': 'max-age=31536000; includeSubDomains',
     'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   };
@@ -1496,6 +1498,12 @@ function createServer() {
       if (!String(url.pathname || '').startsWith('/api/')) return;
       const durationMs = Date.now() - startedAt;
       const clientIp = readClientAddress(req) || '-';
+      // Request counters for health dashboard
+      global.__ISMS_REQUEST_COUNT__ = (Number(global.__ISMS_REQUEST_COUNT__) || 0) + 1;
+      if (res.statusCode >= 500) {
+        global.__ISMS_ERROR_COUNT__ = (Number(global.__ISMS_ERROR_COUNT__) || 0) + 1;
+        try { require('./error-alerter.cjs').collectError({ path: url.pathname, status: res.statusCode, message: 'HTTP ' + res.statusCode, clientIp }); } catch (_) {}
+      }
       console.log(JSON.stringify({
         level: 'info', type: 'http',
         requestId, method: req.method, path: url.pathname,
@@ -1615,13 +1623,41 @@ function createServer() {
           requestAuthz.requireAdmin(authz, 'Only admin can view server stats');
           const uptime = process.uptime();
           const mem = process.memoryUsage();
+          // DB health
+          let dbHealth = { ok: false, latencyMs: 0, activeConnections: 0 };
+          try {
+            const dbStart = Date.now();
+            await db.queryOne('SELECT 1');
+            dbHealth = { ok: true, latencyMs: Date.now() - dbStart, activeConnections: db.pool ? db.pool.totalCount : 0, idleConnections: db.pool ? db.pool.idleCount : 0 };
+          } catch (dbErr) { dbHealth = { ok: false, latencyMs: 0, error: String(dbErr && dbErr.message || dbErr) }; }
+          // Disk usage (attachments dir)
+          let diskUsage = { path: '', totalFiles: 0, totalSizeMB: 0 };
+          try {
+            const attachDir = cleanText(process.env.ATTACHMENTS_DIR) || path.join(__dirname, '..', '..', 'attachments');
+            if (fs.existsSync(attachDir)) {
+              let totalSize = 0; let fileCount = 0;
+              const walk = function (dir) { try { fs.readdirSync(dir, { withFileTypes: true }).forEach(function (e) { if (e.isDirectory()) walk(path.join(dir, e.name)); else { fileCount++; try { totalSize += fs.statSync(path.join(dir, e.name)).size; } catch (_) {} } }); } catch (_) {} };
+              walk(attachDir);
+              diskUsage = { path: attachDir, totalFiles: fileCount, totalSizeMB: Math.round(totalSize / 1024 / 1024 * 10) / 10 };
+            }
+          } catch (_) {}
+          // Error alerter stats
+          let errorStats = { buffered: 0, recent: [] };
+          try { const alerter = require('./error-alerter.cjs'); errorStats = { buffered: alerter.getErrorCount(), recent: alerter.getRecentErrors(5) }; } catch (_) {}
+          // Request stats from HTTP log
+          const requestStats = { totalSinceStart: Number(global.__ISMS_REQUEST_COUNT__ || 0), errorsSinceStart: Number(global.__ISMS_ERROR_COUNT__ || 0) };
           await writeJson(res, buildJsonResponse(200, {
             ok: true,
             uptime: Math.round(uptime),
             uptimeHuman: Math.floor(uptime / 3600) + 'h ' + Math.floor((uptime % 3600) / 60) + 'm',
             memory: { rss: Math.round(mem.rss / 1024 / 1024) + 'MB', heap: Math.round(mem.heapUsed / 1024 / 1024) + 'MB', heapTotal: Math.round(mem.heapTotal / 1024 / 1024) + 'MB' },
+            database: dbHealth,
+            disk: diskUsage,
+            errors: errorStats,
+            requests: requestStats,
             nodeVersion: process.version,
-            platform: process.platform
+            platform: process.platform,
+            rateLimit: { maxRequests: GLOBAL_RATE_LIMIT_MAX_REQUESTS, windowMs: GLOBAL_RATE_LIMIT_WINDOW_MS }
           }), origin);
         } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to read server stats.', 500), origin); }
         return;
@@ -1697,6 +1733,11 @@ function createServer() {
           const auditYear = cleanText(url.searchParams && url.searchParams.get('auditYear')) || String(new Date().getFullYear() - 1911);
           const trainingYear = cleanText(url.searchParams && url.searchParams.get('trainingYear')) || auditYear;
 
+          const apiCache = require('./api-cache.cjs');
+          const cacheKey = 'dashboard:' + auditYear + ':' + trainingYear;
+          const cachedResult = apiCache.get(cacheKey);
+          if (cachedResult) { await writeJson(res, buildJsonResponse(200, cachedResult), origin); return; }
+
           const [checklistStats, trainingStats, trainingByUnit, checklistByUnit, pendingApps, pendingCases] = await Promise.all([
             db.queryOne(`SELECT
               COUNT(DISTINCT unit) FILTER (WHERE status = '已送出')::int AS submitted_units,
@@ -1739,7 +1780,7 @@ function createServer() {
           const pendingTotal = (Number(pa.pending_review) || 0) + (Number(pa.activation_pending) || 0)
             + (Number(pc.pending_correction) || 0) + (Number(pc.proposed) || 0) + (Number(pc.tracking) || 0);
 
-          await writeJson(res, buildJsonResponse(200, {
+          const dashboardResult = {
             checklist: {
               totalUnits,
               submittedUnits,
@@ -1771,7 +1812,9 @@ function createServer() {
               totalPendingItems: pendingTotal
             },
             generatedAt: new Date().toISOString()
-          }), origin);
+          };
+          apiCache.set(cacheKey, dashboardResult, 60000); // 60 秒快取
+          await writeJson(res, buildJsonResponse(200, dashboardResult), origin);
         } catch (error) {
           await writeJson(res, buildErrorResponse(error, 'Failed to load dashboard summary.', 500), origin);
         }
@@ -1821,6 +1864,7 @@ function createServer() {
       if (await systemUserRouter.tryHandle(req, res, origin, url)) return;
       await writeJson(res, buildErrorResponse(new Error('Not found'), 'Not found', 404), origin);
     } catch (error) {
+      try { require('./error-alerter.cjs').collectError({ path: url.pathname, status: 500, message: String(error && error.message || error), clientIp: getClientIp(req) }); } catch (_) {}
       await writeJson(res, buildErrorResponse(error, 'Unexpected backend error.', 500), origin);
     }
   });

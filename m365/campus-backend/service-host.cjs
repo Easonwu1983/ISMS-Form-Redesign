@@ -157,6 +157,17 @@ console.log('service-host starting', {
 
 const server = startServer(Number(process.env.PORT || 8787));
 
+// ── Error alerter ──
+try {
+  const { startAlertSchedule } = require('./error-alerter.cjs');
+  const { sendGraphMail } = require('./graph-mailer.cjs');
+  startAlertSchedule(function (opts) {
+    return sendGraphMail({ ...opts, graphRequest: null, getDelegatedToken: null });
+  });
+} catch (err) {
+  console.warn('[service-host] Error alerter init failed:', String(err && err.message || err));
+}
+
 // ── Daily overdue check schedule (every 24 hours) ──
 const OVERDUE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 let overdueCheckTimer = null;
