@@ -456,7 +456,7 @@
         + '<div class="page-header-actions" style="display:flex;gap:8px;flex-wrap:wrap;">'
         + '<button class="btn btn-primary" data-action="app.createAsset">' + ic('plus') + ' \u65b0\u589e</button>'
         + '<button class="btn btn-outline" data-action="app.exportAssets">' + ic('download') + ' \u532f\u51fa</button>'
-        + '<button class="btn btn-outline" data-action="app.submitAllAssets">' + ic('send') + ' \u5168\u90e8\u9001\u7c3d\u6838</button>'
+        + '<button class="btn btn-outline" data-action="app.submitAllAssets" style="color:#2e7d32;border-color:#2e7d32;">' + ic('check-circle') + ' \u5e74\u5ea6\u5df2\u76e4\u9ede\u5b8c\u6210</button>'
         + '</div>'
         + '</div>'
 
@@ -521,17 +521,21 @@
           link.click();
           toast('\u5df2\u532f\u51fa CSV', 'success');
         },
-        submitAllAssets: async function () {
-          if (!confirm('\u78ba\u5b9a\u8981\u5c07\u6240\u6709\u300c\u586b\u5831\u4e2d\u300d\u7684\u8cc7\u7522\u9001\u7c3d\u6838\uff1f')) return;
-          var user = currentUser();
-          apiCall('POST', '/batch-status', {
-            status: '\u5f85\u7c3d\u6838',
-            unitCode: user && user.primaryUnit || '',
-            year: parseInt(document.getElementById('asset-filter-year').value, 10) || getCurrentRocYear()
-          }).then(function (data) {
-            toast('\u5df2\u9001\u7c3d\u6838 ' + (data.updated || 0) + ' \u7b46', 'success');
-            renderAssetList();
-          }).catch(function (e) { toast('\u9001\u7c3d\u6838\u5931\u6557: ' + e.message, 'error'); });
+        submitAllAssets: function () {
+          var year = (document.getElementById('asset-filter-year') || {}).value || getCurrentRocYear();
+          if (!window.confirm('\u78ba\u5b9a\u8981\u5c07 ' + year + ' \u5e74\u5ea6\u6240\u6709\u8cc7\u7522\u6a19\u8a18\u70ba\u300c\u5df2\u5b8c\u6210\u300d\uff1f\n\n\u9019\u4ee3\u8868\u672c\u55ae\u4f4d\u4eca\u5e74\u5ea6\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u5df2\u5b8c\u6210\uff0c\u6700\u9ad8\u7ba1\u7406\u8005\u5c07\u53ef\u5728\u5f8c\u53f0\u67e5\u770b\u5b8c\u6210\u72c0\u614b\u3002')) return;
+          var endpoint = (window.__M365_UNIT_CONTACT_CONFIG__ && window.__M365_UNIT_CONTACT_CONFIG__.assetInventoryEndpoint) || '/api/assets';
+          fetch(endpoint + '/batch-status', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload: { status: '\u5df2\u5b8c\u6210', unitCode: '', year: parseInt(year, 10) } })
+          }).then(function (r) { return r.json(); })
+            .then(function (data) {
+              alert('\u5df2\u5b8c\u6210\uff01\u5171 ' + (data.updated || 0) + ' \u7b46\u8cc7\u7522\u6a19\u8a18\u70ba\u300c\u5df2\u5b8c\u6210\u300d');
+              window.location.reload();
+            }).catch(function (e) {
+              alert('\u64cd\u4f5c\u5931\u6557\uff1a' + String(e && e.message || e));
+            });
         },
         filterAssets: function () {
           applyFiltersAndReload();
