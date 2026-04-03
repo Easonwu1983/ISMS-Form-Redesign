@@ -979,63 +979,708 @@
     }
 
     // -------------------------------------------------------
-    // renderAppendix10 (stub)
+    // renderAppendix10
     // -------------------------------------------------------
-    function renderAppendix10(assetId) {
+    async function renderAppendix10(assetId) {
       var appEl = document.getElementById('app');
       if (!appEl) return;
 
+      // -- Complete control measures data (附表十) --
+      var APPENDIX10_DATA = [
+        { d: '存取控制', c: '帳號管理', l: '高', t: '應依機關規定之情況及條件，使用資通系統' },
+        { d: '存取控制', c: '帳號管理', l: '高', t: '監控資通系統帳號，如發現帳號違常使用時回報管理者' },
+        { d: '存取控制', c: '帳號管理', l: '高', t: '等級「中」之所有控制措施' },
+        { d: '存取控制', c: '帳號管理', l: '中', t: '機關應定義各系統之閒置時間或可使用期限與使用情況及條件' },
+        { d: '存取控制', c: '帳號管理', l: '中', t: '逾越機關所許可之閒置時間或可使用期限時，系統應自動將使用者登出' },
+        { d: '存取控制', c: '帳號管理', l: '中', t: '等級「普」之所有控制措施' },
+        { d: '存取控制', c: '帳號管理', l: '普', t: '建立帳號管理機制，包含帳號之申請、開通、停用及刪除之程序' },
+        { d: '存取控制', c: '帳號管理', l: '普', t: '已逾期之臨時或緊急帳號應刪除或禁用' },
+        { d: '存取控制', c: '帳號管理', l: '普', t: '資通系統閒置帳號應禁用' },
+        { d: '存取控制', c: '帳號管理', l: '普', t: '定期審核資通系統帳號之建立、修改、啟用、禁用及刪除' },
+        { d: '存取控制', c: '最小權限', l: '共通', t: '採最小權限原則，僅允許使用者依機關任務及業務功能完成指派任務所需之授權存取' },
+        { d: '存取控制', c: '遠端存取', l: '高', t: '資通系統遠端存取之來源應為機關已預先定義及管理之存取控制點' },
+        { d: '存取控制', c: '遠端存取', l: '高', t: '應定期審查機關所保留資通系統之遠端存取之設定' },
+        { d: '存取控制', c: '遠端存取', l: '高', t: '等級「普」之所有控制措施' },
+        { d: '存取控制', c: '遠端存取', l: '高、中', t: '每種遠端存取建立使用限制、連線需求及文件化' },
+        { d: '存取控制', c: '遠端存取', l: '高、中', t: '使用者之權限檢查作業應於伺服器端完成' },
+        { d: '存取控制', c: '遠端存取', l: '高、中', t: '應監控遠端存取機關內部網段或資通系統後臺之連線' },
+        { d: '存取控制', c: '遠端存取', l: '高、中', t: '應採用加密機制' },
+        { d: '存取控制', c: '遠端存取', l: '普', t: '對於每一種允許之遠端存取類型，均應先取得授權，建立使用限制' },
+        { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '訂定日誌之記錄時間週期及留存政策，並保留日誌至少六個月' },
+        { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '確保資通系統有記錄特定事件之功能，並決定應記錄之特定資通系統事件' },
+        { d: '事件日誌與可歸責', c: '記錄事件', l: '高', t: '應記錄資通系統管理者帳號所執行之各項功能' },
+        { d: '事件日誌與可歸責', c: '日誌紀錄內容', l: '共通', t: '日誌應包含事件類型、發生時間、發生位置及使用者身分識別等資訊，採用單一日誌機制，確保輸出格式一致性' },
+        { d: '事件日誌與可歸責', c: '日誌儲存容量', l: '共通', t: '依據日誌儲存需求，配置所需之儲存容量' },
+        { d: '事件日誌與可歸責', c: '日誌處理失效之回應', l: '高', t: '規定需要即時因應之日誌處理失效事件，向特定人員發出警告' },
+        { d: '事件日誌與可歸責', c: '日誌處理失效之回應', l: '中', t: '資通系統於日誌處理失效時，失效後自動執行動作' },
+        { d: '事件日誌與可歸責', c: '時戳及校時', l: '共通', t: '使用系統內部時鐘產生日誌所需時戳，可對應UTC或GMT' },
+        { d: '事件日誌與可歸責', c: '時戳及校時', l: '共通', t: '系統內部時鐘定期與授權時間源同步' },
+        { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '高', t: '備份事件日誌至原系統外之其他系統' },
+        { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '高、中', t: '以邏輯或實體方式確保日誌完整' },
+        { d: '事件日誌與可歸責', c: '日誌資訊之保護', l: '普', t: '日誌之存取管理，僅限授權使用者' },
+        { d: '營運持續計畫', c: '系統備份', l: '高', t: '意外事故還原，建立資料備份還原驗證' },
+        { d: '營運持續計畫', c: '系統備份', l: '中', t: '系統中斷可從備份復原' },
+        { d: '營運持續計畫', c: '系統備份', l: '普', t: '定期備份，可含還原驗證' },
+        { d: '營運持續計畫', c: '系統備援', l: '高', t: '啟動備援作為' },
+        { d: '營運持續計畫', c: '系統備援', l: '中', t: '最大可容忍中斷時間內完成備援' },
+        { d: '營運持續計畫', c: '系統備援', l: '普', t: '定期從備援恢復至正常服務' },
+        { d: '識別與鑑別', c: '使用者之識別與鑑別', l: '共通', t: '識別及鑑別使用者，禁止使用共用帳號' },
+        { d: '識別與鑑別', c: '身分驗證管理', l: '高', t: '認證機制採多因子鑑別' },
+        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '帳戶自動化程序之驗證及密碼變換確認' },
+        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '使用預設密碼登入系統時，應於登入後立即變更' },
+        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '帳號鎖定機制：登入驗證失敗達5次後，至少15分鐘內不允許繼續嘗試' },
+        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '使用密碼進行驗證時，應強制最低密碼複雜度及效期限制' },
+        { d: '識別與鑑別', c: '身分驗證管理', l: '中', t: '密碼變更時，至少不可以與前三次使用過之密碼相同' },
+        { d: '識別與鑑別', c: '鑑別資訊回饋', l: '共通', t: '資通系統應遮蔽鑑別過程中之資訊' },
+        { d: '識別與鑑別', c: '加密模組鑑別', l: '高、中', t: '以密碼進行鑑別時，該密碼應加密或經雜湊處理後儲存' },
+        { d: '識別與鑑別', c: '非內部使用者之識別與鑑別', l: '共通', t: '資通系統應識別及鑑別非機關使用者' },
+        { d: '系統與服務獲得', c: '需求階段', l: '共通', t: '針對系統安全需求（含機密性、可用性、完整性）進行確認' },
+        { d: '系統與服務獲得', c: '設計階段', l: '高、中', t: '根據系統功能與要求，識別可能影響系統之威脅，進行風險分析及評估' },
+        { d: '系統與服務獲得', c: '開發階段', l: '高', t: '執行「原始碼品質」安全檢測' },
+        { d: '系統與服務獲得', c: '開發階段', l: '高、中', t: '以安全需求作為驗收點，避免常見漏洞' },
+        { d: '系統與服務獲得', c: '測試階段', l: '高', t: '執行「滲透測試」安全檢測' },
+        { d: '系統與服務獲得', c: '測試階段', l: '高、中', t: '執行「弱點掃描」安全檢測' },
+        { d: '系統與服務獲得', c: '部署與維運階段', l: '高', t: '版本異動及變更管理' },
+        { d: '系統與服務獲得', c: '部署與維運階段', l: '中', t: '部署環境規範' },
+        { d: '系統與服務獲得', c: '部署與維運階段', l: '普', t: '識別無授權行為、維護紀錄' },
+        { d: '系統與服務獲得', c: '委外階段', l: '共通', t: '開發委外需將系統發展生命週期各階段安全需求納入委外契約' },
+        { d: '系統與服務獲得', c: '獲得程序', l: '高、中', t: '開發、測試及正式作業環境隔離' },
+        { d: '系統與服務獲得', c: '獲得程序', l: '普', t: '識別使用第三方軟體、服務' },
+        { d: '系統與服務獲得', c: '系統文件', l: '共通', t: '應儲存管理系統發展生命週期之相關文件' },
+        { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '高', t: '使用公開國際標準加密、到期換憑、加密連線' },
+        { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '中', t: '加密金鑰或強度到期應汰換' },
+        { d: '系統與通訊保護', c: '傳輸之機密性與完整性', l: '普', t: '資通系統傳輸應加密' },
+        { d: '系統與通訊保護', c: '資料儲存之安全', l: '共通', t: '資通系統應妥善儲存資料並以加密或其他適當方式儲存' },
+        { d: '系統與資訊完整性', c: '漏洞修復', l: '高', t: '定期確認相關漏洞修復之狀態' },
+        { d: '系統與資訊完整性', c: '漏洞修復', l: '中', t: '使用完整性驗證工具' },
+        { d: '系統與資訊完整性', c: '漏洞修復', l: '普', t: '定期檢查並更新，發現漏洞後修復' },
+        { d: '系統與資訊完整性', c: '資通系統監控', l: '高', t: '自動化工具監控進出流量，對特殊事件進行分析' },
+        { d: '系統與資訊完整性', c: '資通系統監控', l: '中', t: '監控資通系統偵測未授權連線' },
+        { d: '系統與資訊完整性', c: '資通系統監控', l: '普', t: '發現資通系統有被入侵跡象時，通報特定人員' },
+        { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '高', t: '完整性檢核工具偵測未授權變更' },
+        { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '中', t: '使用完整性驗證工具，發現違反完整性時通報' },
+        { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '普', t: '使用者輸入資料合法性檢查' }
+      ];
+
+      // -- Determine if a row applies to a given protection level --
+      function isApplicable(protLevel, rowLevel) {
+        if (!protLevel || !rowLevel) return true;
+        if (rowLevel === '共通') return true;
+        if (protLevel === '高') return true;
+        if (protLevel === '中') {
+          return rowLevel === '中' || rowLevel === '普' || rowLevel === '共通'
+            || rowLevel === '高、中' || rowLevel === '高、中、普';
+        }
+        if (protLevel === '普') {
+          return rowLevel === '普' || rowLevel === '共通' || rowLevel === '高、中、普';
+        }
+        return true;
+      }
+
+      // -- Collect unique dimension names for filter --
+      var dimensionSet = {};
+      for (var di = 0; di < APPENDIX10_DATA.length; di++) {
+        dimensionSet[APPENDIX10_DATA[di].d] = true;
+      }
+      var dimensions = Object.keys(dimensionSet);
+
+      // -- Show loading --
+      appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;">'
+        + ic('loader') + ' 載入中...</div></div>';
+      scheduleRefreshIcons();
+
+      // -- Fetch asset + existing assessments --
+      var asset, appendixData;
+      try {
+        var results = await Promise.all([
+          apiCall('GET', '/' + assetId),
+          apiCall('GET', '/' + assetId + '/appendix10')
+        ]);
+        asset = results[0] && results[0].item ? results[0].item : results[0];
+        appendixData = results[1] || {};
+      } catch (err) {
+        appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+          + ic('alert-triangle') + '<p>載入失敗：' + esc(String(err && err.message || err)) + '</p>'
+          + '<button class="btn btn-outline" data-action="backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
+        scheduleRefreshIcons();
+        registerActionHandlers('app', {
+          backToDetail: function () { navigate('asset-detail', assetId); }
+        });
+        return;
+      }
+
+      var a = asset || {};
+      var protLevel = appendixData.protectionLevel
+        || a.protectionLevel
+        || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA)
+        || '';
+      var existingAssessments = Array.isArray(appendixData.assessments) ? appendixData.assessments : [];
+      var complianceStatus = appendixData.complianceStatus || '';
+
+      // -- Build lookup map from existing assessments --
+      function assessmentKey(dimension, code, control) {
+        return dimension + '|' + code + '|' + control;
+      }
+      var assessmentMap = {};
+      for (var ai = 0; ai < existingAssessments.length; ai++) {
+        var ea = existingAssessments[ai];
+        var key = assessmentKey(ea.dimension, ea.code, ea.control);
+        assessmentMap[key] = ea;
+      }
+
+      // -- Build filter bar --
+      var filterHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;">'
+        + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">'
+        + '<div class="form-group" style="margin-bottom:0;">'
+        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">構面篩選</label>'
+        + '<select class="form-control" id="a10-filter-dimension" style="min-width:160px;">'
+        + '<option value="">全部構面</option>';
+      for (var fi = 0; fi < dimensions.length; fi++) {
+        filterHtml += '<option value="' + esc(dimensions[fi]) + '">' + esc(dimensions[fi]) + '</option>';
+      }
+      filterHtml += '</select></div>'
+        + '<div class="form-group" style="margin-bottom:0;">'
+        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">顯示範圍</label>'
+        + '<div style="display:flex;gap:12px;align-items:center;padding-top:4px;">'
+        + '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.9em;">'
+        + '<input type="radio" name="a10ShowMode" value="all" checked> 全部措施'
+        + '</label>'
+        + '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.9em;">'
+        + '<input type="radio" name="a10ShowMode" value="applicable"> 僅適用項目'
+        + '</label>'
+        + '</div></div>'
+        + '</div></div>';
+
+      // -- Build info bar --
+      var protBadgeClass = protLevel === '高' ? 'badge-danger' : (protLevel === '中' ? 'badge-warning' : 'badge-success');
+      var infoHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">'
+        + '<span>' + ic('server') + ' <strong>' + esc(a.assetName || '未命名資產') + '</strong></span>'
+        + '<span>防護等級：<span class="badge ' + protBadgeClass + '"><span class="badge-dot"></span>' + esc(protLevel || '未設定') + '</span></span>'
+        + (complianceStatus ? '<span>合規狀態：' + esc(complianceStatus) + '</span>' : '')
+        + '</div>';
+
+      // -- Build assessment table rows --
+      var tableRowsHtml = '';
+      for (var ri = 0; ri < APPENDIX10_DATA.length; ri++) {
+        var row = APPENDIX10_DATA[ri];
+        var rowKey = assessmentKey(row.d, row.c, row.t);
+        var existing = assessmentMap[rowKey] || {};
+        var result = existing.result || '';
+        var note = existing.note || '';
+        var applicable = isApplicable(protLevel, row.l);
+
+        var rowBg = '';
+        if (result === '符合') rowBg = 'background:#e8f5e9;';
+        else if (result === '不符合') rowBg = 'background:#ffebee;';
+        else if (result === '不適用') rowBg = 'background:#f5f5f5;';
+
+        var levelBadge = row.l === '共通' ? 'badge-info'
+          : (row.l === '高' ? 'badge-danger'
+            : (row.l === '中' ? 'badge-warning'
+              : (row.l === '普' ? 'badge-success' : 'badge-secondary')));
+
+        tableRowsHtml += '<tr class="a10-row" data-dimension="' + esc(row.d) + '" data-level="' + esc(row.l) + '" data-applicable="' + (applicable ? 'yes' : 'no') + '" data-idx="' + ri + '" style="' + rowBg + '">'
+          + '<td style="padding:8px 10px;white-space:nowrap;vertical-align:top;">' + esc(row.d) + '</td>'
+          + '<td style="padding:8px 10px;white-space:nowrap;vertical-align:top;">' + esc(row.c) + '</td>'
+          + '<td style="padding:8px 10px;text-align:center;vertical-align:top;"><span class="badge ' + levelBadge + '" style="font-size:0.8em;">' + esc(row.l) + '</span></td>'
+          + '<td style="padding:8px 10px;vertical-align:top;min-width:240px;">' + esc(row.t) + '</td>'
+          + '<td style="padding:8px 10px;vertical-align:top;min-width:110px;">'
+          + '<select class="form-control a10-result" data-idx="' + ri + '" style="font-size:0.85em;padding:4px 6px;">'
+          + '<option value="">-- 請選擇 --</option>'
+          + '<option value="符合"' + (result === '符合' ? ' selected' : '') + '>符合</option>'
+          + '<option value="不符合"' + (result === '不符合' ? ' selected' : '') + '>不符合</option>'
+          + '<option value="不適用"' + (result === '不適用' ? ' selected' : '') + '>不適用</option>'
+          + '</select></td>'
+          + '<td style="padding:8px 10px;vertical-align:top;min-width:140px;">'
+          + '<input type="text" class="form-control a10-note" data-idx="' + ri + '" value="' + esc(note) + '" placeholder="備註" style="font-size:0.85em;padding:4px 6px;">'
+          + '</td>'
+          + '</tr>';
+      }
+
+      // -- Compute initial summary --
+      var initComply = 0, initNonComply = 0, initNA = 0, initTotal = APPENDIX10_DATA.length;
+      for (var si = 0; si < existingAssessments.length; si++) {
+        if (existingAssessments[si].result === '符合') initComply++;
+        else if (existingAssessments[si].result === '不符合') initNonComply++;
+        else if (existingAssessments[si].result === '不適用') initNA++;
+      }
+
+      // -- Assemble page --
       appEl.innerHTML = '<div class="animate-in">'
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
-        + '<h2>' + ic('clipboard-list') + ' \u9644\u8868\u5341\u8a55\u4f30</h2>'
+        + '<h2>' + ic('clipboard-list') + ' 附表十 資通系統防護基準評估</h2>'
         + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '<button class="btn btn-outline" data-action="backToDetail">' + ic('arrow-left') + ' 返回資產</button>'
+        + '<button class="btn btn-primary" data-action="saveAppendix10">' + ic('save') + ' 儲存評估</button>'
         + '</div>'
         + '</div>'
-        + '<div class="card" style="padding:40px;text-align:center;">'
-        + '<div style="margin-bottom:16px;">' + ic('construction') + '</div>'
-        + '<h3>\u9644\u8868\u5341\u8a55\u4f30 - \u958b\u767c\u4e2d</h3>'
-        + '<p style="color:#666;">\u6b64\u529f\u80fd\u76ee\u524d\u6b63\u5728\u958b\u767c\u4e2d\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66\u3002</p>'
-        + (assetId ? '<p style="color:#999;font-size:0.85em;">\u8cc7\u7522 ID\uff1a' + esc(assetId) + '</p>' : '')
+
+        + infoHtml
+        + filterHtml
+
+        + '<div id="a10-summary" class="card" style="padding:10px 16px;margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:0.9em;">'
+        + '<span>' + ic('check-circle') + ' <strong id="a10-comply-count">' + initComply + '</strong>/' + initTotal + ' 符合</span>'
+        + '<span style="color:#c0392b;">' + ic('x-circle') + ' <strong id="a10-noncomply-count">' + initNonComply + '</strong> 不符合</span>'
+        + '<span style="color:#888;">' + ic('minus-circle') + ' <strong id="a10-na-count">' + initNA + '</strong> 不適用</span>'
         + '</div>'
+
+        + '<div class="table-wrapper" tabindex="0" style="overflow-x:auto;">'
+        + '<table id="a10-table">'
+        + '<caption class="sr-only">附表十資通系統防護基準評估表</caption>'
+        + '<thead><tr>'
+        + '<th scope="col" style="white-space:nowrap;">構面</th>'
+        + '<th scope="col" style="white-space:nowrap;">措施代碼</th>'
+        + '<th scope="col" style="white-space:nowrap;text-align:center;">防護分級</th>'
+        + '<th scope="col">控制措施</th>'
+        + '<th scope="col" style="white-space:nowrap;">評估</th>'
+        + '<th scope="col" style="white-space:nowrap;">備註</th>'
+        + '</tr></thead>'
+        + '<tbody>' + tableRowsHtml + '</tbody>'
+        + '</table>'
+        + '</div>'
+
+        + '<div style="padding-bottom:40px;"></div>'
         + '</div>';
 
       scheduleRefreshIcons();
 
+      // -- Filter logic --
+      function applyFilters() {
+        var dimFilter = document.getElementById('a10-filter-dimension');
+        var showModeEls = document.querySelectorAll('input[name="a10ShowMode"]');
+        var selectedDim = dimFilter ? dimFilter.value : '';
+        var showMode = 'all';
+        for (var mi = 0; mi < showModeEls.length; mi++) {
+          if (showModeEls[mi].checked) { showMode = showModeEls[mi].value; break; }
+        }
+        var rows = document.querySelectorAll('.a10-row');
+        for (var rfi = 0; rfi < rows.length; rfi++) {
+          var tr = rows[rfi];
+          var dimMatch = !selectedDim || tr.getAttribute('data-dimension') === selectedDim;
+          var appMatch = showMode === 'all' || tr.getAttribute('data-applicable') === 'yes';
+          tr.style.display = (dimMatch && appMatch) ? '' : 'none';
+        }
+      }
+
+      var dimFilterEl = document.getElementById('a10-filter-dimension');
+      if (dimFilterEl) {
+        addPageEventListener(dimFilterEl, 'change', applyFilters);
+      }
+      var showModeRadios = document.querySelectorAll('input[name="a10ShowMode"]');
+      for (var smi = 0; smi < showModeRadios.length; smi++) {
+        addPageEventListener(showModeRadios[smi], 'change', applyFilters);
+      }
+
+      // -- Row color update + summary update on result change --
+      function updateRowColorAndSummary() {
+        var complyCount = 0, nonComplyCount = 0, naCount = 0;
+        var resultSelects = document.querySelectorAll('.a10-result');
+        for (var uci = 0; uci < resultSelects.length; uci++) {
+          var sel = resultSelects[uci];
+          var idx = sel.getAttribute('data-idx');
+          var tr = document.querySelector('.a10-row[data-idx="' + idx + '"]');
+          var val = sel.value;
+          if (val === '符合') { complyCount++; if (tr) tr.style.background = '#e8f5e9'; }
+          else if (val === '不符合') { nonComplyCount++; if (tr) tr.style.background = '#ffebee'; }
+          else if (val === '不適用') { naCount++; if (tr) tr.style.background = '#f5f5f5'; }
+          else { if (tr) tr.style.background = ''; }
+        }
+        var complyEl = document.getElementById('a10-comply-count');
+        var nonComplyEl = document.getElementById('a10-noncomply-count');
+        var naEl = document.getElementById('a10-na-count');
+        if (complyEl) complyEl.textContent = String(complyCount);
+        if (nonComplyEl) nonComplyEl.textContent = String(nonComplyCount);
+        if (naEl) naEl.textContent = String(naCount);
+      }
+
+      addPageEventListener(appEl, 'change', function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('a10-result')) {
+          updateRowColorAndSummary();
+        }
+      });
+
+      // -- Action handlers --
       registerActionHandlers('app', {
-        backToList: function () {
-          navigate('asset-list');
+        backToDetail: function () {
+          navigate('asset-detail', assetId);
+        },
+        saveAppendix10: async function () {
+          var assessments = [];
+          for (var ci = 0; ci < APPENDIX10_DATA.length; ci++) {
+            var rowData = APPENDIX10_DATA[ci];
+            var resultSel = document.querySelector('.a10-result[data-idx="' + ci + '"]');
+            var noteInput = document.querySelector('.a10-note[data-idx="' + ci + '"]');
+            assessments.push({
+              dimension: rowData.d,
+              code: rowData.c,
+              level: rowData.l,
+              control: rowData.t,
+              result: resultSel ? resultSel.value : '',
+              note: noteInput ? noteInput.value : ''
+            });
+          }
+          try {
+            await apiCall('POST', '/' + assetId + '/appendix10', {
+              protectionLevel: protLevel,
+              assessments: assessments
+            });
+            toast('附表十評估已儲存', 'success');
+          } catch (err) {
+            toast('儲存失敗：' + String(err && err.message || err), 'error');
+          }
         }
       });
     }
 
     // -------------------------------------------------------
-    // renderRiskAssessment (stub)
+    // renderRiskAssessment
     // -------------------------------------------------------
-    function renderRiskAssessment(assetId) {
+    async function renderRiskAssessment(assetId) {
       var appEl = document.getElementById('app');
       if (!appEl) return;
 
+      // -- Predefined threat and vulnerability lists --
+      var THREATS = ['天然災害', '設備故障', '惡意程式', '未授權存取', '社交工程', '人為疏失', '供應鏈風險', '資料外洩', 'DDoS攻擊'];
+      var VULNERABILITIES = ['密碼強度不足', '未及時更新修補', '缺乏備份', '存取控制不當', '缺乏加密', '人員訓練不足', '實體安全不足', '缺乏日誌監控'];
+
+      // -- Risk matrix definition: matrix[impact-1][likelihood-1] = { score, level } --
+      var RISK_MATRIX = [
+        [{ s: 1, l: '低' }, { s: 2, l: '低' }, { s: 3, l: '中' }],
+        [{ s: 2, l: '低' }, { s: 4, l: '中' }, { s: 6, l: '高' }],
+        [{ s: 3, l: '中' }, { s: 6, l: '高' }, { s: 9, l: '高' }]
+      ];
+      var RISK_COLORS = { '低': '#C8E6C9', '中': '#FFF9C4', '高': '#FFCDD2' };
+
+      // -- Show loading --
+      appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;">'
+        + ic('loader') + ' 載入中...</div></div>';
+      scheduleRefreshIcons();
+
+      // -- Fetch asset data --
+      var asset;
+      try {
+        var resp = await apiCall('GET', '/' + assetId);
+        asset = resp && resp.item ? resp.item : resp;
+      } catch (err) {
+        appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+          + ic('alert-triangle') + '<p>載入失敗：' + esc(String(err && err.message || err)) + '</p>'
+          + '<button class="btn btn-outline" data-action="backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
+        scheduleRefreshIcons();
+        registerActionHandlers('app', {
+          backToDetail: function () { navigate('asset-detail', assetId); }
+        });
+        return;
+      }
+
+      var a = asset || {};
+      var riskData = {};
+      try {
+        riskData = a.risk_data_json ? (typeof a.risk_data_json === 'string' ? JSON.parse(a.risk_data_json) : a.risk_data_json) : {};
+      } catch (e) { riskData = {}; }
+      if (a.riskData) riskData = a.riskData;
+
+      var protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA) || '';
+
+      // -- Compute asset value from CIA --
+      var cVal = CIA_VALUE_MAP[a.ciaC] || 0;
+      var iVal = CIA_VALUE_MAP[a.ciaI] || 0;
+      var aVal = CIA_VALUE_MAP[a.ciaA] || 0;
+      var assetValue = riskData.assetValue || Math.max(cVal, iVal, aVal) || 0;
+
+      // -- Existing risk data --
+      var existingThreats = Array.isArray(riskData.threats) ? riskData.threats : [];
+      var existingVulns = Array.isArray(riskData.vulnerabilities) ? riskData.vulnerabilities : [];
+      var existingLikelihood = riskData.likelihood || '';
+      var existingImpact = riskData.impact || String(assetValue) || '';
+      var existingTreatment = riskData.treatment || '';
+      var existingControlDesc = riskData.controlDescription || '';
+      var existingResidualRisk = riskData.residualRisk || '';
+      var existingRiskOwner = riskData.riskOwner || '';
+      var existingThreatOther = riskData.threatOther || '';
+      var existingVulnOther = riskData.vulnOther || '';
+
+      // -- Compute initial risk score/level --
+      var initScore = computeRiskScore(existingLikelihood, existingImpact);
+      var initLevel = getRiskLevel(initScore);
+
+      // -- Build threat checkboxes --
+      var threatCheckboxHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">';
+      for (var ti = 0; ti < THREATS.length; ti++) {
+        var tChecked = existingThreats.indexOf(THREATS[ti]) !== -1;
+        threatCheckboxHtml += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9em;">'
+          + '<input type="checkbox" class="form-check-input ra-threat" value="' + esc(THREATS[ti]) + '"' + (tChecked ? ' checked' : '') + '>'
+          + '<span>' + esc(THREATS[ti]) + '</span></label>';
+      }
+      threatCheckboxHtml += '</div>'
+        + '<div class="form-group" style="margin-top:8px;">'
+        + '<label class="form-label" style="font-size:0.85em;">其他威脅</label>'
+        + '<input type="text" class="form-control" id="ra-threat-other" value="' + esc(existingThreatOther) + '" placeholder="自訂威脅...">'
+        + '</div>';
+
+      // -- Build vulnerability checkboxes --
+      var vulnCheckboxHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">';
+      for (var vi = 0; vi < VULNERABILITIES.length; vi++) {
+        var vChecked = existingVulns.indexOf(VULNERABILITIES[vi]) !== -1;
+        vulnCheckboxHtml += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9em;">'
+          + '<input type="checkbox" class="form-check-input ra-vuln" value="' + esc(VULNERABILITIES[vi]) + '"' + (vChecked ? ' checked' : '') + '>'
+          + '<span>' + esc(VULNERABILITIES[vi]) + '</span></label>';
+      }
+      vulnCheckboxHtml += '</div>'
+        + '<div class="form-group" style="margin-top:8px;">'
+        + '<label class="form-label" style="font-size:0.85em;">其他弱點</label>'
+        + '<input type="text" class="form-control" id="ra-vuln-other" value="' + esc(existingVulnOther) + '" placeholder="自訂弱點...">'
+        + '</div>';
+
+      // -- Build risk calculation section --
+      var riskCalcHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;">'
+        + '<div class="form-group">'
+        + '<label class="form-label">可能性</label>'
+        + '<select class="form-control" id="ra-likelihood">'
+        + '<option value="">-- 請選擇 --</option>'
+        + '<option value="1"' + (String(existingLikelihood) === '1' ? ' selected' : '') + '>1（低）</option>'
+        + '<option value="2"' + (String(existingLikelihood) === '2' ? ' selected' : '') + '>2（中）</option>'
+        + '<option value="3"' + (String(existingLikelihood) === '3' ? ' selected' : '') + '>3（高）</option>'
+        + '</select></div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">衝擊</label>'
+        + '<select class="form-control" id="ra-impact">'
+        + '<option value="">-- 請選擇 --</option>'
+        + '<option value="1"' + (String(existingImpact) === '1' ? ' selected' : '') + '>1（低）</option>'
+        + '<option value="2"' + (String(existingImpact) === '2' ? ' selected' : '') + '>2（中）</option>'
+        + '<option value="3"' + (String(existingImpact) === '3' ? ' selected' : '') + '>3（高）</option>'
+        + '</select></div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">風險值</label>'
+        + '<div id="ra-risk-score" class="form-control" style="background:#f5f5f5;font-weight:bold;text-align:center;">'
+        + (initScore ? String(initScore) : '--') + '</div></div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">風險等級</label>'
+        + '<div id="ra-risk-level" style="font-weight:bold;padding:6px 0;text-align:center;">'
+        + (initLevel ? '<span class="badge ' + getRiskBadgeClass(initLevel) + '"><span class="badge-dot"></span>' + esc(initLevel) + '</span>' : '--')
+        + '</div></div>'
+        + '</div>';
+
+      // -- Build risk treatment section --
+      var showTreatment = initLevel === '高';
+      var treatmentHtml = '<div id="ra-treatment-section"' + (showTreatment ? '' : ' style="display:none;"') + '>'
+        + '<div style="border-top:1px solid #eee;padding-top:16px;margin-top:16px;">'
+        + '<h4 style="margin-bottom:12px;">' + ic('shield-alert') + ' 風險處置</h4>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+        + '<div class="form-group">'
+        + '<label class="form-label">風險處置方式</label>'
+        + '<select class="form-control" id="ra-treatment">'
+        + '<option value="">-- 請選擇 --</option>'
+        + '<option value="降低"' + (existingTreatment === '降低' ? ' selected' : '') + '>降低</option>'
+        + '<option value="轉移"' + (existingTreatment === '轉移' ? ' selected' : '') + '>轉移</option>'
+        + '<option value="接受"' + (existingTreatment === '接受' ? ' selected' : '') + '>接受</option>'
+        + '<option value="避免"' + (existingTreatment === '避免' ? ' selected' : '') + '>避免</option>'
+        + '</select></div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">殘餘風險等級</label>'
+        + '<select class="form-control" id="ra-residual-risk">'
+        + '<option value="">-- 請選擇 --</option>'
+        + '<option value="低"' + (existingResidualRisk === '低' ? ' selected' : '') + '>低</option>'
+        + '<option value="中"' + (existingResidualRisk === '中' ? ' selected' : '') + '>中</option>'
+        + '<option value="高"' + (existingResidualRisk === '高' ? ' selected' : '') + '>高</option>'
+        + '</select></div></div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">控制措施說明</label>'
+        + '<textarea class="form-control" id="ra-control-desc" rows="3" placeholder="請說明控制措施...">' + esc(existingControlDesc) + '</textarea></div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">風險擁有者</label>'
+        + '<input type="text" class="form-control" id="ra-risk-owner" value="' + esc(existingRiskOwner) + '" placeholder="風險擁有者姓名"></div>'
+        + '</div></div>';
+
+      // -- Build risk matrix visual --
+      var matrixHtml = '<div style="margin-top:16px;">'
+        + '<h4 style="margin-bottom:8px;">' + ic('grid-3x3') + ' 風險矩陣</h4>'
+        + '<div style="display:inline-block;">'
+        + '<table style="border-collapse:collapse;text-align:center;font-size:0.85em;">'
+        + '<thead><tr>'
+        + '<th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;">衝擊 \\ 可能性</th>'
+        + '<th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;">1（低）</th>'
+        + '<th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;">2（中）</th>'
+        + '<th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;">3（高）</th>'
+        + '</tr></thead><tbody>';
+      for (var mrow = 2; mrow >= 0; mrow--) {
+        var impactLabel = (mrow + 1) + '（' + (mrow === 0 ? '低' : (mrow === 1 ? '中' : '高')) + '）';
+        matrixHtml += '<tr><th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;white-space:nowrap;">' + esc(impactLabel) + '</th>';
+        for (var mcol = 0; mcol < 3; mcol++) {
+          var cell = RISK_MATRIX[mrow][mcol];
+          var cellId = 'ra-matrix-' + mrow + '-' + mcol;
+          var isHighlighted = String(existingImpact) === String(mrow + 1) && String(existingLikelihood) === String(mcol + 1);
+          var cellBorder = isHighlighted ? '3px solid #333' : '1px solid #ddd';
+          matrixHtml += '<td id="' + cellId + '" style="padding:10px 16px;border:' + cellBorder + ';background:' + RISK_COLORS[cell.l] + ';font-weight:bold;">'
+            + cell.s + ' - ' + esc(cell.l) + '</td>';
+        }
+        matrixHtml += '</tr>';
+      }
+      matrixHtml += '</tbody></table></div></div>';
+
+      // -- Asset info bar --
+      var protBadgeClass = protLevel === '高' ? 'badge-danger' : (protLevel === '中' ? 'badge-warning' : 'badge-success');
+      var assetValueLabel = assetValue === 3 ? '高' : (assetValue === 2 ? '中' : (assetValue === 1 ? '低' : '--'));
+      var infoHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">'
+        + '<span>' + ic('server') + ' <strong>' + esc(a.assetName || '未命名資產') + '</strong></span>'
+        + '<span>防護等級：<span class="badge ' + protBadgeClass + '"><span class="badge-dot"></span>' + esc(protLevel || '未設定') + '</span></span>'
+        + '<span>資產價值：<strong>' + esc(assetValueLabel) + '</strong>（C=' + esc(a.ciaC || '--') + '、I=' + esc(a.ciaI || '--') + '、A=' + esc(a.ciaA || '--') + '）</span>'
+        + '</div>';
+
+      // -- Assemble page --
       appEl.innerHTML = '<div class="animate-in">'
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
-        + '<h2>' + ic('shield') + ' \u98a8\u96aa\u8a55\u9451</h2>'
+        + '<h2>' + ic('shield') + ' 風險評鑑</h2>'
         + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '<button class="btn btn-outline" data-action="backToDetail">' + ic('arrow-left') + ' 返回資產</button>'
+        + '<button class="btn btn-primary" data-action="saveRiskAssessment">' + ic('save') + ' 儲存評鑑</button>'
         + '</div>'
         + '</div>'
-        + '<div class="card" style="padding:40px;text-align:center;">'
-        + '<div style="margin-bottom:16px;">' + ic('construction') + '</div>'
-        + '<h3>\u98a8\u96aa\u8a55\u9451 - \u958b\u767c\u4e2d</h3>'
-        + '<p style="color:#666;">\u6b64\u529f\u80fd\u76ee\u524d\u6b63\u5728\u958b\u767c\u4e2d\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66\u3002</p>'
-        + (assetId ? '<p style="color:#999;font-size:0.85em;">\u8cc7\u7522 ID\uff1a' + esc(assetId) + '</p>' : '')
+
+        + infoHtml
+
+        + '<div class="card" style="padding:16px;margin-bottom:16px;">'
+        + '<h4 style="margin-bottom:12px;">' + ic('alert-triangle') + ' 威脅識別</h4>'
+        + threatCheckboxHtml
         + '</div>'
+
+        + '<div class="card" style="padding:16px;margin-bottom:16px;">'
+        + '<h4 style="margin-bottom:12px;">' + ic('shield-off') + ' 弱點識別</h4>'
+        + vulnCheckboxHtml
+        + '</div>'
+
+        + '<div class="card" style="padding:16px;margin-bottom:16px;">'
+        + '<h4 style="margin-bottom:12px;">' + ic('calculator') + ' 風險計算</h4>'
+        + riskCalcHtml
+        + treatmentHtml
+        + matrixHtml
+        + '</div>'
+
+        + '<div style="padding-bottom:40px;"></div>'
         + '</div>';
 
       scheduleRefreshIcons();
 
+      // -- Dynamic risk score/level/matrix update --
+      function updateRiskDisplay() {
+        var likelihoodEl = document.getElementById('ra-likelihood');
+        var impactEl = document.getElementById('ra-impact');
+        var scoreEl = document.getElementById('ra-risk-score');
+        var levelEl = document.getElementById('ra-risk-level');
+        var treatmentSection = document.getElementById('ra-treatment-section');
+        if (!likelihoodEl || !impactEl) return;
+
+        var lk = parseInt(likelihoodEl.value, 10) || 0;
+        var imp = parseInt(impactEl.value, 10) || 0;
+        var score = lk * imp;
+        var level = getRiskLevel(score);
+
+        if (scoreEl) scoreEl.textContent = score ? String(score) : '--';
+        if (levelEl) {
+          if (level) {
+            levelEl.innerHTML = '<span class="badge ' + getRiskBadgeClass(level) + '"><span class="badge-dot"></span>' + esc(level) + '</span>';
+          } else {
+            levelEl.textContent = '--';
+          }
+        }
+
+        // Show/hide treatment section based on risk level
+        if (treatmentSection) {
+          treatmentSection.style.display = level === '高' ? '' : 'none';
+        }
+
+        // Update matrix highlights
+        for (var mr = 0; mr < 3; mr++) {
+          for (var mc = 0; mc < 3; mc++) {
+            var cellEl = document.getElementById('ra-matrix-' + mr + '-' + mc);
+            if (!cellEl) continue;
+            var isActive = imp === (mr + 1) && lk === (mc + 1);
+            cellEl.style.border = isActive ? '3px solid #333' : '1px solid #ddd';
+          }
+        }
+
+        scheduleRefreshIcons();
+      }
+
+      var raLikelihoodEl = document.getElementById('ra-likelihood');
+      var raImpactEl = document.getElementById('ra-impact');
+      if (raLikelihoodEl) addPageEventListener(raLikelihoodEl, 'change', updateRiskDisplay);
+      if (raImpactEl) addPageEventListener(raImpactEl, 'change', updateRiskDisplay);
+
+      // -- Action handlers --
       registerActionHandlers('app', {
-        backToList: function () {
-          navigate('asset-list');
+        backToDetail: function () {
+          navigate('asset-detail', assetId);
+        },
+        saveRiskAssessment: async function () {
+          // Collect threats
+          var threats = [];
+          var threatCbs = document.querySelectorAll('.ra-threat');
+          for (var tci = 0; tci < threatCbs.length; tci++) {
+            if (threatCbs[tci].checked) threats.push(threatCbs[tci].value);
+          }
+          var threatOtherEl = document.getElementById('ra-threat-other');
+          var threatOther = threatOtherEl ? threatOtherEl.value.trim() : '';
+          if (threatOther) threats.push(threatOther);
+
+          // Collect vulnerabilities
+          var vulnerabilities = [];
+          var vulnCbs = document.querySelectorAll('.ra-vuln');
+          for (var vci = 0; vci < vulnCbs.length; vci++) {
+            if (vulnCbs[vci].checked) vulnerabilities.push(vulnCbs[vci].value);
+          }
+          var vulnOtherEl = document.getElementById('ra-vuln-other');
+          var vulnOther = vulnOtherEl ? vulnOtherEl.value.trim() : '';
+          if (vulnOther) vulnerabilities.push(vulnOther);
+
+          // Collect risk calculation values
+          var lkEl = document.getElementById('ra-likelihood');
+          var impEl = document.getElementById('ra-impact');
+          var likelihood = lkEl ? lkEl.value : '';
+          var impact = impEl ? impEl.value : '';
+          var riskScore = computeRiskScore(likelihood, impact);
+          var riskLevel = getRiskLevel(riskScore);
+
+          // Collect treatment values
+          var treatmentEl = document.getElementById('ra-treatment');
+          var controlDescEl = document.getElementById('ra-control-desc');
+          var residualEl = document.getElementById('ra-residual-risk');
+          var ownerEl = document.getElementById('ra-risk-owner');
+
+          var treatment = treatmentEl ? treatmentEl.value : '';
+          var controlDescription = controlDescEl ? controlDescEl.value : '';
+          var residualRisk = residualEl ? residualEl.value : '';
+          var riskOwner = ownerEl ? ownerEl.value : '';
+
+          // Validate: if treatment is 降低, controlDescription is required
+          if (riskLevel === '高' && treatment === '降低' && !controlDescription.trim()) {
+            toast('風險處置方式為「降低」時，請填寫控制措施說明', 'error');
+            return;
+          }
+
+          var payload = {
+            riskData: {
+              assetValue: assetValue,
+              threats: threats,
+              vulnerabilities: vulnerabilities,
+              likelihood: likelihood,
+              impact: impact,
+              riskScore: riskScore,
+              riskLevel: riskLevel,
+              treatment: treatment,
+              controlDescription: controlDescription,
+              residualRisk: residualRisk,
+              riskOwner: riskOwner,
+              threatOther: threatOther,
+              vulnOther: vulnOther
+            }
+          };
+
+          try {
+            await apiCall('POST', '/' + assetId, payload);
+            toast('風險評鑑已儲存', 'success');
+          } catch (err) {
+            toast('儲存失敗：' + String(err && err.message || err), 'error');
+          }
         }
       });
     }
