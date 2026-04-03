@@ -2161,7 +2161,30 @@
         + '</div>';
 
       scheduleRefreshIcons();
-      bindActions({ backToList: function () { return '#assets'; } });
+      bindActions({
+        backToList: function () { return '#assets'; },
+        toggleDashGroup: function (ctx) {
+          var targetId = ctx.element && ctx.element.getAttribute('data-target');
+          if (!targetId) return;
+          var bodyEl = document.getElementById(targetId);
+          if (!bodyEl) return;
+          var isVisible = bodyEl.style.display !== 'none';
+          bodyEl.style.display = isVisible ? 'none' : '';
+          var arrow = ctx.element.querySelector('.dash-group-arrow');
+          if (arrow) {
+            arrow.textContent = isVisible ? '\u25b8' : '\u25be';
+          }
+        }
+      });
+
+      // Local unit categorization
+      function localCategorizeUnit(name) {
+        var academicKeywords = ['\u5b78\u9662', '\u5b78\u7cfb', '\u7814\u7a76\u6240', '\u5b78\u4f4d\u5b78\u7a0b', '\u5171\u540c\u6559\u80b2\u4e2d\u5fc3', '\u9032\u4fee\u63a8\u5ee3\u5b78\u9662', '\u570b\u969b\u5b78\u9662'];
+        var centerKeywords = ['\u4e2d\u5fc3', '\u7814\u7a76\u4e2d\u5fc3', '\u8fa6\u516c\u5ba4', '\u59d4\u54e1\u6703', '\u806f\u76df'];
+        if (academicKeywords.some(function (k) { return name.includes(k); })) return '\u5b78\u8853\u55ae\u4f4d';
+        if (centerKeywords.some(function (k) { return name.includes(k); })) return '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d';
+        return '\u884c\u653f\u55ae\u4f4d';
+      }
 
       try {
         // Fetch DB summary and full unit list in parallel
@@ -2219,81 +2242,120 @@
         var dashEl = document.getElementById('asset-dashboard-content');
         if (!dashEl) return;
 
-        // Stat cards
-        var statsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;">'
-          + '<div style="text-align:center;padding:16px;background:#e8f5e9;border-radius:8px;border:2px solid #4caf50;">'
-          + '<div style="font-size:2em;font-weight:bold;color:#2e7d32;">' + completedCount + ' / ' + totalUnits + '</div>'
-          + '<div style="color:#666;">\u5df2\u5b8c\u6210 / \u7e3d\u55ae\u4f4d\u6578</div>'
-          + '<div style="font-size:1.5em;font-weight:bold;color:#2e7d32;margin-top:4px;">' + pct + '%</div></div>'
-          + '<div style="text-align:center;padding:16px;background:#f0f4ff;border-radius:8px;">'
-          + '<div style="font-size:1.8em;font-weight:bold;color:#2c3e50;">' + totalAssets + '</div>'
-          + '<div style="color:#666;">\u5168\u6821\u8cc7\u7522\u7e3d\u6578</div></div>'
-          + '<div style="text-align:center;padding:16px;background:#e8f8f5;border-radius:8px;">'
-          + '<div style="font-size:1.8em;font-weight:bold;color:#27ae60;">' + totalItSys + '</div>'
-          + '<div style="color:#666;">\u8cc7\u901a\u7cfb\u7d71\u6578</div></div>'
-          + '<div style="text-align:center;padding:16px;background:#fef5e7;border-radius:8px;">'
-          + '<div style="font-size:1.8em;font-weight:bold;color:#e67e22;">' + totalCn + '</div>'
-          + '<div style="color:#666;">\u5927\u9678\u5ee0\u724c\u6578</div></div>'
-          + '<div style="text-align:center;padding:16px;background:#fdedec;border-radius:8px;">'
-          + '<div style="font-size:1.8em;font-weight:bold;color:#e74c3c;">' + totalHighRisk + '</div>'
-          + '<div style="color:#666;">\u9ad8\u98a8\u96aa\u6578</div></div>'
+        // ── Beautiful stat cards ──
+        var statsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">'
+          // Main progress card - larger, green gradient
+          + '<div style="grid-column:span 2;background:linear-gradient(135deg,#2e7d32,#43a047);color:white;border-radius:12px;padding:24px;display:flex;align-items:center;gap:20px;">'
+          + '<div style="text-align:center;">'
+          + '<div style="font-size:2.5em;font-weight:bold;">' + pct + '%</div>'
+          + '<div style="font-size:0.9em;opacity:0.9;">\u5b8c\u6210\u7387</div>'
+          + '</div>'
+          + '<div style="flex:1;">'
+          + '<div style="font-size:1.1em;margin-bottom:8px;">\u5168\u6821\u76e4\u9ede\u9032\u5ea6 (' + esc(String(year)) + '\u5e74\u5ea6)</div>'
+          + '<div style="background:rgba(255,255,255,0.3);border-radius:6px;height:10px;overflow:hidden;">'
+          + '<div style="background:white;height:100%;width:' + pct + '%;border-radius:6px;transition:width 0.5s;"></div>'
+          + '</div>'
+          + '<div style="margin-top:6px;font-size:0.85em;opacity:0.9;">' + completedCount + ' / ' + totalUnits + ' \u55ae\u4f4d\u5df2\u5b8c\u6210</div>'
+          + '</div>'
+          + '</div>'
+          // Total assets card
+          + '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-left:4px solid #1976D2;">'
+          + '<div style="font-size:2em;font-weight:bold;color:#1976D2;">' + totalAssets + '</div>'
+          + '<div style="color:#666;font-size:0.9em;">\u5168\u6821\u8cc7\u7522\u7e3d\u6578</div>'
+          + '</div>'
+          // IT systems card
+          + '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-left:4px solid #00897B;">'
+          + '<div style="font-size:2em;font-weight:bold;color:#00897B;">' + totalItSys + '</div>'
+          + '<div style="color:#666;font-size:0.9em;">\u8cc7\u901a\u7cfb\u7d71\u6578</div>'
+          + '</div>'
+          // China brand card
+          + '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-left:4px solid #F57C00;">'
+          + '<div style="font-size:2em;font-weight:bold;color:#F57C00;">' + totalCn + '</div>'
+          + '<div style="color:#666;font-size:0.9em;">\u5927\u9678\u5ee0\u724c\u6578</div>'
+          + '</div>'
+          // High risk card
+          + '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-left:4px solid #D32F2F;">'
+          + '<div style="font-size:2em;font-weight:bold;color:#D32F2F;">' + totalHighRisk + '</div>'
+          + '<div style="color:#666;font-size:0.9em;">\u9ad8\u98a8\u96aa\u6578</div>'
+          + '</div>'
           + '</div>';
 
-        // Progress bar
-        statsHtml += '<div style="margin-bottom:20px;">'
-          + '<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px;">'
-          + '<span>\u5168\u6821\u76e4\u9ede\u9032\u5ea6 (' + year + ' \u5e74\u5ea6)</span>'
-          + '<span style="font-weight:bold;">' + completedCount + ' / ' + totalUnits + ' \u55ae\u4f4d\u5b8c\u6210 (' + pct + '%)</span></div>'
-          + '<div style="background:#e0e0e0;border-radius:4px;height:12px;overflow:hidden;">'
-          + '<div style="background:' + (pct >= 80 ? '#4caf50' : pct >= 40 ? '#ff9800' : '#f44336') + ';height:100%;width:' + pct + '%;border-radius:4px;transition:width 0.5s;"></div>'
-          + '</div></div>';
+        // ── Group units by category ──
+        var categoryConfig = [
+          { key: '\u884c\u653f\u55ae\u4f4d', icon: 'building', label: '\u884c\u653f\u55ae\u4f4d' },
+          { key: '\u5b78\u8853\u55ae\u4f4d', icon: 'graduation-cap', label: '\u5b78\u8853\u55ae\u4f4d' },
+          { key: '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d', icon: 'landmark', label: '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d' }
+        ];
+        var grouped = {};
+        categoryConfig.forEach(function (c) { grouped[c.key] = []; });
+        mergedUnits.forEach(function (u) {
+          var cat = localCategorizeUnit(u.name);
+          if (!grouped[cat]) grouped[cat] = [];
+          grouped[cat].push(u);
+        });
 
-        // Unit table — completed first, then incomplete
-        var completedUnits = mergedUnits.filter(function (u) { return u.completed; });
-        var incompleteUnits = mergedUnits.filter(function (u) { return !u.completed; });
+        // ── Build grouped collapsible sections ──
+        var groupsHtml = '';
+        categoryConfig.forEach(function (cat, idx) {
+          var units = grouped[cat.key] || [];
+          if (units.length === 0) return;
+          var groupCompleted = units.filter(function (u) { return u.completed; }).length;
+          var groupIncomplete = units.length - groupCompleted;
+          var groupPct = units.length > 0 ? Math.round(groupCompleted / units.length * 100) : 0;
+          var groupId = 'dash-group-' + idx;
 
-        function buildUnitRows(list) {
-          var html = '';
-          list.forEach(function (u) {
-            var statusHtml = u.completed
-              ? '<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:#e8f5e9;color:#2e7d32;font-size:0.9em;font-weight:bold;">\u2713 \u5df2\u5b8c\u6210</span>'
-              : '<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:#ffebee;color:#c62828;font-size:0.9em;">\u2717 \u672a\u5b8c\u6210</span>';
-            html += '<tr style="' + (u.completed ? '' : 'background:#fff8f8;') + '">'
-              + '<td>' + esc(u.name) + '</td>'
-              + '<td style="text-align:center;">' + (u.assets || '\u2014') + '</td>'
-              + '<td style="text-align:center;">' + (u.itSys || '\u2014') + '</td>'
-              + '<td style="text-align:center;">' + (u.cn || '\u2014') + '</td>'
-              + '<td style="text-align:center;">'
-              + (u.highRisk > 0 ? '<span style="color:#e74c3c;font-weight:bold;">' + u.highRisk + '</span>' : '\u2014')
+          groupsHtml += '<div class="card" style="margin-bottom:16px;border-radius:12px;overflow:hidden;">'
+            // Card header
+            + '<div style="padding:16px 20px;background:#f8f9fa;border-bottom:1px solid #e9ecef;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" '
+            + 'data-action="app.toggleDashGroup" data-target="' + groupId + '">'
+            + '<div>'
+            + '<span style="font-weight:bold;font-size:1.1em;">' + ic(cat.icon) + ' ' + esc(cat.label) + '</span>'
+            + '<span style="margin-left:12px;font-size:0.85em;color:#666;">'
+            + '\u5171 ' + units.length + ' \u500b\u55ae\u4f4d'
+            + '</span>'
+            + '</div>'
+            + '<div style="display:flex;align-items:center;gap:12px;">'
+            + '<span style="font-size:0.85em;">'
+            + '<span style="color:#2e7d32;font-weight:bold;">' + groupCompleted + ' \u5df2\u5b8c\u6210</span> \u00b7 '
+            + '<span style="color:#c62828;">' + groupIncomplete + ' \u672a\u5b8c\u6210</span>'
+            + '</span>'
+            + '<span style="background:' + (groupPct >= 80 ? '#2e7d32' : groupPct >= 40 ? '#F57C00' : '#c62828') + ';color:white;padding:2px 8px;border-radius:10px;font-size:0.8em;">' + groupPct + '%</span>'
+            + '<span class="dash-group-arrow">\u25be</span>'
+            + '</div>'
+            + '</div>'
+            // Card body with table
+            + '<div class="card-body" id="' + groupId + '" style="padding:0;">'
+            + '<table style="width:100%;border-collapse:collapse;">'
+            + '<thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;">'
+            + '<th style="padding:10px 16px;text-align:left;">\u55ae\u4f4d\u540d\u7a31</th>'
+            + '<th style="padding:10px 12px;text-align:center;">\u72c0\u614b</th>'
+            + '<th style="padding:10px 12px;text-align:center;">\u8cc7\u7522\u6578</th>'
+            + '<th style="padding:10px 12px;text-align:center;">\u8cc7\u901a\u7cfb\u7d71</th>'
+            + '<th style="padding:10px 12px;text-align:center;">\u5927\u9678\u5ee0\u724c</th>'
+            + '<th style="padding:10px 12px;text-align:center;">\u9ad8\u98a8\u96aa</th>'
+            + '</tr></thead><tbody>';
+
+          units.forEach(function (u) {
+            var statusBadge = u.completed
+              ? '<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:#e8f5e9;color:#2e7d32;font-size:0.85em;font-weight:bold;">\u2713 \u5df2\u5b8c\u6210</span>'
+              : '<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:#ffebee;color:#c62828;font-size:0.85em;">\u2717 \u672a\u5b8c\u6210</span>';
+            var rowBg = u.completed ? 'background:#f1f8e9;' : '';
+            groupsHtml += '<tr style="border-bottom:1px solid #f0f0f0;' + rowBg + '">'
+              + '<td style="padding:10px 16px;' + (u.completed ? 'font-weight:bold;' : '') + '">' + esc(u.name) + '</td>'
+              + '<td style="padding:10px 12px;text-align:center;">' + statusBadge + '</td>'
+              + '<td style="padding:10px 12px;text-align:center;">' + (u.assets || '\u2014') + '</td>'
+              + '<td style="padding:10px 12px;text-align:center;">' + (u.itSys || '\u2014') + '</td>'
+              + '<td style="padding:10px 12px;text-align:center;">' + (u.cn || '\u2014') + '</td>'
+              + '<td style="padding:10px 12px;text-align:center;">'
+              + (u.highRisk > 0 ? '<span style="color:#D32F2F;font-weight:bold;">' + u.highRisk + '</span>' : '\u2014')
               + '</td>'
-              + '<td>' + statusHtml + '</td>'
               + '</tr>';
           });
-          return html;
-        }
 
-        var tableHtml = '<table style="width:100%;border-collapse:collapse;">'
-          + '<thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;">'
-          + '<th style="padding:8px 12px;text-align:left;">\u55ae\u4f4d\u540d\u7a31</th>'
-          + '<th style="padding:8px 12px;text-align:center;">\u8cc7\u7522\u6578</th>'
-          + '<th style="padding:8px 12px;text-align:center;">\u8cc7\u901a\u7cfb\u7d71</th>'
-          + '<th style="padding:8px 12px;text-align:center;">\u5927\u9678\u5ee0\u724c</th>'
-          + '<th style="padding:8px 12px;text-align:center;">\u9ad8\u98a8\u96aa</th>'
-          + '<th style="padding:8px 12px;text-align:left;">\u72c0\u614b</th>'
-          + '</tr></thead><tbody>';
+          groupsHtml += '</tbody></table></div></div>';
+        });
 
-        if (completedUnits.length > 0) {
-          tableHtml += '<tr><td colspan="6" style="padding:8px 12px;background:#e8f5e9;font-weight:bold;color:#2e7d32;">'
-            + ic('check-circle', 'icon-sm') + ' \u5df2\u5b8c\u6210\u55ae\u4f4d (' + completedUnits.length + ')</td></tr>';
-          tableHtml += buildUnitRows(completedUnits);
-        }
-
-        tableHtml += '<tr><td colspan="6" style="padding:8px 12px;background:#ffebee;font-weight:bold;color:#c62828;">'
-          + ic('alert-circle', 'icon-sm') + ' \u672a\u5b8c\u6210\u55ae\u4f4d (' + incompleteUnits.length + ')</td></tr>';
-        tableHtml += buildUnitRows(incompleteUnits);
-        tableHtml += '</tbody></table>';
-
-        dashEl.innerHTML = statsHtml + '<div style="overflow-x:auto;">' + tableHtml + '</div>';
+        dashEl.innerHTML = statsHtml + groupsHtml;
         scheduleRefreshIcons();
 
       } catch (err) {
