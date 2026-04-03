@@ -86,27 +86,40 @@
       refreshIcons();
     }
 
+    // Map backend field names to frontend short names
+    function adaptAsset(obj) {
+      if (!obj || typeof obj !== 'object') return obj;
+      if (obj.confidentiality !== undefined) { obj.ciaC = obj.confidentiality; }
+      if (obj.integrity !== undefined) { obj.ciaI = obj.integrity; }
+      if (obj.availability !== undefined) { obj.ciaA = obj.availability; }
+      if (obj.legalCompliance !== undefined) { obj.ciaL = obj.legalCompliance; }
+      // Adapt arrays of items
+      if (Array.isArray(obj.items)) { obj.items.forEach(adaptAsset); }
+      return obj;
+    }
+
     async function apiCall(method, path, body) {
       const endpoint = (CONFIG && CONFIG.assetInventoryEndpoint) || '/api/assets';
-      const opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+      const opts = { method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'include' };
       if (body) opts.body = JSON.stringify({ payload: body });
       const res = await fetch(endpoint + path, opts);
       if (!res.ok) {
         const text = await res.text().catch(function () { return res.statusText; });
         throw new Error(text || ('\u8acb\u6c42\u5931\u6557 (' + res.status + ')'));
       }
-      return res.json();
+      return res.json().then(adaptAsset);
     }
 
     function getCurrentRocYear() {
       return new Date().getFullYear() - 1911;
     }
 
-    function computeProtectionLevel(c, i, a) {
+    function computeProtectionLevel(c, i, a, l) {
       var cv = CIA_VALUE_MAP[c] || 0;
       var iv = CIA_VALUE_MAP[i] || 0;
       var av = CIA_VALUE_MAP[a] || 0;
-      var max = Math.max(cv, iv, av);
+      var lv = CIA_VALUE_MAP[l] || 0;
+      var max = Math.max(cv, iv, av, lv);
       if (max >= 3) return '\u9ad8';
       if (max >= 2) return '\u4e2d';
       if (max >= 1) return '\u666e';
@@ -472,7 +485,7 @@
           var item = items[i];
           var riskScore = computeRiskScore(item.riskLikelihood, item.riskImpact);
           var riskLevel = item.riskLevel || getRiskLevel(riskScore);
-          var protLevel = item.protectionLevel || computeProtectionLevel(item.ciaC, item.ciaI, item.ciaA);
+          var protLevel = item.protectionLevel || computeProtectionLevel(item.ciaC, item.ciaI, item.ciaA, item.ciaL);
 
           rowsHtml += '<tr>'
             + '<td>' + esc(item.assetId || '') + '</td>'
@@ -553,7 +566,7 @@
 
       var a = asset || {};
       var user = currentUser() || {};
-      var currentProtLevel = computeProtectionLevel(a.ciaC || '', a.ciaI || '', a.ciaA || '');
+      var currentProtLevel = computeProtectionLevel(a.ciaC || '', a.ciaI || '', a.ciaA || '', a.ciaL || '');
       var riskScore = computeRiskScore(a.riskLikelihood, a.riskImpact);
       var riskLevel = getRiskLevel(riskScore);
 
@@ -715,9 +728,13 @@
         + '<label class="form-label form-required">\u53ef\u7528\u6027 (A)</label>'
         + '<select class="form-select" id="asset-cia-a" name="ciaA">' + buildSelectOptions(CIA_OPTIONS, a.ciaA || '', true) + '</select>'
         + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">\u6cd5\u5f8b\u9075\u5faa\u6027 (L)</label>'
+        + '<select class="form-select" id="asset-cia-l" name="ciaL">' + buildSelectOptions(CIA_OPTIONS, a.ciaL || '', true) + '</select>'
+        + '</div>'
         + '</div>'
         + '<div class="form-group">'
-        + '<label class="form-label">\u9632\u8b77\u9700\u6c42\u7b49\u7d1a\uff08\u81ea\u52d5\u8a08\u7b97\uff09</label>'
+        + '<label class="form-label">\u9632\u8b77\u9700\u6c42\u7b49\u7d1a\uff08\u81ea\u52d5\u8a08\u7b97 = max(C, I, A, L)\uff09</label>'
         + '<input type="text" class="form-input" id="asset-protection-level" value="' + esc(currentProtLevel || '--') + '" readonly style="background:#f5f5f5;font-weight:bold;">'
         + '</div>';
 
@@ -980,6 +997,12 @@
             return;
           }
 
+          // Map form field names to backend field names
+          if (payload.ciaC) { payload.confidentiality = payload.ciaC; delete payload.ciaC; }
+          if (payload.ciaI) { payload.integrity = payload.ciaI; delete payload.ciaI; }
+          if (payload.ciaA) { payload.availability = payload.ciaA; delete payload.ciaA; }
+          if (payload.ciaL) { payload.legalCompliance = payload.ciaL; delete payload.ciaL; }
+
           var endpoint = (CONFIG && CONFIG.assetInventoryEndpoint) || '/api/assets';
           var hiddenId = (document.getElementById('asset-id-hidden') || {}).value || '';
           var editMode = !!hiddenId;
@@ -1036,13 +1059,16 @@
           // --- CIA -> Protection level auto-compute ---
           case 'asset-cia-c':
           case 'asset-cia-i':
-          case 'asset-cia-a': {
+          case 'asset-cia-a':
+          case 'asset-cia-l': {
             var cC = (document.getElementById('asset-cia-c') || {}).value || '';
             var cI = (document.getElementById('asset-cia-i') || {}).value || '';
             var cA = (document.getElementById('asset-cia-a') || {}).value || '';
-            var protLevel = computeProtectionLevel(cC, cI, cA);
+            var cL = (document.getElementById('asset-cia-l') || {}).value || '';
+            var vals = [cC, cI, cA, cL].filter(function(v) { return v; });
+            var maxVal = vals.reduce(function(mx, v) { return (CIA_VALUE_MAP[v] || 0) > (CIA_VALUE_MAP[mx] || 0) ? v : mx; }, vals[0] || '');
             var protEl = document.getElementById('asset-protection-level');
-            if (protEl) protEl.value = protLevel || '--';
+            if (protEl) protEl.value = maxVal || '--';
             break;
           }
 
@@ -1119,7 +1145,7 @@
       var a = asset || {};
       var riskScore = computeRiskScore(a.riskLikelihood, a.riskImpact);
       var riskLevel = a.riskLevel || getRiskLevel(riskScore);
-      var protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA);
+      var protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL);
 
       function detailRow(label, value) {
         return '<tr><td style="font-weight:600;width:180px;vertical-align:top;padding:8px 12px;white-space:nowrap;">' + esc(label) + '</td>'
@@ -1163,6 +1189,7 @@
         + detailRow('\u6a5f\u5bc6\u6027 (C)', a.ciaC)
         + detailRow('\u5b8c\u6574\u6027 (I)', a.ciaI)
         + detailRow('\u53ef\u7528\u6027 (A)', a.ciaA)
+        + detailRow('\u6cd5\u5f8b\u9075\u5faa\u6027 (L)', a.ciaL)
         + detailBadgeRow('\u9632\u8b77\u9700\u6c42\u7b49\u7d1a', '<strong>' + esc(protLevel || '\u2014') + '</strong>')
         + '</table>';
 
@@ -1410,7 +1437,7 @@
       var a = asset || {};
       var protLevel = appendixData.protectionLevel
         || a.protectionLevel
-        || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA)
+        || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL)
         || '';
       var existingAssessments = Array.isArray(appendixData.assessments) ? appendixData.assessments : [];
       var complianceStatus = appendixData.complianceStatus || '';
@@ -1677,13 +1704,14 @@
       } catch (e) { riskData = {}; }
       if (a.riskData) riskData = a.riskData;
 
-      var protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA) || '';
+      var protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL) || '';
 
       // -- Compute asset value from CIA --
       var cVal = CIA_VALUE_MAP[a.ciaC] || 0;
       var iVal = CIA_VALUE_MAP[a.ciaI] || 0;
       var aVal = CIA_VALUE_MAP[a.ciaA] || 0;
-      var assetValue = riskData.assetValue || Math.max(cVal, iVal, aVal) || 0;
+      var lVal = CIA_VALUE_MAP[a.ciaL] || 0;
+      var assetValue = riskData.assetValue || Math.max(cVal, iVal, aVal, lVal) || 0;
 
       // -- Existing risk data --
       var existingThreats = Array.isArray(riskData.threats) ? riskData.threats : [];
