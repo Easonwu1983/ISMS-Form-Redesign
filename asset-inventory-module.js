@@ -119,6 +119,53 @@
       { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '普', t: '使用者輸入資料合法性檢查' }
     ];
 
+    var THREAT_SCENARIOS = {
+      PE: [
+        { id: 'pe1', threat: '人員離職未完成交接', vuln: '知識集中風險', likelihood: 2, impact: 2 },
+        { id: 'pe2', threat: '權限過大或未即時回收', vuln: '存取控制不當', likelihood: 2, impact: 3 },
+        { id: 'pe3', threat: '遭社交工程攻擊', vuln: '人員訓練不足', likelihood: 2, impact: 2 },
+        { id: 'pe4', threat: '內部人員故意洩密', vuln: '缺乏監控機制', likelihood: 1, impact: 3 }
+      ],
+      DC: [
+        { id: 'dc1', threat: '文件未加密儲存', vuln: '缺乏加密', likelihood: 2, impact: 2 },
+        { id: 'dc2', threat: '文件未依規定分級標示', vuln: '分類分級不當', likelihood: 2, impact: 1 },
+        { id: 'dc3', threat: '不當人員存取機密文件', vuln: '存取控制不當', likelihood: 2, impact: 3 },
+        { id: 'dc4', threat: '文件保存期限過期未銷毀', vuln: '生命週期管理不足', likelihood: 1, impact: 2 }
+      ],
+      DA: [
+        { id: 'da1', threat: '資料庫遭SQL注入攻擊', vuln: '未做輸入驗證', likelihood: 2, impact: 3 },
+        { id: 'da2', threat: '個資外洩', vuln: '缺乏加密或存取控制', likelihood: 2, impact: 3 },
+        { id: 'da3', threat: '資料未備份導致遺失', vuln: '缺乏備份', likelihood: 2, impact: 3 },
+        { id: 'da4', threat: '資料遭竄改', vuln: '缺乏完整性驗證', likelihood: 1, impact: 3 }
+      ],
+      SW: [
+        { id: 'sw1', threat: '軟體漏洞未及時修補', vuln: '未及時更新修補', likelihood: 3, impact: 3 },
+        { id: 'sw2', threat: '軟體授權到期或違規使用', vuln: '授權管理不當', likelihood: 2, impact: 2 },
+        { id: 'sw3', threat: '遭植入惡意程式', vuln: '缺乏防毒機制', likelihood: 2, impact: 3 },
+        { id: 'sw4', threat: '使用弱密碼或預設密碼', vuln: '密碼強度不足', likelihood: 2, impact: 3 },
+        { id: 'sw5', threat: '未經授權存取系統', vuln: '存取控制不當', likelihood: 2, impact: 3 }
+      ],
+      HW: [
+        { id: 'hw1', threat: '設備老化故障', vuln: '缺乏維護保養', likelihood: 2, impact: 2 },
+        { id: 'hw2', threat: '韌體或驅動程式未更新', vuln: '未及時更新修補', likelihood: 2, impact: 3 },
+        { id: 'hw3', threat: '實體設備竊盜或遺失', vuln: '實體安全不足', likelihood: 1, impact: 3 },
+        { id: 'hw4', threat: '天然災害損壞', vuln: '缺乏災害防護', likelihood: 1, impact: 3 },
+        { id: 'hw5', threat: '電力中斷', vuln: '缺乏不斷電系統', likelihood: 2, impact: 2 }
+      ],
+      VM: [
+        { id: 'vm1', threat: 'VM逃逸攻擊', vuln: 'Hypervisor漏洞', likelihood: 1, impact: 3 },
+        { id: 'vm2', threat: '快照管理不當導致資料外洩', vuln: '快照存取控制不足', likelihood: 2, impact: 2 },
+        { id: 'vm3', threat: '資源耗盡（CPU/RAM/Storage）', vuln: '資源監控不足', likelihood: 2, impact: 2 },
+        { id: 'vm4', threat: '映像檔外洩', vuln: '映像檔未加密', likelihood: 1, impact: 3 }
+      ],
+      BS: [
+        { id: 'bs1', threat: '核心業務服務中斷', vuln: '缺乏備援機制', likelihood: 2, impact: 3 },
+        { id: 'bs2', threat: '供應鏈/委外廠商風險', vuln: '供應鏈管理不足', likelihood: 2, impact: 2 },
+        { id: 'bs3', threat: 'SLA違約', vuln: '監控不足', likelihood: 2, impact: 2 },
+        { id: 'bs4', threat: '災難恢復能力不足', vuln: '缺乏營運持續計畫', likelihood: 1, impact: 3 }
+      ]
+    };
+
     // -- Determine if a row applies to a given protection level --
     function isApplicable(protLevel, rowLevel) {
       if (!protLevel || !rowLevel) return true;
@@ -184,6 +231,39 @@
           + '<option value="不適用"' + (isNA ? ' selected' : '') + '>不適用</option>'
           + '</select>'
           + '</td>'
+          + '</tr>';
+      });
+
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function buildRiskScenarios(category, checkedIds) {
+      var scenarios = THREAT_SCENARIOS[category] || THREAT_SCENARIOS['SW'];
+      var checked = {};
+      (checkedIds || []).forEach(function(id) { checked[id] = true; });
+
+      var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+        + '<thead><tr style="background:#f8f9fa;">'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:40px;text-align:center;">選取</th>'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;">威脅情境</th>'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;">對應弱點</th>'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:70px;text-align:center;">可能性</th>'
+        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:70px;text-align:center;">衝擊</th>'
+        + '</tr></thead><tbody>';
+
+      scenarios.forEach(function(s) {
+        var isChecked = checked[s.id];
+        var likelihoodLabel = s.likelihood === 3 ? '高' : s.likelihood === 2 ? '中' : '低';
+        var impactLabel = s.impact === 3 ? '高' : s.impact === 2 ? '中' : '低';
+        html += '<tr style="' + (isChecked ? 'background:#fff3e0;' : '') + '">'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">'
+          + '<input type="checkbox" class="risk-scenario-check" data-scenario-id="' + s.id + '" data-likelihood="' + s.likelihood + '" data-impact="' + s.impact + '"' + (isChecked ? ' checked' : '') + '>'
+          + '</td>'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;">' + esc(s.threat) + '</td>'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;">' + esc(s.vuln) + '</td>'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">' + esc(likelihoodLabel) + '</td>'
+          + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">' + esc(impactLabel) + '</td>'
           + '</tr>';
       });
 
@@ -999,6 +1079,40 @@
         + '<label class="form-label">\u7cfb\u7d71\u529f\u80fd\u8aaa\u660e</label>'
         + '<textarea class="form-textarea" id="asset-sys-description" name="systemDescription" rows="2">' + esc(a.systemDescription || '') + '</textarea>'
         + '</div>'
+        + '<hr style="border:none;border-top:1px solid #e9ecef;margin:12px 0;">'
+        + '<div style="font-weight:600;margin-bottom:8px;">' + ic('clock', 'icon-sm') + ' \u71df\u904b\u6301\u7e8c\u6307\u6a19</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">RTO\uff08\u7cfb\u7d71\u56de\u5fa9\u6642\u9593\u76ee\u6a19\uff09</label>'
+        + '<select class="form-select" id="asset-sys-rto" name="rto">'
+        + '<option value="">-- \u8acb\u9078\u64c7 --</option>'
+        + '<option value="4\u5c0f\u6642\u5167"' + (a.rto === '4\u5c0f\u6642\u5167' ? ' selected' : '') + '>4\u5c0f\u6642\u5167</option>'
+        + '<option value="1\u5929\u4ee5\u5167"' + (a.rto === '1\u5929\u4ee5\u5167' ? ' selected' : '') + '>1\u5929\u4ee5\u5167</option>'
+        + '<option value="3\u5929\u4ee5\u5167"' + (a.rto === '3\u5929\u4ee5\u5167' ? ' selected' : '') + '>3\u5929\u4ee5\u5167</option>'
+        + '<option value="7\u5929\u4ee5\u5167"' + (a.rto === '7\u5929\u4ee5\u5167' ? ' selected' : '') + '>7\u5929\u4ee5\u5167</option>'
+        + '</select>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">RPO\uff08\u8cc7\u6599\u56de\u5fa9\u76ee\u6a19\u9ede\uff09</label>'
+        + '<select class="form-select" id="asset-sys-rpo" name="rpo">'
+        + '<option value="">-- \u8acb\u9078\u64c7 --</option>'
+        + '<option value="\u7121\u5099\u4efd\u6a5f\u5236"' + (a.rpo === '\u7121\u5099\u4efd\u6a5f\u5236' ? ' selected' : '') + '>\u7121\u5099\u4efd\u6a5f\u5236</option>'
+        + '<option value="1\u5929"' + (a.rpo === '1\u5929' ? ' selected' : '') + '>1\u5929</option>'
+        + '<option value="7\u5929"' + (a.rpo === '7\u5929' ? ' selected' : '') + '>7\u5929</option>'
+        + '<option value="30\u5929"' + (a.rpo === '30\u5929' ? ' selected' : '') + '>30\u5929</option>'
+        + '</select>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">MTPD\uff08\u6700\u5927\u53ef\u5bb9\u5fcd\u4e2d\u65b7\u6642\u9593\uff09</label>'
+        + '<select class="form-select" id="asset-sys-mtpd" name="mtpd">'
+        + '<option value="">-- \u8acb\u9078\u64c7 --</option>'
+        + '<option value="8\u5c0f\u6642"' + (a.mtpd === '8\u5c0f\u6642' ? ' selected' : '') + '>8\u5c0f\u6642</option>'
+        + '<option value="2\u5929"' + (a.mtpd === '2\u5929' ? ' selected' : '') + '>2\u5929</option>'
+        + '<option value="4\u5929"' + (a.mtpd === '4\u5929' ? ' selected' : '') + '>4\u5929</option>'
+        + '<option value="7\u5929\u4ee5\u4e0a"' + (a.mtpd === '7\u5929\u4ee5\u4e0a' ? ' selected' : '') + '>7\u5929\u4ee5\u4e0a</option>'
+        + '</select>'
+        + '</div>'
+        + '</div>'
         + '<hr style="border:none;border-top:1px solid #e9ecef;margin:16px 0;">'
         + '<div style="font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px;">'
         +   ic('clipboard-check') + ' \u9644\u8868\u5341 \u8cc7\u901a\u7cfb\u7d71\u9632\u8b77\u57fa\u6e96\uff08\u4f9d\u7cfb\u7d71\u7d1a\u5225\u81ea\u52d5\u7be9\u9078\uff09'
@@ -1037,47 +1151,61 @@
         + '</div>'
         + '</div>';
 
-      // --- Section 9: Risk Assessment ---
+      // --- Section 9: Risk Assessment (Scenario-based) ---
+      var category = a.category || '';
+      var existingRisk = a.riskData || {};
+      var checkedIds = existingRisk.scenarioIds || [];
+
       var riskHtml = ''
+        + '<div style="font-size:13px;color:#666;margin-bottom:8px;">\u4f9d\u8cc7\u7522\u5206\u985e\u300c' + esc(getCategoryLabel(category || 'SW')) + '\u300d\u81ea\u52d5\u5217\u51fa\u5e38\u898b\u5a01\u8105\u60c5\u5883\uff0c\u8acb\u52fe\u9078\u9069\u7528\u9805\u76ee\uff1a</div>'
+        + '<div id="risk-scenarios-container">'
+        + buildRiskScenarios(category, checkedIds)
+        + '</div>'
+        + '<hr style="border:none;border-top:1px solid #e9ecef;margin:16px 0;">'
         + '<div class="form-row">'
         + '<div class="form-group">'
-        + '<label class="form-label">\u53ef\u80fd\u6027 (1-3)</label>'
-        + '<select class="form-select" id="asset-risk-likelihood" name="riskLikelihood">'
+        + '<label class="form-label">\u98a8\u96aa\u503c\uff08\u81ea\u52d5\u8a08\u7b97\uff09</label>'
+        + '<div id="risk-score-display" style="font-size:1.5em;font-weight:bold;padding:8px 0;">--</div>'
+        + '</div>'
+        + '<div class="form-group">'
+        + '<label class="form-label">\u98a8\u96aa\u7b49\u7d1a</label>'
+        + '<div id="risk-level-display" style="font-size:1.5em;font-weight:bold;padding:8px 0;">--</div>'
+        + '</div>'
+        + '</div>'
+        + '<div style="margin:12px 0;">'
+        + '<div style="font-weight:600;margin-bottom:6px;">\u98a8\u96aa\u77e9\u9663</div>'
+        + '<table id="risk-matrix-table" style="border-collapse:collapse;font-size:12px;">'
+        + '<tr><th style="padding:4px 8px;border:1px solid #ccc;">\u885d\u64ca\\\u53ef\u80fd\u6027</th><th style="padding:4px 8px;border:1px solid #ccc;">1(\u4f4e)</th><th style="padding:4px 8px;border:1px solid #ccc;">2(\u4e2d)</th><th style="padding:4px 8px;border:1px solid #ccc;">3(\u9ad8)</th></tr>'
+        + '<tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:bold;">3(\u9ad8)</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFF9C4;text-align:center;" data-cell="1-3">3-\u4e2d</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFCDD2;text-align:center;" data-cell="2-3">6-\u9ad8</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFCDD2;text-align:center;" data-cell="3-3">9-\u9ad8</td></tr>'
+        + '<tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:bold;">2(\u4e2d)</td><td style="padding:4px 8px;border:1px solid #ccc;background:#C8E6C9;text-align:center;" data-cell="1-2">2-\u4f4e</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFF9C4;text-align:center;" data-cell="2-2">4-\u4e2d</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFCDD2;text-align:center;" data-cell="3-2">6-\u9ad8</td></tr>'
+        + '<tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:bold;">1(\u4f4e)</td><td style="padding:4px 8px;border:1px solid #ccc;background:#C8E6C9;text-align:center;" data-cell="1-1">1-\u4f4e</td><td style="padding:4px 8px;border:1px solid #ccc;background:#C8E6C9;text-align:center;" data-cell="2-1">2-\u4f4e</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFF9C4;text-align:center;" data-cell="3-1">3-\u4e2d</td></tr>'
+        + '</table>'
+        + '</div>'
+        + '<div id="risk-treatment-section" style="display:none;margin-top:12px;padding:12px;background:#fff8f8;border:1px solid #ffcdd2;border-radius:8px;">'
+        + '<div style="font-weight:600;color:#c62828;margin-bottom:8px;">' + ic('alert-triangle', 'icon-sm') + ' \u9ad8\u98a8\u96aa \u2014 \u5fc5\u9808\u586b\u5beb\u8655\u7f6e\u65b9\u5f0f</div>'
+        + '<div class="form-row">'
+        + '<div class="form-group">'
+        + '<label class="form-label form-required">\u98a8\u96aa\u8655\u7f6e\u65b9\u5f0f</label>'
+        + '<select class="form-select" id="asset-risk-treatment" name="riskTreatment">'
         + '<option value="">-- \u8acb\u9078\u64c7 --</option>'
-        + '<option value="1"' + (String(a.riskLikelihood) === '1' ? ' selected' : '') + '>1 - \u4f4e</option>'
-        + '<option value="2"' + (String(a.riskLikelihood) === '2' ? ' selected' : '') + '>2 - \u4e2d</option>'
-        + '<option value="3"' + (String(a.riskLikelihood) === '3' ? ' selected' : '') + '>3 - \u9ad8</option>'
+        + '<option value="\u964d\u4f4e"' + ((existingRisk.treatment === '\u964d\u4f4e') ? ' selected' : '') + '>\u964d\u4f4e</option>'
+        + '<option value="\u8f49\u79fb"' + ((existingRisk.treatment === '\u8f49\u79fb') ? ' selected' : '') + '>\u8f49\u79fb</option>'
+        + '<option value="\u907f\u514d"' + ((existingRisk.treatment === '\u907f\u514d') ? ' selected' : '') + '>\u907f\u514d</option>'
         + '</select>'
         + '</div>'
         + '<div class="form-group">'
-        + '<label class="form-label">\u885d\u64ca\u6027 (1-3)</label>'
-        + '<select class="form-select" id="asset-risk-impact" name="riskImpact">'
+        + '<label class="form-label">\u6b98\u9918\u98a8\u96aa\u7b49\u7d1a</label>'
+        + '<select class="form-select" id="asset-risk-residual" name="riskResidual">'
         + '<option value="">-- \u8acb\u9078\u64c7 --</option>'
-        + '<option value="1"' + (String(a.riskImpact) === '1' ? ' selected' : '') + '>1 - \u4f4e</option>'
-        + '<option value="2"' + (String(a.riskImpact) === '2' ? ' selected' : '') + '>2 - \u4e2d</option>'
-        + '<option value="3"' + (String(a.riskImpact) === '3' ? ' selected' : '') + '>3 - \u9ad8</option>'
+        + '<option value="\u4f4e"' + ((existingRisk.residualRisk === '\u4f4e') ? ' selected' : '') + '>\u4f4e</option>'
+        + '<option value="\u4e2d"' + ((existingRisk.residualRisk === '\u4e2d') ? ' selected' : '') + '>\u4e2d</option>'
         + '</select>'
         + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u98a8\u96aa\u5206\u6578</label>'
-        + '<input type="text" class="form-input" id="asset-risk-score" value="' + (riskScore ? riskScore : '--') + '" readonly style="background:#f5f5f5;font-weight:bold;">'
-        + '</div>'
         + '</div>'
         + '<div class="form-group">'
-        + '<label class="form-label">\u98a8\u96aa\u7b49\u7d1a\uff08\u81ea\u52d5\u8a08\u7b97\uff09</label>'
-        + '<div id="asset-risk-level" style="font-weight:bold;padding:6px 0;">'
-        + (riskLevel ? '<span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel) + ' (' + (RISK_LEVELS[riskLevel] || '') + ')</span>' : '--')
+        + '<label class="form-label form-required">\u63a7\u5236\u63aa\u65bd\u8aaa\u660e</label>'
+        + '<textarea class="form-textarea" id="asset-risk-control-desc" name="riskControlDescription" rows="2" placeholder="\u8aaa\u660e\u5c07\u63a1\u53d6\u7684\u63a7\u5236\u63aa\u65bd...">' + esc(existingRisk.controlDescription || '') + '</textarea>'
         + '</div>'
-        + '</div>'
-        + '<div class="form-row">'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u98a8\u96aa\u8655\u7406\u65b9\u5f0f</label>'
-        + '<select class="form-select" name="riskTreatment">' + buildSelectOptions(['\u964d\u4f4e', '\u79fb\u8f49', '\u63a5\u53d7', '\u8ff4\u907f'], a.riskTreatment || '', true) + '</select>'
-        + '</div>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u6b98\u9918\u98a8\u96aa\u8aaa\u660e</label>'
-        + '<textarea class="form-textarea" name="residualRiskNote" rows="2">' + esc(a.residualRiskNote || '') + '</textarea>'
         + '</div>';
 
       // ========== Assemble full form ==========
@@ -1203,6 +1331,30 @@
             }
           });
 
+          // Collect risk scenario data
+          var riskChecks = form.querySelectorAll('.risk-scenario-check:checked');
+          var scenarioIds = [];
+          var maxL = 0, maxI = 0;
+          riskChecks.forEach(function(cb) {
+            scenarioIds.push(cb.getAttribute('data-scenario-id'));
+            var l = parseInt(cb.getAttribute('data-likelihood'), 10) || 0;
+            var i = parseInt(cb.getAttribute('data-impact'), 10) || 0;
+            if (l > maxL) maxL = l;
+            if (i > maxI) maxI = i;
+          });
+          var riskScore = maxL * maxI;
+          var riskLevel = riskScore >= 6 ? '\u9ad8' : riskScore >= 3 ? '\u4e2d' : riskScore >= 1 ? '\u4f4e' : '';
+          payload.riskData = {
+            scenarioIds: scenarioIds,
+            likelihood: maxL,
+            impact: maxI,
+            riskScore: riskScore,
+            riskLevel: riskLevel,
+            treatment: (form.querySelector('#asset-risk-treatment') || {}).value || '',
+            residualRisk: (form.querySelector('#asset-risk-residual') || {}).value || '',
+            controlDescription: (form.querySelector('#asset-risk-control-desc') || {}).value || ''
+          };
+
           var endpoint = (CONFIG && CONFIG.assetInventoryEndpoint) || '/api/assets';
           var hiddenId = (document.getElementById('asset-id-hidden') || {}).value || '';
           var editMode = !!hiddenId;
@@ -1278,6 +1430,48 @@
           return;
         }
 
+        // --- Risk scenario checkbox change ---
+        if (target.classList && target.classList.contains('risk-scenario-check')) {
+          var checks = document.querySelectorAll('.risk-scenario-check:checked');
+          var maxL = 0, maxI = 0;
+          checks.forEach(function(cb) {
+            var l = parseInt(cb.getAttribute('data-likelihood'), 10) || 0;
+            var i = parseInt(cb.getAttribute('data-impact'), 10) || 0;
+            if (l > maxL) maxL = l;
+            if (i > maxI) maxI = i;
+          });
+          var score = maxL * maxI;
+          var level = score >= 6 ? '\u9ad8' : score >= 3 ? '\u4e2d' : score >= 1 ? '\u4f4e' : '--';
+          var levelColor = level === '\u9ad8' ? '#c62828' : level === '\u4e2d' ? '#e65100' : level === '\u4f4e' ? '#2e7d32' : '#666';
+          var scoreEl = document.getElementById('risk-score-display');
+          var levelEl = document.getElementById('risk-level-display');
+          if (scoreEl) scoreEl.textContent = score || '--';
+          if (levelEl) { levelEl.textContent = level; levelEl.style.color = levelColor; }
+          var treatmentEl = document.getElementById('risk-treatment-section');
+          if (treatmentEl) treatmentEl.style.display = level === '\u9ad8' ? '' : 'none';
+          // Update checked row backgrounds
+          document.querySelectorAll('.risk-scenario-check').forEach(function(cb) {
+            var tr = cb.closest('tr');
+            if (tr) tr.style.background = cb.checked ? '#fff3e0' : '';
+          });
+          // Highlight matching cell in risk matrix
+          var matrixTable = document.getElementById('risk-matrix-table');
+          if (matrixTable) {
+            matrixTable.querySelectorAll('[data-cell]').forEach(function(td) {
+              td.style.outline = '';
+              td.style.outlineOffset = '';
+            });
+            if (maxL > 0 && maxI > 0) {
+              var matchCell = matrixTable.querySelector('[data-cell="' + maxL + '-' + maxI + '"]');
+              if (matchCell) {
+                matchCell.style.outline = '3px solid #1565c0';
+                matchCell.style.outlineOffset = '-2px';
+              }
+            }
+          }
+          return;
+        }
+
         if (!target.id) return;
 
         switch (target.id) {
@@ -1287,6 +1481,17 @@
             if (subCatEl) {
               subCatEl.innerHTML = buildSubCategorySelectOptions(target.value, '', true);
             }
+            var riskContainer = document.getElementById('risk-scenarios-container');
+            if (riskContainer) {
+              riskContainer.innerHTML = buildRiskScenarios(target.value, []);
+            }
+            // Reset risk score/level displays
+            var rScoreEl = document.getElementById('risk-score-display');
+            var rLevelEl = document.getElementById('risk-level-display');
+            if (rScoreEl) rScoreEl.textContent = '--';
+            if (rLevelEl) { rLevelEl.textContent = '--'; rLevelEl.style.color = '#666'; }
+            var rTreatEl = document.getElementById('risk-treatment-section');
+            if (rTreatEl) rTreatEl.style.display = 'none';
             break;
           }
 
@@ -1338,25 +1543,7 @@
             break;
           }
 
-          // --- Risk score auto-compute ---
-          case 'asset-risk-likelihood':
-          case 'asset-risk-impact': {
-            var lVal = (document.getElementById('asset-risk-likelihood') || {}).value || '';
-            var iVal = (document.getElementById('asset-risk-impact') || {}).value || '';
-            var score = computeRiskScore(lVal, iVal);
-            var scoreEl = document.getElementById('asset-risk-score');
-            if (scoreEl) scoreEl.value = score ? String(score) : '--';
-            var level = getRiskLevel(score);
-            var levelEl = document.getElementById('asset-risk-level');
-            if (levelEl) {
-              if (level) {
-                levelEl.innerHTML = '<span class="badge ' + getRiskBadgeClass(level) + '"><span class="badge-dot"></span>' + esc(level) + ' (' + (RISK_LEVELS[level] || '') + ')</span>';
-              } else {
-                levelEl.textContent = '--';
-              }
-            }
-            break;
-          }
+          // (Risk score is now computed via risk-scenario-check listener above)
         }
       }
 
@@ -1463,6 +1650,9 @@
           + detailRow('\u7cfb\u7d71\u7dad\u904b\u5ee0\u5546', a.systemVendor)
           + detailRow('\u670d\u52d9\u5951\u7d04\u5230\u671f\u65e5', a.contractExpiry)
           + detailRow('\u7cfb\u7d71\u529f\u80fd\u8aaa\u660e', a.systemDescription)
+          + detailRow('RTO', a.rto)
+          + detailRow('RPO', a.rpo)
+          + detailRow('MTPD', a.mtpd)
           + '</table>';
       }
 
