@@ -83,17 +83,16 @@ function createAssetInventoryRouter(deps) {
   async function handleHealth(req, res, origin) {
     try {
       await db.healthCheck();
-      writeJson(res, 200, { status: 'ok', module: 'asset-inventory' }, origin);
+      writeJson(res, { status: 200, jsonBody: { status: 'ok', module: 'asset-inventory' } }, origin);
     } catch (e) {
-      writeJson(res, 503, { status: 'error', message: e.message }, origin);
+      writeJson(res, { status: 503, jsonBody: { status: 'error', message: e.message } }, origin);
     }
   }
 
   // ── List Assets ──
   async function handleList(req, res, origin, url) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const params = url.searchParams || new URLSearchParams();
       const year = params.get('year') ? parseInt(params.get('year'), 10) : new Date().getFullYear() - 1911;
@@ -105,8 +104,8 @@ function createAssetInventoryRouter(deps) {
       const values = [year];
       let idx = 2;
 
-      if (authz.role !== '最高管理員') {
-        const units = authz.authorizedUnits || [];
+      if (!requestAuthz.isAdmin(authz)) {
+        const units = requestAuthz.getAccessUnits ? requestAuthz.getAccessUnits(authz) : [];
         const primaryUnit = authz.primaryUnit || '';
         const allUnits = [primaryUnit, ...units].filter(Boolean);
         if (allUnits.length > 0) {
@@ -133,20 +132,19 @@ function createAssetInventoryRouter(deps) {
 
       sql += ' ORDER BY created_at DESC';
       const rows = await db.queryAll(sql, values);
-      writeJson(res, 200, { items: rows.map(mapRowToAsset), total: rows.length }, origin);
+      writeJson(res, { status: 200, jsonBody: { items: rows.map(mapRowToAsset), total: rows.length } }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Get Single Asset ──
   async function handleDetail(req, res, origin, assetId) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const row = await db.queryOne('SELECT * FROM information_assets WHERE asset_id = $1', [assetId]);
-      if (!row) { writeJson(res, 404, { error: 'not_found' }, origin); return; }
+      if (!row) { writeJson(res, { status: 404, jsonBody: { error: 'not_found' } }, origin); return; }
 
       const a10 = await db.queryOne('SELECT * FROM appendix10_assessments WHERE asset_id = $1', [assetId]);
 
@@ -160,23 +158,22 @@ function createAssetInventoryRouter(deps) {
         assessedAt: a10.assessed_at ? new Date(a10.assessed_at).toISOString() : ''
       } : null;
 
-      writeJson(res, 200, asset, origin);
+      writeJson(res, { status: 200, jsonBody: asset }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Create Asset ──
   async function handleCreate(req, res, origin) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const body = await parseJsonBody(req);
       const p = body.payload || body;
 
       if (!p.assetName || !p.category) {
-        writeJson(res, 400, { error: 'assetName and category are required' }, origin);
+        writeJson(res, { status: 400, jsonBody: { error: 'assetName and category are required' } }, origin);
         return;
       }
 
@@ -219,26 +216,25 @@ function createAssetInventoryRouter(deps) {
       ];
 
       const row = await db.queryOne(sql, values);
-      writeJson(res, 201, mapRowToAsset(row), origin);
+      writeJson(res, { status: 201, jsonBody: mapRowToAsset(row) }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Update Asset ──
   async function handleUpdate(req, res, origin, assetId) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const body = await parseJsonBody(req);
       const p = body.payload || body;
 
       const existing = await db.queryOne('SELECT * FROM information_assets WHERE asset_id = $1', [assetId]);
-      if (!existing) { writeJson(res, 404, { error: 'not_found' }, origin); return; }
+      if (!existing) { writeJson(res, { status: 404, jsonBody: { error: 'not_found' } }, origin); return; }
 
       if (p.rowVersion && p.rowVersion !== existing.row_version) {
-        writeJson(res, 409, { error: 'conflict', message: 'Record modified by another user' }, origin);
+        writeJson(res, { status: 409, jsonBody: { error: 'conflict', message: 'Record modified by another user' } }, origin);
         return;
       }
 
@@ -286,39 +282,37 @@ function createAssetInventoryRouter(deps) {
       ];
 
       const row = await db.queryOne(sql, values);
-      writeJson(res, 200, mapRowToAsset(row), origin);
+      writeJson(res, { status: 200, jsonBody: mapRowToAsset(row) }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Delete Asset (soft) ──
   async function handleDelete(req, res, origin, assetId) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const row = await db.queryOne('SELECT * FROM information_assets WHERE asset_id = $1', [assetId]);
-      if (!row) { writeJson(res, 404, { error: 'not_found' }, origin); return; }
+      if (!row) { writeJson(res, { status: 404, jsonBody: { error: 'not_found' } }, origin); return; }
 
       await db.query("UPDATE information_assets SET change_type = '刪除' WHERE asset_id = $1", [assetId]);
-      writeJson(res, 200, { success: true, id: assetId }, origin);
+      writeJson(res, { status: 200, jsonBody: { success: true, id: assetId } }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Update Status ──
   async function handleStatusUpdate(req, res, origin, assetId) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const body = await parseJsonBody(req);
       const newStatus = cleanText(body.status || (body.payload && body.payload.status));
       const valid = ['填報中', '待簽核', '已完成'];
       if (!valid.includes(newStatus)) {
-        writeJson(res, 400, { error: `Invalid status. Must be one of: ${valid.join(', ')}` }, origin);
+        writeJson(res, { status: 400, jsonBody: { error: `Invalid status. Must be one of: ${valid.join(', ')}` } }, origin);
         return;
       }
 
@@ -326,18 +320,17 @@ function createAssetInventoryRouter(deps) {
         'UPDATE information_assets SET status = $1 WHERE asset_id = $2 RETURNING *',
         [newStatus, assetId]
       );
-      if (!row) { writeJson(res, 404, { error: 'not_found' }, origin); return; }
-      writeJson(res, 200, mapRowToAsset(row), origin);
+      if (!row) { writeJson(res, { status: 404, jsonBody: { error: 'not_found' } }, origin); return; }
+      writeJson(res, { status: 200, jsonBody: mapRowToAsset(row) }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Batch Status Update (for unit-level sign-off) ──
   async function handleBatchStatus(req, res, origin) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const body = await parseJsonBody(req);
       const p = body.payload || body;
@@ -346,7 +339,7 @@ function createAssetInventoryRouter(deps) {
       const year = p.year || (new Date().getFullYear() - 1911);
 
       if (!newStatus || !unitCode) {
-        writeJson(res, 400, { error: 'status and unitCode required' }, origin);
+        writeJson(res, { status: 400, jsonBody: { error: 'status and unitCode required' } }, origin);
         return;
       }
 
@@ -354,17 +347,16 @@ function createAssetInventoryRouter(deps) {
         'UPDATE information_assets SET status = $1 WHERE unit_code = $2 AND inventory_year = $3 RETURNING asset_id',
         [newStatus, unitCode, year]
       );
-      writeJson(res, 200, { updated: result.rowCount }, origin);
+      writeJson(res, { status: 200, jsonBody: { updated: result.rowCount } }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Dashboard Summary ──
   async function handleSummary(req, res, origin) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const year = new Date().getFullYear() - 1911;
       const sql = `
@@ -377,24 +369,23 @@ function createAssetInventoryRouter(deps) {
         ORDER BY unit_code, category
       `;
       const rows = await db.queryAll(sql, [year]);
-      writeJson(res, 200, { year, summary: rows }, origin);
+      writeJson(res, { status: 200, jsonBody: { year, summary: rows } }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Appendix 10: Get ──
   async function handleGetAppendix10(req, res, origin, assetId) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 401, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const row = await db.queryOne('SELECT * FROM appendix10_assessments WHERE asset_id = $1', [assetId]);
       if (!row) {
-        writeJson(res, 200, { assetId, assessments: [], protectionLevel: '', complianceStatus: '' }, origin);
+        writeJson(res, { status: 200, jsonBody: { assetId, assessments: [], protectionLevel: '', complianceStatus: '' } }, origin);
         return;
       }
-      writeJson(res, 200, {
+      writeJson(res, { status: 200, jsonBody: {
         assetId: row.asset_id,
         protectionLevel: row.protection_level,
         assessments: parseJsonField(row.assessments_json) || [],
@@ -402,17 +393,16 @@ function createAssetInventoryRouter(deps) {
         nonComplianceCodes: row.non_compliance_codes || '',
         assessedBy: row.assessed_by || '',
         assessedAt: row.assessed_at ? new Date(row.assessed_at).toISOString() : ''
-      }, origin);
+      } }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
   // ── Appendix 10: Save ──
   async function handleSaveAppendix10(req, res, origin, assetId) {
     try {
-      const authz = await requestAuthz(req);
-      if (!authz) { writeJson(res, 421, { error: 'unauthorized' }, origin); return; }
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
 
       const body = await parseJsonBody(req);
       const p = body.payload || body;
@@ -452,7 +442,7 @@ function createAssetInventoryRouter(deps) {
         [JSON.stringify(compliance), assetId]
       );
 
-      writeJson(res, 200, {
+      writeJson(res, { status: 200, jsonBody: {
         assetId: row.asset_id,
         protectionLevel: row.protection_level,
         assessments: parseJsonField(row.assessments_json) || [],
@@ -460,9 +450,9 @@ function createAssetInventoryRouter(deps) {
         nonComplianceCodes: row.non_compliance_codes,
         assessedBy: row.assessed_by,
         assessedAt: row.assessed_at ? new Date(row.assessed_at).toISOString() : ''
-      }, origin);
+      } }, origin);
     } catch (e) {
-      writeJson(res, 500, { error: e.message }, origin);
+      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
     }
   }
 
