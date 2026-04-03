@@ -34,6 +34,7 @@ const { createReviewScopeRouter } = require('./review-scope-backend.cjs');
 const { createAttachmentRouter } = require('./attachment-backend.cjs');
 const { createSystemUserRouter } = require('./system-user-backend.cjs');
 const { createTrainingRouter } = require('./training-backend.cjs');
+const { createAssetInventoryRouter } = require('./asset-inventory-backend.cjs');
 const { createRequestAuthz } = require('./request-authz.cjs');
 const {
   buildFieldChanges
@@ -1125,6 +1126,10 @@ const systemUserRouter = createSystemUserRouter({
   getDelegatedToken: getDelegatedTokenShim
 });
 
+const assetInventoryRouter = createAssetInventoryRouter({
+  parseJsonBody, writeJson, requestAuthz
+});
+
 /* ------------------------------------------------------------------ */
 /*  Health                                                             */
 /* ------------------------------------------------------------------ */
@@ -1862,6 +1867,7 @@ function createServer() {
       if (await reviewScopeRouter.tryHandle(req, res, origin, url)) return;
       if (await attachmentRouter.tryHandle(req, res, origin, url)) return;
       if (await systemUserRouter.tryHandle(req, res, origin, url)) return;
+      if (await assetInventoryRouter.tryHandle(req, res, origin, url)) return;
       await writeJson(res, buildErrorResponse(new Error('Not found'), 'Not found', 404), origin);
     } catch (error) {
       try { require('./error-alerter.cjs').collectError({ path: url.pathname, status: 500, message: String(error && error.message || error), clientIp: getClientIp(req) }); } catch (_) {}

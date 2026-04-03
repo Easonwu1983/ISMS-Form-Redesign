@@ -696,6 +696,53 @@
     });
     return trainingModulePromise;
   }
+  // ── Asset Inventory Module ──
+  let assetInventoryModuleApi = null;
+  let assetInventoryModulePromise = null;
+  function getAssetInventoryModule() {
+    if (assetInventoryModuleApi) return assetInventoryModuleApi;
+    if (typeof window === 'undefined' || typeof window.createAssetInventoryModule !== 'function') {
+      throw new Error('asset-inventory-module.js 尚未載入');
+    }
+    assetInventoryModuleApi = window.createAssetInventoryModule({
+      currentUser,
+      isAdmin,
+      isUnitAdmin,
+      getScopedUnit,
+      getAuthorizedUnits,
+      navigate,
+      setUnsavedChangesGuard,
+      clearUnsavedChangesGuard,
+      toast,
+      fmt,
+      fmtTime,
+      esc,
+      ic,
+      refreshIcons,
+      splitUnitValue,
+      buildUnitCascadeControl,
+      initUnitCascade,
+      registerActionHandlers,
+      addPageEventListener: function (target, type, listener, options) { return getUiModule().addPageEventListener(target, type, listener, options); },
+      registerPageCleanup: function (callback) { return getUiModule().registerPageCleanup(callback); },
+      openConfirmDialog,
+      runWithBusyState,
+      CONFIG: getConfig()
+    });
+    return assetInventoryModuleApi;
+  }
+  function ensureAssetInventoryModule() {
+    if (assetInventoryModuleApi) return Promise.resolve(assetInventoryModuleApi);
+    if (assetInventoryModulePromise) return assetInventoryModulePromise;
+    assetInventoryModulePromise = ensureFeatureBundle('feature-bundles/asset-inventory-feature.js', 'asset-inventory-module.js').then(function () {
+      return getAssetInventoryModule();
+    }).catch(function (error) {
+      assetInventoryModulePromise = null;
+      throw error;
+    });
+    return assetInventoryModulePromise;
+  }
+
   let appRuntimeServiceModuleApi = null;
   const appRuntimeServiceState = getAppRuntimeServiceModule().createState();
   function getAppRuntimeServiceModule() {
@@ -2790,6 +2837,8 @@
     ensureChecklistModule,
     getTrainingModule,
     ensureTrainingModule,
+    getAssetInventoryModule,
+    ensureAssetInventoryModule,
     getUnitContactApplicationModule,
     ensureUnitContactApplicationModule,
     getAppPageOrchestrationModule,

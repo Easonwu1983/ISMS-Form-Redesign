@@ -175,6 +175,52 @@
           fallback: 'training',
           deniedMessage: '只有最高管理者可以查看教育訓練名單',
           render: () => ensureModule(d.ensureTrainingModule, d.getTrainingModule).then((module) => module.renderTrainingRoster())
+        },
+        assets: {
+          title: '資訊資產盤點',
+          allow: () => !!d.currentUser(),
+          render: () => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderAssetList())
+        },
+        'asset-create': {
+          title: '新增資產',
+          allow: () => !!d.currentUser(),
+          fallback: 'assets',
+          render: () => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderAssetCreate())
+        },
+        'asset-edit': {
+          title: '編輯資產',
+          allow: () => !!d.currentUser(),
+          requiresParam: true,
+          fallback: 'assets',
+          render: (param) => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderAssetEdit(param))
+        },
+        'asset-detail': {
+          title: '資產詳情',
+          allow: () => !!d.currentUser(),
+          requiresParam: true,
+          fallback: 'assets',
+          render: (param) => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderAssetDetail(param))
+        },
+        'asset-appendix10': {
+          title: '附表十評估',
+          allow: () => !!d.currentUser(),
+          requiresParam: true,
+          fallback: 'assets',
+          render: (param) => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderAppendix10(param))
+        },
+        'asset-risk': {
+          title: '風險評鑑',
+          allow: () => !!d.currentUser(),
+          requiresParam: true,
+          fallback: 'assets',
+          render: (param) => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderRiskAssessment(param))
+        },
+        'asset-dashboard': {
+          title: '盤點總覽',
+          allow: () => d.isAdmin(),
+          fallback: 'assets',
+          deniedMessage: '只有最高管理者可以查看盤點總覽',
+          render: () => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderAssetDashboard())
         }
       };
     }
