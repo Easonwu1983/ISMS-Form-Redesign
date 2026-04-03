@@ -2041,7 +2041,7 @@
       bindChecklistPageEvent(document.getElementById('cl-save-draft-inline'), 'click', saveChecklistDraft);
       bindChecklistPageEvent(document.getElementById('cl-save-draft-floating'), 'click', saveChecklistDraft);
 
-      // Auto-save every 60 seconds when form is dirty
+      // Auto-save every 30 seconds when form is dirty
       var checklistAutoSaveTimer = null;
       var checklistAutoSaveDirty = false;
       function scheduleAutoSave() {
@@ -2051,15 +2051,23 @@
           checklistAutoSaveTimer = null;
           if (!checklistAutoSaveDirty) return;
           checklistAutoSaveDirty = false;
-          saveChecklistDraft().catch(function (err) {
+          saveChecklistDraft().then(function () {
+            if (typeof toast === 'function') toast('已自動儲存', 'info');
+          }).catch(function (err) {
             if (window.__ismsWarn) window.__ismsWarn('Checklist auto-save failed', err);
           });
-        }, 60000);
+        }, 30000);
       }
       bindChecklistPageEvent(checklistForm, 'input', scheduleAutoSave);
       bindChecklistPageEvent(checklistForm, 'change', scheduleAutoSave);
+      // Ctrl+S quick save
+      var onSaveShortcut = function () {
+        saveChecklistDraft().then(function () { toast('已儲存草稿', 'success'); }).catch(function () { toast('儲存失敗', 'error'); });
+      };
+      window.addEventListener('isms:save-shortcut', onSaveShortcut);
       registerChecklistPageCleanup(function () {
         if (checklistAutoSaveTimer) { clearTimeout(checklistAutoSaveTimer); checklistAutoSaveTimer = null; }
+        window.removeEventListener('isms:save-shortcut', onSaveShortcut);
       });
 
       // Offline detection — show warning when network drops

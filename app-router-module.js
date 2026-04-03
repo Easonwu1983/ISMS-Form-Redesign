@@ -78,6 +78,13 @@
       window.addEventListener('focus', function () { handleWindowFocus(deps); });
       document.addEventListener('visibilitychange', function () { handleDocumentVisibilityChange(deps); });
       window.addEventListener('isms:storage-warning', function (event) { handleStorageWarningEvent(deps, event); });
+      // Ctrl+S / Cmd+S global shortcut → dispatch custom save event
+      document.addEventListener('keydown', function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+          event.preventDefault();
+          window.dispatchEvent(new CustomEvent('isms:save-shortcut'));
+        }
+      });
     }
 
     return {

@@ -308,7 +308,7 @@
           var link = document.createElement('link');
           link.rel = 'prefetch';
           link.as = 'script';
-          link.href = 'feature-bundles/' + name + '.js' + (versionSuffix ? '?v=' + versionSuffix : '');
+          link.href = 'feature-bundles/' + name + '.js' + (cacheKey ? '?v=' + cacheKey : '');
           document.head.appendChild(link);
         });
       }, 1000);
