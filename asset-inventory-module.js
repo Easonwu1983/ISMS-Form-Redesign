@@ -152,7 +152,10 @@
         return '<div style="color:#888;padding:12px;">無適用項目</div>';
       }
 
-      var html = '<div style="font-size:13px;color:#666;margin-bottom:8px;">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</div>';
+      var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+        + '<span style="font-size:13px;color:#666;">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</span>'
+        + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform" style="font-size:12px;padding:3px 10px;">' + ic('check-circle', 'icon-xs') + ' 全部符合</button>'
+        + '</div>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
       html += '<thead><tr style="background:#f8f9fa;">'
         + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:100px;">構面</th>'
@@ -166,7 +169,8 @@
         var saved = existing[key] || {};
         var isConform = saved.result === '符合';
         var isNonConform = saved.result === '不符合';
-        var bgColor = isConform ? '#e8f5e9' : isNonConform ? '#ffebee' : '';
+        var isNA = saved.result === '不適用';
+        var bgColor = isConform ? '#e8f5e9' : isNonConform ? '#ffebee' : isNA ? '#f5f5f5' : '';
 
         html += '<tr style="' + (bgColor ? 'background:' + bgColor + ';' : '') + '">'
           + '<td style="padding:4px 8px;border:1px solid #dee2e6;vertical-align:top;">' + esc(row.d) + '</td>'
@@ -177,6 +181,7 @@
           + '<option value="">--</option>'
           + '<option value="符合"' + (isConform ? ' selected' : '') + '>符合</option>'
           + '<option value="不符合"' + (isNonConform ? ' selected' : '') + '>不符合</option>'
+          + '<option value="不適用"' + (isNA ? ' selected' : '') + '>不適用</option>'
           + '</select>'
           + '</td>'
           + '</tr>';
@@ -1094,6 +1099,14 @@
         backToList: function () {
           return '#assets';
         },
+        a10AllConform: function () {
+          var selects = document.querySelectorAll('[data-a10-idx]');
+          selects.forEach(function (sel) {
+            sel.value = '\u7b26\u5408';
+            var tr = sel.closest('tr');
+            if (tr) tr.style.background = '#e8f5e9';
+          });
+        },
         toggleSection: function (ctx) {
           var targetId = ctx.element && ctx.element.getAttribute('data-target');
           if (!targetId) return;
@@ -1233,6 +1246,8 @@
               tr.style.background = '#e8f5e9';
             } else if (target.value === '\u4e0d\u7b26\u5408') {
               tr.style.background = '#ffebee';
+            } else if (target.value === '\u4e0d\u9069\u7528') {
+              tr.style.background = '#f5f5f5';
             } else {
               tr.style.background = '';
             }
