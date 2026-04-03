@@ -66,10 +66,11 @@
       Object.keys(handlers).forEach(function (k) { window.__ismsAssetActions[k] = handlers[k]; });
     }
 
-    // Direct hash navigation — deps-injected navigate is unreliable in ESM bundles
-    function safeNavigate(route, param) {
+    // Direct hash navigation — stored on window to survive ESM bundle minification
+    window.__ismsNav = function (route, param) {
       window.location.hash = param ? '#' + route + '/' + param : '#' + route;
-    }
+    };
+    function safeNavigate(route, param) { window.__ismsNav(route, param); }
 
     function scheduleRefreshIcons() {
       if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
