@@ -240,34 +240,39 @@
 
     function buildRiskScenarios(category, checkedIds) {
       var scenarios = THREAT_SCENARIOS[category] || THREAT_SCENARIOS['SW'];
+      var catLabel = getCategoryLabel(category) || getCategoryLabel('SW');
       var checked = {};
       (checkedIds || []).forEach(function(id) { checked[id] = true; });
 
-      var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-        + '<thead><tr style="background:#f8f9fa;">'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:40px;text-align:center;">選取</th>'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;">威脅情境</th>'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;">對應弱點</th>'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:70px;text-align:center;">可能性</th>'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:70px;text-align:center;">衝擊</th>'
-        + '</tr></thead><tbody>';
+      var likelihoodBadge = function(v) {
+        var color = v === 3 ? '#c62828' : v === 2 ? '#e65100' : '#2e7d32';
+        var label = v === 3 ? '\u9ad8' : v === 2 ? '\u4e2d' : '\u4f4e';
+        return '<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:white;background:' + color + ';">' + label + '</span>';
+      };
 
+      var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
+        + '<div style="font-size:13px;color:#555;">'
+        + ic('shield-alert', 'icon-sm') + ' \u4f9d\u8cc7\u7522\u5206\u985e\u300c<b>' + esc(catLabel) + '</b>\u300d\u5217\u51fa ' + scenarios.length + ' \u9805\u5e38\u898b\u5a01\u8105\u60c5\u5883'
+        + '</div>'
+        + '<span id="risk-checked-count" style="font-size:12px;color:#888;">\u5df2\u52fe\u9078 0 \u9805</span>'
+        + '</div>';
+
+      html += '<div style="display:flex;flex-direction:column;gap:8px;">';
       scenarios.forEach(function(s) {
         var isChecked = checked[s.id];
-        var likelihoodLabel = s.likelihood === 3 ? '高' : s.likelihood === 2 ? '中' : '低';
-        var impactLabel = s.impact === 3 ? '高' : s.impact === 2 ? '中' : '低';
-        html += '<tr style="' + (isChecked ? 'background:#fff3e0;' : '') + '">'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">'
-          + '<input type="checkbox" class="risk-scenario-check" data-scenario-id="' + s.id + '" data-likelihood="' + s.likelihood + '" data-impact="' + s.impact + '"' + (isChecked ? ' checked' : '') + '>'
-          + '</td>'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;">' + esc(s.threat) + '</td>'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;">' + esc(s.vuln) + '</td>'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">' + esc(likelihoodLabel) + '</td>'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">' + esc(impactLabel) + '</td>'
-          + '</tr>';
+        html += '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border:1px solid ' + (isChecked ? '#ff9800' : '#e0e0e0') + ';border-radius:8px;background:' + (isChecked ? '#fff3e0' : '#fafafa') + ';cursor:pointer;transition:all 0.15s;" class="risk-scenario-card">'
+          + '<input type="checkbox" class="risk-scenario-check" data-scenario-id="' + s.id + '" data-likelihood="' + s.likelihood + '" data-impact="' + s.impact + '"' + (isChecked ? ' checked' : '') + ' style="margin-top:3px;flex-shrink:0;">'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="font-weight:600;font-size:13px;color:#333;margin-bottom:3px;">' + ic('alert-triangle', 'icon-xs') + ' ' + esc(s.threat) + '</div>'
+          + '<div style="font-size:12px;color:#888;margin-bottom:4px;">' + ic('shield-x', 'icon-xs') + ' \u5f31\u9ede\uff1a' + esc(s.vuln) + '</div>'
+          + '</div>'
+          + '<div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">'
+          + '<div style="text-align:center;"><div style="font-size:10px;color:#999;">\u53ef\u80fd\u6027</div>' + likelihoodBadge(s.likelihood) + '</div>'
+          + '<div style="text-align:center;"><div style="font-size:10px;color:#999;">\u885d\u64ca</div>' + likelihoodBadge(s.impact) + '</div>'
+          + '</div>'
+          + '</label>';
       });
-
-      html += '</tbody></table>';
+      html += '</div>';
       return html;
     }
 
@@ -1157,29 +1162,31 @@
       var checkedIds = existingRisk.scenarioIds || [];
 
       var riskHtml = ''
-        + '<div style="font-size:13px;color:#666;margin-bottom:8px;">\u4f9d\u8cc7\u7522\u5206\u985e\u300c' + esc(getCategoryLabel(category || 'SW')) + '\u300d\u81ea\u52d5\u5217\u51fa\u5e38\u898b\u5a01\u8105\u60c5\u5883\uff0c\u8acb\u52fe\u9078\u9069\u7528\u9805\u76ee\uff1a</div>'
         + '<div id="risk-scenarios-container">'
         + buildRiskScenarios(category, checkedIds)
         + '</div>'
-        + '<hr style="border:none;border-top:1px solid #e9ecef;margin:16px 0;">'
-        + '<div class="form-row">'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u98a8\u96aa\u503c\uff08\u81ea\u52d5\u8a08\u7b97\uff09</label>'
-        + '<div id="risk-score-display" style="font-size:1.5em;font-weight:bold;padding:8px 0;">--</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">'
+        // Left: Risk score card
+        + '<div style="background:linear-gradient(135deg,#f5f5f5,#e8eaf6);border-radius:12px;padding:20px;text-align:center;">'
+        + '<div style="font-size:0.85em;color:#666;margin-bottom:4px;">\u98a8\u96aa\u503c\uff08\u81ea\u52d5\u8a08\u7b97\uff09</div>'
+        + '<div id="risk-score-display" style="font-size:2.5em;font-weight:bold;color:#37474f;">--</div>'
+        + '<div id="risk-level-display" style="font-size:1.1em;font-weight:bold;margin-top:4px;padding:4px 16px;border-radius:20px;display:inline-block;background:#e0e0e0;color:#666;">--</div>'
         + '</div>'
-        + '<div class="form-group">'
-        + '<label class="form-label">\u98a8\u96aa\u7b49\u7d1a</label>'
-        + '<div id="risk-level-display" style="font-size:1.5em;font-weight:bold;padding:8px 0;">--</div>'
-        + '</div>'
-        + '</div>'
-        + '<div style="margin:12px 0;">'
-        + '<div style="font-weight:600;margin-bottom:6px;">\u98a8\u96aa\u77e9\u9663</div>'
-        + '<table id="risk-matrix-table" style="border-collapse:collapse;font-size:12px;">'
-        + '<tr><th style="padding:4px 8px;border:1px solid #ccc;">\u885d\u64ca\\\u53ef\u80fd\u6027</th><th style="padding:4px 8px;border:1px solid #ccc;">1(\u4f4e)</th><th style="padding:4px 8px;border:1px solid #ccc;">2(\u4e2d)</th><th style="padding:4px 8px;border:1px solid #ccc;">3(\u9ad8)</th></tr>'
-        + '<tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:bold;">3(\u9ad8)</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFF9C4;text-align:center;" data-cell="1-3">3-\u4e2d</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFCDD2;text-align:center;" data-cell="2-3">6-\u9ad8</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFCDD2;text-align:center;" data-cell="3-3">9-\u9ad8</td></tr>'
-        + '<tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:bold;">2(\u4e2d)</td><td style="padding:4px 8px;border:1px solid #ccc;background:#C8E6C9;text-align:center;" data-cell="1-2">2-\u4f4e</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFF9C4;text-align:center;" data-cell="2-2">4-\u4e2d</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFCDD2;text-align:center;" data-cell="3-2">6-\u9ad8</td></tr>'
-        + '<tr><td style="padding:4px 8px;border:1px solid #ccc;font-weight:bold;">1(\u4f4e)</td><td style="padding:4px 8px;border:1px solid #ccc;background:#C8E6C9;text-align:center;" data-cell="1-1">1-\u4f4e</td><td style="padding:4px 8px;border:1px solid #ccc;background:#C8E6C9;text-align:center;" data-cell="2-1">2-\u4f4e</td><td style="padding:4px 8px;border:1px solid #ccc;background:#FFF9C4;text-align:center;" data-cell="3-1">3-\u4e2d</td></tr>'
+        // Right: Risk matrix
+        + '<div style="background:white;border:1px solid #e0e0e0;border-radius:12px;padding:16px;">'
+        + '<div style="font-weight:600;margin-bottom:8px;font-size:0.9em;color:#555;">' + ic('grid-3x3', 'icon-sm') + ' \u98a8\u96aa\u77e9\u9663</div>'
+        + '<table id="risk-matrix-table" style="width:100%;border-collapse:collapse;font-size:12px;">'
+        + '<tr><th style="padding:6px;border:1px solid #e0e0e0;background:#fafafa;"></th><th style="padding:6px;border:1px solid #e0e0e0;background:#fafafa;text-align:center;">1(\u4f4e)</th><th style="padding:6px;border:1px solid #e0e0e0;background:#fafafa;text-align:center;">2(\u4e2d)</th><th style="padding:6px;border:1px solid #e0e0e0;background:#fafafa;text-align:center;">3(\u9ad8)</th></tr>'
+        + '<tr><td style="padding:6px;border:1px solid #e0e0e0;font-weight:bold;background:#fafafa;">3(\u9ad8)</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFF9C4;text-align:center;border-radius:4px;" data-cell="1-3">3</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFCDD2;text-align:center;font-weight:bold;" data-cell="2-3">6</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFCDD2;text-align:center;font-weight:bold;" data-cell="3-3">9</td></tr>'
+        + '<tr><td style="padding:6px;border:1px solid #e0e0e0;font-weight:bold;background:#fafafa;">2(\u4e2d)</td><td style="padding:6px;border:1px solid #e0e0e0;background:#C8E6C9;text-align:center;" data-cell="1-2">2</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFF9C4;text-align:center;" data-cell="2-2">4</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFCDD2;text-align:center;font-weight:bold;" data-cell="3-2">6</td></tr>'
+        + '<tr><td style="padding:6px;border:1px solid #e0e0e0;font-weight:bold;background:#fafafa;">1(\u4f4e)</td><td style="padding:6px;border:1px solid #e0e0e0;background:#C8E6C9;text-align:center;" data-cell="1-1">1</td><td style="padding:6px;border:1px solid #e0e0e0;background:#C8E6C9;text-align:center;" data-cell="2-1">2</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFF9C4;text-align:center;" data-cell="3-1">3</td></tr>'
         + '</table>'
+        + '<div style="margin-top:6px;font-size:11px;color:#999;display:flex;gap:12px;">'
+        + '<span>\u25cf <span style="color:#4caf50;">\u4f4e(1-2)</span></span>'
+        + '<span>\u25cf <span style="color:#ff9800;">\u4e2d(3-4)</span></span>'
+        + '<span>\u25cf <span style="color:#f44336;">\u9ad8(6-9)</span></span>'
+        + '</div>'
+        + '</div>'
         + '</div>'
         + '<div id="risk-treatment-section" style="display:none;margin-top:12px;padding:12px;background:#fff8f8;border:1px solid #ffcdd2;border-radius:8px;">'
         + '<div style="font-weight:600;color:#c62828;margin-bottom:8px;">' + ic('alert-triangle', 'icon-sm') + ' \u9ad8\u98a8\u96aa \u2014 \u5fc5\u9808\u586b\u5beb\u8655\u7f6e\u65b9\u5f0f</div>'
@@ -1449,11 +1456,22 @@
           if (levelEl) { levelEl.textContent = level; levelEl.style.color = levelColor; }
           var treatmentEl = document.getElementById('risk-treatment-section');
           if (treatmentEl) treatmentEl.style.display = level === '\u9ad8' ? '' : 'none';
-          // Update checked row backgrounds
+          // Update card styling and count
+          var totalChecked = checks.length;
+          var countEl = document.getElementById('risk-checked-count');
+          if (countEl) countEl.textContent = '\u5df2\u52fe\u9078 ' + totalChecked + ' \u9805';
           document.querySelectorAll('.risk-scenario-check').forEach(function(cb) {
-            var tr = cb.closest('tr');
-            if (tr) tr.style.background = cb.checked ? '#fff3e0' : '';
+            var card = cb.closest('.risk-scenario-card');
+            if (card) {
+              card.style.background = cb.checked ? '#fff3e0' : '#fafafa';
+              card.style.borderColor = cb.checked ? '#ff9800' : '#e0e0e0';
+            }
           });
+          // Update risk level badge style
+          if (levelEl) {
+            levelEl.style.background = level === '\u9ad8' ? '#FFCDD2' : level === '\u4e2d' ? '#FFF9C4' : level === '\u4f4e' ? '#C8E6C9' : '#e0e0e0';
+            levelEl.style.color = levelColor;
+          }
           // Highlight matching cell in risk matrix
           var matrixTable = document.getElementById('risk-matrix-table');
           if (matrixTable) {
