@@ -46,25 +46,24 @@
     // Internal helpers
     // -------------------------------------------------------
 
-    // Custom action delegation — replaces registerActionHandlers which
-    // doesn't work across ESM feature-bundle scope boundaries.
-    var _actionHandlers = {};
-    var _delegationInstalled = false;
-    function bindActions(handlers) {
-      Object.keys(handlers).forEach(function (k) { _actionHandlers[k] = handlers[k]; });
-      if (_delegationInstalled) return;
-      _delegationInstalled = true;
+    // Custom action delegation — uses window global to survive ESM bundle scoping.
+    if (!window.__ismsAssetActions) window.__ismsAssetActions = {};
+    if (!window.__ismsAssetDelegation) {
+      window.__ismsAssetDelegation = true;
       document.addEventListener('click', function (e) {
         var el = e.target.closest('[data-action]');
         if (!el) return;
-        var action = el.getAttribute('data-action');
-        // support both "app.XXX" and "XXX" for flexibility
-        var handler = _actionHandlers[action] || _actionHandlers[action.replace(/^app\./, '')];
+        var action = el.getAttribute('data-action') || '';
+        var key = action.replace(/^app\./, '');
+        var handler = window.__ismsAssetActions[key];
         if (typeof handler !== 'function') return;
         e.preventDefault();
         e.stopPropagation();
         handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) });
-      }, true); // capture phase to fire before other handlers
+      }, true);
+    }
+    function bindActions(handlers) {
+      Object.keys(handlers).forEach(function (k) { window.__ismsAssetActions[k] = handlers[k]; });
     }
 
     function scheduleRefreshIcons() {
