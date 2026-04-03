@@ -727,7 +727,7 @@
       registerPageCleanup: function (callback) { return getUiModule().registerPageCleanup(callback); },
       openConfirmDialog,
       runWithBusyState,
-      CONFIG: getConfig()
+      CONFIG: (typeof window !== 'undefined' && window.__M365_UNIT_CONTACT_CONFIG__) || {}
     });
     return assetInventoryModuleApi;
   }
