@@ -194,9 +194,17 @@ process.on('unhandledRejection', function (reason) {
 // ── Error alerter ──
 try {
   const { startAlertSchedule } = require('./error-alerter.cjs');
-  const { sendGraphMail } = require('./graph-mailer.cjs');
+  // Note: Graph Mail requires graphRequest/getDelegatedToken from the server context,
+  // which isn't available at service-host level. Error alerts are logged to console
+  // and written to ops_audit table instead.
   startAlertSchedule(function (opts) {
-    return sendGraphMail({ ...opts, graphRequest: null, getDelegatedToken: null });
+    // Write error summary to audit trail instead of sending email
+    var db = require('./db.cjs');
+    return db.query(
+      'INSERT INTO ops_audit (title, event_type, actor_email, record_id, occurred_at, payload_json) VALUES ($1,$2,$3,$4,$5,$6)',
+      ['error-alert', 'system.error_alert', 'system', 'error-alert-' + Date.now(), new Date().toISOString(), JSON.stringify({ subject: opts.subject, errorCount: (opts.html || '').split('<tr>').length - 2 })]
+    ).then(function () { console.log('[error-alerter] Alert recorded to audit trail'); return { sent: true, channel: 'audit-trail' }; })
+    .catch(function (err) { console.warn('[error-alerter] Failed to record alert:', String(err && err.message || err)); return { sent: false, channel: 'audit-trail', error: String(err && err.message || err) }; });
   });
 } catch (err) {
   console.warn('[service-host] Error alerter init failed:', String(err && err.message || err));

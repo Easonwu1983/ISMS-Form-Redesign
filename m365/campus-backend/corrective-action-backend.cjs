@@ -190,15 +190,22 @@ function createCorrectiveActionRouter(deps) {
   }
 
   async function trySendStatusChangeMail(item, oldStatus, newStatus, actorLabel, recipientEmail) {
-    if (!recipientEmail) return { sent: false, reason: 'no-recipient' };
+    if (!recipientEmail) {
+      console.warn('[corrective-actions] status change mail skipped: no recipient for ' + cleanText(item && item.id) + ' (' + oldStatus + ' → ' + newStatus + ')');
+      return { sent: false, reason: 'no-recipient' };
+    }
     try {
+      if (typeof graphRequest !== 'function' || typeof getDelegatedToken !== 'function') {
+        console.warn('[corrective-actions] Graph mail not available, logging status change: ' + cleanText(item && item.id) + ' ' + oldStatus + ' → ' + newStatus + ' → ' + recipientEmail);
+        return { sent: false, reason: 'graph-mail-unavailable' };
+      }
       return await sendGraphMail({
         graphRequest, getDelegatedToken,
         to: recipientEmail,
         ...buildStatusChangeMail(item, oldStatus, newStatus, actorLabel)
       });
     } catch (err) {
-      console.warn('[corrective-actions] status change mail failed:', String(err && err.message || err));
+      console.warn('[corrective-actions] status change mail failed for ' + cleanText(item && item.id) + ':', String(err && err.message || err));
       return { sent: false, reason: 'send-failed', error: String(err && err.message || err) };
     }
   }

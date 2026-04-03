@@ -262,9 +262,18 @@ function createChecklistRouter(deps) {
       }
 
       const now = new Date().toISOString();
-      const status = action === (ACTIONS.SUBMIT || 'SUBMIT') ? (STATUSES.SUBMITTED || '已送出') : (STATUSES.DRAFT || '草稿');
+      const isSubmit = action === (ACTIONS.SUBMIT || 'SUBMIT');
+      const status = isSubmit ? (STATUSES.SUBMITTED || '已送出') : (STATUSES.DRAFT || '草稿');
       const resultsJson = JSON.stringify(incoming.results || {});
       const summary = incoming.summary || { total: 0, conform: 0, partial: 0, nonConform: 0, na: 0 };
+
+      // 送出時強制驗證全部題目已作答
+      if (isSubmit) {
+        const answeredCount = Object.values(incoming.results || {}).filter(function (r) { return r && cleanText(r.compliance); }).length;
+        if (summary.total > 0 && answeredCount < summary.total) {
+          throw createError('檢核表仍有 ' + (summary.total - answeredCount) + ' 題未作答，無法正式送出。', 400);
+        }
+      }
 
       if (existing) {
         await db.query(`
@@ -324,6 +333,9 @@ function createChecklistRouter(deps) {
           action, actorName: actor.actorName, actorUsername: actor.actorUsername
         })
       });
+
+      // 清除 dashboard 快取，確保即時反映最新狀態
+      try { require('./api-cache.cjs').clear(); } catch (_) {}
 
       await writeJson(res, buildJsonResponse(existing ? 200 : 201, {
         ok: true, item: mapChecklistForClient(savedItem), contractVersion: CONTRACT_VERSION
