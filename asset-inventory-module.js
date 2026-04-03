@@ -66,11 +66,8 @@
       Object.keys(handlers).forEach(function (k) { window.__ismsAssetActions[k] = handlers[k]; });
     }
 
-    // Safe navigate — fallback to hash if injected navigate is broken in ESM scope
+    // Direct hash navigation — deps-injected navigate is unreliable in ESM bundles
     function safeNavigate(route, param) {
-      if (typeof navigate === 'function') {
-        try { navigate(route, param); return; } catch (_) {}
-      }
       window.location.hash = param ? '#' + route + '/' + param : '#' + route;
     }
 
