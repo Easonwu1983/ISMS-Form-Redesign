@@ -58,18 +58,18 @@
         var handler = window.__ismsAssetActions[key];
         if (typeof handler !== 'function') return;
         e.preventDefault();
-        try { handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) }); } catch (_) {}
+        try {
+          var result = handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) });
+          // If handler returns a hash string, navigate to it
+          if (typeof result === 'string' && result.charAt(0) === '#') {
+            window.location.hash = result;
+          }
+        } catch (_) {}
       }, true);
     }
     function bindActions(handlers) {
       Object.keys(handlers).forEach(function (k) { window.__ismsAssetActions[k] = handlers[k]; });
     }
-
-    // Direct hash navigation — stored on window to survive ESM bundle minification
-    window.__ismsNav = function (route, param) {
-      window.location.hash = param ? '#' + route + '/' + param : '#' + route;
-    };
-    function safeNavigate(route, param) { window.__ismsNav(route, param); }
 
     function scheduleRefreshIcons() {
       if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
@@ -331,7 +331,7 @@
       // Set up event handlers
       bindActions({
         createAsset: function () {
-          window.location.hash = '#asset-create';
+          return '#asset-create';
         },
         exportAssets: function () {
           var rows = document.querySelectorAll('#asset-list-table-wrapper tbody tr');
@@ -369,11 +369,11 @@
         },
         editAsset: function (ctx) {
           var id = ctx.dataset && ctx.dataset.id;
-          if (id) window.location.hash = '#asset-edit/' + id;
+          if (id) return '#asset-edit/' + id;
         },
         viewAsset: function (ctx) {
           var id = ctx.dataset && ctx.dataset.id;
-          if (id) window.location.hash = '#asset-detail/' + id;
+          if (id) return '#asset-detail/' + id;
         },
         deleteAsset: async function (ctx) {
           var id = ctx.dataset && ctx.dataset.id;
@@ -539,7 +539,7 @@
             + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
             + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
           scheduleRefreshIcons();
-          bindActions({ backToList: function () { window.location.hash = '#assets'; } });
+          bindActions({ backToList: function () { return '#assets'; } });
           return;
         }
       }
@@ -706,7 +706,7 @@
       // Register action handlers
       bindActions({
         backToList: function () {
-          window.location.hash = '#assets';
+          return '#assets';
         },
         saveAsset: async function () {
           var form = document.getElementById('asset-form');
@@ -731,7 +731,7 @@
               }
             });
             toast(isEdit ? '\u8cc7\u7522\u5df2\u66f4\u65b0' : '\u8cc7\u7522\u5df2\u65b0\u589e', 'success');
-            window.location.hash = '#assets';
+            return '#assets';
           } catch (err) {
             toast('\u5132\u5b58\u5931\u6557\uff1a' + String(err && err.message || err), 'error');
           }
@@ -861,7 +861,7 @@
           + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
           + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
         scheduleRefreshIcons();
-        bindActions({ backToList: function () { window.location.hash = '#assets'; } });
+        bindActions({ backToList: function () { return '#assets'; } });
         return;
       }
 
@@ -1001,10 +1001,10 @@
 
       bindActions({
         editThisAsset: function () {
-          window.location.hash = '#asset-edit/' + assetId;
+          return '#asset-edit/' + assetId;
         },
         backToList: function () {
-          window.location.hash = '#assets';
+          return '#assets';
         }
       });
 
@@ -1151,7 +1151,7 @@
           + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
         scheduleRefreshIcons();
         bindActions({
-          backToDetail: function () { window.location.hash = '#asset-detail/' + assetId; }
+          backToDetail: function () { return '#asset-detail/' + assetId; }
         });
         return;
       }
@@ -1349,7 +1349,7 @@
       // -- Action handlers --
       bindActions({
         backToDetail: function () {
-          window.location.hash = '#asset-detail/' + assetId;
+          return '#asset-detail/' + assetId;
         },
         saveAppendix10: async function () {
           var assessments = [];
@@ -1414,7 +1414,7 @@
           + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
         scheduleRefreshIcons();
         bindActions({
-          backToDetail: function () { window.location.hash = '#asset-detail/' + assetId; }
+          backToDetail: function () { return '#asset-detail/' + assetId; }
         });
         return;
       }
@@ -1656,7 +1656,7 @@
       // -- Action handlers --
       bindActions({
         backToDetail: function () {
-          window.location.hash = '#asset-detail/' + assetId;
+          return '#asset-detail/' + assetId;
         },
         saveRiskAssessment: async function () {
           // Collect threats
@@ -1744,7 +1744,7 @@
           + ic('lock') + '<p>\u60a8\u6c92\u6709\u6b0a\u9650\u6aa2\u8996\u6b64\u9801\u9762\u3002</p>'
           + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
         scheduleRefreshIcons();
-        bindActions({ backToList: function () { window.location.hash = '#assets'; } });
+        bindActions({ backToList: function () { return '#assets'; } });
         return;
       }
 
@@ -1764,7 +1764,7 @@
 
       bindActions({
         backToList: function () {
-          window.location.hash = '#assets';
+          return '#assets';
         }
       });
 
@@ -2024,7 +2024,7 @@
       // Action handlers
       bindActions({
         backToList: function () {
-          window.location.hash = '#assets';
+          return '#assets';
         },
         downloadTemplate: function () {
           var csv = '\uFEFF' + TEMPLATE_HEADERS + '\n';
@@ -2226,7 +2226,7 @@
 
       bindActions({
         backToList: function () {
-          window.location.hash = '#assets';
+          return '#assets';
         },
         runComparison: async function () {
           var baseYearEl = document.getElementById('yc-base-year');
