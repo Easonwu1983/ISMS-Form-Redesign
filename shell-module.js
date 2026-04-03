@@ -714,6 +714,8 @@
       var opNav = '';
       if (canCreateCAR()) opNav += '<a class="nav-item ' + (route.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>開立矯正單</a>';
       if (canFillChecklist()) opNav += '<a class="nav-item ' + (route.page === 'checklist-fill' ? 'active' : '') + '" href="#checklist-fill"><span class="nav-icon">' + ic('edit-3') + '</span>填報檢核表</a>';
+      opNav += '<a class="nav-item ' + (route.page === 'asset-import' ? 'active' : '') + '" href="#asset-import"><span class="nav-icon">' + ic('upload') + '</span>資產批次匯入</a>';
+      opNav += '<a class="nav-item ' + (route.page === 'asset-compare' ? 'active' : '') + '" href="#asset-compare"><span class="nav-icon">' + ic('git-compare') + '</span>年度比較</a>';
       if (opNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">操作</div>' + opNav + '</div>';
 
       var sysNav = '';

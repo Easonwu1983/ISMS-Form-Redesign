@@ -221,6 +221,18 @@
           fallback: 'assets',
           deniedMessage: '只有最高管理者可以查看盤點總覽',
           render: () => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderAssetDashboard())
+        },
+        'asset-import': {
+          title: '批次匯入',
+          allow: () => !!d.currentUser(),
+          fallback: 'assets',
+          render: () => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderBatchImport())
+        },
+        'asset-compare': {
+          title: '年度比較',
+          allow: () => !!d.currentUser(),
+          fallback: 'assets',
+          render: () => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderYearComparison())
         }
       };
     }

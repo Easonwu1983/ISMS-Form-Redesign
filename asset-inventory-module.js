@@ -259,9 +259,9 @@
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
         + '<h2>' + ic('database') + ' \u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a</h2>'
         + '<div class="page-header-actions" style="display:flex;gap:8px;flex-wrap:wrap;">'
-        + '<button class="btn btn-primary" data-action="createAsset">' + ic('plus') + ' \u65b0\u589e</button>'
-        + '<button class="btn btn-outline" data-action="exportAssets">' + ic('download') + ' \u532f\u51fa</button>'
-        + '<button class="btn btn-outline" data-action="submitAllAssets">' + ic('send') + ' \u5168\u90e8\u9001\u7c3d\u6838</button>'
+        + '<button class="btn btn-primary" data-action="app.createAsset">' + ic('plus') + ' \u65b0\u589e</button>'
+        + '<button class="btn btn-outline" data-action="app.exportAssets">' + ic('download') + ' \u532f\u51fa</button>'
+        + '<button class="btn btn-outline" data-action="app.submitAllAssets">' + ic('send') + ' \u5168\u90e8\u9001\u7c3d\u6838</button>'
         + '</div>'
         + '</div>'
 
@@ -290,7 +290,7 @@
         + '<input type="text" class="form-control" id="asset-filter-keyword" placeholder="\u8cc7\u7522\u540d\u7a31\u3001\u64c1\u6709\u8005..." value="' + esc(browseState.keyword) + '" style="min-width:160px;">'
         + '</div>'
         + '<div style="display:flex;align-items:flex-end;">'
-        + '<button class="btn btn-outline btn-sm" data-action="filterAssets" style="margin-top:auto;">' + ic('search') + ' \u67e5\u8a62</button>'
+        + '<button class="btn btn-outline btn-sm" data-action="app.filterAssets" style="margin-top:auto;">' + ic('search') + ' \u67e5\u8a62</button>'
         + '</div>'
         + '</div>'
 
@@ -308,14 +308,35 @@
           navigate('asset-create');
         },
         exportAssets: function () {
-          toast('\u532f\u51fa\u529f\u80fd\u958b\u767c\u4e2d', 'info');
+          var rows = document.querySelectorAll('#asset-list-table-wrapper tbody tr');
+          if (!rows.length) { toast('\u6c92\u6709\u8cc7\u6599\u53ef\u532f\u51fa', 'warning'); return; }
+          var csv = '\uFEFF\u8cc7\u7522\u7de8\u865f,\u8cc7\u7522\u540d\u7a31,\u5206\u985e,\u64c1\u6709\u8005,\u9632\u8b77\u7b49\u7d1a,\u98a8\u96aa\u7b49\u7d1a,\u72c0\u614b\n';
+          rows.forEach(function (row) {
+            var cells = row.querySelectorAll('td');
+            if (cells.length >= 7) {
+              var vals = [];
+              for (var i = 0; i < 7; i++) vals.push('"' + (cells[i].textContent || '').trim().replace(/"/g, '""') + '"');
+              csv += vals.join(',') + '\n';
+            }
+          });
+          var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          var link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = '\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a_' + new Date().toISOString().slice(0, 10) + '.csv';
+          link.click();
+          toast('\u5df2\u532f\u51fa CSV', 'success');
         },
         submitAllAssets: async function () {
-          var confirmed = typeof openConfirmDialog === 'function'
-            ? await openConfirmDialog('\u5c07\u6240\u6709\u300c\u586b\u5831\u4e2d\u300d\u8cc7\u7522\u9001\u51fa\u7c3d\u6838\uff0c\u78ba\u5b9a\u7e7c\u7e8c\uff1f', { title: '\u5168\u90e8\u9001\u7c3d\u6838', confirmLabel: '\u78ba\u5b9a\u9001\u51fa' })
-            : window.confirm('\u78ba\u5b9a\u5c07\u6240\u6709\u586b\u5831\u4e2d\u8cc7\u7522\u9001\u7c3d\u6838\uff1f');
-          if (!confirmed) return;
-          toast('\u6279\u6b21\u9001\u7c3d\u6838\u529f\u80fd\u958b\u767c\u4e2d', 'info');
+          if (!confirm('\u78ba\u5b9a\u8981\u5c07\u6240\u6709\u300c\u586b\u5831\u4e2d\u300d\u7684\u8cc7\u7522\u9001\u7c3d\u6838\uff1f')) return;
+          var user = currentUser();
+          apiCall('POST', '/batch-status', {
+            status: '\u5f85\u7c3d\u6838',
+            unitCode: user && user.primaryUnit || '',
+            year: parseInt(document.getElementById('asset-filter-year').value, 10) || getCurrentRocYear()
+          }).then(function (data) {
+            toast('\u5df2\u9001\u7c3d\u6838 ' + (data.updated || 0) + ' \u7b46', 'success');
+            renderAssetList();
+          }).catch(function (e) { toast('\u9001\u7c3d\u6838\u5931\u6557: ' + e.message, 'error'); });
         },
         filterAssets: function () {
           applyFiltersAndReload();
@@ -429,9 +450,9 @@
             + '<td><span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel || '\u2014') + '</span></td>'
             + '<td><span class="badge ' + getStatusBadgeClass(item.status) + '"><span class="badge-dot"></span>' + esc(item.status || '') + '</span></td>'
             + '<td class="action-cell" style="white-space:nowrap;">'
-            + '<button class="btn btn-sm btn-outline" data-action="editAsset" data-id="' + esc(item.id || '') + '" title="\u7de8\u8f2f">' + ic('edit') + '</button> '
-            + '<button class="btn btn-sm btn-outline" data-action="viewAsset" data-id="' + esc(item.id || '') + '" title="\u6aa2\u8996">' + ic('eye') + '</button> '
-            + '<button class="btn btn-sm btn-danger" data-action="deleteAsset" data-id="' + esc(item.id || '') + '" title="\u522a\u9664">' + ic('trash-2') + '</button>'
+            + '<button class="btn btn-sm btn-outline" data-action="app.editAsset" data-id="' + esc(item.id || '') + '" title="\u7de8\u8f2f">' + ic('edit') + '</button> '
+            + '<button class="btn btn-sm btn-outline" data-action="app.viewAsset" data-id="' + esc(item.id || '') + '" title="\u6aa2\u8996">' + ic('eye') + '</button> '
+            + '<button class="btn btn-sm btn-danger" data-action="app.deleteAsset" data-id="' + esc(item.id || '') + '" title="\u522a\u9664">' + ic('trash-2') + '</button>'
             + '</td>'
             + '</tr>';
         }
@@ -490,9 +511,9 @@
         } catch (err) {
           appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
             + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
-            + '<button class="btn btn-outline" data-action="backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
+            + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
           scheduleRefreshIcons();
-          registerActionHandlers('app', { backToList: function () { navigate('asset-list'); } });
+          registerActionHandlers('app', { backToList: function () { navigate('assets'); } });
           return;
         }
       }
@@ -631,7 +652,7 @@
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
         + '<h2>' + ic(isEdit ? 'edit' : 'plus-circle') + ' ' + esc(title) + '</h2>'
         + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
         + '</div>'
         + '</div>'
 
@@ -648,8 +669,8 @@
         + buildCollapsibleSection('risk', '10. \u98a8\u96aa\u8a55\u9451', riskHtml, { open: true, borderColor: '#27ae60' })
 
         + '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;padding-bottom:40px;">'
-        + '<button type="button" class="btn btn-outline" data-action="backToList">\u53d6\u6d88</button>'
-        + '<button type="button" class="btn btn-primary" data-action="saveAsset">' + ic('save') + ' \u5132\u5b58</button>'
+        + '<button type="button" class="btn btn-outline" data-action="app.backToList">\u53d6\u6d88</button>'
+        + '<button type="button" class="btn btn-primary" data-action="app.saveAsset">' + ic('save') + ' \u5132\u5b58</button>'
         + '</div>'
         + '</form>'
         + '</div>';
@@ -659,7 +680,7 @@
       // Register action handlers
       registerActionHandlers('app', {
         backToList: function () {
-          navigate('asset-list');
+          navigate('assets');
         },
         saveAsset: async function () {
           var form = document.getElementById('asset-form');
@@ -684,7 +705,7 @@
               }
             });
             toast(isEdit ? '\u8cc7\u7522\u5df2\u66f4\u65b0' : '\u8cc7\u7522\u5df2\u65b0\u589e', 'success');
-            navigate('asset-list');
+            navigate('assets');
           } catch (err) {
             toast('\u5132\u5b58\u5931\u6557\uff1a' + String(err && err.message || err), 'error');
           }
@@ -812,9 +833,9 @@
       } catch (err) {
         appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
           + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
-          + '<button class="btn btn-outline" data-action="backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
+          + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
         scheduleRefreshIcons();
-        registerActionHandlers('app', { backToList: function () { navigate('asset-list'); } });
+        registerActionHandlers('app', { backToList: function () { navigate('assets'); } });
         return;
       }
 
@@ -931,8 +952,8 @@
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
         + '<h2>' + ic('file-text') + ' \u8cc7\u7522\u8a73\u60c5</h2>'
         + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-primary" data-action="editThisAsset">' + ic('edit') + ' \u7de8\u8f2f</button>'
-        + '<button class="btn btn-outline" data-action="backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '<button class="btn btn-primary" data-action="app.editThisAsset">' + ic('edit') + ' \u7de8\u8f2f</button>'
+        + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
         + '</div>'
         + '</div>'
 
@@ -957,7 +978,7 @@
           navigate('asset-edit', assetId);
         },
         backToList: function () {
-          navigate('asset-list');
+          navigate('assets');
         }
       });
 
@@ -1101,7 +1122,7 @@
       } catch (err) {
         appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
           + ic('alert-triangle') + '<p>載入失敗：' + esc(String(err && err.message || err)) + '</p>'
-          + '<button class="btn btn-outline" data-action="backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
+          + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
         scheduleRefreshIcons();
         registerActionHandlers('app', {
           backToDetail: function () { navigate('asset-detail', assetId); }
@@ -1210,8 +1231,8 @@
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
         + '<h2>' + ic('clipboard-list') + ' 附表十 資通系統防護基準評估</h2>'
         + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="backToDetail">' + ic('arrow-left') + ' 返回資產</button>'
-        + '<button class="btn btn-primary" data-action="saveAppendix10">' + ic('save') + ' 儲存評估</button>'
+        + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回資產</button>'
+        + '<button class="btn btn-primary" data-action="app.saveAppendix10">' + ic('save') + ' 儲存評估</button>'
         + '</div>'
         + '</div>'
 
@@ -1364,7 +1385,7 @@
       } catch (err) {
         appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
           + ic('alert-triangle') + '<p>載入失敗：' + esc(String(err && err.message || err)) + '</p>'
-          + '<button class="btn btn-outline" data-action="backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
+          + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
         scheduleRefreshIcons();
         registerActionHandlers('app', {
           backToDetail: function () { navigate('asset-detail', assetId); }
@@ -1531,8 +1552,8 @@
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
         + '<h2>' + ic('shield') + ' 風險評鑑</h2>'
         + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="backToDetail">' + ic('arrow-left') + ' 返回資產</button>'
-        + '<button class="btn btn-primary" data-action="saveRiskAssessment">' + ic('save') + ' 儲存評鑑</button>'
+        + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回資產</button>'
+        + '<button class="btn btn-primary" data-action="app.saveRiskAssessment">' + ic('save') + ' 儲存評鑑</button>'
         + '</div>'
         + '</div>'
 
@@ -1695,9 +1716,9 @@
       if (!isAdmin()) {
         appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
           + ic('lock') + '<p>\u60a8\u6c92\u6709\u6b0a\u9650\u6aa2\u8996\u6b64\u9801\u9762\u3002</p>'
-          + '<button class="btn btn-outline" data-action="backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
+          + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
         scheduleRefreshIcons();
-        registerActionHandlers('app', { backToList: function () { navigate('asset-list'); } });
+        registerActionHandlers('app', { backToList: function () { navigate('assets'); } });
         return;
       }
 
@@ -1705,7 +1726,7 @@
         + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
         + '<h2>' + ic('bar-chart-2') + ' \u8cc7\u7522\u76e4\u9ede\u7e3d\u89bd\u5100\u8868\u677f</h2>'
         + '<div class="page-header-actions" style="display:flex;gap:8px;">'
-        + '<button class="btn btn-outline" data-action="backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
         + '</div>'
         + '</div>'
         + '<div id="asset-dashboard-content">'
@@ -1717,7 +1738,7 @@
 
       registerActionHandlers('app', {
         backToList: function () {
-          navigate('asset-list');
+          navigate('assets');
         }
       });
 
@@ -1763,11 +1784,18 @@
           + '<div class="stat-label" style="color:#666;">\u9ad8\u98a8\u96aa\u6578</div></div>'
           + '</div>';
 
-        // Unit table
+        // Unit table with color-coded status
+        function dashboardStatusHtml(status) {
+          var s = status || '\u2014';
+          if (s === '\u5df2\u5b8c\u6210') return '<span class="badge badge-success"><span class="badge-dot"></span>' + esc(s) + '</span>';
+          if (s === '\u586b\u5831\u4e2d') return '<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:#fff9c4;color:#856404;font-size:0.9em;">' + esc(s) + '</span>';
+          if (s === '\u5f85\u7c3d\u6838') return '<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:#ffe0b2;color:#e65100;font-size:0.9em;">' + esc(s) + '</span>';
+          return esc(s);
+        }
+
         var rowsHtml = '';
         for (var j = 0; j < units.length; j++) {
           var unit = units[j];
-          var statusLabel = unit.status || '\u2014';
           rowsHtml += '<tr>'
             + '<td>' + esc(unit.unitName || '') + '</td>'
             + '<td style="text-align:center;">' + esc(String(unit.assetCount || 0)) + '</td>'
@@ -1778,7 +1806,7 @@
               ? '<span class="badge badge-danger"><span class="badge-dot"></span>' + esc(String(unit.highRiskCount)) + '</span>'
               : esc(String(unit.highRiskCount || 0)))
             + '</td>'
-            + '<td>' + esc(statusLabel) + '</td>'
+            + '<td>' + dashboardStatusHtml(unit.status) + '</td>'
             + '</tr>';
         }
 
@@ -1792,7 +1820,7 @@
           + '<th scope="col" style="text-align:center;">\u8cc7\u901a\u7cfb\u7d71\u6578</th>'
           + '<th scope="col" style="text-align:center;">\u5927\u9678\u5ee0\u724c\u6578</th>'
           + '<th scope="col" style="text-align:center;">\u9ad8\u98a8\u96aa\u6578</th>'
-          + '<th scope="col">\u72c0\u614b</th>'
+          + '<th scope="col">\u5b8c\u6210\u72c0\u614b</th>'
           + '</tr></thead>'
           + '<tbody>' + rowsHtml + '</tbody>'
           + '</table>'
@@ -1810,6 +1838,460 @@
     }
 
     // -------------------------------------------------------
+    // renderBatchImport
+    // -------------------------------------------------------
+    async function renderBatchImport() {
+      var appEl = document.getElementById('app');
+      if (!appEl) return;
+
+      var TEMPLATE_HEADERS = '\u8cc7\u7522\u540d\u7a31,\u4e3b\u5206\u985e(PE/DC/DA/SW/HW/VM/BS),\u5b50\u5206\u985e,\u64c1\u6709\u8005,\u4fdd\u7ba1\u55ae\u4f4d,\u6a5f\u5bc6\u6027(\u666e/\u4e2d/\u9ad8),\u5b8c\u6574\u6027(\u666e/\u4e2d/\u9ad8),\u53ef\u7528\u6027(\u666e/\u4e2d/\u9ad8),\u662f\u5426\u8cc7\u901a\u7cfb\u7d71(\u662f/\u5426),\u662f\u5426\u5927\u9678\u5ee0\u724c(\u662f/\u5426),\u5099\u8a3b';
+
+      appEl.innerHTML = '<div class="animate-in">'
+        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
+        + '<h2>' + ic('upload') + ' \u6279\u6b21\u532f\u5165\u8cc7\u7522</h2>'
+        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
+        + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '</div>'
+        + '</div>'
+
+        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
+        + '<h4 style="margin-bottom:12px;">' + ic('file-text') + ' \u7bc4\u672c\u4e0b\u8f09</h4>'
+        + '<p style="color:#666;font-size:0.9em;margin-bottom:12px;">\u8acb\u5148\u4e0b\u8f09 CSV \u7bc4\u672c\uff0c\u586b\u5beb\u5f8c\u518d\u4e0a\u50b3\u3002\u7bc4\u672c\u6b04\u4f4d\u5982\u4e0b\uff1a</p>'
+        + '<div style="background:#f9f9f9;padding:10px;border-radius:4px;font-size:0.85em;overflow-x:auto;margin-bottom:12px;">'
+        + '<code>' + esc(TEMPLATE_HEADERS) + '</code></div>'
+        + '<button class="btn btn-outline btn-sm" data-action="app.downloadTemplate">' + ic('download') + ' \u4e0b\u8f09\u7bc4\u672c</button>'
+        + '</div>'
+
+        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
+        + '<h4 style="margin-bottom:12px;">' + ic('upload-cloud') + ' \u4e0a\u50b3 CSV \u6a94\u6848</h4>'
+        + '<div style="border:2px dashed #ccc;border-radius:8px;padding:30px;text-align:center;margin-bottom:12px;" id="batch-import-drop-zone">'
+        + '<p style="color:#888;margin-bottom:8px;">\u9078\u64c7 CSV \u6a94\u6848</p>'
+        + '<input type="file" accept=".csv" id="batch-import-file" style="display:inline-block;">'
+        + '</div>'
+        + '</div>'
+
+        + '<div id="batch-import-preview" style="display:none;">'
+        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
+        + '<h4 style="margin-bottom:12px;">' + ic('eye') + ' \u9810\u89bd\uff08\u524d 10 \u7b46\uff09</h4>'
+        + '<div id="batch-import-preview-table" style="overflow-x:auto;"></div>'
+        + '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;">'
+        + '<span id="batch-import-total" style="color:#666;font-size:0.9em;"></span>'
+        + '<button class="btn btn-primary" data-action="app.confirmImport">' + ic('check') + ' \u78ba\u8a8d\u532f\u5165</button>'
+        + '</div>'
+        + '</div>'
+        + '</div>'
+
+        + '<div id="batch-import-progress" style="display:none;">'
+        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
+        + '<h4 style="margin-bottom:12px;">' + ic('loader') + ' \u532f\u5165\u4e2d...</h4>'
+        + '<div style="background:#eee;border-radius:4px;overflow:hidden;height:24px;margin-bottom:8px;">'
+        + '<div id="batch-import-progress-bar" style="background:#3498db;height:100%;width:0%;transition:width 0.3s;border-radius:4px;"></div>'
+        + '</div>'
+        + '<div id="batch-import-progress-text" style="font-size:0.9em;color:#666;"></div>'
+        + '</div>'
+        + '</div>'
+
+        + '<div id="batch-import-result" style="display:none;">'
+        + '<div class="card" style="padding:20px;margin-bottom:16px;">'
+        + '<div id="batch-import-result-content"></div>'
+        + '</div>'
+        + '</div>'
+
+        + '</div>';
+
+      scheduleRefreshIcons();
+
+      var parsedRows = [];
+
+      function parseCsvLine(line) {
+        var result = [];
+        var current = '';
+        var inQuotes = false;
+        for (var ci = 0; ci < line.length; ci++) {
+          var ch = line[ci];
+          if (inQuotes) {
+            if (ch === '"') {
+              if (ci + 1 < line.length && line[ci + 1] === '"') { current += '"'; ci++; }
+              else { inQuotes = false; }
+            } else { current += ch; }
+          } else {
+            if (ch === '"') { inQuotes = true; }
+            else if (ch === ',') { result.push(current.trim()); current = ''; }
+            else { current += ch; }
+          }
+        }
+        result.push(current.trim());
+        return result;
+      }
+
+      function parseCsvText(text) {
+        var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        var rows = [];
+        var startIdx = 0;
+        if (lines.length > 0) {
+          var firstLine = lines[0].replace(/^\uFEFF/, '');
+          if (firstLine.indexOf('\u8cc7\u7522\u540d\u7a31') !== -1) { startIdx = 1; }
+        }
+        for (var li = startIdx; li < lines.length; li++) {
+          var line = lines[li].trim();
+          if (!line) continue;
+          var cols = parseCsvLine(line);
+          if (cols.length >= 1 && cols[0]) { rows.push(cols); }
+        }
+        return rows;
+      }
+
+      function showPreview(rows) {
+        parsedRows = rows;
+        var previewEl = document.getElementById('batch-import-preview');
+        var tableEl = document.getElementById('batch-import-preview-table');
+        var totalEl = document.getElementById('batch-import-total');
+        if (!previewEl || !tableEl || !totalEl) return;
+
+        previewEl.style.display = '';
+        totalEl.textContent = '\u5171 ' + rows.length + ' \u7b46\u8cc7\u6599';
+
+        var previewCount = Math.min(rows.length, 10);
+        var headers = ['\u8cc7\u7522\u540d\u7a31', '\u4e3b\u5206\u985e', '\u5b50\u5206\u985e', '\u64c1\u6709\u8005', '\u4fdd\u7ba1\u55ae\u4f4d', '\u6a5f\u5bc6\u6027', '\u5b8c\u6574\u6027', '\u53ef\u7528\u6027', '\u8cc7\u901a\u7cfb\u7d71', '\u5927\u9678\u5ee0\u724c', '\u5099\u8a3b'];
+        var html = '<table><thead><tr>';
+        html += '<th scope="col">#</th>';
+        for (var hi = 0; hi < headers.length; hi++) { html += '<th scope="col" style="white-space:nowrap;">' + esc(headers[hi]) + '</th>'; }
+        html += '</tr></thead><tbody>';
+        for (var ri = 0; ri < previewCount; ri++) {
+          var row = rows[ri];
+          html += '<tr><td>' + (ri + 1) + '</td>';
+          for (var ci = 0; ci < headers.length; ci++) {
+            html += '<td>' + esc(row[ci] || '') + '</td>';
+          }
+          html += '</tr>';
+        }
+        if (rows.length > 10) {
+          html += '<tr><td colspan="' + (headers.length + 1) + '" style="text-align:center;color:#888;">... \u5171 ' + rows.length + ' \u7b46\uff0c\u50c5\u986f\u793a\u524d 10 \u7b46</td></tr>';
+        }
+        html += '</tbody></table>';
+        tableEl.innerHTML = html;
+        scheduleRefreshIcons();
+      }
+
+      function mapRowToAsset(cols) {
+        var catMap = { 'PE': 'PE', 'DC': 'DC', 'DA': 'DA', 'SW': 'SW', 'HW': 'HW', 'VM': 'VM', 'BS': 'BS' };
+        var rawCat = (cols[1] || '').toUpperCase().trim();
+        var category = catMap[rawCat] || rawCat;
+        return {
+          assetName: cols[0] || '',
+          category: category,
+          subCategory: cols[2] || '',
+          ownerName: cols[3] || '',
+          ownerUnit: cols[4] || '',
+          ciaC: cols[5] || '',
+          ciaI: cols[6] || '',
+          ciaA: cols[7] || '',
+          isItSystem: (cols[8] || '').trim() === '\u662f',
+          isChinaBrand: (cols[9] || '').trim() === '\u662f',
+          description: cols[10] || '',
+          inventoryYear: getCurrentRocYear(),
+          changeType: '\u65b0\u589e',
+          status: '\u586b\u5831\u4e2d'
+        };
+      }
+
+      // Action handlers
+      registerActionHandlers('app', {
+        backToList: function () {
+          navigate('assets');
+        },
+        downloadTemplate: function () {
+          var csv = '\uFEFF' + TEMPLATE_HEADERS + '\n';
+          var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          var link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = '\u8cc7\u7522\u532f\u5165\u7bc4\u672c.csv';
+          link.click();
+          toast('\u5df2\u4e0b\u8f09\u7bc4\u672c', 'success');
+        },
+        confirmImport: async function () {
+          if (!parsedRows.length) { toast('\u6c92\u6709\u8cc7\u6599\u53ef\u532f\u5165', 'warning'); return; }
+          if (!confirm('\u78ba\u5b9a\u8981\u532f\u5165 ' + parsedRows.length + ' \u7b46\u8cc7\u6599\uff1f')) return;
+
+          var progressSection = document.getElementById('batch-import-progress');
+          var progressBar = document.getElementById('batch-import-progress-bar');
+          var progressText = document.getElementById('batch-import-progress-text');
+          var resultSection = document.getElementById('batch-import-result');
+          var resultContent = document.getElementById('batch-import-result-content');
+          if (progressSection) progressSection.style.display = '';
+
+          var successCount = 0;
+          var failCount = 0;
+          var errors = [];
+
+          for (var i = 0; i < parsedRows.length; i++) {
+            var asset = mapRowToAsset(parsedRows[i]);
+            if (!asset.assetName) {
+              failCount++;
+              errors.push('\u7b2c ' + (i + 1) + ' \u7b46\uff1a\u8cc7\u7522\u540d\u7a31\u4e0d\u53ef\u70ba\u7a7a');
+              continue;
+            }
+            try {
+              await apiCall('POST', '', asset);
+              successCount++;
+            } catch (err) {
+              failCount++;
+              errors.push('\u7b2c ' + (i + 1) + ' \u7b46 (' + esc(asset.assetName) + ')\uff1a' + esc(String(err && err.message || err)));
+            }
+            var pct = Math.round(((i + 1) / parsedRows.length) * 100);
+            if (progressBar) progressBar.style.width = pct + '%';
+            if (progressText) progressText.textContent = '\u5df2\u8655\u7406 ' + (i + 1) + ' / ' + parsedRows.length + ' \u7b46';
+          }
+
+          if (progressSection) progressSection.style.display = 'none';
+          if (resultSection) resultSection.style.display = '';
+          if (resultContent) {
+            var resultHtml = '<div style="margin-bottom:12px;">'
+              + ic('check-circle') + ' <strong>\u532f\u5165\u5b8c\u6210</strong></div>'
+              + '<p>\u6210\u529f\uff1a<strong style="color:#27ae60;">' + successCount + '</strong> \u7b46'
+              + (failCount > 0 ? '\uff0c\u5931\u6557\uff1a<strong style="color:#e74c3c;">' + failCount + '</strong> \u7b46' : '')
+              + '</p>';
+            if (errors.length > 0) {
+              resultHtml += '<div style="margin-top:8px;padding:10px;background:#fff3f3;border-radius:4px;font-size:0.85em;">'
+                + '<strong>\u932f\u8aa4\u660e\u7d30\uff1a</strong><ul style="margin:4px 0 0 16px;padding:0;">';
+              for (var ei = 0; ei < errors.length; ei++) {
+                resultHtml += '<li>' + errors[ei] + '</li>';
+              }
+              resultHtml += '</ul></div>';
+            }
+            resultHtml += '<div style="margin-top:12px;">'
+              + '<button class="btn btn-primary" data-action="app.backToList">' + ic('list') + ' \u67e5\u770b\u8cc7\u7522\u5217\u8868</button></div>';
+            resultContent.innerHTML = resultHtml;
+            scheduleRefreshIcons();
+          }
+        }
+      });
+
+      // File input handler
+      var fileInput = document.getElementById('batch-import-file');
+      if (fileInput) {
+        addPageEventListener(fileInput, 'change', function () {
+          var file = fileInput.files && fileInput.files[0];
+          if (!file) return;
+          if (!file.name.toLowerCase().endsWith('.csv')) {
+            toast('\u8acb\u9078\u64c7 CSV \u6a94\u6848', 'error');
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            var text = e.target.result;
+            var rows = parseCsvText(text);
+            if (!rows.length) {
+              toast('CSV \u6a94\u6848\u4e2d\u6c92\u6709\u6709\u6548\u8cc7\u6599', 'warning');
+              return;
+            }
+            showPreview(rows);
+          };
+          reader.readAsText(file, 'UTF-8');
+        });
+      }
+    }
+
+    // -------------------------------------------------------
+    // renderYearComparison
+    // -------------------------------------------------------
+    async function renderYearComparison() {
+      var appEl = document.getElementById('app');
+      if (!appEl) return;
+
+      var currentYear = getCurrentRocYear();
+
+      appEl.innerHTML = '<div class="animate-in">'
+        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
+        + '<h2>' + ic('git-compare') + ' \u5e74\u5ea6\u8cc7\u7522\u6bd4\u5c0d</h2>'
+        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
+        + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
+        + '</div>'
+        + '</div>'
+
+        + '<div class="card" style="padding:16px;margin-bottom:16px;">'
+        + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">'
+        + '<div class="form-group" style="margin-bottom:0;">'
+        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u57fa\u6e96\u5e74\u5ea6</label>'
+        + '<select class="form-control" id="yc-base-year" style="min-width:100px;">'
+        + buildYearOptions(currentYear - 1)
+        + '</select>'
+        + '</div>'
+        + '<div class="form-group" style="margin-bottom:0;">'
+        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u6bd4\u8f03\u5e74\u5ea6</label>'
+        + '<select class="form-control" id="yc-compare-year" style="min-width:100px;">'
+        + buildYearOptions(currentYear)
+        + '</select>'
+        + '</div>'
+        + '<button class="btn btn-primary btn-sm" data-action="app.runComparison">' + ic('refresh-cw') + ' \u57f7\u884c\u6bd4\u5c0d</button>'
+        + '</div>'
+        + '</div>'
+
+        + '<div id="yc-result">'
+        + '<div class="empty-state" style="padding:40px 0;text-align:center;color:#888;">'
+        + ic('git-compare') + '<p>\u8acb\u9078\u64c7\u5e74\u5ea6\u5f8c\u9ede\u64ca\u300c\u57f7\u884c\u6bd4\u5c0d\u300d</p></div>'
+        + '</div>'
+
+        + '</div>';
+
+      scheduleRefreshIcons();
+
+      function buildComparisonTable(baseItems, compareItems) {
+        var baseMap = {};
+        for (var bi = 0; bi < baseItems.length; bi++) {
+          var bKey = baseItems[bi].assetName || baseItems[bi].assetId || ('base-' + bi);
+          baseMap[bKey] = baseItems[bi];
+        }
+        var compareMap = {};
+        for (var ci = 0; ci < compareItems.length; ci++) {
+          var cKey = compareItems[ci].assetName || compareItems[ci].assetId || ('cmp-' + ci);
+          compareMap[cKey] = compareItems[ci];
+        }
+
+        var allKeys = {};
+        var keys;
+        keys = Object.keys(baseMap);
+        for (var k1 = 0; k1 < keys.length; k1++) allKeys[keys[k1]] = true;
+        keys = Object.keys(compareMap);
+        for (var k2 = 0; k2 < keys.length; k2++) allKeys[keys[k2]] = true;
+
+        var sortedKeys = Object.keys(allKeys).sort();
+        var rows = [];
+        for (var si = 0; si < sortedKeys.length; si++) {
+          var name = sortedKeys[si];
+          var baseA = baseMap[name];
+          var cmpA = compareMap[name];
+          var changeType;
+          if (!baseA && cmpA) {
+            changeType = '\u65b0\u589e';
+          } else if (baseA && !cmpA) {
+            changeType = '\u522a\u9664';
+          } else {
+            var baseCIA = (baseA.ciaC || '') + (baseA.ciaI || '') + (baseA.ciaA || '');
+            var cmpCIA = (cmpA.ciaC || '') + (cmpA.ciaI || '') + (cmpA.ciaA || '');
+            var baseCat = (baseA.category || '') + (baseA.subCategory || '');
+            var cmpCat = (cmpA.category || '') + (cmpA.subCategory || '');
+            changeType = (baseCIA !== cmpCIA || baseCat !== cmpCat) ? '\u4fee\u6539' : '\u7121\u7570\u52d5';
+          }
+          rows.push({
+            name: name,
+            category: cmpA ? getCategoryLabel(cmpA.category) : getCategoryLabel(baseA.category),
+            baseCIA: baseA ? ((baseA.ciaC || '-') + '/' + (baseA.ciaI || '-') + '/' + (baseA.ciaA || '-')) : '\u2014',
+            cmpCIA: cmpA ? ((cmpA.ciaC || '-') + '/' + (cmpA.ciaI || '-') + '/' + (cmpA.ciaA || '-')) : '\u2014',
+            changeType: changeType
+          });
+        }
+        return rows;
+      }
+
+      function getChangeColor(type) {
+        if (type === '\u65b0\u589e') return 'background:#e8f5e9;';
+        if (type === '\u4fee\u6539') return 'background:#fff9c4;';
+        if (type === '\u522a\u9664') return 'background:#ffebee;';
+        return 'background:#f5f5f5;';
+      }
+
+      function getChangeBadge(type) {
+        if (type === '\u65b0\u589e') return '<span class="badge badge-success"><span class="badge-dot"></span>' + esc(type) + '</span>';
+        if (type === '\u4fee\u6539') return '<span class="badge badge-warning"><span class="badge-dot"></span>' + esc(type) + '</span>';
+        if (type === '\u522a\u9664') return '<span class="badge badge-danger"><span class="badge-dot"></span>' + esc(type) + '</span>';
+        return '<span class="badge badge-secondary"><span class="badge-dot"></span>' + esc(type) + '</span>';
+      }
+
+      registerActionHandlers('app', {
+        backToList: function () {
+          navigate('assets');
+        },
+        runComparison: async function () {
+          var baseYearEl = document.getElementById('yc-base-year');
+          var cmpYearEl = document.getElementById('yc-compare-year');
+          var resultEl = document.getElementById('yc-result');
+          if (!baseYearEl || !cmpYearEl || !resultEl) return;
+
+          var baseYear = baseYearEl.value;
+          var cmpYear = cmpYearEl.value;
+          if (baseYear === cmpYear) {
+            toast('\u57fa\u6e96\u5e74\u5ea6\u8207\u6bd4\u8f03\u5e74\u5ea6\u4e0d\u53ef\u76f8\u540c', 'warning');
+            return;
+          }
+
+          resultEl.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div>';
+          scheduleRefreshIcons();
+
+          try {
+            var results = await Promise.all([
+              apiCall('GET', '?year=' + encodeURIComponent(baseYear)),
+              apiCall('GET', '?year=' + encodeURIComponent(cmpYear))
+            ]);
+            var baseItems = Array.isArray(results[0]) ? results[0] : (results[0] && Array.isArray(results[0].items) ? results[0].items : []);
+            var cmpItems = Array.isArray(results[1]) ? results[1] : (results[1] && Array.isArray(results[1].items) ? results[1].items : []);
+
+            var diffRows = buildComparisonTable(baseItems, cmpItems);
+
+            if (!diffRows.length) {
+              resultEl.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;">'
+                + ic('inbox') + '<p>\u7121\u8cc7\u6599\u53ef\u6bd4\u5c0d</p></div>';
+              scheduleRefreshIcons();
+              return;
+            }
+
+            // Summary counts
+            var addCount = 0, modCount = 0, delCount = 0, noChangeCount = 0;
+            for (var di = 0; di < diffRows.length; di++) {
+              if (diffRows[di].changeType === '\u65b0\u589e') addCount++;
+              else if (diffRows[di].changeType === '\u4fee\u6539') modCount++;
+              else if (diffRows[di].changeType === '\u522a\u9664') delCount++;
+              else noChangeCount++;
+            }
+
+            var summaryHtml = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:0.9em;">'
+              + '<span style="color:#27ae60;">' + ic('plus-circle') + ' \u65b0\u589e: <strong>' + addCount + '</strong></span>'
+              + '<span style="color:#f39c12;">' + ic('edit') + ' \u4fee\u6539: <strong>' + modCount + '</strong></span>'
+              + '<span style="color:#e74c3c;">' + ic('minus-circle') + ' \u522a\u9664: <strong>' + delCount + '</strong></span>'
+              + '<span style="color:#888;">' + ic('check') + ' \u7121\u7570\u52d5: <strong>' + noChangeCount + '</strong></span>'
+              + '</div>';
+
+            var tableHtml = '<div class="table-wrapper" tabindex="0" style="overflow-x:auto;">'
+              + '<table>'
+              + '<caption class="sr-only">\u5e74\u5ea6\u8cc7\u7522\u6bd4\u5c0d\u7d50\u679c</caption>'
+              + '<thead><tr>'
+              + '<th scope="col">\u8cc7\u7522\u540d\u7a31</th>'
+              + '<th scope="col">\u5206\u985e</th>'
+              + '<th scope="col">\u57fa\u6e96\u5e74\u5ea6 CIA (' + esc(baseYear) + ')</th>'
+              + '<th scope="col">\u6bd4\u8f03\u5e74\u5ea6 CIA (' + esc(cmpYear) + ')</th>'
+              + '<th scope="col">\u7570\u52d5\u985e\u578b</th>'
+              + '</tr></thead><tbody>';
+
+            for (var ri = 0; ri < diffRows.length; ri++) {
+              var r = diffRows[ri];
+              tableHtml += '<tr style="' + getChangeColor(r.changeType) + '">'
+                + '<td>' + esc(r.name) + '</td>'
+                + '<td>' + esc(r.category) + '</td>'
+                + '<td>' + esc(r.baseCIA) + '</td>'
+                + '<td>' + esc(r.cmpCIA) + '</td>'
+                + '<td>' + getChangeBadge(r.changeType) + '</td>'
+                + '</tr>';
+            }
+            tableHtml += '</tbody></table></div>';
+
+            resultEl.innerHTML = summaryHtml + tableHtml;
+            scheduleRefreshIcons();
+          } catch (err) {
+            resultEl.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+              + ic('alert-triangle') + '<p>\u6bd4\u5c0d\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p></div>';
+            scheduleRefreshIcons();
+          }
+        }
+      });
+
+      // Bind year selectors for keyboard enter
+      var baseYearEl = document.getElementById('yc-base-year');
+      var cmpYearEl = document.getElementById('yc-compare-year');
+      if (baseYearEl) addPageEventListener(baseYearEl, 'change', function () {});
+      if (cmpYearEl) addPageEventListener(cmpYearEl, 'change', function () {});
+    }
+
+    // -------------------------------------------------------
     // Return public API
     // -------------------------------------------------------
     return {
@@ -1819,7 +2301,9 @@
       renderAssetDetail: renderAssetDetail,
       renderAppendix10: renderAppendix10,
       renderRiskAssessment: renderRiskAssessment,
-      renderAssetDashboard: renderAssetDashboard
+      renderAssetDashboard: renderAssetDashboard,
+      renderBatchImport: renderBatchImport,
+      renderYearComparison: renderYearComparison
     };
   };
 })();
