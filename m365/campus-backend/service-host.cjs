@@ -157,6 +157,40 @@ console.log('service-host starting', {
 
 const server = startServer(Number(process.env.PORT || 8787));
 
+// ── Health check watchdog (every 5 min, exit if 3 consecutive failures) ──
+let healthFailCount = 0;
+const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const HEALTH_FAIL_THRESHOLD = 3;
+const healthWatchdog = setInterval(function () {
+  var port = Number(process.env.PORT || 8787);
+  var req = require('http').get('http://127.0.0.1:' + port + '/api/auth/health', { timeout: 10000 }, function (res) {
+    var data = '';
+    res.on('data', function (c) { data += c; });
+    res.on('end', function () {
+      if (res.statusCode === 200) { healthFailCount = 0; }
+      else { healthFailCount++; console.error('[watchdog] Health check returned ' + res.statusCode + ' (fail ' + healthFailCount + '/' + HEALTH_FAIL_THRESHOLD + ')'); }
+      if (healthFailCount >= HEALTH_FAIL_THRESHOLD) { console.error('[watchdog] Health check failed ' + HEALTH_FAIL_THRESHOLD + ' times, exiting for systemd restart'); process.exit(1); }
+    });
+  });
+  req.on('error', function (err) {
+    healthFailCount++;
+    console.error('[watchdog] Health check error: ' + String(err && err.message || err) + ' (fail ' + healthFailCount + '/' + HEALTH_FAIL_THRESHOLD + ')');
+    if (healthFailCount >= HEALTH_FAIL_THRESHOLD) { console.error('[watchdog] Exiting for systemd restart'); process.exit(1); }
+  });
+  req.on('timeout', function () { req.destroy(); healthFailCount++; console.error('[watchdog] Health check timeout (fail ' + healthFailCount + '/' + HEALTH_FAIL_THRESHOLD + ')'); });
+}, HEALTH_CHECK_INTERVAL_MS);
+healthWatchdog.unref();
+console.log('[watchdog] Health check started (every ' + (HEALTH_CHECK_INTERVAL_MS / 60000) + ' min, threshold ' + HEALTH_FAIL_THRESHOLD + ')');
+
+// ── Crash logger ──
+process.on('uncaughtException', function (err) {
+  console.error('[CRASH] Uncaught exception:', err && err.stack ? err.stack : String(err));
+  process.exit(1);
+});
+process.on('unhandledRejection', function (reason) {
+  console.error('[CRASH] Unhandled rejection:', reason && reason.stack ? reason.stack : String(reason));
+});
+
 // ── Error alerter ──
 try {
   const { startAlertSchedule } = require('./error-alerter.cjs');
