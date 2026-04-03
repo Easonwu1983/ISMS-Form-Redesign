@@ -3,7 +3,7 @@
   window.createAppRouteModule = function createAppRouteModule(deps) {
     const options = deps && typeof deps === 'object' ? deps : {};
     const ROUTE_WHITELIST = options.ROUTE_WHITELIST || {};
-    const DEFAULT_TITLE = String(options.defaultTitle || '內部稽核管考追蹤系統');
+    const DEFAULT_TITLE = String(options.defaultTitle || '資訊安全管理系統');
 
     function normalizeRouteParamValue(value) {
       const raw = String(value || '').trim();

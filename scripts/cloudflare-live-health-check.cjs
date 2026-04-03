@@ -50,7 +50,7 @@ async function run() {
   await check('pages:homepage', async () => {
     const { response, text } = await requestText(`${PAGES_BASE}/`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (!/內部稽核管考追蹤系統|登入系統|ISMS/i.test(text)) {
+    if (!/資訊安全管理系統|內部稽核管考追蹤系統|登入系統|ISMS/i.test(text)) {
       throw new Error('landing page did not contain expected login markers');
     }
     return { status: response.status };

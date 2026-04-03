@@ -184,7 +184,7 @@ function writeRedirectIndex() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>內部稽核管考追蹤系統</title>
+  <title>資訊安全管理系統</title>
   <meta http-equiv="refresh" content="1; url=${redirectTarget}">
   <meta name="robots" content="noindex,nofollow">
   <style>
@@ -300,7 +300,7 @@ function writeRedirectIndex() {
       <span class="badge-mark">NTU</span>
       <span>CLOUDFLARE ENTRY</span>
     </div>
-    <h1>內部稽核管考追蹤系統</h1>
+    <h1>資訊安全管理系統</h1>
     <p>目前入口頁由 Cloudflare HTTPS 提供，系統會在 1 秒後自動導向到目前可用的正式系統網址。</p>
     <div class="actions">
       <a class="btn btn-primary" href="${redirectTarget}">立即前往系統</a>

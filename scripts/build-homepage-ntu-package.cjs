@@ -150,7 +150,7 @@ function buildHomepageRedirectIndex() {
   <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
   <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
   <meta http-equiv="Cross-Origin-Resource-Policy" content="same-origin">
-  <title>內部稽核管考追蹤系統入口</title>
+  <title>資訊安全管理系統入口</title>
   <meta http-equiv="refresh" content="1; url=${redirectTarget}">
   <meta name="robots" content="noindex,nofollow">
   <style>
@@ -278,7 +278,7 @@ function buildHomepageRedirectIndex() {
       <span class="badge-mark">NTU</span>
       <span>INTERNAL AUDIT ENTRY</span>
     </div>
-    <h1>內部稽核管考追蹤系統</h1>
+    <h1>資訊安全管理系統</h1>
     <p>此入口頁會自動導向校內正式系統。若 1 秒後未自動跳轉，請直接使用下方按鈕進入。系統僅限校內網路或允許來源連線。</p>
     <div class="actions">
       <a class="btn btn-primary" href="${redirectTarget}">進入系統</a>

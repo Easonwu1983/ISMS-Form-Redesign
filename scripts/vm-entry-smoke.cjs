@@ -73,7 +73,7 @@ function assertRequestId(response, label) {
     await runStep(results, 'homepage', 'VM entry', 'homepage reachable', async () => {
       const { response, text } = await fetchText(`${BASE_URL}/`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      if (!text.includes('內部稽核管考追蹤系統')) throw new Error('homepage title missing');
+      if (!text.includes('資訊安全管理系統')) throw new Error('homepage title missing');
       return { status: response.status };
     }, { critical: true });
 

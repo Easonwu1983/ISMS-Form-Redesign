@@ -355,8 +355,8 @@
       var loginAutoFocus = authMode === 'm365-api' ? 'autofocus' : '';
       var textMap = {
         skip: '\u8df3\u5230\u4e3b\u8981\u5167\u5bb9',
-        title: '\u5167\u90e8\u7a3d\u6838\u7ba1\u8003\u8ffd\u8e64\u7cfb\u7d71',
-        subtitle: 'ISMS \u7ba1\u8003\u8207\u8ffd\u8e64\u5e73\u53f0',
+        title: '\u8cc7\u8a0a\u5b89\u5168\u7ba1\u7406\u7cfb\u7d71',
+        subtitle: 'Information Security Management System',
         loginError: '\u5e33\u865f\u6216\u5bc6\u78bc\u932f\u8aa4',
         setupTitle: '\u5efa\u7acb\u672c\u6a5f\u7ba1\u7406\u54e1\u5e33\u865f',
         setupText: '\u76ee\u524d\u6c92\u6709\u4efb\u4f55\u672c\u6a5f\u5e33\u865f\uff0c\u8acb\u5148\u5efa\u7acb\u4e00\u7d44\u672c\u6a5f\u7ba1\u7406\u54e1\u5e33\u865f\uff0c\u4e4b\u5f8c\u518d\u767b\u5165\u7cfb\u7d71\u3002',
@@ -733,7 +733,7 @@
 
       var sidebarEl = document.getElementById('sidebar');
       if (!sidebarEl) return;
-      sidebarEl.innerHTML = '<div class="sidebar-logo" style="height:58px;max-height:58px;min-height:0;overflow:hidden;display:flex;align-items:center;padding:10px 14px;gap:10px;box-sizing:border-box"><span style="flex-shrink:0;display:inline-flex">' + ntuLogo('ntu-logo-sm') + '</span><div style="min-width:0;line-height:1.3"><div style="font-size:0.78rem;font-weight:800;color:#0f3a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">內部稽核管考追蹤系統</div><div style="font-size:0.58rem;color:#8899ad;letter-spacing:0.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ISMS 管考與追蹤平台</div></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><div class="sidebar-footer-user"><span class="sidebar-footer-name">' + esc(u.name) + '</span><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div><button class="sidebar-logout-btn" data-action="shell.logout"><span class="nav-icon">' + ic('log-out') + '</span>登出系統</button>' + renderVersionChip('sidebar-version-chip') + '</div>';
+      sidebarEl.innerHTML = '<div class="sidebar-logo" style="height:58px;max-height:58px;min-height:0;overflow:hidden;display:flex;align-items:center;padding:10px 14px;gap:10px;box-sizing:border-box"><span style="flex-shrink:0;display:inline-flex">' + ntuLogo('ntu-logo-sm') + '</span><div style="min-width:0;line-height:1.3"><div style="font-size:0.78rem;font-weight:800;color:#0f3a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">資訊安全管理系統</div><div style="font-size:0.58rem;color:#8899ad;letter-spacing:0.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ISMS 管理平台</div></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><div class="sidebar-footer-user"><span class="sidebar-footer-name">' + esc(u.name) + '</span><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div><button class="sidebar-logout-btn" data-action="shell.logout"><span class="nav-icon">' + ic('log-out') + '</span>登出系統</button>' + renderVersionChip('sidebar-version-chip') + '</div>';
       sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
         bindPageEvent(link, 'click', function () {
           if (isMobileViewport()) closeSidebar();
