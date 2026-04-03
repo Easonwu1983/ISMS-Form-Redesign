@@ -192,9 +192,18 @@
     function buildAuthorizedScopePicker(baseId, values, placeholder, hint) {
       const selected = parseUnitList(values);
       const chips = selected.map((value) => '<span class="unit-chip-picker-chip" data-unit-chip="' + esc(value) + '">' + esc(value) + '<button type="button" class="unit-chip-picker-chip-remove" data-remove-unit="' + esc(value) + '" aria-label="移除 ' + esc(value) + '">×</button></span>').join('');
+      const categoryButtons = '<div class="unit-chip-picker-category-bar" id="' + esc(baseId) + '-category-bar">'
+        + '<span class="unit-chip-picker-category-label">快速選取：</span>'
+        + '<button type="button" class="unit-chip-picker-category-btn" data-category="行政單位">行政單位</button>'
+        + '<button type="button" class="unit-chip-picker-category-btn" data-category="學術單位">學術單位</button>'
+        + '<button type="button" class="unit-chip-picker-category-btn" data-category="中心 / 研究單位">中心 / 研究單位</button>'
+        + '<button type="button" class="unit-chip-picker-category-btn unit-chip-picker-category-btn--all" data-category="__all__">全選</button>'
+        + '<button type="button" class="unit-chip-picker-category-btn unit-chip-picker-category-btn--clear" data-category="__clear__">清除</button>'
+        + '</div>';
       return '<div class="unit-chip-picker" data-unit-chip-picker="' + esc(baseId) + '">'
+        + categoryButtons
         + '<div class="unit-chip-picker-search">'
-        + '<input type="search" class="form-input unit-chip-picker-search-input" id="' + esc(baseId) + '-search" aria-label="搜尋額外授權資源範圍" placeholder="' + esc(placeholder || '請輸入單位名稱') + '" autocomplete="off">'
+        + '<input type="search" class="form-input unit-chip-picker-search-input" id="' + esc(baseId) + '-search" aria-label="搜尋額外授權資源範圍" placeholder="' + esc(placeholder || '請輸入單位名稱或用上方按鈕快速選取') + '" autocomplete="off">'
         + '<div class="unit-chip-picker-results" id="' + esc(baseId) + '-results" role="listbox" aria-label="額外授權資源範圍搜尋結果" hidden></div>'
         + '</div>'
         + '<div class="unit-chip-picker-chips" id="' + esc(baseId) + '-chips">' + (chips || '<span class="unit-chip-picker-empty">尚未選擇</span>') + '</div>'
@@ -250,11 +259,59 @@
         renderChips();
         syncHidden(true);
       };
+      // ── Category quick-select bar ──
+      const allEntries = getUnitSearchEntries();
+      const categoryBarEl = document.getElementById(baseId + '-category-bar');
+      if (categoryBarEl) {
+        bindPageEvent(categoryBarEl, 'click', (event) => {
+          const btn = event.target.closest('[data-category]');
+          if (!btn) return;
+          event.preventDefault();
+          const category = btn.dataset.category;
+          if (category === '__clear__') {
+            state.clear();
+            renderChips();
+            syncHidden(true);
+            updateCategoryActiveState();
+            return;
+          }
+          if (category === '__all__') {
+            allEntries.forEach((entry) => {
+              if (entry && entry.value) state.add(entry.value);
+            });
+          } else {
+            allEntries.forEach((entry) => {
+              if (entry && entry.category === category && !entry.child && entry.value) {
+                state.add(entry.value);
+              }
+            });
+          }
+          renderChips();
+          syncHidden(true);
+          updateCategoryActiveState();
+        });
+      }
+      const updateCategoryActiveState = () => {
+        if (!categoryBarEl) return;
+        const buttons = categoryBarEl.querySelectorAll('[data-category]');
+        buttons.forEach((btn) => {
+          const cat = btn.dataset.category;
+          if (cat === '__clear__' || cat === '__all__') {
+            btn.classList.remove('unit-chip-picker-category-btn--active');
+            return;
+          }
+          const catEntries = allEntries.filter((e) => e && e.category === cat && !e.child);
+          const allSelected = catEntries.length > 0 && catEntries.every((e) => state.has(e.value));
+          btn.classList.toggle('unit-chip-picker-category-btn--active', allSelected);
+        });
+      };
+
       bindPageEvent(chipsEl, 'click', (event) => {
         const button = event.target.closest('[data-remove-unit]');
         if (!button) return;
         event.preventDefault();
         removeValue(button.dataset.removeUnit);
+        updateCategoryActiveState();
       });
       bindPageEvent(resultsEl, 'mousedown', (event) => {
         const button = event.target.closest('[data-unit-value]');
@@ -264,6 +321,7 @@
         searchEl.value = '';
         resultsEl.hidden = true;
         resultsEl.innerHTML = '';
+        updateCategoryActiveState();
       });
       bindPageEvent(searchEl, 'input', () => renderResults(searchEl.value));
       bindPageEvent(searchEl, 'focus', () => renderResults(searchEl.value));
@@ -284,12 +342,14 @@
       });
       renderChips();
       syncHidden(false);
+      updateCategoryActiveState();
       return {
         setValues(values) {
           state.clear();
           parseUnitList(values).forEach((value) => state.add(value));
           renderChips();
           syncHidden(true);
+          updateCategoryActiveState();
         },
         getValues() { return Array.from(state); },
         addValue,
@@ -298,6 +358,7 @@
           state.clear();
           renderChips();
           syncHidden(true);
+          updateCategoryActiveState();
         }
       };
     }

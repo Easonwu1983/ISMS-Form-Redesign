@@ -8207,6 +8207,107 @@ tbody tr:hover {
   font-size: 0.84rem;
 }
 
+/* ── Category quick-select bar ── */
+.unit-chip-picker-category-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.unit-chip-picker-category-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-right: 2px;
+  white-space: nowrap;
+}
+
+.unit-chip-picker-category-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(30, 64, 175, 0.22);
+  background: rgba(30, 64, 175, 0.06);
+  color: #1e40af;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.unit-chip-picker-category-btn:hover {
+  background: rgba(30, 64, 175, 0.14);
+  border-color: rgba(30, 64, 175, 0.36);
+  transform: translateY(-1px);
+}
+
+.unit-chip-picker-category-btn--active {
+  background: #1e40af;
+  color: #fff;
+  border-color: #1e40af;
+  box-shadow: 0 2px 8px -2px rgba(30, 64, 175, 0.36);
+}
+
+.unit-chip-picker-category-btn--active:hover {
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+}
+
+.unit-chip-picker-category-btn--all {
+  border-color: rgba(22, 163, 74, 0.22);
+  background: rgba(22, 163, 74, 0.06);
+  color: #15803d;
+}
+
+.unit-chip-picker-category-btn--all:hover {
+  background: rgba(22, 163, 74, 0.14);
+  border-color: rgba(22, 163, 74, 0.36);
+}
+
+.unit-chip-picker-category-btn--clear {
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.06);
+  color: #b91c1c;
+}
+
+.unit-chip-picker-category-btn--clear:hover {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.36);
+}
+
+/* dark mode */
+.dark-mode .unit-chip-picker-category-btn {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(96, 165, 250, 0.25);
+  color: #93bbfd;
+}
+
+.dark-mode .unit-chip-picker-category-btn:hover {
+  background: rgba(96, 165, 250, 0.2);
+}
+
+.dark-mode .unit-chip-picker-category-btn--active {
+  background: #3b82f6;
+  color: #fff;
+  border-color: #3b82f6;
+}
+
+.dark-mode .unit-chip-picker-category-btn--all {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.25);
+  color: #86efac;
+}
+
+.dark-mode .unit-chip-picker-category-btn--clear {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.25);
+  color: #fca5a5;
+}
+
 .training-bulk-bar {
   display: flex;
   align-items: center;
