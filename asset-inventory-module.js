@@ -638,18 +638,14 @@
           return;
         }
 
-        var rowsHtml = '';
-        for (var i = 0; i < items.length; i++) {
-          var item = items[i];
+        // Build table row HTML for a single item
+        function buildAssetRow(item) {
           var riskScore = computeRiskScore(item.riskLikelihood, item.riskImpact);
           var riskLevel = item.riskLevel || getRiskLevel(riskScore);
           var protLevel = item.protectionLevel || computeProtectionLevel(item.ciaC, item.ciaI, item.ciaA, item.ciaL);
-
-          rowsHtml += '<tr>'
-            + '<td>' + esc(item.assetId || '') + '</td>'
+          return '<tr>'
             + '<td>' + esc(item.assetName || '') + '</td>'
             + '<td>' + esc(getCategoryLabel(item.category)) + '</td>'
-            + '<td>' + esc(item.ownerName || '') + '</td>'
             + '<td>' + esc(protLevel) + '</td>'
             + '<td><span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel || '\u2014') + '</span></td>'
             + '<td><span class="badge ' + getStatusBadgeClass(item.status) + '"><span class="badge-dot"></span>' + esc(item.status || '') + '</span></td>'
@@ -661,22 +657,53 @@
             + '</tr>';
         }
 
-        wrapper.innerHTML = '<div class="table-wrapper" tabindex="0">'
-          + '<table>'
-          + '<caption class="sr-only">\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a</caption>'
-          + '<thead><tr>'
-          + '<th scope="col">\u8cc7\u7522\u7de8\u865f</th>'
+        var tableHead = '<thead><tr>'
           + '<th scope="col">\u8cc7\u7522\u540d\u7a31</th>'
           + '<th scope="col">\u5206\u985e</th>'
-          + '<th scope="col">\u64c1\u6709\u8005</th>'
           + '<th scope="col">\u9632\u8b77\u7b49\u7d1a</th>'
           + '<th scope="col">\u98a8\u96aa\u7b49\u7d1a</th>'
           + '<th scope="col">\u72c0\u614b</th>'
           + '<th scope="col">\u64cd\u4f5c</th>'
-          + '</tr></thead>'
-          + '<tbody>' + rowsHtml + '</tbody>'
-          + '</table>'
-          + '</div>';
+          + '</tr></thead>';
+
+        // Admin sees grouped by unit; unit admin sees flat list
+        var isAdminUser = typeof isAdmin === 'function' && isAdmin();
+        var uniqueUnits = {};
+        items.forEach(function (item) { var u = item.unitName || '\u672a\u5206\u985e'; if (!uniqueUnits[u]) uniqueUnits[u] = []; uniqueUnits[u].push(item); });
+        var unitNames = Object.keys(uniqueUnits);
+
+        if (isAdminUser && unitNames.length > 1) {
+          // Grouped view for admin
+          var groupedHtml = '';
+          unitNames.forEach(function (unitName, idx) {
+            var unitItems = uniqueUnits[unitName];
+            var unitCompleted = unitItems.every(function (it) { return it.status === '\u5df2\u5b8c\u6210'; });
+            var statusBadge = unitCompleted
+              ? '<span style="color:#2e7d32;font-weight:bold;">\u2713 \u5df2\u5b8c\u6210</span>'
+              : '<span style="color:#e65100;">' + unitItems.length + ' \u7b46\u8cc7\u7522</span>';
+            groupedHtml += '<div class="card" style="margin-bottom:12px;border-radius:8px;overflow:hidden;">'
+              + '<div style="padding:10px 16px;background:#f8f9fa;border-bottom:1px solid #e9ecef;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" data-action="app.toggleDashGroup" data-target="asset-group-' + idx + '">'
+              + '<span style="font-weight:bold;">' + ic('building', 'icon-sm') + ' ' + esc(unitName) + '</span>'
+              + '<span style="display:flex;align-items:center;gap:8px;">' + statusBadge + ' <span>\u25be</span></span>'
+              + '</div>'
+              + '<div id="asset-group-' + idx + '" style="padding:0;">'
+              + '<table style="width:100%;border-collapse:collapse;">' + tableHead + '<tbody>';
+            unitItems.forEach(function (item) { groupedHtml += buildAssetRow(item); });
+            groupedHtml += '</tbody></table></div></div>';
+          });
+          wrapper.innerHTML = '<div style="font-size:13px;color:#666;margin-bottom:8px;">\u5168\u6821\u5171 ' + items.length + ' \u7b46\u8cc7\u7522\uff0c' + unitNames.length + ' \u500b\u55ae\u4f4d</div>' + groupedHtml;
+        } else {
+          // Flat list for unit admin
+          var rowsHtml = '';
+          items.forEach(function (item) { rowsHtml += buildAssetRow(item); });
+          wrapper.innerHTML = '<div class="table-wrapper" tabindex="0">'
+            + '<table>'
+            + '<caption class="sr-only">\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a</caption>'
+            + tableHead
+            + '<tbody>' + rowsHtml + '</tbody>'
+            + '</table>'
+            + '</div>';
+        }
 
         scheduleRefreshIcons();
       } catch (err) {
