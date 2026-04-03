@@ -18,6 +18,8 @@
         ensureChecklistModule: opts.ensureChecklistModule,
         getTrainingModule: opts.getTrainingModule,
         ensureTrainingModule: opts.ensureTrainingModule,
+        getAssetInventoryModule: opts.getAssetInventoryModule,
+        ensureAssetInventoryModule: opts.ensureAssetInventoryModule,
         getUnitContactApplicationModule: opts.getUnitContactApplicationModule,
         ensureUnitContactApplicationModule: opts.ensureUnitContactApplicationModule
       });
