@@ -50,6 +50,11 @@ function fromCompactTimestamp(value) {
   return Number.isFinite(ms) ? new Date(ms).toISOString() : '';
 }
 
+/**
+ * 解析密碼密文欄位，相容新舊格式
+ * @param {string} rawValue - DB 中的密碼密文原始值
+ * @returns {{hasPassword: boolean, legacy: boolean, scheme: string, salt: string, hash: string, plaintext: string, mustChangePassword: boolean, passwordChangedAt: string, resetTokenHash: string, resetTokenExpiresAt: string, resetRequestedAt: string, sessionVersion: number, raw: string}}
+ */
 function parsePasswordSecret(rawValue) {
   const raw = cleanText(rawValue);
   if (!raw) {
@@ -126,6 +131,11 @@ function parsePasswordSecret(rawValue) {
   };
 }
 
+/**
+ * 將密碼密文物件序列化為管線分隔字串
+ * @param {{salt: string, hash: string, mustChangePassword?: boolean, passwordChangedAt?: string, resetTokenHash?: string, resetTokenExpiresAt?: string, resetRequestedAt?: string, sessionVersion?: number}} secret
+ * @returns {string}
+ */
 function serializePasswordSecret(secret) {
   return [
     SECRET_PREFIX,
@@ -140,6 +150,12 @@ function serializePasswordSecret(secret) {
   ].join('|');
 }
 
+/**
+ * 建立新密碼密文（scrypt 雜湊）
+ * @param {string} password - 明文密碼
+ * @param {{mustChangePassword?: boolean, passwordChangedAt?: string, sessionVersion?: number}} [options]
+ * @returns {{scheme: string, salt: string, hash: string, mustChangePassword: boolean, passwordChangedAt: string, resetTokenHash: string, resetTokenExpiresAt: string, resetRequestedAt: string, sessionVersion: number}}
+ */
 function createPasswordSecret(password, options) {
   const opts = options || {};
   const salt = base64UrlEncode(crypto.randomBytes(16));
@@ -156,6 +172,12 @@ function createPasswordSecret(password, options) {
   };
 }
 
+/**
+ * 驗證密碼是否正確
+ * @param {string} password - 使用者輸入的明文密碼
+ * @param {string} rawSecret - DB 中的密碼密文
+ * @returns {{ok: boolean, secret: object, needsUpgrade: boolean}}
+ */
 function verifyPassword(password, rawSecret) {
   const secret = parsePasswordSecret(rawSecret);
   if (!secret.hasPassword) return { ok: false, secret, needsUpgrade: false };
@@ -176,6 +198,12 @@ function verifyPassword(password, rawSecret) {
   };
 }
 
+/**
+ * 將舊格式密碼升級為新 scrypt 格式
+ * @param {string} password
+ * @param {string|object} secret - 舊密碼密文
+ * @returns {{scheme: string, salt: string, hash: string, mustChangePassword: boolean, passwordChangedAt: string, resetTokenHash: string, resetTokenExpiresAt: string, resetRequestedAt: string, sessionVersion: number}}
+ */
 function upgradePasswordSecret(password, secret) {
   const base = parsePasswordSecret(secret && secret.raw ? secret.raw : secret);
   return createPasswordSecret(password, {
@@ -184,6 +212,12 @@ function upgradePasswordSecret(password, secret) {
   });
 }
 
+/**
+ * 產生密碼重設 token 並更新密文
+ * @param {string} rawSecret - 現有密碼密文
+ * @param {{now?: string}} [options]
+ * @returns {{token: string, expiresAt: string, secret: object}}
+ */
 function createResetToken(rawSecret, options) {
   const base = parsePasswordSecret(rawSecret);
   const now = cleanText(options && options.now) || new Date().toISOString();
@@ -206,6 +240,12 @@ function createResetToken(rawSecret, options) {
   };
 }
 
+/**
+ * 驗證密碼重設 token 是否有效且未過期
+ * @param {string} token
+ * @param {string} rawSecret
+ * @returns {boolean}
+ */
 function verifyResetToken(token, rawSecret) {
   const secret = parsePasswordSecret(rawSecret);
   const expiresAt = cleanText(secret.resetTokenExpiresAt);
@@ -215,6 +255,11 @@ function verifyResetToken(token, rawSecret) {
   return stableEqual(secret.resetTokenHash, sha256(token));
 }
 
+/**
+ * 清除密碼重設狀態，保留原有密碼
+ * @param {string} rawSecret
+ * @returns {object}
+ */
 function clearResetState(rawSecret) {
   const secret = parsePasswordSecret(rawSecret);
   return {
@@ -230,6 +275,13 @@ function clearResetState(rawSecret) {
   };
 }
 
+/**
+ * 變更密碼並遞增 sessionVersion 使舊 session 失效
+ * @param {string} rawSecret - 現有密碼密文
+ * @param {string} newPassword - 新明文密碼
+ * @param {{mustChangePassword?: boolean, passwordChangedAt?: string}} [options]
+ * @returns {object}
+ */
 function changePassword(rawSecret, newPassword, options) {
   const base = parsePasswordSecret(rawSecret);
   return createPasswordSecret(newPassword, {
@@ -239,6 +291,12 @@ function changePassword(rawSecret, newPassword, options) {
   });
 }
 
+/**
+ * 使所有現有 session 失效（遞增 sessionVersion）
+ * @param {string} rawSecret
+ * @param {{updatedAt?: string}} [options]
+ * @returns {object}
+ */
 function invalidateSessions(rawSecret, options) {
   const base = parsePasswordSecret(rawSecret);
   const nextSessionVersion = (Number.isFinite(Number(base.sessionVersion)) ? Number(base.sessionVersion) : 1) + 1;
@@ -263,6 +321,13 @@ function invalidateSessions(rawSecret, options) {
   };
 }
 
+/**
+ * 建立 session token（HMAC-SHA256 簽章）
+ * @param {{username: string, role: string}} user
+ * @param {string} secret - HMAC 密鑰
+ * @param {{ttlMs?: number, sessionVersion?: number}} [options]
+ * @returns {{token: string, expiresAt: string, payload: {sub: string, role: string, sessionVersion: number, iat: string, exp: string}}}
+ */
 function createSessionToken(user, secret, options) {
   const opts = options || {};
   const now = Date.now();
@@ -283,6 +348,12 @@ function createSessionToken(user, secret, options) {
   };
 }
 
+/**
+ * 驗證並解碼 session token，無效或過期回傳 null
+ * @param {string} token
+ * @param {string} secret - HMAC 密鑰
+ * @returns {{sub: string, role: string, sessionVersion: number, iat: string, exp: string} | null}
+ */
 function verifySessionToken(token, secret) {
   const raw = cleanText(token);
   const parts = raw.split('.');

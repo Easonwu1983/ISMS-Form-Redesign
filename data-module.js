@@ -183,7 +183,7 @@
       return Number.isFinite(revision) && revision >= 0 ? Math.floor(revision) : 0;
     }
 
-    var CROSS_TAB_SYNC_KEYS = null;
+    let CROSS_TAB_SYNC_KEYS = null;
     function getCrossTabSyncKeys() {
       if (!CROSS_TAB_SYNC_KEYS) {
         CROSS_TAB_SYNC_KEYS = new Set([AUTH_KEY, DATA_KEY, TRAINING_KEY, CHECKLIST_KEY, UNIT_REVIEW_KEY, UNIT_CONTACT_APP_KEY]);
@@ -908,11 +908,11 @@
 
     function expandFirstLevelWindowScope(units, securityRoles) {
       if (!Array.isArray(securityRoles) || !securityRoles.includes('一級單位資安窗口')) return units;
-      var structure = typeof window !== 'undefined' && typeof window.getUnitStructure_ === 'function' ? window.getUnitStructure_() : null;
+      const structure = typeof window !== 'undefined' && typeof window.getUnitStructure_ === 'function' ? window.getUnitStructure_() : null;
       if (!structure || typeof structure !== 'object') return units;
-      var expanded = new Set(units);
+      const expanded = new Set(units);
       units.forEach(function (unit) {
-        var cleanUnit = String(unit || '').trim();
+        const cleanUnit = String(unit || '').trim();
         if (!cleanUnit) return;
         // If the unit itself is a parent (一級) with children, add all children
         if (Array.isArray(structure[cleanUnit])) {
@@ -920,9 +920,9 @@
           return;
         }
         // If the unit is a child (二級), find its parent and add parent + all siblings
-        var parentKeys = Object.keys(structure);
-        for (var i = 0; i < parentKeys.length; i++) {
-          var parent = parentKeys[i];
+        const parentKeys = Object.keys(structure);
+        for (let i = 0; i < parentKeys.length; i++) {
+          const parent = parentKeys[i];
           if (Array.isArray(structure[parent]) && structure[parent].indexOf(cleanUnit) >= 0) {
             expanded.add(parent);
             structure[parent].forEach(function (child) { if (child) expanded.add(child); });

@@ -39,6 +39,12 @@ function getPool() {
   return pool;
 }
 
+/**
+ * 執行 SQL 查詢，自動偵測慢查詢
+ * @param {string} sql - SQL 語句
+ * @param {any[]} [params] - 綁定參數
+ * @returns {Promise<import('pg').QueryResult>}
+ */
 async function query(sql, params) {
   const start = Date.now();
   const result = await getPool().query(sql, params);
@@ -49,16 +55,33 @@ async function query(sql, params) {
   return result;
 }
 
+/**
+ * 查詢單筆資料，無結果回傳 null
+ * @param {string} sql
+ * @param {any[]} [params]
+ * @returns {Promise<Record<string, any> | null>}
+ */
 async function queryOne(sql, params) {
   const result = await query(sql, params);
   return result.rows[0] || null;
 }
 
+/**
+ * 查詢多筆資料，回傳陣列
+ * @param {string} sql
+ * @param {any[]} [params]
+ * @returns {Promise<Record<string, any>[]>}
+ */
 async function queryAll(sql, params) {
   const result = await query(sql, params);
   return result.rows;
 }
 
+/**
+ * 在交易中執行回呼，自動 COMMIT/ROLLBACK
+ * @param {(client: import('pg').PoolClient) => Promise<any>} fn
+ * @returns {Promise<any>}
+ */
 async function transaction(fn) {
   const client = await getPool().connect();
   try {
@@ -74,6 +97,10 @@ async function transaction(fn) {
   }
 }
 
+/**
+ * 檢查資料庫連線是否正常
+ * @returns {Promise<{ok: boolean, latencyMs: number, error?: string}>}
+ */
 async function healthCheck() {
   const start = Date.now();
   try {
@@ -84,6 +111,10 @@ async function healthCheck() {
   }
 }
 
+/**
+ * 關閉連線池，釋放所有連線
+ * @returns {Promise<void>}
+ */
 async function close() {
   if (pool) {
     console.log('[db] draining pool');

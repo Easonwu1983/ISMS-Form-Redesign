@@ -538,7 +538,7 @@
       }).join('') + '</div>';
     }
 
-    var iconRefreshScheduled = false;
+    let iconRefreshScheduled = false;
     function refreshIcons() {
       const lucideApi = window.lucide;
       if (!lucideApi || typeof lucideApi.createIcons !== 'function') {

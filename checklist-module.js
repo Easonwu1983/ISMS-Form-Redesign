@@ -1871,7 +1871,7 @@
         const unitParts = typeof splitUnitValue === 'function' ? splitUnitValue(unitValue) : { parent: unitValue, child: '' };
         const isAuthorized = authorizedUnits.some(function (au) {
           if (au === unitValue) return true;
-          var auParts = typeof splitUnitValue === 'function' ? splitUnitValue(au) : { parent: au, child: '' };
+          const auParts = typeof splitUnitValue === 'function' ? splitUnitValue(au) : { parent: au, child: '' };
           return auParts.parent && auParts.parent === unitParts.parent;
         });
         if (!isAuthorized) {
@@ -2002,8 +2002,8 @@
         }));
         if (missing.length > 0) {
           debugFlow('checklist', 'submit blocked by unanswered items', { count: missing.length, first: missing[0] });
-          var missingPreview = missing.slice(0, 3).join('、');
-          var moreText = missing.length > 3 ? ('…等共 ' + missing.length + ' 題') : '';
+          const missingPreview = missing.slice(0, 3).join('、');
+          const moreText = missing.length > 3 ? ('…等共 ' + missing.length + ' 題') : '';
           toast('尚有 ' + missing.length + ' 題未填答：' + missingPreview + moreText + '。已自動跳轉到第一題。', 'error');
           revealChecklistItem(missing[0]);
           return;
@@ -2042,8 +2042,8 @@
       bindChecklistPageEvent(document.getElementById('cl-save-draft-floating'), 'click', saveChecklistDraft);
 
       // Auto-save every 30 seconds when form is dirty
-      var checklistAutoSaveTimer = null;
-      var checklistAutoSaveDirty = false;
+      let checklistAutoSaveTimer = null;
+      let checklistAutoSaveDirty = false;
       function scheduleAutoSave() {
         checklistAutoSaveDirty = true;
         if (checklistAutoSaveTimer) return;
@@ -2061,7 +2061,7 @@
       bindChecklistPageEvent(checklistForm, 'input', scheduleAutoSave);
       bindChecklistPageEvent(checklistForm, 'change', scheduleAutoSave);
       // Ctrl+S quick save
-      var onSaveShortcut = function () {
+      const onSaveShortcut = function () {
         saveChecklistDraft().then(function () { toast('已儲存草稿', 'success'); }).catch(function () { toast('儲存失敗', 'error'); });
       };
       window.addEventListener('isms:save-shortcut', onSaveShortcut);

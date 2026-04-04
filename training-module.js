@@ -163,7 +163,7 @@
         const normalizedRows = Array.isArray(rows) ? rows.slice() : [];
         try {
           if (typeof window === 'undefined' || !window.sessionStorage) return;
-          var payload = JSON.stringify(normalizedRows);
+          const payload = JSON.stringify(normalizedRows);
           // Warn if approaching sessionStorage limits (5MB typical)
           if (payload.length > 3 * 1024 * 1024) {
             if (window.__ismsWarn) window.__ismsWarn('Training roster draft approaching storage limit (' + Math.round(payload.length / 1024) + ' KB)');
@@ -172,7 +172,7 @@
         } catch (quotaError) {
           // Quota exceeded — try to trim oldest entries and retry
           try {
-            var trimmed = normalizedRows.slice(-Math.max(Math.floor(normalizedRows.length / 2), 50));
+            const trimmed = normalizedRows.slice(-Math.max(Math.floor(normalizedRows.length / 2), 50));
             window.sessionStorage.setItem(TRAINING_MANUAL_ROSTER_DRAFT_STORAGE_KEY, JSON.stringify(trimmed));
             if (window.__ismsWarn) window.__ismsWarn('Training roster draft trimmed due to storage quota (' + normalizedRows.length + ' → ' + trimmed.length + ' rows)');
           } catch (_) {
@@ -2087,7 +2087,7 @@
     clearUnsavedChangesGuard();
 
     function getTrainingUnitValue() {
-      var el = document.getElementById('tr-unit');
+      const el = document.getElementById('tr-unit');
       return el ? el.value : '';
     }
 

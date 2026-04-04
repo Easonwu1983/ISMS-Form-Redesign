@@ -15,6 +15,17 @@ const includeBrowserZoom = TEST_BASE_URL || LIVE_BASE;
 const includeStress = TEST_BASE_URL || LIVE_BASE;
 const includeLiveSuite = LIVE_BASE && PAGES_BASE;
 
+if (TEST_BASE_URL || LIVE_BASE) {
+  STEPS.push({
+    label: 'e2e-core-flows',
+    command: ['node', path.join(ROOT, 'tests/e2e-core-flows.cjs')]
+  });
+  STEPS.push({
+    label: 'comprehensive-test-suite',
+    command: ['node', path.join(ROOT, 'tests/comprehensive-test-suite.cjs')]
+  });
+}
+
 if (includeBrowserZoom) {
   STEPS.push({
     label: 'browser-zoom-regression',

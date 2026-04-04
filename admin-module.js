@@ -70,7 +70,7 @@
     if (window._adminSecurityWindow && window._adminSecurityWindow.init) window._adminSecurityWindow.init({ esc: esc, ic: ic });
 
     async function promptActivationInfo(applicationId, opts) {
-      var confirmed = typeof openConfirmDialog === 'function'
+      const confirmed = typeof openConfirmDialog === 'function'
         ? await openConfirmDialog('確定要重新寄送登入資訊給此申請人嗎？', { title: '重新寄送', confirmLabel: '寄送', confirmClass: 'btn-primary', kicker: '操作確認' })
         : window.confirm('確定要重新寄送登入資訊嗎？');
       if (!confirmed) return;
@@ -84,11 +84,11 @@
 
     async function promptReviewComment(title, placeholder, confirmLabel, callback) {
       if (typeof openConfirmDialog === 'function') {
-        var confirmed = await openConfirmDialog(placeholder, { title: title, confirmLabel: confirmLabel, confirmClass: 'btn-primary', kicker: '審核操作' });
+        const confirmed = await openConfirmDialog(placeholder, { title: title, confirmLabel: confirmLabel, confirmClass: 'btn-primary', kicker: '審核操作' });
         if (!confirmed) return;
         callback('');
       } else {
-        var comment = window.prompt(title + '\n' + placeholder);
+        const comment = window.prompt(title + '\n' + placeholder);
         if (comment === null) return;
         callback(comment.trim());
       }
@@ -1018,8 +1018,8 @@
       };
     }
 
-    var cachedSystemUsersClient = null;
-    var cachedUnitContactClient = null;
+    let cachedSystemUsersClient = null;
+    let cachedUnitContactClient = null;
 
     function getSystemUsersPagedClient() {
       if (cachedSystemUsersClient) return cachedSystemUsersClient;

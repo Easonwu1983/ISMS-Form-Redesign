@@ -1488,6 +1488,10 @@ async function handleHealth(_req, res, origin) {
 /*  HTTP server                                                        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * 建立 HTTP server 實例，包含所有 API 路由與中介層
+ * @returns {import('http').Server}
+ */
 function createServer() {
   return http.createServer(async (req, res) => {
     const startedAt = Date.now();
@@ -1876,6 +1880,11 @@ function createServer() {
   });
 }
 
+/**
+ * 啟動 HTTP server 並開始監聽
+ * @param {number} [port] - 監聽埠號，預設 DEFAULT_PORT
+ * @returns {import('http').Server}
+ */
 function startServer(port = DEFAULT_PORT) {
   const server = createServer();
   server.listen(port, () => {

@@ -20,14 +20,32 @@ function formatMsg(level, tag, message, details) {
   return prefix + ' ' + message;
 }
 
+/**
+ * 輸出 info 等級日誌
+ * @param {string} tag - 模組標籤
+ * @param {string} message - 訊息
+ * @param {Record<string, any>} [details] - 額外欄位
+ */
 function info(tag, message, details) {
   console.log(formatMsg('info', tag, message, details));
 }
 
+/**
+ * 輸出 warn 等級日誌
+ * @param {string} tag
+ * @param {string} message
+ * @param {Record<string, any>} [details]
+ */
 function warn(tag, message, details) {
   console.warn(formatMsg('warn', tag, message, details));
 }
 
+/**
+ * 輸出 error 等級日誌
+ * @param {string} tag
+ * @param {string} message
+ * @param {Record<string, any>} [details]
+ */
 function error(tag, message, details) {
   console.error(formatMsg('error', tag, message, details));
 }
