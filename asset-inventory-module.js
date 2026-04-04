@@ -193,22 +193,22 @@
       });
 
       if (!protLevel) {
-        return '<div style="color:#888;padding:12px;">請先選擇「系統級別」以顯示對應的防護基準項目</div>';
+        return '<div class="empty-state">請先選擇「系統級別」以顯示對應的防護基準項目</div>';
       }
       if (filtered.length === 0) {
-        return '<div style="color:#888;padding:12px;">無適用項目</div>';
+        return '<div class="empty-state">無適用項目</div>';
       }
 
-      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
-        + '<span style="font-size:13px;color:#666;">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</span>'
-        + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform" style="font-size:12px;padding:5px 14px;line-height:1;"><span style="display:inline-flex;align-items:center;gap:5px;vertical-align:middle;">' + ic('check-circle', 'icon-xs') + '<span style="vertical-align:middle;">\u5168\u90e8\u7b26\u5408</span></span></button>'
+      let html = '<div class="toolbar">'
+        + '<span class="text-muted">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</span>'
+        + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform">' + ic('check-circle', 'icon-xs') + ' \u5168\u90e8\u7b26\u5408</button>'
         + '</div>';
-      html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-      html += '<thead><tr style="background:#f8f9fa;">'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:100px;">構面</th>'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:100px;">措施代碼</th>'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;">控制措施</th>'
-        + '<th style="padding:6px 8px;border:1px solid #dee2e6;width:100px;text-align:center;">評估</th>'
+      html += '<table class="data-table">';
+      html += '<thead><tr>'
+        + '<th>構面</th>'
+        + '<th>措施代碼</th>'
+        + '<th>控制措施</th>'
+        + '<th class="text-center">評估</th>'
         + '</tr></thead><tbody>';
 
       filtered.forEach(function(row, idx) {
@@ -219,12 +219,12 @@
         const isNA = saved.result === '不適用';
         const bgColor = isConform ? '#e8f5e9' : isNonConform ? '#ffebee' : isNA ? '#f5f5f5' : '';
 
-        html += '<tr style="' + (bgColor ? 'background:' + bgColor + ';' : '') + '">'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;vertical-align:top;">' + esc(row.d) + '</td>'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;vertical-align:top;">' + esc(row.c) + '</td>'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;">' + esc(row.t) + '</td>'
-          + '<td style="padding:4px 8px;border:1px solid #dee2e6;text-align:center;">'
-          + '<select class="form-select" style="font-size:12px;padding:2px 4px;width:80px;margin:0 auto;display:block;text-align:center;text-align-last:center;" name="a10_' + idx + '" data-a10-idx="' + idx + '">'
+        html += '<tr' + (bgColor ? ' style="background:' + bgColor + ';"' : '') + '>'
+          + '<td>' + esc(row.d) + '</td>'
+          + '<td>' + esc(row.c) + '</td>'
+          + '<td>' + esc(row.t) + '</td>'
+          + '<td class="text-center">'
+          + '<select class="form-select" style="width:80px;margin:0 auto;display:block;text-align:center;text-align-last:center;" name="a10_' + idx + '" data-a10-idx="' + idx + '">'
           + '<option value="">--</option>'
           + '<option value="符合"' + (isConform ? ' selected' : '') + '>符合</option>'
           + '<option value="不符合"' + (isNonConform ? ' selected' : '') + '>不符合</option>'
@@ -250,25 +250,25 @@
         return '<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:white;background:' + color + ';">' + label + '</span>';
       };
 
-      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
-        + '<div style="font-size:13px;color:#555;">'
+      let html = '<div class="toolbar">'
+        + '<div class="text-muted">'
         + ic('shield-alert', 'icon-sm') + ' \u4f9d\u8cc7\u7522\u5206\u985e\u300c<b>' + esc(catLabel) + '</b>\u300d\u5217\u51fa ' + scenarios.length + ' \u9805\u5e38\u898b\u5a01\u8105\u60c5\u5883'
         + '</div>'
-        + '<span id="risk-checked-count" style="font-size:12px;color:#888;">\u5df2\u52fe\u9078 0 \u9805</span>'
+        + '<span id="risk-checked-count" class="text-muted">\u5df2\u52fe\u9078 0 \u9805</span>'
         + '</div>';
 
-      html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      html += '<div class="risk-scenario-list">';
       scenarios.forEach(function(s) {
         const isChecked = checked[s.id];
         html += '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border:1px solid ' + (isChecked ? '#ff9800' : '#e0e0e0') + ';border-radius:8px;background:' + (isChecked ? '#fff3e0' : '#fafafa') + ';cursor:pointer;transition:all 0.15s;" class="risk-scenario-card">'
           + '<input type="checkbox" class="risk-scenario-check" data-scenario-id="' + s.id + '" data-likelihood="' + s.likelihood + '" data-impact="' + s.impact + '"' + (isChecked ? ' checked' : '') + ' style="margin-top:3px;flex-shrink:0;">'
-          + '<div style="flex:1;min-width:0;">'
-          + '<div style="font-weight:600;font-size:13px;color:#333;margin-bottom:3px;">' + ic('alert-triangle', 'icon-xs') + ' ' + esc(s.threat) + '</div>'
-          + '<div style="font-size:12px;color:#888;margin-bottom:4px;">' + ic('shield-x', 'icon-xs') + ' \u5f31\u9ede\uff1a' + esc(s.vuln) + '</div>'
+          + '<div class="risk-scenario-body">'
+          + '<div class="risk-scenario-threat">' + ic('alert-triangle', 'icon-xs') + ' ' + esc(s.threat) + '</div>'
+          + '<div class="risk-scenario-vuln">' + ic('shield-x', 'icon-xs') + ' \u5f31\u9ede\uff1a' + esc(s.vuln) + '</div>'
           + '</div>'
-          + '<div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">'
-          + '<div style="text-align:center;"><div style="font-size:10px;color:#999;">\u53ef\u80fd\u6027</div>' + likelihoodBadge(s.likelihood) + '</div>'
-          + '<div style="text-align:center;"><div style="font-size:10px;color:#999;">\u885d\u64ca</div>' + likelihoodBadge(s.impact) + '</div>'
+          + '<div class="risk-scenario-scores">'
+          + '<div class="text-center"><div class="risk-scenario-label">\u53ef\u80fd\u6027</div>' + likelihoodBadge(s.likelihood) + '</div>'
+          + '<div class="text-center"><div class="risk-scenario-label">\u885d\u64ca</div>' + likelihoodBadge(s.impact) + '</div>'
           + '</div>'
           + '</label>';
       });
@@ -388,10 +388,10 @@
     }
 
     function statusBadge(status) {
-      if (status === '\u5df2\u5b8c\u6210') return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-size:0.8em;font-weight:600;">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>';
-      if (status === '\u586b\u5831\u4e2d') return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#fff3e0;color:#e65100;font-size:0.8em;font-weight:600;">' + ic('edit', 'icon-xs') + ' \u586b\u5831\u4e2d</span>';
-      if (status === '\u5f85\u7c3d\u6838') return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e3f2fd;color:#1565c0;font-size:0.8em;font-weight:600;">' + ic('clock', 'icon-xs') + ' \u5f85\u7c3d\u6838</span>';
-      return '<span style="color:#999;">' + esc(status || '\u2014') + '</span>';
+      if (status === '\u5df2\u5b8c\u6210') return '<span class="badge badge-success">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>';
+      if (status === '\u586b\u5831\u4e2d') return '<span class="badge badge-warning">' + ic('edit', 'icon-xs') + ' \u586b\u5831\u4e2d</span>';
+      if (status === '\u5f85\u7c3d\u6838') return '<span class="badge badge-info">' + ic('clock', 'icon-xs') + ' \u5f85\u7c3d\u6838</span>';
+      return '<span class="text-muted">' + esc(status || '\u2014') + '</span>';
     }
 
     function getCategoryLabel(code) {
@@ -459,7 +459,7 @@
       const condDisplay = opts.hidden ? ' style="display:none;"' : '';
       const sectionId = 'asset-section-' + id;
       return '<div class="card asset-form-section" id="' + sectionId + '"' + condDisplay + borderStyle + '>'
-        + '<div class="card-header asset-section-header" data-toggle-section="' + id + '" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;">'
+        + '<div class="card-header asset-section-header" data-toggle-section="' + id + '" style="cursor:pointer;">'
         + '<span>' + esc(title) + '</span>'
         + '<span class="section-toggle-icon">' + ic(open ? 'chevron-up' : 'chevron-down') + '</span>'
         + '</div>'
@@ -485,21 +485,21 @@
       const readonly = opts.readonly ? ' readonly' : '';
       let placeholder = opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '';
       const extra = opts.id ? ' id="' + opts.id + '"' : '';
-      return '<input type="text" class="form-control" name="' + esc(name) + '" value="' + esc(value || '') + '"' + readonly + placeholder + extra + '>';
+      return '<input type="text" class="form-input" name="' + esc(name) + '" value="' + esc(value || '') + '"' + readonly + placeholder + extra + '>';
     }
 
     function buildTextarea(name, value, options) {
       const opts = options || {};
       let rows = opts.rows || 3;
       const readonly = opts.readonly ? ' readonly' : '';
-      return '<textarea class="form-control" name="' + esc(name) + '" rows="' + rows + '"' + readonly + '>' + esc(value || '') + '</textarea>';
+      return '<textarea class="form-input" name="' + esc(name) + '" rows="' + rows + '"' + readonly + '>' + esc(value || '') + '</textarea>';
     }
 
     function buildSelect(name, optionsHtml, options) {
       const opts = options || {};
       const disabled = opts.disabled ? ' disabled' : '';
       const extra = opts.id ? ' id="' + opts.id + '"' : '';
-      return '<select class="form-control" name="' + esc(name) + '"' + disabled + extra + '>' + optionsHtml + '</select>';
+      return '<select class="form-select" name="' + esc(name) + '"' + disabled + extra + '>' + optionsHtml + '</select>';
     }
 
     function buildCheckbox(name, label, checked) {
@@ -552,38 +552,38 @@
         + '<div class="review-header-actions">'
         + '<button class="btn btn-primary" data-action="app.createAsset">' + ic('plus') + ' \u65b0\u589e</button>'
         + '<button class="btn btn-secondary" data-action="app.exportAssets">' + ic('download') + ' \u532f\u51fa</button>'
-        + '<button class="btn btn-secondary" data-action="app.submitAllAssets" style="color:#2e7d32;border-color:#2e7d32;">' + ic('check-circle') + ' \u5e74\u5ea6\u5df2\u76e4\u9ede\u5b8c\u6210</button>'
+        + '<button class="btn btn-outline" data-action="app.submitAllAssets" style="color:#2e7d32;border-color:#2e7d32;">' + ic('check-circle') + ' \u5e74\u5ea6\u5df2\u76e4\u9ede\u5b8c\u6210</button>'
         + '</div>'
         + '</div>'
 
         // Filter bar
         + '<div class="card review-table-card asset-mb-16">'
-        + '<div class="card-body" style="padding:12px 16px;">'
-        + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'
+        + '<div class="card-body--padded">'
+        + '<div class="toolbar-filters">'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">\u5e74\u5ea6</label>'
-        + '<select class="form-control" id="asset-filter-year" style="min-width:90px;">' + buildYearOptions(browseState.year) + '</select>'
+        + '<select class="form-select" id="asset-filter-year">' + buildYearOptions(browseState.year) + '</select>'
         + '</div>'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">\u5206\u985e</label>'
-        + '<select class="form-control" id="asset-filter-category" style="min-width:120px;">'
+        + '<select class="form-select" id="asset-filter-category">'
         + '<option value="">\u5168\u90e8</option>'
         + buildCategorySelectOptions(browseState.category, false)
         + '</select>'
         + '</div>'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">\u72c0\u614b</label>'
-        + '<select class="form-control" id="asset-filter-status" style="min-width:100px;">'
+        + '<select class="form-select" id="asset-filter-status">'
         + '<option value="">\u5168\u90e8</option>'
         + buildSelectOptions(STATUS_OPTIONS, browseState.status, false)
         + '</select>'
         + '</div>'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">\u641c\u5c0b</label>'
-        + '<input type="text" class="form-control" id="asset-filter-keyword" placeholder="\u8cc7\u7522\u540d\u7a31\u3001\u64c1\u6709\u8005..." value="' + esc(browseState.keyword) + '" style="min-width:160px;">'
+        + '<input type="text" class="form-input" id="asset-filter-keyword" placeholder="\u8cc7\u7522\u540d\u7a31\u3001\u64c1\u6709\u8005..." value="' + esc(browseState.keyword) + '">'
         + '</div>'
-        + '<div style="display:flex;align-items:flex-end;">'
-        + '<button class="btn btn-secondary btn-sm" data-action="app.filterAssets" style="margin-top:auto;">' + ic('search') + ' \u67e5\u8a62</button>'
+        + '<div class="toolbar-actions">'
+        + '<button class="btn btn-secondary btn-sm" data-action="app.filterAssets">' + ic('search') + ' \u67e5\u8a62</button>'
         + '</div>'
         + '</div>'
         + '</div></div>'
@@ -774,7 +774,7 @@
             + '<td class="asset-td">' + esc(protLevel) + '</td>'
             + '<td class="asset-td"><span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel || '\u2014') + '</span></td>'
             + '<td class="asset-td">' + statusBadge(item.status) + '</td>'
-            + '<td class="action-cell" style="padding:10px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap;">'
+            + '<td class="action-cell nowrap">'
             + '<button class="btn btn-sm btn-outline" data-action="app.editAsset" data-id="' + esc(item.id || '') + '" title="\u7de8\u8f2f">' + ic('edit') + '</button> '
             + '<button class="btn btn-sm btn-outline" data-action="app.viewAsset" data-id="' + esc(item.id || '') + '" title="\u6aa2\u8996">' + ic('eye') + '</button> '
             + '<button class="btn btn-sm btn-danger" data-action="app.deleteAsset" data-id="' + esc(item.id || '') + '" title="\u522a\u9664">' + ic('trash-2') + '</button>'
@@ -804,19 +804,19 @@
             const unitItems = uniqueUnits[unitName];
             const unitCompleted = unitItems.every(function (it) { return it.status === '\u5df2\u5b8c\u6210'; });
             const unitStatusLabel = unitCompleted
-              ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-size:0.8em;font-weight:600;">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
-              : '<span style="color:#e65100;">' + unitItems.length + ' \u7b46\u8cc7\u7522</span>';
-            groupedHtml += '<div class="card" style="margin-bottom:12px;border-radius:8px;overflow:hidden;">'
-              + '<div style="padding:10px 16px;background:#f8f9fa;border-bottom:1px solid #e9ecef;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" data-action="app.toggleDashGroup" data-target="asset-group-' + idx + '">'
-              + '<span style="font-weight:bold;">' + ic('building', 'icon-sm') + ' ' + esc(unitName) + '</span>'
-              + '<span style="display:flex;align-items:center;gap:8px;">' + unitStatusLabel + ' <span>\u25be</span></span>'
+              ? '<span class="badge badge-success">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
+              : '<span class="text-muted" style="color:#e65100;">' + unitItems.length + ' \u7b46\u8cc7\u7522</span>';
+            groupedHtml += '<div class="card" style="margin-bottom:12px;">'
+              + '<div class="card-header" style="cursor:pointer;" data-action="app.toggleDashGroup" data-target="asset-group-' + idx + '">'
+              + '<span class="card-title">' + ic('building', 'icon-sm') + ' ' + esc(unitName) + '</span>'
+              + '<span class="review-card-subtitle">' + unitStatusLabel + ' <span>\u25be</span></span>'
               + '</div>'
               + '<div id="asset-group-' + idx + ' asset-pad-0">'
               + '<table class="asset-table">' + tableHead + '<tbody>';
             unitItems.forEach(function (item) { groupedHtml += buildAssetRow(item); });
             groupedHtml += '</tbody></table></div></div>';
           });
-          wrapper.innerHTML = '<div style="font-size:13px;color:#666;margin-bottom:8px;">\u5168\u6821\u5171 ' + items.length + ' \u7b46\u8cc7\u7522\uff0c' + unitNames.length + ' \u500b\u55ae\u4f4d</div>' + groupedHtml;
+          wrapper.innerHTML = '<div class="text-muted asset-mb-8">\u5168\u6821\u5171 ' + items.length + ' \u7b46\u8cc7\u7522\uff0c' + unitNames.length + ' \u500b\u55ae\u4f4d</div>' + groupedHtml;
         } else {
           // Flat list for unit admin
           let rowsHtml = '';
@@ -902,15 +902,16 @@
         const borderStyle = o.borderColor ? 'border-left:4px solid ' + o.borderColor + ';' : '';
         const displayStyle = o.hidden ? 'display:none;' : '';
         const bodyDisplay = o.collapsed ? 'display:none;' : '';
-        return '<div class="card" id="section-card-' + sectionId + '" style="margin-bottom:16px;' + borderStyle + displayStyle + '">'
-          + '<div class="section-header" style="padding:12px 16px;background:#f8f9fa;border-bottom:1px solid #e9ecef;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" data-action="app.toggleSection" data-target="section-' + sectionId + '">'
-          + '<span style="display:inline-flex;align-items:center;gap:8px;">'
+        const cardStyle = (borderStyle || displayStyle) ? ' style="' + borderStyle + displayStyle + '"' : '';
+        return '<div class="card" id="section-card-' + sectionId + '"' + cardStyle + '>'
+          + '<div class="card-header section-header" style="cursor:pointer;" data-action="app.toggleSection" data-target="section-' + sectionId + '">'
+          + '<span class="card-title">'
           + ic(iconName) + ' ' + esc(sectionTitle)
-          + (subtitle ? '<span style="font-size:12px;color:#6c757d;">\uff08' + esc(subtitle) + '\uff09</span>' : '')
+          + (subtitle ? '<span class="text-muted" style="font-size:12px;">\uff08' + esc(subtitle) + '\uff09</span>' : '')
           + '</span>'
-          + '<span class="section-toggle-icon" style="transition:transform 0.2s;">' + (o.collapsed ? '\u25b8' : '\u25be') + '</span>'
+          + '<span class="section-toggle-icon">' + (o.collapsed ? '\u25b8' : '\u25be') + '</span>'
           + '</div>'
-          + '<div class="card-body" id="section-' + sectionId + '" style="padding:16px;' + bodyDisplay + '">'
+          + '<div class="card-body--padded" id="section-' + sectionId + '"' + (bodyDisplay ? ' style="' + bodyDisplay + '"' : '') + '>'
           + bodyHtml
           + '</div>'
           + '</div>';
@@ -1118,8 +1119,8 @@
         + '<label class="form-label">\u7cfb\u7d71\u529f\u80fd\u8aaa\u660e</label>'
         + '<textarea class="form-textarea" id="asset-sys-description" name="systemDescription" rows="2">' + esc(a.systemDescription || '') + '</textarea>'
         + '</div>'
-        + '<hr style="border:none;border-top:1px solid #e9ecef;margin:12px 0;">'
-        + '<div style="font-weight:600;margin-bottom:8px;">' + ic('clock', 'icon-sm') + ' \u71df\u904b\u6301\u7e8c\u6307\u6a19</div>'
+        + '<hr class="form-divider">'
+        + '<div class="form-section-title">' + ic('clock', 'icon-sm') + ' \u71df\u904b\u6301\u7e8c\u6307\u6a19</div>'
         + '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label form-required">RTO\uff08\u7cfb\u7d71\u56de\u5fa9\u6642\u9593\u76ee\u6a19\uff09</label>'
@@ -1152,8 +1153,8 @@
         + '</select>'
         + '</div>'
         + '</div>'
-        + '<hr style="border:none;border-top:1px solid #e9ecef;margin:16px 0;">'
-        + '<div style="font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px;">'
+        + '<hr class="form-divider">'
+        + '<div class="form-section-title">'
         +   ic('clipboard-check') + ' \u9644\u8868\u5341 \u8cc7\u901a\u7cfb\u7d71\u9632\u8b77\u57fa\u6e96\uff08\u4f9d\u7cfb\u7d71\u7d1a\u5225\u81ea\u52d5\u7be9\u9078\uff09'
         + '</div>'
         + '<div id="asset-appendix10-inline">'
@@ -1209,11 +1210,11 @@
         // Right: Risk matrix
         + '<div style="background:white;border:1px solid #e0e0e0;border-radius:12px;padding:16px;">'
         + '<div style="font-weight:600;margin-bottom:8px;font-size:0.9em;color:#555;">' + ic('grid-3x3', 'icon-sm') + ' \u98a8\u96aa\u77e9\u9663</div>'
-        + '<table id="risk-matrix-table" style="width:100%;border-collapse:collapse;font-size:12px;">'
-        + '<tr><th style="padding:6px;border:1px solid #e0e0e0;background:#fafafa;"></th><th style="padding:6px;border:1px solid #e0e0e0;background:#fafafa;text-align:center;">1(\u4f4e)</th><th style="padding:6px;border:1px solid #e0e0e0;background:#fafafa;text-align:center;">2(\u4e2d)</th><th style="padding:6px;border:1px solid #e0e0e0;background:#fafafa;text-align:center;">3(\u9ad8)</th></tr>'
-        + '<tr><td style="padding:6px;border:1px solid #e0e0e0;font-weight:bold;background:#fafafa;">3(\u9ad8)</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFF9C4;text-align:center;border-radius:4px;" data-cell="1-3">3</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFCDD2;text-align:center;font-weight:bold;" data-cell="2-3">6</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFCDD2;text-align:center;font-weight:bold;" data-cell="3-3">9</td></tr>'
-        + '<tr><td style="padding:6px;border:1px solid #e0e0e0;font-weight:bold;background:#fafafa;">2(\u4e2d)</td><td style="padding:6px;border:1px solid #e0e0e0;background:#C8E6C9;text-align:center;" data-cell="1-2">2</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFF9C4;text-align:center;" data-cell="2-2">4</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFCDD2;text-align:center;font-weight:bold;" data-cell="3-2">6</td></tr>'
-        + '<tr><td style="padding:6px;border:1px solid #e0e0e0;font-weight:bold;background:#fafafa;">1(\u4f4e)</td><td style="padding:6px;border:1px solid #e0e0e0;background:#C8E6C9;text-align:center;" data-cell="1-1">1</td><td style="padding:6px;border:1px solid #e0e0e0;background:#C8E6C9;text-align:center;" data-cell="2-1">2</td><td style="padding:6px;border:1px solid #e0e0e0;background:#FFF9C4;text-align:center;" data-cell="3-1">3</td></tr>'
+        + '<table id="risk-matrix-table" class="data-table">'
+        + '<tr><th></th><th class="text-center">1(\u4f4e)</th><th class="text-center">2(\u4e2d)</th><th class="text-center">3(\u9ad8)</th></tr>'
+        + '<tr><td style="font-weight:bold;">3(\u9ad8)</td><td class="text-center" style="background:#FFF9C4;" data-cell="1-3">3</td><td class="text-center" style="background:#FFCDD2;font-weight:bold;" data-cell="2-3">6</td><td class="text-center" style="background:#FFCDD2;font-weight:bold;" data-cell="3-3">9</td></tr>'
+        + '<tr><td style="font-weight:bold;">2(\u4e2d)</td><td class="text-center" style="background:#C8E6C9;" data-cell="1-2">2</td><td class="text-center" style="background:#FFF9C4;" data-cell="2-2">4</td><td class="text-center" style="background:#FFCDD2;font-weight:bold;" data-cell="3-2">6</td></tr>'
+        + '<tr><td style="font-weight:bold;">1(\u4f4e)</td><td class="text-center" style="background:#C8E6C9;" data-cell="1-1">1</td><td class="text-center" style="background:#C8E6C9;" data-cell="2-1">2</td><td class="text-center" style="background:#FFF9C4;" data-cell="3-1">3</td></tr>'
         + '</table>'
         + '<div style="margin-top:6px;font-size:11px;color:#999;display:flex;gap:12px;">'
         + '<span>\u25cf <span style="color:#4caf50;">\u4f4e(1-2)</span></span>'
@@ -1271,7 +1272,7 @@
         + formCard('chinaBrand', 'alert-circle', '7. \u5927\u9678\u5ee0\u724c', '\u50c5\u5927\u9678\u5ee0\u724c\u7522\u54c1\u9700\u586b', chinaBrandHtml, { borderColor: '#E65100', collapsed: false })
         + formCard('risk', 'activity', '8. \u98a8\u96aa\u8a55\u9451', '\u53ef\u80fd\u6027 \u00d7 \u885d\u64ca\u6027', riskHtml, { borderColor: '#2E7D32', collapsed: false })
 
-        + '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;padding-bottom:40px;">'
+        + '<div class="page-header-actions" style="justify-content:flex-end;margin-top:20px;padding-bottom:40px;">'
         + '<button type="button" class="btn btn-outline" data-action="app.backToList">\u53d6\u6d88</button>'
         + '<button type="button" class="btn btn-primary" data-action="app.saveAsset">' + ic('save') + ' \u5132\u5b58</button>'
         + '</div>'
@@ -1632,13 +1633,13 @@
       const protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL);
 
       function detailRow(label, value) {
-        return '<tr><td style="font-weight:600;width:180px;vertical-align:top;padding:8px 12px;white-space:nowrap;">' + esc(label) + '</td>'
-          + '<td style="padding:8px 12px;">' + esc(value || '\u2014') + '</td></tr>';
+        return '<tr><td class="nowrap" style="font-weight:600;width:180px;">' + esc(label) + '</td>'
+          + '<td>' + esc(value || '\u2014') + '</td></tr>';
       }
 
       function detailBadgeRow(label, badgeHtml) {
-        return '<tr><td style="font-weight:600;width:180px;vertical-align:top;padding:8px 12px;white-space:nowrap;">' + esc(label) + '</td>'
-          + '<td style="padding:8px 12px;">' + badgeHtml + '</td></tr>';
+        return '<tr><td class="nowrap" style="font-weight:600;width:180px;">' + esc(label) + '</td>'
+          + '<td>' + badgeHtml + '</td></tr>';
       }
 
       const basicTable = '<table class="detail-table asset-table">'
@@ -1851,11 +1852,11 @@
       }
 
       // -- Build filter bar --
-      let filterHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;">'
-        + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">'
+      let filterHtml = '<div class="card toolbar" style="margin-bottom:16px;">'
+        + '<div class="toolbar-filters">'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">構面篩選</label>'
-        + '<select class="form-control" id="a10-filter-dimension" style="min-width:160px;">'
+        + '<select class="form-select" id="a10-filter-dimension">'
         + '<option value="">全部構面</option>';
       for (let fi = 0; fi < dimensions.length; fi++) {
         filterHtml += '<option value="' + esc(dimensions[fi]) + '">' + esc(dimensions[fi]) + '</option>';
@@ -1863,11 +1864,11 @@
       filterHtml += '</select></div>'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">顯示範圍</label>'
-        + '<div style="display:flex;gap:12px;align-items:center;padding-top:4px;">'
-        + '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.9em;">'
+        + '<div class="toolbar-filters">'
+        + '<label class="form-check-label">'
         + '<input type="radio" name="a10ShowMode" value="all" checked> 全部措施'
         + '</label>'
-        + '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.9em;">'
+        + '<label class="form-check-label">'
         + '<input type="radio" name="a10ShowMode" value="applicable"> 僅適用項目'
         + '</label>'
         + '</div></div>'
@@ -1875,7 +1876,7 @@
 
       // -- Build info bar --
       const protBadgeClass = protLevel === '高' ? 'badge-danger' : (protLevel === '中' ? 'badge-warning' : 'badge-success');
-      const infoHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">'
+      const infoHtml = '<div class="card toolbar">'
         + '<span>' + ic('server') + ' <strong>' + esc(a.assetName || '未命名資產') + '</strong></span>'
         + '<span>防護等級：<span class="badge ' + protBadgeClass + '"><span class="badge-dot"></span>' + esc(protLevel || '未設定') + '</span></span>'
         + (complianceStatus ? '<span>合規狀態：' + esc(complianceStatus) + '</span>' : '')
@@ -1901,20 +1902,20 @@
             : (row.l === '中' ? 'badge-warning'
               : (row.l === '普' ? 'badge-success' : 'badge-secondary')));
 
-        tableRowsHtml += '<tr class="a10-row" data-dimension="' + esc(row.d) + '" data-level="' + esc(row.l) + '" data-applicable="' + (applicable ? 'yes' : 'no') + '" data-idx="' + ri + '" style="' + rowBg + '">'
-          + '<td style="padding:8px 10px;white-space:nowrap;vertical-align:top;">' + esc(row.d) + '</td>'
-          + '<td style="padding:8px 10px;white-space:nowrap;vertical-align:top;">' + esc(row.c) + '</td>'
-          + '<td style="padding:8px 10px;text-align:center;vertical-align:top;"><span class="badge ' + levelBadge + '" style="font-size:0.8em;">' + esc(row.l) + '</span></td>'
-          + '<td style="padding:8px 10px;vertical-align:top;min-width:240px;">' + esc(row.t) + '</td>'
-          + '<td style="padding:8px 10px;vertical-align:top;min-width:110px;">'
-          + '<select class="form-control a10-result" data-idx="' + ri + '" style="font-size:0.85em;padding:4px 6px;">'
+        tableRowsHtml += '<tr class="a10-row" data-dimension="' + esc(row.d) + '" data-level="' + esc(row.l) + '" data-applicable="' + (applicable ? 'yes' : 'no') + '" data-idx="' + ri + '"' + (rowBg ? ' style="' + rowBg + '"' : '') + '>'
+          + '<td class="nowrap">' + esc(row.d) + '</td>'
+          + '<td class="nowrap">' + esc(row.c) + '</td>'
+          + '<td class="text-center"><span class="badge ' + levelBadge + '" style="font-size:0.8em;">' + esc(row.l) + '</span></td>'
+          + '<td style="min-width:240px;">' + esc(row.t) + '</td>'
+          + '<td style="min-width:110px;">'
+          + '<select class="form-select a10-result" data-idx="' + ri + '">'
           + '<option value="">-- 請選擇 --</option>'
           + '<option value="符合"' + (result === '符合' ? ' selected' : '') + '>符合</option>'
           + '<option value="不符合"' + (result === '不符合' ? ' selected' : '') + '>不符合</option>'
           + '<option value="不適用"' + (result === '不適用' ? ' selected' : '') + '>不適用</option>'
           + '</select></td>'
-          + '<td style="padding:8px 10px;vertical-align:top;min-width:140px;">'
-          + '<input type="text" class="form-control a10-note" data-idx="' + ri + '" value="' + esc(note) + '" placeholder="備註" style="font-size:0.85em;padding:4px 6px;">'
+          + '<td style="min-width:140px;">'
+          + '<input type="text" class="form-input a10-note" data-idx="' + ri + '" value="' + esc(note) + '" placeholder="備註">'
           + '</td>'
           + '</tr>';
       }
@@ -1940,10 +1941,10 @@
         + infoHtml
         + filterHtml
 
-        + '<div id="a10-summary" class="card" style="padding:10px 16px;margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:0.9em;">'
+        + '<div id="a10-summary" class="card toolbar">'
         + '<span>' + ic('check-circle') + ' <strong id="a10-comply-count">' + initComply + '</strong>/' + initTotal + ' 符合</span>'
-        + '<span style="color:#c0392b;">' + ic('x-circle') + ' <strong id="a10-noncomply-count">' + initNonComply + '</strong> 不符合</span>'
-        + '<span style="color:#888;">' + ic('minus-circle') + ' <strong id="a10-na-count">' + initNA + '</strong> 不適用</span>'
+        + '<span style="color:var(--color-error);">' + ic('x-circle') + ' <strong id="a10-noncomply-count">' + initNonComply + '</strong> 不符合</span>'
+        + '<span class="text-muted">' + ic('minus-circle') + ' <strong id="a10-na-count">' + initNA + '</strong> 不適用</span>'
         + '</div>'
 
         + '<div class="table-wrapper asset-scroll-x" tabindex="0">'
@@ -1952,7 +1953,7 @@
         + '<thead><tr>'
         + '<th scope="col" class="asset-nowrap">構面</th>'
         + '<th scope="col" class="asset-nowrap">措施代碼</th>'
-        + '<th scope="col" style="white-space:nowrap;text-align:center;">防護分級</th>'
+        + '<th scope="col" class="text-center nowrap">防護分級</th>'
         + '<th scope="col">控制措施</th>'
         + '<th scope="col" class="asset-nowrap">評估</th>'
         + '<th scope="col" class="asset-nowrap">備註</th>'
@@ -2127,38 +2128,38 @@
       const initLevel = getRiskLevel(initScore);
 
       // -- Build threat checkboxes --
-      let threatCheckboxHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">';
+      let threatCheckboxHtml = '<div class="stats-grid">';
       for (let ti = 0; ti < THREATS.length; ti++) {
         const tChecked = existingThreats.indexOf(THREATS[ti]) !== -1;
-        threatCheckboxHtml += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9em;">'
+        threatCheckboxHtml += '<label class="form-check-label">'
           + '<input type="checkbox" class="form-check-input ra-threat" value="' + esc(THREATS[ti]) + '"' + (tChecked ? ' checked' : '') + '>'
           + '<span>' + esc(THREATS[ti]) + '</span></label>';
       }
       threatCheckboxHtml += '</div>'
-        + '<div class="form-group" style="margin-top:8px;">'
-        + '<label class="form-label" style="font-size:0.85em;">其他威脅</label>'
-        + '<input type="text" class="form-control" id="ra-threat-other" value="' + esc(existingThreatOther) + '" placeholder="自訂威脅...">'
+        + '<div class="form-group">'
+        + '<label class="form-label">其他威脅</label>'
+        + '<input type="text" class="form-input" id="ra-threat-other" value="' + esc(existingThreatOther) + '" placeholder="自訂威脅...">'
         + '</div>';
 
       // -- Build vulnerability checkboxes --
-      let vulnCheckboxHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">';
+      let vulnCheckboxHtml = '<div class="stats-grid">';
       for (let vi = 0; vi < VULNERABILITIES.length; vi++) {
         const vChecked = existingVulns.indexOf(VULNERABILITIES[vi]) !== -1;
-        vulnCheckboxHtml += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9em;">'
+        vulnCheckboxHtml += '<label class="form-check-label">'
           + '<input type="checkbox" class="form-check-input ra-vuln" value="' + esc(VULNERABILITIES[vi]) + '"' + (vChecked ? ' checked' : '') + '>'
           + '<span>' + esc(VULNERABILITIES[vi]) + '</span></label>';
       }
       vulnCheckboxHtml += '</div>'
-        + '<div class="form-group" style="margin-top:8px;">'
-        + '<label class="form-label" style="font-size:0.85em;">其他弱點</label>'
-        + '<input type="text" class="form-control" id="ra-vuln-other" value="' + esc(existingVulnOther) + '" placeholder="自訂弱點...">'
+        + '<div class="form-group">'
+        + '<label class="form-label">其他弱點</label>'
+        + '<input type="text" class="form-input" id="ra-vuln-other" value="' + esc(existingVulnOther) + '" placeholder="自訂弱點...">'
         + '</div>';
 
       // -- Build risk calculation section --
-      const riskCalcHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;">'
+      const riskCalcHtml = '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label">可能性</label>'
-        + '<select class="form-control" id="ra-likelihood">'
+        + '<select class="form-select" id="ra-likelihood">'
         + '<option value="">-- 請選擇 --</option>'
         + '<option value="1"' + (String(existingLikelihood) === '1' ? ' selected' : '') + '>1（低）</option>'
         + '<option value="2"' + (String(existingLikelihood) === '2' ? ' selected' : '') + '>2（中）</option>'
@@ -2166,7 +2167,7 @@
         + '</select></div>'
         + '<div class="form-group">'
         + '<label class="form-label">衝擊</label>'
-        + '<select class="form-control" id="ra-impact">'
+        + '<select class="form-select" id="ra-impact">'
         + '<option value="">-- 請選擇 --</option>'
         + '<option value="1"' + (String(existingImpact) === '1' ? ' selected' : '') + '>1（低）</option>'
         + '<option value="2"' + (String(existingImpact) === '2' ? ' selected' : '') + '>2（中）</option>'
@@ -2174,11 +2175,11 @@
         + '</select></div>'
         + '<div class="form-group">'
         + '<label class="form-label">風險值</label>'
-        + '<div id="ra-risk-score" class="form-control" style="background:#f5f5f5;font-weight:bold;text-align:center;">'
+        + '<div id="ra-risk-score" class="form-input" style="background:#f5f5f5;font-weight:bold;text-align:center;">'
         + (initScore ? String(initScore) : '--') + '</div></div>'
         + '<div class="form-group">'
         + '<label class="form-label">風險等級</label>'
-        + '<div id="ra-risk-level" style="font-weight:bold;padding:6px 0;text-align:center;">'
+        + '<div id="ra-risk-level" class="text-center" style="font-weight:bold;">'
         + (initLevel ? '<span class="badge ' + getRiskBadgeClass(initLevel) + '"><span class="badge-dot"></span>' + esc(initLevel) + '</span>' : '--')
         + '</div></div>'
         + '</div>';
@@ -2186,12 +2187,12 @@
       // -- Build risk treatment section --
       const showTreatment = initLevel === '高';
       const treatmentHtml = '<div id="ra-treatment-section"' + (showTreatment ? '' : ' style="display:none;"') + '>'
-        + '<div style="border-top:1px solid #eee;padding-top:16px;margin-top:16px;">'
+        + '<hr style="border:none;border-top:1px solid #eee;margin:16px 0;">'
         + '<h4 class="asset-mb-12">' + ic('shield-alert') + ' 風險處置</h4>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+        + '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label">風險處置方式</label>'
-        + '<select class="form-control" id="ra-treatment">'
+        + '<select class="form-select" id="ra-treatment">'
         + '<option value="">-- 請選擇 --</option>'
         + '<option value="降低"' + (existingTreatment === '降低' ? ' selected' : '') + '>降低</option>'
         + '<option value="轉移"' + (existingTreatment === '轉移' ? ' selected' : '') + '>轉移</option>'
@@ -2200,7 +2201,7 @@
         + '</select></div>'
         + '<div class="form-group">'
         + '<label class="form-label">殘餘風險等級</label>'
-        + '<select class="form-control" id="ra-residual-risk">'
+        + '<select class="form-select" id="ra-residual-risk">'
         + '<option value="">-- 請選擇 --</option>'
         + '<option value="低"' + (existingResidualRisk === '低' ? ' selected' : '') + '>低</option>'
         + '<option value="中"' + (existingResidualRisk === '中' ? ' selected' : '') + '>中</option>'
@@ -2208,17 +2209,17 @@
         + '</select></div></div>'
         + '<div class="form-group">'
         + '<label class="form-label">控制措施說明</label>'
-        + '<textarea class="form-control" id="ra-control-desc" rows="3" placeholder="請說明控制措施...">' + esc(existingControlDesc) + '</textarea></div>'
+        + '<textarea class="form-input" id="ra-control-desc" rows="3" placeholder="請說明控制措施...">' + esc(existingControlDesc) + '</textarea></div>'
         + '<div class="form-group">'
         + '<label class="form-label">風險擁有者</label>'
-        + '<input type="text" class="form-control" id="ra-risk-owner" value="' + esc(existingRiskOwner) + '" placeholder="風險擁有者姓名"></div>'
+        + '<input type="text" class="form-input" id="ra-risk-owner" value="' + esc(existingRiskOwner) + '" placeholder="風險擁有者姓名"></div>'
         + '</div></div>';
 
       // -- Build risk matrix visual --
       let matrixHtml = '<div style="margin-top:16px;">'
         + '<h4 style="margin-bottom:8px;">' + ic('grid-3x3') + ' 風險矩陣</h4>'
         + '<div style="display:inline-block;">'
-        + '<table style="border-collapse:collapse;text-align:center;font-size:0.85em;">'
+        + '<table class="data-table" style="text-align:center;">'
         + '<thead><tr>'
         + '<th class="asset-form-header">衝擊 \\ 可能性</th>'
         + '<th class="asset-form-header">1（低）</th>'
@@ -2227,13 +2228,13 @@
         + '</tr></thead><tbody>';
       for (let mrow = 2; mrow >= 0; mrow--) {
         const impactLabel = (mrow + 1) + '（' + (mrow === 0 ? '低' : (mrow === 1 ? '中' : '高')) + '）';
-        matrixHtml += '<tr><th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;white-space:nowrap;">' + esc(impactLabel) + '</th>';
+        matrixHtml += '<tr><th class="nowrap">' + esc(impactLabel) + '</th>';
         for (let mcol = 0; mcol < 3; mcol++) {
           let cell = RISK_MATRIX[mrow][mcol];
           const cellId = 'ra-matrix-' + mrow + '-' + mcol;
           const isHighlighted = String(existingImpact) === String(mrow + 1) && String(existingLikelihood) === String(mcol + 1);
           const cellBorder = isHighlighted ? '3px solid #333' : '1px solid #ddd';
-          matrixHtml += '<td id="' + cellId + '" style="padding:10px 16px;border:' + cellBorder + ';background:' + RISK_COLORS[cell.l] + ';font-weight:bold;">'
+          matrixHtml += '<td id="' + cellId + '" class="text-center" style="border:' + cellBorder + ';background:' + RISK_COLORS[cell.l] + ';font-weight:bold;">'
             + cell.s + ' - ' + esc(cell.l) + '</td>';
         }
         matrixHtml += '</tr>';
@@ -2243,7 +2244,7 @@
       // -- Asset info bar --
       const protBadgeClass = protLevel === '高' ? 'badge-danger' : (protLevel === '中' ? 'badge-warning' : 'badge-success');
       const assetValueLabel = assetValue === 3 ? '高' : (assetValue === 2 ? '中' : (assetValue === 1 ? '低' : '--'));
-      const infoHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">'
+      const infoHtml = '<div class="card toolbar">'
         + '<span>' + ic('server') + ' <strong>' + esc(a.assetName || '未命名資產') + '</strong></span>'
         + '<span>防護等級：<span class="badge ' + protBadgeClass + '"><span class="badge-dot"></span>' + esc(protLevel || '未設定') + '</span></span>'
         + '<span>資產價值：<strong>' + esc(assetValueLabel) + '</strong>（C=' + esc(a.ciaC || '--') + '、I=' + esc(a.ciaI || '--') + '、A=' + esc(a.ciaA || '--') + '）</span>'
@@ -2261,17 +2262,17 @@
 
         + infoHtml
 
-        + '<div class="card" style="padding:16px;margin-bottom:16px;">'
+        + '<div class="card card-body--padded">'
         + '<h4 class="asset-mb-12">' + ic('alert-triangle') + ' 威脅識別</h4>'
         + threatCheckboxHtml
         + '</div>'
 
-        + '<div class="card" style="padding:16px;margin-bottom:16px;">'
+        + '<div class="card card-body--padded">'
         + '<h4 class="asset-mb-12">' + ic('shield-off') + ' 弱點識別</h4>'
         + vulnCheckboxHtml
         + '</div>'
 
-        + '<div class="card" style="padding:16px;margin-bottom:16px;">'
+        + '<div class="card card-body--padded">'
         + '<h4 class="asset-mb-12">' + ic('calculator') + ' 風險計算</h4>'
         + riskCalcHtml
         + treatmentHtml
@@ -2429,7 +2430,7 @@
         + '</div>'
         + '</div>'
         + '<div id="asset-dashboard-content">'
-        + '<div style="padding:40px 0;text-align:center;color:#888;">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div>'
+        + '<div class="empty-state">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div>'
         + '</div>'
         + '</div>';
 
@@ -2566,11 +2567,11 @@
 
           units.forEach(function (u) {
             const unitDashBadge = u.completed
-              ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-size:0.8em;font-weight:600;">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
-              : '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#ffebee;color:#c62828;font-size:0.8em;font-weight:600;">' + ic('x', 'icon-xs') + ' \u672a\u5b8c\u6210</span>';
+              ? '<span class="badge badge-success">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
+              : '<span class="badge badge-danger">' + ic('x', 'icon-xs') + ' \u672a\u5b8c\u6210</span>';
             let rowBg = u.completed ? 'background:#f1f8e9;' : '';
-            groupsHtml += '<tr style="border-bottom:1px solid #f0f0f0;' + rowBg + '">'
-              + '<td style="padding:10px 12px;' + (u.completed ? 'font-weight:bold;' : '') + '">' + esc(u.name) + '</td>'
+            groupsHtml += '<tr' + (rowBg ? ' style="' + rowBg + '"' : '') + '>'
+              + '<td' + (u.completed ? ' style="font-weight:bold;"' : '') + '>' + esc(u.name) + '</td>'
               + '<td class="asset-td--center">' + unitDashBadge + '</td>'
               + '<td class="asset-td--center">' + (u.assets || '\u2014') + '</td>'
               + '<td class="asset-td--center">' + (u.itSys || '\u2014') + '</td>'
@@ -2621,8 +2622,8 @@
         + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-header"><span class="card-title">' + ic('file-text', 'icon-sm') + ' \u7bc4\u672c\u4e0b\u8f09</span></div>'
         + '<div class="card-body">'
-        + '<p style="color:#666;font-size:0.9em;margin-bottom:12px;">\u8acb\u5148\u4e0b\u8f09 CSV \u7bc4\u672c\uff0c\u586b\u5beb\u5f8c\u518d\u4e0a\u50b3\u3002\u7bc4\u672c\u6b04\u4f4d\u5982\u4e0b\uff1a</p>'
-        + '<div style="background:#f9f9f9;padding:10px;border-radius:4px;font-size:0.85em;overflow-x:auto;margin-bottom:12px;">'
+        + '<p class="text-muted">\u8acb\u5148\u4e0b\u8f09 CSV \u7bc4\u672c\uff0c\u586b\u5beb\u5f8c\u518d\u4e0a\u50b3\u3002\u7bc4\u672c\u6b04\u4f4d\u5982\u4e0b\uff1a</p>'
+        + '<div class="code-block">'
         + '<code>' + esc(TEMPLATE_HEADERS) + '</code></div>'
         + '<button class="btn btn-secondary btn-sm" data-action="app.downloadTemplate">' + ic('download') + ' \u4e0b\u8f09\u7bc4\u672c</button>'
         + '</div></div>'
@@ -2630,9 +2631,9 @@
         + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-header"><span class="card-title">' + ic('upload', 'icon-sm') + ' \u4e0a\u50b3 CSV \u6a94\u6848</span></div>'
         + '<div class="card-body">'
-        + '<div style="border:2px dashed #ccc;border-radius:8px;padding:30px;text-align:center;" id="batch-import-drop-zone">'
-        + '<p style="color:#888;margin-bottom:8px;">\u9078\u64c7 CSV \u6a94\u6848</p>'
-        + '<input type="file" accept=".csv" id="batch-import-file" style="display:inline-block;">'
+        + '<div class="empty-state" style="border:2px dashed #ccc;border-radius:8px;" id="batch-import-drop-zone">'
+        + '<p class="text-muted">\u9078\u64c7 CSV \u6a94\u6848</p>'
+        + '<input type="file" accept=".csv" id="batch-import-file">'
         + '</div>'
         + '</div></div>'
 
@@ -2641,8 +2642,8 @@
         + '<div class="card-header"><span class="card-title">' + ic('eye') + ' \u9810\u89bd\uff08\u524d 10 \u7b46\uff09</span></div>'
         + '<div class="card-body">'
         + '<div id="batch-import-preview-table" class="asset-scroll-x"></div>'
-        + '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;">'
-        + '<span id="batch-import-total" style="color:#666;font-size:0.9em;"></span>'
+        + '<div class="toolbar-actions" style="margin-top:12px;">'
+        + '<span id="batch-import-total" class="text-muted"></span>'
         + '<button class="btn btn-primary" data-action="app.confirmImport">' + ic('check') + ' \u78ba\u8a8d\u532f\u5165</button>'
         + '</div>'
         + '</div></div>'
@@ -2655,7 +2656,7 @@
         + '<div style="background:#eee;border-radius:4px;overflow:hidden;height:24px;margin-bottom:8px;">'
         + '<div id="batch-import-progress-bar" style="background:#3498db;height:100%;width:0%;transition:width 0.3s;border-radius:4px;"></div>'
         + '</div>'
-        + '<div id="batch-import-progress-text" style="font-size:0.9em;color:#666;"></div>'
+        + '<div id="batch-import-progress-text" class="text-muted"></div>'
         + '</div></div>'
         + '</div>'
 
@@ -2735,7 +2736,7 @@
           html += '</tr>';
         }
         if (rows.length > 10) {
-          html += '<tr><td colspan="' + (headers.length + 1) + '" style="text-align:center;color:#888;">... \u5171 ' + rows.length + ' \u7b46\uff0c\u50c5\u986f\u793a\u524d 10 \u7b46</td></tr>';
+          html += '<tr><td colspan="' + (headers.length + 1) + '" class="text-center text-muted">... \u5171 ' + rows.length + ' \u7b46\uff0c\u50c5\u986f\u793a\u524d 10 \u7b46</td></tr>';
         }
         html += '</tbody></table>';
         tableEl.innerHTML = html;
@@ -2883,18 +2884,18 @@
         + '</div>'
 
         + '<div class="card review-table-card asset-mb-16">'
-        + '<div class="card-body" style="padding:12px 16px;">'
-        + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">'
-        + '<div style="display:flex;align-items:center;gap:6px;margin-right:4px;color:#555;">' + ic('calendar', 'icon-sm') + '</div>'
+        + '<div class="card-body--padded">'
+        + '<div class="toolbar-filters">'
+        + '<div class="text-muted">' + ic('calendar', 'icon-sm') + '</div>'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">\u57fa\u6e96\u5e74\u5ea6</label>'
-        + '<select class="form-control" id="yc-base-year" style="min-width:100px;">'
+        + '<select class="form-select" id="yc-base-year">'
         + buildYearOptions(currentYear - 1)
         + '</select>'
         + '</div>'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">\u6bd4\u8f03\u5e74\u5ea6</label>'
-        + '<select class="form-control" id="yc-compare-year" style="min-width:100px;">'
+        + '<select class="form-select" id="yc-compare-year">'
         + buildYearOptions(currentYear)
         + '</select>'
         + '</div>'
@@ -2903,7 +2904,7 @@
         + '</div></div>'
 
         + '<div id="yc-result">'
-        + '<div class="empty-state" style="padding:40px 0;text-align:center;color:#888;">'
+        + '<div class="empty-state">'
         + ic('git-compare') + '<p>\u8acb\u9078\u64c7\u5e74\u5ea6\u5f8c\u9ede\u64ca\u300c\u57f7\u884c\u6bd4\u5c0d\u300d</p></div>'
         + '</div>'
 
@@ -3023,11 +3024,11 @@
               + '<div class="card-header"><span class="card-title">' + ic('git-compare', 'icon-sm') + ' \u6bd4\u5c0d\u7d50\u679c</span>'
               + '<span class="review-card-subtitle">\u5171 ' + diffRows.length + ' \u7b46</span></div>'
               + '<div class="card-body">'
-              + '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:0.9em;">'
-              + '<span style="color:#27ae60;">' + ic('plus-circle') + ' \u65b0\u589e: <strong>' + addCount + '</strong></span>'
-              + '<span style="color:#f39c12;">' + ic('edit') + ' \u4fee\u6539: <strong>' + modCount + '</strong></span>'
-              + '<span class="asset-danger">' + ic('minus-circle') + ' \u522a\u9664: <strong>' + delCount + '</strong></span>'
-              + '<span style="color:#888;">' + ic('check') + ' \u7121\u7570\u52d5: <strong>' + noChangeCount + '</strong></span>'
+              + '<div class="toolbar-filters asset-mb-16">'
+              + '<span class="badge badge-success">' + ic('plus-circle') + ' \u65b0\u589e: <strong>' + addCount + '</strong></span>'
+              + '<span class="badge badge-warning">' + ic('edit') + ' \u4fee\u6539: <strong>' + modCount + '</strong></span>'
+              + '<span class="badge badge-danger">' + ic('minus-circle') + ' \u522a\u9664: <strong>' + delCount + '</strong></span>'
+              + '<span class="text-muted">' + ic('check') + ' \u7121\u7570\u52d5: <strong>' + noChangeCount + '</strong></span>'
               + '</div>'
               + '</div>'
               + '<div class="card-body asset-pad-0">';

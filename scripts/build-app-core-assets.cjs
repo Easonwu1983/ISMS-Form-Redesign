@@ -123,6 +123,8 @@ function buildPurgeSafelist() {
       /^stat-/,
       /^status-/,
       /^table-/,
+      /^data-table/,
+      /^toolbar/,
       /^tag-/,
       /^toast/,
       /^training-/,

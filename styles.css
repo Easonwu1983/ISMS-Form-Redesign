@@ -3091,9 +3091,12 @@ body.modal-open {
 }
 
 
-/* ── Module CSS (extracted for maintainability) ── */
+/* ── Design System + Module CSS ── */
+@import "css/design-system.css";
+@import "css/dashboard.css";
 @import "css/checklist.css";
 @import "css/training.css";
+@import "css/dashboard.css";
 
 /* ========================================
    Round 4 UI Refinement
@@ -6216,6 +6219,9 @@ tbody tr:hover {
 }
 
 .unit-contact-auth-doc-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-top: 14px;
 }
 

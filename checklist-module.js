@@ -1251,7 +1251,7 @@
     const fillBtn = canFillChecklist() ? `<a href="#checklist-fill" class="btn btn-primary">${ic('edit-3', 'icon-sm')} 填報檢核表</a>` : '';
     const renderListShell = (summary, page) => {
       document.getElementById('app').innerHTML = `<div class="animate-in cl-list-page" data-checklist-route="list" data-checklist-route-state="shell">
-      <div class="page-header checklist-list-header"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報紀錄，協助管理者快速掌握檢核狀況。</p></div><div class="page-header-actions">${fillBtn}</div></div>
+      <div class="page-header page-header--editor"><div><h1 class="page-title">內稽檢核表</h1><p class="page-subtitle">按年度與一級單位分層檢視所有填報紀錄，協助管理者快速掌握檢核狀況。</p></div><div class="page-header-actions">${fillBtn}</div></div>
       <div class="card cl-list-shell" data-checklist-route="list" data-checklist-route-state="shell">
         <div class="cl-list-toolbar-wrap">
           ${buildChecklistListFilters()}
