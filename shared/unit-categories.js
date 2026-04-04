@@ -40,11 +40,26 @@ var ADMIN_UNITS = [
 ];
 
 /**
- * 學術單位白名單
- * 學院群（0.51-0.74）靠關鍵字「學院」自動判斷，這裡只放名稱含「中心」的例外
+ * 學術單位白名單（嚴格比對，依據 https://www.ntu.edu.tw/academics/academics.html）
+ * 只有這 17 個單位歸學術，其他全部靠關鍵字歸中心
  */
 var ACADEMIC_UNITS = [
-  '共同教育中心',                   // 0.37
+  '文學院',                        // 0.51
+  '理學院',                        // 0.52
+  '社會科學院',                     // 0.53
+  '醫學院',                        // 0.54
+  '工學院',                        // 0.55
+  '生物資源暨農學院',                // 0.56
+  '管理學院',                       // 0.58 (管理學院 in units-data)
+  '公共衛生學院',                    // 0.58
+  '電機資訊學院',                    // 0.59
+  '法律學院',                       // 0.60
+  '生命科學院',                     // 0.61
+  '國際政經學院',                    // 0.74
+  '國際學院',                       // 0.72
+  '創新設計學院',                    // 0.K6
+  '重點科技研究學院',                // 0.73
+  '共同教育中心',                    // 0.37
   '進修推廣學院'                    // 0.40
 ];
 
@@ -81,9 +96,8 @@ function categorizeUnit(unitName) {
   if (!unit) return CATEGORY_ADMIN;
   if (ADMIN_UNITS.indexOf(unit) >= 0) return CATEGORY_ADMIN;
   if (ACADEMIC_UNITS.indexOf(unit) >= 0) return CATEGORY_ACADEMIC;
-  var academicKw = ['學院', '學系', '研究所', '學位學程', '國際學院'];
-  var centerKw = ['中心', '研究中心', '研究院', '辦公室', '委員會', '聯盟', '聯合辦公室', '館', '基金會'];
-  if (academicKw.some(function (k) { return unit.indexOf(k) >= 0; })) return CATEGORY_ACADEMIC;
+  // 不在白名單的 → 除了 fallback 行政外，其他都歸中心/研究單位
+  var centerKw = ['中心', '研究中心', '研究院', '辦公室', '委員會', '聯盟', '聯合辦公室', '館', '基金會', '學院', '學程', '研究所'];
   if (centerKw.some(function (k) { return unit.indexOf(k) >= 0; })) return CATEGORY_CENTER;
   return CATEGORY_ADMIN;
 }
