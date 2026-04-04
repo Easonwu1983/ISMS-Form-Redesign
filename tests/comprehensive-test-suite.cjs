@@ -158,8 +158,8 @@ async function test1_realOperations() {
     action: 'asset.create',
     payload: {
       assetName: '__test_asset_' + Date.now(),
-      category: '硬體',
-      subCategory: '伺服器',
+      category: 'HW',
+      subCategory: 'Server',
       ownerName: '測試擁有者',
       custodianName: '測試保管人',
       confidentiality: '中',
@@ -262,7 +262,7 @@ async function test2_permissionMatrix() {
   var noAuthAssets = await req('GET', '/api/assets');
   test('權限', '未認證存取資產清冊列表被擋', noAuthAssets.status === 401);
 
-  var noAuthAssetCreate = await req('POST', '/api/assets', { payload: { assetName: 'hack', category: '硬體' } });
+  var noAuthAssetCreate = await req('POST', '/api/assets', { payload: { assetName: 'hack', category: 'HW' } });
   test('權限', '未認證新建資產被擋', noAuthAssetCreate.status === 401);
 
   var noAuthSummary = await req('GET', '/api/assets/summary');

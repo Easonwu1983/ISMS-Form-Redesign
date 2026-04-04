@@ -11,6 +11,17 @@ function parseJsonField(value) {
 
 function cleanText(v) { return typeof v === 'string' ? v.trim() : (v == null ? '' : String(v)); }
 
+function handleError(e, res, origin, writeJson) {
+  const msg = String(e && e.message || e || '');
+  if (e && e.statusCode === 401 || msg.includes('Authentication') || msg.includes('Unauthorized') || msg.includes('認證')) {
+    writeJson(res, { status: 401, jsonBody: { error: 'Authentication required' } }, origin);
+  } else if (e && e.statusCode === 403 || msg.includes('Forbidden') || msg.includes('權限')) {
+    writeJson(res, { status: 403, jsonBody: { error: 'Forbidden' } }, origin);
+  } else {
+    writeJson(res, { status: 500, jsonBody: { error: msg } }, origin);
+  }
+}
+
 function mapRowToAsset(row) {
   if (!row) return null;
   return {
@@ -134,7 +145,7 @@ function createAssetInventoryRouter(deps) {
       const rows = await db.queryAll(sql, values);
       writeJson(res, { status: 200, jsonBody: { items: rows.map(mapRowToAsset), total: rows.length } }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -160,7 +171,7 @@ function createAssetInventoryRouter(deps) {
 
       writeJson(res, { status: 200, jsonBody: asset }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -218,7 +229,7 @@ function createAssetInventoryRouter(deps) {
       const row = await db.queryOne(sql, values);
       writeJson(res, { status: 201, jsonBody: mapRowToAsset(row) }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -284,7 +295,7 @@ function createAssetInventoryRouter(deps) {
       const row = await db.queryOne(sql, values);
       writeJson(res, { status: 200, jsonBody: mapRowToAsset(row) }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -299,7 +310,7 @@ function createAssetInventoryRouter(deps) {
       await db.query("UPDATE information_assets SET change_type = '刪除' WHERE asset_id = $1", [assetId]);
       writeJson(res, { status: 200, jsonBody: { success: true, id: assetId } }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -323,7 +334,7 @@ function createAssetInventoryRouter(deps) {
       if (!row) { writeJson(res, { status: 404, jsonBody: { error: 'not_found' } }, origin); return; }
       writeJson(res, { status: 200, jsonBody: mapRowToAsset(row) }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -349,7 +360,7 @@ function createAssetInventoryRouter(deps) {
       );
       writeJson(res, { status: 200, jsonBody: { updated: result.rowCount } }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -371,7 +382,7 @@ function createAssetInventoryRouter(deps) {
       const rows = await db.queryAll(sql, [year]);
       writeJson(res, { status: 200, jsonBody: { year, summary: rows } }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -395,7 +406,7 @@ function createAssetInventoryRouter(deps) {
         assessedAt: row.assessed_at ? new Date(row.assessed_at).toISOString() : ''
       } }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 
@@ -452,7 +463,7 @@ function createAssetInventoryRouter(deps) {
         assessedAt: row.assessed_at ? new Date(row.assessed_at).toISOString() : ''
       } }, origin);
     } catch (e) {
-      writeJson(res, { status: 500, jsonBody: { error: e.message } }, origin);
+      handleError(e, res, origin, writeJson);
     }
   }
 

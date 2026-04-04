@@ -164,8 +164,8 @@ async function main() {
     var newAsset = await request('POST', '/api/assets', {
       payload: {
         assetName: '__e2e_test_asset_' + Date.now(),
-        category: '硬體',
-        subCategory: '筆電',
+        category: 'HW',
+        subCategory: 'Desktop',
         ownerName: 'E2E 測試',
         confidentiality: '普',
         integrity: '普',
