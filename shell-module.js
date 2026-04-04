@@ -750,9 +750,8 @@
 
       const sidebarEl = document.getElementById('sidebar');
       if (!sidebarEl) return;
-      var _langCode = (window.__i18n__ && window.__i18n__.getLang()) || 'zh-TW';
-      var _langToggleLabel = _langCode === 'zh-TW' ? 'EN' : '中';
-      sidebarEl.innerHTML = '<div class="sidebar-logo" style="height:58px;max-height:58px;min-height:0;overflow:hidden;display:flex;align-items:center;padding:10px 14px;gap:10px;box-sizing:border-box"><span style="flex-shrink:0;display:inline-flex">' + ntuLogo('ntu-logo-sm') + '</span><div style="min-width:0;line-height:1.3"><div style="font-size:0.78rem;font-weight:800;color:#0f3a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _t('app.title', '資訊安全管理系統') + '</div><div style="font-size:0.58rem;color:#8899ad;letter-spacing:0.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ISMS 管理平台</div></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><div class="sidebar-footer-user"><span class="sidebar-footer-name">' + esc(u.name) + '</span><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div><button class="sidebar-logout-btn" data-action="shell.logout"><span class="nav-icon">' + ic('log-out') + '</span>' + _t('nav.logout', '登出系統') + '</button><button class="btn btn-ghost btn-sm" data-action="shell.toggle-lang" title="Switch Language">' + _langToggleLabel + '</button>' + renderVersionChip('sidebar-version-chip') + '</div>';
+      // Language toggle moved to header
+      sidebarEl.innerHTML = '<div class="sidebar-logo" style="height:58px;max-height:58px;min-height:0;overflow:hidden;display:flex;align-items:center;padding:10px 14px;gap:10px;box-sizing:border-box"><span style="flex-shrink:0;display:inline-flex">' + ntuLogo('ntu-logo-sm') + '</span><div style="min-width:0;line-height:1.3"><div style="font-size:0.78rem;font-weight:800;color:#0f3a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _t('app.title', '資訊安全管理系統') + '</div><div style="font-size:0.58rem;color:#8899ad;letter-spacing:0.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ISMS 管理平台</div></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><div class="sidebar-footer-user"><span class="sidebar-footer-name">' + esc(u.name) + '</span><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div><button class="sidebar-logout-btn" data-action="shell.logout"><span class="nav-icon">' + ic('log-out') + '</span>' + _t('nav.logout', '登出系統') + '</button>' + renderVersionChip('sidebar-version-chip') + '</div>';
       sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
         bindPageEvent(link, 'click', function () {
           if (isMobileViewport()) closeSidebar();
@@ -764,7 +763,7 @@
       const u = getShellAccessProfile();
       if (!u) return;
       const route = getRoute();
-      const headerKey = route.page + '|' + u.role + '|' + (u.activeUnit || '') + '|' + u.name;
+      const headerKey = route.page + '|' + u.role + '|' + (u.activeUnit || '') + '|' + u.name + '|' + ((window.__i18n__ && window.__i18n__.getLang()) || 'zh-TW');
       if (headerKey === lastHeaderKey && document.getElementById('header') && document.getElementById('header').innerHTML) return;
       lastHeaderKey = headerKey;
       let switchHtml = '';
@@ -778,7 +777,9 @@
 
       const headerEl = document.getElementById('header');
       if (!headerEl) return;
-      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context" hidden><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout"><span class="btn-logout-icon">' + ic('log-out') + '</span><span class="btn-logout-text">登出</span></button></div>';
+      const _langCode = (window.__i18n__ && window.__i18n__.getLang()) || 'zh-TW';
+      const _langLabel = _langCode === 'zh-TW' ? 'EN' : '中文';
+      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context" hidden><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<button class="btn btn-ghost btn-sm" data-action="shell.toggle-lang" title="Switch Language" style="font-size:0.78rem;letter-spacing:0.04em;font-weight:700;padding:6px 12px">' + ic('globe', 'icon-xs') + ' ' + _langLabel + '</button><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout"><span class="btn-logout-icon">' + ic('log-out') + '</span><span class="btn-logout-text">登出</span></button></div>';
 
       const switcher = document.getElementById('header-unit-switch');
       if (switcher) {
