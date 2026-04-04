@@ -35,10 +35,6 @@ const ADMIN_UNITS = [
   '校友中心',
   '保健中心',
   '校園安全中心',
-  // 附屬醫療機構（行政管理）
-  '臺大醫院',
-  '臺大醫院環境及職業醫學部',
-  '臺大癌醫中心醫院'
 ];
 
 /** 學術單位白名單（依據 https://www.ntu.edu.tw/academics/academics.html） */
