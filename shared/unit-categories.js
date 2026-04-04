@@ -66,14 +66,25 @@ var ACADEMIC_UNITS = [
  * 醫院/分院不在資安稽核範圍內，系統層級或已廢止的也隱藏
  */
 var HIDDEN_UNITS = [
+  // 系統層級
   '國立臺灣大學系統',
   '臺灣永續棧',
+  // 醫院/分院（不在資安稽核範圍）
   '臺大醫院環境及職業醫學部',
   '臺大新竹分院',
   '臺大雲林分院',
   '臺大金山分院',
   '臺大癌醫中心醫院',
-  '臺大新竹生醫園區分院'
+  '臺大新竹生醫園區分院',
+  // 校長/副校長室（不是獨立稽核單位）
+  '校長室',
+  '丁詩同副校長室',
+  '曾宛如副校長室',
+  '楊志新副校長室',
+  '廖婉君副校長室',
+  // 其他非稽核對象
+  '法務諮詢室',
+  '臺大福智教職員聯誼會'
 ];
 
 /** 分類名稱常數 */
@@ -94,10 +105,8 @@ function categorizeUnit(unitName) {
   if (!unit) return CATEGORY_ADMIN;
   if (ADMIN_UNITS.indexOf(unit) >= 0) return CATEGORY_ADMIN;
   if (ACADEMIC_UNITS.indexOf(unit) >= 0) return CATEGORY_ACADEMIC;
-  // 不在白名單的 → 除了 fallback 行政外，其他都歸中心/研究單位
-  var centerKw = ['中心', '研究中心', '研究院', '辦公室', '委員會', '聯盟', '聯合辦公室', '館', '基金會', '學院', '學程', '研究所'];
-  if (centerKw.some(function (k) { return unit.indexOf(k) >= 0; })) return CATEGORY_CENTER;
-  return CATEGORY_ADMIN;
+  // 不在行政或學術白名單的 → 全部歸中心/研究單位
+  return CATEGORY_CENTER;
 }
 
 // 支援前端 (IIFE global) 和後端 (CJS require)

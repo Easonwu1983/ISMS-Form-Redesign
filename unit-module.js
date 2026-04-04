@@ -27,16 +27,9 @@
       '學校分部總辦事處竹北分部籌備小組',
       '學校分部總辦事處雲林分部籌備小組'
     ]);
-    const HIDDEN_OFFICIAL_UNIT_VALUES = new Set([
-      '國立臺灣大學系統',
-      '臺灣永續棧',
-      '臺大醫院環境及職業醫學部',
-      '臺大新竹分院',
-      '臺大雲林分院',
-      '臺大金山分院',
-      '臺大癌醫中心醫院',
-      '臺大新竹生醫園區分院'
-    ]);
+    // 引用 shared/unit-categories.js 的隱藏名單（Single Source of Truth）
+    const _uch = (typeof window !== 'undefined' && window.__UNIT_CATEGORIES__ && window.__UNIT_CATEGORIES__.HIDDEN_UNITS) || [];
+    const HIDDEN_OFFICIAL_UNIT_VALUES = new Set(_uch);
     const TRAINING_DASHBOARD_EXCLUDED_UNITS = new Set([
       '學校分部總辦事處',
       '國立臺灣大學系統'
