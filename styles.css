@@ -3096,6 +3096,7 @@ body.modal-open {
 @import "css/dashboard.css";
 @import "css/checklist.css";
 @import "css/training.css";
+@import "css/asset-inventory.css";
 
 /* ========================================
    Round 4 UI Refinement

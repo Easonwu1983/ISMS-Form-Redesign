@@ -217,14 +217,14 @@
         const isConform = saved.result === '符合';
         const isNonConform = saved.result === '不符合';
         const isNA = saved.result === '不適用';
-        const bgColor = isConform ? '#e8f5e9' : isNonConform ? '#ffebee' : isNA ? '#f5f5f5' : '';
+        const resultAttr = isConform ? ' data-result="\u7b26\u5408"' : isNonConform ? ' data-result="\u4e0d\u7b26\u5408"' : isNA ? ' data-result="\u4e0d\u9069\u7528"' : '';
 
-        html += '<tr' + (bgColor ? ' style="background:' + bgColor + ';"' : '') + '>'
+        html += '<tr' + resultAttr + '>'
           + '<td>' + esc(row.d) + '</td>'
           + '<td>' + esc(row.c) + '</td>'
           + '<td>' + esc(row.t) + '</td>'
           + '<td class="text-center">'
-          + '<select class="form-select" style="width:80px;margin:0 auto;display:block;text-align:center;text-align-last:center;" name="a10_' + idx + '" data-a10-idx="' + idx + '">'
+          + '<select class="form-select" name="a10_' + idx + '" data-a10-idx="' + idx + '">'
           + '<option value="">--</option>'
           + '<option value="符合"' + (isConform ? ' selected' : '') + '>符合</option>'
           + '<option value="不符合"' + (isNonConform ? ' selected' : '') + '>不符合</option>'
@@ -245,9 +245,9 @@
       (checkedIds || []).forEach(function(id) { checked[id] = true; });
 
       const likelihoodBadge = function(v) {
-        let color = v === 3 ? '#c62828' : v === 2 ? '#e65100' : '#2e7d32';
+        const tone = v === 3 ? 'high' : v === 2 ? 'medium' : 'low';
         const label = v === 3 ? '\u9ad8' : v === 2 ? '\u4e2d' : '\u4f4e';
-        return '<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:white;background:' + color + ';">' + label + '</span>';
+        return '<span class="risk-scenario-badge risk-scenario-badge--' + tone + '">' + label + '</span>';
       };
 
       let html = '<div class="toolbar">'
@@ -260,15 +260,15 @@
       html += '<div class="risk-scenario-list">';
       scenarios.forEach(function(s) {
         const isChecked = checked[s.id];
-        html += '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border:1px solid ' + (isChecked ? '#ff9800' : '#e0e0e0') + ';border-radius:8px;background:' + (isChecked ? '#fff3e0' : '#fafafa') + ';cursor:pointer;transition:all 0.15s;" class="risk-scenario-card">'
-          + '<input type="checkbox" class="risk-scenario-check" data-scenario-id="' + s.id + '" data-likelihood="' + s.likelihood + '" data-impact="' + s.impact + '"' + (isChecked ? ' checked' : '') + ' style="margin-top:3px;flex-shrink:0;">'
+        html += '<label class="risk-scenario-card">'
+          + '<input type="checkbox" class="risk-scenario-check" data-scenario-id="' + s.id + '" data-likelihood="' + s.likelihood + '" data-impact="' + s.impact + '"' + (isChecked ? ' checked' : '') + '>'
           + '<div class="risk-scenario-body">'
           + '<div class="risk-scenario-threat">' + ic('alert-triangle', 'icon-xs') + ' ' + esc(s.threat) + '</div>'
           + '<div class="risk-scenario-vuln">' + ic('shield-x', 'icon-xs') + ' \u5f31\u9ede\uff1a' + esc(s.vuln) + '</div>'
           + '</div>'
           + '<div class="risk-scenario-scores">'
-          + '<div class="text-center"><div class="risk-scenario-label">\u53ef\u80fd\u6027</div>' + likelihoodBadge(s.likelihood) + '</div>'
-          + '<div class="text-center"><div class="risk-scenario-label">\u885d\u64ca</div>' + likelihoodBadge(s.impact) + '</div>'
+          + '<div><div class="risk-scenario-label">\u53ef\u80fd\u6027</div>' + likelihoodBadge(s.likelihood) + '</div>'
+          + '<div><div class="risk-scenario-label">\u885d\u64ca</div>' + likelihoodBadge(s.impact) + '</div>'
           + '</div>'
           + '</label>';
       });
@@ -614,23 +614,46 @@
           return '#asset-create';
         },
         exportAssets: function () {
-          let rows = document.querySelectorAll('#asset-list-table-wrapper tbody tr');
+          const rows = document.querySelectorAll('#asset-list-table-wrapper tbody tr');
           if (!rows.length) { toast('\u6c92\u6709\u8cc7\u6599\u53ef\u532f\u51fa', 'warning'); return; }
-          let csv = '\uFEFF\u8cc7\u7522\u7de8\u865f,\u8cc7\u7522\u540d\u7a31,\u5206\u985e,\u64c1\u6709\u8005,\u9632\u8b77\u7b49\u7d1a,\u98a8\u96aa\u7b49\u7d1a,\u72c0\u614b\n';
+
+          // Collect data
+          const headers = ['\u8cc7\u7522\u7de8\u865f', '\u8cc7\u7522\u540d\u7a31', '\u5206\u985e', '\u64c1\u6709\u8005', '\u9632\u8b77\u7b49\u7d1a', '\u98a8\u96aa\u7b49\u7d1a', '\u72c0\u614b'];
+          const data = [];
           rows.forEach(function (row) {
             const cells = row.querySelectorAll('td');
             if (cells.length >= 7) {
-              const vals = [];
-              for (let i = 0; i < 7; i++) vals.push('"' + (cells[i].textContent || '').trim().replace(/"/g, '""') + '"');
-              csv += vals.join(',') + '\n';
+              const rowData = [];
+              for (let i = 0; i < 7; i++) rowData.push((cells[i].textContent || '').trim());
+              data.push(rowData);
             }
           });
-          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(blob);
-          link.download = '\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a_' + new Date().toISOString().slice(0, 10) + '.csv';
-          link.click();
-          toast('\u5df2\u532f\u51fa CSV', 'success');
+
+          // Try xlsx export (if XLSX library available)
+          if (typeof XLSX !== 'undefined') {
+            const ws = XLSX.utils.aoa_to_sheet([headers].concat(data));
+            // Auto column widths
+            ws['!cols'] = headers.map(function (h, i) {
+              const maxLen = Math.max(h.length * 2, Math.max.apply(null, data.map(function (r) { return (r[i] || '').length; }).concat([6])));
+              return { wch: Math.min(maxLen + 2, 40) };
+            });
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '\u8cc7\u7522\u6e05\u518a');
+            XLSX.writeFile(wb, '\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+            toast('\u5df2\u532f\u51fa Excel', 'success');
+          } else {
+            // Fallback: CSV
+            let csv = '\uFEFF' + headers.join(',') + '\n';
+            data.forEach(function (row) {
+              csv += row.map(function (v) { return '"' + v.replace(/"/g, '""') + '"'; }).join(',') + '\n';
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a_' + new Date().toISOString().slice(0, 10) + '.csv';
+            link.click();
+            toast('\u5df2\u532f\u51fa CSV\uff08\u5efa\u8b70\u7528 Excel \u958b\u555f\uff09', 'success');
+          }
         },
         submitAllAssets: function () {
           let year = (document.getElementById('asset-filter-year') || {}).value || getCurrentRocYear();
