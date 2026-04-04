@@ -266,7 +266,10 @@
     function getBuildVersionText() {
       const buildInfo = getBuildInfo();
       const versionKey = String(buildInfo.versionKey || buildInfo.shortCommit || buildInfo.describe || '').trim();
-      return versionKey ? ('v' + versionKey) : 'vlocal';
+      if (!versionKey) return 'vlocal';
+      // Truncate long hashes for readability: "c11951764abe" → "v1195"
+      var display = versionKey.length > 8 ? versionKey.substring(0, 7) : versionKey;
+      return 'v' + display;
     }
 
     function getBuildVersionTitle() {
@@ -904,10 +907,12 @@
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'data-import' ? 'active' : '') + '" href="#data-import"><span class="nav-icon">' + ic('database') + '</span>' + _t('nav.dataImport', '歷史資料匯入') + '</a>';
       if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.systemAdmin', '系統管理') + '</div>' + sysNav + '</div>';
 
-      // Tutorial nav at the bottom
-      nav += '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.help', '說明') + '</div>'
-        + '<a class="nav-item" href="#" data-action="shell.show-tutorial"><span class="nav-icon">' + ic('book-open') + '</span>' + _t('nav.tutorial', '使用教學') + '</a>'
-        + '</div>';
+      // Tutorial nav at the bottom — only show if tutorial route is implemented
+      if (typeof window.__ISMS_TUTORIAL_ENABLED__ !== 'undefined' && window.__ISMS_TUTORIAL_ENABLED__) {
+        nav += '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.help', '說明') + '</div>'
+          + '<a class="nav-item" href="#tutorial" data-action="shell.show-tutorial"><span class="nav-icon">' + ic('book-open') + '</span>' + _t('nav.tutorial', '使用教學') + '</a>'
+          + '</div>';
+      }
 
       const sidebarEl = document.getElementById('sidebar');
       if (!sidebarEl) return;

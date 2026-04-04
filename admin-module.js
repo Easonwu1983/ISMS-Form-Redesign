@@ -1690,10 +1690,10 @@
       const primaryUnit = getPrimaryAuthorizedUnit(user) || '未指定';
       const isProtectedUser = String(user && user.username || '').trim() === 'admin' || String(user && user.role || '').trim() === ROLES.ADMIN;
       const actionButtons = [
-        `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(user.username)}">${ic('edit-2', 'btn-icon-svg')}</button>`
+        `<button class="btn btn-sm btn-secondary" data-action="admin.editUser" data-username="${esc(user.username)}" aria-label="編輯">${ic('edit-2', 'btn-icon-svg')}</button>`
       ];
       if (!isProtectedUser) {
-        actionButtons.push(`<button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(user.username)}">${ic('trash-2', 'btn-icon-svg')}</button>`);
+        actionButtons.push(`<button class="btn btn-sm btn-danger" data-action="admin.deleteUser" data-username="${esc(user.username)}" aria-label="刪除">${ic('trash-2', 'btn-icon-svg')}</button>`);
       }
       return `<tr><td class="review-cell-strong">${esc(user.username)}</td><td>${esc(user.name)}</td><td><span class="badge-role ${getRoleBadgeClass(user.role)}">${getRoleLabel(user.role)}</span></td><td>${esc(formatSecurityRolesSummary(user.securityRoles))}</td><td>${esc(primaryUnit)}</td><td class="review-cell-secondary">${esc(formatUserUnitSummary(user))}</td><td class="review-cell-secondary">${esc(formatUserReviewUnitSummary(user))}</td><td class="review-cell-secondary">${esc(user.email || '')}</td><td><div class="user-actions">${actionButtons.join('')}</div></td></tr>`;
     }

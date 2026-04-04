@@ -798,9 +798,9 @@
             + '<td class="asset-td"><span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel || '\u2014') + '</span></td>'
             + '<td class="asset-td">' + statusBadge(item.status) + '</td>'
             + '<td class="action-cell nowrap">'
-            + '<button class="btn btn-sm btn-outline" data-action="app.editAsset" data-id="' + esc(item.id || '') + '" title="\u7de8\u8f2f">' + ic('edit') + '</button> '
-            + '<button class="btn btn-sm btn-outline" data-action="app.viewAsset" data-id="' + esc(item.id || '') + '" title="\u6aa2\u8996">' + ic('eye') + '</button> '
-            + '<button class="btn btn-sm btn-danger" data-action="app.deleteAsset" data-id="' + esc(item.id || '') + '" title="\u522a\u9664">' + ic('trash-2') + '</button>'
+            + '<button class="btn btn-sm btn-outline" data-action="app.editAsset" data-id="' + esc(item.id || '') + '" title="\u7de8\u8f2f" aria-label="\u7de8\u8f2f">' + ic('edit') + '</button> '
+            + '<button class="btn btn-sm btn-outline" data-action="app.viewAsset" data-id="' + esc(item.id || '') + '" title="\u6aa2\u8996" aria-label="\u6aa2\u8996">' + ic('eye') + '</button> '
+            + '<button class="btn btn-sm btn-danger" data-action="app.deleteAsset" data-id="' + esc(item.id || '') + '" title="\u522a\u9664" aria-label="\u522a\u9664">' + ic('trash-2') + '</button>'
             + '</td>'
             + '</tr>';
         }
@@ -941,8 +941,17 @@
       }
 
       // --- Section 1: Basic Information ---
+      // Admin without unit: show notice and fallback
+      if (!isEdit && !(user.primaryUnit || user.unit || '').trim()) {
+        appEl.innerHTML = '<div class="animate-in"><div class="page-header"><div><h1 class="page-title">' + ic('alert-triangle') + ' 無法新增資產</h1>'
+          + '<p class="page-subtitle">目前帳號未綁定單位，最高管理員請先至「帳號管理」設定主要單位，或切換至單位管理員帳號操作。</p></div></div>'
+          + '<div style="margin-top:16px"><a class="btn btn-primary" href="#assets">' + ic('arrow-left') + ' 返回資產清冊</a>'
+          + ' <a class="btn btn-secondary" href="#users">' + ic('settings') + ' 前往帳號管理</a></div></div>';
+        scheduleRefreshIcons();
+        return;
+      }
       // 資產編號：新建時由系統自動產生（NTU-{unitCode}-IS3-{cat}-F{seq}）
-      const userUnitCode = (user.primaryUnit || '').replace(/\./g, '').replace(/^0+/, '').padStart(3, '0');
+      const userUnitCode = (user.primaryUnit || user.unit || '').replace(/\./g, '').replace(/^0+/, '').padStart(3, '0');
       const idPreview = isEdit ? a.assetId : 'NTU-' + userUnitCode + '-IS3-{分類}-F{序號}';
       const basicHtml = ''
         + '<div class="form-row">'

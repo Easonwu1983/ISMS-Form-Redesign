@@ -634,10 +634,10 @@
         + myTasksHtml
         + '<div data-dashboard-section="todayFocus"><section class="dashboard-hero dashboard-hero--integrated"><h1 class="sr-only" data-route-heading="true">儀表板</h1><div class="dashboard-hero-grid"><div class="dashboard-hero-copy dashboard-hero-copy--integrated"><p class="dashboard-hero-text dashboard-hero-text--lead">集中掌握矯正單進度、逾期風險與最近活動，讓主管與承辦人可以在同一個入口快速判斷優先順序。</p><div class="dashboard-meta-row">' + heroMeta + '</div><div class="dashboard-hero-actions">' + createBtn + '</div></div>' + heroSide + '</div></section></div>'
       + '<div data-dashboard-section="correctiveStats"><div class="stats-grid">'
-      + buildCaseStatCard('total', 'files', '—', '矯正單總數')
-      + buildCaseStatCard('pending', 'clock', '—', '待矯正')
-      + buildCaseStatCard('overdue', 'alert-triangle', '—', '已逾期')
-      + buildCaseStatCard('closed', 'check-circle-2', '—', '本月結案')
+      + buildCaseStatCard('total', 'files', '0', '矯正單總數')
+      + buildCaseStatCard('pending', 'clock', '0', '待矯正')
+      + buildCaseStatCard('overdue', 'alert-triangle', '0', '已逾期')
+      + buildCaseStatCard('closed', 'check-circle-2', '0', '本月結案')
       + '</div></div>'
       + '<div data-dashboard-section="recentCases"><div class="dashboard-grid">'
       + buildCaseCard('<span class="card-title">狀態分布</span>', chartShell, { cardClass: 'dashboard-panel dashboard-chart-panel' })
@@ -1044,7 +1044,7 @@
     const createAside = '<div class="editor-sticky">'
       + buildEditorSideCard({
         accent: true,
-        kicker: 'Issue Routing',
+        kicker: '案件流轉',
         title: '開單摘要',
         text: '右側摘要會跟著你的填寫內容即時更新，避免漏掉單號、指派與期限設定。',
         bodyHtml: buildEditorSummaryItems([

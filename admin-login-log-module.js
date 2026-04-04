@@ -22,7 +22,9 @@
     var badge = success
       ? '<span class="review-status-badge approved">成功</span>'
       : '<span class="review-status-badge danger">失敗</span>';
-    return '<tr><td>' + esc(fmtTime(log && log.time) || '—') + '</td><td class="review-cell-strong">' + esc(log && log.username || '—') + '</td><td>' + esc(log && log.name || '—') + '</td><td>' + esc(log && log.role || '—') + '</td><td>' + badge + '</td></tr>';
+    var nameDisplay = (log && log.name) ? log.name : (success ? '—' : '(未知帳號)');
+    var roleDisplay = (log && log.role) ? log.role : (success ? '—' : '');
+    return '<tr><td>' + esc(fmtTime(log && log.time) || '—') + '</td><td class="review-cell-strong">' + esc(log && log.username || '—') + '</td><td>' + esc(nameDisplay) + '</td><td>' + esc(roleDisplay) + '</td><td>' + badge + '</td></tr>';
   }
 
   function buildLoginLogEmptyRow() {

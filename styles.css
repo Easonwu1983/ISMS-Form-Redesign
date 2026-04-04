@@ -7325,7 +7325,12 @@ tbody tr:hover {
 }
 
 .dashboard-hero--integrated {
-  padding-top: 20px;
+  padding: 16px 26px;
+}
+
+/* Reduce gap between dashboard sections */
+[data-dashboard-section] + [data-dashboard-section] {
+  margin-top: 4px;
 }
 
 .dashboard-hero-copy--integrated {

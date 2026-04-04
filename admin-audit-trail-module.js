@@ -10,6 +10,42 @@
 (function () {
   'use strict';
 
+  // ─── Event type 中文對照表 ──────────────────────────
+  var EVENT_TYPE_LABELS = {
+    'auth.login.success': '登入成功',
+    'auth.login.failed': '登入失敗',
+    'auth.login.locked': '帳號鎖定',
+    'auth.logout': '登出',
+    'auth.password-changed': '密碼變更',
+    'auth.reset-password.completed': '密碼重設完成',
+    'system-user.created': '帳號建立',
+    'system-user.updated': '帳號更新',
+    'system-user.deleted': '帳號刪除',
+    'system-user.reset-token-issued': '重設密碼連結發送',
+    'corrective-action.created': '矯正單開立',
+    'corrective-action.updated': '矯正單更新',
+    'corrective-action.status-changed': '矯正單狀態變更',
+    'checklist.created': '檢核表建立',
+    'checklist.updated': '檢核表更新',
+    'checklist.submitted': '檢核表送出',
+    'training.form.created': '訓練填報建立',
+    'training.form.updated': '訓練填報更新',
+    'training.form.submitted': '訓練填報送出',
+    'asset-inventory.created': '資產建立',
+    'asset-inventory.updated': '資產更新',
+    'asset-inventory.deleted': '資產刪除',
+    'unit-contact.created': '單位窗口申請',
+    'unit-contact.approved': '單位窗口核准',
+    'unit-contact.rejected': '單位窗口駁回',
+    'system.error_alert': '系統錯誤警報',
+    'system.overdue_reminder': '逾期提醒'
+  };
+
+  function localizeEventType(eventType) {
+    var key = String(eventType || '').trim();
+    return EVENT_TYPE_LABELS[key] || key;
+  }
+
   var _escFn = null;
   var _icFn = null;
   function esc(s) { return (_escFn || (_escFn = window.__esc) || _escFallback)(s); }
@@ -43,7 +79,7 @@
     }
     var total = Math.max(0, Number(summary && summary.total) || 0);
     return items.map(function (entry) {
-      var label = String(entry && entry.eventType || 'unknown').trim() || 'unknown';
+      var label = localizeEventType(entry && entry.eventType);
       var count = Math.max(0, Number(entry && entry.count) || 0);
       var percent = total > 0 ? Math.round((count / total) * 100) : 0;
       return '<div class="review-history-item"><div class="review-history-top"><span class="review-history-title">' + esc(label) + '</span><span class="review-history-time">' + count + ' 筆' + (total > 0 ? ' · ' + percent + '%' : '') + '</span></div><div class="review-history-meta">事件類型 ' + esc(label) + ' 共 ' + count + ' 筆' + (total > 0 ? '，��� ' + percent + '%' : '') + '。</div></div>';
@@ -55,7 +91,7 @@
   function buildAuditTrailRow(entry, index) {
     var target = entry.targetEmail && entry.targetEmail !== entry.actorEmail ? entry.targetEmail : (entry.unitCode || '—');
     var summary = entry.payloadPreview || entry.title || entry.recordId || '—';
-    return '<tr data-action="admin.viewAuditEntry" data-index="' + index + '" style="cursor:pointer"><td style="white-space:nowrap">' + formatAuditOccurredAt(entry.occurredAt) + '</td><td>' + esc(entry.eventType || 'unknown') + '</td><td>' + esc(entry.actorEmail || '—') + '</td><td>' + esc(target) + '</td><td class="review-cell-wrap">' + esc(summary) + '</td></tr>';
+    return '<tr data-action="admin.viewAuditEntry" data-index="' + index + '" style="cursor:pointer"><td style="white-space:nowrap">' + formatAuditOccurredAt(entry.occurredAt) + '</td><td>' + esc(localizeEventType(entry.eventType)) + '</td><td>' + esc(entry.actorEmail || '—') + '</td><td>' + esc(target) + '</td><td class="review-cell-wrap">' + esc(summary) + '</td></tr>';
   }
 
   function buildAuditTrailEmptyRow() {
@@ -92,7 +128,7 @@
       return fallbackRoot;
     }());
     var fieldRows = [
-      ['事件類型', entry.eventType || '—'],
+      ['事件類型', localizeEventType(entry.eventType) + (entry.eventType ? ' (' + entry.eventType + ')' : '')],
       ['時間', formatAuditOccurredAt(entry.occurredAt)],
       ['操作人', entry.actorEmail || '—'],
       ['目標', entry.targetEmail || '—'],
