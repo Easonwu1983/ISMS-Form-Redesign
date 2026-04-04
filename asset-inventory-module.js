@@ -2453,10 +2453,21 @@
 
       // Local unit categorization
       function localCategorizeUnit(name) {
-        const academicKeywords = ['\u5b78\u9662', '\u5b78\u7cfb', '\u7814\u7a76\u6240', '\u5b78\u4f4d\u5b78\u7a0b', '\u5171\u540c\u6559\u80b2\u4e2d\u5fc3', '\u9032\u4fee\u63a8\u5ee3\u5b78\u9662', '\u570b\u969b\u5b78\u9662'];
+        const unit = String(name || '').split('\uFF0F')[0].trim();
+        // 白名單優先（與 unit-module.js / unit-governance-backend.cjs 保持同步）
+        const ADMIN_WHITELIST = new Set([
+          '秘書室', '教務處', '學生事務處', '總務處', '研究發展處',
+          '國際事務處', '財務管理處', '圖書館', '主計室', '人事室',
+          '計算機及資訊網路中心', '出版中心',
+          '環境保護暨職業安全衛生中心', '法務處', '學校分部總辦事處'
+        ]);
+        const ACADEMIC_WHITELIST = new Set(['共同教育中心', '進修推廣學院']);
+        if (ADMIN_WHITELIST.has(unit)) return '\u884c\u653f\u55ae\u4f4d';
+        if (ACADEMIC_WHITELIST.has(unit)) return '\u5b78\u8853\u55ae\u4f4d';
+        const academicKeywords = ['\u5b78\u9662', '\u5b78\u7cfb', '\u7814\u7a76\u6240', '\u5b78\u4f4d\u5b78\u7a0b', '\u570b\u969b\u5b78\u9662'];
         const centerKeywords = ['\u4e2d\u5fc3', '\u7814\u7a76\u4e2d\u5fc3', '\u8fa6\u516c\u5ba4', '\u59d4\u54e1\u6703', '\u806f\u76df'];
-        if (academicKeywords.some(function (k) { return name.includes(k); })) return '\u5b78\u8853\u55ae\u4f4d';
-        if (centerKeywords.some(function (k) { return name.includes(k); })) return '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d';
+        if (academicKeywords.some(function (k) { return unit.includes(k); })) return '\u5b78\u8853\u55ae\u4f4d';
+        if (centerKeywords.some(function (k) { return unit.includes(k); })) return '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d';
         return '\u884c\u653f\u55ae\u4f4d';
       }
 
