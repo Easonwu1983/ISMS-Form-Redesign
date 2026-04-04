@@ -43,7 +43,7 @@
     const CIA_VALUE_MAP = { '\u666e': 1, '\u4e2d': 2, '\u9ad8': 3 };
 
     // -- Complete control measures data (附表十) --
-    var APPENDIX10_DATA = [
+    const APPENDIX10_DATA = [
       { d: '存取控制', c: '帳號管理', l: '高', t: '應依機關規定之情況及條件，使用資通系統' },
       { d: '存取控制', c: '帳號管理', l: '高', t: '監控資通系統帳號，如發現帳號違常使用時回報管理者' },
       { d: '存取控制', c: '帳號管理', l: '高', t: '等級「中」之所有控制措施' },
@@ -119,7 +119,7 @@
       { d: '系統與資訊完整性', c: '軟體及資訊完整性', l: '普', t: '使用者輸入資料合法性檢查' }
     ];
 
-    var THREAT_SCENARIOS = {
+    const THREAT_SCENARIOS = {
       PE: [
         { id: 'pe1', threat: '人員離職未完成交接', vuln: '知識集中風險', likelihood: 2, impact: 2 },
         { id: 'pe2', threat: '權限過大或未即時回收', vuln: '存取控制不當', likelihood: 2, impact: 3 },
@@ -183,12 +183,12 @@
 
     // -- Build inline appendix10 checklist for IT system section --
     function buildInlineAppendix10Checklist(protLevel, existingAssessments) {
-      var existing = {};
+      const existing = {};
       (existingAssessments || []).forEach(function(a) {
         existing[a.dimension + '|' + a.code + '|' + a.control] = a;
       });
 
-      var filtered = APPENDIX10_DATA.filter(function(row) {
+      const filtered = APPENDIX10_DATA.filter(function(row) {
         return isApplicable(protLevel, row.l);
       });
 
@@ -199,7 +199,7 @@
         return '<div style="color:#888;padding:12px;">無適用項目</div>';
       }
 
-      var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
         + '<span style="font-size:13px;color:#666;">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</span>'
         + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform" style="font-size:12px;padding:5px 14px;line-height:1;"><span style="display:inline-flex;align-items:center;gap:5px;vertical-align:middle;">' + ic('check-circle', 'icon-xs') + '<span style="vertical-align:middle;">\u5168\u90e8\u7b26\u5408</span></span></button>'
         + '</div>';
@@ -212,12 +212,12 @@
         + '</tr></thead><tbody>';
 
       filtered.forEach(function(row, idx) {
-        var key = row.d + '|' + row.c + '|' + row.t;
-        var saved = existing[key] || {};
-        var isConform = saved.result === '符合';
-        var isNonConform = saved.result === '不符合';
-        var isNA = saved.result === '不適用';
-        var bgColor = isConform ? '#e8f5e9' : isNonConform ? '#ffebee' : isNA ? '#f5f5f5' : '';
+        const key = row.d + '|' + row.c + '|' + row.t;
+        const saved = existing[key] || {};
+        const isConform = saved.result === '符合';
+        const isNonConform = saved.result === '不符合';
+        const isNA = saved.result === '不適用';
+        const bgColor = isConform ? '#e8f5e9' : isNonConform ? '#ffebee' : isNA ? '#f5f5f5' : '';
 
         html += '<tr style="' + (bgColor ? 'background:' + bgColor + ';' : '') + '">'
           + '<td style="padding:4px 8px;border:1px solid #dee2e6;vertical-align:top;">' + esc(row.d) + '</td>'
@@ -239,18 +239,18 @@
     }
 
     function buildRiskScenarios(category, checkedIds) {
-      var scenarios = THREAT_SCENARIOS[category] || THREAT_SCENARIOS['SW'];
-      var catLabel = getCategoryLabel(category) || getCategoryLabel('SW');
-      var checked = {};
+      const scenarios = THREAT_SCENARIOS[category] || THREAT_SCENARIOS['SW'];
+      const catLabel = getCategoryLabel(category) || getCategoryLabel('SW');
+      const checked = {};
       (checkedIds || []).forEach(function(id) { checked[id] = true; });
 
-      var likelihoodBadge = function(v) {
-        var color = v === 3 ? '#c62828' : v === 2 ? '#e65100' : '#2e7d32';
-        var label = v === 3 ? '\u9ad8' : v === 2 ? '\u4e2d' : '\u4f4e';
+      const likelihoodBadge = function(v) {
+        let color = v === 3 ? '#c62828' : v === 2 ? '#e65100' : '#2e7d32';
+        const label = v === 3 ? '\u9ad8' : v === 2 ? '\u4e2d' : '\u4f4e';
         return '<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:white;background:' + color + ';">' + label + '</span>';
       };
 
-      var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
+      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
         + '<div style="font-size:13px;color:#555;">'
         + ic('shield-alert', 'icon-sm') + ' \u4f9d\u8cc7\u7522\u5206\u985e\u300c<b>' + esc(catLabel) + '</b>\u300d\u5217\u51fa ' + scenarios.length + ' \u9805\u5e38\u898b\u5a01\u8105\u60c5\u5883'
         + '</div>'
@@ -259,7 +259,7 @@
 
       html += '<div style="display:flex;flex-direction:column;gap:8px;">';
       scenarios.forEach(function(s) {
-        var isChecked = checked[s.id];
+        const isChecked = checked[s.id];
         html += '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border:1px solid ' + (isChecked ? '#ff9800' : '#e0e0e0') + ';border-radius:8px;background:' + (isChecked ? '#fff3e0' : '#fafafa') + ';cursor:pointer;transition:all 0.15s;" class="risk-scenario-card">'
           + '<input type="checkbox" class="risk-scenario-check" data-scenario-id="' + s.id + '" data-likelihood="' + s.likelihood + '" data-impact="' + s.impact + '"' + (isChecked ? ' checked' : '') + ' style="margin-top:3px;flex-shrink:0;">'
           + '<div style="flex:1;min-width:0;">'
@@ -285,25 +285,25 @@
     if (!window.__ismsAssetDelegation) {
       window.__ismsAssetDelegation = true;
       document.addEventListener('click', function (e) {
-        var el = e.target.closest('[data-action]');
+        const el = e.target.closest('[data-action]');
         if (!el) return;
-        var action = el.getAttribute('data-action') || '';
-        var key = action.replace(/^app\./, '');
-        var handler = window.__ismsAssetActions[key];
+        let action = el.getAttribute('data-action') || '';
+        const key = action.replace(/^app\./, '');
+        const handler = window.__ismsAssetActions[key];
         if (typeof handler !== 'function') return;
         e.preventDefault();
         // Navigation actions — handle directly to avoid ESM bundle closure issues
-        var navRoutes = {
+        const navRoutes = {
           createAsset: '#asset-create',
           backToList: '#assets'
         };
-        var paramRoutes = {
+        const paramRoutes = {
           editAsset: '#asset-edit/',
           viewAsset: '#asset-detail/',
           backToDetail: '#asset-detail/'
         };
         if (navRoutes[key]) { window.location.hash = navRoutes[key]; return; }
-        if (paramRoutes[key]) { var pid = (el.dataset && el.dataset.id) || ''; if (pid) window.location.hash = paramRoutes[key] + pid; return; }
+        if (paramRoutes[key]) { const pid = (el.dataset && el.dataset.id) || ''; if (pid) window.location.hash = paramRoutes[key] + pid; return; }
         // Non-navigation actions — call handler normally
         try { handler({ event: e, element: el, dataset: Object.assign({}, el.dataset) }); } catch (_) {}
       }, true);
@@ -349,11 +349,11 @@
     }
 
     function computeProtectionLevel(c, i, a, l) {
-      var cv = CIA_VALUE_MAP[c] || 0;
-      var iv = CIA_VALUE_MAP[i] || 0;
-      var av = CIA_VALUE_MAP[a] || 0;
-      var lv = CIA_VALUE_MAP[l] || 0;
-      var max = Math.max(cv, iv, av, lv);
+      const cv = CIA_VALUE_MAP[c] || 0;
+      const iv = CIA_VALUE_MAP[i] || 0;
+      const av = CIA_VALUE_MAP[a] || 0;
+      const lv = CIA_VALUE_MAP[l] || 0;
+      const max = Math.max(cv, iv, av, lv);
       if (max >= 3) return '\u9ad8';
       if (max >= 2) return '\u4e2d';
       if (max >= 1) return '\u666e';
@@ -361,8 +361,8 @@
     }
 
     function computeRiskScore(likelihood, impact) {
-      var l = parseInt(likelihood, 10) || 0;
-      var imp = parseInt(impact, 10) || 0;
+      let l = parseInt(likelihood, 10) || 0;
+      const imp = parseInt(impact, 10) || 0;
       return l * imp;
     }
 
@@ -395,69 +395,69 @@
     }
 
     function getCategoryLabel(code) {
-      var cat = CATEGORIES[code];
+      const cat = CATEGORIES[code];
       return cat ? cat.label : code || '';
     }
 
     function getSubCategories(code) {
-      var cat = CATEGORIES[code];
+      const cat = CATEGORIES[code];
       return cat ? cat.subs : [];
     }
 
     function buildSelectOptions(options, selected, includeEmpty) {
-      var html = '';
+      let html = '';
       if (includeEmpty) {
         html += '<option value="">-- \u8acb\u9078\u64c7 --</option>';
       }
-      for (var i = 0; i < options.length; i++) {
-        var val = options[i];
+      for (let i = 0; i < options.length; i++) {
+        const val = options[i];
         html += '<option value="' + esc(val) + '"' + (val === selected ? ' selected' : '') + '>' + esc(val) + '</option>';
       }
       return html;
     }
 
     function buildCategorySelectOptions(selected, includeEmpty) {
-      var html = '';
+      let html = '';
       if (includeEmpty) {
         html += '<option value="">-- \u8acb\u9078\u64c7 --</option>';
       }
-      var keys = Object.keys(CATEGORIES);
-      for (var i = 0; i < keys.length; i++) {
-        var code = keys[i];
-        var label = CATEGORIES[code].label;
+      let keys = Object.keys(CATEGORIES);
+      for (let i = 0; i < keys.length; i++) {
+        const code = keys[i];
+        const label = CATEGORIES[code].label;
         html += '<option value="' + esc(code) + '"' + (code === selected ? ' selected' : '') + '>' + esc(label) + '</option>';
       }
       return html;
     }
 
     function buildSubCategorySelectOptions(categoryCode, selected, includeEmpty) {
-      var subs = getSubCategories(categoryCode);
-      var html = '';
+      const subs = getSubCategories(categoryCode);
+      let html = '';
       if (includeEmpty) {
         html += '<option value="">-- \u8acb\u9078\u64c7 --</option>';
       }
-      for (var i = 0; i < subs.length; i++) {
+      for (let i = 0; i < subs.length; i++) {
         html += '<option value="' + esc(subs[i]) + '"' + (subs[i] === selected ? ' selected' : '') + '>' + esc(subs[i]) + '</option>';
       }
       return html;
     }
 
     function buildYearOptions(selected) {
-      var current = getCurrentRocYear();
-      var html = '';
-      for (var y = current; y >= current - 5; y--) {
+      let current = getCurrentRocYear();
+      let html = '';
+      for (let y = current; y >= current - 5; y--) {
         html += '<option value="' + y + '"' + (String(y) === String(selected) ? ' selected' : '') + '>' + y + '</option>';
       }
       return html;
     }
 
     function buildCollapsibleSection(id, title, contentHtml, options) {
-      var opts = options || {};
-      var open = opts.open !== false;
-      var borderColor = opts.borderColor || '';
-      var borderStyle = borderColor ? ' style="border-left: 4px solid ' + borderColor + ';"' : '';
-      var condDisplay = opts.hidden ? ' style="display:none;"' : '';
-      var sectionId = 'asset-section-' + id;
+      const opts = options || {};
+      const open = opts.open !== false;
+      let borderColor = opts.borderColor || '';
+      const borderStyle = borderColor ? ' style="border-left: 4px solid ' + borderColor + ';"' : '';
+      const condDisplay = opts.hidden ? ' style="display:none;"' : '';
+      const sectionId = 'asset-section-' + id;
       return '<div class="card asset-form-section" id="' + sectionId + '"' + condDisplay + borderStyle + '>'
         + '<div class="card-header asset-section-header" data-toggle-section="' + id + '" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;">'
         + '<span>' + esc(title) + '</span>'
@@ -470,9 +470,9 @@
     }
 
     function buildFormGroup(labelText, inputHtml, options) {
-      var opts = options || {};
-      var groupClass = 'form-group' + (opts.className ? ' ' + opts.className : '');
-      var hint = opts.hint ? '<small class="form-hint">' + esc(opts.hint) + '</small>' : '';
+      const opts = options || {};
+      const groupClass = 'form-group' + (opts.className ? ' ' + opts.className : '');
+      const hint = opts.hint ? '<small class="form-hint">' + esc(opts.hint) + '</small>' : '';
       return '<div class="' + groupClass + '">'
         + '<label class="form-label">' + esc(labelText) + '</label>'
         + inputHtml
@@ -481,40 +481,40 @@
     }
 
     function buildTextInput(name, value, options) {
-      var opts = options || {};
-      var readonly = opts.readonly ? ' readonly' : '';
-      var placeholder = opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '';
-      var extra = opts.id ? ' id="' + opts.id + '"' : '';
+      const opts = options || {};
+      const readonly = opts.readonly ? ' readonly' : '';
+      let placeholder = opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '';
+      const extra = opts.id ? ' id="' + opts.id + '"' : '';
       return '<input type="text" class="form-control" name="' + esc(name) + '" value="' + esc(value || '') + '"' + readonly + placeholder + extra + '>';
     }
 
     function buildTextarea(name, value, options) {
-      var opts = options || {};
-      var rows = opts.rows || 3;
-      var readonly = opts.readonly ? ' readonly' : '';
+      const opts = options || {};
+      let rows = opts.rows || 3;
+      const readonly = opts.readonly ? ' readonly' : '';
       return '<textarea class="form-control" name="' + esc(name) + '" rows="' + rows + '"' + readonly + '>' + esc(value || '') + '</textarea>';
     }
 
     function buildSelect(name, optionsHtml, options) {
-      var opts = options || {};
-      var disabled = opts.disabled ? ' disabled' : '';
-      var extra = opts.id ? ' id="' + opts.id + '"' : '';
+      const opts = options || {};
+      const disabled = opts.disabled ? ' disabled' : '';
+      const extra = opts.id ? ' id="' + opts.id + '"' : '';
       return '<select class="form-control" name="' + esc(name) + '"' + disabled + extra + '>' + optionsHtml + '</select>';
     }
 
     function buildCheckbox(name, label, checked) {
-      return '<label class="form-check-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">'
+      return '<label class="form-check-label asset-flex-cursor">'
         + '<input type="checkbox" class="form-check-input" name="' + esc(name) + '"' + (checked ? ' checked' : '') + '>'
         + '<span>' + esc(label) + '</span>'
         + '</label>';
     }
 
     function readFormValues(container) {
-      var result = {};
-      var inputs = container.querySelectorAll('input, select, textarea');
-      for (var i = 0; i < inputs.length; i++) {
-        var el = inputs[i];
-        var name = el.getAttribute('name');
+      const result = {};
+      const inputs = container.querySelectorAll('input, select, textarea');
+      for (let i = 0; i < inputs.length; i++) {
+        const el = inputs[i];
+        let name = el.getAttribute('name');
         if (!name) continue;
         if (el.type === 'checkbox') {
           result[name] = el.checked;
@@ -528,7 +528,7 @@
     // -------------------------------------------------------
     // Browse state
     // -------------------------------------------------------
-    var browseState = {
+    const browseState = {
       year: String(getCurrentRocYear()),
       category: '',
       status: '',
@@ -539,7 +539,7 @@
     // renderAssetList
     // -------------------------------------------------------
     async function renderAssetList() {
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
 
       appEl.innerHTML = '<div class="animate-in">'
@@ -614,28 +614,28 @@
           return '#asset-create';
         },
         exportAssets: function () {
-          var rows = document.querySelectorAll('#asset-list-table-wrapper tbody tr');
+          let rows = document.querySelectorAll('#asset-list-table-wrapper tbody tr');
           if (!rows.length) { toast('\u6c92\u6709\u8cc7\u6599\u53ef\u532f\u51fa', 'warning'); return; }
-          var csv = '\uFEFF\u8cc7\u7522\u7de8\u865f,\u8cc7\u7522\u540d\u7a31,\u5206\u985e,\u64c1\u6709\u8005,\u9632\u8b77\u7b49\u7d1a,\u98a8\u96aa\u7b49\u7d1a,\u72c0\u614b\n';
+          let csv = '\uFEFF\u8cc7\u7522\u7de8\u865f,\u8cc7\u7522\u540d\u7a31,\u5206\u985e,\u64c1\u6709\u8005,\u9632\u8b77\u7b49\u7d1a,\u98a8\u96aa\u7b49\u7d1a,\u72c0\u614b\n';
           rows.forEach(function (row) {
-            var cells = row.querySelectorAll('td');
+            const cells = row.querySelectorAll('td');
             if (cells.length >= 7) {
-              var vals = [];
-              for (var i = 0; i < 7; i++) vals.push('"' + (cells[i].textContent || '').trim().replace(/"/g, '""') + '"');
+              const vals = [];
+              for (let i = 0; i < 7; i++) vals.push('"' + (cells[i].textContent || '').trim().replace(/"/g, '""') + '"');
               csv += vals.join(',') + '\n';
             }
           });
-          var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          var link = document.createElement('a');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
           link.download = '\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a_' + new Date().toISOString().slice(0, 10) + '.csv';
           link.click();
           toast('\u5df2\u532f\u51fa CSV', 'success');
         },
         submitAllAssets: function () {
-          var year = (document.getElementById('asset-filter-year') || {}).value || getCurrentRocYear();
+          let year = (document.getElementById('asset-filter-year') || {}).value || getCurrentRocYear();
           if (!window.confirm('\u78ba\u5b9a\u8981\u5c07 ' + year + ' \u5e74\u5ea6\u6240\u6709\u8cc7\u7522\u6a19\u8a18\u70ba\u300c\u5df2\u5b8c\u6210\u300d\uff1f\n\n\u9019\u4ee3\u8868\u672c\u55ae\u4f4d\u4eca\u5e74\u5ea6\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u5df2\u5b8c\u6210\uff0c\u6700\u9ad8\u7ba1\u7406\u8005\u5c07\u53ef\u5728\u5f8c\u53f0\u67e5\u770b\u5b8c\u6210\u72c0\u614b\u3002')) return;
-          var endpoint = (window.__M365_UNIT_CONTACT_CONFIG__ && window.__M365_UNIT_CONTACT_CONFIG__.assetInventoryEndpoint) || '/api/assets';
+          const endpoint = (window.__M365_UNIT_CONTACT_CONFIG__ && window.__M365_UNIT_CONTACT_CONFIG__.assetInventoryEndpoint) || '/api/assets';
           fetch(endpoint + '/batch-status', {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -652,18 +652,18 @@
           applyFiltersAndReload();
         },
         editAsset: function (ctx) {
-          var id = ctx.dataset && ctx.dataset.id;
+          let id = ctx.dataset && ctx.dataset.id;
           if (id) return '#asset-edit/' + id;
         },
         viewAsset: function (ctx) {
-          var id = ctx.dataset && ctx.dataset.id;
+          let id = ctx.dataset && ctx.dataset.id;
           if (id) return '#asset-detail/' + id;
         },
         deleteAsset: function (ctx) {
-          var id = ctx.dataset && ctx.dataset.id;
+          let id = ctx.dataset && ctx.dataset.id;
           if (!id) return;
           if (!window.confirm('\u78ba\u5b9a\u8981\u522a\u9664\u6b64\u8cc7\u7522\u55ce\uff1f\u6b64\u64cd\u4f5c\u7121\u6cd5\u5fa9\u539f\u3002')) return;
-          var endpoint = (window.__M365_UNIT_CONTACT_CONFIG__ && window.__M365_UNIT_CONTACT_CONFIG__.assetInventoryEndpoint) || '/api/assets';
+          const endpoint = (window.__M365_UNIT_CONTACT_CONFIG__ && window.__M365_UNIT_CONTACT_CONFIG__.assetInventoryEndpoint) || '/api/assets';
           fetch(endpoint + '/' + id + '/delete', {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -684,10 +684,10 @@
       });
 
       // Event listeners for filters
-      var yearEl = document.getElementById('asset-filter-year');
-      var categoryEl = document.getElementById('asset-filter-category');
-      var statusEl = document.getElementById('asset-filter-status');
-      var keywordEl = document.getElementById('asset-filter-keyword');
+      const yearEl = document.getElementById('asset-filter-year');
+      const categoryEl = document.getElementById('asset-filter-category');
+      const statusEl = document.getElementById('asset-filter-status');
+      const keywordEl = document.getElementById('asset-filter-keyword');
 
       if (yearEl) addPageEventListener(yearEl, 'change', function () { browseState.year = yearEl.value; });
       if (categoryEl) addPageEventListener(categoryEl, 'change', function () { browseState.category = categoryEl.value; });
@@ -699,10 +699,10 @@
     }
 
     function applyFiltersAndReload() {
-      var yearEl = document.getElementById('asset-filter-year');
-      var categoryEl = document.getElementById('asset-filter-category');
-      var statusEl = document.getElementById('asset-filter-status');
-      var keywordEl = document.getElementById('asset-filter-keyword');
+      const yearEl = document.getElementById('asset-filter-year');
+      const categoryEl = document.getElementById('asset-filter-category');
+      const statusEl = document.getElementById('asset-filter-status');
+      const keywordEl = document.getElementById('asset-filter-keyword');
 
       if (yearEl) browseState.year = yearEl.value;
       if (categoryEl) browseState.category = categoryEl.value;
@@ -713,24 +713,24 @@
     }
 
     async function loadAssetListData() {
-      var wrapper = document.getElementById('asset-list-table-wrapper');
+      const wrapper = document.getElementById('asset-list-table-wrapper');
       if (!wrapper) return;
 
       try {
-        var queryParts = [];
+        const queryParts = [];
         if (browseState.year) queryParts.push('year=' + encodeURIComponent(browseState.year));
         if (browseState.category) queryParts.push('category=' + encodeURIComponent(browseState.category));
         if (browseState.status) queryParts.push('status=' + encodeURIComponent(browseState.status));
-        var queryString = queryParts.length ? '?' + queryParts.join('&') : '';
+        const queryString = queryParts.length ? '?' + queryParts.join('&') : '';
 
-        var data = await apiCall('GET', queryString);
-        var items = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : []);
+        const data = await apiCall('GET', queryString);
+        let items = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : []);
 
         // Client-side keyword filter
-        var keyword = (browseState.keyword || '').trim().toLowerCase();
+        let keyword = (browseState.keyword || '').trim().toLowerCase();
         if (keyword) {
           items = items.filter(function (item) {
-            var haystack = [
+            const haystack = [
               item.assetId || '',
               item.assetName || '',
               item.ownerName || '',
@@ -742,18 +742,18 @@
         }
 
         // Update card subtitle with count
-        var subtitleEl = document.querySelector('.review-card-subtitle');
+        const subtitleEl = document.querySelector('.review-card-subtitle');
         if (subtitleEl) subtitleEl.textContent = '\u5171 ' + items.length + ' \u7b46';
 
         // Update stats summary bar
-        var totalCount = items.length;
-        var itCount = items.filter(function(i) { return i.isItSystem; }).length;
-        var riskCount = items.filter(function(i) { var r = i.riskData || {}; return (i.riskLevel || r.riskLevel) === '\u9ad8'; }).length;
-        var doneCount = items.filter(function(i) { return i.status === '\u5df2\u5b8c\u6210'; }).length;
-        var el1 = document.getElementById('stat-total'); if (el1) el1.textContent = totalCount;
-        var el2 = document.getElementById('stat-it'); if (el2) el2.textContent = itCount;
-        var el3 = document.getElementById('stat-risk'); if (el3) el3.textContent = riskCount;
-        var el4 = document.getElementById('stat-done'); if (el4) el4.textContent = doneCount;
+        const totalCount = items.length;
+        const itCount = items.filter(function(i) { return i.isItSystem; }).length;
+        const riskCount = items.filter(function(i) { const r = i.riskData || {}; return (i.riskLevel || r.riskLevel) === '\u9ad8'; }).length;
+        const doneCount = items.filter(function(i) { return i.status === '\u5df2\u5b8c\u6210'; }).length;
+        const el1 = document.getElementById('stat-total'); if (el1) el1.textContent = totalCount;
+        const el2 = document.getElementById('stat-it'); if (el2) el2.textContent = itCount;
+        const el3 = document.getElementById('stat-risk'); if (el3) el3.textContent = riskCount;
+        const el4 = document.getElementById('stat-done'); if (el4) el4.textContent = doneCount;
 
         if (!items.length) {
           wrapper.innerHTML = '<div class="empty-state asset-empty">'
@@ -765,9 +765,9 @@
 
         // Build table row HTML for a single item
         function buildAssetRow(item) {
-          var riskScore = computeRiskScore(item.riskLikelihood, item.riskImpact);
-          var riskLevel = item.riskLevel || getRiskLevel(riskScore);
-          var protLevel = item.protectionLevel || computeProtectionLevel(item.ciaC, item.ciaI, item.ciaA, item.ciaL);
+          const riskScore = computeRiskScore(item.riskLikelihood, item.riskImpact);
+          const riskLevel = item.riskLevel || getRiskLevel(riskScore);
+          const protLevel = item.protectionLevel || computeProtectionLevel(item.ciaC, item.ciaI, item.ciaA, item.ciaL);
           return '<tr>'
             + '<td class="asset-td">' + esc(item.assetName || '') + '</td>'
             + '<td class="asset-td">' + esc(getCategoryLabel(item.category)) + '</td>'
@@ -782,7 +782,7 @@
             + '</tr>';
         }
 
-        var tableHead = '<thead><tr>'
+        const tableHead = '<thead><tr>'
           + '<th scope="col" class="asset-th">\u8cc7\u7522\u540d\u7a31</th>'
           + '<th scope="col" class="asset-th">\u5206\u985e</th>'
           + '<th scope="col" class="asset-th">\u9632\u8b77\u7b49\u7d1a</th>'
@@ -792,18 +792,18 @@
           + '</tr></thead>';
 
         // Admin sees grouped by unit; unit admin sees flat list
-        var isAdminUser = typeof isAdmin === 'function' && isAdmin();
-        var uniqueUnits = {};
-        items.forEach(function (item) { var u = item.unitName || '\u672a\u5206\u985e'; if (!uniqueUnits[u]) uniqueUnits[u] = []; uniqueUnits[u].push(item); });
-        var unitNames = Object.keys(uniqueUnits);
+        const isAdminUser = typeof isAdmin === 'function' && isAdmin();
+        const uniqueUnits = {};
+        items.forEach(function (item) { const u = item.unitName || '\u672a\u5206\u985e'; if (!uniqueUnits[u]) uniqueUnits[u] = []; uniqueUnits[u].push(item); });
+        const unitNames = Object.keys(uniqueUnits);
 
         if (isAdminUser && unitNames.length > 1) {
           // Grouped view for admin
-          var groupedHtml = '';
+          let groupedHtml = '';
           unitNames.forEach(function (unitName, idx) {
-            var unitItems = uniqueUnits[unitName];
-            var unitCompleted = unitItems.every(function (it) { return it.status === '\u5df2\u5b8c\u6210'; });
-            var unitStatusLabel = unitCompleted
+            const unitItems = uniqueUnits[unitName];
+            const unitCompleted = unitItems.every(function (it) { return it.status === '\u5df2\u5b8c\u6210'; });
+            const unitStatusLabel = unitCompleted
               ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-size:0.8em;font-weight:600;">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
               : '<span style="color:#e65100;">' + unitItems.length + ' \u7b46\u8cc7\u7522</span>';
             groupedHtml += '<div class="card" style="margin-bottom:12px;border-radius:8px;overflow:hidden;">'
@@ -819,7 +819,7 @@
           wrapper.innerHTML = '<div style="font-size:13px;color:#666;margin-bottom:8px;">\u5168\u6821\u5171 ' + items.length + ' \u7b46\u8cc7\u7522\uff0c' + unitNames.length + ' \u500b\u55ae\u4f4d</div>' + groupedHtml;
         } else {
           // Flat list for unit admin
-          var rowsHtml = '';
+          let rowsHtml = '';
           items.forEach(function (item) { rowsHtml += buildAssetRow(item); });
           wrapper.innerHTML = '<div class="table-wrapper" tabindex="0">'
             + '<table class="asset-table">'
@@ -851,18 +851,18 @@
     }
 
     async function renderAssetForm(assetId) {
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
 
-      var isEdit = !!assetId;
-      var title = isEdit ? '\u7de8\u8f2f\u8cc7\u8a0a\u8cc7\u7522' : '\u65b0\u589e\u8cc7\u8a0a\u8cc7\u7522';
-      var asset = null;
+      const isEdit = !!assetId;
+      let title = isEdit ? '\u7de8\u8f2f\u8cc7\u8a0a\u8cc7\u7522' : '\u65b0\u589e\u8cc7\u8a0a\u8cc7\u7522';
+      let asset = null;
 
       if (isEdit) {
         appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-empty">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div></div>';
         scheduleRefreshIcons();
         try {
-          var resp = await apiCall('GET', '/' + assetId);
+          const resp = await apiCall('GET', '/' + assetId);
           asset = resp && resp.item ? resp.item : resp;
         } catch (err) {
           appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-error">'
@@ -875,11 +875,11 @@
       }
 
       // Fetch existing appendix10 assessments if editing
-      var existingA10Assessments = [];
+      let existingA10Assessments = [];
       if (isEdit) {
         try {
-          var a10Resp = await apiCall('GET', '/' + assetId + '/appendix10');
-          var a10Data = a10Resp && a10Resp.item ? a10Resp.item : a10Resp;
+          const a10Resp = await apiCall('GET', '/' + assetId + '/appendix10');
+          const a10Data = a10Resp && a10Resp.item ? a10Resp.item : a10Resp;
           if (a10Data && a10Data.assessments) {
             existingA10Assessments = a10Data.assessments;
           } else if (Array.isArray(a10Data)) {
@@ -890,18 +890,18 @@
         }
       }
 
-      var a = asset || {};
-      var user = currentUser() || {};
-      var currentProtLevel = computeProtectionLevel(a.ciaC || '', a.ciaI || '', a.ciaA || '', a.ciaL || '');
-      var riskScore = computeRiskScore(a.riskLikelihood, a.riskImpact);
-      var riskLevel = getRiskLevel(riskScore);
+      const a = asset || {};
+      const user = currentUser() || {};
+      const currentProtLevel = computeProtectionLevel(a.ciaC || '', a.ciaI || '', a.ciaA || '', a.ciaL || '');
+      const riskScore = computeRiskScore(a.riskLikelihood, a.riskImpact);
+      const riskLevel = getRiskLevel(riskScore);
 
       // Helper to build a form card section
       function formCard(sectionId, iconName, sectionTitle, subtitle, bodyHtml, opts) {
-        var o = opts || {};
-        var borderStyle = o.borderColor ? 'border-left:4px solid ' + o.borderColor + ';' : '';
-        var displayStyle = o.hidden ? 'display:none;' : '';
-        var bodyDisplay = o.collapsed ? 'display:none;' : '';
+        const o = opts || {};
+        const borderStyle = o.borderColor ? 'border-left:4px solid ' + o.borderColor + ';' : '';
+        const displayStyle = o.hidden ? 'display:none;' : '';
+        const bodyDisplay = o.collapsed ? 'display:none;' : '';
         return '<div class="card" id="section-card-' + sectionId + '" style="margin-bottom:16px;' + borderStyle + displayStyle + '">'
           + '<div class="section-header" style="padding:12px 16px;background:#f8f9fa;border-bottom:1px solid #e9ecef;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" data-action="app.toggleSection" data-target="section-' + sectionId + '">'
           + '<span style="display:inline-flex;align-items:center;gap:8px;">'
@@ -917,7 +917,7 @@
       }
 
       // --- Section 1: Basic Information ---
-      var basicHtml = ''
+      const basicHtml = ''
         + '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label">\u8cc7\u7522\u7de8\u865f</label>'
@@ -954,7 +954,7 @@
         + '</div>';
 
       // --- Section 2: Location & Specifications ---
-      var locationHtml = ''
+      const locationHtml = ''
         + '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label">\u5b58\u653e\u4f4d\u7f6e\uff08\u5927\u6a13\uff09</label>'
@@ -1001,7 +1001,7 @@
         + '</div>';
 
       // --- Section 3: Security Settings ---
-      var securityHtml = ''
+      const securityHtml = ''
         + '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label">\u5b58\u53d6\u63a7\u5236\u65b9\u5f0f</label>'
@@ -1034,7 +1034,7 @@
         + '</div>';
 
       // --- Section 4: CIA Classification ---
-      var ciaHtml = ''
+      const ciaHtml = ''
         + '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label form-required">\u6a5f\u5bc6\u6027 (C)</label>'
@@ -1059,9 +1059,9 @@
         + '</div>';
 
       // --- Section 5: PII ---
-      var piiHtml = ''
+      const piiHtml = ''
         + '<div class="form-group">'
-        + '<label class="form-check-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">'
+        + '<label class="form-check-label asset-flex-cursor">'
         + '<input type="checkbox" class="form-check-input" id="asset-has-pii" name="hasPii"' + (a.hasPii ? ' checked' : '') + '>'
         + '<span>\u6b64\u8cc7\u7522\u5305\u542b\u500b\u4eba\u8cc7\u6599</span>'
         + '</label>'
@@ -1086,9 +1086,9 @@
       // Section 6 (年度版本管理) removed — system auto-sets inventoryYear, changeType, status
 
       // --- Section 7: IT System ---
-      var itSystemHtml = ''
+      const itSystemHtml = ''
         + '<div class="form-group">'
-        + '<label class="form-check-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">'
+        + '<label class="form-check-label asset-flex-cursor">'
         + '<input type="checkbox" class="form-check-input" id="asset-is-it-system" name="isItSystem"' + (a.isItSystem ? ' checked' : '') + '>'
         + '<span>\u6b64\u8cc7\u7522\u70ba\u8cc7\u901a\u7cfb\u7d71</span>'
         + '</label>'
@@ -1162,9 +1162,9 @@
         + '</div>';
 
       // --- Section 8: China Brand ---
-      var chinaBrandHtml = ''
+      const chinaBrandHtml = ''
         + '<div class="form-group">'
-        + '<label class="form-check-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">'
+        + '<label class="form-check-label asset-flex-cursor">'
         + '<input type="checkbox" class="form-check-input" id="asset-is-china-brand" name="isChinaBrand"' + (a.isChinaBrand ? ' checked' : '') + '>'
         + '<span>\u6b64\u8cc7\u7522\u70ba\u5927\u9678\u5ee0\u724c\u7522\u54c1</span>'
         + '</label>'
@@ -1191,11 +1191,11 @@
         + '</div>';
 
       // --- Section 9: Risk Assessment (Scenario-based) ---
-      var category = a.category || '';
-      var existingRisk = a.riskData || {};
-      var checkedIds = existingRisk.scenarioIds || [];
+      let category = a.category || '';
+      const existingRisk = a.riskData || {};
+      const checkedIds = existingRisk.scenarioIds || [];
 
-      var riskHtml = ''
+      const riskHtml = ''
         + '<div id="risk-scenarios-container">'
         + buildRiskScenarios(category, checkedIds)
         + '</div>'
@@ -1251,9 +1251,9 @@
 
       // ========== Assemble full form ==========
       appEl.innerHTML = '<div class="animate-in">'
-        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
+        + '<div class="page-header asset-flex-between">'
         + '<h2>' + ic(isEdit ? 'edit' : 'plus-circle') + ' ' + esc(title) + '</h2>'
-        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
+        + '<div class="page-header-actions asset-flex-gap8">'
         + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
         + '</div>'
         + '</div>'
@@ -1286,35 +1286,35 @@
           return '#assets';
         },
         a10AllConform: function () {
-          var selects = document.querySelectorAll('[data-a10-idx]');
+          const selects = document.querySelectorAll('[data-a10-idx]');
           selects.forEach(function (sel) {
             sel.value = '\u7b26\u5408';
-            var tr = sel.closest('tr');
+            const tr = sel.closest('tr');
             if (tr) tr.style.background = '#e8f5e9';
           });
         },
         toggleSection: function (ctx) {
-          var targetId = ctx.element && ctx.element.getAttribute('data-target');
+          const targetId = ctx.element && ctx.element.getAttribute('data-target');
           if (!targetId) return;
-          var bodyEl = document.getElementById(targetId);
+          const bodyEl = document.getElementById(targetId);
           if (!bodyEl) return;
-          var isVisible = bodyEl.style.display !== 'none';
+          const isVisible = bodyEl.style.display !== 'none';
           bodyEl.style.display = isVisible ? 'none' : '';
-          var iconSpan = ctx.element.querySelector('.section-toggle-icon');
+          const iconSpan = ctx.element.querySelector('.section-toggle-icon');
           if (iconSpan) {
             iconSpan.textContent = isVisible ? '\u25b8' : '\u25be';
           }
         },
         saveAsset: function () {
-          var form = document.getElementById('asset-form');
+          const form = document.getElementById('asset-form');
           if (!form) return;
 
           // Read all fields
-          var payload = {};
-          var inputs = form.querySelectorAll('input, select, textarea');
-          for (var i = 0; i < inputs.length; i++) {
-            var el = inputs[i];
-            var name = el.getAttribute('name');
+          const payload = {};
+          const inputs = form.querySelectorAll('input, select, textarea');
+          for (let i = 0; i < inputs.length; i++) {
+            const el = inputs[i];
+            let name = el.getAttribute('name');
             if (!name || name === '_assetId') continue;
             if (el.type === 'checkbox') {
               payload[name] = el.checked;
@@ -1326,13 +1326,13 @@
           // Validation
           if (!payload.assetName) {
             toast('\u8acb\u8f38\u5165\u8cc7\u7522\u540d\u7a31', 'error');
-            var nameEl = document.getElementById('asset-name');
+            const nameEl = document.getElementById('asset-name');
             if (nameEl) nameEl.focus();
             return;
           }
           if (!payload.category) {
             toast('\u8acb\u9078\u64c7\u4e3b\u5206\u985e', 'error');
-            var catEl = document.getElementById('asset-category');
+            const catEl = document.getElementById('asset-category');
             if (catEl) catEl.focus();
             return;
           }
@@ -1344,7 +1344,7 @@
           if (payload.ciaL) { payload.legalCompliance = payload.ciaL; delete payload.ciaL; }
 
           // Auto-set version fields (no longer user-facing)
-          var hiddenId = (document.getElementById('asset-id-hidden') || {}).value || '';
+          const hiddenId = (document.getElementById('asset-id-hidden') || {}).value || '';
           if (!payload.inventoryYear) payload.inventoryYear = getCurrentRocYear();
           if (!payload.changeType) payload.changeType = hiddenId ? '\u4fee\u6539' : '\u65b0\u589e';
           if (!payload.status) payload.status = '\u586b\u5831\u4e2d';
@@ -1355,9 +1355,9 @@
           });
 
           // Collect inline appendix10 assessments
-          var a10Selects = form.querySelectorAll('[data-a10-idx]');
-          var a10Assessments = [];
-          var filteredA10Data = APPENDIX10_DATA.filter(function(row) {
+          const a10Selects = form.querySelectorAll('[data-a10-idx]');
+          const a10Assessments = [];
+          const filteredA10Data = APPENDIX10_DATA.filter(function(row) {
             return isApplicable(payload.systemLevel || '', row.l);
           });
           a10Selects.forEach(function(sel, i) {
@@ -1373,18 +1373,18 @@
           });
 
           // Collect risk scenario data
-          var riskChecks = form.querySelectorAll('.risk-scenario-check:checked');
-          var scenarioIds = [];
-          var maxL = 0, maxI = 0;
+          const riskChecks = form.querySelectorAll('.risk-scenario-check:checked');
+          const scenarioIds = [];
+          let maxL = 0, maxI = 0;
           riskChecks.forEach(function(cb) {
             scenarioIds.push(cb.getAttribute('data-scenario-id'));
-            var l = parseInt(cb.getAttribute('data-likelihood'), 10) || 0;
-            var i = parseInt(cb.getAttribute('data-impact'), 10) || 0;
+            let l = parseInt(cb.getAttribute('data-likelihood'), 10) || 0;
+            let i = parseInt(cb.getAttribute('data-impact'), 10) || 0;
             if (l > maxL) maxL = l;
             if (i > maxI) maxI = i;
           });
-          var riskScore = maxL * maxI;
-          var riskLevel = riskScore >= 6 ? '\u9ad8' : riskScore >= 3 ? '\u4e2d' : riskScore >= 1 ? '\u4f4e' : '';
+          const riskScore = maxL * maxI;
+          const riskLevel = riskScore >= 6 ? '\u9ad8' : riskScore >= 3 ? '\u4e2d' : riskScore >= 1 ? '\u4f4e' : '';
           payload.riskData = {
             scenarioIds: scenarioIds,
             likelihood: maxL,
@@ -1396,10 +1396,10 @@
             controlDescription: (form.querySelector('#asset-risk-control-desc') || {}).value || ''
           };
 
-          var endpoint = (CONFIG && CONFIG.assetInventoryEndpoint) || '/api/assets';
-          var hiddenId = (document.getElementById('asset-id-hidden') || {}).value || '';
-          var editMode = !!hiddenId;
-          var url = endpoint + (editMode ? '/' + hiddenId : '');
+          const endpoint = (CONFIG && CONFIG.assetInventoryEndpoint) || '/api/assets';
+          // hiddenId already declared above in this scope
+          const editMode = !!hiddenId;
+          const url = endpoint + (editMode ? '/' + hiddenId : '');
 
           fetch(url, {
             method: 'POST',
@@ -1414,7 +1414,7 @@
               }
               // Save appendix10 assessments if this is an IT system with assessments
               if (payload.isItSystem && a10Assessments.length > 0) {
-                var assetSavedId = data.id || hiddenId;
+                const assetSavedId = data.id || hiddenId;
                 if (assetSavedId) {
                   fetch(endpoint + '/' + assetSavedId + '/appendix10', {
                     method: 'POST',
@@ -1443,20 +1443,20 @@
     function bindFormDynamicBehaviors() {
       // Use a single document-level change listener with delegation.
       // We tag the listener so it can be identified if cleanup is needed.
-      var listenerKey = '__assetFormChangeListener';
+      const listenerKey = '__assetFormChangeListener';
       if (window[listenerKey]) {
         document.removeEventListener('change', window[listenerKey], true);
       }
 
       function onFormChange(e) {
-        var target = e.target;
+        let target = e.target;
         if (!target) return;
-        var form = document.getElementById('asset-form');
+        const form = document.getElementById('asset-form');
         if (!form) return;
 
         // Handle inline appendix10 assessment dropdown changes
         if (target.getAttribute && target.getAttribute('data-a10-idx') !== null) {
-          var tr = target.closest('tr');
+          const tr = target.closest('tr');
           if (tr) {
             if (target.value === '\u7b26\u5408') {
               tr.style.background = '#e8f5e9';
@@ -1473,29 +1473,29 @@
 
         // --- Risk scenario checkbox change ---
         if (target.classList && target.classList.contains('risk-scenario-check')) {
-          var checks = document.querySelectorAll('.risk-scenario-check:checked');
-          var maxL = 0, maxI = 0;
+          const checks = document.querySelectorAll('.risk-scenario-check:checked');
+          let maxL = 0, maxI = 0;
           checks.forEach(function(cb) {
-            var l = parseInt(cb.getAttribute('data-likelihood'), 10) || 0;
-            var i = parseInt(cb.getAttribute('data-impact'), 10) || 0;
+            let l = parseInt(cb.getAttribute('data-likelihood'), 10) || 0;
+            let i = parseInt(cb.getAttribute('data-impact'), 10) || 0;
             if (l > maxL) maxL = l;
             if (i > maxI) maxI = i;
           });
-          var score = maxL * maxI;
-          var level = score >= 6 ? '\u9ad8' : score >= 3 ? '\u4e2d' : score >= 1 ? '\u4f4e' : '--';
-          var levelColor = level === '\u9ad8' ? '#c62828' : level === '\u4e2d' ? '#e65100' : level === '\u4f4e' ? '#2e7d32' : '#666';
-          var scoreEl = document.getElementById('risk-score-display');
-          var levelEl = document.getElementById('risk-level-display');
+          const score = maxL * maxI;
+          let level = score >= 6 ? '\u9ad8' : score >= 3 ? '\u4e2d' : score >= 1 ? '\u4f4e' : '--';
+          const levelColor = level === '\u9ad8' ? '#c62828' : level === '\u4e2d' ? '#e65100' : level === '\u4f4e' ? '#2e7d32' : '#666';
+          const scoreEl = document.getElementById('risk-score-display');
+          const levelEl = document.getElementById('risk-level-display');
           if (scoreEl) scoreEl.textContent = score || '--';
           if (levelEl) { levelEl.textContent = level; levelEl.style.color = levelColor; }
-          var treatmentEl = document.getElementById('risk-treatment-section');
+          const treatmentEl = document.getElementById('risk-treatment-section');
           if (treatmentEl) treatmentEl.style.display = level === '\u9ad8' ? '' : 'none';
           // Update card styling and count
-          var totalChecked = checks.length;
-          var countEl = document.getElementById('risk-checked-count');
+          const totalChecked = checks.length;
+          const countEl = document.getElementById('risk-checked-count');
           if (countEl) countEl.textContent = '\u5df2\u52fe\u9078 ' + totalChecked + ' \u9805';
           document.querySelectorAll('.risk-scenario-check').forEach(function(cb) {
-            var card = cb.closest('.risk-scenario-card');
+            const card = cb.closest('.risk-scenario-card');
             if (card) {
               card.style.background = cb.checked ? '#fff3e0' : '#fafafa';
               card.style.borderColor = cb.checked ? '#ff9800' : '#e0e0e0';
@@ -1507,14 +1507,14 @@
             levelEl.style.color = levelColor;
           }
           // Highlight matching cell in risk matrix
-          var matrixTable = document.getElementById('risk-matrix-table');
+          const matrixTable = document.getElementById('risk-matrix-table');
           if (matrixTable) {
             matrixTable.querySelectorAll('[data-cell]').forEach(function(td) {
               td.style.outline = '';
               td.style.outlineOffset = '';
             });
             if (maxL > 0 && maxI > 0) {
-              var matchCell = matrixTable.querySelector('[data-cell="' + maxL + '-' + maxI + '"]');
+              const matchCell = matrixTable.querySelector('[data-cell="' + maxL + '-' + maxI + '"]');
               if (matchCell) {
                 matchCell.style.outline = '3px solid #1565c0';
                 matchCell.style.outlineOffset = '-2px';
@@ -1529,20 +1529,20 @@
         switch (target.id) {
           // --- Category -> SubCategory cascade ---
           case 'asset-category': {
-            var subCatEl = document.getElementById('asset-sub-category');
+            const subCatEl = document.getElementById('asset-sub-category');
             if (subCatEl) {
               subCatEl.innerHTML = buildSubCategorySelectOptions(target.value, '', true);
             }
-            var riskContainer = document.getElementById('risk-scenarios-container');
+            const riskContainer = document.getElementById('risk-scenarios-container');
             if (riskContainer) {
               riskContainer.innerHTML = buildRiskScenarios(target.value, []);
             }
             // Reset risk score/level displays
-            var rScoreEl = document.getElementById('risk-score-display');
-            var rLevelEl = document.getElementById('risk-level-display');
+            const rScoreEl = document.getElementById('risk-score-display');
+            const rLevelEl = document.getElementById('risk-level-display');
             if (rScoreEl) rScoreEl.textContent = '--';
             if (rLevelEl) { rLevelEl.textContent = '--'; rLevelEl.style.color = '#666'; }
-            var rTreatEl = document.getElementById('risk-treatment-section');
+            const rTreatEl = document.getElementById('risk-treatment-section');
             if (rTreatEl) rTreatEl.style.display = 'none';
             break;
           }
@@ -1552,27 +1552,27 @@
           case 'asset-cia-i':
           case 'asset-cia-a':
           case 'asset-cia-l': {
-            var cC = (document.getElementById('asset-cia-c') || {}).value || '';
-            var cI = (document.getElementById('asset-cia-i') || {}).value || '';
-            var cA = (document.getElementById('asset-cia-a') || {}).value || '';
-            var cL = (document.getElementById('asset-cia-l') || {}).value || '';
-            var vals = [cC, cI, cA, cL].filter(function(v) { return v; });
-            var maxVal = vals.reduce(function(mx, v) { return (CIA_VALUE_MAP[v] || 0) > (CIA_VALUE_MAP[mx] || 0) ? v : mx; }, vals[0] || '');
-            var protEl = document.getElementById('asset-protection-level');
+            const cC = (document.getElementById('asset-cia-c') || {}).value || '';
+            const cI = (document.getElementById('asset-cia-i') || {}).value || '';
+            const cA = (document.getElementById('asset-cia-a') || {}).value || '';
+            const cL = (document.getElementById('asset-cia-l') || {}).value || '';
+            const vals = [cC, cI, cA, cL].filter(function(v) { return v; });
+            const maxVal = vals.reduce(function(mx, v) { return (CIA_VALUE_MAP[v] || 0) > (CIA_VALUE_MAP[mx] || 0) ? v : mx; }, vals[0] || '');
+            const protEl = document.getElementById('asset-protection-level');
             if (protEl) protEl.value = maxVal || '--';
             break;
           }
 
           // --- hasPii checkbox -> toggle PII details ---
           case 'asset-has-pii': {
-            var piiDetails = document.getElementById('asset-pii-details');
+            const piiDetails = document.getElementById('asset-pii-details');
             if (piiDetails) piiDetails.style.display = target.checked ? '' : 'none';
             break;
           }
 
           // --- isItSystem checkbox -> toggle IT system section ---
           case 'asset-is-it-system': {
-            var itDetails = document.getElementById('asset-it-system-details');
+            const itDetails = document.getElementById('asset-it-system-details');
             if (itDetails) itDetails.style.display = target.checked ? '' : 'none';
             break;
           }
@@ -1581,7 +1581,7 @@
 
           // --- System level change -> rebuild inline appendix10 checklist ---
           case 'asset-sys-level': {
-            var a10Container = document.getElementById('asset-appendix10-inline');
+            const a10Container = document.getElementById('asset-appendix10-inline');
             if (a10Container) {
               a10Container.innerHTML = buildInlineAppendix10Checklist(target.value || '', []);
             }
@@ -1590,7 +1590,7 @@
 
           // --- isChinaBrand checkbox -> toggle China brand section ---
           case 'asset-is-china-brand': {
-            var cnDetails = document.getElementById('asset-china-brand-details');
+            const cnDetails = document.getElementById('asset-china-brand-details');
             if (cnDetails) cnDetails.style.display = target.checked ? '' : 'none';
             break;
           }
@@ -1607,15 +1607,15 @@
     // renderAssetDetail
     // -------------------------------------------------------
     async function renderAssetDetail(assetId) {
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
 
       appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-empty">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div></div>';
       scheduleRefreshIcons();
 
-      var asset;
+      let asset;
       try {
-        var resp = await apiCall('GET', '/' + assetId);
+        const resp = await apiCall('GET', '/' + assetId);
         asset = resp && resp.item ? resp.item : resp;
       } catch (err) {
         appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-error">'
@@ -1626,10 +1626,10 @@
         return;
       }
 
-      var a = asset || {};
-      var riskScore = computeRiskScore(a.riskLikelihood, a.riskImpact);
-      var riskLevel = a.riskLevel || getRiskLevel(riskScore);
-      var protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL);
+      const a = asset || {};
+      const riskScore = computeRiskScore(a.riskLikelihood, a.riskImpact);
+      const riskLevel = a.riskLevel || getRiskLevel(riskScore);
+      const protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL);
 
       function detailRow(label, value) {
         return '<tr><td style="font-weight:600;width:180px;vertical-align:top;padding:8px 12px;white-space:nowrap;">' + esc(label) + '</td>'
@@ -1641,7 +1641,7 @@
           + '<td style="padding:8px 12px;">' + badgeHtml + '</td></tr>';
       }
 
-      var basicTable = '<table class="detail-table asset-table">'
+      const basicTable = '<table class="detail-table asset-table">'
         + detailRow('\u8cc7\u7522\u7de8\u865f', a.assetId)
         + detailRow('\u8cc7\u7522\u540d\u7a31', a.assetName)
         + detailRow('\u82f1\u6587\u540d\u7a31', a.assetNameEn)
@@ -1652,7 +1652,7 @@
         + detailRow('\u8cc7\u7522\u8aaa\u660e', a.description)
         + '</table>';
 
-      var locationTable = '<table class="detail-table asset-table">'
+      const locationTable = '<table class="detail-table asset-table">'
         + detailRow('\u5b58\u653e\u4f4d\u7f6e', a.location)
         + detailRow('\u7db2\u8def\u4f4d\u5740 / IP', a.networkAddress)
         + detailRow('\u5ee0\u724c', a.brand)
@@ -1662,14 +1662,14 @@
         + detailRow('\u55ae\u4f4d', a.quantityUnit)
         + '</table>';
 
-      var securityTable = '<table class="detail-table asset-table">'
+      const securityTable = '<table class="detail-table asset-table">'
         + detailRow('\u5b58\u53d6\u63a7\u5236\u65b9\u5f0f', a.accessControl)
         + detailRow('\u52a0\u5bc6\u65b9\u5f0f', a.encryption)
         + detailRow('\u5099\u4efd\u65b9\u5f0f', a.backupMethod)
         + detailRow('\u5099\u4efd\u983b\u7387', a.backupFrequency)
         + '</table>';
 
-      var ciaTable = '<table class="detail-table asset-table">'
+      const ciaTable = '<table class="detail-table asset-table">'
         + detailRow('\u6a5f\u5bc6\u6027 (C)', a.ciaC)
         + detailRow('\u5b8c\u6574\u6027 (I)', a.ciaI)
         + detailRow('\u53ef\u7528\u6027 (A)', a.ciaA)
@@ -1677,7 +1677,7 @@
         + detailBadgeRow('\u9632\u8b77\u9700\u6c42\u7b49\u7d1a', '<strong>' + esc(protLevel || '\u2014') + '</strong>')
         + '</table>';
 
-      var piiTable = '<table class="detail-table asset-table">'
+      let piiTable = '<table class="detail-table asset-table">'
         + detailRow('\u5305\u542b\u500b\u4eba\u8cc7\u6599', a.hasPii ? '\u662f' : '\u5426');
       if (a.hasPii) {
         piiTable += detailRow('\u500b\u8cc7\u985e\u5225', a.piiCategory)
@@ -1686,14 +1686,14 @@
       }
       piiTable += '</table>';
 
-      var versionTable = '<table class="detail-table asset-table">'
+      const versionTable = '<table class="detail-table asset-table">'
         + detailRow('\u76e4\u9ede\u5e74\u5ea6', a.inventoryYear)
         + detailRow('\u7570\u52d5\u985e\u578b', a.changeType)
         + detailBadgeRow('\u72c0\u614b', statusBadge(a.status))
         + detailRow('\u7570\u52d5\u8aaa\u660e', a.changeDescription)
         + '</table>';
 
-      var itSystemTable = '';
+      let itSystemTable = '';
       if (a.isItSystem) {
         itSystemTable = '<table class="detail-table asset-table">'
           + detailRow('\u8cc7\u901a\u5b89\u5168\u7cfb\u7d71', '\u662f')
@@ -1708,7 +1708,7 @@
           + '</table>';
       }
 
-      var itProtectionTable = '';
+      let itProtectionTable = '';
       if (a.isItSystem) {
         itProtectionTable = '<table class="detail-table asset-table">'
           + detailRow('\u5b58\u53d6\u63a7\u5236\u63aa\u65bd', a.itAccessControl)
@@ -1719,7 +1719,7 @@
           + '</table>';
       }
 
-      var chinaBrandTable = '';
+      let chinaBrandTable = '';
       if (a.isChinaBrand) {
         chinaBrandTable = '<table class="detail-table asset-table">'
           + detailRow('\u5927\u9678\u5ee0\u724c\u7522\u54c1', '\u662f')
@@ -1730,7 +1730,7 @@
           + '</table>';
       }
 
-      var riskTable = '<table class="detail-table asset-table">'
+      const riskTable = '<table class="detail-table asset-table">'
         + detailRow('\u53ef\u80fd\u6027', a.riskLikelihood)
         + detailRow('\u885d\u64ca\u6027', a.riskImpact)
         + detailRow('\u98a8\u96aa\u5206\u6578', riskScore ? String(riskScore) : '\u2014')
@@ -1740,9 +1740,9 @@
         + '</table>';
 
       appEl.innerHTML = '<div class="animate-in">'
-        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
+        + '<div class="page-header asset-flex-between">'
         + '<h2>' + ic('file-text') + ' \u8cc7\u7522\u8a73\u60c5</h2>'
-        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
+        + '<div class="page-header-actions asset-flex-gap8">'
         + '<button class="btn btn-primary" data-action="app.editThisAsset">' + ic('edit') + ' \u7de8\u8f2f</button>'
         + '<button class="btn btn-outline" data-action="app.backToList">' + ic('arrow-left') + ' \u8fd4\u56de\u5217\u8868</button>'
         + '</div>'
@@ -1759,7 +1759,7 @@
         + (a.isChinaBrand ? buildCollapsibleSection('detail-chinaBrand', '9. \u5927\u9678\u5ee0\u724c', chinaBrandTable, { open: true, borderColor: '#e67e22' }) : '')
         + buildCollapsibleSection('detail-risk', '10. \u98a8\u96aa\u8a55\u9451', riskTable, { open: true, borderColor: '#27ae60' })
 
-        + '<div style="padding-bottom:40px;"></div>'
+        + '<div class="asset-pad-bottom"></div>'
         + '</div>';
 
       scheduleRefreshIcons();
@@ -1775,14 +1775,14 @@
 
       // Bind section toggle
       addPageEventListener(appEl, 'click', function (e) {
-        var header = e.target.closest && e.target.closest('[data-toggle-section]');
+        let header = e.target.closest && e.target.closest('[data-toggle-section]');
         if (!header) return;
-        var sectionId = header.getAttribute('data-toggle-section');
-        var bodyEl = document.getElementById('asset-section-body-' + sectionId);
+        const sectionId = header.getAttribute('data-toggle-section');
+        const bodyEl = document.getElementById('asset-section-body-' + sectionId);
         if (!bodyEl) return;
-        var isVisible = bodyEl.style.display !== 'none';
+        const isVisible = bodyEl.style.display !== 'none';
         bodyEl.style.display = isVisible ? 'none' : '';
-        var iconSpan = header.querySelector('.section-toggle-icon');
+        const iconSpan = header.querySelector('.section-toggle-icon');
         if (iconSpan) {
           iconSpan.innerHTML = ic(isVisible ? 'chevron-down' : 'chevron-up');
           scheduleRefreshIcons();
@@ -1794,17 +1794,17 @@
     // renderAppendix10
     // -------------------------------------------------------
     async function renderAppendix10(assetId) {
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
 
       // APPENDIX10_DATA and isApplicable are now at module level
 
       // -- Collect unique dimension names for filter --
-      var dimensionSet = {};
-      for (var di = 0; di < APPENDIX10_DATA.length; di++) {
+      const dimensionSet = {};
+      for (let di = 0; di < APPENDIX10_DATA.length; di++) {
         dimensionSet[APPENDIX10_DATA[di].d] = true;
       }
-      var dimensions = Object.keys(dimensionSet);
+      const dimensions = Object.keys(dimensionSet);
 
       // -- Show loading --
       appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-empty">'
@@ -1812,9 +1812,9 @@
       scheduleRefreshIcons();
 
       // -- Fetch asset + existing assessments --
-      var asset, appendixData;
+      let asset, appendixData;
       try {
-        var results = await Promise.all([
+        const results = await Promise.all([
           apiCall('GET', '/' + assetId),
           apiCall('GET', '/' + assetId + '/appendix10')
         ]);
@@ -1831,33 +1831,33 @@
         return;
       }
 
-      var a = asset || {};
-      var protLevel = appendixData.protectionLevel
+      const a = asset || {};
+      const protLevel = appendixData.protectionLevel
         || a.protectionLevel
         || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL)
         || '';
-      var existingAssessments = Array.isArray(appendixData.assessments) ? appendixData.assessments : [];
-      var complianceStatus = appendixData.complianceStatus || '';
+      const existingAssessments = Array.isArray(appendixData.assessments) ? appendixData.assessments : [];
+      const complianceStatus = appendixData.complianceStatus || '';
 
       // -- Build lookup map from existing assessments --
       function assessmentKey(dimension, code, control) {
         return dimension + '|' + code + '|' + control;
       }
-      var assessmentMap = {};
-      for (var ai = 0; ai < existingAssessments.length; ai++) {
-        var ea = existingAssessments[ai];
-        var key = assessmentKey(ea.dimension, ea.code, ea.control);
+      const assessmentMap = {};
+      for (let ai = 0; ai < existingAssessments.length; ai++) {
+        const ea = existingAssessments[ai];
+        const key = assessmentKey(ea.dimension, ea.code, ea.control);
         assessmentMap[key] = ea;
       }
 
       // -- Build filter bar --
-      var filterHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;">'
+      let filterHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;">'
         + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">構面篩選</label>'
         + '<select class="form-control" id="a10-filter-dimension" style="min-width:160px;">'
         + '<option value="">全部構面</option>';
-      for (var fi = 0; fi < dimensions.length; fi++) {
+      for (let fi = 0; fi < dimensions.length; fi++) {
         filterHtml += '<option value="' + esc(dimensions[fi]) + '">' + esc(dimensions[fi]) + '</option>';
       }
       filterHtml += '</select></div>'
@@ -1874,29 +1874,29 @@
         + '</div></div>';
 
       // -- Build info bar --
-      var protBadgeClass = protLevel === '高' ? 'badge-danger' : (protLevel === '中' ? 'badge-warning' : 'badge-success');
-      var infoHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">'
+      const protBadgeClass = protLevel === '高' ? 'badge-danger' : (protLevel === '中' ? 'badge-warning' : 'badge-success');
+      const infoHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">'
         + '<span>' + ic('server') + ' <strong>' + esc(a.assetName || '未命名資產') + '</strong></span>'
         + '<span>防護等級：<span class="badge ' + protBadgeClass + '"><span class="badge-dot"></span>' + esc(protLevel || '未設定') + '</span></span>'
         + (complianceStatus ? '<span>合規狀態：' + esc(complianceStatus) + '</span>' : '')
         + '</div>';
 
       // -- Build assessment table rows --
-      var tableRowsHtml = '';
-      for (var ri = 0; ri < APPENDIX10_DATA.length; ri++) {
-        var row = APPENDIX10_DATA[ri];
-        var rowKey = assessmentKey(row.d, row.c, row.t);
-        var existing = assessmentMap[rowKey] || {};
-        var result = existing.result || '';
-        var note = existing.note || '';
-        var applicable = isApplicable(protLevel, row.l);
+      let tableRowsHtml = '';
+      for (let ri = 0; ri < APPENDIX10_DATA.length; ri++) {
+        let row = APPENDIX10_DATA[ri];
+        const rowKey = assessmentKey(row.d, row.c, row.t);
+        const existing = assessmentMap[rowKey] || {};
+        const result = existing.result || '';
+        const note = existing.note || '';
+        let applicable = isApplicable(protLevel, row.l);
 
-        var rowBg = '';
+        let rowBg = '';
         if (result === '符合') rowBg = 'background:#e8f5e9;';
         else if (result === '不符合') rowBg = 'background:#ffebee;';
         else if (result === '不適用') rowBg = 'background:#f5f5f5;';
 
-        var levelBadge = row.l === '共通' ? 'badge-info'
+        const levelBadge = row.l === '共通' ? 'badge-info'
           : (row.l === '高' ? 'badge-danger'
             : (row.l === '中' ? 'badge-warning'
               : (row.l === '普' ? 'badge-success' : 'badge-secondary')));
@@ -1920,8 +1920,8 @@
       }
 
       // -- Compute initial summary --
-      var initComply = 0, initNonComply = 0, initNA = 0, initTotal = APPENDIX10_DATA.length;
-      for (var si = 0; si < existingAssessments.length; si++) {
+      let initComply = 0, initNonComply = 0, initNA = 0, initTotal = APPENDIX10_DATA.length;
+      for (let si = 0; si < existingAssessments.length; si++) {
         if (existingAssessments[si].result === '符合') initComply++;
         else if (existingAssessments[si].result === '不符合') initNonComply++;
         else if (existingAssessments[si].result === '不適用') initNA++;
@@ -1929,9 +1929,9 @@
 
       // -- Assemble page --
       appEl.innerHTML = '<div class="animate-in">'
-        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
+        + '<div class="page-header asset-flex-between">'
         + '<h2>' + ic('clipboard-list') + ' 附表十 資通系統防護基準評估</h2>'
-        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
+        + '<div class="page-header-actions asset-flex-gap8">'
         + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回資產</button>'
         + '<button class="btn btn-primary" data-action="app.saveAppendix10">' + ic('save') + ' 儲存評估</button>'
         + '</div>'
@@ -1961,55 +1961,55 @@
         + '</table>'
         + '</div>'
 
-        + '<div style="padding-bottom:40px;"></div>'
+        + '<div class="asset-pad-bottom"></div>'
         + '</div>';
 
       scheduleRefreshIcons();
 
       // -- Filter logic --
       function applyFilters() {
-        var dimFilter = document.getElementById('a10-filter-dimension');
-        var showModeEls = document.querySelectorAll('input[name="a10ShowMode"]');
-        var selectedDim = dimFilter ? dimFilter.value : '';
-        var showMode = 'all';
-        for (var mi = 0; mi < showModeEls.length; mi++) {
+        const dimFilter = document.getElementById('a10-filter-dimension');
+        const showModeEls = document.querySelectorAll('input[name="a10ShowMode"]');
+        const selectedDim = dimFilter ? dimFilter.value : '';
+        let showMode = 'all';
+        for (let mi = 0; mi < showModeEls.length; mi++) {
           if (showModeEls[mi].checked) { showMode = showModeEls[mi].value; break; }
         }
-        var rows = document.querySelectorAll('.a10-row');
-        for (var rfi = 0; rfi < rows.length; rfi++) {
-          var tr = rows[rfi];
-          var dimMatch = !selectedDim || tr.getAttribute('data-dimension') === selectedDim;
-          var appMatch = showMode === 'all' || tr.getAttribute('data-applicable') === 'yes';
+        let rows = document.querySelectorAll('.a10-row');
+        for (let rfi = 0; rfi < rows.length; rfi++) {
+          const tr = rows[rfi];
+          const dimMatch = !selectedDim || tr.getAttribute('data-dimension') === selectedDim;
+          const appMatch = showMode === 'all' || tr.getAttribute('data-applicable') === 'yes';
           tr.style.display = (dimMatch && appMatch) ? '' : 'none';
         }
       }
 
-      var dimFilterEl = document.getElementById('a10-filter-dimension');
+      const dimFilterEl = document.getElementById('a10-filter-dimension');
       if (dimFilterEl) {
         addPageEventListener(dimFilterEl, 'change', applyFilters);
       }
-      var showModeRadios = document.querySelectorAll('input[name="a10ShowMode"]');
-      for (var smi = 0; smi < showModeRadios.length; smi++) {
+      const showModeRadios = document.querySelectorAll('input[name="a10ShowMode"]');
+      for (let smi = 0; smi < showModeRadios.length; smi++) {
         addPageEventListener(showModeRadios[smi], 'change', applyFilters);
       }
 
       // -- Row color update + summary update on result change --
       function updateRowColorAndSummary() {
-        var complyCount = 0, nonComplyCount = 0, naCount = 0;
-        var resultSelects = document.querySelectorAll('.a10-result');
-        for (var uci = 0; uci < resultSelects.length; uci++) {
-          var sel = resultSelects[uci];
-          var idx = sel.getAttribute('data-idx');
-          var tr = document.querySelector('.a10-row[data-idx="' + idx + '"]');
-          var val = sel.value;
+        let complyCount = 0, nonComplyCount = 0, naCount = 0;
+        const resultSelects = document.querySelectorAll('.a10-result');
+        for (let uci = 0; uci < resultSelects.length; uci++) {
+          const sel = resultSelects[uci];
+          let idx = sel.getAttribute('data-idx');
+          const tr = document.querySelector('.a10-row[data-idx="' + idx + '"]');
+          const val = sel.value;
           if (val === '符合') { complyCount++; if (tr) tr.style.background = '#e8f5e9'; }
           else if (val === '不符合') { nonComplyCount++; if (tr) tr.style.background = '#ffebee'; }
           else if (val === '不適用') { naCount++; if (tr) tr.style.background = '#f5f5f5'; }
           else { if (tr) tr.style.background = ''; }
         }
-        var complyEl = document.getElementById('a10-comply-count');
-        var nonComplyEl = document.getElementById('a10-noncomply-count');
-        var naEl = document.getElementById('a10-na-count');
+        const complyEl = document.getElementById('a10-comply-count');
+        const nonComplyEl = document.getElementById('a10-noncomply-count');
+        const naEl = document.getElementById('a10-na-count');
         if (complyEl) complyEl.textContent = String(complyCount);
         if (nonComplyEl) nonComplyEl.textContent = String(nonComplyCount);
         if (naEl) naEl.textContent = String(naCount);
@@ -2027,11 +2027,11 @@
           return '#asset-detail/' + assetId;
         },
         saveAppendix10: async function () {
-          var assessments = [];
-          for (var ci = 0; ci < APPENDIX10_DATA.length; ci++) {
-            var rowData = APPENDIX10_DATA[ci];
-            var resultSel = document.querySelector('.a10-result[data-idx="' + ci + '"]');
-            var noteInput = document.querySelector('.a10-note[data-idx="' + ci + '"]');
+          const assessments = [];
+          for (let ci = 0; ci < APPENDIX10_DATA.length; ci++) {
+            const rowData = APPENDIX10_DATA[ci];
+            const resultSel = document.querySelector('.a10-result[data-idx="' + ci + '"]');
+            const noteInput = document.querySelector('.a10-note[data-idx="' + ci + '"]');
             assessments.push({
               dimension: rowData.d,
               code: rowData.c,
@@ -2058,20 +2058,20 @@
     // renderRiskAssessment
     // -------------------------------------------------------
     async function renderRiskAssessment(assetId) {
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
 
       // -- Predefined threat and vulnerability lists --
-      var THREATS = ['天然災害', '設備故障', '惡意程式', '未授權存取', '社交工程', '人為疏失', '供應鏈風險', '資料外洩', 'DDoS攻擊'];
-      var VULNERABILITIES = ['密碼強度不足', '未及時更新修補', '缺乏備份', '存取控制不當', '缺乏加密', '人員訓練不足', '實體安全不足', '缺乏日誌監控'];
+      const THREATS = ['天然災害', '設備故障', '惡意程式', '未授權存取', '社交工程', '人為疏失', '供應鏈風險', '資料外洩', 'DDoS攻擊'];
+      const VULNERABILITIES = ['密碼強度不足', '未及時更新修補', '缺乏備份', '存取控制不當', '缺乏加密', '人員訓練不足', '實體安全不足', '缺乏日誌監控'];
 
       // -- Risk matrix definition: matrix[impact-1][likelihood-1] = { score, level } --
-      var RISK_MATRIX = [
+      const RISK_MATRIX = [
         [{ s: 1, l: '低' }, { s: 2, l: '低' }, { s: 3, l: '中' }],
         [{ s: 2, l: '低' }, { s: 4, l: '中' }, { s: 6, l: '高' }],
         [{ s: 3, l: '中' }, { s: 6, l: '高' }, { s: 9, l: '高' }]
       ];
-      var RISK_COLORS = { '低': '#C8E6C9', '中': '#FFF9C4', '高': '#FFCDD2' };
+      const RISK_COLORS = { '低': '#C8E6C9', '中': '#FFF9C4', '高': '#FFCDD2' };
 
       // -- Show loading --
       appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-empty">'
@@ -2079,9 +2079,9 @@
       scheduleRefreshIcons();
 
       // -- Fetch asset data --
-      var asset;
+      let asset;
       try {
-        var resp = await apiCall('GET', '/' + assetId);
+        const resp = await apiCall('GET', '/' + assetId);
         asset = resp && resp.item ? resp.item : resp;
       } catch (err) {
         appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-error">'
@@ -2094,42 +2094,42 @@
         return;
       }
 
-      var a = asset || {};
-      var riskData = {};
+      const a = asset || {};
+      let riskData = {};
       try {
         riskData = a.risk_data_json ? (typeof a.risk_data_json === 'string' ? JSON.parse(a.risk_data_json) : a.risk_data_json) : {};
       } catch (e) { riskData = {}; }
       if (a.riskData) riskData = a.riskData;
 
-      var protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL) || '';
+      const protLevel = a.protectionLevel || computeProtectionLevel(a.ciaC, a.ciaI, a.ciaA, a.ciaL) || '';
 
       // -- Compute asset value from CIA --
-      var cVal = CIA_VALUE_MAP[a.ciaC] || 0;
-      var iVal = CIA_VALUE_MAP[a.ciaI] || 0;
-      var aVal = CIA_VALUE_MAP[a.ciaA] || 0;
-      var lVal = CIA_VALUE_MAP[a.ciaL] || 0;
-      var assetValue = riskData.assetValue || Math.max(cVal, iVal, aVal, lVal) || 0;
+      const cVal = CIA_VALUE_MAP[a.ciaC] || 0;
+      const iVal = CIA_VALUE_MAP[a.ciaI] || 0;
+      const aVal = CIA_VALUE_MAP[a.ciaA] || 0;
+      const lVal = CIA_VALUE_MAP[a.ciaL] || 0;
+      const assetValue = riskData.assetValue || Math.max(cVal, iVal, aVal, lVal) || 0;
 
       // -- Existing risk data --
-      var existingThreats = Array.isArray(riskData.threats) ? riskData.threats : [];
-      var existingVulns = Array.isArray(riskData.vulnerabilities) ? riskData.vulnerabilities : [];
-      var existingLikelihood = riskData.likelihood || '';
-      var existingImpact = riskData.impact || String(assetValue) || '';
-      var existingTreatment = riskData.treatment || '';
-      var existingControlDesc = riskData.controlDescription || '';
-      var existingResidualRisk = riskData.residualRisk || '';
-      var existingRiskOwner = riskData.riskOwner || '';
-      var existingThreatOther = riskData.threatOther || '';
-      var existingVulnOther = riskData.vulnOther || '';
+      const existingThreats = Array.isArray(riskData.threats) ? riskData.threats : [];
+      const existingVulns = Array.isArray(riskData.vulnerabilities) ? riskData.vulnerabilities : [];
+      const existingLikelihood = riskData.likelihood || '';
+      const existingImpact = riskData.impact || String(assetValue) || '';
+      const existingTreatment = riskData.treatment || '';
+      const existingControlDesc = riskData.controlDescription || '';
+      const existingResidualRisk = riskData.residualRisk || '';
+      const existingRiskOwner = riskData.riskOwner || '';
+      const existingThreatOther = riskData.threatOther || '';
+      const existingVulnOther = riskData.vulnOther || '';
 
       // -- Compute initial risk score/level --
-      var initScore = computeRiskScore(existingLikelihood, existingImpact);
-      var initLevel = getRiskLevel(initScore);
+      const initScore = computeRiskScore(existingLikelihood, existingImpact);
+      const initLevel = getRiskLevel(initScore);
 
       // -- Build threat checkboxes --
-      var threatCheckboxHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">';
-      for (var ti = 0; ti < THREATS.length; ti++) {
-        var tChecked = existingThreats.indexOf(THREATS[ti]) !== -1;
+      let threatCheckboxHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">';
+      for (let ti = 0; ti < THREATS.length; ti++) {
+        const tChecked = existingThreats.indexOf(THREATS[ti]) !== -1;
         threatCheckboxHtml += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9em;">'
           + '<input type="checkbox" class="form-check-input ra-threat" value="' + esc(THREATS[ti]) + '"' + (tChecked ? ' checked' : '') + '>'
           + '<span>' + esc(THREATS[ti]) + '</span></label>';
@@ -2141,9 +2141,9 @@
         + '</div>';
 
       // -- Build vulnerability checkboxes --
-      var vulnCheckboxHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">';
-      for (var vi = 0; vi < VULNERABILITIES.length; vi++) {
-        var vChecked = existingVulns.indexOf(VULNERABILITIES[vi]) !== -1;
+      let vulnCheckboxHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">';
+      for (let vi = 0; vi < VULNERABILITIES.length; vi++) {
+        const vChecked = existingVulns.indexOf(VULNERABILITIES[vi]) !== -1;
         vulnCheckboxHtml += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9em;">'
           + '<input type="checkbox" class="form-check-input ra-vuln" value="' + esc(VULNERABILITIES[vi]) + '"' + (vChecked ? ' checked' : '') + '>'
           + '<span>' + esc(VULNERABILITIES[vi]) + '</span></label>';
@@ -2155,7 +2155,7 @@
         + '</div>';
 
       // -- Build risk calculation section --
-      var riskCalcHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;">'
+      const riskCalcHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;">'
         + '<div class="form-group">'
         + '<label class="form-label">可能性</label>'
         + '<select class="form-control" id="ra-likelihood">'
@@ -2184,8 +2184,8 @@
         + '</div>';
 
       // -- Build risk treatment section --
-      var showTreatment = initLevel === '高';
-      var treatmentHtml = '<div id="ra-treatment-section"' + (showTreatment ? '' : ' style="display:none;"') + '>'
+      const showTreatment = initLevel === '高';
+      const treatmentHtml = '<div id="ra-treatment-section"' + (showTreatment ? '' : ' style="display:none;"') + '>'
         + '<div style="border-top:1px solid #eee;padding-top:16px;margin-top:16px;">'
         + '<h4 class="asset-mb-12">' + ic('shield-alert') + ' 風險處置</h4>'
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
@@ -2215,7 +2215,7 @@
         + '</div></div>';
 
       // -- Build risk matrix visual --
-      var matrixHtml = '<div style="margin-top:16px;">'
+      let matrixHtml = '<div style="margin-top:16px;">'
         + '<h4 style="margin-bottom:8px;">' + ic('grid-3x3') + ' 風險矩陣</h4>'
         + '<div style="display:inline-block;">'
         + '<table style="border-collapse:collapse;text-align:center;font-size:0.85em;">'
@@ -2225,14 +2225,14 @@
         + '<th class="asset-form-header">2（中）</th>'
         + '<th class="asset-form-header">3（高）</th>'
         + '</tr></thead><tbody>';
-      for (var mrow = 2; mrow >= 0; mrow--) {
-        var impactLabel = (mrow + 1) + '（' + (mrow === 0 ? '低' : (mrow === 1 ? '中' : '高')) + '）';
+      for (let mrow = 2; mrow >= 0; mrow--) {
+        const impactLabel = (mrow + 1) + '（' + (mrow === 0 ? '低' : (mrow === 1 ? '中' : '高')) + '）';
         matrixHtml += '<tr><th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;white-space:nowrap;">' + esc(impactLabel) + '</th>';
-        for (var mcol = 0; mcol < 3; mcol++) {
-          var cell = RISK_MATRIX[mrow][mcol];
-          var cellId = 'ra-matrix-' + mrow + '-' + mcol;
-          var isHighlighted = String(existingImpact) === String(mrow + 1) && String(existingLikelihood) === String(mcol + 1);
-          var cellBorder = isHighlighted ? '3px solid #333' : '1px solid #ddd';
+        for (let mcol = 0; mcol < 3; mcol++) {
+          let cell = RISK_MATRIX[mrow][mcol];
+          const cellId = 'ra-matrix-' + mrow + '-' + mcol;
+          const isHighlighted = String(existingImpact) === String(mrow + 1) && String(existingLikelihood) === String(mcol + 1);
+          const cellBorder = isHighlighted ? '3px solid #333' : '1px solid #ddd';
           matrixHtml += '<td id="' + cellId + '" style="padding:10px 16px;border:' + cellBorder + ';background:' + RISK_COLORS[cell.l] + ';font-weight:bold;">'
             + cell.s + ' - ' + esc(cell.l) + '</td>';
         }
@@ -2241,9 +2241,9 @@
       matrixHtml += '</tbody></table></div></div>';
 
       // -- Asset info bar --
-      var protBadgeClass = protLevel === '高' ? 'badge-danger' : (protLevel === '中' ? 'badge-warning' : 'badge-success');
-      var assetValueLabel = assetValue === 3 ? '高' : (assetValue === 2 ? '中' : (assetValue === 1 ? '低' : '--'));
-      var infoHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">'
+      const protBadgeClass = protLevel === '高' ? 'badge-danger' : (protLevel === '中' ? 'badge-warning' : 'badge-success');
+      const assetValueLabel = assetValue === 3 ? '高' : (assetValue === 2 ? '中' : (assetValue === 1 ? '低' : '--'));
+      const infoHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">'
         + '<span>' + ic('server') + ' <strong>' + esc(a.assetName || '未命名資產') + '</strong></span>'
         + '<span>防護等級：<span class="badge ' + protBadgeClass + '"><span class="badge-dot"></span>' + esc(protLevel || '未設定') + '</span></span>'
         + '<span>資產價值：<strong>' + esc(assetValueLabel) + '</strong>（C=' + esc(a.ciaC || '--') + '、I=' + esc(a.ciaI || '--') + '、A=' + esc(a.ciaA || '--') + '）</span>'
@@ -2251,9 +2251,9 @@
 
       // -- Assemble page --
       appEl.innerHTML = '<div class="animate-in">'
-        + '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
+        + '<div class="page-header asset-flex-between">'
         + '<h2>' + ic('shield') + ' 風險評鑑</h2>'
-        + '<div class="page-header-actions" style="display:flex;gap:8px;">'
+        + '<div class="page-header-actions asset-flex-gap8">'
         + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回資產</button>'
         + '<button class="btn btn-primary" data-action="app.saveRiskAssessment">' + ic('save') + ' 儲存評鑑</button>'
         + '</div>'
@@ -2278,24 +2278,24 @@
         + matrixHtml
         + '</div>'
 
-        + '<div style="padding-bottom:40px;"></div>'
+        + '<div class="asset-pad-bottom"></div>'
         + '</div>';
 
       scheduleRefreshIcons();
 
       // -- Dynamic risk score/level/matrix update --
       function updateRiskDisplay() {
-        var likelihoodEl = document.getElementById('ra-likelihood');
-        var impactEl = document.getElementById('ra-impact');
-        var scoreEl = document.getElementById('ra-risk-score');
-        var levelEl = document.getElementById('ra-risk-level');
-        var treatmentSection = document.getElementById('ra-treatment-section');
+        const likelihoodEl = document.getElementById('ra-likelihood');
+        const impactEl = document.getElementById('ra-impact');
+        const scoreEl = document.getElementById('ra-risk-score');
+        const levelEl = document.getElementById('ra-risk-level');
+        const treatmentSection = document.getElementById('ra-treatment-section');
         if (!likelihoodEl || !impactEl) return;
 
-        var lk = parseInt(likelihoodEl.value, 10) || 0;
-        var imp = parseInt(impactEl.value, 10) || 0;
-        var score = lk * imp;
-        var level = getRiskLevel(score);
+        const lk = parseInt(likelihoodEl.value, 10) || 0;
+        const imp = parseInt(impactEl.value, 10) || 0;
+        const score = lk * imp;
+        let level = getRiskLevel(score);
 
         if (scoreEl) scoreEl.textContent = score ? String(score) : '--';
         if (levelEl) {
@@ -2312,11 +2312,11 @@
         }
 
         // Update matrix highlights
-        for (var mr = 0; mr < 3; mr++) {
-          for (var mc = 0; mc < 3; mc++) {
-            var cellEl = document.getElementById('ra-matrix-' + mr + '-' + mc);
+        for (let mr = 0; mr < 3; mr++) {
+          for (let mc = 0; mc < 3; mc++) {
+            const cellEl = document.getElementById('ra-matrix-' + mr + '-' + mc);
             if (!cellEl) continue;
-            var isActive = imp === (mr + 1) && lk === (mc + 1);
+            const isActive = imp === (mr + 1) && lk === (mc + 1);
             cellEl.style.border = isActive ? '3px solid #333' : '1px solid #ddd';
           }
         }
@@ -2324,8 +2324,8 @@
         scheduleRefreshIcons();
       }
 
-      var raLikelihoodEl = document.getElementById('ra-likelihood');
-      var raImpactEl = document.getElementById('ra-impact');
+      const raLikelihoodEl = document.getElementById('ra-likelihood');
+      const raImpactEl = document.getElementById('ra-impact');
       if (raLikelihoodEl) addPageEventListener(raLikelihoodEl, 'change', updateRiskDisplay);
       if (raImpactEl) addPageEventListener(raImpactEl, 'change', updateRiskDisplay);
 
@@ -2336,43 +2336,43 @@
         },
         saveRiskAssessment: async function () {
           // Collect threats
-          var threats = [];
-          var threatCbs = document.querySelectorAll('.ra-threat');
-          for (var tci = 0; tci < threatCbs.length; tci++) {
+          const threats = [];
+          const threatCbs = document.querySelectorAll('.ra-threat');
+          for (let tci = 0; tci < threatCbs.length; tci++) {
             if (threatCbs[tci].checked) threats.push(threatCbs[tci].value);
           }
-          var threatOtherEl = document.getElementById('ra-threat-other');
-          var threatOther = threatOtherEl ? threatOtherEl.value.trim() : '';
+          const threatOtherEl = document.getElementById('ra-threat-other');
+          const threatOther = threatOtherEl ? threatOtherEl.value.trim() : '';
           if (threatOther) threats.push(threatOther);
 
           // Collect vulnerabilities
-          var vulnerabilities = [];
-          var vulnCbs = document.querySelectorAll('.ra-vuln');
-          for (var vci = 0; vci < vulnCbs.length; vci++) {
+          const vulnerabilities = [];
+          const vulnCbs = document.querySelectorAll('.ra-vuln');
+          for (let vci = 0; vci < vulnCbs.length; vci++) {
             if (vulnCbs[vci].checked) vulnerabilities.push(vulnCbs[vci].value);
           }
-          var vulnOtherEl = document.getElementById('ra-vuln-other');
-          var vulnOther = vulnOtherEl ? vulnOtherEl.value.trim() : '';
+          const vulnOtherEl = document.getElementById('ra-vuln-other');
+          const vulnOther = vulnOtherEl ? vulnOtherEl.value.trim() : '';
           if (vulnOther) vulnerabilities.push(vulnOther);
 
           // Collect risk calculation values
-          var lkEl = document.getElementById('ra-likelihood');
-          var impEl = document.getElementById('ra-impact');
-          var likelihood = lkEl ? lkEl.value : '';
-          var impact = impEl ? impEl.value : '';
-          var riskScore = computeRiskScore(likelihood, impact);
-          var riskLevel = getRiskLevel(riskScore);
+          const lkEl = document.getElementById('ra-likelihood');
+          const impEl = document.getElementById('ra-impact');
+          let likelihood = lkEl ? lkEl.value : '';
+          let impact = impEl ? impEl.value : '';
+          const riskScore = computeRiskScore(likelihood, impact);
+          const riskLevel = getRiskLevel(riskScore);
 
           // Collect treatment values
-          var treatmentEl = document.getElementById('ra-treatment');
-          var controlDescEl = document.getElementById('ra-control-desc');
-          var residualEl = document.getElementById('ra-residual-risk');
-          var ownerEl = document.getElementById('ra-risk-owner');
+          const treatmentEl = document.getElementById('ra-treatment');
+          const controlDescEl = document.getElementById('ra-control-desc');
+          const residualEl = document.getElementById('ra-residual-risk');
+          const ownerEl = document.getElementById('ra-risk-owner');
 
-          var treatment = treatmentEl ? treatmentEl.value : '';
-          var controlDescription = controlDescEl ? controlDescEl.value : '';
-          var residualRisk = residualEl ? residualEl.value : '';
-          var riskOwner = ownerEl ? ownerEl.value : '';
+          const treatment = treatmentEl ? treatmentEl.value : '';
+          const controlDescription = controlDescEl ? controlDescEl.value : '';
+          const residualRisk = residualEl ? residualEl.value : '';
+          const riskOwner = ownerEl ? ownerEl.value : '';
 
           // Validate: if treatment is 降低, controlDescription is required
           if (riskLevel === '高' && treatment === '降低' && !controlDescription.trim()) {
@@ -2380,7 +2380,7 @@
             return;
           }
 
-          var payload = {
+          const payload = {
             riskData: {
               assetValue: assetValue,
               threats: threats,
@@ -2412,10 +2412,10 @@
     // renderAssetDashboard (admin only)
     // -------------------------------------------------------
     async function renderAssetDashboard() {
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
 
-      var year = getCurrentRocYear();
+      let year = getCurrentRocYear();
 
       appEl.innerHTML = '<div class="animate-in">'
         + '<div class="page-header review-page-header page-header--integrated">'
@@ -2437,13 +2437,13 @@
       bindActions({
         backToList: function () { return '#assets'; },
         toggleDashGroup: function (ctx) {
-          var targetId = ctx.element && ctx.element.getAttribute('data-target');
+          const targetId = ctx.element && ctx.element.getAttribute('data-target');
           if (!targetId) return;
-          var bodyEl = document.getElementById(targetId);
+          const bodyEl = document.getElementById(targetId);
           if (!bodyEl) return;
-          var isVisible = bodyEl.style.display !== 'none';
+          const isVisible = bodyEl.style.display !== 'none';
           bodyEl.style.display = isVisible ? 'none' : '';
-          var arrow = ctx.element.querySelector('.dash-group-arrow');
+          const arrow = ctx.element.querySelector('.dash-group-arrow');
           if (arrow) {
             arrow.textContent = isVisible ? '\u25b8' : '\u25be';
           }
@@ -2452,8 +2452,8 @@
 
       // Local unit categorization
       function localCategorizeUnit(name) {
-        var academicKeywords = ['\u5b78\u9662', '\u5b78\u7cfb', '\u7814\u7a76\u6240', '\u5b78\u4f4d\u5b78\u7a0b', '\u5171\u540c\u6559\u80b2\u4e2d\u5fc3', '\u9032\u4fee\u63a8\u5ee3\u5b78\u9662', '\u570b\u969b\u5b78\u9662'];
-        var centerKeywords = ['\u4e2d\u5fc3', '\u7814\u7a76\u4e2d\u5fc3', '\u8fa6\u516c\u5ba4', '\u59d4\u54e1\u6703', '\u806f\u76df'];
+        const academicKeywords = ['\u5b78\u9662', '\u5b78\u7cfb', '\u7814\u7a76\u6240', '\u5b78\u4f4d\u5b78\u7a0b', '\u5171\u540c\u6559\u80b2\u4e2d\u5fc3', '\u9032\u4fee\u63a8\u5ee3\u5b78\u9662', '\u570b\u969b\u5b78\u9662'];
+        const centerKeywords = ['\u4e2d\u5fc3', '\u7814\u7a76\u4e2d\u5fc3', '\u8fa6\u516c\u5ba4', '\u59d4\u54e1\u6703', '\u806f\u76df'];
         if (academicKeywords.some(function (k) { return name.includes(k); })) return '\u5b78\u8853\u55ae\u4f4d';
         if (centerKeywords.some(function (k) { return name.includes(k); })) return '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d';
         return '\u884c\u653f\u55ae\u4f4d';
@@ -2461,15 +2461,15 @@
 
       try {
         // Fetch DB summary and full unit list in parallel
-        var summaryData = await apiCall('GET', '/summary');
-        var allUnitGroups = (window.__OFFICIAL_UNIT_DATA__ && window.__OFFICIAL_UNIT_DATA__.unitGroups) || [];
+        const summaryData = await apiCall('GET', '/summary');
+        const allUnitGroups = (window.__OFFICIAL_UNIT_DATA__ && window.__OFFICIAL_UNIT_DATA__.unitGroups) || [];
 
         // Build lookup: unitCode -> { assetCount, itCount, cnCount, highRisk, hasCompleted }
-        var dbUnits = {};
-        var summaryRows = summaryData.summary || summaryData.units || [];
+        const dbUnits = {};
+        const summaryRows = summaryData.summary || summaryData.units || [];
         if (Array.isArray(summaryRows)) {
           summaryRows.forEach(function (row) {
-            var code = row.unit_code || row.unitCode || '';
+            const code = row.unit_code || row.unitCode || '';
             if (!code) return;
             if (!dbUnits[code]) dbUnits[code] = { name: row.unit_name || row.unitName || '', assets: 0, itSys: 0, cn: 0, highRisk: 0, completed: false };
             dbUnits[code].assets += parseInt(row.cnt || row.assetCount || 0, 10);
@@ -2481,18 +2481,18 @@
         }
 
         // Merge with all official units
-        var mergedUnits = [];
-        var completedCount = 0;
-        var totalUnits = 0;
-        var totalAssets = 0;
-        var totalItSys = 0;
-        var totalCn = 0;
-        var totalHighRisk = 0;
+        const mergedUnits = [];
+        let completedCount = 0;
+        let totalUnits = 0;
+        let totalAssets = 0;
+        let totalItSys = 0;
+        let totalCn = 0;
+        let totalHighRisk = 0;
 
         allUnitGroups.forEach(function (group) {
-          var code = group.code || '';
-          var db = dbUnits[code] || {};
-          var isCompleted = db.completed || false;
+          const code = group.code || '';
+          const db = dbUnits[code] || {};
+          const isCompleted = db.completed || false;
           totalUnits++;
           if (isCompleted) completedCount++;
           totalAssets += db.assets || 0;
@@ -2511,42 +2511,42 @@
           });
         });
 
-        var pct = totalUnits > 0 ? Math.round(completedCount / totalUnits * 100) : 0;
-        var dashEl = document.getElementById('asset-dashboard-content');
+        const pct = totalUnits > 0 ? Math.round(completedCount / totalUnits * 100) : 0;
+        const dashEl = document.getElementById('asset-dashboard-content');
         if (!dashEl) return;
 
         // ── Stat cards ──
-        var statsHtml = '<div class="stats-grid review-stats-grid">'
+        const statsHtml = '<div class="stats-grid review-stats-grid">'
           + '<div class="stat-card"><div class="stat-value" style="color:#2e7d32;">' + ic('trending-up', 'icon-sm') + ' ' + pct + '%</div><div class="stat-label">\u5b8c\u6210\u7387</div></div>'
           + '<div class="stat-card"><div class="stat-value">' + ic('check-circle', 'icon-sm') + ' ' + completedCount + '/' + totalUnits + '</div><div class="stat-label">\u5df2\u5b8c\u6210/\u7e3d\u55ae\u4f4d</div></div>'
           + '<div class="stat-card"><div class="stat-value">' + ic('layers', 'icon-sm') + ' ' + totalAssets + '</div><div class="stat-label">\u5168\u6821\u8cc7\u7522\u6578</div></div>'
           + '<div class="stat-card"><div class="stat-value">' + ic('server', 'icon-sm') + ' ' + totalItSys + '</div><div class="stat-label">\u8cc7\u901a\u7cfb\u7d71</div></div>'
-          + '<div class="stat-card"><div class="stat-value" style="color:#e74c3c;">' + ic('alert-triangle', 'icon-sm') + ' ' + totalHighRisk + '</div><div class="stat-label">\u9ad8\u98a8\u96aa</div></div>'
+          + '<div class="stat-card"><div class="stat-value asset-danger">' + ic('alert-triangle', 'icon-sm') + ' ' + totalHighRisk + '</div><div class="stat-label">\u9ad8\u98a8\u96aa</div></div>'
           + '</div>';
 
         // ── Group units by category ──
-        var categoryConfig = [
+        const categoryConfig = [
           { key: '\u884c\u653f\u55ae\u4f4d', icon: 'building', label: '\u884c\u653f\u55ae\u4f4d' },
           { key: '\u5b78\u8853\u55ae\u4f4d', icon: 'graduation-cap', label: '\u5b78\u8853\u55ae\u4f4d' },
           { key: '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d', icon: 'landmark', label: '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d' }
         ];
-        var grouped = {};
+        const grouped = {};
         categoryConfig.forEach(function (c) { grouped[c.key] = []; });
         mergedUnits.forEach(function (u) {
-          var cat = localCategorizeUnit(u.name);
+          const cat = localCategorizeUnit(u.name);
           if (!grouped[cat]) grouped[cat] = [];
           grouped[cat].push(u);
         });
 
         // ── Build grouped collapsible sections ──
-        var groupsHtml = '';
+        let groupsHtml = '';
         categoryConfig.forEach(function (cat, idx) {
-          var units = grouped[cat.key] || [];
+          const units = grouped[cat.key] || [];
           if (units.length === 0) return;
-          var groupCompleted = units.filter(function (u) { return u.completed; }).length;
-          var groupIncomplete = units.length - groupCompleted;
-          var groupPct = units.length > 0 ? Math.round(groupCompleted / units.length * 100) : 0;
-          var groupId = 'dash-group-' + idx;
+          const groupCompleted = units.filter(function (u) { return u.completed; }).length;
+          const groupIncomplete = units.length - groupCompleted;
+          const groupPct = units.length > 0 ? Math.round(groupCompleted / units.length * 100) : 0;
+          const groupId = 'dash-group-' + idx;
 
           groupsHtml += '<div class="card review-table-card asset-mb-16">'
             + '<div class="card-header" style="cursor:pointer;" data-action="app.toggleDashGroup" data-target="' + groupId + '">'
@@ -2565,10 +2565,10 @@
             + '</tr></thead><tbody>';
 
           units.forEach(function (u) {
-            var unitDashBadge = u.completed
+            const unitDashBadge = u.completed
               ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-size:0.8em;font-weight:600;">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
               : '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:#ffebee;color:#c62828;font-size:0.8em;font-weight:600;">' + ic('x', 'icon-xs') + ' \u672a\u5b8c\u6210</span>';
-            var rowBg = u.completed ? 'background:#f1f8e9;' : '';
+            let rowBg = u.completed ? 'background:#f1f8e9;' : '';
             groupsHtml += '<tr style="border-bottom:1px solid #f0f0f0;' + rowBg + '">'
               + '<td style="padding:10px 12px;' + (u.completed ? 'font-weight:bold;' : '') + '">' + esc(u.name) + '</td>'
               + '<td class="asset-td--center">' + unitDashBadge + '</td>'
@@ -2588,7 +2588,7 @@
         scheduleRefreshIcons();
 
       } catch (err) {
-        var dashEl2 = document.getElementById('asset-dashboard-content');
+        const dashEl2 = document.getElementById('asset-dashboard-content');
         if (dashEl2) {
           dashEl2.innerHTML = '<div class="asset-error">'
             + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p></div>';
@@ -2601,10 +2601,10 @@
     // renderBatchImport
     // -------------------------------------------------------
     async function renderBatchImport() {
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
 
-      var TEMPLATE_HEADERS = '\u8cc7\u7522\u540d\u7a31,\u4e3b\u5206\u985e(PE/DC/DA/SW/HW/VM/BS),\u5b50\u5206\u985e,\u64c1\u6709\u8005,\u4fdd\u7ba1\u55ae\u4f4d,\u6a5f\u5bc6\u6027(\u666e/\u4e2d/\u9ad8),\u5b8c\u6574\u6027(\u666e/\u4e2d/\u9ad8),\u53ef\u7528\u6027(\u666e/\u4e2d/\u9ad8),\u662f\u5426\u8cc7\u901a\u7cfb\u7d71(\u662f/\u5426),\u662f\u5426\u5927\u9678\u5ee0\u724c(\u662f/\u5426),\u5099\u8a3b';
+      const TEMPLATE_HEADERS = '\u8cc7\u7522\u540d\u7a31,\u4e3b\u5206\u985e(PE/DC/DA/SW/HW/VM/BS),\u5b50\u5206\u985e,\u64c1\u6709\u8005,\u4fdd\u7ba1\u55ae\u4f4d,\u6a5f\u5bc6\u6027(\u666e/\u4e2d/\u9ad8),\u5b8c\u6574\u6027(\u666e/\u4e2d/\u9ad8),\u53ef\u7528\u6027(\u666e/\u4e2d/\u9ad8),\u662f\u5426\u8cc7\u901a\u7cfb\u7d71(\u662f/\u5426),\u662f\u5426\u5927\u9678\u5ee0\u724c(\u662f/\u5426),\u5099\u8a3b';
 
       appEl.innerHTML = '<div class="animate-in">'
         + '<div class="page-header review-page-header page-header--integrated">'
@@ -2670,14 +2670,14 @@
 
       scheduleRefreshIcons();
 
-      var parsedRows = [];
+      let parsedRows = [];
 
       function parseCsvLine(line) {
-        var result = [];
-        var current = '';
-        var inQuotes = false;
-        for (var ci = 0; ci < line.length; ci++) {
-          var ch = line[ci];
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let ci = 0; ci < line.length; ci++) {
+          const ch = line[ci];
           if (inQuotes) {
             if (ch === '"') {
               if (ci + 1 < line.length && line[ci + 1] === '"') { current += '"'; ci++; }
@@ -2694,17 +2694,17 @@
       }
 
       function parseCsvText(text) {
-        var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-        var rows = [];
-        var startIdx = 0;
+        const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        let rows = [];
+        let startIdx = 0;
         if (lines.length > 0) {
-          var firstLine = lines[0].replace(/^\uFEFF/, '');
+          const firstLine = lines[0].replace(/^\uFEFF/, '');
           if (firstLine.indexOf('\u8cc7\u7522\u540d\u7a31') !== -1) { startIdx = 1; }
         }
-        for (var li = startIdx; li < lines.length; li++) {
-          var line = lines[li].trim();
+        for (let li = startIdx; li < lines.length; li++) {
+          const line = lines[li].trim();
           if (!line) continue;
-          var cols = parseCsvLine(line);
+          const cols = parseCsvLine(line);
           if (cols.length >= 1 && cols[0]) { rows.push(cols); }
         }
         return rows;
@@ -2712,24 +2712,24 @@
 
       function showPreview(rows) {
         parsedRows = rows;
-        var previewEl = document.getElementById('batch-import-preview');
-        var tableEl = document.getElementById('batch-import-preview-table');
-        var totalEl = document.getElementById('batch-import-total');
+        const previewEl = document.getElementById('batch-import-preview');
+        const tableEl = document.getElementById('batch-import-preview-table');
+        const totalEl = document.getElementById('batch-import-total');
         if (!previewEl || !tableEl || !totalEl) return;
 
         previewEl.style.display = '';
         totalEl.textContent = '\u5171 ' + rows.length + ' \u7b46\u8cc7\u6599';
 
-        var previewCount = Math.min(rows.length, 10);
-        var headers = ['\u8cc7\u7522\u540d\u7a31', '\u4e3b\u5206\u985e', '\u5b50\u5206\u985e', '\u64c1\u6709\u8005', '\u4fdd\u7ba1\u55ae\u4f4d', '\u6a5f\u5bc6\u6027', '\u5b8c\u6574\u6027', '\u53ef\u7528\u6027', '\u8cc7\u901a\u7cfb\u7d71', '\u5927\u9678\u5ee0\u724c', '\u5099\u8a3b'];
-        var html = '<table class="asset-table"><thead><tr>';
+        const previewCount = Math.min(rows.length, 10);
+        const headers = ['\u8cc7\u7522\u540d\u7a31', '\u4e3b\u5206\u985e', '\u5b50\u5206\u985e', '\u64c1\u6709\u8005', '\u4fdd\u7ba1\u55ae\u4f4d', '\u6a5f\u5bc6\u6027', '\u5b8c\u6574\u6027', '\u53ef\u7528\u6027', '\u8cc7\u901a\u7cfb\u7d71', '\u5927\u9678\u5ee0\u724c', '\u5099\u8a3b'];
+        let html = '<table class="asset-table"><thead><tr>';
         html += '<th scope="col" class="asset-th">#</th>';
-        for (var hi = 0; hi < headers.length; hi++) { html += '<th scope="col" class="asset-th">' + esc(headers[hi]) + '</th>'; }
+        for (let hi = 0; hi < headers.length; hi++) { html += '<th scope="col" class="asset-th">' + esc(headers[hi]) + '</th>'; }
         html += '</tr></thead><tbody>';
-        for (var ri = 0; ri < previewCount; ri++) {
-          var row = rows[ri];
+        for (let ri = 0; ri < previewCount; ri++) {
+          let row = rows[ri];
           html += '<tr><td class="asset-td">' + (ri + 1) + '</td>';
-          for (var ci = 0; ci < headers.length; ci++) {
+          for (let ci = 0; ci < headers.length; ci++) {
             html += '<td class="asset-td">' + esc(row[ci] || '') + '</td>';
           }
           html += '</tr>';
@@ -2743,9 +2743,9 @@
       }
 
       function mapRowToAsset(cols) {
-        var catMap = { 'PE': 'PE', 'DC': 'DC', 'DA': 'DA', 'SW': 'SW', 'HW': 'HW', 'VM': 'VM', 'BS': 'BS' };
-        var rawCat = (cols[1] || '').toUpperCase().trim();
-        var category = catMap[rawCat] || rawCat;
+        const catMap = { 'PE': 'PE', 'DC': 'DC', 'DA': 'DA', 'SW': 'SW', 'HW': 'HW', 'VM': 'VM', 'BS': 'BS' };
+        const rawCat = (cols[1] || '').toUpperCase().trim();
+        let category = catMap[rawCat] || rawCat;
         return {
           assetName: cols[0] || '',
           category: category,
@@ -2770,9 +2770,9 @@
           return '#assets';
         },
         downloadTemplate: function () {
-          var csv = '\uFEFF' + TEMPLATE_HEADERS + '\n';
-          var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          var link = document.createElement('a');
+          let csv = '\uFEFF' + TEMPLATE_HEADERS + '\n';
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
           link.download = '\u8cc7\u7522\u532f\u5165\u7bc4\u672c.csv';
           link.click();
@@ -2782,19 +2782,19 @@
           if (!parsedRows.length) { toast('\u6c92\u6709\u8cc7\u6599\u53ef\u532f\u5165', 'warning'); return; }
           if (!confirm('\u78ba\u5b9a\u8981\u532f\u5165 ' + parsedRows.length + ' \u7b46\u8cc7\u6599\uff1f')) return;
 
-          var progressSection = document.getElementById('batch-import-progress');
-          var progressBar = document.getElementById('batch-import-progress-bar');
-          var progressText = document.getElementById('batch-import-progress-text');
-          var resultSection = document.getElementById('batch-import-result');
-          var resultContent = document.getElementById('batch-import-result-content');
+          const progressSection = document.getElementById('batch-import-progress');
+          const progressBar = document.getElementById('batch-import-progress-bar');
+          const progressText = document.getElementById('batch-import-progress-text');
+          const resultSection = document.getElementById('batch-import-result');
+          const resultContent = document.getElementById('batch-import-result-content');
           if (progressSection) progressSection.style.display = '';
 
-          var successCount = 0;
-          var failCount = 0;
-          var errors = [];
+          let successCount = 0;
+          let failCount = 0;
+          const errors = [];
 
-          for (var i = 0; i < parsedRows.length; i++) {
-            var asset = mapRowToAsset(parsedRows[i]);
+          for (let i = 0; i < parsedRows.length; i++) {
+            let asset = mapRowToAsset(parsedRows[i]);
             if (!asset.assetName) {
               failCount++;
               errors.push('\u7b2c ' + (i + 1) + ' \u7b46\uff1a\u8cc7\u7522\u540d\u7a31\u4e0d\u53ef\u70ba\u7a7a');
@@ -2807,7 +2807,7 @@
               failCount++;
               errors.push('\u7b2c ' + (i + 1) + ' \u7b46 (' + esc(asset.assetName) + ')\uff1a' + esc(String(err && err.message || err)));
             }
-            var pct = Math.round(((i + 1) / parsedRows.length) * 100);
+            const pct = Math.round(((i + 1) / parsedRows.length) * 100);
             if (progressBar) progressBar.style.width = pct + '%';
             if (progressText) progressText.textContent = '\u5df2\u8655\u7406 ' + (i + 1) + ' / ' + parsedRows.length + ' \u7b46';
           }
@@ -2815,15 +2815,15 @@
           if (progressSection) progressSection.style.display = 'none';
           if (resultSection) resultSection.style.display = '';
           if (resultContent) {
-            var resultHtml = '<div class="asset-mb-12">'
+            let resultHtml = '<div class="asset-mb-12">'
               + ic('check-circle') + ' <strong>\u532f\u5165\u5b8c\u6210</strong></div>'
               + '<p>\u6210\u529f\uff1a<strong style="color:#27ae60;">' + successCount + '</strong> \u7b46'
-              + (failCount > 0 ? '\uff0c\u5931\u6557\uff1a<strong style="color:#e74c3c;">' + failCount + '</strong> \u7b46' : '')
+              + (failCount > 0 ? '\uff0c\u5931\u6557\uff1a<strong class="asset-danger">' + failCount + '</strong> \u7b46' : '')
               + '</p>';
             if (errors.length > 0) {
               resultHtml += '<div style="margin-top:8px;padding:10px;background:#fff3f3;border-radius:4px;font-size:0.85em;">'
                 + '<strong>\u932f\u8aa4\u660e\u7d30\uff1a</strong><ul style="margin:4px 0 0 16px;padding:0;">';
-              for (var ei = 0; ei < errors.length; ei++) {
+              for (let ei = 0; ei < errors.length; ei++) {
                 resultHtml += '<li>' + errors[ei] + '</li>';
               }
               resultHtml += '</ul></div>';
@@ -2837,19 +2837,19 @@
       });
 
       // File input handler
-      var fileInput = document.getElementById('batch-import-file');
+      const fileInput = document.getElementById('batch-import-file');
       if (fileInput) {
         addPageEventListener(fileInput, 'change', function () {
-          var file = fileInput.files && fileInput.files[0];
+          const file = fileInput.files && fileInput.files[0];
           if (!file) return;
           if (!file.name.toLowerCase().endsWith('.csv')) {
             toast('\u8acb\u9078\u64c7 CSV \u6a94\u6848', 'error');
             return;
           }
-          var reader = new FileReader();
+          const reader = new FileReader();
           reader.onload = function (e) {
-            var text = e.target.result;
-            var rows = parseCsvText(text);
+            const text = e.target.result;
+            let rows = parseCsvText(text);
             if (!rows.length) {
               toast('CSV \u6a94\u6848\u4e2d\u6c92\u6709\u6709\u6548\u8cc7\u6599', 'warning');
               return;
@@ -2865,10 +2865,10 @@
     // renderYearComparison
     // -------------------------------------------------------
     async function renderYearComparison() {
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
 
-      var currentYear = getCurrentRocYear();
+      const currentYear = getCurrentRocYear();
 
       appEl.innerHTML = '<div class="animate-in">'
         + '<div class="page-header review-page-header page-header--integrated">'
@@ -2912,40 +2912,40 @@
       scheduleRefreshIcons();
 
       function buildComparisonTable(baseItems, compareItems) {
-        var baseMap = {};
-        for (var bi = 0; bi < baseItems.length; bi++) {
-          var bKey = baseItems[bi].assetName || baseItems[bi].assetId || ('base-' + bi);
+        const baseMap = {};
+        for (let bi = 0; bi < baseItems.length; bi++) {
+          const bKey = baseItems[bi].assetName || baseItems[bi].assetId || ('base-' + bi);
           baseMap[bKey] = baseItems[bi];
         }
-        var compareMap = {};
-        for (var ci = 0; ci < compareItems.length; ci++) {
-          var cKey = compareItems[ci].assetName || compareItems[ci].assetId || ('cmp-' + ci);
+        const compareMap = {};
+        for (let ci = 0; ci < compareItems.length; ci++) {
+          const cKey = compareItems[ci].assetName || compareItems[ci].assetId || ('cmp-' + ci);
           compareMap[cKey] = compareItems[ci];
         }
 
-        var allKeys = {};
-        var keys;
+        const allKeys = {};
+        let keys;
         keys = Object.keys(baseMap);
-        for (var k1 = 0; k1 < keys.length; k1++) allKeys[keys[k1]] = true;
+        for (let k1 = 0; k1 < keys.length; k1++) allKeys[keys[k1]] = true;
         keys = Object.keys(compareMap);
-        for (var k2 = 0; k2 < keys.length; k2++) allKeys[keys[k2]] = true;
+        for (let k2 = 0; k2 < keys.length; k2++) allKeys[keys[k2]] = true;
 
-        var sortedKeys = Object.keys(allKeys).sort();
-        var rows = [];
-        for (var si = 0; si < sortedKeys.length; si++) {
-          var name = sortedKeys[si];
-          var baseA = baseMap[name];
-          var cmpA = compareMap[name];
-          var changeType;
+        const sortedKeys = Object.keys(allKeys).sort();
+        let rows = [];
+        for (let si = 0; si < sortedKeys.length; si++) {
+          let name = sortedKeys[si];
+          const baseA = baseMap[name];
+          const cmpA = compareMap[name];
+          let changeType;
           if (!baseA && cmpA) {
             changeType = '\u65b0\u589e';
           } else if (baseA && !cmpA) {
             changeType = '\u522a\u9664';
           } else {
-            var baseCIA = (baseA.ciaC || '') + (baseA.ciaI || '') + (baseA.ciaA || '');
-            var cmpCIA = (cmpA.ciaC || '') + (cmpA.ciaI || '') + (cmpA.ciaA || '');
-            var baseCat = (baseA.category || '') + (baseA.subCategory || '');
-            var cmpCat = (cmpA.category || '') + (cmpA.subCategory || '');
+            const baseCIA = (baseA.ciaC || '') + (baseA.ciaI || '') + (baseA.ciaA || '');
+            const cmpCIA = (cmpA.ciaC || '') + (cmpA.ciaI || '') + (cmpA.ciaA || '');
+            const baseCat = (baseA.category || '') + (baseA.subCategory || '');
+            const cmpCat = (cmpA.category || '') + (cmpA.subCategory || '');
             changeType = (baseCIA !== cmpCIA || baseCat !== cmpCat) ? '\u4fee\u6539' : '\u7121\u7570\u52d5';
           }
           rows.push({
@@ -2978,13 +2978,13 @@
           return '#assets';
         },
         runComparison: async function () {
-          var baseYearEl = document.getElementById('yc-base-year');
-          var cmpYearEl = document.getElementById('yc-compare-year');
-          var resultEl = document.getElementById('yc-result');
+          const baseYearEl = document.getElementById('yc-base-year');
+          const cmpYearEl = document.getElementById('yc-compare-year');
+          const resultEl = document.getElementById('yc-result');
           if (!baseYearEl || !cmpYearEl || !resultEl) return;
 
-          var baseYear = baseYearEl.value;
-          var cmpYear = cmpYearEl.value;
+          const baseYear = baseYearEl.value;
+          const cmpYear = cmpYearEl.value;
           if (baseYear === cmpYear) {
             toast('\u57fa\u6e96\u5e74\u5ea6\u8207\u6bd4\u8f03\u5e74\u5ea6\u4e0d\u53ef\u76f8\u540c', 'warning');
             return;
@@ -2994,14 +2994,14 @@
           scheduleRefreshIcons();
 
           try {
-            var results = await Promise.all([
+            const results = await Promise.all([
               apiCall('GET', '?year=' + encodeURIComponent(baseYear)),
               apiCall('GET', '?year=' + encodeURIComponent(cmpYear))
             ]);
-            var baseItems = Array.isArray(results[0]) ? results[0] : (results[0] && Array.isArray(results[0].items) ? results[0].items : []);
-            var cmpItems = Array.isArray(results[1]) ? results[1] : (results[1] && Array.isArray(results[1].items) ? results[1].items : []);
+            const baseItems = Array.isArray(results[0]) ? results[0] : (results[0] && Array.isArray(results[0].items) ? results[0].items : []);
+            const cmpItems = Array.isArray(results[1]) ? results[1] : (results[1] && Array.isArray(results[1].items) ? results[1].items : []);
 
-            var diffRows = buildComparisonTable(baseItems, cmpItems);
+            const diffRows = buildComparisonTable(baseItems, cmpItems);
 
             if (!diffRows.length) {
               resultEl.innerHTML = '<div class="empty-state asset-empty">'
@@ -3011,28 +3011,28 @@
             }
 
             // Summary counts
-            var addCount = 0, modCount = 0, delCount = 0, noChangeCount = 0;
-            for (var di = 0; di < diffRows.length; di++) {
+            let addCount = 0, modCount = 0, delCount = 0, noChangeCount = 0;
+            for (let di = 0; di < diffRows.length; di++) {
               if (diffRows[di].changeType === '\u65b0\u589e') addCount++;
               else if (diffRows[di].changeType === '\u4fee\u6539') modCount++;
               else if (diffRows[di].changeType === '\u522a\u9664') delCount++;
               else noChangeCount++;
             }
 
-            var summaryHtml = '<div class="card review-table-card">'
+            const summaryHtml = '<div class="card review-table-card">'
               + '<div class="card-header"><span class="card-title">' + ic('git-compare', 'icon-sm') + ' \u6bd4\u5c0d\u7d50\u679c</span>'
               + '<span class="review-card-subtitle">\u5171 ' + diffRows.length + ' \u7b46</span></div>'
               + '<div class="card-body">'
               + '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:0.9em;">'
               + '<span style="color:#27ae60;">' + ic('plus-circle') + ' \u65b0\u589e: <strong>' + addCount + '</strong></span>'
               + '<span style="color:#f39c12;">' + ic('edit') + ' \u4fee\u6539: <strong>' + modCount + '</strong></span>'
-              + '<span style="color:#e74c3c;">' + ic('minus-circle') + ' \u522a\u9664: <strong>' + delCount + '</strong></span>'
+              + '<span class="asset-danger">' + ic('minus-circle') + ' \u522a\u9664: <strong>' + delCount + '</strong></span>'
               + '<span style="color:#888;">' + ic('check') + ' \u7121\u7570\u52d5: <strong>' + noChangeCount + '</strong></span>'
               + '</div>'
               + '</div>'
               + '<div class="card-body asset-pad-0">';
 
-            var tableHtml = '<div class="table-wrapper asset-scroll-x" tabindex="0">'
+            let tableHtml = '<div class="table-wrapper asset-scroll-x" tabindex="0">'
               + '<table class="asset-table">'
               + '<caption class="sr-only">\u5e74\u5ea6\u8cc7\u7522\u6bd4\u5c0d\u7d50\u679c</caption>'
               + '<thead><tr>'
@@ -3043,8 +3043,8 @@
               + '<th scope="col" class="asset-th">\u7570\u52d5\u985e\u578b</th>'
               + '</tr></thead><tbody>';
 
-            for (var ri = 0; ri < diffRows.length; ri++) {
-              var r = diffRows[ri];
+            for (let ri = 0; ri < diffRows.length; ri++) {
+              let r = diffRows[ri];
               tableHtml += '<tr style="' + getChangeColor(r.changeType) + '">'
                 + '<td class="asset-td">' + esc(r.name) + '</td>'
                 + '<td class="asset-td">' + esc(r.category) + '</td>'
@@ -3067,8 +3067,8 @@
       });
 
       // Bind year selectors for keyboard enter
-      var baseYearEl = document.getElementById('yc-base-year');
-      var cmpYearEl = document.getElementById('yc-compare-year');
+      const baseYearEl = document.getElementById('yc-base-year');
+      const cmpYearEl = document.getElementById('yc-compare-year');
       if (baseYearEl) addPageEventListener(baseYearEl, 'change', function () {});
       if (cmpYearEl) addPageEventListener(cmpYearEl, 'change', function () {});
     }
