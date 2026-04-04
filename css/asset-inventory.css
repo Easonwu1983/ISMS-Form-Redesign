@@ -2,6 +2,12 @@
    Asset Inventory Module — 風險評鑑 + 附表十 美化
    ═══════════════════════════════════════════════════ */
 
+/* ── Appendix 10 Toolbar fix ── */
+#asset-appendix10-inline .toolbar {
+  align-items: center;
+  justify-content: space-between;
+}
+
 /* ── Risk Scenario Cards ── */
 .risk-scenario-list {
   display: grid;
