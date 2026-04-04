@@ -536,6 +536,10 @@
       (Array.isArray(catalog) ? catalog : []).forEach((entry) => {
         const value = String(entry && entry.value || '').trim();
         if (!value || seen.has(value)) return;
+        // Filter hidden units (hospitals, system-level, etc.)
+        const topLevel = value.split('\uFF0F')[0].trim();
+        if (HIDDEN_OFFICIAL_UNIT_VALUES.has(topLevel)) return;
+        if (isExcludedUnitValue(value, excludedUnits)) return;
         seen.add(value);
         values.push(value);
       });
