@@ -6,8 +6,16 @@
 #asset-appendix10-inline > .toolbar {
   display: flex !important;
   align-items: center !important;
-  justify-content: space-between !important;
+  justify-content: flex-start !important;
   flex-wrap: nowrap;
+  gap: 16px !important;
+}
+
+#asset-appendix10-inline > .toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 /* ── Risk Scenario Cards ── */
