@@ -445,24 +445,17 @@
     }
 
     function categorizeTopLevelUnit(unitValue) {
+      // 使用 shared/unit-categories.js 的統一分類（Single Source of Truth）
+      const cats = (typeof window !== 'undefined' && window.__UNIT_CATEGORIES__) || {};
+      if (typeof cats.categorizeUnit === 'function') {
+        return cats.categorizeUnit(unitValue);
+      }
+      // Fallback（正常不會走到這裡）
       const unit = String(splitUnitValue(unitValue).parent || unitValue || '').trim();
-      if (TRAINING_CENTER_OVERRIDE_UNITS.has(unit)) return TRAINING_UNIT_CATEGORY_CENTER;
-      if (!unit || isCorruptedUnitValue(unit)) return TRAINING_UNIT_CATEGORY_ADMIN;
+      if (!unit) return TRAINING_UNIT_CATEGORY_ADMIN;
       if (UNIT_ADMIN_PRIMARY_WHITELIST.has(unit)) return TRAINING_UNIT_CATEGORY_ADMIN;
       if (UNIT_ACADEMIC_PRIMARY_WHITELIST.has(unit)) return TRAINING_UNIT_CATEGORY_ACADEMIC;
-      const meta = getTopLevelUnitOfficialMeta(unit) || {};
-      const code = String(meta.topCode || meta.code || '').trim().toUpperCase();
-      const academicKeywords = ['學院', '學系', '研究所', '學位學程', '共同教育中心', '進修推廣學院', '國際學院'];
-      const centerKeywords = ['中心', '研究中心', '辦公室', '委員會', '聯盟', '聯合辦公室', '館'];
-      if (academicKeywords.some((keyword) => unit.includes(keyword))) return TRAINING_UNIT_CATEGORY_ACADEMIC;
-      if (centerKeywords.some((keyword) => unit.includes(keyword))) return TRAINING_UNIT_CATEGORY_CENTER;
-      if (/^0\.\d{2}$/.test(code)) {
-        const numeric = Number(code.slice(2));
-        if (numeric >= 51) return TRAINING_UNIT_CATEGORY_ACADEMIC;
-        return TRAINING_UNIT_CATEGORY_ADMIN;
-      }
-      if (/^0\.[A-Z0-9]{2}$/.test(code)) return TRAINING_UNIT_CATEGORY_CENTER;
-      return TRAINING_UNIT_CATEGORY_ADMIN;
+      return TRAINING_UNIT_CATEGORY_CENTER;
     }
 
     function isTrainingDashboardExcludedUnit(unitValue) {
