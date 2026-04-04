@@ -3,9 +3,11 @@
    ═══════════════════════════════════════════════════ */
 
 /* ── Appendix 10 Toolbar fix ── */
-#asset-appendix10-inline .toolbar {
-  align-items: center;
-  justify-content: space-between;
+#asset-appendix10-inline > .toolbar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: nowrap;
 }
 
 /* ── Risk Scenario Cards ── */
