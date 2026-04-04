@@ -13,6 +13,7 @@
   var assets = [
     'web-vitals-monitor.js',
     'i18n.js',
+    'shared/unit-categories.js',
     { src: 'm365-config.override.js', optional: true },
     coreBundleSrc
   ];
