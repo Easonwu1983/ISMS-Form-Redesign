@@ -18,6 +18,7 @@
     coreBundleSrc
   ];
   var fallbackAssets = [
+    'shared/unit-categories.js',
     'm365-config.js',
     'data-module.js',
     'collection-cache-module.js',
