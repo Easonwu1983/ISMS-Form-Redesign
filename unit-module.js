@@ -68,7 +68,7 @@
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitCatalog_ === 'function') {
           const catalog = window.getOfficialUnitCatalog_();
           if (Array.isArray(catalog)) {
-            officialUnitCatalogCache = catalog.map((entry) => (entry && typeof entry === 'object' ? { ...entry } : entry)).filter((entry) => { if (!entry || typeof entry !== 'object') return false; const value = String(entry.value || '').trim(); const name = String(entry.name || '').trim(); const fullName = String(entry.fullName || '').trim(); return !!value && !HIDDEN_OFFICIAL_UNIT_VALUES.has(value) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(name) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(fullName) && !value.includes('?') && !name.includes('?') && !fullName.includes('?'); });
+            officialUnitCatalogCache = catalog.map((entry) => (entry && typeof entry === 'object' ? { ...entry } : entry)).filter((entry) => { if (!entry || typeof entry !== 'object') return false; const value = String(entry.value || '').trim(); const name = String(entry.name || '').trim(); const fullName = String(entry.fullName || '').trim(); const topLevel = value.split('\uFF0F')[0].trim(); return !!value && !HIDDEN_OFFICIAL_UNIT_VALUES.has(value) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(name) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(fullName) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(topLevel) && !/醫院|分院/.test(value) && !value.includes('?') && !name.includes('?') && !fullName.includes('?'); });
             officialUnitMetaCache = null;
             return officialUnitCatalogCache.slice();
           }
@@ -539,6 +539,9 @@
         // Filter hidden units (hospitals, system-level, etc.)
         const topLevel = value.split('\uFF0F')[0].trim();
         if (HIDDEN_OFFICIAL_UNIT_VALUES.has(topLevel)) return;
+        if (HIDDEN_OFFICIAL_UNIT_VALUES.has(value)) return;
+        // Also hide any entry containing 醫院/分院 keywords
+        if (/醫院|分院/.test(value)) return;
         if (isExcludedUnitValue(value, excludedUnits)) return;
         seen.add(value);
         values.push(value);
