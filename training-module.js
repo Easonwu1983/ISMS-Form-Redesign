@@ -1265,7 +1265,7 @@
     const opts = options || {};
     const tbodyIdAttr = opts.tbodyId ? ' id="' + esc(opts.tbodyId) + '"' : '';
     const caption = opts.caption || opts.title || '教育訓練資料表';
-    return '<div class="table-wrapper" tabindex="0"><table>' + buildTrainingTableCaption(caption) + '<thead><tr>' + applyTrainingTableHeaderScope(headersHtml) + '</tr></thead><tbody' + tbodyIdAttr + '>' + rowsHtml + '</tbody></table></div>';
+    return '<div class="table-wrapper" tabindex="0"><table class="data-table">' + buildTrainingTableCaption(caption) + '<thead><tr>' + applyTrainingTableHeaderScope(headersHtml) + '</tr></thead><tbody' + tbodyIdAttr + '>' + rowsHtml + '</tbody></table></div>';
   }
 
   function buildTrainingEmptyTableRow(colspan, title, desc, padding) {

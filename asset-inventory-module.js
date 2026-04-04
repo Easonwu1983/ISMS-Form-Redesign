@@ -552,7 +552,7 @@
         + '<div class="review-header-actions">'
         + '<button class="btn btn-primary" data-action="app.createAsset">' + ic('plus') + ' \u65b0\u589e</button>'
         + '<button class="btn btn-secondary" data-action="app.exportAssets">' + ic('download') + ' \u532f\u51fa</button>'
-        + '<button class="btn btn-outline" data-action="app.submitAllAssets" style="color:#2e7d32;border-color:#2e7d32;">' + ic('check-circle') + ' \u5e74\u5ea6\u5df2\u76e4\u9ede\u5b8c\u6210</button>'
+        + '<button class="btn btn-outline" data-action="app.submitAllAssets" style="color:var(--color-success);border-color:var(--color-success);">' + ic('check-circle') + ' \u5e74\u5ea6\u5df2\u76e4\u9ede\u5b8c\u6210</button>'
         + '</div>'
         + '</div>'
 
@@ -828,8 +828,8 @@
             const unitCompleted = unitItems.every(function (it) { return it.status === '\u5df2\u5b8c\u6210'; });
             const unitStatusLabel = unitCompleted
               ? '<span class="badge badge-success">' + ic('check', 'icon-xs') + ' \u5df2\u5b8c\u6210</span>'
-              : '<span class="text-muted" style="color:#e65100;">' + unitItems.length + ' \u7b46\u8cc7\u7522</span>';
-            groupedHtml += '<div class="card" style="margin-bottom:12px;">'
+              : '<span class="text-muted" style="color:var(--color-warning);">' + unitItems.length + ' \u7b46\u8cc7\u7522</span>';
+            groupedHtml += '<div class="card asset-mb-12">'
               + '<div class="card-header" style="cursor:pointer;" data-action="app.toggleDashGroup" data-target="asset-group-' + idx + '">'
               + '<span class="card-title">' + ic('building', 'icon-sm') + ' ' + esc(unitName) + '</span>'
               + '<span class="review-card-subtitle">' + unitStatusLabel + ' <span>\u25be</span></span>'
@@ -1240,14 +1240,14 @@
         + '<tr><td style="font-weight:bold;">1(\u4f4e)</td><td class="text-center" style="background:#C8E6C9;" data-cell="1-1">1</td><td class="text-center" style="background:#C8E6C9;" data-cell="2-1">2</td><td class="text-center" style="background:#FFF9C4;" data-cell="3-1">3</td></tr>'
         + '</table>'
         + '<div style="margin-top:6px;font-size:11px;color:#999;display:flex;gap:12px;">'
-        + '<span>\u25cf <span style="color:#4caf50;">\u4f4e(1-2)</span></span>'
-        + '<span>\u25cf <span style="color:#ff9800;">\u4e2d(3-4)</span></span>'
-        + '<span>\u25cf <span style="color:#f44336;">\u9ad8(6-9)</span></span>'
+        + '<span>\u25cf <span style="color:var(--color-success);">\u4f4e(1-2)</span></span>'
+        + '<span>\u25cf <span style="color:var(--color-warning);">\u4e2d(3-4)</span></span>'
+        + '<span>\u25cf <span style="color:var(--color-error);">\u9ad8(6-9)</span></span>'
         + '</div>'
         + '</div>'
         + '</div>'
         + '<div id="risk-treatment-section" style="display:none;margin-top:12px;padding:12px;background:#fff8f8;border:1px solid #ffcdd2;border-radius:8px;">'
-        + '<div style="font-weight:600;color:#c62828;margin-bottom:8px;">' + ic('alert-triangle', 'icon-sm') + ' \u9ad8\u98a8\u96aa \u2014 \u5fc5\u9808\u586b\u5beb\u8655\u7f6e\u65b9\u5f0f</div>'
+        + '<div style="font-weight:600;color:var(--color-error);margin-bottom:8px;">' + ic('alert-triangle', 'icon-sm') + ' \u9ad8\u98a8\u96aa \u2014 \u5fc5\u9808\u586b\u5beb\u8655\u7f6e\u65b9\u5f0f</div>'
         + '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label form-required">\u98a8\u96aa\u8655\u7f6e\u65b9\u5f0f</label>'
@@ -1507,7 +1507,7 @@
           });
           const score = maxL * maxI;
           let level = score >= 6 ? '\u9ad8' : score >= 3 ? '\u4e2d' : score >= 1 ? '\u4f4e' : '--';
-          const levelColor = level === '\u9ad8' ? '#c62828' : level === '\u4e2d' ? '#e65100' : level === '\u4f4e' ? '#2e7d32' : '#666';
+          const levelColor = level === '\u9ad8' ? 'var(--color-error)' : level === '\u4e2d' ? 'var(--color-warning)' : level === '\u4f4e' ? 'var(--color-success)' : '#666';
           const scoreEl = document.getElementById('risk-score-display');
           const levelEl = document.getElementById('risk-level-display');
           if (scoreEl) scoreEl.textContent = score || '--';
@@ -1875,7 +1875,7 @@
       }
 
       // -- Build filter bar --
-      let filterHtml = '<div class="card toolbar" style="margin-bottom:16px;">'
+      let filterHtml = '<div class="card toolbar asset-mb-16">'
         + '<div class="toolbar-filters">'
         + '<div class="form-group asset-mb-0">'
         + '<label class="form-label asset-meta">構面篩選</label>'
@@ -2552,7 +2552,7 @@
 
         // ── Stat cards ──
         const statsHtml = '<div class="stats-grid review-stats-grid">'
-          + '<div class="stat-card"><div class="stat-value" style="color:#2e7d32;">' + ic('trending-up', 'icon-sm') + ' ' + pct + '%</div><div class="stat-label">\u5b8c\u6210\u7387</div></div>'
+          + '<div class="stat-card"><div class="stat-value" style="color:var(--color-success);">' + ic('trending-up', 'icon-sm') + ' ' + pct + '%</div><div class="stat-label">\u5b8c\u6210\u7387</div></div>'
           + '<div class="stat-card"><div class="stat-value">' + ic('check-circle', 'icon-sm') + ' ' + completedCount + '/' + totalUnits + '</div><div class="stat-label">\u5df2\u5b8c\u6210/\u7e3d\u55ae\u4f4d</div></div>'
           + '<div class="stat-card"><div class="stat-value">' + ic('layers', 'icon-sm') + ' ' + totalAssets + '</div><div class="stat-label">\u5168\u6821\u8cc7\u7522\u6578</div></div>'
           + '<div class="stat-card"><div class="stat-value">' + ic('server', 'icon-sm') + ' ' + totalItSys + '</div><div class="stat-label">\u8cc7\u901a\u7cfb\u7d71</div></div>'
@@ -2611,7 +2611,7 @@
               + '<td class="asset-td--center">' + (u.itSys || '\u2014') + '</td>'
               + '<td class="asset-td--center">' + (u.cn || '\u2014') + '</td>'
               + '<td class="asset-td--center">'
-              + (u.highRisk > 0 ? '<span style="color:#D32F2F;font-weight:bold;">' + u.highRisk + '</span>' : '\u2014')
+              + (u.highRisk > 0 ? '<span style="color:var(--color-error);font-weight:bold;">' + u.highRisk + '</span>' : '\u2014')
               + '</td>'
               + '</tr>';
           });
@@ -2852,7 +2852,7 @@
           if (resultContent) {
             let resultHtml = '<div class="asset-mb-12">'
               + ic('check-circle') + ' <strong>\u532f\u5165\u5b8c\u6210</strong></div>'
-              + '<p>\u6210\u529f\uff1a<strong style="color:#27ae60;">' + successCount + '</strong> \u7b46'
+              + '<p>\u6210\u529f\uff1a<strong style="color:var(--color-success);">' + successCount + '</strong> \u7b46'
               + (failCount > 0 ? '\uff0c\u5931\u6557\uff1a<strong class="asset-danger">' + failCount + '</strong> \u7b46' : '')
               + '</p>';
             if (errors.length > 0) {

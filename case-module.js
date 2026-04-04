@@ -190,7 +190,7 @@
   function buildCaseTableMarkup(headersHtml, rowsHtml, options) {
     const opts = options || {};
     const wrapperClass = opts.wrapperClass ? 'table-wrapper ' + opts.wrapperClass : 'table-wrapper';
-    const tableClass = opts.tableClass ? ' class="' + opts.tableClass + '"' : '';
+    const tableClass = opts.tableClass ? ' class="' + opts.tableClass + ' data-table"' : ' class="data-table"';
     const caption = opts.caption || '矯正單資料表';
     return '<div class="' + wrapperClass + '" tabindex="0"><table' + tableClass + '>' + buildCaseTableCaption(caption) + '<thead><tr>' + applyCaseTableHeaderScope(headersHtml) + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
   }
@@ -538,7 +538,7 @@
       return '<option value="' + y + '"' + (y === currentAuditYear ? ' selected' : '') + '>' + y + ' 年度</option>';
     }).join('');
     const auditProgressHtml = showAuditProgress ? (
-      '<section class="dashboard-audit-progress"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('shield-check', 'icon-sm') + ' 年度稽核進度總覽</h2><select class="form-select" id="audit-year-select" style="width:auto;margin-left:12px;font-size:.88rem">' + auditYearOptions + '</select></div>'
+      '<section class="dashboard-audit-progress"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('shield-check', 'icon-sm') + ' 年度稽核進度總覽</h2><select class="form-select dashboard-year-select" id="audit-year-select">' + auditYearOptions + '</select></div>'
       + '<div class="stats-grid stats-grid--audit">'
       + '<div class="stat-card total"><div class="stat-icon">' + ic('clipboard-list') + '</div><div class="stat-value" id="' + auditSlotIds.filingStat + '">—</div><div class="stat-label">年度填報</div></div>'
       + '<div class="stat-card closed"><div class="stat-icon">' + ic('graduation-cap') + '</div><div class="stat-value" id="' + auditSlotIds.trainingStat + '">—</div><div class="stat-label">訓練達成率</div></div>'
@@ -582,13 +582,13 @@
       const distributionOrder = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, '已逾期', STATUSES.CLOSED];
       const sc = snapshot.bucketCounts;
       const cc = {};
-      cc[STATUSES.CREATED] = '#3b82f6';
-      cc[STATUSES.PENDING] = '#f59e0b';
-      cc[STATUSES.PROPOSED] = '#a855f7';
+      cc[STATUSES.CREATED] = 'var(--status-created)';
+      cc[STATUSES.PENDING] = 'var(--status-pending)';
+      cc[STATUSES.PROPOSED] = 'var(--status-responded)';
       cc[STATUSES.REVIEWING] = '#06b6d4';
       cc[STATUSES.TRACKING] = '#f97316';
-      cc['已逾期'] = '#ef4444';
-      cc[STATUSES.CLOSED] = '#22c55e';
+      cc['已逾期'] = 'var(--status-overdue)';
+      cc[STATUSES.CLOSED] = 'var(--status-closed)';
       const R = 60, C = 2 * Math.PI * R; let segs = '', off = 0;
       if (total > 0) {
         distributionOrder.forEach(function (s) {
@@ -599,9 +599,9 @@
           off += l;
         });
       } else {
-        segs = '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="#e2e8f0" stroke-width="20"/>';
+        segs = '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="var(--border-color)" stroke-width="20"/>';
       }
-      const svg = '<svg viewBox="0 0 160 160" class="donut-chart">' + segs + '<text x="80" y="74" text-anchor="middle" fill="#0f172a" font-size="24" font-weight="700" font-family="Inter">' + total + '</text><text x="80" y="94" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500" font-family="Inter">總計</text></svg>';
+      const svg = '<svg viewBox="0 0 160 160" class="donut-chart">' + segs + '<text x="80" y="74" text-anchor="middle" fill="var(--text-heading)" font-size="24" font-weight="700" font-family="Inter">' + total + '</text><text x="80" y="94" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-weight="500" font-family="Inter">總計</text></svg>';
       const leg = distributionOrder.map(function (s) {
         return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>';
       }).join('');
@@ -675,21 +675,21 @@
         slot.classList.remove('dashboard-card-loading');
         slot.removeAttribute('aria-busy');
         if (!result || !result.ok || !result.data) {
-          slot.innerHTML = '<div class="card" style="padding:20px"><div class="empty-state empty-state--compact"><div class="empty-state-title">無法載入待辦事項</div></div></div>';
+          slot.innerHTML = '<div class="card empty-state--pad-20"><div class="empty-state empty-state--compact"><div class="empty-state-title">無法載入待辦事項</div></div></div>';
           return;
         }
         const tasks = Array.isArray(result.data.tasks) ? result.data.tasks : [];
         const summary = result.data.summary || {};
         if (!tasks.length) {
-          slot.innerHTML = '<div class="card" style="padding:24px"><div class="empty-state"><div class="empty-state-icon">' + ic('check-circle-2') + '</div><div class="empty-state-title">太棒了！目前沒有待辦事項</div><div class="empty-state-desc">所有檢核表已送出、矯正單已處理完畢。</div></div></div>';
+          slot.innerHTML = '<div class="card empty-state--pad-24"><div class="empty-state"><div class="empty-state-icon">' + ic('check-circle-2') + '</div><div class="empty-state-title">太棒了！目前沒有待辦事項</div><div class="empty-state-desc">所有檢核表已送出、矯正單已處理完畢。</div></div></div>';
           scheduleRefreshIcons();
           return;
         }
         const priorityIcons = { urgent: 'alert-circle', high: 'alert-triangle', medium: 'clock' };
-        const priorityColors = { urgent: '#ef4444', high: '#f59e0b', medium: '#3b82f6' };
+        const priorityColors = { urgent: 'var(--color-error)', high: 'var(--color-warning)', medium: 'var(--color-info)' };
         const taskCards = tasks.map(function (t) {
           const iconName = priorityIcons[t.priority] || 'circle';
-          const color = priorityColors[t.priority] || '#94a3b8';
+          const color = priorityColors[t.priority] || 'var(--text-muted)';
           return '<a href="' + esc(t.route || '#') + '" class="my-task-card" style="border-left:3px solid ' + color + '">'
             + '<div class="my-task-icon" style="color:' + color + '">' + ic(iconName, 'icon-sm') + '</div>'
             + '<div class="my-task-content"><div class="my-task-title">' + esc(t.title) + '</div>'
@@ -702,8 +702,8 @@
           + '<span class="my-tasks-chip ' + (summary.openCases > 0 ? 'chip-warning' : 'chip-success') + '">' + ic(summary.openCases > 0 ? 'alert-triangle' : 'check-circle-2', 'icon-xs') + ' 矯正單：' + (summary.openCases || 0) + ' 件開放</span>'
           + '<span class="my-tasks-chip ' + (summary.trainingStatus === '已完成' ? 'chip-success' : 'chip-warning') + '">' + ic(summary.trainingStatus === '已完成' ? 'check-circle-2' : 'graduation-cap', 'icon-xs') + ' 教育訓練：' + esc(summary.trainingStatus || '未知') + '</span>'
           + '</div>';
-        slot.innerHTML = '<div class="card" style="padding:0">'
-          + '<div style="padding:16px 20px;border-bottom:1px solid var(--border-color)">' + summaryHtml + '</div>'
+        slot.innerHTML = '<div class="card card--flush">'
+          + '<div class="dashboard-tasks-header">' + summaryHtml + '</div>'
           + '<div class="my-tasks-list">' + taskCards + '</div></div>';
         scheduleRefreshIcons();
       }).catch(function () {});
@@ -741,11 +741,11 @@
         if (filingSlot) {
           filingSlot.classList.remove('dashboard-card-loading');
           filingSlot.removeAttribute('aria-busy');
-          const filingLight = filingPct >= 80 ? '#22c55e' : (filingPct >= 50 ? '#f59e0b' : '#ef4444');
+          const filingLight = filingPct >= 80 ? 'var(--color-success)' : (filingPct >= 50 ? 'var(--color-warning)' : 'var(--color-error)');
           const filingLightLabel = filingPct >= 80 ? '進度良好' : (filingPct >= 50 ? '需要催辦' : '嚴重落後');
           filingSlot.innerHTML = '<div class="dashboard-panel-body">'
-            + '<div class="dashboard-panel-row"><div class="dashboard-panel-indicator"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + filingLight + '"></span><span style="font-size:.82rem;color:' + filingLight + ';font-weight:600">' + filingLightLabel + '</span></div><span style="font-size:.9rem;color:var(--text-secondary)">' + esc(String(subU)) + ' / ' + esc(String(totalU)) + ' 個單位已送出</span><strong style="color:var(--accent-primary)">' + filingPct + '%</strong></div>'
-            + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + filingPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,' + filingLight + ',' + filingLight + ');transition:width .6s ease"></div></div>'
+            + '<div class="dashboard-panel-row"><div class="dashboard-panel-indicator"><span class="dashboard-status-dot" style="background:' + filingLight + '"></span><span class="dashboard-status-label" style="color:' + filingLight + '">' + filingLightLabel + '</span></div><span class="dashboard-panel-text">' + esc(String(subU)) + ' / ' + esc(String(totalU)) + ' 個單位已送出</span><strong class="dashboard-panel-pct">' + filingPct + '%</strong></div>'
+            + '<div class="dashboard-progress-bar"><div class="dashboard-progress-fill" style="width:' + filingPct + '%;background:linear-gradient(90deg,' + filingLight + ',' + filingLight + ')"></div></div>'
             + '<div class="dashboard-panel-pills">'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已送出</span><strong class="dashboard-panel-pill-value">' + esc(String(cl.submittedCount || subU)) + '</strong></div>'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">草稿中</span><strong class="dashboard-panel-pill-value">' + esc(String(cl.draftCount || 0)) + '</strong></div>'
@@ -765,16 +765,16 @@
           const retF = Number(tr.returnedForms) || 0;
           const totalF = Number(tr.totalForms) || 0;
           const tPct = totalF > 0 ? Math.round(compF / totalF * 100) : 0;
-          const trainLight = tPct >= 80 ? '#22c55e' : (tPct >= 50 ? '#f59e0b' : '#ef4444');
+          const trainLight = tPct >= 80 ? 'var(--color-success)' : (tPct >= 50 ? 'var(--color-warning)' : 'var(--color-error)');
           const trainLightLabel = tPct >= 80 ? '達標' : (tPct >= 50 ? '進行中' : '需注意');
           trainingSlot.innerHTML = '<div class="dashboard-panel-body">'
-            + '<div class="dashboard-panel-row"><div class="dashboard-panel-indicator"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + trainLight + '"></span><span style="font-size:.82rem;color:' + trainLight + ';font-weight:600">' + trainLightLabel + '</span></div><span style="font-size:.9rem;color:var(--text-secondary)">全校訓練完成率</span><strong style="color:var(--accent-primary)">' + tPct + '%</strong></div>'
-            + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + tPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,' + trainLight + ',' + trainLight + ');transition:width .6s ease"></div></div>'
+            + '<div class="dashboard-panel-row"><div class="dashboard-panel-indicator"><span class="dashboard-status-dot" style="background:' + trainLight + '"></span><span class="dashboard-status-label" style="color:' + trainLight + '">' + trainLightLabel + '</span></div><span class="dashboard-panel-text">全校訓練完成率</span><strong class="dashboard-panel-pct">' + tPct + '%</strong></div>'
+            + '<div class="dashboard-progress-bar"><div class="dashboard-progress-fill" style="width:' + tPct + '%;background:linear-gradient(90deg,' + trainLight + ',' + trainLight + ')"></div></div>'
             + '<div class="dashboard-panel-pills">'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">已完成</span><strong class="dashboard-panel-pill-value">' + compF + '</strong></div>'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">填報中</span><strong class="dashboard-panel-pill-value">' + (draftF + pendF) + '</strong></div>'
             + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">退回更正</span><strong class="dashboard-panel-pill-value">' + retF + '</strong></div>'
-            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待處理</span><strong class="dashboard-panel-pill-value" style="' + (pendingTotal > 0 ? 'color:#ef4444' : '') + '">' + pendingTotal + ' 項</strong></div>'
+            + '<div class="dashboard-panel-pill"><span class="dashboard-panel-pill-label">待處理</span><strong class="dashboard-panel-pill-value" style="' + (pendingTotal > 0 ? 'color:var(--color-error)' : '') + '">' + pendingTotal + ' 項</strong></div>'
             + '</div></div>';
         }
         // Show toast notification for pending items
