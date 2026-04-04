@@ -87,8 +87,8 @@ function createAuditTrailRouter(deps) {
     return {
       keyword: cleanText(sp.get('keyword')).toLowerCase(),
       eventType: cleanText(sp.get('eventType')),
-      occurredFrom: cleanText(sp.get('occurredFrom')),
-      occurredTo: cleanText(sp.get('occurredTo')),
+      occurredFrom: cleanText(sp.get('occurredFrom') || sp.get('dateFrom')),
+      occurredTo: cleanText(sp.get('occurredTo') || sp.get('dateTo')),
       actorEmail: cleanText(sp.get('actorEmail')).toLowerCase(),
       targetEmail: cleanText(sp.get('targetEmail')).toLowerCase(),
       unitCode: cleanText(sp.get('unitCode')),

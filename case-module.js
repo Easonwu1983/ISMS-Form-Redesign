@@ -162,7 +162,7 @@
   }
 
   function renderListTableRow(item) {
-    return '<tr data-route="detail/' + item.id + '"><td class="record-id-col">' + renderCopyIdCell(item.id, '矯正單號', true) + '</td><td>' + esc(item.deficiencyType) + '</td><td>' + esc(item.source) + '</td><td>' + renderCaseStatusCell(item, true) + '</td><td>' + esc(item.proposerName) + '</td><td>' + esc(item.handlerName) + '</td><td>' + fmt(item.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(item)) + '</td></tr>';
+    return '<tr data-route="detail/' + item.id + '"><td class="batch-chk-col" data-no-route="1"><label class="chk-label chk-label--center"><input type="checkbox" class="batch-row-chk" value="' + esc(item.id) + '"><span class="chk-box"></span></label></td><td class="record-id-col">' + renderCopyIdCell(item.id, '矯正單號', true) + '</td><td>' + esc(item.deficiencyType) + '</td><td>' + esc(item.source) + '</td><td>' + renderCaseStatusCell(item, true) + '</td><td>' + esc(item.proposerName) + '</td><td>' + esc(item.handlerName) + '</td><td>' + fmt(item.correctiveDueDate) + '</td><td>' + fmt(getCurrentNextTrackingDate(item)) + '</td></tr>';
   }
 
   function buildCaseCard(headerHtml, bodyHtml, options) {
@@ -336,7 +336,7 @@
     filtered.sort(function (a, b) {
       return (Number(b && b.createdAtTs) || Date.parse(b && b.createdAt || '') || 0) - (Number(a && a.createdAtTs) || Date.parse(a && a.createdAt || '') || 0);
     });
-    const rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : buildCaseEmptyTableRow(8, 'search', '沒有符合條件的矯正單');
+    const rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : buildCaseEmptyTableRow(9, 'search', '沒有符合條件的矯正單');
     const snapshot = { total: list.length, filtered: filtered, filteredCount: filtered.length, rows: rows };
     caseListRenderCache = { items: list, filter: filter, search: search, snapshot: snapshot };
     return snapshot;
@@ -466,6 +466,76 @@
 
   let dashboardRenderToken = 0;
 
+  // ── Dashboard card customization ──
+  const DASHBOARD_PREFS_KEY = 'isms_dashboard_prefs';
+  const DASHBOARD_SECTIONS = [
+    { key: 'auditProgress',    label: '年度稽核進度總覽',  icon: 'shield-check',    adminOnly: true },
+    { key: 'filingProgress',   label: '年度填報進度',      icon: 'clipboard-list',  adminOnly: true },
+    { key: 'trainingOverview', label: '教育訓練概覽',      icon: 'graduation-cap',  adminOnly: true },
+    { key: 'correctiveStats',  label: '矯正單統計',        icon: 'files',           adminOnly: false },
+    { key: 'recentCases',      label: '最近矯正單',        icon: 'clock',           adminOnly: false },
+    { key: 'todayFocus',       label: '今日焦點',          icon: 'target',          adminOnly: false },
+    { key: 'myTasks',          label: '我的待辦事項',      icon: 'list-checks',     adminOnly: false }
+  ];
+
+  function getDashboardPrefs() {
+    try {
+      return JSON.parse(localStorage.getItem(DASHBOARD_PREFS_KEY) || '{}');
+    } catch (_e) {
+      return {};
+    }
+  }
+
+  function saveDashboardPrefs(prefs) {
+    try {
+      localStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify(prefs));
+    } catch (_e) { /* storage full or unavailable */ }
+  }
+
+  function isDashboardSectionVisible(key) {
+    const prefs = getDashboardPrefs();
+    return prefs[key] !== false; // default: all visible
+  }
+
+  function applyDashboardVisibility() {
+    const prefs = getDashboardPrefs();
+    const sections = document.querySelectorAll('[data-dashboard-section]');
+    for (let i = 0; i < sections.length; i++) {
+      const el = sections[i];
+      const key = el.getAttribute('data-dashboard-section');
+      el.style.display = prefs[key] === false ? 'none' : '';
+    }
+  }
+
+  function buildDashboardSettingsModal() {
+    const prefs = getDashboardPrefs();
+    const user = currentUser();
+    const isAdmin = user && user.role === ROLES.ADMIN;
+    const rows = DASHBOARD_SECTIONS.filter(function (sec) {
+      if (sec.adminOnly && !isAdmin) return false;
+      if (sec.key === 'myTasks' && isAdmin) return false;
+      return true;
+    }).map(function (sec) {
+      const checked = prefs[sec.key] !== false;
+      return '<label class="dashboard-pref-row">'
+        + '<input type="checkbox" class="dashboard-pref-checkbox" data-pref-key="' + sec.key + '"' + (checked ? ' checked' : '') + '>'
+        + '<span class="dashboard-pref-icon">' + ic(sec.icon, 'icon-sm') + '</span>'
+        + '<span class="dashboard-pref-label">' + esc(sec.label) + '</span>'
+        + '</label>';
+    }).join('');
+
+    return '<div class="modal-backdrop dashboard-settings-backdrop" data-action="case.closeDashboardSettings">'
+      + '<div class="modal dashboard-settings-modal" role="dialog" aria-label="自訂儀表板">'
+      + '<div class="modal-header"><h3 class="modal-title">' + ic('settings', 'icon-sm') + ' 自訂儀表板</h3>'
+      + '<button class="btn btn-ghost btn-icon modal-close" data-action="case.closeDashboardSettings" title="關閉">' + ic('x', 'icon-sm') + '</button></div>'
+      + '<div class="modal-body"><p class="dashboard-pref-hint">選擇要在儀表板上顯示的區塊：</p>'
+      + '<div class="dashboard-pref-list">' + rows + '</div></div>'
+      + '<div class="modal-footer">'
+      + '<button class="btn btn-ghost btn-sm" data-action="case.resetDashboardPrefs">重設預設值</button>'
+      + '<button class="btn btn-primary btn-sm" data-action="case.closeDashboardSettings">完成</button>'
+      + '</div></div></div>';
+  }
+
   function scheduleDashboardHydration(task) {
     if (typeof task !== 'function') return;
     const cancelled = false;
@@ -538,37 +608,44 @@
       return '<option value="' + y + '"' + (y === currentAuditYear ? ' selected' : '') + '>' + y + ' 年度</option>';
     }).join('');
     const auditProgressHtml = showAuditProgress ? (
-      '<section class="dashboard-audit-progress"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('shield-check', 'icon-sm') + ' 年度稽核進度總覽</h2><select class="form-select dashboard-year-select" id="audit-year-select">' + auditYearOptions + '</select></div>'
+      '<div data-dashboard-section="auditProgress">'
+      + '<section class="dashboard-audit-progress"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('shield-check', 'icon-sm') + ' 年度稽核進度總覽</h2><select class="form-select dashboard-year-select" id="audit-year-select">' + auditYearOptions + '</select></div>'
       + '<div class="stats-grid stats-grid--audit">'
       + '<div class="stat-card total"><div class="stat-icon">' + ic('clipboard-list') + '</div><div class="stat-value" id="' + auditSlotIds.filingStat + '">—</div><div class="stat-label">年度填報</div></div>'
       + '<div class="stat-card closed"><div class="stat-icon">' + ic('graduation-cap') + '</div><div class="stat-value" id="' + auditSlotIds.trainingStat + '">—</div><div class="stat-label">訓練達成率</div></div>'
       + '<div class="stat-card overdue"><div class="stat-icon">' + ic('bell-ring') + '</div><div class="stat-value" id="' + auditSlotIds.pendingStat + '">—</div><div class="stat-label">待處理事項</div></div>'
       + '</div>'
       + '<div class="dashboard-grid dashboard-grid--audit">'
-      + '<div class="card dashboard-panel"><div class="card-header"><span class="card-title">年度填報進度</span></div><div id="' + auditSlotIds.filing + '" class="dashboard-card-loading" aria-busy="true">正在載入填報進度…</div></div>'
-      + '<div class="card dashboard-panel"><div class="card-header"><span class="card-title">教育訓練概覽</span></div><div id="' + auditSlotIds.training + '" class="dashboard-card-loading" aria-busy="true">正在載入訓練資料…</div></div>'
-      + '</div></section>'
+      + '<div data-dashboard-section="filingProgress"><div class="card dashboard-panel"><div class="card-header"><span class="card-title">年度填報進度</span></div><div id="' + auditSlotIds.filing + '" class="dashboard-card-loading" aria-busy="true">正在載入填報進度…</div></div></div>'
+      + '<div data-dashboard-section="trainingOverview"><div class="card dashboard-panel"><div class="card-header"><span class="card-title">教育訓練概覽</span></div><div id="' + auditSlotIds.training + '" class="dashboard-card-loading" aria-busy="true">正在載入訓練資料…</div></div></div>'
+      + '</div></section></div>'
     ) : '';
 
     const myTasksHtml = showMyTasks ? (
-      '<section class="dashboard-my-tasks"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('list-checks', 'icon-sm') + ' 我的待辦事項</h2></div>'
-      + '<div id="' + myTasksSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入您的待辦事項…</div></section>'
+      '<div data-dashboard-section="myTasks"><section class="dashboard-my-tasks"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('list-checks', 'icon-sm') + ' 我的待辦事項</h2></div>'
+      + '<div id="' + myTasksSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入您的待辦事項…</div></section></div>'
     ) : '';
 
+    const settingsBtn = '<button class="btn btn-ghost btn-sm" data-action="case.dashboardSettings" title="自訂儀表板">' + ic('settings', 'icon-sm') + ' 自訂</button>';
+
     document.getElementById('app').innerHTML = '<div class="animate-in">'
+        + '<div class="dashboard-toolbar"><div class="dashboard-toolbar-actions">' + settingsBtn + '</div></div>'
         + auditProgressHtml
         + myTasksHtml
-        + '<section class="dashboard-hero dashboard-hero--integrated"><h1 class="sr-only" data-route-heading="true">儀表板</h1><div class="dashboard-hero-grid"><div class="dashboard-hero-copy dashboard-hero-copy--integrated"><p class="dashboard-hero-text dashboard-hero-text--lead">集中掌握矯正單進度、逾期風險與最近活動，讓主管與承辦人可以在同一個入口快速判斷優先順序。</p><div class="dashboard-meta-row">' + heroMeta + '</div><div class="dashboard-hero-actions">' + createBtn + '</div></div>' + heroSide + '</div></section>'
-      + '<div class="stats-grid">'
+        + '<div data-dashboard-section="todayFocus"><section class="dashboard-hero dashboard-hero--integrated"><h1 class="sr-only" data-route-heading="true">儀表板</h1><div class="dashboard-hero-grid"><div class="dashboard-hero-copy dashboard-hero-copy--integrated"><p class="dashboard-hero-text dashboard-hero-text--lead">集中掌握矯正單進度、逾期風險與最近活動，讓主管與承辦人可以在同一個入口快速判斷優先順序。</p><div class="dashboard-meta-row">' + heroMeta + '</div><div class="dashboard-hero-actions">' + createBtn + '</div></div>' + heroSide + '</div></section></div>'
+      + '<div data-dashboard-section="correctiveStats"><div class="stats-grid">'
       + buildCaseStatCard('total', 'files', '—', '矯正單總數')
       + buildCaseStatCard('pending', 'clock', '—', '待矯正')
       + buildCaseStatCard('overdue', 'alert-triangle', '—', '已逾期')
       + buildCaseStatCard('closed', 'check-circle-2', '—', '本月結案')
-      + '</div>'
-      + '<div class="dashboard-grid">'
+      + '</div></div>'
+      + '<div data-dashboard-section="recentCases"><div class="dashboard-grid">'
       + buildCaseCard('<span class="card-title">狀態分布</span>', chartShell, { cardClass: 'dashboard-panel dashboard-chart-panel' })
       + buildCaseCard('<span class="card-title">最近矯正單</span><a href="#list" class="btn btn-ghost btn-sm">查看全部 →</a>', recentShell, { cardClass: 'dashboard-panel dashboard-table-panel' })
-        + '</div></div>';
+        + '</div></div></div>';
+
+    applyDashboardVisibility();
+    scheduleRefreshIcons();
 
     scheduleDashboardHydration(function () {
       if (renderToken !== dashboardRenderToken) return;
@@ -828,21 +905,120 @@
   }
 
   let curFilter = '全部', curSearch = '';
+
+  // ─── Batch operations ─────────────────────
+  function getSelectedBatchIds() {
+    const checks = document.querySelectorAll('.batch-row-chk:checked');
+    const ids = [];
+    for (let i = 0; i < checks.length; i++) { ids.push(checks[i].value); }
+    return ids;
+  }
+
+  function updateBatchToolbar() {
+    const toolbar = document.getElementById('batch-toolbar');
+    if (!toolbar) return;
+    const selected = getSelectedBatchIds();
+    const countEl = toolbar.querySelector('.batch-selected-count');
+    if (countEl) countEl.textContent = '\u5df2\u9078\u53d6 ' + selected.length + ' \u7b46';
+    toolbar.style.display = selected.length > 0 ? 'flex' : 'none';
+    const selectAll = document.getElementById('batch-select-all');
+    if (selectAll) {
+      const allChecks = document.querySelectorAll('.batch-row-chk');
+      selectAll.checked = allChecks.length > 0 && selected.length === allChecks.length;
+      selectAll.indeterminate = selected.length > 0 && selected.length < allChecks.length;
+    }
+  }
+
+  function handleBatchSelectAll(event) {
+    const checked = event.target.checked;
+    const allChecks = document.querySelectorAll('.batch-row-chk');
+    for (let i = 0; i < allChecks.length; i++) { allChecks[i].checked = checked; }
+    updateBatchToolbar();
+  }
+
+  async function handleBatchReminder() {
+    const ids = getSelectedBatchIds();
+    if (!ids.length) { toast('\u8acb\u5148\u52fe\u9078\u8981\u50ac\u8fa6\u7684\u77ef\u6b63\u55ae', 'error'); return; }
+    try {
+      const response = await fetch('/api/batch-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseIds: ids })
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      toast('\u5df2\u9001\u51fa ' + ids.length + ' \u7b46\u50ac\u8fa6\u901a\u77e5', 'success');
+    } catch (error) {
+      toast('\u6279\u6b21\u50ac\u8fa6\u5931\u6557\uff1a' + String(error && error.message || error), 'error');
+    }
+  }
+
+  function handleBatchExportCsv() {
+    const ids = getSelectedBatchIds();
+    if (!ids.length) { toast('\u8acb\u5148\u52fe\u9078\u8981\u532f\u51fa\u7684\u77ef\u6b63\u55ae', 'error'); return; }
+    const allItems = getVisibleItems();
+    const items = allItems.filter(function (item) { return ids.indexOf(item.id) >= 0; });
+    if (!items.length) { toast('\u627e\u4e0d\u5230\u5df2\u9078\u53d6\u7684\u77ef\u6b63\u55ae\u8cc7\u6599', 'error'); return; }
+    const headers = ['\u55ae\u865f', '\u7f3a\u5931\u7a2e\u985e', '\u4f86\u6e90', '\u5206\u985e', '\u72c0\u614b', '\u63d0\u5831\u55ae\u4f4d', '\u63d0\u5831\u4eba', '\u8655\u7406\u55ae\u4f4d', '\u8655\u7406\u4eba', '\u8655\u7406\u4eba\u90f5\u4ef6', '\u554f\u984c\u8aaa\u660e', '\u77ef\u6b63\u63aa\u65bd', '\u9810\u5b9a\u5b8c\u6210\u65e5', '\u4e0b\u6b21\u8ffd\u8e64', '\u958b\u7acb\u65e5\u671f', '\u7d50\u6848\u65e5\u671f'];
+    const rows = items.map(function (item) {
+      return [
+        item.id, item.deficiencyType, item.source,
+        Array.isArray(item.category) ? item.category.join('\u3001') : '',
+        item.status, item.proposerUnit, item.proposerName,
+        item.handlerUnit, item.handlerName, item.handlerEmail,
+        String(item.problemDesc || '').replace(/[\r\n]+/g, ' '),
+        String(item.correctiveAction || '').replace(/[\r\n]+/g, ' '),
+        item.correctiveDueDate ? item.correctiveDueDate.slice(0, 10) : '',
+        item.reviewNextDate ? item.reviewNextDate.slice(0, 10) : '',
+        item.createdAt ? item.createdAt.slice(0, 10) : '',
+        item.closedDate ? item.closedDate.slice(0, 10) : ''
+      ];
+    });
+    const bom = '\uFEFF';
+    const csvContent = bom + headers.join(',') + '\n' + rows.map(function (row) {
+      return row.map(function (cell) { return '"' + String(cell || '').replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'ISMS_\u77ef\u6b63\u55ae_\u6279\u6b21\u532f\u51fa_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+    toast('\u5df2\u532f\u51fa ' + items.length + ' \u7b46\u5df2\u9078\u53d6\u77ef\u6b63\u55ae', 'success');
+  }
+
   function renderList() {
     const items = getVisibleItems(); const filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); const listSnapshot = getCachedCaseListSnapshot(items); const filtered = listSnapshot.filtered;
     const ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
     const createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
-    const exportBtn = '<button type="button" class="btn btn-secondary" id="case-export-csv">' + ic('download', 'icon-sm') + ' 匯出 CSV</button>';
+    const exportBtn = '<button type="button" class="btn btn-secondary" id="case-export-csv">' + ic('download', 'icon-sm') + ' \u532f\u51fa CSV</button>';
+    const batchToolbar = '<div id="batch-toolbar" class="batch-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 16px;background:var(--color-surface-secondary,#f5f6fa);border-radius:6px;margin-bottom:8px">'
+      + '<span class="batch-selected-count" style="font-weight:600;font-size:0.95em">\u5df2\u9078\u53d6 0 \u7b46</span>'
+      + '<button type="button" class="btn btn-primary btn-sm" id="batch-reminder-btn">' + ic('bell', 'icon-sm') + ' \u6279\u6b21\u50ac\u8fa6</button>'
+      + '<button type="button" class="btn btn-secondary btn-sm" id="batch-export-btn">' + ic('download', 'icon-sm') + ' \u6279\u6b21\u532f\u51fa</button>'
+      + '</div>';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
-      '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + listSnapshot.total + ' 筆，顯示 ' + listSnapshot.filteredCount + ' 筆</p></div><div class="page-header-actions">' + exportBtn + createBtn + '</div></div>' +
-      '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
-      buildCaseCard('', buildCaseTableMarkup('<th class="record-id-head">單號</th><th>缺失種類</th><th>來源</th><th>狀態</th><th>提出人</th><th>處理人</th><th>預定完成</th><th>下次追蹤</th>', listSnapshot.rows), { cardClass: 'case-table-card' }) + '</div>';
+      '<div class="page-header"><div><h1 class="page-title">\u77ef\u6b63\u55ae\u5217\u8868</h1><p class="page-subtitle">\u5171 ' + listSnapshot.total + ' \u7b46\uff0c\u986f\u793a ' + listSnapshot.filteredCount + ' \u7b46</p></div><div class="page-header-actions">' + exportBtn + createBtn + '</div></div>' +
+      '<div class="toolbar"><div class="search-box"><input type="text" placeholder="\u641c\u5c0b\u55ae\u865f\u3001\u8aaa\u660e\u3001\u4eba\u54e1..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
+      batchToolbar +
+      buildCaseCard('', buildCaseTableMarkup('<th class="batch-chk-col" style="width:40px"><label class="chk-label chk-label--center" title="\u5168\u9078"><input type="checkbox" id="batch-select-all"><span class="chk-box"></span></label></th><th class="record-id-head">\u55ae\u865f</th><th>\u7f3a\u5931\u7a2e\u985e</th><th>\u4f86\u6e90</th><th>\u72c0\u614b</th><th>\u63d0\u51fa\u4eba</th><th>\u8655\u7406\u4eba</th><th>\u9810\u5b9a\u5b8c\u6210</th><th>\u4e0b\u6b21\u8ffd\u8e64</th>', listSnapshot.rows), { cardClass: 'case-table-card' }) + '</div>';
     window.setTimeout(function () {
       scheduleRefreshIcons();
       bindCopyButtons();
       const exportCsvBtn = document.getElementById('case-export-csv');
       if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportCaseListCsv);
     }, 0);
+    // ─── Batch operation event wiring ────────
+    const selectAllChk = document.getElementById('batch-select-all');
+    if (selectAllChk) bindCasePageEvent(selectAllChk, 'change', handleBatchSelectAll);
+    bindCasePageEvent(document.getElementById('app'), 'change', function (e) {
+      if (e.target && e.target.classList.contains('batch-row-chk')) updateBatchToolbar();
+    });
+    const batchReminderBtn = document.getElementById('batch-reminder-btn');
+    if (batchReminderBtn) bindCasePageEvent(batchReminderBtn, 'click', handleBatchReminder);
+    const batchExportBtn = document.getElementById('batch-export-btn');
+    if (batchExportBtn) bindCasePageEvent(batchExportBtn, 'click', handleBatchExportCsv);
     let searchRenderTimer = null;
     const scheduleRenderList = function () {
       if (searchRenderTimer) window.clearTimeout(searchRenderTimer);
@@ -1951,6 +2127,43 @@ function renderTracking(id) {
       } catch (error) {
         toast('刪除失敗：' + String(error && error.message || error || ''), 'error');
       }
+    },
+    dashboardSettings: function () {
+      const existing = document.querySelector('.dashboard-settings-backdrop');
+      if (existing) { existing.remove(); return; }
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = buildDashboardSettingsModal();
+      const modal = wrapper.firstChild;
+      document.body.appendChild(modal);
+      scheduleRefreshIcons();
+      modal.addEventListener('change', function (e) {
+        const cb = e.target;
+        if (!cb.classList.contains('dashboard-pref-checkbox')) return;
+        const key = cb.getAttribute('data-pref-key');
+        if (!key) return;
+        const prefs = getDashboardPrefs();
+        prefs[key] = cb.checked;
+        saveDashboardPrefs(prefs);
+        applyDashboardVisibility();
+      });
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+    },
+    closeDashboardSettings: function () {
+      const backdrop = document.querySelector('.dashboard-settings-backdrop');
+      if (backdrop) backdrop.remove();
+    },
+    resetDashboardPrefs: function () {
+      saveDashboardPrefs({});
+      applyDashboardVisibility();
+      const checkboxes = document.querySelectorAll('.dashboard-pref-checkbox');
+      for (let i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = true;
+      }
+      toast('已重設為預設值', 'info');
     }
   });
 
