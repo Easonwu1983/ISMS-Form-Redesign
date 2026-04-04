@@ -1,63 +1,36 @@
-﻿# 執行流程索引
+# 執行流程索引
 
 ## 接手層
 
-- [production-topology.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/production-topology.md)
-- [handoff-index.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/handoff-index.md)
-- [boot-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/boot-checklist.md)
+- [production-topology.md](./production-topology.md)
+- [handoff-index.md](./handoff-index.md)
+- [boot-checklist.md](./boot-checklist.md)
 
 ## 校內 VM
 
-- [vm-migration-checklist.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/vm-migration-checklist.md)
-- [release-and-rollback.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/release-and-rollback.md)
+- [vm-migration-checklist.md](./vm-migration-checklist.md)
+- [release-and-rollback.md](./release-and-rollback.md)
 
-## 固定順序
+## 固定部署順序
 
-1. 確認 tracked 工作樹乾淨，只忽略既有未追蹤暫存檔
-2. 若改到 shell / CSS / bundles，先 `node scripts/build-app-core-assets.cjs`
-3. push `origin/main`
-4. 刷新本機 root `deploy-manifest.json`
-5. 同步 `useradmin@140.112.97.150`
-6. 跑 VM smoke
-7. 發 Pages
-8. 跑 formal smoke
+1. 確認 git 工作樹乾淨
+2. 若改到 shell / CSS / bundles，先 `npm run build`
+3. `git push origin main`
+4. SSH 進 VM：`sudo -u ismsbackend bash -c 'cd /srv/isms-form-redesign && git pull origin main'`
+5. `sudo systemctl restart isms-unit-contact-backend.service`
+6. 驗證：`curl http://127.0.0.1:8787/api/auth/health`
 
-## 不再重建上下文的固定事實
+## 固定事實
 
 - 正式主站：`http://140.112.97.150/`
-- Pages：`https://isms-campus-portal.pages.dev/`
-- 正式部署入口：`useradmin@140.112.97.150`
-- VM repo：`/srv/isms-form-redesign`
-- service user：`ismsbackend`
-- 本機 `8088` 不是正式判準
-- Pages smoke 不和 full smoke 平行執行
+- Cloudflare Pages 入口：`https://isms-campus-portal.pages.dev/`
+- VM SSH：`useradmin@140.112.97.150`
+- VM 專案路徑：`/srv/isms-form-redesign`
+- 服務帳號：`ismsbackend`
+- systemd 服務：`isms-unit-contact-backend.service`
 
-## 目前固定優先順序
+## 優先順序原則
 
-1. 先把正式鏈維持綠燈
-2. 再壓 `latest-release-report.md` 裡最大的 latency hotspot
-3. 最後才做結構性重構或視覺細修
-
-目前優先修的點：
-
-- `visual:desktop:dashboard`
-- `visual:desktop:unit-review`
-- `checklist:list-loaded`
-- `visual:public-desktop:unit-contact-apply`
-- `unit-admin:login`
-
-## 固定避坑
-
-- 不再把 guest `127.0.0.1:2222` 當正式部署入口
-- 不再把本機 `8088` 混進正式版本治理
-- 不要因為大量未追蹤暫存檔就中斷；只看 tracked 變更
-- 如果本輪動到 build 產物相關檔案，先重建 core assets，再推版
-
-## 例外層
-
-- [fast-redeploy-runbook.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/fast-redeploy-runbook.md)
-
-## 細節層
-
-- [data-layer-governance.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/data-layer-governance.md)
-- [module-architecture.md](/C:/Users/User/Playground/ISMS-Form-Redesign/docs/module-architecture.md)
+1. 先確保正式環境穩定（health check 全綠）
+2. 再處理使用者回報的功能問題
+3. 最後做結構性重構或視覺細修

@@ -9,11 +9,10 @@
 
 ## 資料層
 
-- **主要資料來源**：PostgreSQL 17（VM 本機 `127.0.0.1:5432`，資料庫 `isms_db`，使用者 `isms_user`）
-- **歷史資料來源**：M365 / SharePoint Lists（遷移中，部分模組仍使用 Graph API）
-- **附件儲存**：SharePoint Drive（規劃遷移至 VM 本地 `/var/lib/isms/attachments/`）
+- **主要資料來源**：PostgreSQL 16（VM 本機 `127.0.0.1:5432`，資料庫 `isms_db`，使用者 `isms_user`）
+- **附件儲存**：VM 本地磁碟（`/srv/isms-form-redesign/attachments/`）
 - **前端資料快取**：localStorage（跨裝置不同步）
-- **後端快取**：`logs/campus-backend/*.json`（audit-trail, training-rosters, checklists, unit-governance）
+- **後端快取**：in-memory API cache（60s TTL, 100 筆上限）
 
 ## 連線與憑證
 
@@ -25,7 +24,7 @@
 | 自動部署腳本 | `.runtime/tools/vm-deploy.ps1` |
 | DB 連線模組 | `m365/campus-backend/db.cjs` (pg.Pool) |
 | DB 設定來源 | `runtime.local.json` → `postgres` 區塊 |
-| M365 Graph API | `runtime.local.json` → `m365` 區塊 |
+| Graph Mail API | `runtime.local.json` → `mailSenderUpn` |
 | VM repo 路徑 | `/srv/isms-form-redesign` |
 | VM service user | `ismsbackend` |
 | systemd service | `isms-unit-contact-backend.service` |
