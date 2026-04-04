@@ -146,8 +146,8 @@ import"./chunks/chunk-CEJRW7TZ.js";(function(){window.createChecklistModule=func
             <div class="cm-item-hint">\u8AAA\u660E\uFF1A${l(e.hint||"\u5C1A\u7121\u8AAA\u660E")}</div>
           </div>
           <div class="cm-item-actions">
-            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${t}" data-ii="${i}" title="\u7DE8\u8F2F\u984C\u76EE">${E("edit-2","btn-icon-svg")}</button>
-            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${t}" data-ii="${i}" title="\u522A\u9664\u984C\u76EE">${E("trash-2","btn-icon-svg")}</button>
+            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${t}" data-ii="${i}" title="\u7DE8\u8F2F\u984C\u76EE" aria-label="\u7DE8\u8F2F\u984C\u76EE">${E("edit-2","btn-icon-svg")}</button>
+            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${t}" data-ii="${i}" title="\u522A\u9664\u984C\u76EE" aria-label="\u522A\u9664\u984C\u76EE">${E("trash-2","btn-icon-svg")}</button>
           </div>
         </div>`}function cs(e,t){let i=e.items.map((s,n)=>ls(s,t,n)).join("");return`
         <div class="cm-section" data-si="${t}">
@@ -158,9 +158,9 @@ import"./chunks/chunk-CEJRW7TZ.js";(function(){window.createChecklistModule=func
             </div>
             <div class="cm-section-actions">
               <span class="cm-item-count">${e.items.length} \u984C</span>
-              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${t}" title="\u7DE8\u8F2F\u985E\u5225">${E("edit-2","btn-icon-svg")}</button>
+              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${t}" title="\u7DE8\u8F2F\u985E\u5225" aria-label="\u7DE8\u8F2F\u985E\u5225">${E("edit-2","btn-icon-svg")}</button>
               <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${t}" title="\u65B0\u589E\u984C\u76EE">${E("plus","btn-icon-svg")} \u65B0\u589E\u984C\u76EE</button>
-              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${t}" title="\u522A\u9664\u985E\u5225">${E("trash-2","btn-icon-svg")}</button>
+              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${t}" title="\u522A\u9664\u985E\u5225" aria-label="\u522A\u9664\u985E\u5225">${E("trash-2","btn-icon-svg")}</button>
             </div>
           </div>
           <div class="cm-items-wrap">${i}</div>

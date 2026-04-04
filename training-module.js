@@ -1346,7 +1346,7 @@
       ? '<span class="training-na-chip">不適用</span>'
       : renderTrainingBinaryButtons('completedProfessional', row.completedProfessional, index, professionalDisabled, '✓', '✕');
     const actionHtml = canDeleteRow
-      ? '<div class="training-row-actions"><button type="button" class="btn btn-sm btn-danger training-row-delete" data-idx="' + index + '">' + ic('trash-2', 'btn-icon-svg') + '</button></div>'
+      ? '<div class="training-row-actions"><button type="button" class="btn btn-sm btn-danger training-row-delete" data-idx="' + index + '" aria-label="刪除">' + ic('trash-2', 'btn-icon-svg') + '</button></div>'
       : '<div class="training-row-actions"><span class="training-row-action-hint">' + (row.source === 'manual' ? '僅建立者可刪' : '正式名單') + '</span></div>';
     return '<tr>'
       + '<td><input type="checkbox" class="training-row-check" data-key="' + esc(key) + '" ' + (selected ? 'checked' : '') + '></td>'
@@ -1489,7 +1489,7 @@
       + '<td>' + esc(row.jobTitle || '—') + '</td>'
       + '<td>' + esc(row.createdBy || '') + '</td>'
       + '<td>' + fmtTime(row.createdAt) + '</td>'
-      + '<td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '">' + ic('trash-2', 'btn-icon-svg') + '</button></td>'
+      + '<td><button type="button" class="btn btn-sm btn-danger" data-testid="training-roster-delete-' + esc(row.id) + '" data-action="training.deleteRoster" data-id="' + esc(row.id) + '" aria-label="刪除">' + ic('trash-2', 'btn-icon-svg') + '</button></td>'
       + '</tr>';
   }
 

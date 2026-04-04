@@ -2211,8 +2211,8 @@
             <div class="cm-item-hint">說明：${esc(item.hint || '尚無說明')}</div>
           </div>
           <div class="cm-item-actions">
-            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯題目">${ic('edit-2', 'btn-icon-svg')}</button>
-            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除題目">${ic('trash-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-secondary" data-action="checklist.editItem" data-si="${si}" data-ii="${ii}" title="編輯題目" aria-label="編輯題目">${ic('edit-2', 'btn-icon-svg')}</button>
+            <button class="btn btn-sm btn-danger" data-action="checklist.deleteItem" data-si="${si}" data-ii="${ii}" title="刪除題目" aria-label="刪除題目">${ic('trash-2', 'btn-icon-svg')}</button>
           </div>
         </div>`;
   }
@@ -2228,9 +2228,9 @@
             </div>
             <div class="cm-section-actions">
               <span class="cm-item-count">${sec.items.length} 題</span>
-              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="編輯類別">${ic('edit-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-secondary" data-action="checklist.editSection" data-si="${si}" title="編輯類別" aria-label="編輯類別">${ic('edit-2', 'btn-icon-svg')}</button>
               <button class="btn btn-sm btn-primary" data-action="checklist.addItem" data-si="${si}" title="新增題目">${ic('plus', 'btn-icon-svg')} 新增題目</button>
-              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${si}" title="刪除類別">${ic('trash-2', 'btn-icon-svg')}</button>
+              <button class="btn btn-sm btn-danger" data-action="checklist.deleteSection" data-si="${si}" title="刪除類別" aria-label="刪除類別">${ic('trash-2', 'btn-icon-svg')}</button>
             </div>
           </div>
           <div class="cm-items-wrap">${itemRows}</div>
