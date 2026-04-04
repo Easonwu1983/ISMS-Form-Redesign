@@ -369,31 +369,32 @@
       const loginPanelDisplay = 'block';
       const bootstrapAutoFocus = '';
       const loginAutoFocus = authMode === 'm365-api' ? 'autofocus' : '';
+      const _t = window.__i18n__ && typeof window.__i18n__.t === 'function' ? window.__i18n__.t : function (k, fb) { return fb || k; };
       const textMap = {
-        skip: '\u8df3\u5230\u4e3b\u8981\u5167\u5bb9',
-        title: '\u8cc7\u8a0a\u5b89\u5168\u7ba1\u7406\u7cfb\u7d71',
-        subtitle: 'Information Security Management System',
-        loginError: '\u5e33\u865f\u6216\u5bc6\u78bc\u932f\u8aa4',
-        setupTitle: '\u5efa\u7acb\u672c\u6a5f\u7ba1\u7406\u54e1\u5e33\u865f',
-        setupText: '\u76ee\u524d\u6c92\u6709\u4efb\u4f55\u672c\u6a5f\u5e33\u865f\uff0c\u8acb\u5148\u5efa\u7acb\u4e00\u7d44\u672c\u6a5f\u7ba1\u7406\u54e1\u5e33\u865f\uff0c\u4e4b\u5f8c\u518d\u767b\u5165\u7cfb\u7d71\u3002',
-        adminName: '\u7ba1\u7406\u54e1\u59d3\u540d',
-        adminUser: '\u7ba1\u7406\u54e1\u5e33\u865f',
-        email: '\u96fb\u5b50\u90f5\u4ef6',
-        initPassword: '\u521d\u59cb\u5bc6\u78bc',
-        placeholderName: '\u8acb\u8f38\u5165\u7ba1\u7406\u54e1\u59d3\u540d',
-        placeholderUser: '\u8acb\u8f38\u5165\u767b\u5165\u5e33\u865f',
-        placeholderEmail: '\u8acb\u8f38\u5165\u96fb\u5b50\u90f5\u4ef6',
-        placeholderPassword: '\u81f3\u5c11 8 \u78bc\uff0c\u542b\u5927\u5c0f\u5beb\u3001\u6578\u5b57\u8207\u7279\u6b8a\u7b26\u865f',
-        defaultAdminName: '\u672c\u6a5f\u7ba1\u7406\u54e1',
-        createAdmin: '\u5efa\u7acb\u672c\u6a5f\u7ba1\u7406\u54e1',
-        account: '\u5e33\u865f',
-        password: '\u5bc6\u78bc',
-        loginAction: '\u767b\u5165\u7cfb\u7d71',
-        firstUseTitle: '\u7533\u8acb\u55ae\u4f4d\u7ba1\u7406\u4eba\u54e1',
-        firstUseText: '\u5982\u9700\u65b0\u589e\u6216\u7570\u52d5\u5404\u55ae\u4f4d\u7ba1\u7406\u7a97\u53e3\uff0c\u8acb\u5148\u9001\u51fa\u55ae\u4f4d\u7ba1\u7406\u4eba\u7533\u8acb\u3002\u5be9\u6838\u901a\u904e\u5f8c\uff0c\u7cfb\u7d71\u6703\u76f4\u63a5\u555f\u7528\u5e33\u865f\u4e26\u5bc4\u9001\u767b\u5165\u8cc7\u8a0a\u3002',
-        applyUnitContact: '\u524d\u5f80\u7533\u8acb',
-        checkProgress: '\u67e5\u8a62\u9032\u5ea6',
-        forgotPassword: '\u5fd8\u8a18\u5bc6\u78bc\uff1f',
+        skip: _t('login.skip', '\u8df3\u5230\u4e3b\u8981\u5167\u5bb9'),
+        title: _t('login.title', '\u8cc7\u8a0a\u5b89\u5168\u7ba1\u7406\u7cfb\u7d71'),
+        subtitle: _t('login.subtitle', 'Information Security Management System'),
+        loginError: _t('login.error', '\u5e33\u865f\u6216\u5bc6\u78bc\u932f\u8aa4'),
+        setupTitle: _t('login.setupTitle', '\u5efa\u7acb\u672c\u6a5f\u7ba1\u7406\u54e1\u5e33\u865f'),
+        setupText: _t('login.setupText', '\u76ee\u524d\u6c92\u6709\u4efb\u4f55\u672c\u6a5f\u5e33\u865f\uff0c\u8acb\u5148\u5efa\u7acb\u4e00\u7d44\u672c\u6a5f\u7ba1\u7406\u54e1\u5e33\u865f\uff0c\u4e4b\u5f8c\u518d\u767b\u5165\u7cfb\u7d71\u3002'),
+        adminName: _t('login.adminName', '\u7ba1\u7406\u54e1\u59d3\u540d'),
+        adminUser: _t('login.adminUser', '\u7ba1\u7406\u54e1\u5e33\u865f'),
+        email: _t('login.email', '\u96fb\u5b50\u90f5\u4ef6'),
+        initPassword: _t('login.initPassword', '\u521d\u59cb\u5bc6\u78bc'),
+        placeholderName: _t('login.placeholderName', '\u8acb\u8f38\u5165\u7ba1\u7406\u54e1\u59d3\u540d'),
+        placeholderUser: _t('login.placeholderUser', '\u8acb\u8f38\u5165\u767b\u5165\u5e33\u865f'),
+        placeholderEmail: _t('login.placeholderEmail', '\u8acb\u8f38\u5165\u96fb\u5b50\u90f5\u4ef6'),
+        placeholderPassword: _t('login.placeholderPassword', '\u81f3\u5c11 8 \u78bc\uff0c\u542b\u5927\u5c0f\u5beb\u3001\u6578\u5b57\u8207\u7279\u6b8a\u7b26\u865f'),
+        defaultAdminName: _t('login.defaultAdminName', '\u672c\u6a5f\u7ba1\u7406\u54e1'),
+        createAdmin: _t('login.createAdmin', '\u5efa\u7acb\u672c\u6a5f\u7ba1\u7406\u54e1'),
+        account: _t('login.account', '\u5e33\u865f'),
+        password: _t('login.password', '\u5bc6\u78bc'),
+        loginAction: _t('login.submit', '\u767b\u5165\u7cfb\u7d71'),
+        firstUseTitle: _t('login.apply', '\u7533\u8acb\u55ae\u4f4d\u7ba1\u7406\u4eba\u54e1'),
+        firstUseText: _t('login.applyDesc', '\u5982\u9700\u65b0\u589e\u6216\u7570\u52d5\u5404\u55ae\u4f4d\u7ba1\u7406\u7a97\u53e3\uff0c\u8acb\u5148\u9001\u51fa\u55ae\u4f4d\u7ba1\u7406\u4eba\u7533\u8acb\u3002\u5be9\u6838\u901a\u904e\u5f8c\uff0c\u7cfb\u7d71\u6703\u76f4\u63a5\u555f\u7528\u5e33\u865f\u4e26\u5bc4\u9001\u767b\u5165\u8cc7\u8a0a\u3002'),
+        applyUnitContact: _t('login.goApply', '\u524d\u5f80\u7533\u8acb'),
+        checkProgress: _t('login.checkStatus', '\u67e5\u8a62\u9032\u5ea6'),
+        forgotPassword: _t('login.forgot', '\u5fd8\u8a18\u5bc6\u78bc\uff1f'),
         changeTitle: '\u9996\u6b21\u767b\u5165\u9700\u8b8a\u66f4\u5bc6\u78bc',
         passwordRule: '\u5bc6\u78bc\u9700\u81f3\u5c11 8 \u78bc\uff0c\u4e26\u5305\u542b\u82f1\u6587\u5927\u5beb\u3001\u82f1\u6587\u5c0f\u5beb\u3001\u6578\u5b57\u8207\u7279\u6b8a\u7b26\u865f\uff08\u5982 !@#$%&*\uff09\u3002',
         changeError: '\u5bc6\u78bc\u8b8a\u66f4\u5931\u6557',
@@ -429,7 +430,7 @@
         '<div class="login-logo"><span class="login-logo-icon">' + ntuLogo('ntu-logo-lg') + '</span><h1 id="login-page-title">' + textMap.title + '</h1><p>' + textMap.subtitle + '</p></div>' +
         '<div class="login-error" id="login-error" data-testid="login-error" role="alert" aria-live="assertive" aria-atomic="true">' + textMap.loginError + '</div>' +
         '<div id="login-panel" style="display:' + loginPanelDisplay + '"><form class="login-form" id="login-form" data-testid="login-form"><div class="form-group"><label class="form-label">' + textMap.account + '</label><input type="text" class="form-input" id="login-user" data-testid="login-user" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required ' + loginAutoFocus + '></div><div class="form-group"><label class="form-label">' + textMap.password + '</label><input type="password" class="form-input" id="login-pass" data-testid="login-pass" autocomplete="current-password" placeholder="' + textMap.password + '" required></div><button type="submit" class="login-btn" data-testid="login-submit">' + textMap.loginAction + ' ' + ic('arrow-right', 'icon-sm') + '</button></form>' +
-        '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h2 class="login-entry-title">' + textMap.firstUseTitle + '</h2><p class="login-entry-text">' + textMap.firstUseText + '</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">' + textMap.applyUnitContact + '</a><a class="btn btn-secondary" href="#apply-unit-contact-status">' + textMap.checkProgress + '</a></div></div><p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.forgotPassword + '</a></p></div>' +
+        '<div class="login-entry-card"><div class="login-entry-eyebrow">New</div><h2 class="login-entry-title">' + textMap.firstUseTitle + '</h2><p class="login-entry-text">' + textMap.firstUseText + '</p><div class="login-entry-actions"><a class="btn btn-primary" href="#apply-unit-contact">' + textMap.applyUnitContact + '</a><a class="btn btn-secondary" href="#apply-unit-contact-status">' + textMap.checkProgress + '</a></div></div><p style="text-align:center;margin-top:14px"><a href="#" id="forgot-link" style="color:var(--accent-primary);font-size:.85rem;text-decoration:none">' + textMap.forgotPassword + '</a></p><div style="text-align:center;margin-top:8px"><button type="button" id="login-lang-toggle" style="background:none;border:1px solid var(--border-color);border-radius:20px;padding:5px 16px;font-size:.82rem;color:var(--text-secondary);cursor:pointer;transition:all .15s ease">' + ic('globe', 'icon-xs') + ' ' + (((window.__i18n__ && window.__i18n__.getLang()) || 'zh-TW') === 'zh-TW' ? 'Switch to English' : '切換為繁體中文') + '</button></div></div>' +
         '<div id="bootstrap-panel" style="display:' + bootstrapPanelDisplay + '"><div class="login-entry-card login-entry-card--setup"><div class="login-entry-eyebrow">Setup</div><h2 class="login-entry-title">' + textMap.setupTitle + '</h2><p class="login-entry-text">' + textMap.setupText + '</p><form class="login-form" id="bootstrap-form"><div class="form-group"><label class="form-label">' + textMap.adminName + '</label><input type="text" class="form-input" id="bootstrap-name" autocomplete="name" placeholder="' + textMap.placeholderName + '" value="' + textMap.defaultAdminName + '" required ' + bootstrapAutoFocus + '></div><div class="form-group"><label class="form-label">' + textMap.adminUser + '</label><input type="text" class="form-input" id="bootstrap-user" autocomplete="username" placeholder="' + textMap.placeholderUser + '" required></div><div class="form-group"><label class="form-label">' + textMap.email + '</label><input type="email" class="form-input" id="bootstrap-email" autocomplete="email" placeholder="' + textMap.placeholderEmail + '" required></div><div class="form-group"><label class="form-label">' + textMap.initPassword + '</label><input type="password" class="form-input" id="bootstrap-pass" autocomplete="new-password" placeholder="' + textMap.placeholderPassword + '" required></div><button type="submit" class="login-btn">' + textMap.createAdmin + '</button></form></div></div>' +
         '<div id="auth-secondary-panels"></div>' +
         '</main></div><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div>';
@@ -686,6 +687,15 @@
         ensureAuthPanel('forgot-panel');
         wireForgotPanel();
         switchPanel('forgot-panel');
+      });
+
+      // Login page language toggle
+      bindPageEvent(document.getElementById('login-lang-toggle'), 'click', function () {
+        const i18n = window.__i18n__;
+        if (!i18n) return;
+        const next = i18n.getLang() === 'zh-TW' ? 'en' : 'zh-TW';
+        i18n.setLang(next);
+        renderLogin(); // Re-render login page with new language
       });
 
       const loggedInUser = currentUser();
