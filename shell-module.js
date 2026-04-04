@@ -720,36 +720,39 @@
       const sidebarKey = route.page + '|' + pendingCount + '|' + u.role + '|' + (u.activeUnit || '');
       if (sidebarKey === lastSidebarKey && document.getElementById('sidebar') && document.getElementById('sidebar').innerHTML) return;
       lastSidebarKey = sidebarKey;
-      let nav = '<div class="sidebar-section"><div class="sidebar-section-title">主選單</div>' +
-        '<a class="nav-item ' + (route.page === 'dashboard' ? 'active' : '') + '" href="#dashboard"><span class="nav-icon">' + ic('pie-chart') + '</span>儀表板</a>' +
-        '<a class="nav-item ' + (route.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>矯正單列表' + (pendingCount ? '<span class="nav-badge">' + pendingCount + '</span>' : '') + '</a>' +
-        '<a class="nav-item ' + (route.page === 'checklist' || route.page === 'checklist-fill' || route.page === 'checklist-detail' ? 'active' : '') + '" href="#checklist"><span class="nav-icon">' + ic('clipboard-check') + '</span>內稽檢核表</a>' +
-        '<a class="nav-item ' + (route.page === 'training' || route.page === 'training-fill' || route.page === 'training-detail' || route.page === 'training-roster' ? 'active' : '') + '" href="#training"><span class="nav-icon">' + ic('graduation-cap') + '</span>資安教育訓練統計</a>' +
-        '<a class="nav-item ' + (/^asset/.test(route.page) ? 'active' : '') + '" href="#assets"><span class="nav-icon">' + ic('database') + '</span>資訊資產盤點</a></div>';
+      var _t = function (key, fallback) { return (window.__i18n__ && window.__i18n__.t(key)) || fallback; };
+      let nav = '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.mainMenu', '主選單') + '</div>' +
+        '<a class="nav-item ' + (route.page === 'dashboard' ? 'active' : '') + '" href="#dashboard"><span class="nav-icon">' + ic('pie-chart') + '</span>' + _t('nav.dashboard', '儀表板') + '</a>' +
+        '<a class="nav-item ' + (route.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>' + _t('nav.corrective', '矯正單列表') + (pendingCount ? '<span class="nav-badge">' + pendingCount + '</span>' : '') + '</a>' +
+        '<a class="nav-item ' + (route.page === 'checklist' || route.page === 'checklist-fill' || route.page === 'checklist-detail' ? 'active' : '') + '" href="#checklist"><span class="nav-icon">' + ic('clipboard-check') + '</span>' + _t('nav.checklist', '內稽檢核表') + '</a>' +
+        '<a class="nav-item ' + (route.page === 'training' || route.page === 'training-fill' || route.page === 'training-detail' || route.page === 'training-roster' ? 'active' : '') + '" href="#training"><span class="nav-icon">' + ic('graduation-cap') + '</span>' + _t('nav.training', '資安教育訓練統計') + '</a>' +
+        '<a class="nav-item ' + (/^asset/.test(route.page) ? 'active' : '') + '" href="#assets"><span class="nav-icon">' + ic('database') + '</span>' + _t('nav.assets', '資訊資產盤點') + '</a></div>';
 
       let opNav = '';
-      if (canCreateCAR()) opNav += '<a class="nav-item ' + (route.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>開立矯正單</a>';
-      if (canFillChecklist()) opNav += '<a class="nav-item ' + (route.page === 'checklist-fill' ? 'active' : '') + '" href="#checklist-fill"><span class="nav-icon">' + ic('edit-3') + '</span>填報檢核表</a>';
-      opNav += '<a class="nav-item ' + (route.page === 'asset-import' ? 'active' : '') + '" href="#asset-import"><span class="nav-icon">' + ic('upload') + '</span>資產批次匯入</a>';
-      opNav += '<a class="nav-item ' + (route.page === 'asset-compare' ? 'active' : '') + '" href="#asset-compare"><span class="nav-icon">' + ic('git-compare') + '</span>年度比較</a>';
-      if (opNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">操作</div>' + opNav + '</div>';
+      if (canCreateCAR()) opNav += '<a class="nav-item ' + (route.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>' + _t('nav.createCase', '開立矯正單') + '</a>';
+      if (canFillChecklist()) opNav += '<a class="nav-item ' + (route.page === 'checklist-fill' ? 'active' : '') + '" href="#checklist-fill"><span class="nav-icon">' + ic('edit-3') + '</span>' + _t('nav.fillChecklist', '填報檢核表') + '</a>';
+      opNav += '<a class="nav-item ' + (route.page === 'asset-import' ? 'active' : '') + '" href="#asset-import"><span class="nav-icon">' + ic('upload') + '</span>' + _t('nav.batchImport', '資產批次匯入') + '</a>';
+      opNav += '<a class="nav-item ' + (route.page === 'asset-compare' ? 'active' : '') + '" href="#asset-compare"><span class="nav-icon">' + ic('git-compare') + '</span>' + _t('nav.yearCompare', '年度比較') + '</a>';
+      if (opNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.operations', '操作') + '</div>' + opNav + '</div>';
 
       let sysNav = '';
-      if (canManageUsers()) sysNav += '<a class="nav-item ' + (route.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a>';
-      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'unit-contact-review' ? 'active' : '') + '" href="#unit-contact-review"><span class="nav-icon">' + ic('mail-plus') + '</span>單位管理人申請</a>';
-      if (canManageUsers()) sysNav += '<a class="nav-item ' + (route.page === 'login-log' ? 'active' : '') + '" href="#login-log"><span class="nav-icon">' + ic('shield-check') + '</span>登入紀錄</a>';
-      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'audit-trail' ? 'active' : '') + '" href="#audit-trail"><span class="nav-icon">' + ic('scroll-text') + '</span>操作軌跡</a>';
-      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'security-window' ? 'active' : '') + '" href="#security-window"><span class="nav-icon">' + ic('shield-check') + '</span>資安窗口</a>';
+      if (canManageUsers()) sysNav += '<a class="nav-item ' + (route.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>' + _t('nav.users', '帳號管理') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'unit-contact-review' ? 'active' : '') + '" href="#unit-contact-review"><span class="nav-icon">' + ic('mail-plus') + '</span>' + _t('nav.applications', '單位管理人申請') + '</a>';
+      if (canManageUsers()) sysNav += '<a class="nav-item ' + (route.page === 'login-log' ? 'active' : '') + '" href="#login-log"><span class="nav-icon">' + ic('shield-check') + '</span>' + _t('nav.loginLog', '登入紀錄') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'audit-trail' ? 'active' : '') + '" href="#audit-trail"><span class="nav-icon">' + ic('scroll-text') + '</span>' + _t('nav.auditTrail', '操作軌跡') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'security-window' ? 'active' : '') + '" href="#security-window"><span class="nav-icon">' + ic('shield-check') + '</span>' + _t('nav.securityWindow', '資安窗口') + '</a>';
       // schema-health 保留路由但不顯示在 sidebar（開發者可直接存取 #schema-health）
-      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>檢核表管理</a>';
-      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'training-roster' ? 'active' : '') + '" href="#training-roster"><span class="nav-icon">' + ic('users-round') + '</span>教育訓練名單</a>';
-      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'unit-review' ? 'active' : '') + '" href="#unit-review"><span class="nav-icon">' + ic('building-2') + '</span>單位治理</a>';
-      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'asset-dashboard' ? 'active' : '') + '" href="#asset-dashboard"><span class="nav-icon">' + ic('bar-chart-3') + '</span>資產盤點總覽</a>';
-      if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div>' + sysNav + '</div>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>' + _t('nav.checklistManage', '檢核表管理') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'training-roster' ? 'active' : '') + '" href="#training-roster"><span class="nav-icon">' + ic('users-round') + '</span>' + _t('nav.trainingRoster', '教育訓練名單') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'unit-review' ? 'active' : '') + '" href="#unit-review"><span class="nav-icon">' + ic('building-2') + '</span>' + _t('nav.unitReview', '單位治理') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'asset-dashboard' ? 'active' : '') + '" href="#asset-dashboard"><span class="nav-icon">' + ic('bar-chart-3') + '</span>' + _t('nav.assetDashboard', '資產盤點總覽') + '</a>';
+      if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.systemAdmin', '系統管理') + '</div>' + sysNav + '</div>';
 
       const sidebarEl = document.getElementById('sidebar');
       if (!sidebarEl) return;
-      sidebarEl.innerHTML = '<div class="sidebar-logo" style="height:58px;max-height:58px;min-height:0;overflow:hidden;display:flex;align-items:center;padding:10px 14px;gap:10px;box-sizing:border-box"><span style="flex-shrink:0;display:inline-flex">' + ntuLogo('ntu-logo-sm') + '</span><div style="min-width:0;line-height:1.3"><div style="font-size:0.78rem;font-weight:800;color:#0f3a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">資訊安全管理系統</div><div style="font-size:0.58rem;color:#8899ad;letter-spacing:0.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ISMS 管理平台</div></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><div class="sidebar-footer-user"><span class="sidebar-footer-name">' + esc(u.name) + '</span><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div><button class="sidebar-logout-btn" data-action="shell.logout"><span class="nav-icon">' + ic('log-out') + '</span>登出系統</button>' + renderVersionChip('sidebar-version-chip') + '</div>';
+      var _langCode = (window.__i18n__ && window.__i18n__.getLang()) || 'zh-TW';
+      var _langToggleLabel = _langCode === 'zh-TW' ? 'EN' : '中';
+      sidebarEl.innerHTML = '<div class="sidebar-logo" style="height:58px;max-height:58px;min-height:0;overflow:hidden;display:flex;align-items:center;padding:10px 14px;gap:10px;box-sizing:border-box"><span style="flex-shrink:0;display:inline-flex">' + ntuLogo('ntu-logo-sm') + '</span><div style="min-width:0;line-height:1.3"><div style="font-size:0.78rem;font-weight:800;color:#0f3a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _t('app.title', '資訊安全管理系統') + '</div><div style="font-size:0.58rem;color:#8899ad;letter-spacing:0.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ISMS 管理平台</div></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><div class="sidebar-footer-user"><span class="sidebar-footer-name">' + esc(u.name) + '</span><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div><button class="sidebar-logout-btn" data-action="shell.logout"><span class="nav-icon">' + ic('log-out') + '</span>' + _t('nav.logout', '登出系統') + '</button><button class="btn btn-ghost btn-sm" data-action="shell.toggle-lang" title="Switch Language">' + _langToggleLabel + '</button>' + renderVersionChip('sidebar-version-chip') + '</div>';
       sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
         bindPageEvent(link, 'click', function () {
           if (isMobileViewport()) closeSidebar();
@@ -956,7 +959,19 @@
         });
       },
       'toggle-sidebar': function () { toggleSidebar(); },
-      'close-sidebar': function () { closeSidebar(); }
+      'close-sidebar': function () { closeSidebar(); },
+      'toggle-lang': function () {
+        var i18n = window.__i18n__;
+        if (!i18n) return;
+        var next = i18n.getLang() === 'zh-TW' ? 'en' : 'zh-TW';
+        i18n.setLang(next);
+        // Re-render sidebar and header to apply new language
+        lastSidebarKey = '';
+        lastHeaderKey = '';
+        renderSidebar();
+        renderHeader();
+        toast(next === 'en' ? 'Switched to English' : '已切換為繁體中文', 'info');
+      }
     });
 
     return {

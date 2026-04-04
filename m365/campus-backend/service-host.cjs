@@ -1,6 +1,7 @@
 // @ts-check
 ﻿const fs = require('fs');
 const path = require('path');
+const log = require('./logger.cjs');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 const runtimeConfigArg = process.argv[2] ? path.resolve(process.argv[2]) : '';
@@ -124,13 +125,13 @@ function validateRequiredEnv() {
   const missing = required.filter((r) => !String(process.env[r.key] || '').trim());
   if (missing.length) {
     const lines = missing.map((r) => `  - ${r.key}: ${r.hint}`);
-    console.error('FATAL: Missing required environment variables:\n' + lines.join('\n'));
+    log.error('service-host', 'missing required environment variables', { missing: missing.map(function (r) { return r.key; }) });
     process.exit(1);
   }
   // Validate session secret strength
   const secret = String(process.env.AUTH_SESSION_SECRET || '');
   if (secret.length < 16) {
-    console.error('FATAL: AUTH_SESSION_SECRET must be at least 16 characters for adequate security.');
+    log.error('service-host', 'AUTH_SESSION_SECRET must be at least 16 characters for adequate security');
     process.exit(1);
   }
 }
@@ -146,7 +147,7 @@ const { startServer } = require('./server.cjs');
 const logDir = path.resolve(runtimeConfig.logDir || path.join(projectRoot, 'logs', 'campus-backend'));
 const disposeLogger = installFileLogger(logDir);
 
-console.log('service-host starting', {
+log.info('service-host', 'starting', {
   runtimeConfigPath,
   runtimeConfigExists: !!runtimeConfigPath && fs.existsSync(runtimeConfigPath),
   projectRoot,
@@ -168,27 +169,27 @@ const healthWatchdog = setInterval(function () {
     res.on('data', function (c) { data += c; });
     res.on('end', function () {
       if (res.statusCode === 200) { healthFailCount = 0; }
-      else { healthFailCount++; console.error('[watchdog] Health check returned ' + res.statusCode + ' (fail ' + healthFailCount + '/' + HEALTH_FAIL_THRESHOLD + ')'); }
-      if (healthFailCount >= HEALTH_FAIL_THRESHOLD) { console.error('[watchdog] Health check failed ' + HEALTH_FAIL_THRESHOLD + ' times, exiting for systemd restart'); process.exit(1); }
+      else { healthFailCount++; log.error('watchdog', 'health check returned non-200', { statusCode: res.statusCode, failCount: healthFailCount, threshold: HEALTH_FAIL_THRESHOLD }); }
+      if (healthFailCount >= HEALTH_FAIL_THRESHOLD) { log.error('watchdog', 'health check failed, exiting for systemd restart', { failCount: HEALTH_FAIL_THRESHOLD }); process.exit(1); }
     });
   });
   req.on('error', function (err) {
     healthFailCount++;
-    console.error('[watchdog] Health check error: ' + String(err && err.message || err) + ' (fail ' + healthFailCount + '/' + HEALTH_FAIL_THRESHOLD + ')');
-    if (healthFailCount >= HEALTH_FAIL_THRESHOLD) { console.error('[watchdog] Exiting for systemd restart'); process.exit(1); }
+    log.error('watchdog', 'health check error', { error: String(err && err.message || err), failCount: healthFailCount, threshold: HEALTH_FAIL_THRESHOLD });
+    if (healthFailCount >= HEALTH_FAIL_THRESHOLD) { log.error('watchdog', 'exiting for systemd restart', { failCount: HEALTH_FAIL_THRESHOLD }); process.exit(1); }
   });
-  req.on('timeout', function () { req.destroy(); healthFailCount++; console.error('[watchdog] Health check timeout (fail ' + healthFailCount + '/' + HEALTH_FAIL_THRESHOLD + ')'); });
+  req.on('timeout', function () { req.destroy(); healthFailCount++; log.error('watchdog', 'health check timeout', { failCount: healthFailCount, threshold: HEALTH_FAIL_THRESHOLD }); });
 }, HEALTH_CHECK_INTERVAL_MS);
 healthWatchdog.unref();
-console.log('[watchdog] Health check started (every ' + (HEALTH_CHECK_INTERVAL_MS / 60000) + ' min, threshold ' + HEALTH_FAIL_THRESHOLD + ')');
+log.info('watchdog', 'health check started', { intervalMin: HEALTH_CHECK_INTERVAL_MS / 60000, threshold: HEALTH_FAIL_THRESHOLD });
 
 // ── Crash logger ──
 process.on('uncaughtException', function (err) {
-  console.error('[CRASH] Uncaught exception:', err && err.stack ? err.stack : String(err));
+  log.error('CRASH', 'uncaught exception', { error: err && err.stack ? err.stack : String(err) });
   process.exit(1);
 });
 process.on('unhandledRejection', function (reason) {
-  console.error('[CRASH] Unhandled rejection:', reason && reason.stack ? reason.stack : String(reason));
+  log.error('CRASH', 'unhandled rejection', { error: reason && reason.stack ? reason.stack : String(reason) });
 });
 
 // ── Error alerter ──
@@ -203,11 +204,11 @@ try {
     return db.query(
       'INSERT INTO ops_audit (title, event_type, actor_email, record_id, occurred_at, payload_json) VALUES ($1,$2,$3,$4,$5,$6)',
       ['error-alert', 'system.error_alert', 'system', 'error-alert-' + Date.now(), new Date().toISOString(), JSON.stringify({ subject: opts.subject, errorCount: (opts.html || '').split('<tr>').length - 2 })]
-    ).then(function () { console.log('[error-alerter] Alert recorded to audit trail'); return { sent: true, channel: 'audit-trail' }; })
-    .catch(function (err) { console.warn('[error-alerter] Failed to record alert:', String(err && err.message || err)); return { sent: false, channel: 'audit-trail', error: String(err && err.message || err) }; });
+    ).then(function () { log.info('error-alerter', 'alert recorded to audit trail'); return { sent: true, channel: 'audit-trail' }; })
+    .catch(function (err) { log.warn('error-alerter', 'failed to record alert', { error: String(err && err.message || err) }); return { sent: false, channel: 'audit-trail', error: String(err && err.message || err) }; });
   });
 } catch (err) {
-  console.warn('[service-host] Error alerter init failed:', String(err && err.message || err));
+  log.warn('service-host', 'error alerter init failed', { error: String(err && err.message || err) });
 }
 
 // ── Daily overdue check schedule (every 24 hours) ──
@@ -218,9 +219,9 @@ function scheduleOverdueCheck() {
   overdueCheckTimer = setTimeout(function runOverdueCheck() {
     const db = require('./db.cjs');
     db.queryAll("SELECT case_id, handler_email, handler_unit, handler_name, corrective_due_date, status FROM corrective_actions WHERE status NOT IN ('結案') AND corrective_due_date < NOW() AND corrective_due_date IS NOT NULL").then(function (rows) {
-      console.log('[overdue-schedule] Daily check: found ' + (rows || []).length + ' overdue items.');
+      log.info('overdue-schedule', 'daily check completed', { overdueCount: (rows || []).length });
     }).catch(function (err) {
-      console.warn('[overdue-schedule] Check failed:', String(err && err.message || err));
+      log.warn('overdue-schedule', 'check failed', { error: String(err && err.message || err) });
     });
     overdueCheckTimer = setTimeout(runOverdueCheck, OVERDUE_CHECK_INTERVAL_MS);
     overdueCheckTimer.unref();
@@ -233,26 +234,26 @@ let shuttingDown = false;
 function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`service-host received ${signal}, shutting down gracefully`);
+  log.info('service-host', 'received signal, shutting down gracefully', { signal });
   // Clean up timers
   clearInterval(healthWatchdog);
   if (overdueCheckTimer) clearTimeout(overdueCheckTimer);
   const shutdownTimeout = setTimeout(() => {
-    console.error('service-host shutdown timed out after 10s, forcing exit');
+    log.error('service-host', 'shutdown timed out after 10s, forcing exit');
     disposeLogger();
     process.exit(1);
   }, 10000);
   shutdownTimeout.unref();
   server.close(() => {
-    console.log('service-host http server closed');
+    log.info('service-host', 'http server closed');
     const db = require('./db.cjs');
     db.close().then(() => {
-      console.log('service-host database pool closed');
+      log.info('service-host', 'database pool closed');
     }).catch((err) => {
-      console.error('service-host db close error', err && err.message || err);
+      log.error('service-host', 'db close error', { error: String(err && err.message || err) });
     }).finally(() => {
       clearTimeout(shutdownTimeout);
-      console.log('service-host stopped');
+      log.info('service-host', 'stopped');
       disposeLogger();
       process.exit(0);
     });
@@ -262,10 +263,10 @@ function shutdown(signal) {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('uncaughtException', (error) => {
-  console.error('uncaughtException', error && error.stack ? error.stack : error);
+  log.error('service-host', 'uncaughtException', { error: String(error && error.stack ? error.stack : error) });
 });
 process.on('unhandledRejection', (error) => {
-  console.error('unhandledRejection', error && error.stack ? error.stack : error);
+  log.error('service-host', 'unhandledRejection', { error: String(error && error.stack ? error.stack : error) });
 });
 
 

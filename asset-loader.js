@@ -12,6 +12,7 @@
   var minifiedStylesheet = 'styles.min.css';
   var assets = [
     'web-vitals-monitor.js',
+    'i18n.js',
     { src: 'm365-config.override.js', optional: true },
     coreBundleSrc
   ];

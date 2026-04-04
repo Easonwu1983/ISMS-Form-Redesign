@@ -658,10 +658,10 @@
         if (renderToken !== dashboardRenderToken) return;
         if (showMyTasks) {
           toast('歡迎！請先從「待辦事項」開始，完成您的檢核表填報。', 'info');
-          window.setTimeout(function () { toast('提示：左側選單可以查看矯正單和教育訓練統計。', 'info'); }, 3000);
+          window.setTimeout(function () { toast('提示：左側選單可以查看矯正單和教育訓練統計。', 'info'); }, 2500);
         } else {
           toast('歡迎！儀表板顯示全校稽核進度。', 'info');
-          window.setTimeout(function () { toast('提示：向下滾動可查看矯正單狀態分布。', 'info'); }, 3000);
+          window.setTimeout(function () { toast('提示：向下滾動可查看矯正單狀態分布。', 'info'); }, 2500);
         }
       }, 1500);
     }

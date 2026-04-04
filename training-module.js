@@ -2733,6 +2733,8 @@
     });
     bindTrainingPageEvent(trainingForm, 'submit', async (event) => {
       event.preventDefault();
+      var trainingFormEl = document.getElementById('training-form');
+      if (trainingFormEl && !trainingFormEl.reportValidity()) return;
       await runWithBusyState('\u6b63\u5728\u9001\u51fa\u6559\u80b2\u8a13\u7df4\u6d41\u7a0b\u4e00\u2026', async () => {
         await saveTrainingForm(TRAINING_STATUSES.PENDING_SIGNOFF);
       });

@@ -1508,7 +1508,7 @@
     return `<div class="cl-item${editable ? '' : ' cl-item--locked'}" id="cl-item-${item.id}" data-cl-item-id="${item.id}" data-cl-section-index="${sectionIndex}" tabindex="-1">
       <div class="cl-item-header"><span class="cl-item-id">${item.id}</span><span class="cl-item-text">${esc(item.text)}</span></div>
       <div class="cl-item-body">
-        <div class="cl-compliance"><label class="form-label form-required">\u7b26\u5408\u7a0b\u5ea6</label><div class="cl-radio-group">${radios}</div></div>
+        <div class="cl-compliance"><label class="form-label form-required">\u7b26\u5408\u7a0b\u5ea6</label><div class="cl-radio-group" role="radiogroup" aria-label="\u7b26\u5408\u7a0b\u5ea6 ${esc(item.id)}">${radios}</div></div>
         <div class="cl-fields">
           <div class="form-group"><label class="form-label">\u57f7\u884c\u60c5\u5f62\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-exec-${item.id}" placeholder="${esc(item.hint)}" rows="2"${editable ? '' : ' readonly'}>${esc(saved.execution || '')}</textarea></div>
           <div class="form-group"><label class="form-label">\u4f50\u8b49\u8cc7\u6599\u8aaa\u660e</label><textarea class="form-textarea cl-textarea" id="cl-evidence-${item.id}" placeholder="\u4f8b\u5982\u6587\u4ef6\u540d\u7a31\u3001\u756b\u9762\u622a\u5716\u3001\u8def\u5f91\u6216\u88dc\u5145\u8aaa\u660e" rows="2"${editable ? '' : ' readonly'}>${esc(saved.evidence || '')}</textarea></div>
@@ -1592,7 +1592,7 @@
       <div class="page-header page-header--editor" data-checklist-route="fill" data-checklist-route-state="shell"><div><h1 class="page-title">${existing ? '\u7de8\u4fee\u6aa2\u6838\u8868' : '\u586b\u5831\u6aa2\u6838\u8868'}</h1><p class="page-subtitle">\u53d7\u7a3d\u55ae\u4f4d\u9810\u8a2d\u5e36\u5165\u76ee\u524d\u767b\u5165\u55ae\u4f4d\uff0c\u4f46\u53ef\u4f9d\u5be6\u969b\u586b\u5831\u9700\u6c42\u5207\u63db\u5230\u5176\u4ed6\u55ae\u4f4d\u3002\u8349\u7a3f\u53ef\u96a8\u6642\u66ab\u5b58\uff0c\u6b63\u5f0f\u9001\u51fa\u5f8c\u9396\u5b9a\u3002</p></div><a href="#checklist" class="btn btn-secondary">\u8fd4\u56de\u5217\u8868</a></div>
       <div class="editor-shell editor-shell--checklist">
         <section class="editor-main">
-          <div class="card editor-card"><form id="checklist-form" data-checklist-route="fill" data-checklist-route-state="shell" data-testid="checklist-form">
+          <div class="card editor-card"><form id="checklist-form" data-checklist-route="fill" data-checklist-route-state="shell" data-testid="checklist-form" aria-label="檢核表填報表單">
             ${checklistLockBanner}
             <div class="section-header">${ic('info', 'icon-sm')} \u57fa\u672c\u8cc7\u6599</div>
             <div class="form-row">
@@ -1994,6 +1994,8 @@
         toast('目前此檢核表僅供檢視，無法送出。', 'info');
         return;
       }
+      const form = document.getElementById('checklist-form');
+      if (form && !form.reportValidity()) return;
       await runWithBusyState('\u6b63\u5728\u9001\u51fa\u6aa2\u6838\u8868\u2026', async function () {
         debugFlow('checklist', 'submit start', { id: existing?.id || null, unit: document.getElementById('cl-unit').value });
         const missing = [];

@@ -54,3 +54,5 @@ pdf-extract.txt
 docx-extract.txt
 docx-extract-readable.txt
 units-data.min.json
+m365-config.override.sample.js
+tmp-app-core.bundle.js

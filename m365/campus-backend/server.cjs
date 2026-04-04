@@ -57,6 +57,7 @@ const {
   validateSystemUserPayload
 } = require('../azure-function/system-user-api/src/shared/contract');
 const db = require('./db.cjs');
+const log = require('./logger.cjs');
 
 const DEFAULT_PORT = Number(process.env.PORT || process.env.UNIT_CONTACT_BACKEND_PORT || 8787);
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -663,7 +664,7 @@ async function tryCreateAuditRow(input) {
   try {
     await createAuditRow(input);
   } catch (error) {
-    console.error('[audit] failed to create audit row', String(error && error.message || error || 'unknown error'), input && input.eventType ? 'event=' + input.eventType : '');
+    log.error('audit', 'failed to create audit row', { error: String(error && error.message || error || 'unknown error'), eventType: input && input.eventType || undefined });
   }
 }
 
@@ -1623,7 +1624,7 @@ function createServer() {
 function startServer(port = DEFAULT_PORT) {
   const server = createServer();
   server.listen(port, () => {
-    console.log(`unit-contact-campus-backend listening on http://127.0.0.1:${port}`);
+    log.info('server', 'listening', { url: `http://127.0.0.1:${port}` });
   });
   return server;
 }

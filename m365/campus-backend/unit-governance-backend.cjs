@@ -16,27 +16,10 @@ const CENTER_OVERRIDE_UNITS = new Set([
   '學校分部總辦事處竹北分部籌備小組',
   '學校分部總辦事處雲林分部籌備小組'
 ]);
-const ADMIN_PRIMARY_WHITELIST = new Set([
-  '秘書室',
-  '教務處',
-  '學生事務處',
-  '總務處',
-  '研究發展處',
-  '國際事務處',
-  '財務管理處',
-  '圖書館',
-  '主計室',
-  '人事室',
-  '計算機及資訊網路中心',
-  '出版中心',
-  '環境保護暨職業安全衛生中心',
-  '法務處',
-  '學校分部總辦事處'
-]);
-const ACADEMIC_PRIMARY_WHITELIST = new Set([
-  '共同教育中心',
-  '進修推廣學院'
-]);
+// 引用共用白名單（Single Source of Truth）
+const { ADMIN_UNITS, ACADEMIC_UNITS } = require('../../shared/unit-categories.js');
+const ADMIN_PRIMARY_WHITELIST = new Set(ADMIN_UNITS);
+const ACADEMIC_PRIMARY_WHITELIST = new Set(ACADEMIC_UNITS);
 
 function createUnitGovernanceRouter(deps) {
   const {
