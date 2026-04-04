@@ -11,6 +11,7 @@
   var purgedStylesheet = 'styles.purged.min.css';
   var minifiedStylesheet = 'styles.min.css';
   var assets = [
+    'web-vitals-monitor.js',
     { src: 'm365-config.override.js', optional: true },
     coreBundleSrc
   ];
@@ -313,6 +314,10 @@
         });
       }, 1000);
     }, { once: true });
+    // Register service worker for offline dashboard support
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    }
     assets.unshift('units.js');
     loadNextScript();
   }
