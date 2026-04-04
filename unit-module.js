@@ -46,7 +46,7 @@
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitList_ === 'function') {
           const units = window.getOfficialUnitList_();
           if (Array.isArray(units)) {
-            officialUnitsCache = units.map((entry) => String(entry || '').trim()).filter((entry) => entry && !HIDDEN_OFFICIAL_UNIT_VALUES.has(entry) && !entry.includes('?'));
+            officialUnitsCache = units.map((entry) => String(entry || '').trim()).filter((entry) => entry && !HIDDEN_OFFICIAL_UNIT_VALUES.has(entry) && !/醫院|分院|副校長|紀念品/.test(entry) && !entry.includes('?'));
             return officialUnitsCache.slice();
           }
         }
@@ -61,7 +61,7 @@
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitCatalog_ === 'function') {
           const catalog = window.getOfficialUnitCatalog_();
           if (Array.isArray(catalog)) {
-            officialUnitCatalogCache = catalog.map((entry) => (entry && typeof entry === 'object' ? { ...entry } : entry)).filter((entry) => { if (!entry || typeof entry !== 'object') return false; const value = String(entry.value || '').trim(); const name = String(entry.name || '').trim(); const fullName = String(entry.fullName || '').trim(); const topLevel = value.split('\uFF0F')[0].trim(); return !!value && !HIDDEN_OFFICIAL_UNIT_VALUES.has(value) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(name) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(fullName) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(topLevel) && !/醫院|分院/.test(value) && !value.includes('?') && !name.includes('?') && !fullName.includes('?'); });
+            officialUnitCatalogCache = catalog.map((entry) => (entry && typeof entry === 'object' ? { ...entry } : entry)).filter((entry) => { if (!entry || typeof entry !== 'object') return false; const value = String(entry.value || '').trim(); const name = String(entry.name || '').trim(); const fullName = String(entry.fullName || '').trim(); const topLevel = value.split('\uFF0F')[0].trim(); return !!value && !HIDDEN_OFFICIAL_UNIT_VALUES.has(value) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(name) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(fullName) && !HIDDEN_OFFICIAL_UNIT_VALUES.has(topLevel) && !/醫院|分院|副校長|紀念品/.test(value) && !value.includes('?') && !name.includes('?') && !fullName.includes('?'); });
             officialUnitMetaCache = null;
             return officialUnitCatalogCache.slice();
           }
@@ -388,12 +388,12 @@
       const merged = {};
 
       Object.keys(base).forEach((parent) => {
-        if (isExcludedUnitValue(parent, excludedUnits) || HIDDEN_OFFICIAL_UNIT_VALUES.has(String(parent || '').trim())) return;
+        if (isExcludedUnitValue(parent, excludedUnits) || HIDDEN_OFFICIAL_UNIT_VALUES.has(String(parent || '').trim()) || /醫院|分院|副校長|紀念品/.test(parent)) return;
         merged[parent] = Array.isArray(base[parent]) ? [...base[parent]] : [];
       });
 
       getApprovedCustomUnits().forEach((unit) => {
-        if (isExcludedUnitValue(unit, excludedUnits) || HIDDEN_OFFICIAL_UNIT_VALUES.has(String(unit || '').trim())) return;
+        if (isExcludedUnitValue(unit, excludedUnits) || HIDDEN_OFFICIAL_UNIT_VALUES.has(String(unit || '').trim()) || /醫院|分院|副校長|紀念品/.test(unit)) return;
         const parsed = splitUnitValue(unit);
         if (!parsed.parent) return;
         if (!merged[parsed.parent]) merged[parsed.parent] = [];
@@ -527,7 +527,7 @@
         if (HIDDEN_OFFICIAL_UNIT_VALUES.has(topLevel)) return;
         if (HIDDEN_OFFICIAL_UNIT_VALUES.has(value)) return;
         // Also hide any entry containing 醫院/分院 keywords
-        if (/醫院|分院/.test(value)) return;
+        if (/醫院|分院|副校長|紀念品/.test(value)) return;
         if (isExcludedUnitValue(value, excludedUnits)) return;
         seen.add(value);
         values.push(value);
