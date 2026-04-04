@@ -1,0 +1,2502 @@
+openapi: 3.0.3
+info:
+  title: ISMS Campus Backend API
+  version: 1.0.0
+  description: 校園資安管理系統 (ISMS) 後端 API — 涵蓋帳號申請、檢核表、矯正單、教育訓練、資產盤點等模組。
+
+servers:
+  - url: http://localhost:8787
+    description: 本地開發
+
+tags:
+  - name: Auth
+    description: 認證與密碼管理
+  - name: SystemUser
+    description: 系統使用者管理
+  - name: UnitContact
+    description: 單位資安窗口申請
+  - name: Checklist
+    description: 內稽檢核表
+  - name: CorrectiveAction
+    description: 矯正預防措施
+  - name: Training
+    description: 教育訓練
+  - name: TrainingRoster
+    description: 教育訓練名冊
+  - name: ReviewScope
+    description: 審查範圍管理
+  - name: Attachment
+    description: 附件上傳與下載
+  - name: AuditTrail
+    description: 稽核軌跡
+  - name: UnitGovernance
+    description: 單位治理
+  - name: AssetInventory
+    description: 資訊資產盤點
+  - name: Dashboard
+    description: 儀表板與待辦事項
+  - name: Ops
+    description: 營運管理與批次作業
+
+# ─────────────────────────────────────────────────────
+#  Security
+# ─────────────────────────────────────────────────────
+security:
+  - cookieAuth: []
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: isms_session
+
+  # ── Shared Schemas ──────────────────────────────────
+  schemas:
+
+    # -- Common --
+    ErrorResponse:
+      type: object
+      properties:
+        ok: { type: boolean, example: false }
+        error: { type: string }
+        statusCode: { type: integer }
+
+    AuthError:
+      type: object
+      properties:
+        ok: { type: boolean, example: false }
+        error: { type: string, example: 未授權 }
+        statusCode: { type: integer, example: 401 }
+
+    ForbiddenError:
+      type: object
+      properties:
+        ok: { type: boolean, example: false }
+        error: { type: string, example: Forbidden }
+        statusCode: { type: integer, example: 403 }
+
+    PageMeta:
+      type: object
+      properties:
+        offset: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        pageCount: { type: integer }
+        currentPage: { type: integer }
+        hasPrev: { type: boolean }
+        hasNext: { type: boolean }
+        prevOffset: { type: integer }
+        nextOffset: { type: integer }
+        pageStart: { type: integer }
+        pageEnd: { type: integer }
+
+    HealthResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        ready: { type: boolean }
+        contractVersion: { type: string }
+        repository: { type: string }
+        database:
+          type: object
+          properties:
+            ok: { type: boolean }
+            latencyMs: { type: number }
+
+    ActionEnvelope:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string }
+        payload: { type: object }
+        contractVersion: { type: string }
+
+    # -- Auth --
+    LoginRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: LOGIN }
+        payload:
+          type: object
+          required: [username, password]
+          properties:
+            username: { type: string }
+            password: { type: string }
+
+    LoginResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        user:
+          $ref: '#/components/schemas/SessionUser'
+        mustChangePassword: { type: boolean }
+
+    SessionUser:
+      type: object
+      properties:
+        username: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string }
+        primaryUnit: { type: string }
+        authorizedUnits: { type: array, items: { type: string } }
+        securityRoles: { type: array, items: { type: string } }
+
+    ChangePasswordRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: CHANGE_PASSWORD }
+        payload:
+          type: object
+          required: [currentPassword, newPassword]
+          properties:
+            currentPassword: { type: string }
+            newPassword: { type: string }
+
+    RequestResetRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: REQUEST_RESET }
+        payload:
+          type: object
+          required: [email]
+          properties:
+            email: { type: string, format: email }
+
+    RedeemResetRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: REDEEM_RESET }
+        payload:
+          type: object
+          required: [token, newPassword]
+          properties:
+            token: { type: string }
+            newPassword: { type: string }
+
+    # -- System User --
+    SystemUser:
+      type: object
+      properties:
+        username: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [管理員, 單位管理員, 稽核員, 一般使用者] }
+        primaryUnit: { type: string }
+        authorizedUnits: { type: array, items: { type: string } }
+        securityRoles: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SystemUserUpsertRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: UPSERT }
+        payload:
+          type: object
+          required: [username, email, role]
+          properties:
+            username: { type: string }
+            name: { type: string }
+            email: { type: string }
+            role: { type: string }
+            primaryUnit: { type: string }
+            authorizedUnits: { type: array, items: { type: string } }
+            securityRoles: { type: array, items: { type: string } }
+
+    # -- Unit Contact Application --
+    Application:
+      type: object
+      properties:
+        id: { type: string }
+        applicantName: { type: string }
+        applicantEmail: { type: string }
+        extensionNumber: { type: string }
+        unitCategory: { type: string }
+        primaryUnit: { type: string }
+        secondaryUnit: { type: string }
+        unitValue: { type: string }
+        unitCode: { type: string }
+        contactType: { type: string }
+        note: { type: string }
+        authorizedUnits: { type: array, items: { type: string } }
+        securityRoles: { type: array, items: { type: string } }
+        status: { type: string }
+        statusLabel: { type: string }
+        statusDetail: { type: string }
+        submittedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        reviewedAt: { type: string, format: date-time }
+        reviewedBy: { type: string }
+        reviewComment: { type: string }
+
+    ApplyRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: APPLY }
+        payload:
+          type: object
+          required: [applicantName, applicantEmail, unitValue, contactType]
+          properties:
+            applicantName: { type: string }
+            applicantEmail: { type: string }
+            extensionNumber: { type: string }
+            unitCategory: { type: string }
+            primaryUnit: { type: string }
+            secondaryUnit: { type: string }
+            unitValue: { type: string }
+            unitCode: { type: string }
+            contactType: { type: string }
+            note: { type: string }
+            authorizedUnits: { type: array, items: { type: string } }
+            securityRoles: { type: array, items: { type: string } }
+
+    ReviewRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: REVIEW }
+        payload:
+          type: object
+          required: [applicationId, decision]
+          properties:
+            applicationId: { type: string }
+            decision: { type: string, enum: [approved, returned, rejected] }
+            reviewComment: { type: string }
+
+    ActivateRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: ACTIVATE }
+        payload:
+          type: object
+          required: [applicationId]
+          properties:
+            applicationId: { type: string }
+
+    # -- Checklist --
+    Checklist:
+      type: object
+      properties:
+        id: { type: string }
+        documentNo: { type: string }
+        checklistSeq: { type: integer }
+        unit: { type: string }
+        unitCode: { type: string }
+        fillerName: { type: string }
+        fillerUsername: { type: string }
+        fillDate: { type: string, format: date-time }
+        auditYear: { type: string }
+        supervisorName: { type: string }
+        supervisorTitle: { type: string }
+        signStatus: { type: string }
+        results: { type: object }
+        summary:
+          type: object
+          properties:
+            total: { type: integer }
+            conform: { type: integer }
+            partial: { type: integer }
+            nonConform: { type: integer }
+            na: { type: integer }
+        answeredCount: { type: integer }
+        status: { type: string, enum: [草稿, 已送出] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ChecklistWriteRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, enum: [SAVE_DRAFT, SUBMIT] }
+        payload:
+          type: object
+          properties:
+            unit: { type: string }
+            unitCode: { type: string }
+            fillerName: { type: string }
+            fillerUsername: { type: string }
+            fillDate: { type: string }
+            auditYear: { type: string }
+            supervisorName: { type: string }
+            supervisorTitle: { type: string }
+            results: { type: object }
+            summary:
+              type: object
+              properties:
+                total: { type: integer }
+                conform: { type: integer }
+                partial: { type: integer }
+                nonConform: { type: integer }
+                na: { type: integer }
+
+    # -- Corrective Action --
+    CorrectiveActionCase:
+      type: object
+      properties:
+        id: { type: string }
+        documentNo: { type: string }
+        caseSeq: { type: integer }
+        proposerUnit: { type: string }
+        proposerName: { type: string }
+        handlerUnit: { type: string }
+        handlerName: { type: string }
+        handlerEmail: { type: string }
+        deficiencyType: { type: string }
+        source: { type: string }
+        category: { type: array, items: { type: string } }
+        clause: { type: string }
+        problemDesc: { type: string }
+        correctiveAction: { type: string }
+        correctiveDueDate: { type: string, format: date-time }
+        status: { type: string, enum: [待矯正, 已提案, 審核中, 追蹤中, 結案, 退回] }
+        trackings: { type: array, items: { type: object } }
+        evidence: { type: array, items: { type: object } }
+        history: { type: array, items: { type: object } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    # -- Training Form --
+    TrainingForm:
+      type: object
+      properties:
+        id: { type: string }
+        documentNo: { type: string }
+        formSeq: { type: integer }
+        unit: { type: string }
+        unitCode: { type: string }
+        statsUnit: { type: string }
+        fillerName: { type: string }
+        fillerUsername: { type: string }
+        fillDate: { type: string }
+        trainingYear: { type: string }
+        status: { type: string, enum: [暫存, 待簽核, 已完成填報, 退回更正] }
+        records: { type: array, items: { type: object } }
+        summary: { type: object }
+        signedFiles: { type: array, items: { type: object } }
+        returnReason: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    TrainingRoster:
+      type: object
+      properties:
+        id: { type: string }
+        unit: { type: string }
+        statsUnit: { type: string }
+        l1Unit: { type: string }
+        name: { type: string }
+        unitName: { type: string }
+        identity: { type: string }
+        jobTitle: { type: string }
+        source: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    # -- Review Scope --
+    ReviewScope:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        unit: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ReviewScopeReplaceRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: REPLACE }
+        payload:
+          type: object
+          required: [username, units]
+          properties:
+            username: { type: string }
+            units: { type: array, items: { type: string } }
+
+    # -- Attachment --
+    AttachmentItem:
+      type: object
+      properties:
+        attachmentId: { type: string }
+        name: { type: string }
+        size: { type: integer }
+        contentType: { type: string }
+        scope: { type: string }
+        ownerId: { type: string }
+        recordType: { type: string }
+        path: { type: string }
+        uploadedAt: { type: string, format: date-time }
+        storage: { type: string }
+
+    UploadAttachmentRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action: { type: string, example: UPLOAD }
+        payload:
+          type: object
+          required: [fileName, contentBase64, scope, ownerId]
+          properties:
+            attachmentId: { type: string }
+            fileName: { type: string }
+            contentType: { type: string }
+            contentBase64: { type: string, format: byte }
+            scope: { type: string }
+            ownerId: { type: string }
+            recordType: { type: string }
+
+    # -- Audit Trail --
+    AuditEntry:
+      type: object
+      properties:
+        listItemId: { type: string }
+        title: { type: string }
+        eventType: { type: string }
+        actorEmail: { type: string }
+        targetEmail: { type: string }
+        unitCode: { type: string }
+        recordId: { type: string }
+        occurredAt: { type: string, format: date-time }
+        payload: { type: object, nullable: true }
+
+    # -- Asset Inventory --
+    InformationAsset:
+      type: object
+      properties:
+        id: { type: string }
+        assetName: { type: string }
+        category: { type: string }
+        subCategory: { type: string }
+        ownerName: { type: string }
+        custodianName: { type: string }
+        userName: { type: string }
+        unitCode: { type: string }
+        unitName: { type: string }
+        confidentiality: { type: string, enum: [普, 中, 高] }
+        integrity: { type: string, enum: [普, 中, 高] }
+        availability: { type: string, enum: [普, 中, 高] }
+        legalCompliance: { type: string, enum: [普, 中, 高] }
+        protectionLevel: { type: string, enum: [普, 中, 高] }
+        hasPii: { type: boolean }
+        hasSensitivePii: { type: boolean }
+        inventoryYear: { type: integer }
+        changeType: { type: string, enum: [新增, 異動, 刪除] }
+        isItSystem: { type: boolean }
+        isChinaBrand: { type: boolean }
+        status: { type: string, enum: [填報中, 待簽核, 已完成] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    # -- Unit Governance --
+    UnitGovernanceEntry:
+      type: object
+      properties:
+        unitCode: { type: string }
+        unitName: { type: string }
+
+  # ── Common Responses ────────────────────────────────
+  responses:
+    Unauthorized:
+      description: 未認證
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AuthError' }
+    Forbidden:
+      description: 無權限
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ForbiddenError' }
+    NotFound:
+      description: 找不到資源
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServerError:
+      description: 伺服器錯誤
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+# ═════════════════════════════════════════════════════
+#  Paths
+# ═════════════════════════════════════════════════════
+paths:
+
+  # ───── Auth ─────────────────────────────────────────
+
+  /api/auth/health:
+    get:
+      tags: [Auth]
+      summary: 認證模組健康檢查
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: 使用者登入
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: 登入成功 (Set-Cookie isms_session)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '423':
+          description: 帳號鎖定
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/auth/verify:
+    get:
+      tags: [Auth]
+      summary: 驗證 session 有效性
+      responses:
+        '200':
+          description: session 有效
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  user: { $ref: '#/components/schemas/SessionUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: 登出（清除 session cookie）
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/auth/request-reset:
+    post:
+      tags: [Auth]
+      summary: 請求密碼重設（寄送重設連結）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestResetRequest' }
+      responses:
+        '200':
+          description: 重設郵件已寄出
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '429':
+          description: 請求頻率過高
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/auth/redeem-reset:
+    post:
+      tags: [Auth]
+      summary: 使用重設 token 設定新密碼
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RedeemResetRequest' }
+      responses:
+        '200':
+          description: 密碼重設成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '400': { $ref: '#/components/responses/NotFound' }
+
+  /api/auth/change-password:
+    post:
+      tags: [Auth]
+      summary: 變更密碼（需登入）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '200':
+          description: 密碼變更成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ───── System Users ────────────────────────────────
+
+  /api/system-users/health:
+    get:
+      tags: [SystemUser]
+      summary: 使用者模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/system-users:
+    get:
+      tags: [SystemUser]
+      summary: 列出所有系統使用者（管理員）
+      parameters:
+        - name: keyword
+          in: query
+          schema: { type: string }
+        - name: role
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: 使用者列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/SystemUser' }
+                  total: { type: integer }
+                  page: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/system-users/upsert:
+    post:
+      tags: [SystemUser]
+      summary: 新增或更新系統使用者（管理員）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SystemUserUpsertRequest' }
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/SystemUser' }
+        '201':
+          description: 新增成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/SystemUser' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/system-users/{username}:
+    get:
+      tags: [SystemUser]
+      summary: 取得單一使用者詳情
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/SystemUser' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/system-users/{username}/delete:
+    post:
+      tags: [SystemUser]
+      summary: 刪除系統使用者（管理員）
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  deletedUsername: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/system-users/{username}/reset-password:
+    post:
+      tags: [SystemUser]
+      summary: 管理員重設使用者密碼
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  temporaryPassword: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ───── Unit Contact ────────────────────────────────
+
+  /api/unit-contact/health:
+    get:
+      tags: [UnitContact]
+      summary: 單位窗口模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/unit-contact/apply:
+    post:
+      tags: [UnitContact]
+      summary: 提交資安窗口申請（公開）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApplyRequest' }
+      responses:
+        '201':
+          description: 申請已送出
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  application: { $ref: '#/components/schemas/Application' }
+        '409':
+          description: 重複申請
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '429':
+          description: 請求頻率過高
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/unit-contact/applications:
+    get:
+      tags: [UnitContact]
+      summary: 列出所有窗口申請（管理員）
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: email
+          in: query
+          schema: { type: string }
+        - name: keyword
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: 申請列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Application' }
+                  total: { type: integer }
+                  summary: { type: object }
+                  page: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/unit-contact/status:
+    post:
+      tags: [UnitContact]
+      summary: 查詢申請狀態（以 email 查詢，公開 / 已登入皆可）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, payload]
+              properties:
+                action: { type: string, example: LOOKUP }
+                payload:
+                  type: object
+                  required: [email]
+                  properties:
+                    email: { type: string, format: email }
+      responses:
+        '200':
+          description: 查詢結果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  applications:
+                    type: array
+                    items: { $ref: '#/components/schemas/Application' }
+
+  /api/unit-contact/review:
+    post:
+      tags: [UnitContact]
+      summary: 審核窗口申請（管理員）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewRequest' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  application: { $ref: '#/components/schemas/Application' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/unit-contact/activate:
+    post:
+      tags: [UnitContact]
+      summary: 啟用帳號（管理員）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActivateRequest' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  application: { $ref: '#/components/schemas/Application' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/unit-contact/applications/{applicationId}/authorization-doc/content:
+    get:
+      tags: [UnitContact]
+      summary: 下載申請授權書附件
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 檔案內容 (binary)
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ───── Checklists ──────────────────────────────────
+
+  /api/checklists/health:
+    get:
+      tags: [Checklist]
+      summary: 檢核表模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/checklists:
+    get:
+      tags: [Checklist]
+      summary: 列出檢核表
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: unit
+          in: query
+          schema: { type: string }
+        - name: auditYear
+          in: query
+          schema: { type: string }
+        - name: keyword
+          in: query
+          schema: { type: string }
+        - name: summaryOnly
+          in: query
+          schema: { type: string, enum: ['0', '1'] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: 檢核表列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Checklist' }
+                  total: { type: integer }
+                  summary: { type: object }
+                  page: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/checklists/{checklistId}:
+    get:
+      tags: [Checklist]
+      summary: 取得單一檢核表詳情
+      parameters:
+        - name: checklistId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/Checklist' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/checklists/{checklistId}/save-draft:
+    post:
+      tags: [Checklist]
+      summary: 儲存檢核表草稿
+      parameters:
+        - name: checklistId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChecklistWriteRequest' }
+      responses:
+        '200':
+          description: 更新草稿
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/Checklist' }
+        '201':
+          description: 新建草稿
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/Checklist' }
+
+  /api/checklists/{checklistId}/submit:
+    post:
+      tags: [Checklist]
+      summary: 正式送出檢核表
+      parameters:
+        - name: checklistId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChecklistWriteRequest' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/Checklist' }
+        '400':
+          description: 未完成所有題目
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/checklists/year/{auditYear}:
+    post:
+      tags: [Checklist]
+      summary: 刪除指定年度所有檢核表（管理員）
+      parameters:
+        - name: auditYear
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  auditYear: { type: string }
+                  deletedCount: { type: integer }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ───── Corrective Actions ──────────────────────────
+
+  /api/corrective-actions/health:
+    get:
+      tags: [CorrectiveAction]
+      summary: 矯正單模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/corrective-actions:
+    get:
+      tags: [CorrectiveAction]
+      summary: 列出矯正單
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: unit
+          in: query
+          schema: { type: string }
+        - name: keyword
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CorrectiveActionCase' }
+                  total: { type: integer }
+                  page: { $ref: '#/components/schemas/PageMeta' }
+    post:
+      tags: [CorrectiveAction]
+      summary: 建立矯正單（管理員）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/CorrectiveActionCase' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/corrective-actions/{caseId}:
+    get:
+      tags: [CorrectiveAction]
+      summary: 取得矯正單詳情
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/CorrectiveActionCase' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/corrective-actions/{caseId}/delete:
+    post:
+      tags: [CorrectiveAction]
+      summary: 刪除矯正單（管理員）
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  deletedId: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/corrective-actions/{caseId}/respond:
+    post:
+      tags: [CorrectiveAction]
+      summary: 處理人回覆矯正措施
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/CorrectiveActionCase' }
+
+  /api/corrective-actions/{caseId}/review:
+    post:
+      tags: [CorrectiveAction]
+      summary: 審核矯正單（管理員）
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/CorrectiveActionCase' }
+
+  /api/corrective-actions/{caseId}/tracking-submit:
+    post:
+      tags: [CorrectiveAction]
+      summary: 提交追蹤記錄
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/CorrectiveActionCase' }
+
+  /api/corrective-actions/{caseId}/tracking-review:
+    post:
+      tags: [CorrectiveAction]
+      summary: 審核追蹤記錄（管理員）
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/CorrectiveActionCase' }
+
+  # ───── Training Forms ──────────────────────────────
+
+  /api/training/health:
+    get:
+      tags: [Training]
+      summary: 教育訓練模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/training/forms:
+    get:
+      tags: [Training]
+      summary: 列出教育訓練表單
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: unit
+          in: query
+          schema: { type: string }
+        - name: statsUnit
+          in: query
+          schema: { type: string }
+        - name: trainingYear
+          in: query
+          schema: { type: string }
+        - name: fillerUsername
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: summaryOnly
+          in: query
+          schema: { type: string, enum: ['0', '1'] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TrainingForm' }
+                  total: { type: integer }
+                  summary: { type: object }
+                  page: { $ref: '#/components/schemas/PageMeta' }
+
+  /api/training/forms/{formId}:
+    get:
+      tags: [Training]
+      summary: 取得單一教育訓練表單詳情
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/TrainingForm' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/training/forms/{formId}/save-draft:
+    post:
+      tags: [Training]
+      summary: 儲存教育訓練草稿
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/TrainingForm' }
+
+  /api/training/forms/{formId}/submit-step-one:
+    post:
+      tags: [Training]
+      summary: 送出第一階段（送簽）
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/TrainingForm' }
+
+  /api/training/forms/{formId}/mark-printed:
+    post:
+      tags: [Training]
+      summary: 標記已列印簽到表
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/TrainingForm' }
+
+  /api/training/forms/{formId}/finalize:
+    post:
+      tags: [Training]
+      summary: 完成填報（上傳簽核單後送出）
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/TrainingForm' }
+
+  /api/training/forms/{formId}/return:
+    post:
+      tags: [Training]
+      summary: 退回教育訓練表單（管理員）
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/TrainingForm' }
+
+  /api/training/forms/{formId}/undo:
+    post:
+      tags: [Training]
+      summary: 撤回至草稿狀態
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/TrainingForm' }
+
+  /api/training/forms/{formId}/delete:
+    post:
+      tags: [Training]
+      summary: 刪除教育訓練表單
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  deletedId: { type: string }
+
+  # ───── Training Roster ─────────────────────────────
+
+  /api/training/rosters:
+    get:
+      tags: [TrainingRoster]
+      summary: 列出訓練名冊
+      parameters:
+        - name: unit
+          in: query
+          schema: { type: string }
+        - name: statsUnit
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TrainingRoster' }
+                  total: { type: integer }
+                  page: { $ref: '#/components/schemas/PageMeta' }
+
+  /api/training/rosters/upsert:
+    post:
+      tags: [TrainingRoster]
+      summary: 新增或更新單筆名冊
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/TrainingRoster' }
+
+  /api/training/rosters/upsert-batch:
+    post:
+      tags: [TrainingRoster]
+      summary: 批次匯入名冊
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  upsertedCount: { type: integer }
+
+  /api/training/rosters/delete-batch:
+    post:
+      tags: [TrainingRoster]
+      summary: 批次刪除名冊
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  deletedCount: { type: integer }
+
+  /api/training/rosters/{rosterId}/delete:
+    post:
+      tags: [TrainingRoster]
+      summary: 刪除單筆名冊
+      parameters:
+        - name: rosterId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  deletedId: { type: string }
+
+  # ───── Review Scopes ───────────────────────────────
+
+  /api/review-scopes/health:
+    get:
+      tags: [ReviewScope]
+      summary: 審查範圍模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/review-scopes:
+    get:
+      tags: [ReviewScope]
+      summary: 列出審查範圍
+      parameters:
+        - name: username
+          in: query
+          schema: { type: string }
+        - name: unit
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReviewScope' }
+
+  /api/review-scopes/replace:
+    post:
+      tags: [ReviewScope]
+      summary: 替換使用者審查範圍（管理員）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewScopeReplaceRequest' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  username: { type: string }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReviewScope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ───── Attachments ─────────────────────────────────
+
+  /api/attachments/health:
+    get:
+      tags: [Attachment]
+      summary: 附件模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/attachments/upload:
+    post:
+      tags: [Attachment]
+      summary: 上傳附件（需登入）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UploadAttachmentRequest' }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/AttachmentItem' }
+        '413':
+          description: 檔案過大
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '415':
+          description: 不允許的檔案類型
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/attachments/public-upload:
+    post:
+      tags: [Attachment]
+      summary: 公開上傳附件（授權書用）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UploadAttachmentRequest' }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/AttachmentItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/attachments/{attachmentId}:
+    get:
+      tags: [Attachment]
+      summary: 取得附件 metadata
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  item: { $ref: '#/components/schemas/AttachmentItem' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/attachments/{attachmentId}/content:
+    get:
+      tags: [Attachment]
+      summary: 下載附件檔案內容
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: download
+          in: query
+          description: 設為 1 時以 attachment 方式下載
+          schema: { type: string, enum: ['0', '1'] }
+      responses:
+        '200':
+          description: 檔案二進位內容
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/attachments/{attachmentId}/delete:
+    post:
+      tags: [Attachment]
+      summary: 刪除附件
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  deletedId: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ───── Audit Trail ─────────────────────────────────
+
+  /api/audit-trail/health:
+    get:
+      tags: [AuditTrail]
+      summary: 稽核軌跡模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/audit-trail:
+    get:
+      tags: [AuditTrail]
+      summary: 列出稽核軌跡（管理員）
+      parameters:
+        - name: keyword
+          in: query
+          schema: { type: string }
+        - name: eventType
+          in: query
+          schema: { type: string }
+        - name: actorEmail
+          in: query
+          schema: { type: string }
+        - name: targetEmail
+          in: query
+          schema: { type: string }
+        - name: unitCode
+          in: query
+          schema: { type: string }
+        - name: recordId
+          in: query
+          schema: { type: string }
+        - name: occurredFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: occurredTo
+          in: query
+          schema: { type: string, format: date }
+        - name: summaryOnly
+          in: query
+          schema: { type: string, enum: ['0', '1'] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEntry' }
+                  total: { type: integer }
+                  summary: { type: object }
+                  page: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ───── Unit Governance ─────────────────────────────
+
+  /api/unit-governance/health:
+    get:
+      tags: [UnitGovernance]
+      summary: 單位治理模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+  /api/unit-governance:
+    get:
+      tags: [UnitGovernance]
+      summary: 列出所有單位治理記錄
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/UnitGovernanceEntry' }
+
+  /api/unit-governance/upsert:
+    post:
+      tags: [UnitGovernance]
+      summary: 新增或更新單位治理記錄（管理員）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionEnvelope' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/security-window/inventory:
+    get:
+      tags: [UnitGovernance]
+      summary: 資安窗口盤點資料
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  items: { type: array, items: { type: object } }
+
+  # ───── Asset Inventory ─────────────────────────────
+
+  /api/assets/health:
+    get:
+      tags: [AssetInventory]
+      summary: 資產盤點模組健康檢查
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  module: { type: string, example: asset-inventory }
+
+  /api/assets:
+    get:
+      tags: [AssetInventory]
+      summary: 列出資訊資產
+      parameters:
+        - name: year
+          in: query
+          schema: { type: integer }
+        - name: unit
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/InformationAsset' }
+                  total: { type: integer }
+    post:
+      tags: [AssetInventory]
+      summary: 新增資訊資產
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetName, category]
+              properties:
+                assetName: { type: string }
+                category: { type: string }
+                subCategory: { type: string }
+                ownerName: { type: string }
+                custodianName: { type: string }
+                unitCode: { type: string }
+                unitName: { type: string }
+                confidentiality: { type: string }
+                integrity: { type: string }
+                availability: { type: string }
+                legalCompliance: { type: string }
+                inventoryYear: { type: integer }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InformationAsset' }
+
+  /api/assets/summary:
+    get:
+      tags: [AssetInventory]
+      summary: 資產盤點儀表板摘要
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  year: { type: integer }
+                  summary: { type: array, items: { type: object } }
+
+  /api/assets/batch-status:
+    post:
+      tags: [AssetInventory]
+      summary: 批次更新資產狀態（整個單位）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, unitCode]
+              properties:
+                status: { type: string }
+                unitCode: { type: string }
+                year: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+
+  /api/assets/{assetId}:
+    get:
+      tags: [AssetInventory]
+      summary: 取得單一資產詳情（含附表十）
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InformationAsset' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [AssetInventory]
+      summary: 更新資訊資產
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assetName: { type: string }
+                category: { type: string }
+                rowVersion: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InformationAsset' }
+        '409':
+          description: 版本衝突
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/assets/{assetId}/delete:
+    post:
+      tags: [AssetInventory]
+      summary: 軟刪除資產（標記為刪除）
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  id: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/assets/{assetId}/status:
+    post:
+      tags: [AssetInventory]
+      summary: 更新單一資產狀態
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [填報中, 待簽核, 已完成] }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InformationAsset' }
+
+  /api/assets/{assetId}/appendix10:
+    get:
+      tags: [AssetInventory]
+      summary: 取得附表十評估資料
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assetId: { type: string }
+                  protectionLevel: { type: string }
+                  assessments: { type: array, items: { type: object } }
+                  complianceStatus: { type: string }
+    post:
+      tags: [AssetInventory]
+      summary: 儲存附表十評估資料
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                protectionLevel: { type: string }
+                assessments: { type: array, items: { type: object } }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assetId: { type: string }
+                  protectionLevel: { type: string }
+                  assessments: { type: array, items: { type: object } }
+                  complianceStatus: { type: string }
+
+  # ───── Dashboard ───────────────────────────────────
+
+  /api/my-tasks:
+    get:
+      tags: [Dashboard]
+      summary: 取得目前使用者待辦事項
+      parameters:
+        - name: auditYear
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string }
+                        priority: { type: string, enum: [urgent, high, medium, low] }
+                        title: { type: string }
+                        subtitle: { type: string }
+                        action: { type: string }
+                        route: { type: string }
+                  summary:
+                    type: object
+                    properties:
+                      checklistStatus: { type: string }
+                      openCases: { type: integer }
+                      pendingCases: { type: integer }
+                      trainingStatus: { type: string }
+                  units: { type: array, items: { type: string } }
+                  auditYear: { type: string }
+
+  /api/dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: 管理員儀表板總覽（管理員）
+      parameters:
+        - name: auditYear
+          in: query
+          schema: { type: string }
+        - name: trainingYear
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checklist:
+                    type: object
+                    properties:
+                      totalUnits: { type: integer }
+                      submittedUnits: { type: integer }
+                      notFiledUnits: { type: integer }
+                      draftCount: { type: integer }
+                      submittedCount: { type: integer }
+                  training:
+                    type: object
+                    properties:
+                      totalForms: { type: integer }
+                      completedForms: { type: integer }
+                      draftForms: { type: integer }
+                      avgCompletionRate: { type: number }
+                  pending:
+                    type: object
+                    properties:
+                      applicationsPendingReview: { type: integer }
+                      correctivePending: { type: integer }
+                      correctiveOpenTotal: { type: integer }
+                      totalPendingItems: { type: integer }
+                  generatedAt: { type: string, format: date-time }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ───── Ops ─────────────────────────────────────────
+
+  /api/batch-reminder:
+    post:
+      tags: [Ops]
+      summary: 批次催辦未送出檢核表（管理員）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string }
+                payload:
+                  type: object
+                  properties:
+                    auditYear: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  totalTargets: { type: integer }
+                  sent: { type: integer }
+                  submittedUnits: { type: integer }
+                  auditYear: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/server-stats:
+    get:
+      tags: [Ops]
+      summary: 伺服器運行狀態（管理員）
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  uptime: { type: integer }
+                  uptimeHuman: { type: string }
+                  memory:
+                    type: object
+                    properties:
+                      rss: { type: string }
+                      heap: { type: string }
+                  database:
+                    type: object
+                    properties:
+                      ok: { type: boolean }
+                      latencyMs: { type: number }
+                  disk:
+                    type: object
+                    properties:
+                      totalFiles: { type: integer }
+                      totalSizeMB: { type: number }
+                  nodeVersion: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/audit-report/pdf:
+    get:
+      tags: [Ops]
+      summary: 下載稽核報告 PDF（管理員）
+      parameters:
+        - name: auditYear
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: PDF 檔案
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/overdue-check:
+    post:
+      tags: [Ops]
+      summary: 觸發逾期矯正單檢查與通知（管理員）
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  checked: { type: integer }
+                  notified: { type: integer }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/audit-year/summary:
+    get:
+      tags: [Ops]
+      summary: 年度結算摘要（管理員）
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  checklistYears:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        year: { type: string }
+                        total: { type: integer }
+                        submitted: { type: integer }
+                  trainingYears:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        year: { type: string }
+                        total: { type: integer }
+                        completed: { type: integer }
+        '403': { $ref: '#/components/responses/Forbidden' }
