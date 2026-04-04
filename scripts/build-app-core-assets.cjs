@@ -213,8 +213,18 @@ async function buildFeatureBundles() {
   };
 }
 
+function resolveStyleImports(source, baseDir) {
+  return source.replace(/@import\s+(?:url\()?['"]([^'"]+)['"]\)?;/g, function (match, importPath) {
+    const fullPath = path.join(baseDir, importPath);
+    if (!fs.existsSync(fullPath)) { console.warn('[css] @import not found:', fullPath); return '/* missing: ' + importPath + ' */'; }
+    const imported = fs.readFileSync(fullPath, 'utf8');
+    return '/* ── ' + importPath + ' ── */\n' + resolveStyleImports(imported, path.dirname(fullPath));
+  });
+}
+
 async function buildMinifiedStyles() {
-  const source = fs.readFileSync(STYLES_SOURCE, 'utf8');
+  const raw = fs.readFileSync(STYLES_SOURCE, 'utf8');
+  const source = resolveStyleImports(raw, path.dirname(STYLES_SOURCE));
   const result = await esbuild.transform(source, {
     loader: 'css',
     minify: true,
@@ -242,7 +252,8 @@ async function buildCriticalStyles() {
 }
 
 async function buildPurgedStyles() {
-  const source = fs.readFileSync(STYLES_SOURCE, 'utf8');
+  const raw = fs.readFileSync(STYLES_SOURCE, 'utf8');
+  const source = resolveStyleImports(raw, path.dirname(STYLES_SOURCE));
   const purgecss = new PurgeCSS();
   const [result] = await purgecss.purge({
     content: collectPurgeContent(),

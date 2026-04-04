@@ -557,29 +557,29 @@
         + '</div>'
 
         // Filter bar
-        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-body" style="padding:12px 16px;">'
         + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'
-        + '<div class="form-group" style="margin-bottom:0;">'
-        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u5e74\u5ea6</label>'
+        + '<div class="form-group asset-mb-0">'
+        + '<label class="form-label asset-meta">\u5e74\u5ea6</label>'
         + '<select class="form-control" id="asset-filter-year" style="min-width:90px;">' + buildYearOptions(browseState.year) + '</select>'
         + '</div>'
-        + '<div class="form-group" style="margin-bottom:0;">'
-        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u5206\u985e</label>'
+        + '<div class="form-group asset-mb-0">'
+        + '<label class="form-label asset-meta">\u5206\u985e</label>'
         + '<select class="form-control" id="asset-filter-category" style="min-width:120px;">'
         + '<option value="">\u5168\u90e8</option>'
         + buildCategorySelectOptions(browseState.category, false)
         + '</select>'
         + '</div>'
-        + '<div class="form-group" style="margin-bottom:0;">'
-        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u72c0\u614b</label>'
+        + '<div class="form-group asset-mb-0">'
+        + '<label class="form-label asset-meta">\u72c0\u614b</label>'
         + '<select class="form-control" id="asset-filter-status" style="min-width:100px;">'
         + '<option value="">\u5168\u90e8</option>'
         + buildSelectOptions(STATUS_OPTIONS, browseState.status, false)
         + '</select>'
         + '</div>'
-        + '<div class="form-group" style="margin-bottom:0;">'
-        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u641c\u5c0b</label>'
+        + '<div class="form-group asset-mb-0">'
+        + '<label class="form-label asset-meta">\u641c\u5c0b</label>'
         + '<input type="text" class="form-control" id="asset-filter-keyword" placeholder="\u8cc7\u7522\u540d\u7a31\u3001\u64c1\u6709\u8005..." value="' + esc(browseState.keyword) + '" style="min-width:160px;">'
         + '</div>'
         + '<div style="display:flex;align-items:flex-end;">'
@@ -589,7 +589,7 @@
         + '</div></div>'
 
         // Stats summary bar
-        + '<div class="stats-grid review-stats-grid" style="margin-bottom:16px;">'
+        + '<div class="stats-grid review-stats-grid asset-mb-16">'
         + '<div class="stat-card"><div class="stat-value">' + ic('layers', 'icon-sm') + ' <span id="stat-total">-</span></div><div class="stat-label">\u8cc7\u7522\u7e3d\u6578</div></div>'
         + '<div class="stat-card"><div class="stat-value">' + ic('server', 'icon-sm') + ' <span id="stat-it">-</span></div><div class="stat-label">\u8cc7\u901a\u7cfb\u7d71</div></div>'
         + '<div class="stat-card"><div class="stat-value">' + ic('shield-alert', 'icon-sm') + ' <span id="stat-risk">-</span></div><div class="stat-label">\u9ad8\u98a8\u96aa</div></div>'
@@ -599,9 +599,9 @@
         // Table
         + '<div class="card review-table-card">'
         + '<div class="card-header"><span class="card-title">\u8cc7\u7522\u6e05\u518a</span><span class="review-card-subtitle">\u8f09\u5165\u4e2d...</span></div>'
-        + '<div class="card-body" style="padding:0;">'
-        + '<div id="asset-list-table-wrapper" style="overflow-x:auto;">'
-        + '<div class="empty-state" style="padding:40px 0;text-align:center;">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div>'
+        + '<div class="card-body asset-pad-0">'
+        + '<div id="asset-list-table-wrapper" class="asset-scroll-x">'
+        + '<div class="empty-state asset-empty">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div>'
         + '</div>'
         + '</div></div>'
         + '</div>';
@@ -756,7 +756,7 @@
         var el4 = document.getElementById('stat-done'); if (el4) el4.textContent = doneCount;
 
         if (!items.length) {
-          wrapper.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;">'
+          wrapper.innerHTML = '<div class="empty-state asset-empty">'
             + ic('inbox') + '<p>\u7121\u7b26\u5408\u689d\u4ef6\u7684\u8cc7\u7522\u8cc7\u6599</p>'
             + '</div>';
           scheduleRefreshIcons();
@@ -769,11 +769,11 @@
           var riskLevel = item.riskLevel || getRiskLevel(riskScore);
           var protLevel = item.protectionLevel || computeProtectionLevel(item.ciaC, item.ciaI, item.ciaA, item.ciaL);
           return '<tr>'
-            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(item.assetName || '') + '</td>'
-            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(getCategoryLabel(item.category)) + '</td>'
-            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(protLevel) + '</td>'
-            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;"><span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel || '\u2014') + '</span></td>'
-            + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + statusBadge(item.status) + '</td>'
+            + '<td class="asset-td">' + esc(item.assetName || '') + '</td>'
+            + '<td class="asset-td">' + esc(getCategoryLabel(item.category)) + '</td>'
+            + '<td class="asset-td">' + esc(protLevel) + '</td>'
+            + '<td class="asset-td"><span class="badge ' + getRiskBadgeClass(riskLevel) + '"><span class="badge-dot"></span>' + esc(riskLevel || '\u2014') + '</span></td>'
+            + '<td class="asset-td">' + statusBadge(item.status) + '</td>'
             + '<td class="action-cell" style="padding:10px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap;">'
             + '<button class="btn btn-sm btn-outline" data-action="app.editAsset" data-id="' + esc(item.id || '') + '" title="\u7de8\u8f2f">' + ic('edit') + '</button> '
             + '<button class="btn btn-sm btn-outline" data-action="app.viewAsset" data-id="' + esc(item.id || '') + '" title="\u6aa2\u8996">' + ic('eye') + '</button> '
@@ -783,12 +783,12 @@
         }
 
         var tableHead = '<thead><tr>'
-          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u8cc7\u7522\u540d\u7a31</th>'
-          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u5206\u985e</th>'
-          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u9632\u8b77\u7b49\u7d1a</th>'
-          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u98a8\u96aa\u7b49\u7d1a</th>'
-          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u72c0\u614b</th>'
-          + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u64cd\u4f5c</th>'
+          + '<th scope="col" class="asset-th">\u8cc7\u7522\u540d\u7a31</th>'
+          + '<th scope="col" class="asset-th">\u5206\u985e</th>'
+          + '<th scope="col" class="asset-th">\u9632\u8b77\u7b49\u7d1a</th>'
+          + '<th scope="col" class="asset-th">\u98a8\u96aa\u7b49\u7d1a</th>'
+          + '<th scope="col" class="asset-th">\u72c0\u614b</th>'
+          + '<th scope="col" class="asset-th">\u64cd\u4f5c</th>'
           + '</tr></thead>';
 
         // Admin sees grouped by unit; unit admin sees flat list
@@ -811,8 +811,8 @@
               + '<span style="font-weight:bold;">' + ic('building', 'icon-sm') + ' ' + esc(unitName) + '</span>'
               + '<span style="display:flex;align-items:center;gap:8px;">' + unitStatusLabel + ' <span>\u25be</span></span>'
               + '</div>'
-              + '<div id="asset-group-' + idx + '" style="padding:0;">'
-              + '<table style="width:100%;border-collapse:collapse;">' + tableHead + '<tbody>';
+              + '<div id="asset-group-' + idx + ' asset-pad-0">'
+              + '<table class="asset-table">' + tableHead + '<tbody>';
             unitItems.forEach(function (item) { groupedHtml += buildAssetRow(item); });
             groupedHtml += '</tbody></table></div></div>';
           });
@@ -822,7 +822,7 @@
           var rowsHtml = '';
           items.forEach(function (item) { rowsHtml += buildAssetRow(item); });
           wrapper.innerHTML = '<div class="table-wrapper" tabindex="0">'
-            + '<table style="width:100%;border-collapse:collapse;">'
+            + '<table class="asset-table">'
             + '<caption class="sr-only">\u8cc7\u8a0a\u8cc7\u7522\u76e4\u9ede\u6e05\u518a</caption>'
             + tableHead
             + '<tbody>' + rowsHtml + '</tbody>'
@@ -832,7 +832,7 @@
 
         scheduleRefreshIcons();
       } catch (err) {
-        wrapper.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+        wrapper.innerHTML = '<div class="empty-state asset-error">'
           + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
           + '</div>';
         scheduleRefreshIcons();
@@ -859,13 +859,13 @@
       var asset = null;
 
       if (isEdit) {
-        appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div></div>';
+        appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-empty">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div></div>';
         scheduleRefreshIcons();
         try {
           var resp = await apiCall('GET', '/' + assetId);
           asset = resp && resp.item ? resp.item : resp;
         } catch (err) {
-          appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+          appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-error">'
             + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
             + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
           scheduleRefreshIcons();
@@ -1610,7 +1610,7 @@
       var appEl = document.getElementById('app');
       if (!appEl) return;
 
-      appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div></div>';
+      appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-empty">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div></div>';
       scheduleRefreshIcons();
 
       var asset;
@@ -1618,7 +1618,7 @@
         var resp = await apiCall('GET', '/' + assetId);
         asset = resp && resp.item ? resp.item : resp;
       } catch (err) {
-        appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+        appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-error">'
           + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p>'
           + '<button class="btn btn-outline" data-action="app.backToList">\u8fd4\u56de\u5217\u8868</button></div></div>';
         scheduleRefreshIcons();
@@ -1641,7 +1641,7 @@
           + '<td style="padding:8px 12px;">' + badgeHtml + '</td></tr>';
       }
 
-      var basicTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+      var basicTable = '<table class="detail-table asset-table">'
         + detailRow('\u8cc7\u7522\u7de8\u865f', a.assetId)
         + detailRow('\u8cc7\u7522\u540d\u7a31', a.assetName)
         + detailRow('\u82f1\u6587\u540d\u7a31', a.assetNameEn)
@@ -1652,7 +1652,7 @@
         + detailRow('\u8cc7\u7522\u8aaa\u660e', a.description)
         + '</table>';
 
-      var locationTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+      var locationTable = '<table class="detail-table asset-table">'
         + detailRow('\u5b58\u653e\u4f4d\u7f6e', a.location)
         + detailRow('\u7db2\u8def\u4f4d\u5740 / IP', a.networkAddress)
         + detailRow('\u5ee0\u724c', a.brand)
@@ -1662,14 +1662,14 @@
         + detailRow('\u55ae\u4f4d', a.quantityUnit)
         + '</table>';
 
-      var securityTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+      var securityTable = '<table class="detail-table asset-table">'
         + detailRow('\u5b58\u53d6\u63a7\u5236\u65b9\u5f0f', a.accessControl)
         + detailRow('\u52a0\u5bc6\u65b9\u5f0f', a.encryption)
         + detailRow('\u5099\u4efd\u65b9\u5f0f', a.backupMethod)
         + detailRow('\u5099\u4efd\u983b\u7387', a.backupFrequency)
         + '</table>';
 
-      var ciaTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+      var ciaTable = '<table class="detail-table asset-table">'
         + detailRow('\u6a5f\u5bc6\u6027 (C)', a.ciaC)
         + detailRow('\u5b8c\u6574\u6027 (I)', a.ciaI)
         + detailRow('\u53ef\u7528\u6027 (A)', a.ciaA)
@@ -1677,7 +1677,7 @@
         + detailBadgeRow('\u9632\u8b77\u9700\u6c42\u7b49\u7d1a', '<strong>' + esc(protLevel || '\u2014') + '</strong>')
         + '</table>';
 
-      var piiTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+      var piiTable = '<table class="detail-table asset-table">'
         + detailRow('\u5305\u542b\u500b\u4eba\u8cc7\u6599', a.hasPii ? '\u662f' : '\u5426');
       if (a.hasPii) {
         piiTable += detailRow('\u500b\u8cc7\u985e\u5225', a.piiCategory)
@@ -1686,7 +1686,7 @@
       }
       piiTable += '</table>';
 
-      var versionTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+      var versionTable = '<table class="detail-table asset-table">'
         + detailRow('\u76e4\u9ede\u5e74\u5ea6', a.inventoryYear)
         + detailRow('\u7570\u52d5\u985e\u578b', a.changeType)
         + detailBadgeRow('\u72c0\u614b', statusBadge(a.status))
@@ -1695,7 +1695,7 @@
 
       var itSystemTable = '';
       if (a.isItSystem) {
-        itSystemTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+        itSystemTable = '<table class="detail-table asset-table">'
           + detailRow('\u8cc7\u901a\u5b89\u5168\u7cfb\u7d71', '\u662f')
           + detailRow('\u7cfb\u7d71\u7d1a\u5225', a.systemLevel)
           + detailRow('\u7cfb\u7d71\u7c7b\u578b', a.systemType)
@@ -1710,7 +1710,7 @@
 
       var itProtectionTable = '';
       if (a.isItSystem) {
-        itProtectionTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+        itProtectionTable = '<table class="detail-table asset-table">'
           + detailRow('\u5b58\u53d6\u63a7\u5236\u63aa\u65bd', a.itAccessControl)
           + detailRow('\u65e5\u8a8c\u7ba1\u7406\u63aa\u65bd', a.itLogManagement)
           + detailRow('\u60e1\u610f\u7a0b\u5f0f\u9632\u8b77', a.itMalwareProtection)
@@ -1721,7 +1721,7 @@
 
       var chinaBrandTable = '';
       if (a.isChinaBrand) {
-        chinaBrandTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+        chinaBrandTable = '<table class="detail-table asset-table">'
           + detailRow('\u5927\u9678\u5ee0\u724c\u7522\u54c1', '\u662f')
           + detailRow('\u5ee0\u724c\u540d\u7a31', a.chinaBrandName)
           + detailRow('\u7522\u54c1\u578b\u865f', a.chinaBrandModel)
@@ -1730,7 +1730,7 @@
           + '</table>';
       }
 
-      var riskTable = '<table class="detail-table" style="width:100%;border-collapse:collapse;">'
+      var riskTable = '<table class="detail-table asset-table">'
         + detailRow('\u53ef\u80fd\u6027', a.riskLikelihood)
         + detailRow('\u885d\u64ca\u6027', a.riskImpact)
         + detailRow('\u98a8\u96aa\u5206\u6578', riskScore ? String(riskScore) : '\u2014')
@@ -1807,7 +1807,7 @@
       var dimensions = Object.keys(dimensionSet);
 
       // -- Show loading --
-      appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;">'
+      appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-empty">'
         + ic('loader') + ' 載入中...</div></div>';
       scheduleRefreshIcons();
 
@@ -1821,7 +1821,7 @@
         asset = results[0] && results[0].item ? results[0].item : results[0];
         appendixData = results[1] || {};
       } catch (err) {
-        appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+        appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-error">'
           + ic('alert-triangle') + '<p>載入失敗：' + esc(String(err && err.message || err)) + '</p>'
           + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
         scheduleRefreshIcons();
@@ -1853,16 +1853,16 @@
       // -- Build filter bar --
       var filterHtml = '<div class="card" style="padding:12px 16px;margin-bottom:16px;">'
         + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">'
-        + '<div class="form-group" style="margin-bottom:0;">'
-        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">構面篩選</label>'
+        + '<div class="form-group asset-mb-0">'
+        + '<label class="form-label asset-meta">構面篩選</label>'
         + '<select class="form-control" id="a10-filter-dimension" style="min-width:160px;">'
         + '<option value="">全部構面</option>';
       for (var fi = 0; fi < dimensions.length; fi++) {
         filterHtml += '<option value="' + esc(dimensions[fi]) + '">' + esc(dimensions[fi]) + '</option>';
       }
       filterHtml += '</select></div>'
-        + '<div class="form-group" style="margin-bottom:0;">'
-        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">顯示範圍</label>'
+        + '<div class="form-group asset-mb-0">'
+        + '<label class="form-label asset-meta">顯示範圍</label>'
         + '<div style="display:flex;gap:12px;align-items:center;padding-top:4px;">'
         + '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.9em;">'
         + '<input type="radio" name="a10ShowMode" value="all" checked> 全部措施'
@@ -1946,16 +1946,16 @@
         + '<span style="color:#888;">' + ic('minus-circle') + ' <strong id="a10-na-count">' + initNA + '</strong> 不適用</span>'
         + '</div>'
 
-        + '<div class="table-wrapper" tabindex="0" style="overflow-x:auto;">'
+        + '<div class="table-wrapper asset-scroll-x" tabindex="0">'
         + '<table id="a10-table">'
         + '<caption class="sr-only">附表十資通系統防護基準評估表</caption>'
         + '<thead><tr>'
-        + '<th scope="col" style="white-space:nowrap;">構面</th>'
-        + '<th scope="col" style="white-space:nowrap;">措施代碼</th>'
+        + '<th scope="col" class="asset-nowrap">構面</th>'
+        + '<th scope="col" class="asset-nowrap">措施代碼</th>'
         + '<th scope="col" style="white-space:nowrap;text-align:center;">防護分級</th>'
         + '<th scope="col">控制措施</th>'
-        + '<th scope="col" style="white-space:nowrap;">評估</th>'
-        + '<th scope="col" style="white-space:nowrap;">備註</th>'
+        + '<th scope="col" class="asset-nowrap">評估</th>'
+        + '<th scope="col" class="asset-nowrap">備註</th>'
         + '</tr></thead>'
         + '<tbody>' + tableRowsHtml + '</tbody>'
         + '</table>'
@@ -2074,7 +2074,7 @@
       var RISK_COLORS = { '低': '#C8E6C9', '中': '#FFF9C4', '高': '#FFCDD2' };
 
       // -- Show loading --
-      appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;">'
+      appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-empty">'
         + ic('loader') + ' 載入中...</div></div>';
       scheduleRefreshIcons();
 
@@ -2084,7 +2084,7 @@
         var resp = await apiCall('GET', '/' + assetId);
         asset = resp && resp.item ? resp.item : resp;
       } catch (err) {
-        appEl.innerHTML = '<div class="animate-in"><div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+        appEl.innerHTML = '<div class="animate-in"><div class="empty-state asset-error">'
           + ic('alert-triangle') + '<p>載入失敗：' + esc(String(err && err.message || err)) + '</p>'
           + '<button class="btn btn-outline" data-action="app.backToDetail">' + ic('arrow-left') + ' 返回</button></div></div>';
         scheduleRefreshIcons();
@@ -2187,7 +2187,7 @@
       var showTreatment = initLevel === '高';
       var treatmentHtml = '<div id="ra-treatment-section"' + (showTreatment ? '' : ' style="display:none;"') + '>'
         + '<div style="border-top:1px solid #eee;padding-top:16px;margin-top:16px;">'
-        + '<h4 style="margin-bottom:12px;">' + ic('shield-alert') + ' 風險處置</h4>'
+        + '<h4 class="asset-mb-12">' + ic('shield-alert') + ' 風險處置</h4>'
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
         + '<div class="form-group">'
         + '<label class="form-label">風險處置方式</label>'
@@ -2220,10 +2220,10 @@
         + '<div style="display:inline-block;">'
         + '<table style="border-collapse:collapse;text-align:center;font-size:0.85em;">'
         + '<thead><tr>'
-        + '<th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;">衝擊 \\ 可能性</th>'
-        + '<th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;">1（低）</th>'
-        + '<th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;">2（中）</th>'
-        + '<th style="padding:8px 12px;border:1px solid #ddd;background:#f9f9f9;">3（高）</th>'
+        + '<th class="asset-form-header">衝擊 \\ 可能性</th>'
+        + '<th class="asset-form-header">1（低）</th>'
+        + '<th class="asset-form-header">2（中）</th>'
+        + '<th class="asset-form-header">3（高）</th>'
         + '</tr></thead><tbody>';
       for (var mrow = 2; mrow >= 0; mrow--) {
         var impactLabel = (mrow + 1) + '（' + (mrow === 0 ? '低' : (mrow === 1 ? '中' : '高')) + '）';
@@ -2262,17 +2262,17 @@
         + infoHtml
 
         + '<div class="card" style="padding:16px;margin-bottom:16px;">'
-        + '<h4 style="margin-bottom:12px;">' + ic('alert-triangle') + ' 威脅識別</h4>'
+        + '<h4 class="asset-mb-12">' + ic('alert-triangle') + ' 威脅識別</h4>'
         + threatCheckboxHtml
         + '</div>'
 
         + '<div class="card" style="padding:16px;margin-bottom:16px;">'
-        + '<h4 style="margin-bottom:12px;">' + ic('shield-off') + ' 弱點識別</h4>'
+        + '<h4 class="asset-mb-12">' + ic('shield-off') + ' 弱點識別</h4>'
         + vulnCheckboxHtml
         + '</div>'
 
         + '<div class="card" style="padding:16px;margin-bottom:16px;">'
-        + '<h4 style="margin-bottom:12px;">' + ic('calculator') + ' 風險計算</h4>'
+        + '<h4 class="asset-mb-12">' + ic('calculator') + ' 風險計算</h4>'
         + riskCalcHtml
         + treatmentHtml
         + matrixHtml
@@ -2548,20 +2548,20 @@
           var groupPct = units.length > 0 ? Math.round(groupCompleted / units.length * 100) : 0;
           var groupId = 'dash-group-' + idx;
 
-          groupsHtml += '<div class="card review-table-card" style="margin-bottom:16px;">'
+          groupsHtml += '<div class="card review-table-card asset-mb-16">'
             + '<div class="card-header" style="cursor:pointer;" data-action="app.toggleDashGroup" data-target="' + groupId + '">'
             + '<span class="card-title">' + ic(cat.icon) + ' ' + esc(cat.label) + '</span>'
             + '<span class="review-card-subtitle">' + units.length + ' \u500b\u55ae\u4f4d \u00b7 ' + groupCompleted + ' \u5df2\u5b8c\u6210</span>'
             + '</div>'
-            + '<div class="card-body" id="' + groupId + '" style="padding:0;">'
-            + '<table style="width:100%;border-collapse:collapse;">'
+            + '<div class="card-body" id="' + groupId + ' asset-pad-0">'
+            + '<table class="asset-table">'
             + '<thead><tr>'
-            + '<th style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u55ae\u4f4d\u540d\u7a31</th>'
-            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u72c0\u614b</th>'
-            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u8cc7\u7522\u6578</th>'
-            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u8cc7\u901a\u7cfb\u7d71</th>'
-            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u5927\u9678\u5ee0\u724c</th>'
-            + '<th style="padding:10px 12px;text-align:center;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u9ad8\u98a8\u96aa</th>'
+            + '<th class="asset-th">\u55ae\u4f4d\u540d\u7a31</th>'
+            + '<th class="asset-th--center">\u72c0\u614b</th>'
+            + '<th class="asset-th--center">\u8cc7\u7522\u6578</th>'
+            + '<th class="asset-th--center">\u8cc7\u901a\u7cfb\u7d71</th>'
+            + '<th class="asset-th--center">\u5927\u9678\u5ee0\u724c</th>'
+            + '<th class="asset-th--center">\u9ad8\u98a8\u96aa</th>'
             + '</tr></thead><tbody>';
 
           units.forEach(function (u) {
@@ -2571,11 +2571,11 @@
             var rowBg = u.completed ? 'background:#f1f8e9;' : '';
             groupsHtml += '<tr style="border-bottom:1px solid #f0f0f0;' + rowBg + '">'
               + '<td style="padding:10px 12px;' + (u.completed ? 'font-weight:bold;' : '') + '">' + esc(u.name) + '</td>'
-              + '<td style="padding:10px 12px;text-align:center;">' + unitDashBadge + '</td>'
-              + '<td style="padding:10px 12px;text-align:center;">' + (u.assets || '\u2014') + '</td>'
-              + '<td style="padding:10px 12px;text-align:center;">' + (u.itSys || '\u2014') + '</td>'
-              + '<td style="padding:10px 12px;text-align:center;">' + (u.cn || '\u2014') + '</td>'
-              + '<td style="padding:10px 12px;text-align:center;">'
+              + '<td class="asset-td--center">' + unitDashBadge + '</td>'
+              + '<td class="asset-td--center">' + (u.assets || '\u2014') + '</td>'
+              + '<td class="asset-td--center">' + (u.itSys || '\u2014') + '</td>'
+              + '<td class="asset-td--center">' + (u.cn || '\u2014') + '</td>'
+              + '<td class="asset-td--center">'
               + (u.highRisk > 0 ? '<span style="color:#D32F2F;font-weight:bold;">' + u.highRisk + '</span>' : '\u2014')
               + '</td>'
               + '</tr>';
@@ -2590,7 +2590,7 @@
       } catch (err) {
         var dashEl2 = document.getElementById('asset-dashboard-content');
         if (dashEl2) {
-          dashEl2.innerHTML = '<div style="padding:40px 0;text-align:center;color:#c0392b;">'
+          dashEl2.innerHTML = '<div class="asset-error">'
             + ic('alert-triangle') + '<p>\u8f09\u5165\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p></div>';
           scheduleRefreshIcons();
         }
@@ -2618,7 +2618,7 @@
         + '</div>'
         + '</div>'
 
-        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-header"><span class="card-title">' + ic('file-text', 'icon-sm') + ' \u7bc4\u672c\u4e0b\u8f09</span></div>'
         + '<div class="card-body">'
         + '<p style="color:#666;font-size:0.9em;margin-bottom:12px;">\u8acb\u5148\u4e0b\u8f09 CSV \u7bc4\u672c\uff0c\u586b\u5beb\u5f8c\u518d\u4e0a\u50b3\u3002\u7bc4\u672c\u6b04\u4f4d\u5982\u4e0b\uff1a</p>'
@@ -2627,7 +2627,7 @@
         + '<button class="btn btn-secondary btn-sm" data-action="app.downloadTemplate">' + ic('download') + ' \u4e0b\u8f09\u7bc4\u672c</button>'
         + '</div></div>'
 
-        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-header"><span class="card-title">' + ic('upload', 'icon-sm') + ' \u4e0a\u50b3 CSV \u6a94\u6848</span></div>'
         + '<div class="card-body">'
         + '<div style="border:2px dashed #ccc;border-radius:8px;padding:30px;text-align:center;" id="batch-import-drop-zone">'
@@ -2637,10 +2637,10 @@
         + '</div></div>'
 
         + '<div id="batch-import-preview" style="display:none;">'
-        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-header"><span class="card-title">' + ic('eye') + ' \u9810\u89bd\uff08\u524d 10 \u7b46\uff09</span></div>'
         + '<div class="card-body">'
-        + '<div id="batch-import-preview-table" style="overflow-x:auto;"></div>'
+        + '<div id="batch-import-preview-table" class="asset-scroll-x"></div>'
         + '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;">'
         + '<span id="batch-import-total" style="color:#666;font-size:0.9em;"></span>'
         + '<button class="btn btn-primary" data-action="app.confirmImport">' + ic('check') + ' \u78ba\u8a8d\u532f\u5165</button>'
@@ -2649,7 +2649,7 @@
         + '</div>'
 
         + '<div id="batch-import-progress" style="display:none;">'
-        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-header"><span class="card-title">' + ic('loader') + ' \u532f\u5165\u4e2d...</span></div>'
         + '<div class="card-body">'
         + '<div style="background:#eee;border-radius:4px;overflow:hidden;height:24px;margin-bottom:8px;">'
@@ -2660,7 +2660,7 @@
         + '</div>'
 
         + '<div id="batch-import-result" style="display:none;">'
-        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-body">'
         + '<div id="batch-import-result-content"></div>'
         + '</div></div>'
@@ -2722,15 +2722,15 @@
 
         var previewCount = Math.min(rows.length, 10);
         var headers = ['\u8cc7\u7522\u540d\u7a31', '\u4e3b\u5206\u985e', '\u5b50\u5206\u985e', '\u64c1\u6709\u8005', '\u4fdd\u7ba1\u55ae\u4f4d', '\u6a5f\u5bc6\u6027', '\u5b8c\u6574\u6027', '\u53ef\u7528\u6027', '\u8cc7\u901a\u7cfb\u7d71', '\u5927\u9678\u5ee0\u724c', '\u5099\u8a3b'];
-        var html = '<table style="width:100%;border-collapse:collapse;"><thead><tr>';
-        html += '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">#</th>';
-        for (var hi = 0; hi < headers.length; hi++) { html += '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">' + esc(headers[hi]) + '</th>'; }
+        var html = '<table class="asset-table"><thead><tr>';
+        html += '<th scope="col" class="asset-th">#</th>';
+        for (var hi = 0; hi < headers.length; hi++) { html += '<th scope="col" class="asset-th">' + esc(headers[hi]) + '</th>'; }
         html += '</tr></thead><tbody>';
         for (var ri = 0; ri < previewCount; ri++) {
           var row = rows[ri];
-          html += '<tr><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + (ri + 1) + '</td>';
+          html += '<tr><td class="asset-td">' + (ri + 1) + '</td>';
           for (var ci = 0; ci < headers.length; ci++) {
-            html += '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(row[ci] || '') + '</td>';
+            html += '<td class="asset-td">' + esc(row[ci] || '') + '</td>';
           }
           html += '</tr>';
         }
@@ -2815,7 +2815,7 @@
           if (progressSection) progressSection.style.display = 'none';
           if (resultSection) resultSection.style.display = '';
           if (resultContent) {
-            var resultHtml = '<div style="margin-bottom:12px;">'
+            var resultHtml = '<div class="asset-mb-12">'
               + ic('check-circle') + ' <strong>\u532f\u5165\u5b8c\u6210</strong></div>'
               + '<p>\u6210\u529f\uff1a<strong style="color:#27ae60;">' + successCount + '</strong> \u7b46'
               + (failCount > 0 ? '\uff0c\u5931\u6557\uff1a<strong style="color:#e74c3c;">' + failCount + '</strong> \u7b46' : '')
@@ -2882,18 +2882,18 @@
         + '</div>'
         + '</div>'
 
-        + '<div class="card review-table-card" style="margin-bottom:16px;">'
+        + '<div class="card review-table-card asset-mb-16">'
         + '<div class="card-body" style="padding:12px 16px;">'
         + '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">'
         + '<div style="display:flex;align-items:center;gap:6px;margin-right:4px;color:#555;">' + ic('calendar', 'icon-sm') + '</div>'
-        + '<div class="form-group" style="margin-bottom:0;">'
-        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u57fa\u6e96\u5e74\u5ea6</label>'
+        + '<div class="form-group asset-mb-0">'
+        + '<label class="form-label asset-meta">\u57fa\u6e96\u5e74\u5ea6</label>'
         + '<select class="form-control" id="yc-base-year" style="min-width:100px;">'
         + buildYearOptions(currentYear - 1)
         + '</select>'
         + '</div>'
-        + '<div class="form-group" style="margin-bottom:0;">'
-        + '<label class="form-label" style="font-size:0.85em;margin-bottom:2px;">\u6bd4\u8f03\u5e74\u5ea6</label>'
+        + '<div class="form-group asset-mb-0">'
+        + '<label class="form-label asset-meta">\u6bd4\u8f03\u5e74\u5ea6</label>'
         + '<select class="form-control" id="yc-compare-year" style="min-width:100px;">'
         + buildYearOptions(currentYear)
         + '</select>'
@@ -2990,7 +2990,7 @@
             return;
           }
 
-          resultEl.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div>';
+          resultEl.innerHTML = '<div class="empty-state asset-empty">' + ic('loader') + ' \u8f09\u5165\u4e2d...</div>';
           scheduleRefreshIcons();
 
           try {
@@ -3004,7 +3004,7 @@
             var diffRows = buildComparisonTable(baseItems, cmpItems);
 
             if (!diffRows.length) {
-              resultEl.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;">'
+              resultEl.innerHTML = '<div class="empty-state asset-empty">'
                 + ic('inbox') + '<p>\u7121\u8cc7\u6599\u53ef\u6bd4\u5c0d</p></div>';
               scheduleRefreshIcons();
               return;
@@ -3030,27 +3030,27 @@
               + '<span style="color:#888;">' + ic('check') + ' \u7121\u7570\u52d5: <strong>' + noChangeCount + '</strong></span>'
               + '</div>'
               + '</div>'
-              + '<div class="card-body" style="padding:0;">';
+              + '<div class="card-body asset-pad-0">';
 
-            var tableHtml = '<div class="table-wrapper" tabindex="0" style="overflow-x:auto;">'
-              + '<table style="width:100%;border-collapse:collapse;">'
+            var tableHtml = '<div class="table-wrapper asset-scroll-x" tabindex="0">'
+              + '<table class="asset-table">'
               + '<caption class="sr-only">\u5e74\u5ea6\u8cc7\u7522\u6bd4\u5c0d\u7d50\u679c</caption>'
               + '<thead><tr>'
-              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u8cc7\u7522\u540d\u7a31</th>'
-              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u5206\u985e</th>'
-              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u57fa\u6e96\u5e74\u5ea6 CIA (' + esc(baseYear) + ')</th>'
-              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u6bd4\u8f03\u5e74\u5ea6 CIA (' + esc(cmpYear) + ')</th>'
-              + '<th scope="col" style="padding:10px 12px;text-align:left;font-weight:600;font-size:0.85em;color:#555;border-bottom:2px solid #e9ecef;white-space:nowrap;">\u7570\u52d5\u985e\u578b</th>'
+              + '<th scope="col" class="asset-th">\u8cc7\u7522\u540d\u7a31</th>'
+              + '<th scope="col" class="asset-th">\u5206\u985e</th>'
+              + '<th scope="col" class="asset-th">\u57fa\u6e96\u5e74\u5ea6 CIA (' + esc(baseYear) + ')</th>'
+              + '<th scope="col" class="asset-th">\u6bd4\u8f03\u5e74\u5ea6 CIA (' + esc(cmpYear) + ')</th>'
+              + '<th scope="col" class="asset-th">\u7570\u52d5\u985e\u578b</th>'
               + '</tr></thead><tbody>';
 
             for (var ri = 0; ri < diffRows.length; ri++) {
               var r = diffRows[ri];
               tableHtml += '<tr style="' + getChangeColor(r.changeType) + '">'
-                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(r.name) + '</td>'
-                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(r.category) + '</td>'
-                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(r.baseCIA) + '</td>'
-                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + esc(r.cmpCIA) + '</td>'
-                + '<td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">' + getChangeBadge(r.changeType) + '</td>'
+                + '<td class="asset-td">' + esc(r.name) + '</td>'
+                + '<td class="asset-td">' + esc(r.category) + '</td>'
+                + '<td class="asset-td">' + esc(r.baseCIA) + '</td>'
+                + '<td class="asset-td">' + esc(r.cmpCIA) + '</td>'
+                + '<td class="asset-td">' + getChangeBadge(r.changeType) + '</td>'
                 + '</tr>';
             }
             tableHtml += '</tbody></table></div>'
@@ -3059,7 +3059,7 @@
             resultEl.innerHTML = summaryHtml + tableHtml;
             scheduleRefreshIcons();
           } catch (err) {
-            resultEl.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:#c0392b;">'
+            resultEl.innerHTML = '<div class="empty-state asset-error">'
               + ic('alert-triangle') + '<p>\u6bd4\u5c0d\u5931\u6557\uff1a' + esc(String(err && err.message || err)) + '</p></div>';
             scheduleRefreshIcons();
           }
