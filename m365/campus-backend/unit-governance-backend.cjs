@@ -449,24 +449,10 @@ function createUnitGovernanceRouter(deps) {
     return metaByValue.get(parent) || metaByValue.get(unitValue) || {};
   }
 
-  function categorizeTopLevelUnit(unitValue, metaByValue, catalogEntry) {
-    const unit = cleanText(splitUnitValue(unitValue).parent || unitValue);
-    if (!unit) return '行政單位';
-    if (CENTER_OVERRIDE_UNITS.has(unit)) return '中心 / 研究單位';
-    if (ADMIN_PRIMARY_WHITELIST.has(unit)) return '行政單位';
-    if (ACADEMIC_PRIMARY_WHITELIST.has(unit)) return '學術單位';
-    const meta = {
-      ...getTopLevelUnitMeta(metaByValue, unit),
-      ...(catalogEntry && typeof catalogEntry === 'object' ? catalogEntry : {})
-    };
-    const code = cleanText(meta.topCode || meta.code).toUpperCase();
-    if (/(中心|研究)/.test(unit)) return '中心 / 研究單位';
-    if (/(學院|學系|研究所|學位學程)/.test(unit)) return '學術單位';
-    if (/^0\.\d{2}$/.test(code)) {
-      return Number(code.slice(2)) >= 51 ? '學術單位' : '行政單位';
-    }
-    if (/^0\.[A-Z0-9]{2}$/.test(code)) return '中心 / 研究單位';
-    return '行政單位';
+  function categorizeTopLevelUnit(unitValue) {
+    // 使用 shared/unit-categories.js 的統一分類（Single Source of Truth）
+    const { categorizeUnit } = require('../../shared/unit-categories.js');
+    return categorizeUnit(unitValue);
   }
 
   function loadOfficialUnits() {

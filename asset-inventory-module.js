@@ -2476,19 +2476,12 @@
 
       // Local unit categorization
       function localCategorizeUnit(name) {
-        const unit = String(name || '').split('\uFF0F')[0].trim();
-        // 白名單優先（與 unit-module.js / unit-governance-backend.cjs 保持同步）
-        // 引用 shared/unit-categories.js (Single Source of Truth)
-        const _uc = (typeof window !== 'undefined' && window.__UNIT_CATEGORIES__) || {};
-        const ADMIN_WHITELIST = new Set(_uc.ADMIN_UNITS || []);
-        const ACADEMIC_WHITELIST = new Set(_uc.ACADEMIC_UNITS || []);
-        if (ADMIN_WHITELIST.has(unit)) return '\u884c\u653f\u55ae\u4f4d';
-        if (ACADEMIC_WHITELIST.has(unit)) return '\u5b78\u8853\u55ae\u4f4d';
-        const academicKeywords = ['\u5b78\u9662', '\u5b78\u7cfb', '\u7814\u7a76\u6240', '\u5b78\u4f4d\u5b78\u7a0b', '\u570b\u969b\u5b78\u9662'];
-        const centerKeywords = ['\u4e2d\u5fc3', '\u7814\u7a76\u4e2d\u5fc3', '\u8fa6\u516c\u5ba4', '\u59d4\u54e1\u6703', '\u806f\u76df'];
-        if (academicKeywords.some(function (k) { return unit.includes(k); })) return '\u5b78\u8853\u55ae\u4f4d';
-        if (centerKeywords.some(function (k) { return unit.includes(k); })) return '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d';
-        return '\u884c\u653f\u55ae\u4f4d';
+        // 直接用 shared/unit-categories.js 的 categorizeUnit（Single Source of Truth）
+        const cats = (typeof window !== 'undefined' && window.__UNIT_CATEGORIES__) || {};
+        if (typeof cats.categorizeUnit === 'function') {
+          return cats.categorizeUnit(name);
+        }
+        return '\u4e2d\u5fc3 / \u7814\u7a76\u55ae\u4f4d';
       }
 
       try {
