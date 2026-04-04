@@ -10,8 +10,13 @@
 (function () {
   'use strict';
 
-  var esc = window.__esc || function (s) { return String(s || '').replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c] || c; }); };
-  var ic = window.__ic || function () { return ''; };
+  var _escFn = null;
+  var _icFn = null;
+  function esc(s) { return (_escFn || (_escFn = window.__esc) || _escFallback)(s); }
+  function ic(a, b) { return (_icFn || (_icFn = window.__ic) || _icFallback)(a, b); }
+  function _escFallback(s) { return String(s || '').replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c] || c; }); }
+  function _icFallback() { return ''; }
+  function init(deps) { if (deps.esc) _escFn = deps.esc; if (deps.ic) _icFn = deps.ic; }
 
   var SECURITY_WINDOW_CATEGORY_ORDER = ['行政單位', '學術單位', '中心 / 研究單位'];
 
@@ -282,6 +287,7 @@
   // ─── Public API ────────────────────────────────────
 
   window._adminSecurityWindow = {
+    init: init,
     SECURITY_WINDOW_CATEGORY_ORDER: SECURITY_WINDOW_CATEGORY_ORDER,
     getSecurityWindowUnitStatusMeta: getSecurityWindowUnitStatusMeta,
     summarizeSecurityWindowCategoryItems: summarizeSecurityWindowCategoryItems,

@@ -10,8 +10,13 @@
 (function () {
   'use strict';
 
-  var esc = window.__esc || function (s) { return String(s || '').replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c] || c; }); };
-  var ic = window.__ic || function () { return ''; };
+  var _escFn = null;
+  var _icFn = null;
+  function esc(s) { return (_escFn || (_escFn = window.__esc) || _escFallback)(s); }
+  function ic(a, b) { return (_icFn || (_icFn = window.__ic) || _icFallback)(a, b); }
+  function _escFallback(s) { return String(s || '').replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c] || c; }); }
+  function _icFallback() { return ''; }
+  function init(deps) { if (deps.esc) _escFn = deps.esc; if (deps.ic) _icFn = deps.ic; }
 
   // ─── Formatting helpers ─────────────────────────────
 
@@ -179,6 +184,7 @@
   // ─── Public API ─────────────���──────────────────────
 
   window._adminAuditTrail = {
+    init: init,
     formatAuditOccurredAt: formatAuditOccurredAt,
     formatAuditEventTypeSummary: formatAuditEventTypeSummary,
     buildAuditTrailRow: buildAuditTrailRow,

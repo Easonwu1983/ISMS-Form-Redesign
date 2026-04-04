@@ -64,6 +64,11 @@
       requestUnitContactAuthorizationDocument
     } = deps;
 
+    // Initialize extracted sub-modules with real dependency references
+    if (window._adminAuditTrail && window._adminAuditTrail.init) window._adminAuditTrail.init({ esc: esc, ic: ic });
+    if (window._adminLoginLog && window._adminLoginLog.init) window._adminLoginLog.init({ esc: esc });
+    if (window._adminSecurityWindow && window._adminSecurityWindow.init) window._adminSecurityWindow.init({ esc: esc, ic: ic });
+
     async function promptActivationInfo(applicationId, opts) {
       var confirmed = typeof openConfirmDialog === 'function'
         ? await openConfirmDialog('確定要重新寄送登入資訊給此申請人嗎？', { title: '重新寄送', confirmLabel: '寄送', confirmClass: 'btn-primary', kicker: '操作確認' })
@@ -89,35 +94,9 @@
       }
     }
 
-    function formatAuditOccurredAt(value) {
-      const input = String(value || '').trim();
-      if (!input) return '—';
-      const date = new Date(input);
-      if (Number.isNaN(date.getTime())) return input;
-      return date.toLocaleString('zh-TW', {
-        hour12: false,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
-    }
-
-    function formatAuditEventTypeSummary(summary) {
-      const items = Array.isArray(summary && summary.eventTypes) ? summary.eventTypes : [];
-      if (!items.length) {
-        return '<div class="review-history-item"><div class="review-history-title">尚無事件分布</div><div class="review-history-meta">目前查詢範圍內沒有可用的事件類型統計。</div></div>';
-      }
-      const total = Math.max(0, Number(summary && summary.total) || 0);
-      return items.map((entry) => {
-        const label = String(entry && entry.eventType || 'unknown').trim() || 'unknown';
-        const count = Math.max(0, Number(entry && entry.count) || 0);
-        const percent = total > 0 ? Math.round((count / total) * 100) : 0;
-        return `<div class="review-history-item"><div class="review-history-top"><span class="review-history-title">${esc(label)}</span><span class="review-history-time">${count} 筆${total > 0 ? ` · ${percent}%` : ''}</span></div><div class="review-history-meta">事件類型 ${esc(label)} 共 ${count} 筆${total > 0 ? `，佔 ${percent}%` : ''}。</div></div>`;
-      }).join('');
-    }
+    // ─── Audit Trail formatting: delegated to admin-audit-trail-module.js ───
+    function formatAuditOccurredAt(value) { return window._adminAuditTrail.formatAuditOccurredAt(value); }
+    function formatAuditEventTypeSummary(summary) { return window._adminAuditTrail.formatAuditEventTypeSummary(summary); }
 
     const DEFAULT_AUDIT_FILTERS = Object.freeze({
       keyword: '',
@@ -821,6 +800,7 @@
       unitGovernanceRenderCache = { signature: '', cardsHtml: '' };
       unitGovernanceDeferredBodiesCache = { signature: '', itemsByCategory: {}, htmlByCategory: {} };
       securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
+      if (window._adminSecurityWindow) window._adminSecurityWindow.resetRenderCaches();
     }
 
     function resetUnitGovernanceSummaryState() {
@@ -838,10 +818,12 @@
     function resetSecurityWindowSummaryState() {
       securityWindowState.categorySummaries = {};
       securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
+      if (window._adminSecurityWindow) window._adminSecurityWindow.resetRenderCaches();
     }
 
     function resetSecurityWindowRenderState() {
       securityWindowRenderCache = { unitCardsSignature: '', unitCardsHtml: '', peopleRowsSignature: '', peopleRowsHtml: '' };
+      if (window._adminSecurityWindow) window._adminSecurityWindow.resetRenderCaches();
     }
 
     function resetAdminRemoteCaches(reason, scope) {
@@ -1396,15 +1378,7 @@
       ].map((value) => String(value || '').trim()).join('|');
     }
 
-    function normalizeAuditTrailSummary(summary) {
-      const source = summary && typeof summary === 'object' ? summary : {};
-      return {
-        total: Math.max(0, Number(source.total) || 0),
-        actorCount: Math.max(0, Number(source.actorCount) || 0),
-        latestOccurredAt: String(source.latestOccurredAt || '').trim(),
-        eventTypes: Array.isArray(source.eventTypes) ? source.eventTypes.slice() : []
-      };
-    }
+    function normalizeAuditTrailSummary(summary) { return window._adminAuditTrail.normalizeAuditTrailSummary(summary); }
 
     function serializeAuditTrailSummary(summary) {
       const safe = normalizeAuditTrailSummary(summary);
@@ -1641,44 +1615,9 @@
       });
     }
 
+    // ─── Audit Trail row/skeleton building: delegated to admin-audit-trail-module.js ───
     function buildAuditTrailLoadingMarkup(filters, summary) {
-      const safeFilters = { ...DEFAULT_AUDIT_FILTERS, ...(filters || {}) };
-      const safeSummary = normalizeAuditTrailSummary(summary);
-      const page = normalizeAuditTrailPage(null, safeFilters, []);
-      const labels = {
-        eyebrow: '\u7a3d\u6838\u8ffd\u8e64',
-        title: '\u64cd\u4f5c\u7a3d\u6838\u8ecc\u8de1',
-        subtitle: '\u5148\u5efa\u7acb\u67e5\u8a62\u8207\u6458\u8981\u9aa8\u67b6\uff0c\u80cc\u666f\u518d\u88dc\u9f4a\u5b8c\u6574\u7a3d\u6838\u8cc7\u6599\u3002',
-        summary: `count=${safeSummary.total || 0} actors=${safeSummary.actorCount || 0}`,
-        loading: '\u8f09\u5165\u4e2d',
-        searchTitle: '\u7a3d\u6838\u7d00\u9304\u67e5\u8a62',
-        distributionTitle: '\u4e8b\u4ef6\u5206\u5e03',
-        distributionSubtitle: '\u6b63\u5728\u6574\u7406\u7d71\u8a08',
-        summaryPending: '\u6458\u8981\u540c\u6b65\u4e2d',
-        summaryPendingDesc: '\u80cc\u666f\u6458\u8981\u5b8c\u6210\u5f8c\u6703\u81ea\u52d5\u66f4\u65b0\u4e8b\u4ef6\u5206\u985e\u8207\u6700\u8fd1\u6642\u9593\u3002',
-        tableLoadingTitle: 'Loading audit trail',
-        tableLoadingDesc: 'Page shell is ready. Latest records continue loading in the background.',
-        toolbarSubtitle: 'Audit trail is still syncing.',
-        keyword: '\u95dc\u9375\u5b57',
-        eventType: '\u4e8b\u4ef6\u985e\u578b',
-        startDate: '\u958b\u59cb\u65e5\u671f',
-        endDate: '\u7d50\u675f\u65e5\u671f',
-        allEvents: '\u5168\u90e8\u4e8b\u4ef6',
-        applyFilters: '\u5957\u7528\u7be9\u9078',
-        resetFilters: '\u6e05\u7a7a\u689d\u4ef6'
-      };
-      const tableShell = buildReviewTableShell(
-        'audit-trail-table',
-        '<th>Time</th><th>Event</th><th>Actor</th><th>Target</th><th>Unit</th><th>Summary</th><th>Diff</th>',
-        '<tr><td colspan="7"><div class="empty-state review-empty"><div class="empty-state-icon">' + ic('loader-circle') + '</div><div class="empty-state-title">' + labels.tableLoadingTitle + '</div><div class="empty-state-desc">' + labels.tableLoadingDesc + '</div></div></td></tr>',
-        {
-          toolbarSubtitle: labels.toolbarSubtitle,
-          wrapperId: 'audit-trail-table-wrap',
-          wrapperClass: 'audit-trail-table-wrap',
-          tbodyId: 'audit-trail-table-body'
-        }
-      );
-      return '<div class="animate-in"><div class="page-header review-page-header"><div><div class="page-eyebrow">' + labels.eyebrow + '</div><h1 class="page-title">' + labels.title + '</h1><p class="page-subtitle">' + labels.subtitle + '</p></div><div class="review-header-actions"><button type="button" class="btn btn-secondary" disabled>' + ic('loader-circle', 'icon-sm') + ' ' + labels.loading + '</button></div></div><div class="review-callout"><span class="review-callout-icon">' + ic('shield-check', 'icon-sm') + '</span><div><strong class="review-callout-strong">' + esc(labels.summary) + '</strong><div class="review-card-subtitle review-card-subtitle--top-6">' + labels.tableLoadingDesc + '</div></div></div><div class="review-grid"><div class="card review-table-card"><div class="card-header"><span class="card-title">' + labels.searchTitle + '</span><span class="review-card-subtitle">' + esc(labels.summary) + '</span></div><form id="audit-filter-form"><div class="panel-grid-two review-filter-grid"><div class="form-group"><label class="form-label">' + labels.keyword + '</label><input type="text" class="form-input" id="audit-keyword" value="' + esc(safeFilters.keyword) + '" placeholder="event, email, recordId, payload" disabled></div><div class="form-group"><label class="form-label">' + labels.eventType + '</label><select class="form-select" id="audit-event-type" disabled><option value="">' + labels.allEvents + '</option></select></div><div class="form-group"><label class="form-label">' + labels.startDate + '</label><input type="date" class="form-input" id="audit-occurred-from" value="' + esc(safeFilters.occurredFrom) + '" disabled></div><div class="form-group"><label class="form-label">' + labels.endDate + '</label><input type="date" class="form-input" id="audit-occurred-to" value="' + esc(safeFilters.occurredTo) + '" disabled></div></div><div class="form-actions review-form-actions-start"><button type="submit" class="btn btn-primary" disabled>' + ic('search', 'icon-sm') + ' ' + labels.applyFilters + '</button><button type="button" class="btn btn-secondary" disabled>' + ic('rotate-ccw', 'icon-sm') + ' ' + labels.resetFilters + '</button></div></form>' + tableShell + '</div><div class="card review-history-card"><div class="card-header"><span class="card-title">' + labels.distributionTitle + '</span><span class="review-card-subtitle">' + labels.distributionSubtitle + '</span></div><div class="empty-state review-empty"><div class="empty-state-icon">' + ic('activity') + '</div><div class="empty-state-title">' + labels.summaryPending + '</div><div class="empty-state-desc">' + labels.summaryPendingDesc + '</div></div></div></div></div>';
+      return window._adminAuditTrail.buildAuditTrailLoadingMarkup(filters, summary, { normalizeAuditTrailPage: normalizeAuditTrailPage, buildReviewTableShell: buildReviewTableShell });
     }
     function getAuditTrailOffsetByPageNumber(page, targetPage) {
       const meta = getAuditTrailPageActionMeta(page);
@@ -1687,19 +1626,9 @@
       return Math.max(0, (safeTargetPage - 1) * meta.limit);
     }
 
-    function buildAuditTrailRow(entry, index) {
-      var target = entry.targetEmail && entry.targetEmail !== entry.actorEmail ? entry.targetEmail : (entry.unitCode || '—');
-      var summary = entry.payloadPreview || entry.title || entry.recordId || '—';
-      return `<tr data-action="admin.viewAuditEntry" data-index="${index}" style="cursor:pointer"><td style="white-space:nowrap">${formatAuditOccurredAt(entry.occurredAt)}</td><td>${esc(entry.eventType || 'unknown')}</td><td>${esc(entry.actorEmail || '—')}</td><td>${esc(target)}</td><td class="review-cell-wrap">${esc(summary)}</td></tr>`;
-    }
-
-    function buildAuditTrailEmptyRow() {
-      return `<tr><td colspan="5"><div class="empty-state review-empty"><div class="empty-state-title">目前沒有稽核紀錄</div><div class="empty-state-desc">調整篩選條件後重新查詢。</div></div></td></tr>`;
-    }
-
-    function buildAuditTrailVirtualSpacer(height) {
-      return `<tr class="review-virtual-spacer" aria-hidden="true"><td class="review-virtual-spacer-cell" colspan="5" style="height:${Math.max(0, Math.round(height))}px"></td></tr>`;
-    }
+    function buildAuditTrailRow(entry, index) { return window._adminAuditTrail.buildAuditTrailRow(entry, index); }
+    function buildAuditTrailEmptyRow() { return window._adminAuditTrail.buildAuditTrailEmptyRow(); }
+    function buildAuditTrailVirtualSpacer(height) { return window._adminAuditTrail.buildAuditTrailVirtualSpacer(height); }
 
     function getAuditTrailVirtualWindow(totalRows) {
       if (!auditTrailTableViewport || totalRows <= AUDIT_TRAIL_VIRTUAL_ROW_THRESHOLD) {
@@ -1838,68 +1767,12 @@
       window.setTimeout(run, 0);
     }
 
-    function buildLoginLogRow(log) {
-      const success = !!(log && log.success);
-      const badge = success
-        ? '<span class="review-status-badge approved">成功</span>'
-        : '<span class="review-status-badge danger">失敗</span>';
-      return `<tr><td>${esc(fmtTime(log && log.time) || '—')}</td><td class="review-cell-strong">${esc(log && log.username || '—')}</td><td>${esc(log && log.name || '—')}</td><td>${esc(log && log.role || '—')}</td><td>${badge}</td></tr>`;
-    }
-
-    function buildLoginLogEmptyRow() {
-      return '<tr><td colspan="5"><div class="empty-state review-empty review-empty--spacious"><div class="empty-state-title">目前沒有登入紀錄</div><div class="empty-state-desc">系統會保留最近的登入與失敗紀錄。</div></div></td></tr>';
-    }
-
-    function buildLoginLogVirtualSpacer(height) {
-      return `<tr class="review-virtual-spacer" aria-hidden="true"><td class="review-virtual-spacer-cell" colspan="5" style="height:${Math.max(0, Math.round(height))}px"></td></tr>`;
-    }
-
-    function getLoginLogVirtualWindow(totalRows) {
-      if (!loginLogTableViewport || totalRows <= LOGIN_LOG_VIRTUAL_ROW_THRESHOLD) {
-        return {
-          enabled: false,
-          start: 0,
-          end: totalRows,
-          padTop: 0,
-          padBottom: 0
-        };
-      }
-      const scrollTop = Math.max(0, Number(loginLogTableViewport.scrollTop || 0));
-      const viewportHeight = Math.max(ADMIN_MIN_VIRTUAL_VIEWPORT_HEIGHT, Number(loginLogTableViewport.clientHeight || 0) || 0);
-      const start = Math.max(0, Math.floor(scrollTop / LOGIN_LOG_VIRTUAL_ROW_HEIGHT) - LOGIN_LOG_VIRTUAL_ROW_OVERSCAN);
-      const visibleCount = Math.ceil(viewportHeight / LOGIN_LOG_VIRTUAL_ROW_HEIGHT) + (LOGIN_LOG_VIRTUAL_ROW_OVERSCAN * 2);
-      const end = Math.min(totalRows, start + visibleCount);
-      return {
-        enabled: true,
-        start,
-        end,
-        padTop: start * LOGIN_LOG_VIRTUAL_ROW_HEIGHT,
-        padBottom: Math.max(0, (totalRows - end) * LOGIN_LOG_VIRTUAL_ROW_HEIGHT)
-      };
-    }
-
-    function renderLoginLogRows(items) {
-      const body = document.getElementById('login-log-table-body');
-      if (!body) return;
-      const logs = Array.isArray(items) ? items : [];
-      if (!logs.length) {
-        body.innerHTML = buildLoginLogEmptyRow();
-        return;
-      }
-      const virtualWindow = getLoginLogVirtualWindow(logs.length);
-      if (!virtualWindow.enabled) {
-        body.innerHTML = logs.map((log) => buildLoginLogRow(log)).join('');
-        return;
-      }
-      const rowsHtml = logs
-        .slice(virtualWindow.start, virtualWindow.end)
-        .map((log) => buildLoginLogRow(log))
-        .join('');
-      body.innerHTML = buildLoginLogVirtualSpacer(virtualWindow.padTop)
-        + rowsHtml
-        + buildLoginLogVirtualSpacer(virtualWindow.padBottom);
-    }
-
+    // ─── Login Log rendering: delegated to admin-login-log-module.js ───
+    function buildLoginLogRow(log) { return window._adminLoginLog.buildLoginLogRow(log, fmtTime); }
+    function buildLoginLogEmptyRow() { return window._adminLoginLog.buildLoginLogEmptyRow(); }
+    function buildLoginLogVirtualSpacer(height) { return window._adminLoginLog.buildLoginLogVirtualSpacer(height); }
+    function getLoginLogVirtualWindow(totalRows) { return window._adminLoginLog.getLoginLogVirtualWindow(totalRows, loginLogTableViewport); }
+    function renderLoginLogRows(items) { return window._adminLoginLog.renderLoginLogRows(items, loginLogTableViewport, fmtTime); }
     function scheduleLoginLogRowsRender() {
       if (loginLogVirtualRowsRenderPending) return;
       loginLogVirtualRowsRenderPending = true;
@@ -1916,40 +1789,7 @@
     }
 
     function showAuditEntryModal(index) {
-      const items = Array.isArray(auditTrailState.items) ? auditTrailState.items : [];
-      const entryIndex = Math.max(0, Number(index) || 0);
-      const entry = items[entryIndex] || null;
-      if (!entry) {
-        toast('找不到稽核紀錄明細', 'error');
-        return;
-      }
-      const payload = entry && typeof entry.payload === 'object' && entry.payload ? entry.payload : null;
-      const payloadText = payload
-        ? JSON.stringify(payload, null, 2)
-        : String(entry.payloadJson || entry.payloadPreview || '—');
-      const mr = document.getElementById('modal-root') || (function () {
-        const fallbackRoot = document.createElement('div');
-        fallbackRoot.id = 'modal-root';
-        document.body.appendChild(fallbackRoot);
-        return fallbackRoot;
-      }());
-      const fieldRows = [
-        ['事件類型', entry.eventType || '—'],
-        ['時間', formatAuditOccurredAt(entry.occurredAt)],
-        ['操作人', entry.actorEmail || '—'],
-        ['目標', entry.targetEmail || '—'],
-        ['單位', entry.unitCode || '—'],
-        ['紀錄編號', entry.recordId || '—']
-      ].map(([label, value]) => `<div class="audit-modal-field"><div class="audit-modal-label">${esc(label)}</div><div class="audit-modal-value">${esc(value)}</div></div>`).join('');
-
-      mr.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal audit-entry-modal" role="dialog" aria-modal="true" aria-labelledby="audit-entry-modal-title" aria-describedby="audit-entry-modal-description"><div class="modal-header"><span class="modal-title" id="audit-entry-modal-title">操作稽核差異檢視</span><button class="btn btn-ghost btn-icon" data-dismiss-modal aria-label="關閉操作稽核差異檢視">✕</button></div><div class="modal-body"><p class="sr-only" id="audit-entry-modal-description">檢視單筆操作稽核紀錄的摘要與完整內容。</p><div class="audit-modal-summary">${fieldRows}</div><div class="form-group audit-modal-summary-block"><label class="form-label">內容摘要</label><div class="review-card-subtitle review-cell-wrap">${esc(entry.payloadPreview || '—')}</div></div><div class="form-group"><label class="form-label">完整內容</label><pre class="audit-modal-pre">${esc(payloadText)}</pre></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss-modal>關閉</button></div></div></div>`;
-      const backdrop = document.getElementById('modal-bg');
-      if (backdrop) {
-        bindAdminPageEvent(backdrop, 'click', (event) => {
-          if (event.target === event.currentTarget) closeModalRoot();
-        });
-      }
-      refreshIcons();
+      window._adminAuditTrail.showAuditEntryModal(index, auditTrailState.items, { toast: toast, closeModalRoot: closeModalRoot, refreshIcons: refreshIcons, bindAdminPageEvent: bindAdminPageEvent });
     }
 
     async function loadAuditTrailData(nextFilters, options) {
@@ -2418,14 +2258,7 @@
       return secondary ? composeUnitValue(primary, secondary) : primary;
     }
 
-    function getSecurityWindowUnitStatusMeta(status) {
-      const key = String(status || '').trim();
-      if (key === 'assigned') return { label: '已設定', tone: 'approved' };
-      if (key === 'pending') return { label: '待審核', tone: 'pending' };
-      if (key === 'missing') return { label: '未設定', tone: 'danger' };
-      if (key === 'exempted') return { label: '由一級單位統一', tone: 'closed' };
-      return { label: key || '未知', tone: 'pending' };
-    }
+    function getSecurityWindowUnitStatusMeta(status) { return window._adminSecurityWindow.getSecurityWindowUnitStatusMeta(status); }
 
     function buildEmptySecurityWindowInventory() {
       return {
@@ -2468,17 +2301,7 @@
       };
     }
 
-    function summarizeSecurityWindowCategoryItems(units, category) {
-      const rows = Array.isArray(units) ? units : [];
-      return {
-        category: String(category || '').trim(),
-        unitCount: rows.length,
-        assignedCount: rows.filter((unit) => unit && unit.hasWindow).length,
-        pendingCount: rows.reduce((sum, unit) => sum + (Array.isArray(unit && unit.pending) ? unit.pending.length : 0), 0),
-        missingCount: rows.filter((unit) => unit && !unit.hasWindow && !(Array.isArray(unit.pending) && unit.pending.length)).length,
-        childCount: rows.reduce((sum, unit) => sum + (Array.isArray(unit && unit.children) ? unit.children.length : 0), 0)
-      };
-    }
+    function summarizeSecurityWindowCategoryItems(units, category) { return window._adminSecurityWindow.summarizeSecurityWindowCategoryItems(units, category); }
 
     function normalizeSecurityWindowCategorySummaries(value) {
       return normalizeCategorySummaryMap(value, function (summary, category) {
@@ -2636,168 +2459,21 @@
     }
 
     function renderSecurityWindowPersonRows(items) {
-      const rows = Array.isArray(items) ? items : [];
-      if (!rows.length) {
-        return `<tr><td colspan="6"><div class="empty-state empty-state--pad-32-20"><div class="empty-state-title">沒有符合條件的資安窗口人員</div><div class="empty-state-desc">請調整關鍵字或狀態篩選。</div></div></td></tr>`;
-      }
-      return rows.map((person) => {
-        const units = Array.isArray(person.units) ? person.units : [];
-        const unitSummary = units.length ? units.join('、') : '未指定';
-        const statusMeta = getSecurityWindowUnitStatusMeta(person.hasWindow ? 'assigned' : 'missing');
-        return `<tr><td class="review-cell-strong">${esc(person.name || person.username || '—')}</td><td>${esc(person.username || '—')}<div class="review-card-subtitle review-card-subtitle--top-4">${esc(person.email || '—')}</div></td><td class="review-cell-secondary">${esc(unitSummary)}</td><td>${renderSecurityWindowPersonBadge(person)}</td><td><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span></td><td class="review-cell-secondary">${esc(person.activeUnit || '—')}</td></tr>`;
-      }).join('');
+      return window._adminSecurityWindow.renderSecurityWindowPersonRows(items);
     }
 
-    function renderSecurityWindowScopeCard(row) {
-      const meta = getSecurityWindowUnitStatusMeta(row.status);
-      const holders = Array.isArray(row.holders) ? row.holders : [];
-      const pending = Array.isArray(row.pending) ? row.pending : [];
-      const holderHtml = holders.length
-        ? holders.map((person) => `<span class="cl-governance-child-chip">${esc(person.name || person.username || '—')} · ${esc(formatSecurityRolesSummary(person.securityRoles))}</span>`).join('')
-        : '<span class="cl-governance-child-chip cl-governance-child-chip--muted">尚未指定</span>';
-      const pendingHtml = pending.length
-        ? pending.map((item) => `<span class="cl-governance-child-chip">${esc(item.applicantName || item.applicantEmail || '—')} · ${esc(formatSecurityRolesSummary(item.securityRoles))}</span>`).join('')
-        : '<span class="cl-governance-child-chip cl-governance-child-chip--muted">無待審核申請</span>';
-      const tierLabel = row.exempted ? '已整併' : (row.isTop ? '一級單位' : '二級單位');
-      const tierTone = row.exempted ? 'closed' : (row.isTop ? 'approved' : meta.tone);
-      const noteLabel = row.exempted
-        ? '由一級單位統一填報'
-        : (row.isTop ? '本部 / 主體盤點' : '轄下單位分層盤點');
-      return `
-        <article class="security-window-scope-card ${row.isTop ? 'is-top' : 'is-child'} ${row.exempted ? 'is-exempted' : ''}">
-          <div class="security-window-scope-card-head">
-            <div>
-              <div class="security-window-scope-card-title">${esc(row.label || row.unit || '—')}</div>
-              <div class="security-window-scope-card-subtitle">
-                <span class="review-count-chip">${esc(tierLabel)}</span>
-                <span>${esc(noteLabel)}</span>
-              </div>
-            </div>
-            <span class="review-status-badge ${tierTone}">${esc(meta.label)}</span>
-          </div>
-          <div class="security-window-scope-card-body">
-            <div class="security-window-scope-chip-row">${holderHtml}</div>
-            ${pending.length ? `<div class="review-card-subtitle review-card-subtitle--top-10">待審核：<div class="security-window-scope-chip-row security-window-scope-chip-row--top-8">${pendingHtml}</div></div>` : ''}
-          </div>
-        </article>`;
-    }
+    // ─── Security Window rendering: delegated to admin-security-window-module.js ───
+    function renderSecurityWindowScopeCard(row) { return window._adminSecurityWindow.renderSecurityWindowScopeCard(row); }
+    function renderSecurityWindowScopeSection(title, subtitle, rows, emptyText) { return window._adminSecurityWindow.renderSecurityWindowScopeSection(title, subtitle, rows, emptyText); }
+    function renderSecurityWindowScopeRows(unit) { return window._adminSecurityWindow.renderSecurityWindowScopeRows(unit); }
+    const SECURITY_WINDOW_CATEGORY_ORDER = window._adminSecurityWindow.SECURITY_WINDOW_CATEGORY_ORDER;
+    function normalizeSecurityWindowCategory(category) { return window._adminSecurityWindow.normalizeSecurityWindowCategory(category); }
+    function groupSecurityWindowUnitsByCategory(units) { return window._adminSecurityWindow.groupSecurityWindowUnitsByCategory(units); }
+    function renderSecurityWindowUnitCard(unit) { return window._adminSecurityWindow.renderSecurityWindowUnitCard(unit); }
+    function renderSecurityWindowCategoryCard(group, index, categorySummaries) { return window._adminSecurityWindow.renderSecurityWindowCategoryCard(group, index, categorySummaries); }
+    function renderSecurityWindowUnitCards(units, categorySummaries) { return window._adminSecurityWindow.renderSecurityWindowUnitCards(units, categorySummaries); }
 
-    function renderSecurityWindowScopeSection(title, subtitle, rows, emptyText) {
-      const items = Array.isArray(rows) ? rows : [];
-      const safeEmptyText = emptyText || '沒有可顯示的單位範圍';
-      return `
-        <section class="security-window-tier-section">
-          <div class="security-window-tier-section-header">
-            <div>
-              <div class="security-window-tier-section-title">${esc(title)}</div>
-              <div class="review-card-subtitle">${esc(subtitle || '')}</div>
-            </div>
-            <span class="review-count-chip">${esc(String(items.length))} 筆</span>
-          </div>
-          ${items.length
-            ? `<div class="security-window-tier-items">${items.map((row) => renderSecurityWindowScopeCard(row)).join('')}</div>`
-            : `<div class="empty-state security-window-tier-empty"><div class="empty-state-title">${esc(safeEmptyText)}</div><div class="empty-state-desc">請確認單位資料與治理設定是否已就緒。</div></div>`}
-        </section>`;
-    }
-
-    function renderSecurityWindowScopeRows(unit) {
-      const rows = Array.isArray(unit && unit.scopeRows) ? unit.scopeRows : [];
-      const topRows = rows.filter((row) => row && row.isTop);
-      const childRows = rows.filter((row) => row && !row.isTop);
-      return `
-        <div class="security-window-tier-stack">
-          ${renderSecurityWindowScopeSection('一級單位', '主單位與本部資安窗口盤點', topRows, '沒有可顯示的一級單位盤點資料')}
-          ${renderSecurityWindowScopeSection('二級單位', String(unit && unit.mode || 'independent').trim() === 'consolidated' ? '已整併單位會顯示為由一級單位統一' : '轄下單位的資安窗口盤點', childRows, '沒有可顯示的二級單位盤點資料')}
-        </div>`;
-    }
-
-    const SECURITY_WINDOW_CATEGORY_ORDER = ['行政單位', '學術單位', '中心 / 研究單位'];
-
-    function normalizeSecurityWindowCategory(category) {
-      const raw = String(category || '').trim();
-      if (!raw) return null;
-      if (SECURITY_WINDOW_CATEGORY_ORDER.includes(raw)) return raw;
-      if (raw.includes('行政')) return '行政單位';
-      if (raw.includes('學術')) return '學術單位';
-      if (raw.includes('中心') || raw.includes('研究')) return '中心 / 研究單位';
-      return null;
-    }
-
-    function groupSecurityWindowUnitsByCategory(units) {
-      const groups = new Map();
-      (Array.isArray(units) ? units : []).forEach((unit) => {
-        const category = normalizeSecurityWindowCategory(unit && unit.category);
-        if (!category) return;
-        if (!groups.has(category)) groups.set(category, []);
-        groups.get(category).push(unit);
-      });
-      return SECURITY_WINDOW_CATEGORY_ORDER
-        .map((category) => ({ category, items: groups.get(category) || [] }))
-        .filter((group) => Array.isArray(group.items) && group.items.length);
-    }
-
-    function renderSecurityWindowUnitCard(unit) {
-      const statusMeta = getSecurityWindowUnitStatusMeta(unit.status);
-      const holderCount = Array.isArray(unit.holders) ? unit.holders.length : 0;
-      const pendingCount = Array.isArray(unit.pending) ? unit.pending.length : 0;
-      const childCount = Array.isArray(unit.children) ? unit.children.length : 0;
-      const summaryChips = [
-        ['一級單位', 1],
-        ['二級單位', childCount],
-        ['已設定', holderCount],
-        ['待審核', pendingCount]
-      ];
-      return `<details class="training-group-card security-window-card" data-security-window-unit="${esc(unit.unit)}"><summary class="training-group-summary security-window-summary"><div><span class="training-group-title">${esc(unit.unit)}</span><div class="training-group-subtitle">${esc(unit.category || '正式單位')} · ${esc(unit.mode === 'consolidated' ? '合併 / 統一填報' : '獨立填報')}</div><div class="training-group-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="review-status-badge ${statusMeta.tone}">${esc(statusMeta.label)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="governance-card-body governance-card-body--top-pad"><div class="review-callout compact"><span class="review-callout-icon">${ic('users-round', 'icon-sm')}</span><div>${esc(unit.note || (unit.mode === 'consolidated' ? '轄下單位由一級單位統一管理。' : '轄下單位需各自維護資安窗口。'))}</div></div>${renderSecurityWindowScopeRows(unit)}</div></details>`;
-    }
-
-    function renderSecurityWindowCategoryCard(group, index, categorySummaries) {
-      const items = Array.isArray(group && group.items) ? group.items : [];
-      const category = String(group && group.category || '').trim() || '中心 / 研究單位';
-      const summary = categorySummaries && categorySummaries[category]
-        ? categorySummaries[category]
-        : summarizeSecurityWindowCategoryItems(items, category);
-      const unitCount = Number(summary && summary.unitCount || items.length);
-      const assignedCount = Number(summary && summary.assignedCount || 0);
-      const pendingCount = Number(summary && summary.pendingCount || 0);
-      const childCount = Number(summary && summary.childCount || 0);
-      const missingCount = Number(summary && summary.missingCount || 0);
-      const summaryChips = [
-        ['單位數', unitCount],
-        ['已設定', assignedCount],
-        ['待審核', pendingCount],
-        ['未設定', missingCount]
-      ];
-      const openAttr = index === 0 ? ' open' : '';
-      const subtitle = `${category} · ${childCount} 個二級單位`;
-      const bodyHtml = `<div class="security-window-group-stack security-window-group-stack--nested">${items.map((unit) => renderSecurityWindowUnitCard(unit)).join('')}</div>`;
-      return `<details class="training-group-card security-window-category-card"${openAttr} data-security-window-category="${esc(category)}"><summary class="training-group-summary security-window-summary security-window-category-summary"><div><span class="training-group-title">${esc(category)}</span><div class="training-group-subtitle">${esc(subtitle)}</div><div class="training-group-summary-grid security-window-category-summary-grid">${summaryChips.map(([label, value]) => `<span class="training-group-summary-chip security-window-category-summary-chip"><strong>${esc(String(value || 0))}</strong><small>${esc(label)}</small></span>`).join('')}</div></div><div class="training-group-meta"><span class="security-window-category-tag">${esc(category)}</span><span class="training-group-toggle">${ic('chevron-down', 'icon-sm')}</span></div></summary><div class="security-window-category-body">${bodyHtml}</div></details>`;
-    }
-
-    function renderSecurityWindowUnitCards(units, categorySummaries) {
-      const rows = Array.isArray(units) ? units : [];
-      if (!rows.length) {
-        return `<div class="empty-state review-empty review-empty--spacious"><div class="empty-state-icon">${ic('shield-alert')}</div><div class="empty-state-title">目前沒有符合條件的資安窗口單位</div><div class="empty-state-desc">請調整關鍵字、狀態或先確認單位治理設定。</div></div>`;
-      }
-      const groups = groupSecurityWindowUnitsByCategory(rows);
-      return `<div class="security-window-category-stack">${groups.map((group, index) => renderSecurityWindowCategoryCard(group, index, categorySummaries)).join('')}</div>`;
-    }
-
-    function serializeCategorySummaries(categorySummaries) {
-      const source = categorySummaries && typeof categorySummaries === 'object' ? categorySummaries : {};
-      return Object.keys(source).sort().map((category) => {
-        const summary = source[category] && typeof source[category] === 'object' ? source[category] : {};
-        return [
-          category,
-          Number(summary.unitCount || summary.total || 0),
-          Number(summary.consolidatedCount || summary.consolidated || 0),
-          Number(summary.independentCount || summary.independent || 0),
-          Number(summary.childCount || summary.children || 0),
-          Number(summary.assignedCount || 0),
-          Number(summary.pendingCount || 0),
-          Number(summary.missingCount || 0)
-        ];
-      });
-    }
+    function serializeCategorySummaries(categorySummaries) { return window._adminSecurityWindow.serializeCategorySummaries(categorySummaries); }
 
     function buildUnitGovernanceCardsRenderSignature(items, filters, page, loadedAt, categorySummaries) {
       const safeFilters = filters || {};
@@ -2847,77 +2523,11 @@
       return cardsHtml;
     }
 
-    function buildSecurityWindowUnitCardsRenderSignature(units, filters, page, generatedAt, categorySummaries) {
-      const safeFilters = filters || {};
-      const safePage = page || {};
-      const rows = Array.isArray(units) ? units : [];
-      return JSON.stringify([
-        String(generatedAt || '').trim(),
-        String(safeFilters.keyword || '').trim(),
-        String(safeFilters.status || 'all').trim(),
-        String(safeFilters.category || 'all').trim(),
-        Number(safePage.offset || 0),
-        Number(safePage.limit || 12),
-        Number(safePage.total || rows.length),
-          rows.map((item) => [
-            String(item && item.unit || '').trim(),
-            String(item && item.category || '').trim(),
-            String(item && item.mode || '').trim(),
-            String(item && item.status || '').trim(),
-            Number(Array.isArray(item && item.children) ? item.children.length : 0),
-            Number(Array.isArray(item && item.holders) ? item.holders.length : 0),
-            Number(Array.isArray(item && item.pending) ? item.pending.length : 0)
-          ]),
-          serializeCategorySummaries(categorySummaries)
-      ]);
-    }
-
     function getCachedSecurityWindowUnitCardsHtml(units, filters, page, generatedAt, categorySummaries) {
-      const signature = buildSecurityWindowUnitCardsRenderSignature(units, filters, page, generatedAt, categorySummaries);
-      if (securityWindowRenderCache.unitCardsSignature === signature && securityWindowRenderCache.unitCardsHtml) {
-        return securityWindowRenderCache.unitCardsHtml;
-      }
-      const unitCardsHtml = renderSecurityWindowUnitCards(units, categorySummaries);
-      securityWindowRenderCache.unitCardsSignature = signature;
-      securityWindowRenderCache.unitCardsHtml = unitCardsHtml;
-      return unitCardsHtml;
+      return window._adminSecurityWindow.getCachedSecurityWindowUnitCardsHtml(units, filters, page, generatedAt, categorySummaries);
     }
-
-    function buildSecurityWindowPeopleRowsRenderSignature(people, filters, generatedAt) {
-      const safeFilters = filters || {};
-      const rows = Array.isArray(people) ? people : [];
-      return JSON.stringify([
-        String(generatedAt || '').trim(),
-        String(safeFilters.keyword || '').trim(),
-        String(safeFilters.status || 'all').trim(),
-        String(safeFilters.category || 'all').trim(),
-        rows.length,
-        rows.slice(0, 5).map((item) => [
-          String(item && item.username || '').trim(),
-          String(item && item.activeUnit || '').trim(),
-          Array.isArray(item && item.units) ? item.units.length : 0,
-          Array.isArray(item && item.securityRoles) ? item.securityRoles.join('|') : '',
-          item && item.hasWindow ? 1 : 0
-        ]),
-        rows.slice(-5).map((item) => [
-          String(item && item.username || '').trim(),
-          String(item && item.activeUnit || '').trim(),
-          Array.isArray(item && item.units) ? item.units.length : 0,
-          Array.isArray(item && item.securityRoles) ? item.securityRoles.join('|') : '',
-          item && item.hasWindow ? 1 : 0
-        ])
-      ]);
-    }
-
     function getCachedSecurityWindowPeopleRowsHtml(people, filters, generatedAt) {
-      const signature = buildSecurityWindowPeopleRowsRenderSignature(people, filters, generatedAt);
-      if (securityWindowRenderCache.peopleRowsSignature === signature && securityWindowRenderCache.peopleRowsHtml) {
-        return securityWindowRenderCache.peopleRowsHtml;
-      }
-      const peopleRowsHtml = renderSecurityWindowPersonRows(people);
-      securityWindowRenderCache.peopleRowsSignature = signature;
-      securityWindowRenderCache.peopleRowsHtml = peopleRowsHtml;
-      return peopleRowsHtml;
+      return window._adminSecurityWindow.getCachedSecurityWindowPeopleRowsHtml(people, filters, generatedAt);
     }
 
     function applyColHeaderScope(headersHtml) {
@@ -3052,17 +2662,8 @@
       ? getUnitSearchEntries([], { excludeUnits: ['學校分部總辦事處'] })
       : [];
 
-    function normalizeSecurityRoles(value) {
-      const rawValues = Array.isArray(value)
-        ? value
-        : String(value || '').split(/[\n,，]+/);
-      return Array.from(new Set(rawValues.map((item) => String(item || '').trim()).filter((item) => SECURITY_ROLE_OPTIONS.includes(item))));
-    }
-
-    function formatSecurityRolesSummary(value) {
-      const roles = normalizeSecurityRoles(value);
-      return roles.length ? roles.join('、') : '未指定';
-    }
+    function normalizeSecurityRoles(value) { return window._adminSecurityWindow.normalizeSecurityRoles(value); }
+    function formatSecurityRolesSummary(value) { return window._adminSecurityWindow.formatSecurityRolesSummary(value); }
 
     function buildSecurityRoleCheckboxes(selectedRoles) {
       const selected = new Set(normalizeSecurityRoles(selectedRoles));
