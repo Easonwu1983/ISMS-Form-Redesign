@@ -1,4 +1,4 @@
-const CACHE_NAME = 'isms-v1';
+const CACHE_NAME = 'isms-v2';
 const PRECACHE = [
   '/',
   '/index.html',
