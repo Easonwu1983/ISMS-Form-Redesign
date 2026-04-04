@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "local-server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".codex-local-server.cjs"],
+      "port": 8090
+    },
+    {
+      "name": "campus-backend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["m365/campus-backend/server.cjs"],
+      "port": 8787
+    }
+  ]
+}

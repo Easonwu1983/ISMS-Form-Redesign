@@ -1,40 +1,42 @@
 # Contributing
 
-## Branching
+## 開發規範
 
-- Use the `codex/` prefix for new branches.
-- Keep changes focused. One branch should handle one theme of work.
+- 所有 JS 檔案必須有 `// @ts-check` 標頭
+- 變數宣告使用 `const`（預設）或 `let`（需要重新賦值時），**禁止使用 `var`**
+- 後端核心函式需加 JSDoc 型別註解
+- CSS 新增模組樣式請建立 `css/<module>.css` 並在 `styles.css` 中 `@import`
 
-## Before you push
+## 提交前檢查
 
-Run the relevant checks for the area you touched:
+```bash
+node --check <修改的 JS 檔案>     # 語法檢查
+npm run build                     # 確認 bundle 正常
+npm run lint                      # ESLint 檢查
+```
 
-- `node --check` on edited JS files
-- `npm run test:live:all` for live/runtime changes
-- `npm run test:security` for auth, upload, permission, or input handling changes
-- `npm run test:training:all` for training flow changes
-- `npm run test:role:all` for role / access-control changes
-- `npm run test:zoom:browsers` for responsive or layout changes
+如涉及 API 或功能變更：
 
-## Commit quality
+```bash
+node tests/e2e-core-flows.cjs           # 核心流程 E2E
+node tests/comprehensive-test-suite.cjs  # 綜合測試
+```
 
-- Keep commit messages short and descriptive.
-- Do not commit secrets, tokens, or generated deployment artifacts.
-- Update docs when you change user-visible behavior or setup steps.
+## Commit 格式
 
-## Pull requests
+```
+<type>: <簡短描述>
 
-Include:
+- feat: 新功能
+- fix: 修 bug
+- refactor: 重構（不改功能）
+- perf: 效能優化
+- docs: 文件更新
+```
 
-- what changed
-- how to verify it
-- whether the change was deployed to live
-- any remaining follow-up items
+## 安全規範
 
-## Security and data handling
-
-- Treat all user input as untrusted.
-- Prefer allowlists over blocklists.
-- Do not weaken existing authz or validation checks without a clear reason.
-- If a change affects CSV export, attachments, or session handling, run the relevant security smoke after the change.
-
+- 不要把密鑰、token、密碼寫進 repo
+- 所有 SQL 使用參數化查詢（`$1`, `$2`）
+- 所有 innerHTML 使用 `esc()` 跳脫
+- 修改認證/附件/權限邏輯後，跑對應 smoke test

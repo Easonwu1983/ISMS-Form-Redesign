@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep \"\\\\.js$\")",
+      "Bash(grep -rn \"parseTrainingRosterWorkbook\\\\|parseTrainingRosterImport\" C:UsersUserPlaygroundISMS-Form-Redesign --include=*.js)",
+      "Bash(xargs -I {} sh -c \"echo \"\"=== {} ===\"\" && head -20 \"\"{}\"\"\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(cygpath -w /tmp/doc_unpacked/word/media/image1.jpeg)",
+      "Bash(node -e \":*)",
+      "Bash(find . -name *xlsx* -type f)",
+      "Bash(grep -r \"import.*lucide\\\\|require.*lucide\" --include=*.js --include=*.cjs --include=*.ts --include=*.tsx)",
+      "Bash(grep -r \"import.*xlsx\\\\|require.*xlsx\" --include=*.js --include=*.cjs --include=*.ts --include=*.tsx)"
+    ]
+  }
+}

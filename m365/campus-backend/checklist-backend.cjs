@@ -83,6 +83,11 @@ const CHECKLIST_SELECT = `
   FROM checklists
 `;
 
+/**
+ * 建立檢核表 API 路由處理器
+ * @param {{parseJsonBody: Function, writeJson: Function, requestAuthz: object}} deps - 注入的依賴
+ * @returns {{tryHandle: (req: import('http').IncomingMessage, res: import('http').ServerResponse, origin: string, url: URL) => Promise<boolean>}}
+ */
 function createChecklistRouter(deps) {
   const { parseJsonBody, writeJson, requestAuthz } = deps;
 
