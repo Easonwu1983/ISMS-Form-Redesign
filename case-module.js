@@ -1084,7 +1084,7 @@
             <div class="section-header">${ic('info', 'icon-sm')} 基本資訊</div>
             <div class="form-row form-row--create-meta">
               <div class="form-group"><label class="form-label">編號前綴</label><input type="text" class="form-input" id="f-docno" placeholder="選擇處理單位後自動帶入" readonly><p class="form-hint">系統依 NTU 文件編號規範自動帶入，例如 NTU-022-IS2-11-F03-115。</p></div>
-              <div class="form-group"><label class="form-label">案件編號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動產生，例如 CAR-115-022-1"><p class="form-hint">若留白，系統自動產生，例如 NTU-022-IS2-11-F03-115-1；若手動輸入，僅支援英數、連字號與底線。</p></div>
+              <div class="form-group"><label class="form-label">案件編號</label><input type="text" class="form-input" id="f-id" placeholder="留白則由系統自動產生，例如 NTU-022-IS2-11-F03-115-1"><p class="form-hint">若留白，系統自動產生，例如 NTU-022-IS2-11-F03-115-1；若手動輸入，僅支援英數、連字號與底線。</p></div>
               <div class="form-group"><label class="form-label form-required">提報單位</label>${buildUnitCascadeControl('f-punit', scopedUnit, true, true)}</div>
             </div>
             <div class="form-row">
