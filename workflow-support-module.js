@@ -44,7 +44,13 @@
     function buildScopedRecordPrefix(prefix, unitValue, yearValue, fallbackDateValue) {
       const unitCode = getUnitCode(unitValue);
       const year = normalizeRocYear(yearValue, fallbackDateValue);
-      return unitCode ? `${String(prefix || '').trim().toUpperCase()}-${year}-${unitCode}` : '';
+      if (!unitCode) return '';
+      const p = String(prefix || '').trim().toUpperCase();
+      // 矯正單用正式編號: NTU-{unitCode}-IS2-11-F03-{year}
+      if (p === 'CAR') {
+        return `NTU-${unitCode}-IS2-11-F03-${year}`;
+      }
+      return `${p}-${year}-${unitCode}`;
     }
 
     function parseScopedRecordId(value, prefix) {
@@ -81,13 +87,14 @@
     }
 
     function parseCorrectionAutoId(value) {
-      const match = String(value || '').trim().toUpperCase().match(/^(CAR-\d{3}-[A-Z0-9]+)-(\d+)$/);
-      if (!match) return null;
-      return {
-        documentNo: match[1],
-        sequence: Number(match[2]),
-        sequenceText: match[2]
-      };
+      const v = String(value || '').trim().toUpperCase();
+      // 新格式: NTU-022-IS2-11-F03-115-1
+      const newMatch = v.match(/^(NTU-[A-Z0-9]+-IS2-11-F03-\d{3})-(\d+)$/);
+      if (newMatch) return { documentNo: newMatch[1], sequence: Number(newMatch[2]), sequenceText: newMatch[2] };
+      // 舊格式相容: CAR-115-022-1
+      const oldMatch = v.match(/^(CAR-\d{3}-[A-Z0-9]+)-(\d+)$/);
+      if (oldMatch) return { documentNo: oldMatch[1], sequence: Number(oldMatch[2]), sequenceText: oldMatch[2] };
+      return null;
     }
 
     function buildAutoCarIdByDocument(documentNo, sequence) {
