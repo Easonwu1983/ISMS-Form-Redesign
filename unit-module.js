@@ -28,7 +28,13 @@
       '學校分部總辦事處雲林分部籌備小組'
     ]);
     const HIDDEN_OFFICIAL_UNIT_VALUES = new Set([
-      '國立臺灣大學系統'
+      '國立臺灣大學系統',
+      '臺大醫院環境及職業醫學部',
+      '臺大新竹分院',
+      '臺大雲林分院',
+      '臺大金山分院',
+      '臺大癌醫中心醫院',
+      '臺大新竹生醫園區分院'
     ]);
     const TRAINING_DASHBOARD_EXCLUDED_UNITS = new Set([
       '學校分部總辦事處',

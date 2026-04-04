@@ -43,6 +43,17 @@ const ACADEMIC_UNITS = [
   '進修推廣學院'
 ];
 
+/** 不應出現在系統下拉選單的單位（醫院/分院不在資安稽核範圍內） */
+const HIDDEN_UNITS = [
+  '國立臺灣大學系統',
+  '臺大醫院環境及職業醫學部',
+  '臺大新竹分院',
+  '臺大雲林分院',
+  '臺大金山分院',
+  '臺大癌醫中心醫院',
+  '臺大新竹生醫園區分院'
+];
+
 /** 分類名稱常數 */
 const CATEGORY_ADMIN = '行政單位';
 const CATEGORY_ACADEMIC = '學術單位';
@@ -70,8 +81,8 @@ function categorizeUnit(unitName) {
 
 // 支援前端 (IIFE global) 和後端 (CJS require)
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { ADMIN_UNITS, ACADEMIC_UNITS, CATEGORY_ADMIN, CATEGORY_ACADEMIC, CATEGORY_CENTER, CATEGORY_ORDER, categorizeUnit };
+  module.exports = { ADMIN_UNITS, ACADEMIC_UNITS, HIDDEN_UNITS, CATEGORY_ADMIN, CATEGORY_ACADEMIC, CATEGORY_CENTER, CATEGORY_ORDER, categorizeUnit };
 }
 if (typeof window !== 'undefined') {
-  window.__UNIT_CATEGORIES__ = { ADMIN_UNITS: ADMIN_UNITS, ACADEMIC_UNITS: ACADEMIC_UNITS, CATEGORY_ADMIN: CATEGORY_ADMIN, CATEGORY_ACADEMIC: CATEGORY_ACADEMIC, CATEGORY_CENTER: CATEGORY_CENTER, CATEGORY_ORDER: CATEGORY_ORDER, categorizeUnit: categorizeUnit };
+  window.__UNIT_CATEGORIES__ = { ADMIN_UNITS: ADMIN_UNITS, ACADEMIC_UNITS: ACADEMIC_UNITS, HIDDEN_UNITS: HIDDEN_UNITS, CATEGORY_ADMIN: CATEGORY_ADMIN, CATEGORY_ACADEMIC: CATEGORY_ACADEMIC, CATEGORY_CENTER: CATEGORY_CENTER, CATEGORY_ORDER: CATEGORY_ORDER, categorizeUnit: categorizeUnit };
 }
