@@ -46,6 +46,22 @@
       registerActionHandlers
     } = deps;
 
+    // Global error boundary — prevent white screen on JS crash
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', function (event) {
+        const app = document.getElementById('app');
+        if (app && !app.querySelector('.error-boundary')) {
+          app.innerHTML = '<div class="error-boundary" style="padding:48px 24px;text-align:center;max-width:500px;margin:0 auto">'
+            + '<div style="font-size:2rem;margin-bottom:16px">⚠️</div>'
+            + '<h2 style="font-size:1.2rem;font-weight:700;color:#1e293b;margin-bottom:8px">系統發生錯誤</h2>'
+            + '<p style="color:#64748b;margin-bottom:16px">請重新整理頁面，如果問題持續請聯繫管理員。</p>'
+            + '<button onclick="location.reload()" style="padding:10px 24px;background:#2459a9;color:#fff;border:none;border-radius:8px;font-size:0.9rem;cursor:pointer">重新整理</button>'
+            + '<p style="font-size:0.75rem;color:#94a3b8;margin-top:12px">' + (event.message || '未知錯誤') + '</p>'
+            + '</div>';
+        }
+      });
+    }
+
     let isSidebarOpen = false;
 
     function isPublicRoute(page) {
