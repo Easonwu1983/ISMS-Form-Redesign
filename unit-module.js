@@ -29,6 +29,7 @@
     ]);
     const HIDDEN_OFFICIAL_UNIT_VALUES = new Set([
       '國立臺灣大學系統',
+      '臺灣永續棧',
       '臺大醫院環境及職業醫學部',
       '臺大新竹分院',
       '臺大雲林分院',
