@@ -6,7 +6,7 @@ Use this path when you want a public HTTPS frontend quickly without opening camp
 
 - Frontend: Cloudflare Pages
 - Backend: current campus backend through Cloudflare Named Tunnel
-- Data: Microsoft 365 / SharePoint
+- Data: PostgreSQL（VM 本機）
 
 ## Why this path
 

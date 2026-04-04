@@ -72,12 +72,10 @@ powershell -ExecutionPolicy Bypass -File .runtime/tools/vm-deploy.ps1
 
 ## 補充
 
-- `audit-trail` 會先讀取 `logs/campus-backend/audit-trail-cache.json`，再背景刷新 SharePoint 全量快取。
-- `training-rosters` 會先讀取 `logs/campus-backend/training-rosters-cache.json`，再背景刷新 SharePoint 全量快取。
-- `checklists` 會先讀取 `logs/campus-backend/checklists-cache.json`，再背景刷新 SharePoint 全量快取。
-- `unit-governance` 會保存在 `logs/campus-backend/unit-governance-store.json`，校內 VM 上不同瀏覽器共用同一份治理設定。
-- PostgreSQL 17 已安裝，監聽 `127.0.0.1:5432`，資料庫 `isms_db`，使用者 `isms_user`。
-- 資料遷移方向：M365 SharePoint → PostgreSQL（進行中）。
+- 所有資料存於 PostgreSQL 16（`127.0.0.1:5432`，資料庫 `isms_db`，使用者 `isms_user`）
+- 附件存於 VM 本地磁碟（`/srv/isms-form-redesign/attachments/`）
+- 後端 API 快取：in-memory 60s TTL
+- M365 SharePoint 已完全遷移至 PostgreSQL（2026-04 完成）
 - DB 連線模組：`m365/campus-backend/db.cjs`（pg.Pool）。
 - Schema migration：`m365/campus-backend/migrations/001-initial-schema.sql`。
 - DB 設定：`runtime.local.json` → `postgres` 區塊，由 `service-host.cjs` 讀取。
