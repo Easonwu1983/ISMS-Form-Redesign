@@ -53,21 +53,21 @@
     }
 
     function normalizeUnitList(units) {
-      var source = Array.isArray(units) ? units : [];
+      const source = Array.isArray(units) ? units : [];
       return Array.from(new Set(source.map(function (unit) {
         return String(unit || '').trim();
       }).filter(Boolean)));
     }
 
     function getShellAccessProfile(user) {
-      var base = user || currentUser();
+      const base = user || currentUser();
       if (!base) return null;
-      var authorizedUnits = normalizeUnitList(
+      const authorizedUnits = normalizeUnitList(
         Array.isArray(base.authorizedUnits) && base.authorizedUnits.length
           ? base.authorizedUnits
           : getAuthorizedUnits(base)
       );
-      var activeUnit = String(base.activeUnit || getScopedUnit(base) || base.primaryUnit || base.unit || authorizedUnits[0] || '').trim();
+      const activeUnit = String(base.activeUnit || getScopedUnit(base) || base.primaryUnit || base.unit || authorizedUnits[0] || '').trim();
       return Object.assign({}, base, {
         authorizedUnits: authorizedUnits,
         activeUnit: activeUnit
@@ -93,10 +93,10 @@
     function toggleSidebar() { setSidebarOpen(!isSidebarOpen); }
 
     function getBuildInfo() {
-      var manifest = window.__APP_ASSET_MANIFEST__ && typeof window.__APP_ASSET_MANIFEST__ === 'object'
+      const manifest = window.__APP_ASSET_MANIFEST__ && typeof window.__APP_ASSET_MANIFEST__ === 'object'
         ? window.__APP_ASSET_MANIFEST__
         : {};
-      var buildInfo = window.__APP_BUILD_INFO__ && typeof window.__APP_BUILD_INFO__ === 'object'
+      let buildInfo = window.__APP_BUILD_INFO__ && typeof window.__APP_BUILD_INFO__ === 'object'
         ? window.__APP_BUILD_INFO__
         : {};
       if ((!buildInfo || !buildInfo.versionKey) && manifest.buildInfo && typeof manifest.buildInfo === 'object') {
@@ -106,14 +106,14 @@
     }
 
     function getBuildVersionText() {
-      var buildInfo = getBuildInfo();
-      var versionKey = String(buildInfo.versionKey || buildInfo.shortCommit || buildInfo.describe || '').trim();
+      const buildInfo = getBuildInfo();
+      const versionKey = String(buildInfo.versionKey || buildInfo.shortCommit || buildInfo.describe || '').trim();
       return versionKey ? ('v' + versionKey) : 'vlocal';
     }
 
     function getBuildVersionTitle() {
-      var buildInfo = getBuildInfo();
-      var parts = [];
+      const buildInfo = getBuildInfo();
+      const parts = [];
       if (buildInfo.platform) parts.push('平台: ' + buildInfo.platform);
       if (buildInfo.versionKey) parts.push('版本: ' + buildInfo.versionKey);
       if (buildInfo.commit) parts.push('Commit: ' + buildInfo.commit);
@@ -124,13 +124,13 @@
     }
 
     function renderVersionChip(extraClass) {
-      var classes = ['app-version-chip'];
+      const classes = ['app-version-chip'];
       if (extraClass) classes.push(extraClass);
       return '<span class="' + classes.join(' ') + '" data-testid="app-version-chip" title="' + esc(getBuildVersionTitle()) + '">' + esc(getBuildVersionText()) + '</span>';
     }
 
     function validatePasswordComplexity(password) {
-      var value = String(password || '');
+      const value = String(password || '');
       if (value.length < 8) return '密碼至少需要 8 碼';
       if (!/[a-z]/.test(value)) return '密碼至少需要一個小寫英文字母';
       if (!/[A-Z]/.test(value)) return '密碼至少需要一個大寫英文字母';
@@ -139,10 +139,10 @@
       return '';
     }
 
-    var AUTH_STORAGE_KEY = 'cats_auth';
-    var AUTH_VERIFY_CACHE_KEY = '__AUTH_VERIFY_CACHE__';
-    var AUTH_BOOTSTRAP_FRESH_KEY = '__AUTH_BOOTSTRAP_FRESH__';
-    var AUTH_APP_TRANSITION_KEY = '__AUTH_APP_TRANSITION__';
+    const AUTH_STORAGE_KEY = 'cats_auth';
+    const AUTH_VERIFY_CACHE_KEY = '__AUTH_VERIFY_CACHE__';
+    const AUTH_BOOTSTRAP_FRESH_KEY = '__AUTH_BOOTSTRAP_FRESH__';
+    const AUTH_APP_TRANSITION_KEY = '__AUTH_APP_TRANSITION__';
 
     function safeReadStorage(storage, key) {
       try {
@@ -169,28 +169,28 @@
     }
 
     function hasExpiredTimestamp(value) {
-      var parsed = Date.parse(String(value || '').trim());
+      const parsed = Date.parse(String(value || '').trim());
       return Number.isFinite(parsed) && parsed <= Date.now();
     }
 
     function purgeStaleLoginState() {
-      var localRaw = safeReadStorage(window.localStorage, AUTH_STORAGE_KEY);
-      var sessionRaw = safeReadStorage(window.sessionStorage, AUTH_STORAGE_KEY);
-      var verifyRaw = safeReadStorage(window.sessionStorage, AUTH_VERIFY_CACHE_KEY);
+      const localRaw = safeReadStorage(window.localStorage, AUTH_STORAGE_KEY);
+      const sessionRaw = safeReadStorage(window.sessionStorage, AUTH_STORAGE_KEY);
+      const verifyRaw = safeReadStorage(window.sessionStorage, AUTH_VERIFY_CACHE_KEY);
       if (!localRaw && !sessionRaw && !verifyRaw) return false;
 
-      var localAuth = parseJsonOrNull(localRaw);
-      var sessionAuth = parseJsonOrNull(sessionRaw);
-      var verifyCache = parseJsonOrNull(verifyRaw);
-      var auth = localAuth || sessionAuth;
-      var shouldClear = false;
+      const localAuth = parseJsonOrNull(localRaw);
+      const sessionAuth = parseJsonOrNull(sessionRaw);
+      const verifyCache = parseJsonOrNull(verifyRaw);
+      const auth = localAuth || sessionAuth;
+      let shouldClear = false;
 
       if ((localRaw && !localAuth) || (sessionRaw && !sessionAuth) || (verifyRaw && !verifyCache)) {
         shouldClear = true;
       }
       if (auth) {
-        var sessionToken = String(auth.sessionToken || '').trim();
-        var sessionExpiresAt = String(auth.sessionExpiresAt || '').trim();
+        const sessionToken = String(auth.sessionToken || '').trim();
+        const sessionExpiresAt = String(auth.sessionExpiresAt || '').trim();
         if (sessionToken || sessionExpiresAt) {
           shouldClear = true;
         }
@@ -218,7 +218,7 @@
 
     function consumeAppTransitionFlag() {
       try {
-        var enabled = String(window.sessionStorage.getItem(AUTH_APP_TRANSITION_KEY) || '').trim() === '1';
+        const enabled = String(window.sessionStorage.getItem(AUTH_APP_TRANSITION_KEY) || '').trim() === '1';
         window.sessionStorage.removeItem(AUTH_APP_TRANSITION_KEY);
         return enabled;
       } catch (_) {
@@ -238,7 +238,7 @@
     function dismissAppTransitionOverlay() {
       if (typeof window === 'undefined') return;
       window.requestAnimationFrame(function () {
-        var overlay = document.getElementById('app-transition-overlay');
+        const overlay = document.getElementById('app-transition-overlay');
         if (!overlay) return;
         overlay.classList.add('is-leaving');
         window.setTimeout(function () {
@@ -257,7 +257,7 @@
       return esc(String(role || '未設定'));
     }
 
-    var HEADER_INTEGRATED_ROUTES = {
+    const HEADER_INTEGRATED_ROUTES = {
       dashboard: true,
       list: true,
       users: true,
@@ -274,27 +274,27 @@
     };
 
     function setHeaderContextText(selector, value) {
-      var node = document.querySelector(selector);
+      const node = document.querySelector(selector);
       if (!node) return;
       node.textContent = String(value || '').trim();
     }
 
     function syncHeaderRouteContext(page) {
-      var headerEl = document.getElementById('header');
-      var app = document.getElementById('app');
+      const headerEl = document.getElementById('header');
+      const app = document.getElementById('app');
       if (!headerEl || !app) return;
 
-      var routePage = String(page || '').trim() || 'dashboard';
-      var pageHeader = app.querySelector('.page-header');
-      var eyebrow = app.querySelector('.page-header .page-eyebrow, .dashboard-hero-eyebrow');
-      var title = app.querySelector('[data-route-heading], .page-header .page-title');
-      var kickerText = eyebrow && eyebrow.textContent ? eyebrow.textContent.trim() : '';
-      var titleText = title && title.textContent ? title.textContent.trim() : getRouteTitle(routePage);
-      var headerContext = headerEl.querySelector('.header-context');
-      var kickerEl = headerEl.querySelector('.header-kicker');
-      var integrated = !!HEADER_INTEGRATED_ROUTES[routePage];
-      var hasPageHeader = !!pageHeader;
-      var shouldShowHeaderContext = !!titleText && !hasPageHeader;
+      const routePage = String(page || '').trim() || 'dashboard';
+      const pageHeader = app.querySelector('.page-header');
+      const eyebrow = app.querySelector('.page-header .page-eyebrow, .dashboard-hero-eyebrow');
+      const title = app.querySelector('[data-route-heading], .page-header .page-title');
+      const kickerText = eyebrow && eyebrow.textContent ? eyebrow.textContent.trim() : '';
+      const titleText = title && title.textContent ? title.textContent.trim() : getRouteTitle(routePage);
+      const headerContext = headerEl.querySelector('.header-context');
+      const kickerEl = headerEl.querySelector('.header-kicker');
+      const integrated = !!HEADER_INTEGRATED_ROUTES[routePage];
+      const hasPageHeader = !!pageHeader;
+      const shouldShowHeaderContext = !!titleText && !hasPageHeader;
 
       if (kickerEl) {
         kickerEl.textContent = kickerText;
@@ -315,13 +315,13 @@
 
     function focusRouteContent() {
       window.requestAnimationFrame(function () {
-        var heading = document.querySelector('[data-route-heading]');
+        const heading = document.querySelector('[data-route-heading]');
         if (heading && typeof heading.focus === 'function') {
           heading.setAttribute('tabindex', '-1');
           heading.focus({ preventScroll: false });
           return;
         }
-        var main = document.getElementById('app');
+        const main = document.getElementById('app');
         if (main && typeof main.focus === 'function') {
           main.focus({ preventScroll: false });
         }
@@ -348,12 +348,12 @@
       if (typeof window !== 'undefined') {
         window.__APP_READY__ = false;
       }
-      var authMode = getAuthMode();
-      var bootstrapPanelDisplay = 'none';
-      var loginPanelDisplay = 'block';
-      var bootstrapAutoFocus = '';
-      var loginAutoFocus = authMode === 'm365-api' ? 'autofocus' : '';
-      var textMap = {
+      const authMode = getAuthMode();
+      const bootstrapPanelDisplay = 'none';
+      const loginPanelDisplay = 'block';
+      const bootstrapAutoFocus = '';
+      const loginAutoFocus = authMode === 'm365-api' ? 'autofocus' : '';
+      const textMap = {
         skip: '\u8df3\u5230\u4e3b\u8981\u5167\u5bb9',
         title: '\u8cc7\u8a0a\u5b89\u5168\u7ba1\u7406\u7cfb\u7d71',
         subtitle: 'Information Security Management System',
@@ -423,17 +423,17 @@
           window.setTimeout(function () {
             try {
               if (typeof hasLocalUsers !== 'function') return;
-              var bootstrapPanel = document.getElementById('bootstrap-panel');
-              var loginPanel = document.getElementById('login-panel');
+              const bootstrapPanel = document.getElementById('bootstrap-panel');
+              const loginPanel = document.getElementById('login-panel');
               if (!bootstrapPanel || !loginPanel) return;
-              var active = typeof document !== 'undefined' ? document.activeElement : null;
+              const active = typeof document !== 'undefined' ? document.activeElement : null;
               if (active && active !== document.body) {
                 if (typeof active.closest === 'function' && (active.closest('#login-form') || active.closest('#bootstrap-form'))) {
                   return;
                 }
               }
               if (hasLocalUsers()) {
-                var loginUser = document.getElementById('login-user');
+                const loginUser = document.getElementById('login-user');
                 if (loginUser && typeof loginUser.focus === 'function' && document.activeElement === document.body) {
                   loginUser.focus({ preventScroll: true });
                 }
@@ -441,7 +441,7 @@
               }
               bootstrapPanel.style.display = 'block';
               loginPanel.style.display = 'none';
-              var bootstrapName = document.getElementById('bootstrap-name');
+              const bootstrapName = document.getElementById('bootstrap-name');
               if (bootstrapName && typeof bootstrapName.focus === 'function') {
                 bootstrapName.focus({ preventScroll: true });
               }
@@ -461,9 +461,9 @@
       }
 
       function ensureAuthPanel(panelId) {
-        var panel = document.getElementById(panelId);
+        const panel = document.getElementById(panelId);
         if (panel) return panel;
-        var host = document.getElementById('auth-secondary-panels');
+        const host = document.getElementById('auth-secondary-panels');
         if (!host) return null;
         if (panelId === 'change-panel') {
           host.insertAdjacentHTML('beforeend', buildChangePanelHtml());
@@ -474,33 +474,33 @@
       }
 
       function wireChangePanel() {
-        var panel = ensureAuthPanel('change-panel');
+        const panel = ensureAuthPanel('change-panel');
         if (!panel || panel.dataset.authBound === '1') return panel;
         panel.dataset.authBound = '1';
         bindPageEvent(document.getElementById('change-form'), 'submit', async function (e) {
           e.preventDefault();
-          var username = document.getElementById('change-username').value.trim();
-          var currentPassword = document.getElementById('change-current-password').value;
-          var nextPassword = document.getElementById('change-pass').value;
-          var confirmPassword = document.getElementById('change-pass-confirm').value;
+          const username = document.getElementById('change-username').value.trim();
+          const currentPassword = document.getElementById('change-current-password').value;
+          const nextPassword = document.getElementById('change-pass').value;
+          const confirmPassword = document.getElementById('change-pass-confirm').value;
           if (nextPassword !== confirmPassword) {
             document.getElementById('change-error').textContent = textMap.changeMismatch;
-            var changeError = document.getElementById('change-error');
+            const changeError = document.getElementById('change-error');
             if (changeError) changeError.classList.add('show');
             return;
           }
-          var changePasswordError = validatePasswordComplexity(nextPassword);
+          const changePasswordError = validatePasswordComplexity(nextPassword);
           if (changePasswordError) {
             document.getElementById('change-error').textContent = changePasswordError;
-            var changeError = document.getElementById('change-error');
+            const changeError = document.getElementById('change-error');
             if (changeError) changeError.classList.add('show');
             return;
           }
           try {
-            var updatedUser = await changePassword({ username: username, currentPassword: currentPassword, newPassword: nextPassword });
+            const updatedUser = await changePassword({ username: username, currentPassword: currentPassword, newPassword: nextPassword });
             if (!updatedUser) {
               document.getElementById('change-error').textContent = textMap.changeError;
-              var changeError = document.getElementById('change-error');
+              const changeError = document.getElementById('change-error');
               if (changeError) changeError.classList.add('show');
               return;
             }
@@ -510,7 +510,7 @@
             document.getElementById('login-pass').value = '';
           } catch (error) {
             document.getElementById('change-error').textContent = String(error && error.message || error || textMap.changeError);
-            var changeError = document.getElementById('change-error');
+            const changeError = document.getElementById('change-error');
             if (changeError) changeError.classList.add('show');
           }
         });
@@ -522,25 +522,25 @@
       }
 
       function wireForgotPanel() {
-        var panel = ensureAuthPanel('forgot-panel');
+        const panel = ensureAuthPanel('forgot-panel');
         if (!panel || panel.dataset.authBound === '1') return panel;
         panel.dataset.authBound = '1';
         bindPageEvent(document.getElementById('forgot-form'), 'submit', async function (e) {
           e.preventDefault();
-          var username = document.getElementById('forgot-username').value.trim();
-          var email = document.getElementById('forgot-email').value.trim();
+          const username = document.getElementById('forgot-username').value.trim();
+          const email = document.getElementById('forgot-email').value.trim();
           try {
-            var resetResult = await resetPasswordByEmail({ username: username, email: email });
+            const resetResult = await resetPasswordByEmail({ username: username, email: email });
             if (!resetResult) {
-              var forgotError = document.getElementById('forgot-error');
+              const forgotError = document.getElementById('forgot-error');
               if (forgotError) forgotError.classList.add('show');
               return;
             }
-            var forgotError = document.getElementById('forgot-error');
+            const forgotError = document.getElementById('forgot-error');
             if (forgotError) forgotError.classList.remove('show');
             document.getElementById('reset-username').textContent = resetResult.user.username;
             document.getElementById('reset-expire').textContent = resetResult.resetTokenExpiresAt || textMap.forgotExpireFallback;
-            var deliveredByMail = !!(resetResult.delivery && resetResult.delivery.sent);
+            const deliveredByMail = !!(resetResult.delivery && resetResult.delivery.sent);
             document.getElementById('reset-result-title').textContent = deliveredByMail ? textMap.forgotDeliverySent : textMap.forgotDeliveryUnavailable;
             document.getElementById('reset-result-message').textContent = deliveredByMail
               ? (textMap.forgotDeliverySentMessagePrefix + (resetResult.user.email || email) + textMap.forgotDeliverySentMessageSuffix)
@@ -552,7 +552,7 @@
             toast(deliveredByMail ? textMap.forgotDeliverySent : textMap.forgotDeliveryUnavailable, deliveredByMail ? 'success' : 'error');
           } catch (error) {
             document.getElementById('forgot-error').textContent = String(error && error.message || error || textMap.resetFailed);
-            var forgotError = document.getElementById('forgot-error');
+            const forgotError = document.getElementById('forgot-error');
             if (forgotError) forgotError.classList.add('show');
           }
         });
@@ -562,21 +562,21 @@
         });
         bindPageEvent(document.getElementById('redeem-form'), 'submit', async function (e) {
           e.preventDefault();
-          var username = document.getElementById('redeem-username').value.trim();
-          var token = document.getElementById('redeem-token').value.trim();
-          var nextPassword = document.getElementById('redeem-pass').value;
-          var confirmPassword = document.getElementById('redeem-pass-confirm').value;
+          const username = document.getElementById('redeem-username').value.trim();
+          const token = document.getElementById('redeem-token').value.trim();
+          const nextPassword = document.getElementById('redeem-pass').value;
+          const confirmPassword = document.getElementById('redeem-pass-confirm').value;
           if (nextPassword !== confirmPassword) {
             toast(textMap.changeMismatch, 'error');
             return;
           }
-          var redeemPasswordError = validatePasswordComplexity(nextPassword);
+          const redeemPasswordError = validatePasswordComplexity(nextPassword);
           if (redeemPasswordError) {
             toast(redeemPasswordError, 'error');
             return;
           }
           try {
-            var user = await redeemResetPassword({ username: username, token: token, newPassword: nextPassword });
+            const user = await redeemResetPassword({ username: username, token: token, newPassword: nextPassword });
             if (!user) {
               toast(textMap.resetInvalid, 'error');
               return;
@@ -592,24 +592,24 @@
 
       function switchPanel(target) {
         ['bootstrap-panel', 'login-panel', 'forgot-panel', 'change-panel'].forEach(function (id) {
-          var panel = document.getElementById(id);
+          const panel = document.getElementById(id);
           if (panel) panel.style.display = id === target ? 'block' : 'none';
         });
         ['login-error', 'forgot-error', 'change-error'].forEach(function (id) {
-          var errorEl = document.getElementById(id);
+          const errorEl = document.getElementById(id);
           if (errorEl) errorEl.classList.remove('show');
         });
       }
 
-      var bootstrapForm = document.getElementById('bootstrap-form');
+      const bootstrapForm = document.getElementById('bootstrap-form');
       if (bootstrapForm) {
         bindPageEvent(bootstrapForm, 'submit', async function (e) {
           e.preventDefault();
-          var username = document.getElementById('bootstrap-user').value.trim();
-          var password = document.getElementById('bootstrap-pass').value;
-          var email = document.getElementById('bootstrap-email').value.trim();
-          var name = document.getElementById('bootstrap-name').value.trim();
-          var passwordError = validatePasswordComplexity(password);
+          const username = document.getElementById('bootstrap-user').value.trim();
+          const password = document.getElementById('bootstrap-pass').value;
+          const email = document.getElementById('bootstrap-email').value.trim();
+          const name = document.getElementById('bootstrap-name').value.trim();
+          const passwordError = validatePasswordComplexity(password);
           if (passwordError) {
             toast(passwordError, 'error');
             return;
@@ -629,10 +629,10 @@
 
       bindPageEvent(document.getElementById('login-form'), 'submit', async function (e) {
         e.preventDefault();
-        var username = document.getElementById('login-user').value.trim();
-        var password = document.getElementById('login-pass').value;
+        const username = document.getElementById('login-user').value.trim();
+        const password = document.getElementById('login-pass').value;
         try {
-          var user = await login(username, password);
+          const user = await login(username, password);
           if (user) {
             if (user.mustChangePassword) {
               ensureAuthPanel('change-panel');
@@ -655,11 +655,11 @@
             }
             renderApp();
           } else {
-            var loginError = document.getElementById('login-error');
+            const loginError = document.getElementById('login-error');
             if (loginError) loginError.classList.add('show');
           }
         } catch (error) {
-          var loginError = document.getElementById('login-error');
+          const loginError = document.getElementById('login-error');
           if (loginError) loginError.classList.add('show');
           toast(String(error && error.message || error || textMap.loginFailed), 'error');
         }
@@ -672,13 +672,13 @@
         switchPanel('forgot-panel');
       });
 
-      var loggedInUser = currentUser();
+      const loggedInUser = currentUser();
       if (loggedInUser && loggedInUser.mustChangePassword) {
         ensureAuthPanel('change-panel');
         wireChangePanel();
         switchPanel('change-panel');
         document.getElementById('change-username').value = loggedInUser.username || '';
-        var currentPasswordInput = document.getElementById('change-current-password');
+        const currentPasswordInput = document.getElementById('change-current-password');
         if (currentPasswordInput) currentPasswordInput.focus();
       }
 
@@ -692,33 +692,33 @@
     }
 
 
-    var lastSidebarKey = '';
-    var lastHeaderKey = '';
-    var routeRenderGeneration = 0;
+    let lastSidebarKey = '';
+    let lastHeaderKey = '';
+    let routeRenderGeneration = 0;
     function renderSidebar() {
-      var u = getShellAccessProfile();
+      const u = getShellAccessProfile();
       if (!u) return;
-      var items = getVisibleItems();
-      var pendingCount = items.filter(function (item) { return item.status === STATUSES.PENDING || isOverdue(item); }).length;
-      var route = getRoute();
-      var sidebarKey = route.page + '|' + pendingCount + '|' + u.role + '|' + (u.activeUnit || '');
+      const items = getVisibleItems();
+      const pendingCount = items.filter(function (item) { return item.status === STATUSES.PENDING || isOverdue(item); }).length;
+      const route = getRoute();
+      const sidebarKey = route.page + '|' + pendingCount + '|' + u.role + '|' + (u.activeUnit || '');
       if (sidebarKey === lastSidebarKey && document.getElementById('sidebar') && document.getElementById('sidebar').innerHTML) return;
       lastSidebarKey = sidebarKey;
-      var nav = '<div class="sidebar-section"><div class="sidebar-section-title">主選單</div>' +
+      let nav = '<div class="sidebar-section"><div class="sidebar-section-title">主選單</div>' +
         '<a class="nav-item ' + (route.page === 'dashboard' ? 'active' : '') + '" href="#dashboard"><span class="nav-icon">' + ic('pie-chart') + '</span>儀表板</a>' +
         '<a class="nav-item ' + (route.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>矯正單列表' + (pendingCount ? '<span class="nav-badge">' + pendingCount + '</span>' : '') + '</a>' +
         '<a class="nav-item ' + (route.page === 'checklist' || route.page === 'checklist-fill' || route.page === 'checklist-detail' ? 'active' : '') + '" href="#checklist"><span class="nav-icon">' + ic('clipboard-check') + '</span>內稽檢核表</a>' +
         '<a class="nav-item ' + (route.page === 'training' || route.page === 'training-fill' || route.page === 'training-detail' || route.page === 'training-roster' ? 'active' : '') + '" href="#training"><span class="nav-icon">' + ic('graduation-cap') + '</span>資安教育訓練統計</a>' +
         '<a class="nav-item ' + (/^asset/.test(route.page) ? 'active' : '') + '" href="#assets"><span class="nav-icon">' + ic('database') + '</span>資訊資產盤點</a></div>';
 
-      var opNav = '';
+      let opNav = '';
       if (canCreateCAR()) opNav += '<a class="nav-item ' + (route.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>開立矯正單</a>';
       if (canFillChecklist()) opNav += '<a class="nav-item ' + (route.page === 'checklist-fill' ? 'active' : '') + '" href="#checklist-fill"><span class="nav-icon">' + ic('edit-3') + '</span>填報檢核表</a>';
       opNav += '<a class="nav-item ' + (route.page === 'asset-import' ? 'active' : '') + '" href="#asset-import"><span class="nav-icon">' + ic('upload') + '</span>資產批次匯入</a>';
       opNav += '<a class="nav-item ' + (route.page === 'asset-compare' ? 'active' : '') + '" href="#asset-compare"><span class="nav-icon">' + ic('git-compare') + '</span>年度比較</a>';
       if (opNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">操作</div>' + opNav + '</div>';
 
-      var sysNav = '';
+      let sysNav = '';
       if (canManageUsers()) sysNav += '<a class="nav-item ' + (route.page === 'users' ? 'active' : '') + '" href="#users"><span class="nav-icon">' + ic('users') + '</span>帳號管理</a>';
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'unit-contact-review' ? 'active' : '') + '" href="#unit-contact-review"><span class="nav-icon">' + ic('mail-plus') + '</span>單位管理人申請</a>';
       if (canManageUsers()) sysNav += '<a class="nav-item ' + (route.page === 'login-log' ? 'active' : '') + '" href="#login-log"><span class="nav-icon">' + ic('shield-check') + '</span>登入紀錄</a>';
@@ -731,7 +731,7 @@
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'asset-dashboard' ? 'active' : '') + '" href="#asset-dashboard"><span class="nav-icon">' + ic('bar-chart-3') + '</span>資產盤點總覽</a>';
       if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">系統管理</div>' + sysNav + '</div>';
 
-      var sidebarEl = document.getElementById('sidebar');
+      const sidebarEl = document.getElementById('sidebar');
       if (!sidebarEl) return;
       sidebarEl.innerHTML = '<div class="sidebar-logo" style="height:58px;max-height:58px;min-height:0;overflow:hidden;display:flex;align-items:center;padding:10px 14px;gap:10px;box-sizing:border-box"><span style="flex-shrink:0;display:inline-flex">' + ntuLogo('ntu-logo-sm') + '</span><div style="min-width:0;line-height:1.3"><div style="font-size:0.78rem;font-weight:800;color:#0f3a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">資訊安全管理系統</div><div style="font-size:0.58rem;color:#8899ad;letter-spacing:0.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ISMS 管理平台</div></div></div><nav class="sidebar-nav">' + nav + '</nav><div class="sidebar-footer"><div class="sidebar-footer-user"><span class="sidebar-footer-name">' + esc(u.name) + '</span><span class="badge-role ' + getRoleBadgeClass(u.role) + '">' + getRoleLabel(u.role) + '</span></div><button class="sidebar-logout-btn" data-action="shell.logout"><span class="nav-icon">' + ic('log-out') + '</span>登出系統</button>' + renderVersionChip('sidebar-version-chip') + '</div>';
       sidebarEl.querySelectorAll('a.nav-item').forEach(function (link) {
@@ -742,13 +742,13 @@
     }
 
     function renderHeader() {
-      var u = getShellAccessProfile();
+      const u = getShellAccessProfile();
       if (!u) return;
-      var route = getRoute();
-      var headerKey = route.page + '|' + u.role + '|' + (u.activeUnit || '') + '|' + u.name;
+      const route = getRoute();
+      const headerKey = route.page + '|' + u.role + '|' + (u.activeUnit || '') + '|' + u.name;
       if (headerKey === lastHeaderKey && document.getElementById('header') && document.getElementById('header').innerHTML) return;
       lastHeaderKey = headerKey;
-      var switchHtml = '';
+      let switchHtml = '';
       if (canSwitchAuthorizedUnit(u)) {
         switchHtml = '<label class="header-scope-switch"><span class="header-scope-label">目前單位</span><select class="form-select header-scope-select" id="header-unit-switch" aria-label="切換目前單位">' +
           u.authorizedUnits.map(function (unit) {
@@ -757,11 +757,11 @@
           '</select></label>';
       }
 
-      var headerEl = document.getElementById('header');
+      const headerEl = document.getElementById('header');
       if (!headerEl) return;
       headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context" hidden><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout"><span class="btn-logout-icon">' + ic('log-out') + '</span><span class="btn-logout-text">登出</span></button></div>';
 
-      var switcher = document.getElementById('header-unit-switch');
+      const switcher = document.getElementById('header-unit-switch');
       if (switcher) {
         bindPageEvent(switcher, 'change', function (event) {
           if (switchCurrentUserUnit(event.target.value)) handleRoute();
@@ -773,14 +773,14 @@
       renderSidebar();
       renderHeader();
       closeSidebar();
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       if (!appEl) return;
       appEl.innerHTML = '<div class="animate-in"><div class="card"><div class="card-header"><span class="card-title">\u6b63\u5728\u6e96\u5099\u767b\u5165\u74b0\u5883</span></div><p class="page-subtitle" style="margin:0">\u7cfb\u7d71\u6b63\u5728\u78ba\u8a8d\u767b\u5165\u72c0\u614b\u8207\u6b0a\u9650\u8cc7\u6599\uff0c\u5b8c\u6210\u5f8c\u6703\u81ea\u52d5\u9032\u5165\u76ee\u524d\u8def\u7531\u3002</p></div></div>';
       refreshIcons();
     }
 
     function setRouteLoadingState(isLoading) {
-      var app = document.getElementById('app');
+      const app = document.getElementById('app');
       if (!app) return;
       app.setAttribute('aria-busy', isLoading ? 'true' : 'false');
       app.classList.toggle('page-loading', !!isLoading);
@@ -819,16 +819,16 @@
       renderHeader();
       closeSidebar();
       setRouteLoadingState(true);
-      var thisGeneration = ++routeRenderGeneration;
+      const thisGeneration = ++routeRenderGeneration;
       // ── Route transition: skeleton placeholder (only if render hasn't finished yet) ──
-      var appEl = document.getElementById('app');
+      const appEl = document.getElementById('app');
       setTimeout(function () {
         if (thisGeneration !== routeRenderGeneration) return;
         if (appEl && !appEl.querySelector('.skeleton-container') && !appEl.querySelector('.animate-in') && !appEl.querySelector('.page-title') && !appEl.querySelector('.dashboard-section-title')) {
           appEl.innerHTML = '<div class="skeleton-container animate-in"><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-grid"><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div></div></div>';
         }
       }, 300);
-      var renderAttempt = 0;
+      let renderAttempt = 0;
       function attemptRender() {
         if (thisGeneration !== routeRenderGeneration) return Promise.resolve();
         return Promise.resolve(getRouteMeta(page).render(route.param))
@@ -839,7 +839,7 @@
           })
           .catch(function (error) {
             if (thisGeneration !== routeRenderGeneration) return;
-            var msg = error && error.message ? error.message : String(error);
+            const msg = error && error.message ? error.message : String(error);
             window.__ismsError('route render failed (attempt ' + (renderAttempt + 1) + '):', msg, error && error.stack);
             // Auto-retry once on module loading errors (not loaded / Failed to load)
             if (renderAttempt === 0 && /not loaded|Failed to load|尚未載入/i.test(msg)) {
@@ -887,7 +887,7 @@
       if (typeof window !== 'undefined') {
         window.__APP_READY__ = false;
       }
-      var u = currentUser();
+      const u = currentUser();
       if (!u) {
         handleRoute();
         return;
@@ -896,7 +896,7 @@
         renderLogin();
         return;
       }
-      var showTransitionOverlay = consumeAppTransitionFlag();
+      const showTransitionOverlay = consumeAppTransitionFlag();
       document.body.innerHTML = '<a class="skip-link" href="#app">\u8df3\u5230\u4e3b\u8981\u5167\u5bb9</a><aside class="sidebar" id="sidebar"></aside><div class="sidebar-backdrop" id="sidebar-backdrop" data-action="shell.close-sidebar"></div><header class="header" id="header"></header><main class="main-content" id="app" tabindex="-1" role="main"></main><div class="toast-container" id="toast-container" aria-live="polite" aria-relevant="additions text" aria-atomic="false"></div><div id="modal-root"></div>' + (showTransitionOverlay ? renderAppTransitionOverlay() : '');
       if (typeof window !== 'undefined') {
         window.__APP_READY__ = true;
@@ -917,7 +917,7 @@
       }
       renderBootstrapShell();
       Promise.resolve(ensureAuthenticatedRemoteBootstrap()).then(function () {
-        var resolvedUser = u || currentUser();
+        const resolvedUser = u || currentUser();
         if (resolvedUser) handleRoute(resolvedUser);
       }).catch(function (error) {
         window.__ismsError(error && error.stack ? error.stack : String(error));

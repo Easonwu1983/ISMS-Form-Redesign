@@ -83,22 +83,22 @@
   const CASE_LIST_SEARCH_DEBOUNCE_MS = 120;
 
   function normalizeCaseUnitList(units) {
-    var source = Array.isArray(units) ? units : [];
+    const source = Array.isArray(units) ? units : [];
     return Array.from(new Set(source.map(function (unit) {
       return String(unit || '').trim();
     }).filter(Boolean)));
   }
 
   function getCaseAccessProfile(user) {
-    var base = user || currentUser();
+    const base = user || currentUser();
     if (!base) return null;
-    var authorizedUnits = normalizeCaseUnitList(
+    const authorizedUnits = normalizeCaseUnitList(
       Array.isArray(base.authorizedUnits) && base.authorizedUnits.length
         ? base.authorizedUnits
         : [base.primaryUnit || getScopedUnit(base) || base.unit]
     );
-    var activeUnit = String(base.activeUnit || getScopedUnit(base) || authorizedUnits[0] || base.primaryUnit || base.unit || '').trim();
-    var primaryUnit = String(base.primaryUnit || activeUnit || base.unit || '').trim();
+    const activeUnit = String(base.activeUnit || getScopedUnit(base) || authorizedUnits[0] || base.primaryUnit || base.unit || '').trim();
+    const primaryUnit = String(base.primaryUnit || activeUnit || base.unit || '').trim();
     return Object.assign({}, base, {
       primaryUnit: primaryUnit,
       authorizedUnits: authorizedUnits,
@@ -139,8 +139,8 @@
   }
 
   function renderCaseStatusCell(item, useClosedGuard) {
-    var overdue = isOverdue(item);
-    var label = overdue && (!useClosedGuard || item.status !== STATUSES.CLOSED) ? '已逾期' : item.status;
+    const overdue = isOverdue(item);
+    const label = overdue && (!useClosedGuard || item.status !== STATUSES.CLOSED) ? '已逾期' : item.status;
     return '<span class="badge badge-' + (overdue ? 'overdue' : STATUS_CLASSES[item.status]) + '"><span class="badge-dot"></span>' + label + '</span>';
   }
 
@@ -149,7 +149,7 @@
   }
 
   function renderDashboardTableRow(item, lastActivityText) {
-    var problemDesc = String(item.problemDesc || '').trim();
+    const problemDesc = String(item.problemDesc || '').trim();
     return '<tr data-route="detail/' + item.id + '">'
       + '<td class="record-id-col">' + renderDashboardIdCell(item) + '</td>'
       + '<td class="dashboard-recent-desc-cell" title="' + esc(problemDesc) + '"><span class="dashboard-recent-desc">' + esc(problemDesc || '—') + '</span></td>'
@@ -166,10 +166,10 @@
   }
 
   function buildCaseCard(headerHtml, bodyHtml, options) {
-    var opts = options || {};
-    var styleAttr = opts.style ? ' style="' + opts.style + '"' : '';
-    var headerClass = opts.headerClass || 'card-header';
-    var cardClass = opts.cardClass ? 'card ' + opts.cardClass : 'card';
+    const opts = options || {};
+    const styleAttr = opts.style ? ' style="' + opts.style + '"' : '';
+    const headerClass = opts.headerClass || 'card-header';
+    const cardClass = opts.cardClass ? 'card ' + opts.cardClass : 'card';
     return '<div class="' + cardClass + '"' + styleAttr + '>' + (headerHtml ? '<div class="' + headerClass + '">' + headerHtml + '</div>' : '') + bodyHtml + '</div>';
   }
 
@@ -182,16 +182,16 @@
   }
 
   function buildCaseTableCaption(caption) {
-    var text = String(caption || '').trim();
+    const text = String(caption || '').trim();
     if (!text) return '';
     return '<caption class="sr-only">' + esc(text) + '</caption>';
   }
 
   function buildCaseTableMarkup(headersHtml, rowsHtml, options) {
-    var opts = options || {};
-    var wrapperClass = opts.wrapperClass ? 'table-wrapper ' + opts.wrapperClass : 'table-wrapper';
-    var tableClass = opts.tableClass ? ' class="' + opts.tableClass + '"' : '';
-    var caption = opts.caption || '矯正單資料表';
+    const opts = options || {};
+    const wrapperClass = opts.wrapperClass ? 'table-wrapper ' + opts.wrapperClass : 'table-wrapper';
+    const tableClass = opts.tableClass ? ' class="' + opts.tableClass + '"' : '';
+    const caption = opts.caption || '矯正單資料表';
     return '<div class="' + wrapperClass + '" tabindex="0"><table' + tableClass + '>' + buildCaseTableCaption(caption) + '<thead><tr>' + applyCaseTableHeaderScope(headersHtml) + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
   }
 
@@ -200,15 +200,15 @@
   }
 
   function buildCaseTableCard(title, headersHtml, rowsHtml, options) {
-    var opts = options || {};
-    var headerHtml = '<span class="card-title">' + title + '</span>' + (opts.actionHtml || '');
-    var cardStyle = opts.cardStyle || '';
-    var headerClass = opts.headerClass || 'card-header';
+    const opts = options || {};
+    const headerHtml = '<span class="card-title">' + title + '</span>' + (opts.actionHtml || '');
+    const cardStyle = opts.cardStyle || '';
+    const headerClass = opts.headerClass || 'card-header';
     return buildCaseCard(headerHtml, buildCaseTableMarkup(headersHtml, rowsHtml, opts), { style: cardStyle, headerClass: headerClass, cardClass: opts.cardClass || '' });
   }
 
   function buildDashboardStatusOverview(summary) {
-    var stats = [
+    const stats = [
       { label: '進行中', value: summary.openCount || 0 },
       { label: '已結案', value: summary.closedCount || 0 },
       { label: '逾期', value: summary.overdueCount || 0 }
@@ -222,11 +222,11 @@
   }
 
   function buildDashboardSnapshot(items) {
-    var list = Array.isArray(items) ? items : [];
-    var now = new Date();
-    var currentMonth = now.getMonth();
-    var currentYear = now.getFullYear();
-    var bucketCounts = {};
+    const list = Array.isArray(items) ? items : [];
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const bucketCounts = {};
     bucketCounts[STATUSES.CREATED] = 0;
     bucketCounts[STATUSES.PENDING] = 0;
     bucketCounts[STATUSES.PROPOSED] = 0;
@@ -234,7 +234,7 @@
     bucketCounts[STATUSES.TRACKING] = 0;
     bucketCounts['已逾期'] = 0;
     bucketCounts[STATUSES.CLOSED] = 0;
-    var snapshot = {
+    const snapshot = {
       total: list.length,
       openCount: 0,
       closedCount: 0,
@@ -245,16 +245,16 @@
       nextDueItem: null,
       recent: []
     };
-    var nextDueTimestamp = 0;
-    var recent = [];
+    let nextDueTimestamp = 0;
+    const recent = [];
     function compareRecentEntry(a, b) {
-      var aClosed = a.item && a.item.status === STATUSES.CLOSED ? 1 : 0;
-      var bClosed = b.item && b.item.status === STATUSES.CLOSED ? 1 : 0;
+      const aClosed = a.item && a.item.status === STATUSES.CLOSED ? 1 : 0;
+      const bClosed = b.item && b.item.status === STATUSES.CLOSED ? 1 : 0;
       if (aClosed !== bClosed) return aClosed - bClosed;
       return (b.sortTime || 0) - (a.sortTime || 0);
     }
     function insertRecentEntry(entry) {
-      var index = 0;
+      let index = 0;
       while (index < recent.length && compareRecentEntry(recent[index], entry) <= 0) {
         index += 1;
       }
@@ -265,24 +265,24 @@
     }
     list.forEach(function (item) {
       if (!item) return;
-      var status = item.status || STATUSES.CREATED;
-      var isClosed = status === STATUSES.CLOSED;
-      var isLate = isOverdue(item);
-      var bucket = isLate ? '已逾期' : status;
+      const status = item.status || STATUSES.CREATED;
+      const isClosed = status === STATUSES.CLOSED;
+      const isLate = isOverdue(item);
+      const bucket = isLate ? '已逾期' : status;
       if (bucketCounts[bucket] !== undefined) bucketCounts[bucket] += 1;
       if (status === STATUSES.PENDING) snapshot.pendingCount += 1;
       if (isClosed) {
         snapshot.closedCount += 1;
-        var closedDate = String(item.closedDate || '').trim();
+        const closedDate = String(item.closedDate || '').trim();
         if (closedDate) {
-          var closedTime = new Date(closedDate);
+          const closedTime = new Date(closedDate);
           if (closedTime.getMonth() === currentMonth && closedTime.getFullYear() === currentYear) snapshot.closedThisMonth += 1;
         }
       } else {
         snapshot.openCount += 1;
       }
       if (isLate) snapshot.overdueCount += 1;
-      var dueTime = toTimestamp(item.correctiveDueDate);
+      const dueTime = toTimestamp(item.correctiveDueDate);
       if (!isClosed && dueTime && (!nextDueTimestamp || dueTime < nextDueTimestamp)) {
         nextDueTimestamp = dueTime;
         snapshot.nextDueItem = item;
@@ -301,26 +301,26 @@
     return snapshot;
   }
 
-  var dashboardSnapshotCache = { items: null, snapshot: null };
-  var caseListRenderCache = { items: null, filter: '', search: '', snapshot: null };
+  let dashboardSnapshotCache = { items: null, snapshot: null };
+  let caseListRenderCache = { items: null, filter: '', search: '', snapshot: null };
 
   function getCachedDashboardSnapshot(items) {
     if (dashboardSnapshotCache.items === items && dashboardSnapshotCache.snapshot) return dashboardSnapshotCache.snapshot;
-    var snapshot = buildDashboardSnapshot(items);
+    const snapshot = buildDashboardSnapshot(items);
     dashboardSnapshotCache = { items: items, snapshot: snapshot };
     return snapshot;
   }
 
   function getCachedCaseListSnapshot(items) {
-    var list = Array.isArray(items) ? items : [];
-    var filter = curFilter || '全部';
-    var search = String(curSearch || '').trim().toLowerCase();
+    const list = Array.isArray(items) ? items : [];
+    const filter = curFilter || '全部';
+    const search = String(curSearch || '').trim().toLowerCase();
     if (caseListRenderCache.items === list && caseListRenderCache.filter === filter && caseListRenderCache.search === search && caseListRenderCache.snapshot) {
       return caseListRenderCache.snapshot;
     }
-    var filtered = [];
-    for (var index = 0; index < list.length; index += 1) {
-      var item = list[index];
+    const filtered = [];
+    for (let index = 0; index < list.length; index += 1) {
+      const item = list[index];
       if (!item) continue;
       if (filter === '已逾期') {
         if (!isOverdue(item)) continue;
@@ -328,7 +328,7 @@
         continue;
       }
       if (search) {
-        var haystack = String(item.searchText || [item.id, item.problemDesc, item.handlerName, item.proposerName, item.source, item.status, item.deficiencyType].filter(Boolean).join(' ').toLowerCase());
+        const haystack = String(item.searchText || [item.id, item.problemDesc, item.handlerName, item.proposerName, item.source, item.status, item.deficiencyType].filter(Boolean).join(' ').toLowerCase());
         if (haystack.indexOf(search) < 0) continue;
       }
       filtered.push(item);
@@ -336,8 +336,8 @@
     filtered.sort(function (a, b) {
       return (Number(b && b.createdAtTs) || Date.parse(b && b.createdAt || '') || 0) - (Number(a && a.createdAtTs) || Date.parse(a && a.createdAt || '') || 0);
     });
-    var rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : buildCaseEmptyTableRow(8, 'search', '沒有符合條件的矯正單');
-    var snapshot = { total: list.length, filtered: filtered, filteredCount: filtered.length, rows: rows };
+    const rows = filtered.length ? filtered.map(function (i) { return renderListTableRow(i); }).join('') : buildCaseEmptyTableRow(8, 'search', '沒有符合條件的矯正單');
+    const snapshot = { total: list.length, filtered: filtered, filteredCount: filtered.length, rows: rows };
     caseListRenderCache = { items: list, filter: filter, search: search, snapshot: snapshot };
     return snapshot;
   }
@@ -347,15 +347,15 @@
   }
 
   function toDateInputValue(value) {
-    var raw = String(value || '').trim();
+    const raw = String(value || '').trim();
     if (!raw) return '';
-    var match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
     return match ? match[1] : raw;
   }
 
   function buildEditorSummaryItems(items) {
     return '<div class="editor-summary-list editor-summary-list--compact">' + items.map(function (item) {
-      var idAttr = item.id ? ' id="' + item.id + '"' : '';
+      const idAttr = item.id ? ' id="' + item.id + '"' : '';
       return '<div class="editor-summary-item"><span>' + esc(item.label) + '</span><strong' + idAttr + '>' + item.value + '</strong></div>';
     }).join('') + '</div>';
   }
@@ -373,11 +373,11 @@
   }
 
   function buildEditorSideCard(options) {
-    var opts = options || {};
-    var classes = 'editor-side-card' + (opts.accent ? ' editor-side-card--accent' : '');
-    var kickerHtml = opts.kicker ? '<div class="editor-side-kicker">' + esc(opts.kicker) + '</div>' : '';
-    var titleHtml = opts.title ? '<div class="editor-side-title">' + esc(opts.title) + '</div>' : '';
-    var textHtml = opts.text ? '<div class="editor-side-text">' + esc(opts.text) + '</div>' : '';
+    const opts = options || {};
+    const classes = 'editor-side-card' + (opts.accent ? ' editor-side-card--accent' : '');
+    const kickerHtml = opts.kicker ? '<div class="editor-side-kicker">' + esc(opts.kicker) + '</div>' : '';
+    const titleHtml = opts.title ? '<div class="editor-side-title">' + esc(opts.title) + '</div>' : '';
+    const textHtml = opts.text ? '<div class="editor-side-text">' + esc(opts.text) + '</div>' : '';
     return '<div class="' + classes + '">' + kickerHtml + titleHtml + textHtml + (opts.bodyHtml || '') + '</div>';
   }
 
@@ -396,9 +396,9 @@
 
   function buildCaseTimeline(historyList) {
     return (historyList || []).map(function (h, index, all) {
-      var actor = h.user || '';
+      let actor = h.user || '';
       if (!actor || actor === '系統' || actor === '蝟餌絞') {
-        var linked = all.slice(0, index).reverse().find(function (entry) { return entry.time === h.time && entry.user && entry.user !== '蝟餌絞'; });
+        const linked = all.slice(0, index).reverse().find(function (entry) { return entry.time === h.time && entry.user && entry.user !== '蝟餌絞'; });
         if (linked) actor = linked.user;
       }
       return '<div class="timeline-item"><div class="timeline-time">' + fmtTime(h.time) + '</div><div class="timeline-text">' + esc(h.action) + (actor ? (' - ' + esc(actor)) : '') + '</div></div>';
@@ -406,13 +406,13 @@
   }
 
   function toTimestamp(value) {
-    var time = new Date(value || '').getTime();
+    const time = new Date(value || '').getTime();
     return Number.isFinite(time) ? time : 0;
   }
 
   function getCaseLastActivityTime(item) {
     if (!item) return 0;
-    var candidates = [
+    const candidates = [
       item.updatedAt,
       item.createdAt,
       item.closedDate,
@@ -437,13 +437,13 @@
   }
 
   function formatCaseLastActivity(item) {
-    var last = getCaseLastActivityTime(item);
+    const last = getCaseLastActivityTime(item);
     return last ? fmtTime(new Date(last).toISOString()) : '—';
   }
 
   function getDashboardRecentSortTime(item) {
     if (!item) return 0;
-    var candidates = [
+    const candidates = [
       item.updatedAt,
       item.createdAt,
       item.closedDate,
@@ -468,10 +468,10 @@
 
   function scheduleDashboardHydration(task) {
     if (typeof task !== 'function') return;
-    var cancelled = false;
-    var frameId = 0;
-    var timerId = 0;
-    var runTask = function () {
+    const cancelled = false;
+    let frameId = 0;
+    let timerId = 0;
+    const runTask = function () {
       if (cancelled) return;
       try {
         task();
@@ -481,7 +481,7 @@
         }
       }
     };
-    var scheduleTimeout = function () {
+    const scheduleTimeout = function () {
       if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
         timerId = window.setTimeout(runTask, CASE_DASHBOARD_HYDRATION_IDLE_TIMEOUT_MS);
         return;
@@ -496,10 +496,10 @@
   }
 
   function renderDashboard() {
-    var renderToken = ++dashboardRenderToken;
-    var chartSlotId = 'dashboard-chart-slot';
-    var recentSlotId = 'dashboard-recent-slot';
-    var heroMetaIds = {
+    const renderToken = ++dashboardRenderToken;
+    const chartSlotId = 'dashboard-chart-slot';
+    const recentSlotId = 'dashboard-recent-slot';
+    const heroMetaIds = {
       pending: 'dashboard-meta-pending',
       overdue: 'dashboard-meta-overdue',
       closed: 'dashboard-meta-closed',
@@ -512,32 +512,32 @@
       openCount: 'dashboard-open-count',
       latestHandler: 'dashboard-latest-handler'
     };
-    var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
-    var recentShell = '<div id="' + recentSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入最近矯正單</div>';
-    var chartShell = '<div id="' + chartSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入狀態分布</div>';
-    var heroMeta = [
+    const createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
+    const recentShell = '<div id="' + recentSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入最近矯正單</div>';
+    const chartShell = '<div id="' + chartSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入狀態分布</div>';
+    const heroMeta = [
       { label: '待矯正', id: heroMetaIds.pending, value: '—' },
       { label: '已逾期', id: heroMetaIds.overdue, value: '—' },
       { label: '本月結案', id: heroMetaIds.closed, value: '—' }
     ].map(function (item) {
       return '<div class="dashboard-meta-chip"><span class="dashboard-meta-label">' + item.label + '</span><strong class="dashboard-meta-value" id="' + item.id + '">' + item.value + '</strong></div>';
     }).join('');
-    var heroSide = '<div class="dashboard-hero-side"><div class="dashboard-focus-card"><div class="dashboard-focus-label">今日焦點</div><div class="dashboard-focus-text" id="' + heroMetaIds.focusText + '">正在整理近期案件與逾期資訊…</div><div class="dashboard-focus-list">'
+    const heroSide = '<div class="dashboard-hero-side"><div class="dashboard-focus-card"><div class="dashboard-focus-label">今日焦點</div><div class="dashboard-focus-text" id="' + heroMetaIds.focusText + '">正在整理近期案件與逾期資訊…</div><div class="dashboard-focus-list">'
       + '<div class="dashboard-focus-item"><span>下一個截止</span><strong id="' + heroMetaIds.nextDue + '">載入中</strong></div>'
       + '<div class="dashboard-focus-item"><span>進行中案件</span><strong id="' + heroMetaIds.openCount + '">—</strong></div>'
       + '<div class="dashboard-focus-item"><span>最新處理人</span><strong id="' + heroMetaIds.latestHandler + '">—</strong></div>'
       + '</div></div>';
 
-    var user = currentUser();
-    var showAuditProgress = user && user.role === ROLES.ADMIN;
-    var showMyTasks = user && user.role !== ROLES.ADMIN;
-    var myTasksSlotId = 'my-tasks-slot';
-    var auditSlotIds = { filingStat: 'audit-filing-stat', trainingStat: 'audit-training-stat', pendingStat: 'audit-pending-stat', filing: 'audit-filing-slot', training: 'audit-training-slot' };
-    var currentAuditYear = String(new Date().getFullYear() - 1911);
-    var auditYearOptions = [currentAuditYear, String(Number(currentAuditYear) - 1), String(Number(currentAuditYear) - 2)].map(function (y) {
+    const user = currentUser();
+    const showAuditProgress = user && user.role === ROLES.ADMIN;
+    const showMyTasks = user && user.role !== ROLES.ADMIN;
+    const myTasksSlotId = 'my-tasks-slot';
+    const auditSlotIds = { filingStat: 'audit-filing-stat', trainingStat: 'audit-training-stat', pendingStat: 'audit-pending-stat', filing: 'audit-filing-slot', training: 'audit-training-slot' };
+    const currentAuditYear = String(new Date().getFullYear() - 1911);
+    const auditYearOptions = [currentAuditYear, String(Number(currentAuditYear) - 1), String(Number(currentAuditYear) - 2)].map(function (y) {
       return '<option value="' + y + '"' + (y === currentAuditYear ? ' selected' : '') + '>' + y + ' 年度</option>';
     }).join('');
-    var auditProgressHtml = showAuditProgress ? (
+    const auditProgressHtml = showAuditProgress ? (
       '<section class="dashboard-audit-progress"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('shield-check', 'icon-sm') + ' 年度稽核進度總覽</h2><select class="form-select" id="audit-year-select" style="width:auto;margin-left:12px;font-size:.88rem">' + auditYearOptions + '</select></div>'
       + '<div class="stats-grid stats-grid--audit">'
       + '<div class="stat-card total"><div class="stat-icon">' + ic('clipboard-list') + '</div><div class="stat-value" id="' + auditSlotIds.filingStat + '">—</div><div class="stat-label">年度填報</div></div>'
@@ -550,7 +550,7 @@
       + '</div></section>'
     ) : '';
 
-    var myTasksHtml = showMyTasks ? (
+    const myTasksHtml = showMyTasks ? (
       '<section class="dashboard-my-tasks"><div class="dashboard-section-header"><h2 class="dashboard-section-title">' + ic('list-checks', 'icon-sm') + ' 我的待辦事項</h2></div>'
       + '<div id="' + myTasksSlotId + '" class="dashboard-card-loading" aria-busy="true">正在載入您的待辦事項…</div></section>'
     ) : '';
@@ -572,16 +572,16 @@
 
     scheduleDashboardHydration(function () {
       if (renderToken !== dashboardRenderToken) return;
-      var items = getVisibleItems();
-      var snapshot = getCachedDashboardSnapshot(items);
-      var total = snapshot.total;
-      var pending = snapshot.pendingCount;
-      var overdue = snapshot.overdueCount;
-      var closedM = snapshot.closedThisMonth;
-      var openCount = snapshot.openCount;
-      var distributionOrder = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, '已逾期', STATUSES.CLOSED];
-      var sc = snapshot.bucketCounts;
-      var cc = {};
+      const items = getVisibleItems();
+      const snapshot = getCachedDashboardSnapshot(items);
+      const total = snapshot.total;
+      const pending = snapshot.pendingCount;
+      const overdue = snapshot.overdueCount;
+      const closedM = snapshot.closedThisMonth;
+      const openCount = snapshot.openCount;
+      const distributionOrder = [STATUSES.CREATED, STATUSES.PENDING, STATUSES.PROPOSED, STATUSES.REVIEWING, STATUSES.TRACKING, '已逾期', STATUSES.CLOSED];
+      const sc = snapshot.bucketCounts;
+      const cc = {};
       cc[STATUSES.CREATED] = '#3b82f6';
       cc[STATUSES.PENDING] = '#f59e0b';
       cc[STATUSES.PROPOSED] = '#a855f7';
@@ -589,54 +589,54 @@
       cc[STATUSES.TRACKING] = '#f97316';
       cc['已逾期'] = '#ef4444';
       cc[STATUSES.CLOSED] = '#22c55e';
-      var R = 60, C = 2 * Math.PI * R, segs = '', off = 0;
+      const R = 60, C = 2 * Math.PI * R; let segs = '', off = 0;
       if (total > 0) {
         distributionOrder.forEach(function (s) {
-          var c2 = sc[s];
+          const c2 = sc[s];
           if (!c2) return;
-          var l = c2 / total * C;
+          const l = c2 / total * C;
           segs += '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="' + cc[s] + '" stroke-width="20" stroke-dasharray="' + l + ' ' + (C - l) + '" stroke-dashoffset="' + (-off) + '"/>';
           off += l;
         });
       } else {
         segs = '<circle r="' + R + '" cx="80" cy="80" fill="none" stroke="#e2e8f0" stroke-width="20"/>';
       }
-      var svg = '<svg viewBox="0 0 160 160" class="donut-chart">' + segs + '<text x="80" y="74" text-anchor="middle" fill="#0f172a" font-size="24" font-weight="700" font-family="Inter">' + total + '</text><text x="80" y="94" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500" font-family="Inter">總計</text></svg>';
-      var leg = distributionOrder.map(function (s) {
+      const svg = '<svg viewBox="0 0 160 160" class="donut-chart">' + segs + '<text x="80" y="74" text-anchor="middle" fill="#0f172a" font-size="24" font-weight="700" font-family="Inter">' + total + '</text><text x="80" y="94" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500" font-family="Inter">總計</text></svg>';
+      const leg = distributionOrder.map(function (s) {
         return '<div class="legend-item"><span class="legend-dot" style="background:' + cc[s] + '"></span><span>' + s + '</span><span class="legend-count">' + sc[s] + '</span></div>';
       }).join('');
-      var nextDueItem = snapshot.nextDueItem;
-      var focusLine = overdue > 0
+      const nextDueItem = snapshot.nextDueItem;
+      const focusLine = overdue > 0
         ? '目前有 ' + overdue + ' 筆矯正單已逾期，建議優先追蹤。'
         : (pending > 0 ? '目前有 ' + pending + ' 筆待矯正事項，可優先分派與提醒。' : '目前沒有逾期項目，整體進度維持穩定。');
-      var chartSlot = document.getElementById(chartSlotId);
-      var recentSlot = document.getElementById(recentSlotId);
+      const chartSlot = document.getElementById(chartSlotId);
+      const recentSlot = document.getElementById(recentSlotId);
       if (!chartSlot || !recentSlot) return;
-      var recentRows = snapshot.recent.length ? snapshot.recent.map(function (entry) {
-        var lastActivityText = entry.lastActivity ? fmtTime(new Date(entry.lastActivity).toISOString()) : '—';
+      const recentRows = snapshot.recent.length ? snapshot.recent.map(function (entry) {
+        const lastActivityText = entry.lastActivity ? fmtTime(new Date(entry.lastActivity).toISOString()) : '—';
         return renderDashboardTableRow(entry.item, lastActivityText);
       }).join('') : buildCaseEmptyTableRow(7, 'inbox', '沒有矯正單資料', 40);
-      var totalStat = document.getElementById(heroMetaIds.total);
-      var pendingStat = document.getElementById(heroMetaIds.pendingStat);
-      var overdueStat = document.getElementById(heroMetaIds.overdueStat);
-      var closedStat = document.getElementById(heroMetaIds.closedStat);
+      const totalStat = document.getElementById(heroMetaIds.total);
+      const pendingStat = document.getElementById(heroMetaIds.pendingStat);
+      const overdueStat = document.getElementById(heroMetaIds.overdueStat);
+      const closedStat = document.getElementById(heroMetaIds.closedStat);
       if (totalStat) totalStat.textContent = String(total);
       if (pendingStat) pendingStat.textContent = String(pending);
       if (overdueStat) overdueStat.textContent = String(overdue);
       if (closedStat) closedStat.textContent = String(closedM);
-      var heroPending = document.getElementById(heroMetaIds.pending);
-      var heroOverdue = document.getElementById(heroMetaIds.overdue);
-      var heroClosed = document.getElementById(heroMetaIds.closed);
+      const heroPending = document.getElementById(heroMetaIds.pending);
+      const heroOverdue = document.getElementById(heroMetaIds.overdue);
+      const heroClosed = document.getElementById(heroMetaIds.closed);
       if (heroPending) heroPending.textContent = String(pending);
       if (heroOverdue) heroOverdue.textContent = String(overdue);
       if (heroClosed) heroClosed.textContent = String(closedM);
-      var focusTextEl = document.getElementById(heroMetaIds.focusText);
+      const focusTextEl = document.getElementById(heroMetaIds.focusText);
       if (focusTextEl) focusTextEl.textContent = focusLine;
-      var nextDueEl = document.getElementById(heroMetaIds.nextDue);
+      const nextDueEl = document.getElementById(heroMetaIds.nextDue);
       if (nextDueEl) nextDueEl.textContent = nextDueItem ? (String(nextDueItem.id || '') + ' · ' + fmt(nextDueItem.correctiveDueDate)) : '目前無';
-      var openCountEl = document.getElementById(heroMetaIds.openCount);
+      const openCountEl = document.getElementById(heroMetaIds.openCount);
       if (openCountEl) openCountEl.textContent = String(openCount);
-      var latestHandlerEl = document.getElementById(heroMetaIds.latestHandler);
+      const latestHandlerEl = document.getElementById(heroMetaIds.latestHandler);
       if (latestHandlerEl) latestHandlerEl.textContent = snapshot.recent[0] ? String(snapshot.recent[0].item && snapshot.recent[0].item.handlerName || '—') : '—';
       chartSlot.classList.remove('dashboard-card-loading');
       chartSlot.innerHTML = buildDashboardStatusOverview(snapshot) + '<div class="donut-chart-container">' + svg + '<div class="donut-legend">' + leg + '</div></div>';
@@ -651,7 +651,7 @@
 
     // Audit progress hydration (admin only, parallel to CAR hydration)
     // ── First-time user guide ──
-    var guideKey = '__isms_guide_shown_' + (user && user.username || 'anon');
+    const guideKey = '__isms_guide_shown_' + (user && user.username || 'anon');
     if (typeof localStorage !== 'undefined' && !localStorage.getItem(guideKey)) {
       localStorage.setItem(guideKey, '1');
       window.setTimeout(function () {
@@ -670,7 +670,7 @@
     if (showMyTasks && typeof fetchMyTasks === 'function') {
       fetchMyTasks().then(function (result) {
         if (renderToken !== dashboardRenderToken) return;
-        var slot = document.getElementById(myTasksSlotId);
+        const slot = document.getElementById(myTasksSlotId);
         if (!slot) return;
         slot.classList.remove('dashboard-card-loading');
         slot.removeAttribute('aria-busy');
@@ -678,18 +678,18 @@
           slot.innerHTML = '<div class="card" style="padding:20px"><div class="empty-state empty-state--compact"><div class="empty-state-title">無法載入待辦事項</div></div></div>';
           return;
         }
-        var tasks = Array.isArray(result.data.tasks) ? result.data.tasks : [];
-        var summary = result.data.summary || {};
+        const tasks = Array.isArray(result.data.tasks) ? result.data.tasks : [];
+        const summary = result.data.summary || {};
         if (!tasks.length) {
           slot.innerHTML = '<div class="card" style="padding:24px"><div class="empty-state"><div class="empty-state-icon">' + ic('check-circle-2') + '</div><div class="empty-state-title">太棒了！目前沒有待辦事項</div><div class="empty-state-desc">所有檢核表已送出、矯正單已處理完畢。</div></div></div>';
           scheduleRefreshIcons();
           return;
         }
-        var priorityIcons = { urgent: 'alert-circle', high: 'alert-triangle', medium: 'clock' };
-        var priorityColors = { urgent: '#ef4444', high: '#f59e0b', medium: '#3b82f6' };
-        var taskCards = tasks.map(function (t) {
-          var iconName = priorityIcons[t.priority] || 'circle';
-          var color = priorityColors[t.priority] || '#94a3b8';
+        const priorityIcons = { urgent: 'alert-circle', high: 'alert-triangle', medium: 'clock' };
+        const priorityColors = { urgent: '#ef4444', high: '#f59e0b', medium: '#3b82f6' };
+        const taskCards = tasks.map(function (t) {
+          const iconName = priorityIcons[t.priority] || 'circle';
+          const color = priorityColors[t.priority] || '#94a3b8';
           return '<a href="' + esc(t.route || '#') + '" class="my-task-card" style="border-left:3px solid ' + color + '">'
             + '<div class="my-task-icon" style="color:' + color + '">' + ic(iconName, 'icon-sm') + '</div>'
             + '<div class="my-task-content"><div class="my-task-title">' + esc(t.title) + '</div>'
@@ -697,7 +697,7 @@
             + '</div>'
             + '<span class="my-task-action btn btn-sm btn-primary">' + esc(t.action || '處理') + '</span></a>';
         }).join('');
-        var summaryHtml = '<div class="my-tasks-summary">'
+        const summaryHtml = '<div class="my-tasks-summary">'
           + '<span class="my-tasks-chip ' + (summary.checklistStatus === '已送出' ? 'chip-success' : 'chip-warning') + '">' + ic(summary.checklistStatus === '已送出' ? 'check-circle-2' : 'file-edit', 'icon-xs') + ' 檢核表：' + esc(summary.checklistStatus || '未知') + '</span>'
           + '<span class="my-tasks-chip ' + (summary.openCases > 0 ? 'chip-warning' : 'chip-success') + '">' + ic(summary.openCases > 0 ? 'alert-triangle' : 'check-circle-2', 'icon-xs') + ' 矯正單：' + (summary.openCases || 0) + ' 件開放</span>'
           + '<span class="my-tasks-chip ' + (summary.trainingStatus === '已完成' ? 'chip-success' : 'chip-warning') + '">' + ic(summary.trainingStatus === '已完成' ? 'check-circle-2' : 'graduation-cap', 'icon-xs') + ' 教育訓練：' + esc(summary.trainingStatus || '未知') + '</span>'
@@ -710,39 +710,39 @@
     }
 
     if (showAuditProgress && typeof fetchDashboardSummary === 'function') {
-      var selectedYear = (document.getElementById('audit-year-select') || {}).value || currentAuditYear;
+      const selectedYear = (document.getElementById('audit-year-select') || {}).value || currentAuditYear;
       fetchDashboardSummary({ auditYear: selectedYear, trainingYear: selectedYear }).then(function (result) {
         if (renderToken !== dashboardRenderToken) return;
         if (!result || !result.ok || !result.data) {
-          var errSlot = document.getElementById(auditSlotIds.filing);
+          const errSlot = document.getElementById(auditSlotIds.filing);
           if (errSlot) { errSlot.classList.remove('dashboard-card-loading'); errSlot.innerHTML = '<div class="empty-state empty-state--compact"><div class="empty-state-title">無法載入稽核進度</div></div>'; }
           return;
         }
-        var d = result.data;
-        var cl = d.checklist || {};
-        var tr = d.training || {};
-        var pd = d.pending || {};
-        var totalU = Number(cl.totalUnits) || 163;
-        var subU = Number(cl.submittedUnits) || 0;
-        var filingPct = totalU > 0 ? Math.round(subU / totalU * 100) : 0;
-        var avgRate = Number(tr.avgCompletionRate) || 0;
-        var pendingTotal = Number(pd.totalPendingItems) || 0;
+        const d = result.data;
+        const cl = d.checklist || {};
+        const tr = d.training || {};
+        const pd = d.pending || {};
+        const totalU = Number(cl.totalUnits) || 163;
+        const subU = Number(cl.submittedUnits) || 0;
+        const filingPct = totalU > 0 ? Math.round(subU / totalU * 100) : 0;
+        const avgRate = Number(tr.avgCompletionRate) || 0;
+        const pendingTotal = Number(pd.totalPendingItems) || 0;
 
         // Update stat cards
-        var fs = document.getElementById(auditSlotIds.filingStat);
+        const fs = document.getElementById(auditSlotIds.filingStat);
         if (fs) fs.textContent = subU + '/' + totalU;
-        var ts2 = document.getElementById(auditSlotIds.trainingStat);
+        const ts2 = document.getElementById(auditSlotIds.trainingStat);
         if (ts2) ts2.textContent = avgRate + '%';
-        var ps = document.getElementById(auditSlotIds.pendingStat);
+        const ps = document.getElementById(auditSlotIds.pendingStat);
         if (ps) ps.textContent = String(pendingTotal);
 
         // Filing progress panel
-        var filingSlot = document.getElementById(auditSlotIds.filing);
+        const filingSlot = document.getElementById(auditSlotIds.filing);
         if (filingSlot) {
           filingSlot.classList.remove('dashboard-card-loading');
           filingSlot.removeAttribute('aria-busy');
-          var filingLight = filingPct >= 80 ? '#22c55e' : (filingPct >= 50 ? '#f59e0b' : '#ef4444');
-          var filingLightLabel = filingPct >= 80 ? '進度良好' : (filingPct >= 50 ? '需要催辦' : '嚴重落後');
+          const filingLight = filingPct >= 80 ? '#22c55e' : (filingPct >= 50 ? '#f59e0b' : '#ef4444');
+          const filingLightLabel = filingPct >= 80 ? '進度良好' : (filingPct >= 50 ? '需要催辦' : '嚴重落後');
           filingSlot.innerHTML = '<div style="padding:16px 20px">'
             + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + filingLight + '"></span><span style="font-size:.82rem;color:' + filingLight + ';font-weight:600">' + filingLightLabel + '</span></div><span style="font-size:.9rem;color:var(--text-secondary)">' + esc(String(subU)) + ' / ' + esc(String(totalU)) + ' 個單位已送出</span><strong style="color:var(--accent-primary)">' + filingPct + '%</strong></div>'
             + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + filingPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,' + filingLight + ',' + filingLight + ');transition:width .6s ease"></div></div>'
@@ -755,18 +755,18 @@
         }
 
         // Training overview panel
-        var trainingSlot = document.getElementById(auditSlotIds.training);
+        const trainingSlot = document.getElementById(auditSlotIds.training);
         if (trainingSlot) {
           trainingSlot.classList.remove('dashboard-card-loading');
           trainingSlot.removeAttribute('aria-busy');
-          var compF = Number(tr.completedForms) || 0;
-          var draftF = Number(tr.draftForms) || 0;
-          var pendF = Number(tr.pendingForms) || 0;
-          var retF = Number(tr.returnedForms) || 0;
-          var totalF = Number(tr.totalForms) || 0;
-          var tPct = totalF > 0 ? Math.round(compF / totalF * 100) : 0;
-          var trainLight = tPct >= 80 ? '#22c55e' : (tPct >= 50 ? '#f59e0b' : '#ef4444');
-          var trainLightLabel = tPct >= 80 ? '達標' : (tPct >= 50 ? '進行中' : '需注意');
+          const compF = Number(tr.completedForms) || 0;
+          const draftF = Number(tr.draftForms) || 0;
+          const pendF = Number(tr.pendingForms) || 0;
+          const retF = Number(tr.returnedForms) || 0;
+          const totalF = Number(tr.totalForms) || 0;
+          const tPct = totalF > 0 ? Math.round(compF / totalF * 100) : 0;
+          const trainLight = tPct >= 80 ? '#22c55e' : (tPct >= 50 ? '#f59e0b' : '#ef4444');
+          const trainLightLabel = tPct >= 80 ? '達標' : (tPct >= 50 ? '進行中' : '需注意');
           trainingSlot.innerHTML = '<div style="padding:16px 20px">'
             + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + trainLight + '"></span><span style="font-size:.82rem;color:' + trainLight + ';font-weight:600">' + trainLightLabel + '</span></div><span style="font-size:.9rem;color:var(--text-secondary)">全校訓練完成率</span><strong style="color:var(--accent-primary)">' + tPct + '%</strong></div>'
             + '<div class="cl-progress-bar" style="height:10px;border-radius:5px;background:#e2e8f0"><div class="cl-progress-fill" style="width:' + tPct + '%;height:100%;border-radius:5px;background:linear-gradient(90deg,' + trainLight + ',' + trainLight + ');transition:width .6s ease"></div></div>'
@@ -784,7 +784,7 @@
         scheduleRefreshIcons();
 
         // Bind year selector change
-        var yearSelect = document.getElementById('audit-year-select');
+        const yearSelect = document.getElementById('audit-year-select');
         if (yearSelect) {
           yearSelect.addEventListener('change', function () {
             renderDashboard();
@@ -795,10 +795,10 @@
   }
 
   function exportCaseListCsv() {
-    var items = getVisibleItems();
+    const items = getVisibleItems();
     if (!items.length) { toast('沒有可匯出的矯正單資料', 'error'); return; }
-    var headers = ['單號', '缺失種類', '來源', '分類', '狀態', '提報單位', '提報人', '處理單位', '處理人', '處理人郵件', '問題說明', '矯正措施', '預定完成日', '下次追蹤', '開立日期', '結案日期'];
-    var rows = items.map(function (item) {
+    const headers = ['單號', '缺失種類', '來源', '分類', '狀態', '提報單位', '提報人', '處理單位', '處理人', '處理人郵件', '問題說明', '矯正措施', '預定完成日', '下次追蹤', '開立日期', '結案日期'];
+    const rows = items.map(function (item) {
       return [
         item.id, item.deficiencyType, item.source,
         Array.isArray(item.category) ? item.category.join('、') : '',
@@ -812,12 +812,12 @@
         item.closedDate ? item.closedDate.slice(0, 10) : ''
       ];
     });
-    var bom = '\uFEFF';
-    var csvContent = bom + headers.join(',') + '\n' + rows.map(function (row) {
+    const bom = '\uFEFF';
+    const csvContent = bom + headers.join(',') + '\n' + rows.map(function (row) {
       return row.map(function (cell) { return '"' + String(cell || '').replace(/"/g, '""') + '"'; }).join(',');
     }).join('\n');
-    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    var link = document.createElement('a');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = 'ISMS_矯正單_' + new Date().toISOString().slice(0, 10) + '.csv';
     document.body.appendChild(link);
@@ -827,12 +827,12 @@
     toast('已匯出 ' + items.length + ' 筆矯正單', 'success');
   }
 
-  var curFilter = '全部', curSearch = '';
+  let curFilter = '全部', curSearch = '';
   function renderList() {
-    var items = getVisibleItems(); var filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); var listSnapshot = getCachedCaseListSnapshot(items); var filtered = listSnapshot.filtered;
-    var ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
-    var createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
-    var exportBtn = '<button type="button" class="btn btn-secondary" id="case-export-csv">' + ic('download', 'icon-sm') + ' 匯出 CSV</button>';
+    const items = getVisibleItems(); const filters = ['全部'].concat(STATUS_FLOW).concat(['已逾期']); const listSnapshot = getCachedCaseListSnapshot(items); const filtered = listSnapshot.filtered;
+    const ftabs = filters.map(function (f) { return '<button class="filter-tab ' + (curFilter === f ? 'active' : '') + '" data-filter="' + f + '">' + f + '</button>'; }).join('');
+    const createBtn = canCreateCAR() ? '<a href="#create" class="btn btn-primary">' + ic('plus-circle', 'icon-sm') + ' 開立矯正單</a>' : '';
+    const exportBtn = '<button type="button" class="btn btn-secondary" id="case-export-csv">' + ic('download', 'icon-sm') + ' 匯出 CSV</button>';
     document.getElementById('app').innerHTML = '<div class="animate-in">' +
       '<div class="page-header"><div><h1 class="page-title">矯正單列表</h1><p class="page-subtitle">共 ' + listSnapshot.total + ' 筆，顯示 ' + listSnapshot.filteredCount + ' 筆</p></div><div class="page-header-actions">' + exportBtn + createBtn + '</div></div>' +
       '<div class="toolbar"><div class="search-box"><input type="text" placeholder="搜尋單號、說明、人員..." id="search-input" value="' + esc(curSearch) + '"></div><div class="filter-tabs" id="filter-tabs">' + ftabs + '</div></div>' +
@@ -840,7 +840,7 @@
     window.setTimeout(function () {
       scheduleRefreshIcons();
       bindCopyButtons();
-      var exportCsvBtn = document.getElementById('case-export-csv');
+      const exportCsvBtn = document.getElementById('case-export-csv');
       if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportCaseListCsv);
     }, 0);
     let searchRenderTimer = null;
@@ -863,9 +863,9 @@
 
   // ─── Render: Create ────────────────────────
   function buildCreatePage(u) {
-    var accessProfile = getCaseAccessProfile(u);
-    var scopedUnit = String((accessProfile && accessProfile.activeUnit) || (accessProfile && accessProfile.primaryUnit) || (accessProfile && accessProfile.unit) || '').trim();
-    var createAside = '<div class="editor-sticky">'
+    const accessProfile = getCaseAccessProfile(u);
+    const scopedUnit = String((accessProfile && accessProfile.activeUnit) || (accessProfile && accessProfile.primaryUnit) || (accessProfile && accessProfile.unit) || '').trim();
+    const createAside = '<div class="editor-sticky">'
       + buildEditorSideCard({
         accent: true,
         kicker: 'Issue Routing',
@@ -1077,7 +1077,7 @@
     function renderHandlerOptionsByUnit(unit) {
       const prevSelected = handlerName.value;
       const filtered = filterUsersByUnit(unit);
-      var optionsHtml = '<option value="">\u8acb\u9078\u64c7\u8655\u7406\u4eba\u54e1</option>';
+      let optionsHtml = '<option value="">\u8acb\u9078\u64c7\u8655\u7406\u4eba\u54e1</option>';
       optionsHtml += filtered.map((entry) => {
         const username = String(entry.username || '').trim();
         const displayName = String(entry.name || entry.username || entry.email || '\u672a\u547d\u540d\u5e33\u865f').trim();
@@ -1089,16 +1089,16 @@
       }
       // Always show all users as fallback
       if (unit) {
-        var allOther = users.filter(function(entry) {
-          var un = String(entry.username || '').trim().toLowerCase();
+        const allOther = users.filter(function(entry) {
+          const un = String(entry.username || '').trim().toLowerCase();
           return un !== currentUsername && !filtered.some(function(f) { return String(f.username || '').trim() === un; });
         });
         if (allOther.length > 0) {
           optionsHtml += '<option value="" disabled>\u2500\u2500 \u5176\u4ed6\u55ae\u4f4d\u4eba\u54e1 \u2500\u2500</option>';
           optionsHtml += allOther.map(function(entry) {
-            var username = String(entry.username || '').trim();
-            var displayName = String(entry.name || entry.username || entry.email || '\u672a\u547d\u540d').trim();
-            var unitLabel = formatUserUnitSummary(entry);
+            const username = String(entry.username || '').trim();
+            const displayName = String(entry.name || entry.username || entry.email || '\u672a\u547d\u540d').trim();
+            const unitLabel = formatUserUnitSummary(entry);
             return '<option value="' + esc(username) + '" data-display-name="' + esc(displayName) + '" data-username="' + esc(username) + '" data-email="' + esc(entry.email || '') + '">' + esc(displayName) + '\uFF08' + esc(unitLabel) + '\uFF09</option>';
           }).join('');
         }
@@ -1491,7 +1491,7 @@ async function handleStatusTransition(id, ns) {
   // ─── Render: Respond ───────────────────────
   
   function buildRespondPage(item) {
-    var respondAside = '<div class="editor-sticky">'
+    const respondAside = '<div class="editor-sticky">'
       + buildEditorSideCard({
         accent: true,
         kicker: '回覆摘要',
@@ -1699,7 +1699,7 @@ function renderRespond(id) {
   }
 
   function buildTrackingPage(item, round) {
-    var trackingAside = '<div class="editor-sticky">'
+    const trackingAside = '<div class="editor-sticky">'
       + buildEditorSideCard({
         accent: true,
         kicker: '追蹤摘要',
@@ -1933,11 +1933,11 @@ function renderTracking(id) {
       handleReviewTracking(dataset.id, dataset.decision);
     },
     deleteCase: async function ({ dataset }) {
-      var caseId = dataset.id;
+      const caseId = dataset.id;
       if (!caseId) return;
-      var item = getItem(caseId);
-      var label = item ? (item.id + '（' + (item.handlerUnit || '') + '）') : caseId;
-      var confirmed = typeof openConfirmDialog === 'function'
+      const item = getItem(caseId);
+      const label = item ? (item.id + '（' + (item.handlerUnit || '') + '）') : caseId;
+      const confirmed = typeof openConfirmDialog === 'function'
         ? await openConfirmDialog('即將刪除「' + label + '」矯正單。\n\n刪除後相關操作紀錄仍會保留於操作軌跡。此操作無法復原。', { title: '刪除矯正單', confirmLabel: '確認刪除', confirmClass: 'btn-danger', kicker: '注意' })
         : window.confirm('確定要刪除矯正單 ' + label + ' 嗎？此操作無法復原。');
       if (!confirmed) return;

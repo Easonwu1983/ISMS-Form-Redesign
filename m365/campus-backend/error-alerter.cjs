@@ -11,6 +11,8 @@
  * - 同一錯誤 1 小時內不重複告警
  */
 
+const log = require('./logger.cjs');
+
 const ALERT_INTERVAL_MS = 15 * 60 * 1000; // 15 分鐘
 const MAX_ERRORS_PER_ALERT = 20;
 const DEDUP_WINDOW_MS = 60 * 60 * 1000; // 1 小時去重
@@ -68,7 +70,7 @@ function startAlertSchedule(sendMailFn) {
     if (!errorBuffer.length) return;
     const adminEmail = String(process.env.ISMS_ADMIN_EMAIL || '').trim();
     if (!adminEmail) {
-      console.log('[error-alerter] No ISMS_ADMIN_EMAIL configured, skipping alert for ' + errorBuffer.length + ' errors');
+      log.warn('error-alerter', 'No ISMS_ADMIN_EMAIL configured, skipping alert', { errorCount: errorBuffer.length });
       errorBuffer.length = 0;
       return;
     }
@@ -85,13 +87,13 @@ function startAlertSchedule(sendMailFn) {
         subject: 'ISMS 系統告警：偵測到 ' + errors.length + ' 筆 API 錯誤',
         html: buildAlertHtml(errors)
       }).catch(function (err) {
-        console.warn('[error-alerter] Failed to send alert email:', String(err && err.message || err));
+        log.error('error-alerter', 'Failed to send alert', { error: String(err && err.message || err) });
       });
     }
-    console.log('[error-alerter] Sent alert for ' + errors.length + ' errors to ' + adminEmail);
+    log.info('error-alerter', 'Alert sent', { errorCount: errors.length, to: adminEmail });
   }, ALERT_INTERVAL_MS);
   alertTimer.unref();
-  console.log('[error-alerter] Alert schedule started (every ' + (ALERT_INTERVAL_MS / 60000) + ' min)');
+  log.info('error-alerter', 'Alert schedule started', { intervalMin: ALERT_INTERVAL_MS / 60000 });
 }
 
 function getErrorCount() { return errorBuffer.length; }

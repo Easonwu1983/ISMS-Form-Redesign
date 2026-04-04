@@ -51,6 +51,14 @@
 
   --sidebar-width: 260px;
   --header-height: 64px;
+
+  --color-white: #ffffff;
+  --color-error: #ef4444;
+  --color-error-light: rgba(239, 68, 68, 0.12);
+  --color-success: #22c55e;
+  --color-success-light: rgba(34, 197, 94, 0.12);
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
 }
 
 *,
@@ -305,7 +313,7 @@ body {
 
 .login-result-title {
   font-size: 0.88rem;
-  color: #0f172a;
+  color: var(--text-heading);
   font-weight: 600;
 }
 
@@ -1865,7 +1873,7 @@ tbody td:first-child {
 
 .forgot-result-title {
   font-size: 0.88rem;
-  color: #0f172a;
+  color: var(--text-heading);
   font-weight: 600;
 }
 
@@ -3254,13 +3262,13 @@ body.modal-open {
 
 /* N/A */
 .cl-radio-na:has(input:checked) {
-  border-color: #94a3b8;
+  border-color: var(--text-muted);
   background: #f8fafc;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .cl-radio-na input:checked+.cl-radio-indicator {
-  border-color: #94a3b8;
+  border-color: var(--text-muted);
 }
 
 .cl-radio-na input:checked+.cl-radio-indicator::after {
@@ -3910,7 +3918,7 @@ body.modal-open {
 
 .cl-governance-child-chip--muted {
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .cl-draft-status {
@@ -4111,7 +4119,7 @@ body.modal-open {
 
 .cl-badge-na {
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .cl-detail-field {
@@ -4448,7 +4456,7 @@ body.modal-open {
 }
 
 .training-chart-card .card-title {
-  color: #0f172a;
+  color: var(--text-heading);
 }
 
 .training-chart-card .card-title + * {
@@ -4498,14 +4506,14 @@ body.modal-open {
   font-size: 0.7rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 700;
 }
 
 .training-chart-overview-stat strong {
   display: block;
   margin-top: 6px;
-  color: #0f172a;
+  color: var(--text-heading);
   font-size: 0.98rem;
   font-weight: 800;
   line-height: 1.2;
@@ -4622,7 +4630,7 @@ body.modal-open {
   font-size: 0.66rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 800;
 }
 
@@ -4727,7 +4735,7 @@ body.modal-open {
   font-size: 0.68rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 800;
 }
 
@@ -4736,7 +4744,7 @@ body.modal-open {
   grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) 144px;
   gap: 12px;
   padding: 0 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -4810,7 +4818,7 @@ body.modal-open {
 
 .training-chart-row--parent .training-chart-label {
   font-size: 0.86rem;
-  color: #0f172a;
+  color: var(--text-heading);
 }
 
 .training-chart-row--parent .training-chart-track {
@@ -7462,7 +7470,7 @@ tbody tr:hover {
   font-size: 0.76rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 700;
 }
 
@@ -7471,7 +7479,7 @@ tbody tr:hover {
   font-size: 1.92rem;
   line-height: 1;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-heading);
   font-variant-numeric: tabular-nums;
 }
 
@@ -7508,14 +7516,14 @@ tbody tr:hover {
   font-size: 0.7rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 800;
 }
 
 .training-exec-panel-title {
   margin: 6px 0 0;
   font-size: 1.02rem;
-  color: #0f172a;
+  color: var(--text-heading);
 }
 
 .training-exec-panel-badge {
@@ -7576,7 +7584,7 @@ tbody tr:hover {
 .training-exec-list-head strong,
 .training-exec-update-title {
   font-size: 0.92rem;
-  color: #0f172a;
+  color: var(--text-heading);
   font-weight: 700;
   line-height: 1.4;
 }
@@ -7586,7 +7594,7 @@ tbody tr:hover {
   margin-top: 6px;
   font-size: 0.82rem;
   line-height: 1.55;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .training-exec-list-side {
@@ -7597,14 +7605,14 @@ tbody tr:hover {
 .training-exec-list-value {
   font-size: 1.1rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-heading);
   font-variant-numeric: tabular-nums;
 }
 
 .training-exec-list-caption {
   margin-top: 4px;
   font-size: 0.74rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .training-exec-mini-track {
@@ -7638,14 +7646,14 @@ tbody tr:hover {
 }
 
 .training-exec-rank-head strong {
-  color: #0f172a;
+  color: var(--text-heading);
   font-size: 0.9rem;
 }
 
 .training-exec-rank-head span,
 .training-exec-rank-foot span {
   font-size: 0.78rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 600;
 }
 
@@ -7693,7 +7701,7 @@ tbody tr:hover {
   border-radius: 18px;
   border: 1px dashed rgba(148, 163, 184, 0.35);
   background: rgba(248, 250, 252, 0.9);
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.84rem;
   line-height: 1.6;
 }
@@ -7717,12 +7725,12 @@ tbody tr:hover {
 .training-lite-title {
   margin: 6px 0 0;
   font-size: 1.05rem;
-  color: #0f172a;
+  color: var(--text-heading);
 }
 
 .training-lite-updated {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 600;
 }
 
@@ -7748,7 +7756,7 @@ tbody tr:hover {
   font-size: 0.76rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 700;
 }
 
@@ -7756,14 +7764,14 @@ tbody tr:hover {
   margin-top: 10px;
   font-size: 1.5rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--text-heading);
 }
 
 .training-lite-note {
   margin-top: 8px;
   font-size: 0.82rem;
   line-height: 1.55;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .training-chart-card {
@@ -7803,7 +7811,7 @@ tbody tr:hover {
   margin-top: 6px;
   font-size: 0.84rem;
   line-height: 1.55;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 1360px) {
@@ -8809,7 +8817,7 @@ tbody tr:hover {
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 800;
 }
 
@@ -8817,7 +8825,7 @@ tbody tr:hover {
   margin-top: 8px;
   font-size: 1rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-heading);
 }
 
 .training-step-status {
@@ -8831,7 +8839,7 @@ tbody tr:hover {
   margin-top: 6px;
   font-size: 0.82rem;
   line-height: 1.55;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .training-dashboard-sections {

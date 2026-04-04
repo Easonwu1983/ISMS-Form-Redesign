@@ -2,6 +2,7 @@
 'use strict';
 
 const { Pool } = require('pg');
+const log = require('./logger.cjs');
 
 let pool = null;
 
@@ -23,10 +24,10 @@ function getPool() {
   pool = new Pool(config);
 
   pool.on('error', (err) => {
-    console.error('[db] unexpected pool error', err.message);
+    log.error('db', 'unexpected pool error', { error: err.message });
   });
 
-  console.log('[db] pool created', {
+  log.info('db', 'pool created', {
     host: config.host,
     port: config.port,
     database: config.database,
@@ -43,7 +44,7 @@ async function query(sql, params) {
   const result = await getPool().query(sql, params);
   const ms = Date.now() - start;
   if (ms > 100) {
-    console.log('[db] slow query', { ms, sql: sql.substring(0, 120) });
+    log.warn('db', 'slow query', { ms, sql: sql.substring(0, 120) });
   }
   return result;
 }
