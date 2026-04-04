@@ -199,9 +199,9 @@
         return '<div class="empty-state">無適用項目</div>';
       }
 
-      let html = '<div class="toolbar">'
+      let html = '<div class="toolbar" style="align-items:center;justify-content:space-between;">'
         + '<span class="text-muted">共 ' + filtered.length + ' 項適用（防護等級：' + esc(protLevel) + '）</span>'
-        + '<button type="button" class="btn btn-sm btn-outline" data-action="app.a10AllConform">' + ic('check-circle', 'icon-xs') + ' \u5168\u90e8\u7b26\u5408</button>'
+        + '<button type="button" class="btn btn-sm btn-primary" data-action="app.a10AllConform">' + ic('check-circle', 'icon-xs') + ' \u5168\u90e8\u7b26\u5408</button>'
         + '</div>';
       html += '<table class="data-table">';
       html += '<thead><tr>'
