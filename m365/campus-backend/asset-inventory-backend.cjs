@@ -83,11 +83,18 @@ function createAssetInventoryRouter(deps) {
   function routeAssetId(v) { return decodeURIComponent(cleanText(v)); }
 
   // ── Generate asset ID ──
+  // 格式: NTU-{unitCode}-IS3-{category}-F{seq}
+  // 例: NTU-022-IS3-HW-F001（計算機中心的第 1 筆硬體資產）
   async function nextAssetId(unitCode, category) {
-    const seq = await db.queryOne("SELECT nextval('seq_asset_id') AS n");
-    const prefix = cleanText(unitCode).replace(/\./g, '').substring(0, 4).toUpperCase() || 'XXXX';
+    const code = cleanText(unitCode).replace(/\./g, '').replace(/^0+/, '').padStart(3, '0');
     const cat = cleanText(category).substring(0, 2).toUpperCase() || 'XX';
-    return `${prefix}-${cat}-${String(seq.n).padStart(5, '0')}`;
+    // 用同一 unit+category 的現有最大序號 +1（而非全域序列）
+    const existing = await db.queryOne(
+      "SELECT COUNT(*) AS cnt FROM information_assets WHERE unit_code = $1 AND category = $2",
+      [cleanText(unitCode), cleanText(category)]
+    );
+    const seq = (Number(existing && existing.cnt) || 0) + 1;
+    return `NTU-${code}-IS3-${cat}-F${String(seq).padStart(3, '0')}`;
   }
 
   // ── Health Check ──

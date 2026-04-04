@@ -941,11 +941,15 @@
       }
 
       // --- Section 1: Basic Information ---
+      // 資產編號：新建時由系統自動產生（NTU-{unitCode}-IS3-{cat}-F{seq}）
+      const userUnitCode = (user.primaryUnit || '').replace(/\./g, '').replace(/^0+/, '').padStart(3, '0');
+      const idPreview = isEditing ? a.assetId : 'NTU-' + userUnitCode + '-IS3-{分類}-F{序號}';
       const basicHtml = ''
         + '<div class="form-row">'
         + '<div class="form-group">'
         + '<label class="form-label">\u8cc7\u7522\u7de8\u865f</label>'
-        + '<input type="text" class="form-input" id="asset-id-display" name="assetId" value="' + esc(a.assetId || '') + '" placeholder="\u7cfb\u7d71\u81ea\u52d5\u7522\u751f\u6216\u624b\u52d5\u8f38\u5165">'
+        + '<input type="text" class="form-input" id="asset-id-display" name="assetId" value="' + esc(a.assetId || '') + '" placeholder="' + esc(idPreview) + '" ' + (isEditing ? '' : 'readonly') + ' style="' + (isEditing ? '' : 'background:#f8fafc;color:var(--text-muted);') + '">'
+        + '<div class="form-hint" id="asset-id-hint">' + (isEditing ? '' : '\u7cfb\u7d71\u4f9d\u55ae\u4f4d\u4ee3\u78bc\u8207\u5206\u985e\u81ea\u52d5\u7522\u751f\uff0c\u5982 NTU-022-IS3-HW-F001') + '</div>'
         + '</div>'
         + '</div>'
         + '<div class="form-group">'
@@ -1556,6 +1560,12 @@
             const subCatEl = document.getElementById('asset-sub-category');
             if (subCatEl) {
               subCatEl.innerHTML = buildSubCategorySelectOptions(target.value, '', true);
+            }
+            // 更新編號預覽
+            const idField = document.getElementById('asset-id-display');
+            if (idField && !idField.value) {
+              const catCode = target.value ? target.value.substring(0, 2).toUpperCase() : '{分類}';
+              idField.placeholder = 'NTU-' + userUnitCode + '-IS3-' + catCode + '-F{序號}';
             }
             const riskContainer = document.getElementById('risk-scenarios-container');
             if (riskContainer) {
