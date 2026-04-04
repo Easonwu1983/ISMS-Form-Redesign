@@ -1,0 +1,15 @@
+{
+  "name": "ISMS 資訊安全管理系統",
+  "short_name": "ISMS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2f6fb",
+  "theme_color": "#1e40af",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -220,6 +220,18 @@ function scheduleOverdueCheck() {
     const db = require('./db.cjs');
     db.queryAll("SELECT case_id, handler_email, handler_unit, handler_name, corrective_due_date, status FROM corrective_actions WHERE status NOT IN ('結案') AND corrective_due_date < NOW() AND corrective_due_date IS NOT NULL").then(function (rows) {
       log.info('overdue-schedule', 'daily check completed', { overdueCount: (rows || []).length });
+      // Write overdue summary to ops_audit for audit trail and downstream alerting
+      if (rows && rows.length > 0) {
+        db.query(
+          'INSERT INTO ops_audit (title, event_type, actor_email, record_id, occurred_at, payload_json) VALUES ($1,$2,$3,$4,$5,$6)',
+          ['overdue-reminder', 'system.overdue_reminder', 'system', 'overdue-' + Date.now(), new Date().toISOString(),
+           JSON.stringify({ count: rows.length, cases: rows.slice(0, 10).map(function (r) { return { id: r.case_id, unit: r.handler_unit, email: r.handler_email, due: r.corrective_due_date }; }) })]
+        ).then(function () {
+          log.info('overdue-schedule', 'recorded overdue reminder to ops_audit', { count: rows.length });
+        }).catch(function (auditErr) {
+          log.warn('overdue-schedule', 'failed to write ops_audit', { error: String(auditErr && auditErr.message || auditErr) });
+        });
+      }
     }).catch(function (err) {
       log.warn('overdue-schedule', 'check failed', { error: String(err && err.message || err) });
     });

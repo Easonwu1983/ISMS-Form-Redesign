@@ -37,6 +37,7 @@ const { createTrainingRouter } = require('./training-backend.cjs');
 const { createAssetInventoryRouter } = require('./asset-inventory-backend.cjs');
 const { createDashboardRouter } = require('./dashboard-backend.cjs');
 const { createOpsRouter } = require('./ops-backend.cjs');
+const { createNotificationRouter } = require('./notification-backend.cjs');
 const { createRequestAuthz } = require('./request-authz.cjs');
 const {
   buildFieldChanges
@@ -1146,6 +1147,10 @@ const opsRouter = createOpsRouter({
   globalRateLimitWindowMs: GLOBAL_RATE_LIMIT_WINDOW_MS
 });
 
+const notificationRouter = createNotificationRouter({
+  parseJsonBody, writeJson, requestAuthz
+});
+
 /* ------------------------------------------------------------------ */
 /*  Health                                                             */
 /* ------------------------------------------------------------------ */
@@ -1608,6 +1613,7 @@ function createServer() {
       if (await attachmentRouter.tryHandle(req, res, origin, url)) return;
       if (await systemUserRouter.tryHandle(req, res, origin, url)) return;
       if (await assetInventoryRouter.tryHandle(req, res, origin, url)) return;
+      if (await notificationRouter.tryHandle(req, res, origin, url)) return;
       await writeJson(res, buildErrorResponse(new Error('Not found'), 'Not found', 404), origin);
     } catch (error) {
       try { require('./error-alerter.cjs').collectError({ path: url.pathname, status: 500, message: String(error && error.message || error), clientIp: getClientIp(req) }); } catch (_) {}

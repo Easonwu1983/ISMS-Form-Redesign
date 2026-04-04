@@ -191,6 +191,48 @@ function createChecklistRouter(deps) {
     return { items: rows.map(mapRowToChecklist), total, summary: dbSummary };
   }
 
+  async function handleCompare(req, res, origin, url) {
+    try {
+      const authz = await requestAuthz.requireAuthenticatedUser(req);
+      requestAuthz.requireAdmin(authz, 'Only admin can view year-over-year comparison');
+      const yearA = cleanText(url.searchParams.get('yearA')) || '114';
+      const yearB = cleanText(url.searchParams.get('yearB')) || '115';
+      const [a, b] = await Promise.all([
+        db.queryAll('SELECT unit, status, summary_total, summary_conform, summary_partial, summary_non_conform, summary_na FROM checklists WHERE audit_year = $1', [yearA]),
+        db.queryAll('SELECT unit, status, summary_total, summary_conform, summary_partial, summary_non_conform, summary_na FROM checklists WHERE audit_year = $1', [yearB])
+      ]);
+      const itemsA = a.map(function (row) {
+        return {
+          unit: row.unit || '',
+          status: row.status || '',
+          summary: {
+            total: Number(row.summary_total) || 0,
+            conform: Number(row.summary_conform) || 0,
+            partial: Number(row.summary_partial) || 0,
+            nonConform: Number(row.summary_non_conform) || 0,
+            na: Number(row.summary_na) || 0
+          }
+        };
+      });
+      const itemsB = b.map(function (row) {
+        return {
+          unit: row.unit || '',
+          status: row.status || '',
+          summary: {
+            total: Number(row.summary_total) || 0,
+            conform: Number(row.summary_conform) || 0,
+            partial: Number(row.summary_partial) || 0,
+            nonConform: Number(row.summary_non_conform) || 0,
+            na: Number(row.summary_na) || 0
+          }
+        };
+      });
+      await writeJson(res, buildJsonResponse(200, { yearA, yearB, itemsA, itemsB }), origin);
+    } catch (error) {
+      await writeJson(res, buildErrorResponse(error, 'Failed to compare checklists.', 500), origin);
+    }
+  }
+
   async function buildHealth() {
     const dbHealth = await db.healthCheck();
     return {
@@ -392,6 +434,9 @@ function createChecklistRouter(deps) {
 
     if (url.pathname === '/api/checklists/health' && req.method === 'GET') {
       return handleHealth(req, res, origin).then(() => true);
+    }
+    if (url.pathname === '/api/checklists/compare' && req.method === 'GET') {
+      return handleCompare(req, res, origin, url).then(() => true);
     }
     if (url.pathname === '/api/checklists' && req.method === 'GET') {
       return handleList(req, res, origin, url).then(() => true);

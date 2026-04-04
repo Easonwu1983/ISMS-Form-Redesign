@@ -2480,6 +2480,153 @@
       await renderChecklistList({ skipSync: true });
     });
   }
+  // ── Year-over-Year Comparison ──────────────────────────────────────
+  async function renderChecklistCompare() {
+    const app = document.getElementById('app');
+    if (!app) return;
+
+    const currentYear = new Date().getFullYear() - 1911; // ROC year
+    const defaultYearB = String(currentYear);
+    const defaultYearA = String(currentYear - 1);
+
+    app.innerHTML = '<div class="animate-in">'
+      + '<h1 class="page-title">' + ic('git-compare') + ' 檢核表歷年比對</h1>'
+      + '<div class="card" style="margin-bottom:24px"><div class="card-body" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">'
+      + '<label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;font-weight:600"><span>年度 A</span>'
+      + '<input type="number" id="cmp-year-a" class="form-input" value="' + esc(defaultYearA) + '" min="100" max="200" style="width:100px" /></label>'
+      + '<span style="font-size:1.2rem;font-weight:700;padding-bottom:4px">vs</span>'
+      + '<label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;font-weight:600"><span>年度 B</span>'
+      + '<input type="number" id="cmp-year-b" class="form-input" value="' + esc(defaultYearB) + '" min="100" max="200" style="width:100px" /></label>'
+      + '<button class="btn btn-primary btn-sm" id="cmp-fetch-btn">' + ic('search', 'icon-xs') + ' 比對</button>'
+      + '<button class="btn btn-ghost btn-sm" id="cmp-export-btn" disabled>' + ic('download', 'icon-xs') + ' 匯出 CSV</button>'
+      + '</div></div>'
+      + '<div id="cmp-result" class="card"><div class="card-body"><p class="text-muted" style="text-align:center">請選擇兩個年度後按「比對」</p></div></div>'
+      + '</div>';
+    refreshIcons();
+
+    let lastCompareData = null;
+
+    function buildCompareTable(data) {
+      const mapByUnit = function (items) {
+        const m = {};
+        (items || []).forEach(function (row) {
+          m[row.unit] = row;
+        });
+        return m;
+      };
+      const mapA = mapByUnit(data.itemsA);
+      const mapB = mapByUnit(data.itemsB);
+      const allUnits = Array.from(new Set(Object.keys(mapA).concat(Object.keys(mapB)))).sort();
+      if (!allUnits.length) {
+        return '<p class="text-muted" style="text-align:center">這兩個年度都沒有檢核資料</p>';
+      }
+      let html = '<div style="overflow-x:auto"><table class="data-table" style="width:100%;font-size:0.85rem">'
+        + '<thead><tr>'
+        + '<th>單位</th>'
+        + '<th>' + esc(data.yearA) + ' 狀態</th><th>' + esc(data.yearA) + ' 符合</th><th>' + esc(data.yearA) + ' 部分符合</th><th>' + esc(data.yearA) + ' 不符合</th>'
+        + '<th>' + esc(data.yearB) + ' 狀態</th><th>' + esc(data.yearB) + ' 符合</th><th>' + esc(data.yearB) + ' 部分符合</th><th>' + esc(data.yearB) + ' 不符合</th>'
+        + '<th>變化</th>'
+        + '</tr></thead><tbody>';
+
+      allUnits.forEach(function (unit) {
+        const a = mapA[unit];
+        const b = mapB[unit];
+        const ncA = a ? (a.summary ? a.summary.nonConform : 0) : 0;
+        const ncB = b ? (b.summary ? b.summary.nonConform : 0) : 0;
+        const gotWorse = ncB > ncA;
+        const rowStyle = gotWorse ? 'background:#fef2f2' : '';
+        html += '<tr style="' + rowStyle + '">'
+          + '<td style="font-weight:600">' + esc(unit) + '</td>'
+          + '<td>' + (a ? esc(a.status) : '<span class="text-muted">—</span>') + '</td>'
+          + '<td>' + (a ? a.summary.conform : '—') + '</td>'
+          + '<td>' + (a ? a.summary.partial : '—') + '</td>'
+          + '<td>' + (a ? a.summary.nonConform : '—') + '</td>'
+          + '<td>' + (b ? esc(b.status) : '<span class="text-muted">—</span>') + '</td>'
+          + '<td>' + (b ? b.summary.conform : '—') + '</td>'
+          + '<td>' + (b ? b.summary.partial : '—') + '</td>'
+          + '<td>' + (b ? b.summary.nonConform : '—') + '</td>'
+          + '<td style="font-weight:700;color:' + (gotWorse ? '#dc2626' : (ncB < ncA ? '#16a34a' : '#64748b')) + '">'
+          + (gotWorse ? '⬆ 退步' : (ncB < ncA ? '⬇ 進步' : '— 持平'))
+          + '</td>'
+          + '</tr>';
+      });
+      html += '</tbody></table></div>';
+      return html;
+    }
+
+    function exportCsv(data) {
+      const mapByUnit = function (items) {
+        const m = {};
+        (items || []).forEach(function (row) { m[row.unit] = row; });
+        return m;
+      };
+      const mapA = mapByUnit(data.itemsA);
+      const mapB = mapByUnit(data.itemsB);
+      const allUnits = Array.from(new Set(Object.keys(mapA).concat(Object.keys(mapB)))).sort();
+      const BOM = '\uFEFF';
+      let csv = BOM + '單位,'
+        + data.yearA + ' 狀態,' + data.yearA + ' 符合,' + data.yearA + ' 部分符合,' + data.yearA + ' 不符合,'
+        + data.yearB + ' 狀態,' + data.yearB + ' 符合,' + data.yearB + ' 部分符合,' + data.yearB + ' 不符合,'
+        + '變化\r\n';
+      allUnits.forEach(function (unit) {
+        const a = mapA[unit];
+        const b = mapB[unit];
+        const ncA = a ? (a.summary ? a.summary.nonConform : 0) : 0;
+        const ncB = b ? (b.summary ? b.summary.nonConform : 0) : 0;
+        const change = ncB > ncA ? '退步' : (ncB < ncA ? '進步' : '持平');
+        csv += '"' + unit + '",'
+          + (a ? a.status : '') + ',' + (a ? a.summary.conform : '') + ',' + (a ? a.summary.partial : '') + ',' + (a ? a.summary.nonConform : '') + ','
+          + (b ? b.status : '') + ',' + (b ? b.summary.conform : '') + ',' + (b ? b.summary.partial : '') + ',' + (b ? b.summary.nonConform : '') + ','
+          + change + '\r\n';
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '檢核表比對_' + data.yearA + '_vs_' + data.yearB + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    }
+
+    const fetchBtn = document.getElementById('cmp-fetch-btn');
+    const exportBtn = document.getElementById('cmp-export-btn');
+
+    addPageEventListener(fetchBtn, 'click', async function () {
+      const yearA = String(document.getElementById('cmp-year-a').value || '').trim();
+      const yearB = String(document.getElementById('cmp-year-b').value || '').trim();
+      if (!yearA || !yearB) { toast('請輸入兩個年度', 'error'); return; }
+      if (yearA === yearB) { toast('兩個年度不能相同', 'error'); return; }
+      const resultEl = document.getElementById('cmp-result');
+      if (resultEl) resultEl.innerHTML = '<div class="card-body"><p class="text-muted" style="text-align:center">載入中…</p></div>';
+      try {
+        const client = getChecklistRemoteClient();
+        if (!client) throw new Error('無法取得 API 用戶端');
+        const baseUrl = typeof client.getBaseUrl === 'function' ? client.getBaseUrl() : '';
+        const endpoint = (baseUrl || '') + '/api/checklists/compare?yearA=' + encodeURIComponent(yearA) + '&yearB=' + encodeURIComponent(yearB);
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(typeof client.getAuthHeaders === 'function' ? client.getAuthHeaders() : {})
+          }
+        });
+        const json = await response.json();
+        const body = json && json.jsonBody ? json.jsonBody : json;
+        lastCompareData = body;
+        if (resultEl) resultEl.innerHTML = '<div class="card-body">' + buildCompareTable(body) + '</div>';
+        if (exportBtn) exportBtn.disabled = false;
+        refreshIcons();
+      } catch (error) {
+        if (resultEl) resultEl.innerHTML = '<div class="card-body"><p style="color:#dc2626;text-align:center">比對失敗：' + esc(error.message || String(error)) + '</p></div>';
+      }
+    });
+
+    addPageEventListener(exportBtn, 'click', function () {
+      if (lastCompareData) exportCsv(lastCompareData);
+    });
+  }
+
   registerActionHandlers('checklist', {
     addSection: function () {
       cmAddSection();
@@ -2512,7 +2659,8 @@
       renderChecklistList,
       renderChecklistFill,
       renderChecklistDetail,
-      renderChecklistManage
+      renderChecklistManage,
+      renderChecklistCompare
     };
   };
 })();

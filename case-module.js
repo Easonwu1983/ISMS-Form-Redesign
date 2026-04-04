@@ -2167,13 +2167,255 @@ function renderTracking(id) {
     }
   });
 
+  // ── Progress Wall: visual kanban view of all units' filing status ──
+  function renderProgressWall() {
+    const app = document.getElementById('app');
+    if (!app) return;
+
+    const currentAuditYear = String(new Date().getFullYear() - 1911);
+    const yearOptions = [currentAuditYear, String(Number(currentAuditYear) - 1), String(Number(currentAuditYear) - 2)].map(function (y) {
+      return '<option value="' + y + '"' + (y === currentAuditYear ? ' selected' : '') + '>' + y + ' 年度</option>';
+    }).join('');
+
+    app.innerHTML = '<div class="animate-in">'
+      + '<div class="page-header"><h1 class="page-title">' + ic('layout-grid', 'icon-sm') + ' 單位填報進度牆</h1>'
+      + '<div class="page-header-actions">'
+      + '<select class="form-select" id="pw-year-select">' + yearOptions + '</select>'
+      + '<select class="form-select" id="pw-category-filter"><option value="">全部分類</option><option value="行政">行政單位</option><option value="學術">學術單位</option><option value="中心">中心</option></select>'
+      + '</div></div>'
+      + '<div id="pw-board" class="progress-wall-board" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;min-height:300px">'
+      + '<div class="progress-wall-col"><div class="progress-wall-col-header" style="background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:8px 8px 0 0;font-weight:700">未填報</div><div id="pw-not-filed" class="progress-wall-cards" style="min-height:120px;padding:8px;background:#fef2f2;border-radius:0 0 8px 8px"></div></div>'
+      + '<div class="progress-wall-col"><div class="progress-wall-col-header" style="background:#fef9c3;color:#854d0e;padding:12px 16px;border-radius:8px 8px 0 0;font-weight:700">草稿中</div><div id="pw-draft" class="progress-wall-cards" style="min-height:120px;padding:8px;background:#fefce8;border-radius:0 0 8px 8px"></div></div>'
+      + '<div class="progress-wall-col"><div class="progress-wall-col-header" style="background:#dcfce7;color:#166534;padding:12px 16px;border-radius:8px 8px 0 0;font-weight:700">已送出</div><div id="pw-submitted" class="progress-wall-cards" style="min-height:120px;padding:8px;background:#f0fdf4;border-radius:0 0 8px 8px"></div></div>'
+      + '</div></div>';
+
+    var unitCategories = window.__UNIT_CATEGORIES__ || {};
+
+    function classifyUnit(unitName) {
+      if (typeof unitCategories.classify === 'function') return unitCategories.classify(unitName);
+      if (/中心|所|中/.test(unitName)) return '中心';
+      if (/學院|系/.test(unitName)) return '學術';
+      return '行政';
+    }
+
+    function buildUnitCard(unit, color) {
+      var borderColor = color === 'red' ? '#fca5a5' : (color === 'yellow' ? '#fde047' : '#86efac');
+      var dotColor = color === 'red' ? '#ef4444' : (color === 'yellow' ? '#eab308' : '#22c55e');
+      return '<div class="progress-wall-card" style="background:#fff;border:1px solid ' + borderColor + ';border-left:4px solid ' + dotColor + ';border-radius:8px;padding:10px 14px;margin-bottom:8px">'
+        + '<div style="font-weight:600;font-size:0.88rem;color:#1e293b">' + esc(unit.unit || '—') + '</div>'
+        + '<div style="font-size:0.75rem;color:#64748b;margin-top:4px">'
+        + (unit.contact ? ic('user', 'icon-xs') + ' ' + esc(unit.contact) : '')
+        + (unit.updatedAt ? '<span style="margin-left:8px">' + ic('clock', 'icon-xs') + ' ' + esc(unit.updatedAt) + '</span>' : '')
+        + '</div></div>';
+    }
+
+    function loadWall() {
+      var year = document.getElementById('pw-year-select').value;
+      var catFilter = document.getElementById('pw-category-filter').value;
+
+      var notFiledEl = document.getElementById('pw-not-filed');
+      var draftEl = document.getElementById('pw-draft');
+      var submittedEl = document.getElementById('pw-submitted');
+      if (notFiledEl) notFiledEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:16px">載入中...</div>';
+      if (draftEl) draftEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:16px">載入中...</div>';
+      if (submittedEl) submittedEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:16px">載入中...</div>';
+
+      Promise.all([
+        fetch('/api/dashboard/summary?auditYear=' + encodeURIComponent(year)).then(function (r) { return r.json(); }),
+        fetch('/api/checklists?summaryOnly=1&auditYear=' + encodeURIComponent(year)).then(function (r) { return r.json(); })
+      ]).then(function (results) {
+        var summaryData = results[0] && results[0].data ? results[0].data : {};
+        var checklistData = results[1] && results[1].data ? results[1].data : [];
+        var checklistList = Array.isArray(checklistData) ? checklistData : (checklistData.items || []);
+
+        var unitMap = {};
+        checklistList.forEach(function (item) {
+          var unitName = String(item.unit || '').trim();
+          if (!unitName) return;
+          unitMap[unitName] = {
+            unit: unitName,
+            status: item.status || '',
+            contact: item.contact_name || item.contactName || item.filled_by || '',
+            updatedAt: item.updated_at || item.updatedAt || ''
+          };
+        });
+
+        // Build category from units-core or unit-categories
+        var allUnits = [];
+        try {
+          var unitsDetail = window.__UNITS_DETAIL__ || window.__UNITS_DATA__ || [];
+          if (Array.isArray(unitsDetail)) {
+            unitsDetail.forEach(function (u) {
+              var name = String(u.name || u.unit_name || u.unitName || '').trim();
+              if (name && !unitMap[name]) {
+                unitMap[name] = { unit: name, status: '', contact: u.contact || '', updatedAt: '' };
+              }
+            });
+          }
+        } catch (_) {}
+
+        var notFiled = [];
+        var draft = [];
+        var submitted = [];
+
+        Object.keys(unitMap).forEach(function (key) {
+          var entry = unitMap[key];
+          if (catFilter && classifyUnit(entry.unit) !== catFilter) return;
+          if (entry.status === '已送出') submitted.push(entry);
+          else if (entry.status === '草稿' || entry.status === '暫存') draft.push(entry);
+          else notFiled.push(entry);
+        });
+
+        if (notFiledEl) notFiledEl.innerHTML = notFiled.length
+          ? '<div style="font-size:0.75rem;color:#991b1b;padding:4px 8px;font-weight:600">' + notFiled.length + ' 個單位</div>' + notFiled.map(function (u) { return buildUnitCard(u, 'red'); }).join('')
+          : '<div style="color:#94a3b8;text-align:center;padding:24px">全數已填報</div>';
+
+        if (draftEl) draftEl.innerHTML = draft.length
+          ? '<div style="font-size:0.75rem;color:#854d0e;padding:4px 8px;font-weight:600">' + draft.length + ' 個單位</div>' + draft.map(function (u) { return buildUnitCard(u, 'yellow'); }).join('')
+          : '<div style="color:#94a3b8;text-align:center;padding:24px">無草稿中單位</div>';
+
+        if (submittedEl) submittedEl.innerHTML = submitted.length
+          ? '<div style="font-size:0.75rem;color:#166534;padding:4px 8px;font-weight:600">' + submitted.length + ' 個單位</div>' + submitted.map(function (u) { return buildUnitCard(u, 'green'); }).join('')
+          : '<div style="color:#94a3b8;text-align:center;padding:24px">尚無送出</div>';
+
+        scheduleRefreshIcons();
+      }).catch(function () {
+        if (notFiledEl) notFiledEl.innerHTML = '<div style="color:#ef4444;text-align:center;padding:24px">載入失敗，請稍後再試</div>';
+      });
+    }
+
+    var yearSelect = document.getElementById('pw-year-select');
+    var catSelect = document.getElementById('pw-category-filter');
+    if (yearSelect) bindCasePageEvent(yearSelect, 'change', loadWall);
+    if (catSelect) bindCasePageEvent(catSelect, 'change', loadWall);
+    loadWall();
+    scheduleRefreshIcons();
+  }
+
+  // ── Historical Data Import: CSV upload for 112/113 年度 data ──
+  function renderDataImport() {
+    var app = document.getElementById('app');
+    if (!app) return;
+
+    var currentAuditYear = String(new Date().getFullYear() - 1911);
+    var yearOptions = [currentAuditYear, String(Number(currentAuditYear) - 1), String(Number(currentAuditYear) - 2), String(Number(currentAuditYear) - 3)].map(function (y) {
+      return '<option value="' + y + '">' + y + ' 年度</option>';
+    }).join('');
+
+    app.innerHTML = '<div class="animate-in">'
+      + '<div class="page-header"><h1 class="page-title">' + ic('database', 'icon-sm') + ' 歷史資料匯入</h1></div>'
+      + '<div class="card" style="max-width:720px">'
+      + '<div class="card-header"><span class="card-title">匯入設定</span></div>'
+      + '<div style="padding:20px">'
+      + '<div class="form-group"><label class="form-label">匯入年度</label><select class="form-select" id="di-year">' + yearOptions + '</select></div>'
+      + '<div class="form-group"><label class="form-label">資料類型</label><select class="form-select" id="di-type">'
+      + '<option value="checklists">檢核表</option>'
+      + '<option value="training">教育訓練</option>'
+      + '<option value="corrective_actions">矯正單</option>'
+      + '</select></div>'
+      + '<div class="form-group"><label class="form-label">CSV 檔案</label>'
+      + '<input type="file" accept=".csv" id="di-file" class="form-input" style="padding:8px">'
+      + '<div style="font-size:0.75rem;color:#64748b;margin-top:4px">請上傳 UTF-8 編碼的 CSV 檔案，第一列為欄位標題。</div></div>'
+      + '<button class="btn btn-secondary" id="di-preview-btn">' + ic('eye', 'icon-xs') + ' 預覽資料</button>'
+      + '</div></div>'
+      + '<div id="di-preview-area" style="margin-top:16px"></div>'
+      + '<div id="di-result-area" style="margin-top:16px"></div>'
+      + '</div>';
+
+    var parsedRows = [];
+    var parsedHeaders = [];
+
+    function parseCSV(text) {
+      var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
+      if (lines.length < 2) return { headers: [], rows: [] };
+      var headers = lines[0].split(',').map(function (h) { return h.trim().replace(/^"|"$/g, ''); });
+      var rows = [];
+      for (var i = 1; i < lines.length; i++) {
+        var cols = lines[i].split(',').map(function (c) { return c.trim().replace(/^"|"$/g, ''); });
+        if (cols.length === headers.length) rows.push(cols);
+      }
+      return { headers: headers, rows: rows };
+    }
+
+    var previewBtn = document.getElementById('di-preview-btn');
+    if (previewBtn) bindCasePageEvent(previewBtn, 'click', function () {
+      var fileInput = document.getElementById('di-file');
+      var previewArea = document.getElementById('di-preview-area');
+      if (!fileInput || !fileInput.files || !fileInput.files.length) {
+        toast('請先選擇 CSV 檔案', 'error');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var result = parseCSV(e.target.result);
+        parsedHeaders = result.headers;
+        parsedRows = result.rows;
+        if (!parsedRows.length) {
+          previewArea.innerHTML = '<div class="card"><div style="padding:20px;color:#ef4444">CSV 檔案無有效資料列</div></div>';
+          return;
+        }
+        var displayRows = parsedRows.slice(0, 10);
+        var thead = '<tr>' + parsedHeaders.map(function (h) { return '<th scope="col">' + esc(h) + '</th>'; }).join('') + '</tr>';
+        var tbody = displayRows.map(function (row) {
+          return '<tr>' + row.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>';
+        }).join('');
+        previewArea.innerHTML = '<div class="card"><div class="card-header"><span class="card-title">預覽（前 10 筆，共 ' + parsedRows.length + ' 筆）</span></div>'
+          + '<div class="table-wrapper" tabindex="0"><table class="data-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>'
+          + '<div style="padding:16px"><button class="btn btn-primary" id="di-confirm-btn">' + ic('upload', 'icon-xs') + ' 確認匯入 ' + parsedRows.length + ' 筆</button></div></div>';
+        var confirmBtn = document.getElementById('di-confirm-btn');
+        if (confirmBtn) bindCasePageEvent(confirmBtn, 'click', doImport);
+      };
+      reader.readAsText(fileInput.files[0], 'UTF-8');
+    });
+
+    function doImport() {
+      var year = document.getElementById('di-year').value;
+      var dataType = document.getElementById('di-type').value;
+      var resultArea = document.getElementById('di-result-area');
+      var confirmBtn = document.getElementById('di-confirm-btn');
+      if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '匯入中...'; }
+
+      fetch('/api/data-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ payload: { auditYear: year, dataType: dataType, headers: parsedHeaders, rows: parsedRows } })
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (resp) {
+        var data = resp && resp.data ? resp.data : {};
+        if (data.ok) {
+          resultArea.innerHTML = '<div class="card" style="border-left:4px solid #22c55e"><div style="padding:20px">'
+            + '<div style="font-weight:700;color:#166534;font-size:1rem;margin-bottom:8px">匯入成功</div>'
+            + '<div style="color:#334155">成功匯入 <strong>' + (data.insertedCount || 0) + '</strong> 筆資料至 ' + esc(dataType) + '（' + esc(year) + ' 年度）</div>'
+            + (data.skippedCount ? '<div style="color:#854d0e;margin-top:4px">略過 ' + data.skippedCount + ' 筆（重複或格式錯誤）</div>' : '')
+            + '</div></div>';
+          toast('匯入完成：' + (data.insertedCount || 0) + ' 筆', 'success');
+        } else {
+          resultArea.innerHTML = '<div class="card" style="border-left:4px solid #ef4444"><div style="padding:20px;color:#991b1b">' + esc(data.message || resp.message || '匯入失敗') + '</div></div>';
+          toast('匯入失敗', 'error');
+        }
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '確認匯入'; }
+      })
+      .catch(function (err) {
+        resultArea.innerHTML = '<div class="card" style="border-left:4px solid #ef4444"><div style="padding:20px;color:#991b1b">網路錯誤：' + esc(String(err && err.message || err)) + '</div></div>';
+        toast('匯入失敗', 'error');
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '確認匯入'; }
+      });
+    }
+
+    scheduleRefreshIcons();
+  }
+
     return {
       renderDashboard,
       renderList,
       renderCreate,
       renderDetail,
       renderRespond,
-      renderTracking
+      renderTracking,
+      renderProgressWall,
+      renderDataImport
     };
   };
 })();

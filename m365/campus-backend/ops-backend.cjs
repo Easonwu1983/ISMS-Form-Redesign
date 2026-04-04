@@ -155,12 +155,57 @@ function createOpsRouter(deps) {
       return true;
     }
 
+    // ── Audit report DOCX download (admin only) ──
+    if (url.pathname === '/api/audit-report/docx' && req.method === 'GET') {
+      try {
+        const authz = await requestAuthz.requireAuthenticatedUser(req);
+        requestAuthz.requireAdmin(authz, 'Only admin can download audit report');
+        const auditYear = cleanText(url.searchParams && url.searchParams.get('year'))
+          || cleanText(url.searchParams && url.searchParams.get('auditYear'))
+          || String(new Date().getFullYear() - 1911);
+        // Reuse the same dashboard summary queries as PDF
+        const [checklistStats, trainingStats, pendingApps, pendingCases, correctiveDetails, overdueCounts] = await Promise.all([
+          db.queryOne(`SELECT COUNT(DISTINCT unit) FILTER (WHERE status = '已送出')::int AS submitted_units, COUNT(DISTINCT unit)::int AS total_filing_units, COUNT(*) FILTER (WHERE status = '草稿')::int AS draft_count FROM checklists WHERE audit_year = $1`, [auditYear]),
+          db.queryOne(`SELECT COUNT(*)::int AS total_forms, COUNT(*) FILTER (WHERE status = '已完成填報')::int AS completed_forms, COUNT(*) FILTER (WHERE status = '暫存')::int AS draft_forms, COUNT(*) FILTER (WHERE status = '待簽核')::int AS pending_forms, COUNT(*) FILTER (WHERE status = '退回更正')::int AS returned_forms, COALESCE(AVG(completion_rate),0)::numeric(5,2) AS avg_completion_rate FROM training_forms WHERE training_year = $1`, [auditYear]),
+          db.queryOne(`SELECT COUNT(*) FILTER (WHERE status = 'pending_review')::int AS pending_review, COUNT(*) FILTER (WHERE status = 'activation_pending')::int AS activation_pending FROM unit_contact_applications`),
+          db.queryOne(`SELECT COUNT(*) FILTER (WHERE status = '待矯正')::int AS pending_correction, COUNT(*) FILTER (WHERE status = '已提案')::int AS proposed, COUNT(*) FILTER (WHERE status = '追蹤中')::int AS tracking, COUNT(*) FILTER (WHERE status NOT IN ('結案'))::int AS open_total FROM corrective_actions`),
+          db.queryAll(`SELECT case_id, handler_unit, handler_name, status, corrective_due_date FROM corrective_actions WHERE status NOT IN ('結案') ORDER BY corrective_due_date LIMIT 20`),
+          db.queryOne(`SELECT COUNT(*) FILTER (WHERE status = '結案')::int AS closed, COUNT(*) FILTER (WHERE status NOT IN ('結案') AND corrective_due_date < NOW() AND corrective_due_date IS NOT NULL)::int AS overdue FROM corrective_actions`)
+        ]);
+        const cs = checklistStats || {}; const ts = trainingStats || {}; const pa = pendingApps || {}; const pc = pendingCases || {}; const oc = overdueCounts || {};
+        const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 163);
+        const docxData = {
+          checklist: { totalUnits, submittedUnits: Number(cs.submitted_units) || 0, notFiledUnits: totalUnits - (Number(cs.submitted_units) || 0), draftCount: Number(cs.draft_count) || 0, auditYear },
+          training: { completedForms: Number(ts.completed_forms) || 0, draftForms: Number(ts.draft_forms) || 0, pendingForms: Number(ts.pending_forms) || 0, returnedForms: Number(ts.returned_forms) || 0, avgCompletionRate: Number(ts.avg_completion_rate) || 0 },
+          pending: { applicationsPendingReview: Number(pa.pending_review) || 0, activationPending: Number(pa.activation_pending) || 0, correctivePending: Number(pc.pending_correction) || 0, correctiveProposed: Number(pc.proposed) || 0, correctiveTracking: Number(pc.tracking) || 0, correctiveOpenTotal: Number(pc.open_total) || 0, correctiveOverdue: Number(oc.overdue) || 0, correctiveClosed: Number(oc.closed) || 0, totalPendingItems: (Number(pa.pending_review) || 0) + (Number(pa.activation_pending) || 0) + (Number(pc.pending_correction) || 0) + (Number(pc.proposed) || 0) + (Number(pc.tracking) || 0) },
+          correctiveDetails: correctiveDetails || []
+        };
+        const { generateAuditReportDocx } = require(require('path').join(__dirname, '..', '..', 'scripts', 'generate-audit-report-docx.cjs'));
+        const docxBuffer = await generateAuditReportDocx(docxData);
+        await writeBinary(res, { status: 200, path: '/api/audit-report/docx', body: docxBuffer, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Disposition': 'attachment; filename="ISMS-audit-report-' + auditYear + '.docx"' } }, origin);
+      } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to generate audit report DOCX.', 500), origin); }
+      return true;
+    }
+
     // ── Overdue check endpoint (admin only) ──
     if (url.pathname === '/api/overdue-check' && req.method === 'POST') {
       try {
         const authz = await requestAuthz.requireAuthenticatedUser(req);
         requestAuthz.requireAdmin(authz, 'Only admin can trigger overdue check');
         const result = await correctiveActionRouter.checkOverdueAndNotify();
+        // Also write overdue summary to ops_audit for audit trail
+        if (result && result.checked > 0) {
+          try {
+            const overdueRows = await db.queryAll(
+              "SELECT case_id, handler_email, handler_unit, corrective_due_date FROM corrective_actions WHERE status NOT IN ('結案') AND corrective_due_date < NOW() AND corrective_due_date IS NOT NULL ORDER BY corrective_due_date LIMIT 10"
+            );
+            await db.query(
+              'INSERT INTO ops_audit (title, event_type, actor_email, record_id, occurred_at, payload_json) VALUES ($1,$2,$3,$4,$5,$6)',
+              ['overdue-reminder', 'system.overdue_reminder', authz.user || 'admin', 'overdue-' + Date.now(), new Date().toISOString(),
+               JSON.stringify({ trigger: 'manual', count: result.checked, notified: result.notified, cases: (overdueRows || []).map(function (r) { return { id: r.case_id, unit: r.handler_unit, email: r.handler_email, due: r.corrective_due_date }; }) })]
+            );
+          } catch (_auditErr) { /* audit write is best-effort */ }
+        }
         await writeJson(res, buildJsonResponse(200, { ok: true, ...result }), origin);
       } catch (error) { await writeJson(res, buildErrorResponse(error, 'Overdue check failed.', 500), origin); }
       return true;
@@ -187,6 +232,97 @@ function createOpsRouter(deps) {
           trainingYears: (trainingYears || []).map(function (r) { return { year: r.training_year, total: r.form_count, completed: r.completed }; })
         }), origin);
       } catch (error) { await writeJson(res, buildErrorResponse(error, 'Failed to load year summary.', 500), origin); }
+      return true;
+    }
+
+    // ── Historical data import endpoint (admin only) ──
+    if (url.pathname === '/api/data-import' && req.method === 'POST') {
+      try {
+        const authz = await requestAuthz.requireAuthenticatedUser(req);
+        requestAuthz.requireAdmin(authz, 'Only admin can import historical data');
+        const envelope = await parseJsonBody(req);
+        const payload = envelope && envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
+        const auditYear = cleanText(payload.auditYear);
+        const dataType = cleanText(payload.dataType);
+        const headers = Array.isArray(payload.headers) ? payload.headers.map(function (h) { return cleanText(h); }) : [];
+        const rows = Array.isArray(payload.rows) ? payload.rows : [];
+
+        if (!auditYear || !/^\d{2,4}$/.test(auditYear)) {
+          await writeJson(res, buildErrorResponse(new Error('Invalid auditYear'), 'auditYear is required.', 400), origin);
+          return true;
+        }
+        const allowedTypes = ['checklists', 'training', 'corrective_actions'];
+        if (!allowedTypes.includes(dataType)) {
+          await writeJson(res, buildErrorResponse(new Error('Invalid dataType'), 'dataType must be one of: ' + allowedTypes.join(', '), 400), origin);
+          return true;
+        }
+        if (!headers.length || !rows.length) {
+          await writeJson(res, buildErrorResponse(new Error('Empty data'), 'No headers or rows provided.', 400), origin);
+          return true;
+        }
+
+        let insertedCount = 0;
+        let skippedCount = 0;
+
+        if (dataType === 'checklists') {
+          for (const row of rows) {
+            try {
+              const obj = {};
+              headers.forEach(function (h, i) { obj[h] = row[i] || ''; });
+              const unit = cleanText(obj.unit || obj['\u55ae\u4f4d'] || obj.unit_name || '');
+              if (!unit) { skippedCount++; continue; }
+              await db.queryOne(
+                `INSERT INTO checklists (unit, audit_year, status, filled_by, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, NOW(), NOW())
+                 ON CONFLICT DO NOTHING`,
+                [unit, auditYear, cleanText(obj.status || obj['\u72c0\u614b'] || '\u5df2\u9001\u51fa'), cleanText(obj.filled_by || obj['\u586b\u5831\u4eba'] || '')]
+              );
+              insertedCount++;
+            } catch (_) { skippedCount++; }
+          }
+        } else if (dataType === 'training') {
+          for (const row of rows) {
+            try {
+              const obj = {};
+              headers.forEach(function (h, i) { obj[h] = row[i] || ''; });
+              const unit = cleanText(obj.unit || obj['\u55ae\u4f4d'] || obj.unit_name || '');
+              if (!unit) { skippedCount++; continue; }
+              await db.queryOne(
+                `INSERT INTO training_forms (unit, training_year, status, filled_by, completion_rate, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+                 ON CONFLICT DO NOTHING`,
+                [unit, auditYear, cleanText(obj.status || obj['\u72c0\u614b'] || '\u5df2\u5b8c\u6210\u586b\u5831'), cleanText(obj.filled_by || obj['\u586b\u5831\u4eba'] || ''), Number(obj.completion_rate || obj['\u5b8c\u6210\u7387'] || 100)]
+              );
+              insertedCount++;
+            } catch (_) { skippedCount++; }
+          }
+        } else if (dataType === 'corrective_actions') {
+          for (const row of rows) {
+            try {
+              const obj = {};
+              headers.forEach(function (h, i) { obj[h] = row[i] || ''; });
+              const problemDesc = cleanText(obj.problem_desc || obj['\u554f\u984c\u63cf\u8ff0'] || obj.problemDesc || '');
+              if (!problemDesc) { skippedCount++; continue; }
+              await db.queryOne(
+                `INSERT INTO corrective_actions (problem_desc, deficiency_type, source, status, audit_year, proposer_name, handler_name, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+                [
+                  problemDesc,
+                  cleanText(obj.deficiency_type || obj['\u7f3a\u5931\u985e\u578b'] || ''),
+                  cleanText(obj.source || obj['\u4f86\u6e90'] || ''),
+                  cleanText(obj.status || obj['\u72c0\u614b'] || '\u7d50\u6848'),
+                  auditYear,
+                  cleanText(obj.proposer_name || obj['\u63d0\u6848\u4eba'] || ''),
+                  cleanText(obj.handler_name || obj['\u8655\u7406\u4eba'] || '')
+                ]
+              );
+              insertedCount++;
+            } catch (_) { skippedCount++; }
+          }
+        }
+
+        await writeJson(res, buildJsonResponse(200, { ok: true, insertedCount, skippedCount, auditYear, dataType }), origin);
+      } catch (error) { await writeJson(res, buildErrorResponse(error, 'Data import failed.', 500), origin); }
       return true;
     }
 

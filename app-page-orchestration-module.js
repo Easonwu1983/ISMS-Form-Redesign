@@ -233,6 +233,27 @@
           allow: () => !!d.currentUser(),
           fallback: 'assets',
           render: () => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderYearComparison())
+        },
+        'progress-wall': {
+          title: '單位填報進度牆',
+          allow: () => d.isAdmin(),
+          fallback: 'dashboard',
+          deniedMessage: '只有最高管理者可以查看填報進度牆',
+          render: () => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderProgressWall())
+        },
+        'data-import': {
+          title: '歷史資料匯入',
+          allow: () => d.isAdmin(),
+          fallback: 'dashboard',
+          deniedMessage: '只有最高管理者可以匯入歷史資料',
+          render: () => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderDataImport())
+        },
+        'checklist-compare': {
+          title: '檢核表歷年比對',
+          allow: () => d.isAdmin(),
+          deniedMessage: '只有最高管理者可以查看歷年比對',
+          fallback: 'dashboard',
+          render: () => ensureModule(d.ensureChecklistModule, d.getChecklistModule).then((m) => m.renderChecklistCompare())
         }
       };
     }

@@ -321,6 +321,26 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(function () {});
     }
+    // PWA install prompt
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      var installBtn = document.createElement('button');
+      installBtn.className = 'btn btn-ghost btn-sm';
+      installBtn.textContent = '\uD83D\uDCF1 \u5B89\u88DD APP';
+      installBtn.onclick = function () {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function () { deferredPrompt = null; installBtn.remove(); });
+      };
+      var tryAttach = function () {
+        var footer = document.querySelector('.sidebar-footer');
+        if (footer) { footer.insertBefore(installBtn, footer.firstChild); }
+        else { setTimeout(tryAttach, 1000); }
+      };
+      tryAttach();
+    });
     assets.unshift('units.js');
     loadNextScript();
   }

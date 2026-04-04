@@ -64,6 +64,148 @@
 
     let isSidebarOpen = false;
 
+    // ── Notification Center state ──────────────────────────────────────
+    let notifPollTimer = null;
+    let notifDropdownOpen = false;
+    const NOTIF_POLL_INTERVAL_MS = 60000;
+
+    function getNotifApiBase() {
+      if (window._m365ApiClient && typeof window._m365ApiClient === 'object' && typeof window._m365ApiClient.getBaseUrl === 'function') {
+        return window._m365ApiClient.getBaseUrl() || '';
+      }
+      try {
+        if (window.__ISMS_BOOTSTRAP__ && typeof window.__ISMS_BOOTSTRAP__.resolveM365ApiClient === 'function') {
+          var cl = window.__ISMS_BOOTSTRAP__.resolveM365ApiClient();
+          if (cl && typeof cl.getBaseUrl === 'function') return cl.getBaseUrl() || '';
+        }
+      } catch (_) {}
+      return '';
+    }
+
+    function getNotifAuthHeaders() {
+      if (window._m365ApiClient && typeof window._m365ApiClient === 'object' && typeof window._m365ApiClient.getAuthHeaders === 'function') {
+        return window._m365ApiClient.getAuthHeaders() || {};
+      }
+      try {
+        if (window.__ISMS_BOOTSTRAP__ && typeof window.__ISMS_BOOTSTRAP__.resolveM365ApiClient === 'function') {
+          var cl = window.__ISMS_BOOTSTRAP__.resolveM365ApiClient();
+          if (cl && typeof cl.getAuthHeaders === 'function') return cl.getAuthHeaders() || {};
+        }
+      } catch (_) {}
+      return {};
+    }
+
+    function notifFetchJson(path) {
+      var base = getNotifApiBase();
+      return fetch(base + path, {
+        method: 'GET',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, getNotifAuthHeaders())
+      }).then(function (r) { return r.json(); });
+    }
+
+    function notifPostJson(path, body) {
+      var base = getNotifApiBase();
+      return fetch(base + path, {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, getNotifAuthHeaders()),
+        body: JSON.stringify(body)
+      }).then(function (r) { return r.json(); });
+    }
+
+    function updateNotifBadge(count) {
+      var badge = document.getElementById('notif-badge');
+      if (!badge) return;
+      var n = Math.max(0, Number(count) || 0);
+      badge.textContent = n > 99 ? '99+' : String(n);
+      badge.style.display = n > 0 ? 'inline-block' : 'none';
+    }
+
+    function pollNotifCount() {
+      if (!currentUser()) return;
+      notifFetchJson('/api/notifications/count').then(function (json) {
+        var body = json && json.jsonBody ? json.jsonBody : json;
+        if (body && body.ok) updateNotifBadge(body.count);
+      }).catch(function () { /* silent */ });
+    }
+
+    function startNotifPolling() {
+      stopNotifPolling();
+      pollNotifCount();
+      notifPollTimer = setInterval(pollNotifCount, NOTIF_POLL_INTERVAL_MS);
+    }
+
+    function stopNotifPolling() {
+      if (notifPollTimer) { clearInterval(notifPollTimer); notifPollTimer = null; }
+    }
+
+    function renderNotifItem(item) {
+      var readClass = item.read ? 'opacity:0.55;' : 'font-weight:600;';
+      var timeStr = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-TW') : '';
+      return '<div class="notif-item" data-notif-id="' + esc(String(item.id)) + '" style="padding:10px 14px;border-bottom:1px solid #f1f5f9;cursor:pointer;' + readClass + '">'
+        + '<div style="font-size:0.84rem;color:#1e293b">' + esc(item.title) + '</div>'
+        + (item.message ? '<div style="font-size:0.78rem;color:#64748b;margin-top:2px">' + esc(item.message) + '</div>' : '')
+        + '<div style="font-size:0.7rem;color:#94a3b8;margin-top:4px">' + esc(timeStr) + '</div>'
+        + '</div>';
+    }
+
+    function loadNotifDropdown() {
+      var content = document.getElementById('notif-dropdown-content');
+      if (!content) return;
+      content.innerHTML = '<div style="padding:12px;text-align:center;color:#94a3b8;font-size:0.82rem">載入中…</div>';
+      notifFetchJson('/api/notifications').then(function (json) {
+        var body = json && json.jsonBody ? json.jsonBody : json;
+        if (!body || !body.ok || !Array.isArray(body.items) || !body.items.length) {
+          content.innerHTML = '<div style="padding:16px;text-align:center;color:#94a3b8;font-size:0.82rem">沒有通知</div>';
+          return;
+        }
+        content.innerHTML = '<div style="padding:8px 14px;font-size:0.78rem;font-weight:700;color:#475569;border-bottom:1px solid #e2e8f0">通知中心</div>'
+          + body.items.map(renderNotifItem).join('');
+        content.querySelectorAll('.notif-item').forEach(function (el) {
+          el.addEventListener('click', function () {
+            var id = Number(el.getAttribute('data-notif-id'));
+            if (id) {
+              notifPostJson('/api/notifications/read', { id: id }).then(function () {
+                pollNotifCount();
+              }).catch(function () {});
+              el.style.opacity = '0.55';
+              el.style.fontWeight = 'normal';
+            }
+          });
+        });
+      }).catch(function () {
+        content.innerHTML = '<div style="padding:16px;text-align:center;color:#dc2626;font-size:0.82rem">載入失���</div>';
+      });
+    }
+
+    function toggleNotifDropdown() {
+      var dd = document.getElementById('notif-dropdown');
+      if (!dd) return;
+      notifDropdownOpen = !notifDropdownOpen;
+      dd.style.display = notifDropdownOpen ? 'block' : 'none';
+      if (notifDropdownOpen) loadNotifDropdown();
+    }
+
+    function closeNotifDropdown() {
+      notifDropdownOpen = false;
+      var dd = document.getElementById('notif-dropdown');
+      if (dd) dd.style.display = 'none';
+    }
+
+    function bindNotifBell() {
+      var btn = document.getElementById('notif-bell-btn');
+      if (btn) {
+        bindPageEvent(btn, 'click', function (event) {
+          event.stopPropagation();
+          toggleNotifDropdown();
+        });
+      }
+      // Close dropdown when clicking outside
+      document.addEventListener('click', function (event) {
+        var wrap = document.getElementById('notif-bell-wrap');
+        if (wrap && !wrap.contains(event.target)) closeNotifDropdown();
+      });
+    }
+
     function isPublicRoute(page) {
       return !!(page && ROUTE_WHITELIST[page] && ROUTE_WHITELIST[page].public);
     }
@@ -284,6 +426,7 @@
       'schema-health': true,
       checklist: true,
       'checklist-manage': true,
+      'checklist-compare': true,
       'unit-review': true,
       training: true,
       'training-roster': true
@@ -753,10 +896,18 @@
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'security-window' ? 'active' : '') + '" href="#security-window"><span class="nav-icon">' + ic('shield-check') + '</span>' + _t('nav.securityWindow', '資安窗口') + '</a>';
       // schema-health 保留路由但不顯示在 sidebar（開發者可直接存取 #schema-health）
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'checklist-manage' ? 'active' : '') + '" href="#checklist-manage"><span class="nav-icon">' + ic('settings') + '</span>' + _t('nav.checklistManage', '檢核表管理') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'checklist-compare' ? 'active' : '') + '" href="#checklist-compare"><span class="nav-icon">' + ic('git-compare') + '</span>' + _t('nav.checklistCompare', '檢核表歷年比對') + '</a>';
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'training-roster' ? 'active' : '') + '" href="#training-roster"><span class="nav-icon">' + ic('users-round') + '</span>' + _t('nav.trainingRoster', '教育訓練名單') + '</a>';
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'unit-review' ? 'active' : '') + '" href="#unit-review"><span class="nav-icon">' + ic('building-2') + '</span>' + _t('nav.unitReview', '單位治理') + '</a>';
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'asset-dashboard' ? 'active' : '') + '" href="#asset-dashboard"><span class="nav-icon">' + ic('bar-chart-3') + '</span>' + _t('nav.assetDashboard', '資產盤點總覽') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'progress-wall' ? 'active' : '') + '" href="#progress-wall"><span class="nav-icon">' + ic('layout-grid') + '</span>' + _t('nav.progressWall', '填報進度牆') + '</a>';
+      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'data-import' ? 'active' : '') + '" href="#data-import"><span class="nav-icon">' + ic('database') + '</span>' + _t('nav.dataImport', '歷史資料匯入') + '</a>';
       if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.systemAdmin', '系統管理') + '</div>' + sysNav + '</div>';
+
+      // Tutorial nav at the bottom
+      nav += '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.help', '說明') + '</div>'
+        + '<a class="nav-item" href="#" data-action="shell.show-tutorial"><span class="nav-icon">' + ic('book-open') + '</span>' + _t('nav.tutorial', '使用教學') + '</a>'
+        + '</div>';
 
       const sidebarEl = document.getElementById('sidebar');
       if (!sidebarEl) return;
@@ -789,7 +940,14 @@
       if (!headerEl) return;
       const _langCode = (window.__i18n__ && window.__i18n__.getLang()) || 'zh-TW';
       const _langLabel = _langCode === 'zh-TW' ? 'EN' : '中文';
-      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context" hidden><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<button class="btn btn-ghost btn-sm" data-action="shell.toggle-lang" title="Switch Language" style="font-size:0.78rem;letter-spacing:0.04em;font-weight:700;padding:6px 12px">' + ic('globe', 'icon-xs') + ' ' + _langLabel + '</button><div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout"><span class="btn-logout-icon">' + ic('log-out') + '</span><span class="btn-logout-text">登出</span></button></div>';
+      headerEl.innerHTML = '<div class="header-left"><button type="button" class="header-menu-btn" data-action="shell.toggle-sidebar" aria-label="開啟選單">' + ic('menu') + '</button><div class="header-context" hidden><span class="header-kicker" hidden></span><span class="header-title">' + getRouteTitle(route.page) + '</span></div></div><div class="header-right">' + switchHtml + '<button class="btn btn-ghost btn-sm" data-action="shell.toggle-lang" title="Switch Language" style="font-size:0.78rem;letter-spacing:0.04em;font-weight:700;padding:6px 12px">' + ic('globe', 'icon-xs') + ' ' + _langLabel + '</button>'
+        + '<div id="notif-bell-wrap" style="position:relative;display:inline-flex;align-items:center;margin:0 4px">'
+        + '<button type="button" id="notif-bell-btn" class="btn btn-ghost btn-sm" title="通知" style="position:relative;padding:6px 10px;font-size:1rem" aria-label="通知">' + ic('bell', 'icon-xs')
+        + '<span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;background:#dc2626;color:#fff;font-size:0.65rem;font-weight:700;line-height:16px;text-align:center;padding:0 4px">0</span>'
+        + '</button>'
+        + '<div id="notif-dropdown" style="display:none;position:absolute;top:100%;right:0;width:340px;max-height:420px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:9999;padding:8px 0">'
+        + '<div id="notif-dropdown-content" style="padding:8px 12px;font-size:0.85rem;color:#64748b;text-align:center">載入中…</div></div></div>'
+        + '<div class="header-user"><span class="header-user-name">' + esc(u.name) + '</span><span class="header-user-role">' + getRoleLabel(u.role) + '</span><div class="header-user-avatar">' + esc(u.name[0]) + '</div></div><button class="btn-logout" data-action="shell.logout"><span class="btn-logout-icon">' + ic('log-out') + '</span><span class="btn-logout-text">登出</span></button></div>';
 
       const switcher = document.getElementById('header-unit-switch');
       if (switcher) {
@@ -797,6 +955,10 @@
           if (switchCurrentUserUnit(event.target.value)) handleRoute();
         });
       }
+      // Notification bell binding and polling
+      bindNotifBell();
+      startNotifPolling();
+      refreshIcons();
     }
 
     function renderBootstrapShell() {
@@ -982,6 +1144,49 @@
         renderSidebar();
         renderHeader();
         toast(next === 'en' ? 'Switched to English' : '已切換為繁體中文', 'info');
+      },
+      'show-tutorial': function () {
+        // Tutorial modal
+        var modalRoot = document.getElementById('modal-root');
+        if (!modalRoot) return;
+        var backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+        backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:flex;align-items:center;justify-content:center';
+        var modal = document.createElement('div');
+        modal.className = 'modal-dialog';
+        modal.style.cssText = 'background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-width:640px;width:90%;max-height:85vh;overflow-y:auto;z-index:9999;animation:fadeInUp 0.2s ease';
+        modal.innerHTML = '<div style="padding:24px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
+          + '<h2 style="font-size:1.2rem;font-weight:700;color:#1e293b;margin:0">' + ic('book-open', 'icon-sm') + ' 使用教學</h2>'
+          + '<button class="btn btn-ghost btn-sm" id="tutorial-close-btn" style="font-size:1.2rem;padding:4px 8px">' + ic('x') + '</button>'
+          + '</div>'
+          + '<div style="margin-bottom:20px">'
+          + '<h3 style="font-size:0.95rem;font-weight:600;color:#334155;margin-bottom:12px">操作手冊</h3>'
+          + '<a href="docs/user-sop-beginner.html" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f1f5f9;border-radius:8px;text-decoration:none;color:#1e40af;font-weight:600;margin-bottom:8px">'
+          + ic('file-text', 'icon-sm') + ' 新手入門操作手冊（HTML）</a>'
+          + '<a href="docs/user-sop-beginner.pdf" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f1f5f9;border-radius:8px;text-decoration:none;color:#1e40af;font-weight:600;margin-bottom:8px">'
+          + ic('file', 'icon-sm') + ' 新手入門操作手冊（PDF）</a>'
+          + '</div>'
+          + '<div style="margin-bottom:20px">'
+          + '<h3 style="font-size:0.95rem;font-weight:600;color:#334155;margin-bottom:12px">教學影片</h3>'
+          + '<div style="background:#f8fafc;border:2px dashed #cbd5e1;border-radius:8px;padding:32px 16px;text-align:center;color:#64748b">'
+          + '<div style="font-size:2rem;margin-bottom:8px">' + ic('video') + '</div>'
+          + '<div style="font-weight:600;margin-bottom:4px">教學影片即將上線</div>'
+          + '<div style="font-size:0.8rem">影片製作中，完成後將自動顯示於此處。</div>'
+          + '</div></div>'
+          + '<div>'
+          + '<h3 style="font-size:0.95rem;font-weight:600;color:#334155;margin-bottom:12px">常見問題</h3>'
+          + '<details style="margin-bottom:8px;background:#f8fafc;border-radius:8px;padding:12px 16px"><summary style="cursor:pointer;font-weight:600;color:#334155">如何填報內稽檢核表？</summary><p style="margin:8px 0 0;color:#64748b;font-size:0.88rem">請前往左側選單「內稽檢核表」，點擊「填報檢核表」按鈕，依據表單欄位逐一填寫後按「儲存」或「送出」。</p></details>'
+          + '<details style="margin-bottom:8px;background:#f8fafc;border-radius:8px;padding:12px 16px"><summary style="cursor:pointer;font-weight:600;color:#334155">忘記密碼怎麼辦？</summary><p style="margin:8px 0 0;color:#64748b;font-size:0.88rem">請在登入頁面點擊「忘記密碼」，輸入您的 Email 後系統將寄送重設密碼連結。</p></details>'
+          + '<details style="margin-bottom:8px;background:#f8fafc;border-radius:8px;padding:12px 16px"><summary style="cursor:pointer;font-weight:600;color:#334155">如何查看歷年稽核資料？</summary><p style="margin:8px 0 0;color:#64748b;font-size:0.88rem">管理者可透過儀表板的「年度稽核進度總覽」區塊切換年度查看，或前往各模組使用年度篩選功能。</p></details>'
+          + '</div></div>';
+        backdrop.appendChild(modal);
+        modalRoot.appendChild(backdrop);
+        refreshIcons();
+        var closeBtn = document.getElementById('tutorial-close-btn');
+        if (closeBtn) closeBtn.addEventListener('click', function () { backdrop.remove(); });
+        backdrop.addEventListener('click', function (e) { if (e.target === backdrop) backdrop.remove(); });
+        if (isMobileViewport()) closeSidebar();
       }
     });
 
