@@ -278,6 +278,10 @@
           }
         });
       }
+
+    // ═══════════════════════════════════════════════════════════════
+    // §1 — 基礎工具：deferred promise, cache store, collection state
+    // ═══════════════════════════════════════════════════════════════
     function scheduleDeferredPromise(taskFactory, timeoutMs) {
       const delay = Number.isFinite(timeoutMs) ? Math.max(0, Math.floor(timeoutMs)) : TRAINING_DEFERRED_SYNC_TIMEOUT_MS;
       return new Promise((resolve) => {
@@ -546,6 +550,9 @@
       trainingAccessProfileListenerInstalled = true;
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // §2 — 遠端資料：API client, roster paging, remote collection
+    // ═══════════════════════════════════════════════════════════════
     function getTrainingRemoteClient() {
       installTrainingAccessProfileListener();
       if (typeof window === 'undefined') return null;
@@ -1068,6 +1075,9 @@
         deleteSelectedButton: contentEl.querySelector('#training-roster-delete-selected')
       };
     }
+  // ═══════════════════════════════════════════════════════════════
+  // §3 — UI 建構：summary cards, table, roster rows, detail fields
+  // ═══════════════════════════════════════════════════════════════
   function buildTrainingSummaryCards(summary) {
     const cards = [['在職人數', summary.activeCount || 0, 'active'], ['已完成', summary.completedCount || 0, 'complete'], ['未完成', summary.incompleteCount || 0, 'warning'], ['完成率', (summary.completionRate || 0) + '%', 'rate'], ['資訊人員', summary.infoStaffCount || 0, 'info'], ['待補欄位', (summary.missingStatusCount || 0) + (summary.missingFieldCount ? ' / ' + summary.missingFieldCount : ''), 'pending']];
     return cards.map(([label, value, tone]) => '<div class="training-mini-card training-mini-card--' + tone + '"><div class="training-mini-label">' + label + '</div><div class="training-mini-value">' + value + '</div></div>').join('');
@@ -1777,6 +1787,9 @@
     exportTrainingDetailCsv(form);
   }
 
+    // ═══════════════════════════════════════════════════════════════
+    // §4 — 頁面渲染：renderTraining (填報主頁)
+    // ═══════════════════════════════════════════════════════════════
     async function renderTraining(options) {
       const opts = options || {};
       const accessProfile = getTrainingAccessProfile();
@@ -1984,6 +1997,9 @@
       + '</div>';
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // §6 — 填報表單：renderTrainingFill + 事件處理
+  // ═══════════════════════════════════════════════════════════════
   function renderTrainingFill(id) {
     if (!canFillTraining()) {
       navigate('training');
@@ -3318,6 +3334,9 @@
     return '<div class="card training-editor-card training-editor-card--spaced"><form id="training-import-form"><div class="section-header">' + ic('upload', 'icon-sm') + ' 匯入單位名單</div><div class="training-editor-note">' + buildTrainingRosterImportNote() + '</div><div class="form-row"><div class="form-group"><label class="form-label">單位</label>' + buildUnitCascadeControl('training-import-unit', '', false, false) + '<div class="form-hint">可先指定單位當作預設值；若 Excel 內已有「填報單位」欄位，系統會優先使用檔案中的單位。</div></div><div class="form-group"><label class="form-label">Excel 檔案</label><label class="training-file-input"><input type="file" id="training-import-file" accept=".xlsx,.xls,.csv,.tsv"><span class="training-file-input-copy" id="training-import-file-copy">' + buildTrainingRosterFileCopy('') + '</span></label></div></div><div class="form-group"><label class="form-label">格式範例</label><textarea class="form-textarea" rows="4" readonly>' + buildTrainingRosterSampleCsv() + '</textarea></div><div class="form-group"><label class="form-label">或直接貼上內容</label><textarea class="form-textarea" id="training-import-names" rows="8" placeholder="姓名,本職單位,身分別,職稱"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="training-import-submit">' + ic('upload', 'icon-sm') + ' 匯入名單</button></div></form></div>';
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // §5 — 名單管理：renderTrainingRoster (Admin only)
+  // ═══════════════════════════════════════════════════════════════
   async function renderTrainingRoster(options) {
     const opts = options || {};
     if (!isAdmin()) {

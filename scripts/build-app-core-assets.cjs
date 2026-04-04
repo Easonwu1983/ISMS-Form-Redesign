@@ -15,7 +15,7 @@ const STYLES_OUTPUT = path.join(ROOT, 'styles.min.css');
 const STYLES_PURGED_OUTPUT = path.join(ROOT, 'styles.purged.min.css');
 
 const FEATURE_BUNDLE_CONFIG = {
-  'admin-feature': ['admin-collection-cache-module.js', 'admin-module.js'],
+  'admin-feature': ['admin-collection-cache-module.js', 'admin-audit-trail-module.js', 'admin-security-window-module.js', 'admin-module.js'],
   'case-feature': ['attachment-module.js', 'case-module.js'],
   'checklist-feature': ['attachment-module.js', 'checklist-module.js'],
   'training-feature': ['attachment-module.js', 'training-module.js'],

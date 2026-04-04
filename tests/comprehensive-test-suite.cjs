@@ -15,8 +15,16 @@ const http = require('http');
 const BASE = process.argv[2] || 'http://140.112.97.150';
 const ADMIN = { user: 'easonwu', pass: '2wsx#EDC' };
 const UNIT_ADMIN = { user: 'testunit01', pass: 'NewTest1234!' };
+const UNIT_ADMIN_PROFILE = {
+  username: UNIT_ADMIN.user, password: UNIT_ADMIN.pass,
+  name: 'Test Unit Admin', email: 'testunit01@test.local',
+  role: '單位管理員', primaryUnit: '4510',
+  authorizedUnits: ['4510'], securityRoles: ['二級單位資安窗口'],
+  forcePasswordChange: false
+};
 let adminToken = null, unitToken = null;
 let passed = 0, failed = 0, warnings = 0;
+let createdAssetId = null;
 const issues = [];
 
 function req(method, path, body, token) {
@@ -51,6 +59,23 @@ async function login(user, pass) {
   const res = await req('POST', '/api/auth/login', { action: 'auth.login', payload: { username: user, password: pass } });
   if (!res.ok || !res.json) return null;
   return (res.json.session && res.json.session.token) || (res.json.item && res.json.item.sessionToken) || null;
+}
+
+async function ensureTestUnitAdmin(adminTok) {
+  // Try logging in first
+  var token = await login(UNIT_ADMIN.user, UNIT_ADMIN.pass);
+  if (token) return token;
+  // Account missing or wrong password — upsert via admin API
+  console.log('    ⚙️  testunit01 login failed, creating account via admin API...');
+  var upsertRes = await req('POST', '/api/system-users/upsert', {
+    action: 'system-user.upsert', payload: UNIT_ADMIN_PROFILE
+  }, adminTok);
+  if (!upsertRes.ok) {
+    console.log('    ⚠️  upsert failed: ' + (upsertRes.json && upsertRes.json.error || upsertRes.raw));
+    return null;
+  }
+  // Retry login with the freshly created account
+  return login(UNIT_ADMIN.user, UNIT_ADMIN.pass);
 }
 
 async function test1_realOperations() {
@@ -109,10 +134,84 @@ async function test1_realOperations() {
   test('操作', 'Server stats 有 memory', ss.json && ss.json.memory);
 
   // 1.13 單位管理員操作
-  unitToken = await login(UNIT_ADMIN.user, UNIT_ADMIN.pass);
+  unitToken = await ensureTestUnitAdmin(adminToken);
   test('操作', '單位管理員登入', !!unitToken);
   var tasks = await req('GET', '/api/my-tasks?auditYear=115', null, unitToken);
   test('操作', '我的待辦回傳 tasks', tasks.ok && tasks.json && Array.isArray(tasks.json.tasks));
+
+  // 1.14 資產清冊 — 健康檢查
+  var assetHealth = await req('GET', '/api/assets/health');
+  test('操作', '資產清冊 health 端點回應正常', assetHealth.ok && assetHealth.json && assetHealth.json.status === 'ok');
+
+  // 1.15 資產清冊 — 列表查詢
+  var assetList = await req('GET', '/api/assets', null, adminToken);
+  test('操作', '資產清冊列表 API 回應正常', assetList.ok && assetList.json);
+  test('操作', '資產清冊列表有 items 陣列', assetList.json && Array.isArray(assetList.json.items));
+  test('操作', '資產清冊列表有 total', assetList.json && typeof assetList.json.total === 'number');
+
+  // 1.16 資產清冊 — 帶篩選條件列表查詢
+  var assetFiltered = await req('GET', '/api/assets?status=' + encodeURIComponent('填報中'), null, adminToken);
+  test('操作', '資產清冊帶 status 篩選回應正常', assetFiltered.ok && assetFiltered.json);
+
+  // 1.17 資產清冊 — 新建資產
+  var createPayload = {
+    action: 'asset.create',
+    payload: {
+      assetName: '__test_asset_' + Date.now(),
+      category: '硬體',
+      subCategory: '伺服器',
+      ownerName: '測試擁有者',
+      custodianName: '測試保管人',
+      confidentiality: '中',
+      integrity: '中',
+      availability: '普',
+      legalCompliance: '普'
+    }
+  };
+  var assetCreate = await req('POST', '/api/assets', createPayload, adminToken);
+  test('操作', '資產清冊新建回傳 201', assetCreate.status === 201);
+  test('操作', '新建資產有 id', assetCreate.json && !!assetCreate.json.id);
+  test('操作', '新建資產名稱正確', assetCreate.json && assetCreate.json.assetName && assetCreate.json.assetName.indexOf('__test_asset_') === 0);
+  test('操作', '新建資產 protectionLevel 自動計算', assetCreate.json && assetCreate.json.protectionLevel === '中');
+  test('操作', '新建資產狀態為填報中', assetCreate.json && assetCreate.json.status === '填報中');
+
+  if (assetCreate.json && assetCreate.json.id) {
+    createdAssetId = assetCreate.json.id;
+
+    // 1.18 資產清冊 — 讀取單筆
+    var assetDetail = await req('GET', '/api/assets/' + encodeURIComponent(createdAssetId), null, adminToken);
+    test('操作', '資產清冊單筆讀取成功', assetDetail.ok && assetDetail.json && assetDetail.json.id === createdAssetId);
+    test('操作', '單筆資產有 appendix10 欄位', assetDetail.json && assetDetail.json.hasOwnProperty('appendix10'));
+
+    // 1.19 資產清冊 — 更新資產
+    var updatePayload = { payload: { assetName: '__test_asset_updated_' + Date.now(), confidentiality: '高' } };
+    var assetUpdate = await req('POST', '/api/assets/' + encodeURIComponent(createdAssetId), updatePayload, adminToken);
+    test('操作', '資產清冊更新成功', assetUpdate.ok && assetUpdate.json);
+    test('操作', '更新後名稱已變更', assetUpdate.json && assetUpdate.json.assetName && assetUpdate.json.assetName.indexOf('__test_asset_updated_') === 0);
+    test('操作', '更新後 protectionLevel 重新計算為高', assetUpdate.json && assetUpdate.json.protectionLevel === '高');
+
+    // 1.20 資產清冊 — 狀態變更
+    var statusPayload = { status: '待簽核' };
+    var assetStatus = await req('POST', '/api/assets/' + encodeURIComponent(createdAssetId) + '/status', statusPayload, adminToken);
+    test('操作', '資產狀態變更成功', assetStatus.ok && assetStatus.json && assetStatus.json.status === '待簽核');
+
+    // 1.21 資產清冊 — 附錄十 GET（初始應為空）
+    var a10Get = await req('GET', '/api/assets/' + encodeURIComponent(createdAssetId) + '/appendix10', null, adminToken);
+    test('操作', '附錄十 GET 回應正常', a10Get.ok && a10Get.json);
+    test('操作', '附錄十初始 assessments 為空陣列', a10Get.json && Array.isArray(a10Get.json.assessments) && a10Get.json.assessments.length === 0);
+
+    // 1.22 資產清冊 — 軟刪除
+    var assetDelete = await req('POST', '/api/assets/' + encodeURIComponent(createdAssetId) + '/delete', {}, adminToken);
+    test('操作', '資產軟刪除成功', assetDelete.ok && assetDelete.json && assetDelete.json.success === true);
+  } else {
+    warn('操作', '跳過資產 CRUD 後續測試', '新建資產失敗');
+  }
+
+  // 1.23 資產清冊 — Dashboard Summary
+  var assetSummary = await req('GET', '/api/assets/summary', null, adminToken);
+  test('操作', '資產清冊 Summary API 回應正常', assetSummary.ok && assetSummary.json);
+  test('操作', '資產清冊 Summary 有 year', assetSummary.json && typeof assetSummary.json.year === 'number');
+  test('操作', '資產清冊 Summary 有 summary 陣列', assetSummary.json && Array.isArray(assetSummary.json.summary));
 }
 
 async function test2_permissionMatrix() {
@@ -158,6 +257,26 @@ async function test2_permissionMatrix() {
   // 2.5 附件權限（之前修的 bug）
   var unitAtt = await req('GET', '/api/attachments/nonexistent-id', null, unitToken);
   test('權限', '不存在的附件回 404', unitAtt.status === 404);
+
+  // 2.6 資產清冊 — 未認證存取被擋
+  var noAuthAssets = await req('GET', '/api/assets');
+  test('權限', '未認證存取資產清冊列表被擋', noAuthAssets.status === 401);
+
+  var noAuthAssetCreate = await req('POST', '/api/assets', { payload: { assetName: 'hack', category: '硬體' } });
+  test('權限', '未認證新建資產被擋', noAuthAssetCreate.status === 401);
+
+  var noAuthSummary = await req('GET', '/api/assets/summary');
+  test('權限', '未認證存取資產 Summary 被擋', noAuthSummary.status === 401);
+
+  var noAuthAssetDetail = await req('GET', '/api/assets/FAKE-ID-001');
+  test('權限', '未認證存取單筆資產被擋', noAuthAssetDetail.status === 401);
+
+  var noAuthA10 = await req('GET', '/api/assets/FAKE-ID-001/appendix10');
+  test('權限', '未認證存取附錄十被擋', noAuthA10.status === 401);
+
+  // 2.7 資產清冊 — health 端點為公開（不需認證）
+  var assetHealthPublic = await req('GET', '/api/assets/health');
+  test('權限', '資產清冊 health 為公開端點', assetHealthPublic.ok);
 }
 
 async function test3_boundaryValues() {
@@ -335,6 +454,27 @@ async function test6_regression() {
   await req('GET', '/api/dashboard/summary?auditYear=115', null, adminToken);
   var d2 = Date.now() - t2;
   test('回歸', 'API 快取生效（第二次更快）', d2 <= d1 + 5); // 允許 5ms 誤差
+
+  // 6.9 資產清冊 — 端點可用且回傳正確結構
+  var regAssetList = await req('GET', '/api/assets', null, adminToken);
+  test('回歸', '資產清冊列表端點可用', regAssetList.ok);
+  test('回歸', '資產清冊回傳有 items + total', regAssetList.json && Array.isArray(regAssetList.json.items) && typeof regAssetList.json.total === 'number');
+
+  // 6.10 資產清冊 — health 端點穩定
+  var regAssetHealth = await req('GET', '/api/assets/health');
+  test('回歸', '資產清冊 health 端點穩定', regAssetHealth.ok && regAssetHealth.json && regAssetHealth.json.module === 'asset-inventory');
+
+  // 6.11 資產清冊 — 不存在的資產回 404
+  var regAsset404 = await req('GET', '/api/assets/NONEXISTENT-ASSET-99999', null, adminToken);
+  test('回歸', '不存在的資產回 404', regAsset404.status === 404);
+
+  // 6.12 資產清冊 — 新建缺必填欄位回 400
+  var regAssetBadCreate = await req('POST', '/api/assets', { payload: { assetName: '' } }, adminToken);
+  test('回歸', '缺必填欄位新建資產回 400', regAssetBadCreate.status === 400);
+
+  // 6.13 資產清冊 — 無效狀態變更回 400
+  var regBadStatus = await req('POST', '/api/assets/NONEXISTENT-ASSET-99999/status', { status: '無效狀態' }, adminToken);
+  test('回歸', '無效狀態變更回 400 或 404', regBadStatus.status === 400 || regBadStatus.status === 404);
 }
 
 async function main() {

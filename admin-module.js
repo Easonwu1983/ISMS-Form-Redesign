@@ -2506,9 +2506,7 @@
     }
 
     function renderSecurityWindowPersonBadge(person) {
-      const roles = Array.isArray(person && person.securityRoles) ? person.securityRoles : [];
-      if (!roles.length) return '<span class="badge-role badge-pending">未設定</span>';
-      return roles.map((role) => `<span class="badge-role badge-unit-admin badge-role-chip">${esc(role)}</span>`).join('');
+      return window._adminSecurityWindow.renderSecurityWindowPersonBadge(person);
     }
 
     function buildSecurityWindowInventory(users, applications) {

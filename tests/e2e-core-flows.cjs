@@ -3,12 +3,13 @@
 /**
  * ISMS 端對端核心流程測試
  *
- * 5 個核心流程：
+ * 6 個核心流程：
  * 1. 登入 → 看到儀表板
  * 2. 填報檢核表 → 儲存草稿
  * 3. 填報教育訓練 → 儲存草稿
  * 4. 開立矯正單（admin）
  * 5. 申請帳號頁面可存取
+ * 6. 資產清冊 → 列表 → 新建 → 讀取 → 軟刪除
  *
  * 用法：node tests/e2e-core-flows.cjs [base-url]
  */
@@ -17,6 +18,13 @@ const http = require('http');
 const BASE = process.argv[2] || 'http://140.112.97.150';
 const ADMIN = { user: 'easonwu', pass: '2wsx#EDC' };
 const UNIT_ADMIN = { user: 'testunit01', pass: 'NewTest1234!' };
+const UNIT_ADMIN_PROFILE = {
+  username: UNIT_ADMIN.user, password: UNIT_ADMIN.pass,
+  name: 'Test Unit Admin', email: 'testunit01@test.local',
+  role: '單位管理員', primaryUnit: '4510',
+  authorizedUnits: ['4510'], securityRoles: ['二級單位資安窗口'],
+  forcePasswordChange: false
+};
 let passed = 0, failed = 0;
 
 function request(method, path, body, token) {
@@ -52,6 +60,23 @@ async function login(user, pass) {
   return (res.json.session && res.json.session.token) || (res.json.item && res.json.item.sessionToken) || null;
 }
 
+async function ensureTestUnitAdmin(adminTok) {
+  // Try logging in first
+  var token = await login(UNIT_ADMIN.user, UNIT_ADMIN.pass);
+  if (token) return token;
+  // Account missing or wrong password — upsert via admin API
+  console.log('  ⚙️  testunit01 login failed, creating account via admin API...');
+  var upsertRes = await request('POST', '/api/system-users/upsert', {
+    action: 'system-user.upsert', payload: UNIT_ADMIN_PROFILE
+  }, adminTok);
+  if (!upsertRes.ok) {
+    console.log('  ⚠️  upsert failed: ' + (upsertRes.json && upsertRes.json.error || upsertRes.raw));
+    return null;
+  }
+  // Retry login with the freshly created account
+  return login(UNIT_ADMIN.user, UNIT_ADMIN.pass);
+}
+
 function test(name, ok, detail) {
   if (ok) { passed++; console.log('  ✅ ' + name); }
   else { failed++; console.log('  ❌ ' + name + (detail ? ' — ' + detail : '')); }
@@ -59,7 +84,7 @@ function test(name, ok, detail) {
 
 async function main() {
   console.log('\n╔══════════════════════════════════════════════════════╗');
-  console.log('║  ISMS 端對端核心流程測試（5 個流程）                   ║');
+  console.log('║  ISMS 端對端核心流程測試（6 個流程）                   ║');
   console.log('╚══════════════════════════════════════════════════════╝\n');
 
   // Flow 1: Admin 登入 → 儀表板 → 看到年度稽核進度
@@ -111,7 +136,7 @@ async function main() {
 
   // Flow 5: 單位管理員待辦 + 公開申請頁面
   console.log('Flow 5: 單位管理員 + 公開頁面');
-  var unitToken = await login(UNIT_ADMIN.user, UNIT_ADMIN.pass);
+  var unitToken = await ensureTestUnitAdmin(adminToken);
   test('單位管理員登入成功', !!unitToken);
   if (unitToken) {
     var tasks = await request('GET', '/api/my-tasks?auditYear=115', null, unitToken);
@@ -122,6 +147,50 @@ async function main() {
   test('公開首頁可存取', applyPage.ok);
   var health = await request('GET', '/api/unit-contact/health');
   test('申請 API health 正常', health.ok);
+  console.log('');
+
+  // Flow 6: 資產清冊 → 列表 → 新建 → 讀取 → 軟刪除
+  console.log('Flow 6: 資產清冊 CRUD');
+  if (adminToken) {
+    // 6a. Health check（公開端點）
+    var assetHealth = await request('GET', '/api/assets/health');
+    test('資產清冊 health 回應正常', assetHealth.ok && assetHealth.json && assetHealth.json.status === 'ok');
+
+    // 6b. 列表查詢
+    var assetList = await request('GET', '/api/assets', null, adminToken);
+    test('資產清冊列表 API 正常', assetList.ok && assetList.json && Array.isArray(assetList.json.items));
+
+    // 6c. 新建資產
+    var newAsset = await request('POST', '/api/assets', {
+      payload: {
+        assetName: '__e2e_test_asset_' + Date.now(),
+        category: '硬體',
+        subCategory: '筆電',
+        ownerName: 'E2E 測試',
+        confidentiality: '普',
+        integrity: '普',
+        availability: '普',
+        legalCompliance: '普'
+      }
+    }, adminToken);
+    test('資產新建成功 (201)', newAsset.status === 201 && newAsset.json && !!newAsset.json.id);
+
+    if (newAsset.json && newAsset.json.id) {
+      var aid = newAsset.json.id;
+
+      // 6d. 讀取單筆
+      var assetDetail = await request('GET', '/api/assets/' + encodeURIComponent(aid), null, adminToken);
+      test('資產單筆讀取成功', assetDetail.ok && assetDetail.json && assetDetail.json.id === aid);
+
+      // 6e. 軟刪除
+      var assetDel = await request('POST', '/api/assets/' + encodeURIComponent(aid) + '/delete', {}, adminToken);
+      test('資產軟刪除成功', assetDel.ok && assetDel.json && assetDel.json.success === true);
+    }
+
+    // 6f. Summary
+    var assetSummary = await request('GET', '/api/assets/summary', null, adminToken);
+    test('資產清冊 Summary API 正常', assetSummary.ok && assetSummary.json && typeof assetSummary.json.year === 'number');
+  }
   console.log('');
 
   // Summary
