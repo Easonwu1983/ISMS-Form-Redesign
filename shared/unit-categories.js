@@ -55,7 +55,6 @@ var ACADEMIC_UNITS = [
 var HIDDEN_UNITS = [
   '國立臺灣大學系統',
   '臺灣永續棧',
-  '文教基金會',
   '臺大醫院環境及職業醫學部',
   '臺大新竹分院',
   '臺大雲林分院',
@@ -83,7 +82,7 @@ function categorizeUnit(unitName) {
   if (ADMIN_UNITS.indexOf(unit) >= 0) return CATEGORY_ADMIN;
   if (ACADEMIC_UNITS.indexOf(unit) >= 0) return CATEGORY_ACADEMIC;
   var academicKw = ['學院', '學系', '研究所', '學位學程', '國際學院'];
-  var centerKw = ['中心', '研究中心', '辦公室', '委員會', '聯盟', '聯合辦公室', '館'];
+  var centerKw = ['中心', '研究中心', '研究院', '辦公室', '委員會', '聯盟', '聯合辦公室', '館', '基金會'];
   if (academicKw.some(function (k) { return unit.indexOf(k) >= 0; })) return CATEGORY_ACADEMIC;
   if (centerKw.some(function (k) { return unit.indexOf(k) >= 0; })) return CATEGORY_CENTER;
   return CATEGORY_ADMIN;
