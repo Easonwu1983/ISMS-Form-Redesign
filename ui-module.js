@@ -539,6 +539,7 @@
     }
 
     let iconRefreshScheduled = false;
+    let iconRefreshSafetyTimer = null;
     function refreshIcons() {
       const lucideApi = window.lucide;
       if (!lucideApi || typeof lucideApi.createIcons !== 'function') {
@@ -560,13 +561,32 @@
         window.clearTimeout(iconRetryTimer);
         iconRetryTimer = null;
       }
+      // Coalesce multiple refreshIcons() calls within the same frame.
+      // Previously: if the raf callback was preempted by rapid DOM mutations
+      // (e.g. fast module switching), iconRefreshScheduled could stay `true`
+      // and block all future refreshes → sidebar icons stuck as <i> placeholders.
+      // Fix: add safety timeout that always resets the flag + runs createIcons.
       if (iconRefreshScheduled) return;
       iconRefreshScheduled = true;
       const raf = window.requestAnimationFrame || function (callback) { return window.setTimeout(callback, 0); };
       raf(function () {
         iconRefreshScheduled = false;
-        lucideApi.createIcons();
+        if (iconRefreshSafetyTimer) {
+          window.clearTimeout(iconRefreshSafetyTimer);
+          iconRefreshSafetyTimer = null;
+        }
+        try { lucideApi.createIcons(); } catch (_) {}
       });
+      // Safety net: if raf is dropped/deferred beyond 150ms, force reset so
+      // the next refreshIcons() call can always schedule a new frame.
+      if (iconRefreshSafetyTimer) window.clearTimeout(iconRefreshSafetyTimer);
+      iconRefreshSafetyTimer = window.setTimeout(function () {
+        iconRefreshSafetyTimer = null;
+        if (iconRefreshScheduled) {
+          iconRefreshScheduled = false;
+          try { lucideApi.createIcons(); } catch (_) {}
+        }
+      }, 150);
     }
 
     function ensureModalRoot() {

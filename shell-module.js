@@ -922,6 +922,12 @@
           if (isMobileViewport()) closeSidebar();
         });
       });
+      // Sidebar has its own lucide <i> placeholders that must be converted to SVG.
+      // During rapid route switching, the attemptRender().finally() path can skip
+      // refreshIcons() due to generation-check abort, leaving sidebar icons stuck
+      // as <i> placeholders. Call refreshIcons() directly here so sidebar icons
+      // are always processed independently of route render lifecycle.
+      refreshIcons();
     }
 
     function renderHeader() {
