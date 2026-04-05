@@ -1,6 +1,6 @@
 # ISMS 資訊安全管理系統
 
-國立臺灣大學資訊安全管理系統（Information Security Management System），涵蓋全校 163 個一級單位、667 個二級單位的內部稽核管考作業。
+國立臺灣大學資訊安全管理系統（Information Security Management System），涵蓋全校 138 個一級單位（扣除 14 個隱藏單位如醫院/副校長室）、667 個二級單位的內部稽核管考作業。
 
 ## 功能模組
 

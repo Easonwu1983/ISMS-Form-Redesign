@@ -2506,7 +2506,24 @@
       try {
         // Fetch DB summary and full unit list in parallel
         const summaryData = await apiCall('GET', '/summary');
-        const allUnitGroups = (window.__OFFICIAL_UNIT_DATA__ && window.__OFFICIAL_UNIT_DATA__.unitGroups) || [];
+        // Build unit list from unitStructure (152 level-1 units, complete)
+        // instead of unitGroups (120, stale and missing 32 units including 管理學院)
+        const officialData = window.__OFFICIAL_UNIT_DATA__ || {};
+        const unitStructure = officialData.unitStructure || {};
+        const unitMetaByValue = officialData.unitMetaByValue || {};
+        const catsRef = window.__UNIT_CATEGORIES__ || {};
+        const hiddenSet = new Set(catsRef.HIDDEN_UNITS || []);
+        const hiddenRegex = /醫院|分院|副校長|紀念品/;
+        const allUnitGroups = Object.keys(unitStructure)
+          .filter(function (name) { return !hiddenSet.has(name) && !hiddenRegex.test(name); })
+          .map(function (name) {
+            const meta = unitMetaByValue[name] || {};
+            return {
+              name: name,
+              code: meta.normalizedCode || meta.code || '',
+              children: unitStructure[name] || []
+            };
+          });
 
         // Build lookup: unitCode -> { assetCount, itCount, cnCount, highRisk, hasCompleted }
         const dbUnits = {};

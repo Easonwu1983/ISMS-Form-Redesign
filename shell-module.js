@@ -903,7 +903,6 @@
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'training-roster' ? 'active' : '') + '" href="#training-roster"><span class="nav-icon">' + ic('users-round') + '</span>' + _t('nav.trainingRoster', '教育訓練名單') + '</a>';
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'unit-review' ? 'active' : '') + '" href="#unit-review"><span class="nav-icon">' + ic('building-2') + '</span>' + _t('nav.unitReview', '單位治理') + '</a>';
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'asset-dashboard' ? 'active' : '') + '" href="#asset-dashboard"><span class="nav-icon">' + ic('bar-chart-3') + '</span>' + _t('nav.assetDashboard', '資產盤點總覽') + '</a>';
-      if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'progress-wall' ? 'active' : '') + '" href="#progress-wall"><span class="nav-icon">' + ic('layout-grid') + '</span>' + _t('nav.progressWall', '填報進度牆') + '</a>';
       if (isAdmin()) sysNav += '<a class="nav-item ' + (route.page === 'data-import' ? 'active' : '') + '" href="#data-import"><span class="nav-icon">' + ic('database') + '</span>' + _t('nav.dataImport', '歷史資料匯入') + '</a>';
       if (sysNav) nav += '<div class="sidebar-section"><div class="sidebar-section-title">' + _t('nav.systemAdmin', '系統管理') + '</div>' + sysNav + '</div>';
 

@@ -799,7 +799,21 @@
         const cl = d.checklist || {};
         const tr = d.training || {};
         const pd = d.pending || {};
-        const totalU = Number(cl.totalUnits) || 163;
+        // Dynamically compute total from SSOT unitStructure minus hidden units
+        // instead of hardcoded 163 fallback. Matches asset-dashboard (138 visible).
+        function computeTotalUnitsFallback() {
+          try {
+            const od = (typeof window !== 'undefined' && window.__OFFICIAL_UNIT_DATA__) || {};
+            const cats = (typeof window !== 'undefined' && window.__UNIT_CATEGORIES__) || {};
+            const struct = od.unitStructure || {};
+            const hidden = new Set(cats.HIDDEN_UNITS || []);
+            const hiddenRegex = /醫院|分院|副校長|紀念品/;
+            const names = Object.keys(struct);
+            if (names.length === 0) return 0;
+            return names.filter(function (n) { return !hidden.has(n) && !hiddenRegex.test(n); }).length;
+          } catch (_) { return 0; }
+        }
+        const totalU = Number(cl.totalUnits) || computeTotalUnitsFallback() || 138;
         const subU = Number(cl.submittedUnits) || 0;
         const filingPct = totalU > 0 ? Math.round(subU / totalU * 100) : 0;
         const avgRate = Number(tr.avgCompletionRate) || 0;
@@ -2167,131 +2181,6 @@ function renderTracking(id) {
     }
   });
 
-  // ── Progress Wall: visual kanban view of all units' filing status ──
-  function renderProgressWall() {
-    const app = document.getElementById('app');
-    if (!app) return;
-
-    const currentAuditYear = String(new Date().getFullYear() - 1911);
-    const yearOptions = [currentAuditYear, String(Number(currentAuditYear) - 1), String(Number(currentAuditYear) - 2)].map(function (y) {
-      return '<option value="' + y + '"' + (y === currentAuditYear ? ' selected' : '') + '>' + y + ' 年度</option>';
-    }).join('');
-
-    app.innerHTML = '<div class="animate-in">'
-      + '<div class="page-header"><h1 class="page-title">' + ic('layout-grid', 'icon-sm') + ' 單位填報進度牆</h1>'
-      + '<div class="page-header-actions">'
-      + '<select class="form-select" id="pw-year-select">' + yearOptions + '</select>'
-      + '<select class="form-select" id="pw-category-filter"><option value="">全部分類</option><option value="行政">行政單位</option><option value="學術">學術單位</option><option value="中心">中心</option></select>'
-      + '</div></div>'
-      + '<div id="pw-board" class="progress-wall-board" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;min-height:300px">'
-      + '<div class="progress-wall-col"><div class="progress-wall-col-header" style="background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:8px 8px 0 0;font-weight:700">未填報</div><div id="pw-not-filed" class="progress-wall-cards" style="min-height:120px;padding:8px;background:#fef2f2;border-radius:0 0 8px 8px"></div></div>'
-      + '<div class="progress-wall-col"><div class="progress-wall-col-header" style="background:#fef9c3;color:#854d0e;padding:12px 16px;border-radius:8px 8px 0 0;font-weight:700">草稿中</div><div id="pw-draft" class="progress-wall-cards" style="min-height:120px;padding:8px;background:#fefce8;border-radius:0 0 8px 8px"></div></div>'
-      + '<div class="progress-wall-col"><div class="progress-wall-col-header" style="background:#dcfce7;color:#166534;padding:12px 16px;border-radius:8px 8px 0 0;font-weight:700">已送出</div><div id="pw-submitted" class="progress-wall-cards" style="min-height:120px;padding:8px;background:#f0fdf4;border-radius:0 0 8px 8px"></div></div>'
-      + '</div></div>';
-
-    var unitCategories = window.__UNIT_CATEGORIES__ || {};
-
-    function classifyUnit(unitName) {
-      if (typeof unitCategories.classify === 'function') return unitCategories.classify(unitName);
-      if (/中心|所|中/.test(unitName)) return '中心';
-      if (/學院|系/.test(unitName)) return '學術';
-      return '行政';
-    }
-
-    function buildUnitCard(unit, color) {
-      var borderColor = color === 'red' ? '#fca5a5' : (color === 'yellow' ? '#fde047' : '#86efac');
-      var dotColor = color === 'red' ? '#ef4444' : (color === 'yellow' ? '#eab308' : '#22c55e');
-      return '<div class="progress-wall-card" style="background:#fff;border:1px solid ' + borderColor + ';border-left:4px solid ' + dotColor + ';border-radius:8px;padding:10px 14px;margin-bottom:8px">'
-        + '<div style="font-weight:600;font-size:0.88rem;color:#1e293b">' + esc(unit.unit || '—') + '</div>'
-        + '<div style="font-size:0.75rem;color:#64748b;margin-top:4px">'
-        + (unit.contact ? ic('user', 'icon-xs') + ' ' + esc(unit.contact) : '')
-        + (unit.updatedAt ? '<span style="margin-left:8px">' + ic('clock', 'icon-xs') + ' ' + esc(unit.updatedAt) + '</span>' : '')
-        + '</div></div>';
-    }
-
-    function loadWall() {
-      var year = document.getElementById('pw-year-select').value;
-      var catFilter = document.getElementById('pw-category-filter').value;
-
-      var notFiledEl = document.getElementById('pw-not-filed');
-      var draftEl = document.getElementById('pw-draft');
-      var submittedEl = document.getElementById('pw-submitted');
-      if (notFiledEl) notFiledEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:16px">載入中...</div>';
-      if (draftEl) draftEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:16px">載入中...</div>';
-      if (submittedEl) submittedEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:16px">載入中...</div>';
-
-      Promise.all([
-        fetch('/api/dashboard/summary?auditYear=' + encodeURIComponent(year)).then(function (r) { return r.json(); }),
-        fetch('/api/checklists?summaryOnly=1&auditYear=' + encodeURIComponent(year)).then(function (r) { return r.json(); })
-      ]).then(function (results) {
-        var summaryData = results[0] && results[0].data ? results[0].data : {};
-        var checklistData = results[1] && results[1].data ? results[1].data : [];
-        var checklistList = Array.isArray(checklistData) ? checklistData : (checklistData.items || []);
-
-        var unitMap = {};
-        checklistList.forEach(function (item) {
-          var unitName = String(item.unit || '').trim();
-          if (!unitName) return;
-          unitMap[unitName] = {
-            unit: unitName,
-            status: item.status || '',
-            contact: item.contact_name || item.contactName || item.filled_by || '',
-            updatedAt: item.updated_at || item.updatedAt || ''
-          };
-        });
-
-        // Build category from units-core or unit-categories
-        var allUnits = [];
-        try {
-          var unitsDetail = window.__UNITS_DETAIL__ || window.__UNITS_DATA__ || [];
-          if (Array.isArray(unitsDetail)) {
-            unitsDetail.forEach(function (u) {
-              var name = String(u.name || u.unit_name || u.unitName || '').trim();
-              if (name && !unitMap[name]) {
-                unitMap[name] = { unit: name, status: '', contact: u.contact || '', updatedAt: '' };
-              }
-            });
-          }
-        } catch (_) {}
-
-        var notFiled = [];
-        var draft = [];
-        var submitted = [];
-
-        Object.keys(unitMap).forEach(function (key) {
-          var entry = unitMap[key];
-          if (catFilter && classifyUnit(entry.unit) !== catFilter) return;
-          if (entry.status === '已送出') submitted.push(entry);
-          else if (entry.status === '草稿' || entry.status === '暫存') draft.push(entry);
-          else notFiled.push(entry);
-        });
-
-        if (notFiledEl) notFiledEl.innerHTML = notFiled.length
-          ? '<div style="font-size:0.75rem;color:#991b1b;padding:4px 8px;font-weight:600">' + notFiled.length + ' 個單位</div>' + notFiled.map(function (u) { return buildUnitCard(u, 'red'); }).join('')
-          : '<div style="color:#94a3b8;text-align:center;padding:24px">全數已填報</div>';
-
-        if (draftEl) draftEl.innerHTML = draft.length
-          ? '<div style="font-size:0.75rem;color:#854d0e;padding:4px 8px;font-weight:600">' + draft.length + ' 個單位</div>' + draft.map(function (u) { return buildUnitCard(u, 'yellow'); }).join('')
-          : '<div style="color:#94a3b8;text-align:center;padding:24px">無草稿中單位</div>';
-
-        if (submittedEl) submittedEl.innerHTML = submitted.length
-          ? '<div style="font-size:0.75rem;color:#166534;padding:4px 8px;font-weight:600">' + submitted.length + ' 個單位</div>' + submitted.map(function (u) { return buildUnitCard(u, 'green'); }).join('')
-          : '<div style="color:#94a3b8;text-align:center;padding:24px">尚無送出</div>';
-
-        scheduleRefreshIcons();
-      }).catch(function () {
-        if (notFiledEl) notFiledEl.innerHTML = '<div style="color:#ef4444;text-align:center;padding:24px">載入失敗，請稍後再試</div>';
-      });
-    }
-
-    var yearSelect = document.getElementById('pw-year-select');
-    var catSelect = document.getElementById('pw-category-filter');
-    if (yearSelect) bindCasePageEvent(yearSelect, 'change', loadWall);
-    if (catSelect) bindCasePageEvent(catSelect, 'change', loadWall);
-    loadWall();
-    scheduleRefreshIcons();
-  }
-
   // ── Historical Data Import: CSV upload for 112/113 年度 data ──
   function renderDataImport() {
     var app = document.getElementById('app');
@@ -2414,7 +2303,6 @@ function renderTracking(id) {
       renderDetail,
       renderRespond,
       renderTracking,
-      renderProgressWall,
       renderDataImport
     };
   };

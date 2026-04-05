@@ -234,13 +234,6 @@
           fallback: 'assets',
           render: () => ensureModule(d.ensureAssetInventoryModule, d.getAssetInventoryModule).then((m) => m.renderYearComparison())
         },
-        'progress-wall': {
-          title: '單位填報進度牆',
-          allow: () => d.isAdmin(),
-          fallback: 'dashboard',
-          deniedMessage: '只有最高管理者可以查看填報進度牆',
-          render: () => ensureModule(d.ensureCaseModule, d.getCaseModule).then((module) => module.renderProgressWall())
-        },
         'data-import': {
           title: '歷史資料匯入',
           allow: () => d.isAdmin(),

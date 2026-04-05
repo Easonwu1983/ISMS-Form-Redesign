@@ -142,7 +142,8 @@ function createOpsRouter(deps) {
           db.queryOne(`SELECT COUNT(*) FILTER (WHERE status = '待矯正')::int AS pending_correction, COUNT(*) FILTER (WHERE status = '已提案')::int AS proposed, COUNT(*) FILTER (WHERE status = '追蹤中')::int AS tracking, COUNT(*) FILTER (WHERE status NOT IN ('結案'))::int AS open_total FROM corrective_actions`)
         ]);
         const cs = checklistStats || {}; const ts = trainingStats || {}; const pa = pendingApps || {}; const pc = pendingCases || {};
-        const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 163);
+        // Total visible level-1 units: 152 in unitStructure - 14 hidden = 138
+        const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 138);
         const data = {
           checklist: { totalUnits, submittedUnits: Number(cs.submitted_units) || 0, notFiledUnits: totalUnits - (Number(cs.submitted_units) || 0), draftCount: Number(cs.draft_count) || 0, auditYear },
           training: { completedForms: Number(ts.completed_forms) || 0, draftForms: Number(ts.draft_forms) || 0, pendingForms: Number(ts.pending_forms) || 0, returnedForms: Number(ts.returned_forms) || 0, avgCompletionRate: Number(ts.avg_completion_rate) || 0 },
@@ -173,7 +174,8 @@ function createOpsRouter(deps) {
           db.queryOne(`SELECT COUNT(*) FILTER (WHERE status = '結案')::int AS closed, COUNT(*) FILTER (WHERE status NOT IN ('結案') AND corrective_due_date < NOW() AND corrective_due_date IS NOT NULL)::int AS overdue FROM corrective_actions`)
         ]);
         const cs = checklistStats || {}; const ts = trainingStats || {}; const pa = pendingApps || {}; const pc = pendingCases || {}; const oc = overdueCounts || {};
-        const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 163);
+        // Total visible level-1 units: 152 in unitStructure - 14 hidden = 138
+        const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 138);
         const docxData = {
           checklist: { totalUnits, submittedUnits: Number(cs.submitted_units) || 0, notFiledUnits: totalUnits - (Number(cs.submitted_units) || 0), draftCount: Number(cs.draft_count) || 0, auditYear },
           training: { completedForms: Number(ts.completed_forms) || 0, draftForms: Number(ts.draft_forms) || 0, pendingForms: Number(ts.pending_forms) || 0, returnedForms: Number(ts.returned_forms) || 0, avgCompletionRate: Number(ts.avg_completion_rate) || 0 },

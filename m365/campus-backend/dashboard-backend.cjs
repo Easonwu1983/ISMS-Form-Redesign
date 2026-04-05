@@ -118,7 +118,8 @@ function createDashboardRouter(deps) {
         const ts = trainingStats || {};
         const pa = pendingApps || {};
         const pc = pendingCases || {};
-        const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 163);
+        // Total visible level-1 units: 152 in unitStructure - 14 hidden (醫院/副校長/etc.) = 138
+        const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 138);
         const submittedUnits = Number(cs.submitted_units) || 0;
         const pendingTotal = (Number(pa.pending_review) || 0) + (Number(pa.activation_pending) || 0)
           + (Number(pc.pending_correction) || 0) + (Number(pc.proposed) || 0) + (Number(pc.tracking) || 0);
