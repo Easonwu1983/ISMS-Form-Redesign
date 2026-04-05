@@ -10,16 +10,26 @@ const GOVERNANCE_QUERY_CACHE_MAX = 24;
 const INVENTORY_QUERY_CACHE_MAX = 24;
 const GOVERNANCE_CATEGORY_ORDER = ['行政單位', '學術單位', '中心 / 研究單位'];
 const GOVERNANCE_PENDING_STATUSES = new Set(['pending_review', 'returned', 'approved', 'activation_pending']);
-const HIDDEN_OFFICIAL_UNIT_VALUES = new Set(['國立臺灣大學系統']);
 const CENTER_OVERRIDE_UNITS = new Set([
   '學校分部總辦事處',
   '學校分部總辦事處竹北分部籌備小組',
   '學校分部總辦事處雲林分部籌備小組'
 ]);
 // 引用共用白名單（Single Source of Truth）
-const { ADMIN_UNITS, ACADEMIC_UNITS } = require('../../shared/unit-categories.js');
+const { ADMIN_UNITS, ACADEMIC_UNITS, HIDDEN_UNITS } = require('../../shared/unit-categories.js');
 const ADMIN_PRIMARY_WHITELIST = new Set(ADMIN_UNITS);
 const ACADEMIC_PRIMARY_WHITELIST = new Set(ACADEMIC_UNITS);
+// Hidden units from SSOT (醫院/分院/副校長/紀念品/etc.) — these should NEVER appear
+// in unit governance, asset dashboard, or any user-facing count. Match frontend.
+const HIDDEN_OFFICIAL_UNIT_VALUES = new Set(HIDDEN_UNITS || []);
+const HIDDEN_UNIT_REGEX = /醫院|分院|副校長|紀念品/;
+function isHiddenUnit(name) {
+  const cleaned = String(name || '').trim();
+  if (!cleaned) return false;
+  if (HIDDEN_OFFICIAL_UNIT_VALUES.has(cleaned)) return true;
+  if (HIDDEN_UNIT_REGEX.test(cleaned)) return true;
+  return false;
+}
 
 function createUnitGovernanceRouter(deps) {
   const {
@@ -458,28 +468,32 @@ function createUnitGovernanceRouter(deps) {
   function loadOfficialUnits() {
     if (Array.isArray(state.officialUnits)) return state.officialUnits;
     const unitData = require('../../units-data.json');
-    const catalog = Array.isArray(unitData && unitData.unitCatalog) ? unitData.unitCatalog : [];
+    // SSOT: use unitStructure (152 level-1 units) as authoritative top-level list.
+    // This matches frontend asset-dashboard and dashboard counts (138 visible).
+    // unitCatalog is flat and has extra non-top parents which cause count mismatch.
+    const unitStructure = unitData && unitData.unitStructure && typeof unitData.unitStructure === 'object'
+      ? unitData.unitStructure
+      : {};
     const rawMeta = unitData && unitData.unitMetaByValue && typeof unitData.unitMetaByValue === 'object'
       ? unitData.unitMetaByValue
       : {};
     const metaByValue = new Map(Object.entries(rawMeta).map(([key, value]) => [cleanText(key), value || {}]));
     const groups = new Map();
-    catalog.forEach((entry) => {
-      const source = entry && typeof entry === 'object' ? entry : { value: entry };
-      const value = cleanText(source.value);
-      if (!value || HIDDEN_OFFICIAL_UNIT_VALUES.has(value)) return;
-      const parsed = splitUnitValue(value);
-      const parent = cleanText(source.topName || parsed.parent || value);
-      const child = cleanText(source.childName || parsed.child);
-      if (!parent || HIDDEN_OFFICIAL_UNIT_VALUES.has(parent)) return;
+    Object.keys(unitStructure).forEach((parentName) => {
+      const parent = cleanText(parentName);
+      if (!parent || isHiddenUnit(parent)) return;
+      const children = Array.isArray(unitStructure[parentName]) ? unitStructure[parentName] : [];
       if (!groups.has(parent)) {
         groups.set(parent, {
           unit: parent,
-          category: categorizeTopLevelUnit(parent, metaByValue, source),
+          category: categorizeTopLevelUnit(parent, metaByValue, { value: parent, topName: parent }),
           children: new Set()
         });
       }
-      if (child) groups.get(parent).children.add(child);
+      children.forEach((child) => {
+        const childName = cleanText(typeof child === 'string' ? child : (child && (child.name || child.value || child.childName)));
+        if (childName) groups.get(parent).children.add(childName);
+      });
     });
     state.officialUnits = Array.from(groups.values())
       .map((entry) => ({
