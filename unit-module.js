@@ -30,10 +30,11 @@
     // 引用 shared/unit-categories.js 的隱藏名單（Single Source of Truth）
     const _uch = (typeof window !== 'undefined' && window.__UNIT_CATEGORIES__ && window.__UNIT_CATEGORIES__.HIDDEN_UNITS) || [];
     const HIDDEN_OFFICIAL_UNIT_VALUES = new Set(_uch);
-    const TRAINING_DASHBOARD_EXCLUDED_UNITS = new Set([
-      '學校分部總辦事處',
-      '國立臺灣大學系統'
-    ]);
+    // Align with SSOT: all hidden units are handled by HIDDEN_OFFICIAL_UNIT_VALUES.
+    // This set should now be empty to match asset-dashboard/unit-review/security-window
+    // counts (138 total, 106 中心/研究). Previously excluded 學校分部總辦事處 which
+    // caused training to show 105 instead of 106.
+    const TRAINING_DASHBOARD_EXCLUDED_UNITS = new Set();
     const UNIT_CASCADE_SEARCH_BLUR_DELAY_MS = 180;
     let officialUnitsCache = null;
     let officialUnitCatalogCache = null;
