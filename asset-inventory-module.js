@@ -2592,12 +2592,17 @@
           const groupPct = units.length > 0 ? Math.round(groupCompleted / units.length * 100) : 0;
           const groupId = 'dash-group-' + idx;
 
+          // Default: collapse third group (中心/研究), keep 行政 and 學術 expanded
+          const defaultCollapsed = idx >= 2;
+          const initialArrow = defaultCollapsed ? '\u25b8' : '\u25be';
+          const initialBodyStyle = defaultCollapsed ? ' style="display:none"' : '';
           groupsHtml += '<div class="card review-table-card asset-mb-16">'
-            + '<div class="card-header" style="cursor:pointer;" data-action="app.toggleDashGroup" data-target="' + groupId + '">'
-            + '<span class="card-title">' + ic(cat.icon) + ' ' + esc(cat.label) + '</span>'
-            + '<span class="review-card-subtitle">' + units.length + ' \u500b\u55ae\u4f4d \u00b7 ' + groupCompleted + ' \u5df2\u5b8c\u6210</span>'
+            + '<div class="card-header dash-group-header" style="cursor:pointer;display:flex;align-items:center;gap:12px;" data-action="app.toggleDashGroup" data-target="' + groupId + '">'
+            + '<span class="card-title" style="flex:1;">' + ic(cat.icon) + ' ' + esc(cat.label) + '</span>'
+            + '<span class="review-card-subtitle">' + units.length + ' \u500b\u55ae\u4f4d \u00b7 ' + groupCompleted + ' / ' + units.length + ' \u5df2\u5b8c\u6210 (' + groupPct + '%)</span>'
+            + '<span class="dash-group-arrow" style="font-size:1.1rem;color:var(--text-secondary);">' + initialArrow + '</span>'
             + '</div>'
-            + '<div class="card-body" id="' + groupId + ' asset-pad-0">'
+            + '<div class="card-body asset-pad-0" id="' + groupId + '"' + initialBodyStyle + '>'
             + '<table class="asset-table">'
             + '<thead><tr>'
             + '<th class="asset-th">\u55ae\u4f4d\u540d\u7a31</th>'
