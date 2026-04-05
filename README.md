@@ -60,6 +60,7 @@ sudo systemctl restart isms-unit-contact-backend.service
 | `docs/boot-checklist.md` | 開機檢查清單 |
 | `docs/release-and-rollback.md` | 上版與回滾流程 |
 | `docs/production-topology.md` | 正式環境拓撲 |
+| `docs/cross-module-consistency-guide.md` | **跨模組資料一致性排查指南**（SSOT 架構、常見陷阱、工具箱）|
 | `CHANGELOG.md` | 版本歷史與變更紀錄 |
 
 ### 測試報告

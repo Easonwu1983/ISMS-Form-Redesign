@@ -24,6 +24,7 @@
 - 切帳號 / 交接 AI：看 `account-handoff-checklist.md`
 - 要正式上版：看 `pre-release-must-read.md`
 - 要查完整背景：看 `boot-checklist.md`、`release-and-rollback.md`、`vm-migration-checklist.md`
+- **數字在各頁顯示不一致**：看 `cross-module-consistency-guide.md`（SSOT 架構、偵錯流程、工具箱）
 
 ## 最近已經寫死的坑
 

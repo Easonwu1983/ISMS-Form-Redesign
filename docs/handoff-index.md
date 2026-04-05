@@ -9,3 +9,4 @@
 5. [開機清單](./boot-checklist.md) — 服務啟動檢查
 6. [上版與回滾](./release-and-rollback.md) — 部署流程
 7. [正式環境拓撲](./production-topology.md) — 架構圖
+8. [跨模組一致性排查指南](./cross-module-consistency-guide.md) — SSOT 架構、「同一數字各頁不同」的偵錯方法、工具箱（**遇到數據問題必讀**）
