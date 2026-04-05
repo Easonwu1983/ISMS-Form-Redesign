@@ -1018,12 +1018,16 @@
       const thisGeneration = ++routeRenderGeneration;
       // ── Route transition: skeleton placeholder (only if render hasn't finished yet) ──
       const appEl = document.getElementById('app');
+      // Only show skeleton if render takes longer than 150ms (was 300ms).
+      // Most renders complete in 2-30ms so skeleton rarely shows — this just
+      // avoids a flash-of-old-content on slow renders without introducing
+      // artificial wait time.
       setTimeout(function () {
         if (thisGeneration !== routeRenderGeneration) return;
         if (appEl && !appEl.querySelector('.skeleton-container') && !appEl.querySelector('.animate-in') && !appEl.querySelector('.page-title') && !appEl.querySelector('.dashboard-section-title')) {
           appEl.innerHTML = '<div class="skeleton-container animate-in"><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-grid"><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div><div class="skeleton-card"><div class="skeleton-line skeleton-line--short"></div><div class="skeleton-line skeleton-line--long"></div><div class="skeleton-line skeleton-line--medium"></div></div></div></div>';
         }
-      }, 300);
+      }, 150);
       let renderAttempt = 0;
       function attemptRender() {
         if (thisGeneration !== routeRenderGeneration) return Promise.resolve();

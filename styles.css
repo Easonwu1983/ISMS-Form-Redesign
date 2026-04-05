@@ -3011,7 +3011,7 @@ body.modal-open {
 @keyframes fadeSlideIn {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(4px);
   }
 
   to {
@@ -3020,8 +3020,18 @@ body.modal-open {
   }
 }
 
+/* Route transition animation — reduced from 400ms → 150ms to cut perceived
+ * module switch latency. 400ms felt sluggish when users rapidly clicked nav
+ * items. 150ms gives subtle feedback without blocking perception. */
 .animate-in {
-  animation: fadeSlideIn 400ms ease forwards;
+  animation: fadeSlideIn 150ms ease-out forwards;
+}
+
+/* Respect users who prefer reduced motion — disable entirely */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in {
+    animation: none;
+  }
 }
 
 /* ── Route transition fade ── */
@@ -3038,7 +3048,7 @@ body.modal-open {
 
 .skeleton-container {
   padding: 8px 0;
-  animation: fadeIn 200ms ease;
+  animation: fadeIn 100ms ease;
 }
 
 .skeleton-line {
