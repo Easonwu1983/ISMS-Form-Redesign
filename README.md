@@ -60,6 +60,14 @@ sudo systemctl restart isms-unit-contact-backend.service
 | `docs/boot-checklist.md` | 開機檢查清單 |
 | `docs/release-and-rollback.md` | 上版與回滾流程 |
 | `docs/production-topology.md` | 正式環境拓撲 |
+| `CHANGELOG.md` | 版本歷史與變更紀錄 |
+
+### 測試報告
+
+| 報告 | 說明 |
+|------|------|
+| `test-artifacts/three-role-browser-test-report-2026-04-04.md` | 三角色（Admin/L1/L2）瀏覽器真實性測試與資料隔離驗證 |
+| `test-artifacts/ux-audit-report-2026-04-04.md` | UX 完整性巡檢（i18n/A11Y/英文殘留/版本 hash）|
 
 ## 專案結構
 

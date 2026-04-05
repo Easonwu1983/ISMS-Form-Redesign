@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-04-05
+
+### Testing
+- 三角色瀏覽器真實性測試 — Admin/L1/L2 資料隔離 8/8 通過、頁面渲染 15/15 通過
+- 三輪 UX 完整性測試 — 19 頁面全掃描、零問題
+- 響應式解析度支援完整測試 — 4 種斷點（1920/1280/768/375）CSS 靜態審計
+
+### Fixes
+- **第二輪 UX** (12 項修復 `2a29107`)
+  - 側邊欄 4 個 i18n key 翻譯 (`nav.checklistCompare`/`nav.progressWall`/`nav.dataImport`/`nav.help`/`nav.tutorial`)
+  - NAV.HELP 區塊隱藏（未實作功能）
+  - `#asset-create` 管理員白屏 → 加入提示與導引按鈕
+  - 「ISSUE ROUTING」英文 → 「案件流轉」
+  - 操作軌跡事件類型中文化（28 項對照）
+  - 版本 hash 截短至 7 字元
+  - 登入失敗紀錄 `—` → `(未知帳號)`
+  - 矯正單統計卡 `—` → `0`
+  - 儀表板空白區域 CSS 調整
+- **第三輪 A11Y** (140+ 按鈕補 aria-label `33c5299`)
+  - `asset-inventory-module.js` 5 個 icon-only 按鈕
+  - `admin-module.js` 2 個 icon-only 按鈕
+  - `checklist-module.js` 98 個 edit/delete 按鈕
+  - `training-module.js` 42 個刪除按鈕
+- **響應式 CSS 審計** (9 類修復 `b451af4`)
+  - 表單觸控目標 `min-height: 44px` + `font-size: 1rem`（WCAG + iOS no-zoom）
+  - Record ID 欄位 320px 固定寬 → mobile `width: auto`
+  - 資產表頭 `white-space: nowrap` → mobile `normal`
+  - Dashboard hero 裝飾 320px → 120px/480px 隱藏
+  - Kanban 看板斷點修正（600→700px 為 2 欄）
+  - 矯正單 Timeline mobile 定位
+  - 登入頁裝飾圓 460px → mobile 200px
+  - Nav item 觸控目標 44px
+  - Dashboard pill 間距 mobile 縮減
+- 部署快取失效 — deploy-manifest versionKey bump (`359646c`)
+
+### Docs
+- CHANGELOG.md 更新 2026-04-05 三輪測試修復紀錄
+- test-artifacts/ 新增三份測試報告（three-role-browser/ux-audit/responsive）
+
 ## 2026-04-04
 
 ### Features
