@@ -145,7 +145,7 @@ function createOpsRouter(deps) {
         // Total visible level-1 units: 152 in unitStructure - 14 hidden = 138
         const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 138);
         const data = {
-          checklist: { totalUnits, submittedUnits: Number(cs.submitted_units) || 0, notFiledUnits: totalUnits - (Number(cs.submitted_units) || 0), draftCount: Number(cs.draft_count) || 0, auditYear },
+          checklist: { totalUnits, submittedUnits: Number(cs.submitted_units) || 0, notFiledUnits: Math.max(0, totalUnits - (Number(cs.submitted_units) || 0) - (Number(cs.draft_count) || 0)), draftCount: Number(cs.draft_count) || 0, auditYear },
           training: { completedForms: Number(ts.completed_forms) || 0, draftForms: Number(ts.draft_forms) || 0, pendingForms: Number(ts.pending_forms) || 0, returnedForms: Number(ts.returned_forms) || 0, avgCompletionRate: Number(ts.avg_completion_rate) || 0 },
           pending: { applicationsPendingReview: Number(pa.pending_review) || 0, activationPending: Number(pa.activation_pending) || 0, correctivePending: Number(pc.pending_correction) || 0, correctiveProposed: Number(pc.proposed) || 0, correctiveTracking: Number(pc.tracking) || 0, correctiveOpenTotal: Number(pc.open_total) || 0, totalPendingItems: (Number(pa.pending_review) || 0) + (Number(pa.activation_pending) || 0) + (Number(pc.pending_correction) || 0) + (Number(pc.proposed) || 0) + (Number(pc.tracking) || 0) }
         };
@@ -177,7 +177,7 @@ function createOpsRouter(deps) {
         // Total visible level-1 units: 152 in unitStructure - 14 hidden = 138
         const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 138);
         const docxData = {
-          checklist: { totalUnits, submittedUnits: Number(cs.submitted_units) || 0, notFiledUnits: totalUnits - (Number(cs.submitted_units) || 0), draftCount: Number(cs.draft_count) || 0, auditYear },
+          checklist: { totalUnits, submittedUnits: Number(cs.submitted_units) || 0, notFiledUnits: Math.max(0, totalUnits - (Number(cs.submitted_units) || 0) - (Number(cs.draft_count) || 0)), draftCount: Number(cs.draft_count) || 0, auditYear },
           training: { completedForms: Number(ts.completed_forms) || 0, draftForms: Number(ts.draft_forms) || 0, pendingForms: Number(ts.pending_forms) || 0, returnedForms: Number(ts.returned_forms) || 0, avgCompletionRate: Number(ts.avg_completion_rate) || 0 },
           pending: { applicationsPendingReview: Number(pa.pending_review) || 0, activationPending: Number(pa.activation_pending) || 0, correctivePending: Number(pc.pending_correction) || 0, correctiveProposed: Number(pc.proposed) || 0, correctiveTracking: Number(pc.tracking) || 0, correctiveOpenTotal: Number(pc.open_total) || 0, correctiveOverdue: Number(oc.overdue) || 0, correctiveClosed: Number(oc.closed) || 0, totalPendingItems: (Number(pa.pending_review) || 0) + (Number(pa.activation_pending) || 0) + (Number(pc.pending_correction) || 0) + (Number(pc.proposed) || 0) + (Number(pc.tracking) || 0) },
           correctiveDetails: correctiveDetails || []

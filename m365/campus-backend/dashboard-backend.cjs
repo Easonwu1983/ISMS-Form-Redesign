@@ -120,7 +120,34 @@ function createDashboardRouter(deps) {
         const pc = pendingCases || {};
         // Total visible level-1 units: 152 in unitStructure - 14 hidden (醫院/副校長/etc.) = 138
         const totalUnits = Math.max(Number(cs.total_filing_units) || 0, 138);
-        const submittedUnits = Number(cs.submitted_units) || 0;
+
+        // Filter checklist rows: exclude hidden units and level-2 (containing '／')
+        // so that submitted/draft/notFiled counts match the level-1 total (138).
+        const { HIDDEN_UNITS } = require('../../shared/unit-categories.js');
+        const hiddenSet = new Set(HIDDEN_UNITS || []);
+        const hiddenRegex = /醫院|分院|副校長|紀念品/;
+        const isLevel1Visible = function (unitName) {
+          const name = String(unitName || '').trim();
+          if (!name) return false;
+          if (name.indexOf('／') >= 0 || name.indexOf('/') >= 0) return false; // level-2
+          if (hiddenSet.has(name)) return false;
+          if (hiddenRegex.test(name)) return false;
+          return true;
+        };
+        const rawByUnit = Array.isArray(checklistByUnit) ? checklistByUnit : [];
+        const level1ByUnit = rawByUnit.filter(function (r) { return isLevel1Visible(r && r.unit); });
+        // Count distinct level-1 units by status
+        const submittedLv1 = new Set();
+        const draftLv1 = new Set();
+        level1ByUnit.forEach(function (r) {
+          const status = String(r.status || '').trim();
+          if (status === '已送出') submittedLv1.add(r.unit);
+          else if (status === '草稿') draftLv1.add(r.unit);
+        });
+        const submittedUnits = submittedLv1.size;
+        const draftCount = draftLv1.size;
+        const notFiledUnits = Math.max(0, totalUnits - submittedUnits - draftCount);
+
         const pendingTotal = (Number(pa.pending_review) || 0) + (Number(pa.activation_pending) || 0)
           + (Number(pc.pending_correction) || 0) + (Number(pc.proposed) || 0) + (Number(pc.tracking) || 0);
 
@@ -128,11 +155,11 @@ function createDashboardRouter(deps) {
           checklist: {
             totalUnits,
             submittedUnits,
-            notFiledUnits: totalUnits - submittedUnits,
-            draftCount: Number(cs.draft_count) || 0,
+            notFiledUnits,
+            draftCount,
             submittedCount: Number(cs.submitted_count) || 0,
             auditYear,
-            byUnit: (checklistByUnit || []).map(function (r) { return { unit: r.unit, status: r.status, count: Number(r.count) || 0 }; })
+            byUnit: level1ByUnit.map(function (r) { return { unit: r.unit, status: r.status, count: Number(r.count) || 0 }; })
           },
           training: {
             totalForms: Number(ts.total_forms) || 0,
