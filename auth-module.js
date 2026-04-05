@@ -234,11 +234,42 @@
       if (cacheKey === authSessionCacheKey) {
         return authSessionCacheValue ? { ...authSessionCacheValue } : null;
       }
-      const parsed = localRaw ? (() => { try { return JSON.parse(localRaw); } catch (_) { return null; } })() : null;
-      const fallback = parsed || (sessionRaw ? (() => { try { return JSON.parse(sessionRaw); } catch (_) { return null; } })() : null);
+      const parseJson = function (raw) {
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch (_) { return null; }
+      };
+      const localParsed = parseJson(localRaw);
+      const sessionParsed = parseJson(sessionRaw);
+
+      // Choose the fresher session between localStorage and sessionStorage.
+      // Previously preferred localStorage, but if admin updates own unit via
+      // 帳號管理, sessionStorage gets the new value while localStorage stays
+      // stale, causing currentUser() to return empty primaryUnit inconsistently.
+      // Pick by updatedAt timestamp; fall back to whichever exists.
+      let chosen = null;
+      if (localParsed && sessionParsed) {
+        const sameUser = String(localParsed.username || '') === String(sessionParsed.username || '')
+          && String(localParsed.sessionToken || '') === String(sessionParsed.sessionToken || '');
+        if (sameUser) {
+          const localTs = Date.parse(String(localParsed.updatedAt || '')) || 0;
+          const sessionTs = Date.parse(String(sessionParsed.updatedAt || '')) || 0;
+          chosen = sessionTs > localTs ? sessionParsed : localParsed;
+          // If sessionStorage is newer, backfill localStorage so subsequent
+          // tabs/reloads get the up-to-date record.
+          if (sessionTs > localTs) {
+            try { localStorage.setItem(AUTH_KEY, JSON.stringify(sessionParsed)); } catch (_) {}
+          }
+        } else {
+          // Different users — prefer localStorage (persistent across tabs)
+          chosen = localParsed;
+        }
+      } else {
+        chosen = localParsed || sessionParsed;
+      }
+
       authSessionCacheKey = cacheKey;
-      authSessionCacheValue = fallback ? { ...fallback } : null;
-      return fallback ? { ...fallback } : null;
+      authSessionCacheValue = chosen ? { ...chosen } : null;
+      return chosen ? { ...chosen } : null;
     }
 
     async function verifyLocalPassword(user, password) {

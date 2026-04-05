@@ -941,17 +941,45 @@
       }
 
       // --- Section 1: Basic Information ---
-      // Admin without unit: show notice and fallback
-      if (!isEdit && !(user.primaryUnit || user.unit || '').trim()) {
+      // Check all possible unit fields — user may have unit in any of these
+      // depending on how the account was set up (primaryUnit/unit/activeUnit/authorizedUnits).
+      function pickUserUnit(u) {
+        const candidates = [
+          u && u.activeUnit,
+          u && u.primaryUnit,
+          u && u.unit,
+          u && Array.isArray(u.authorizedUnits) && u.authorizedUnits[0],
+          u && Array.isArray(u.units) && u.units[0]
+        ];
+        for (let i = 0; i < candidates.length; i++) {
+          const v = String(candidates[i] || '').trim();
+          if (v) return v;
+        }
+        return '';
+      }
+      const effectiveUserUnit = pickUserUnit(user);
+      // Admin without any unit binding: show notice and fallback
+      if (!isEdit && !effectiveUserUnit) {
         appEl.innerHTML = '<div class="animate-in"><div class="page-header"><div><h1 class="page-title">' + ic('alert-triangle') + ' 無法新增資產</h1>'
           + '<p class="page-subtitle">目前帳號未綁定單位，最高管理員請先至「帳號管理」設定主要單位，或切換至單位管理員帳號操作。</p></div></div>'
           + '<div style="margin-top:16px"><a class="btn btn-primary" href="#assets">' + ic('arrow-left') + ' 返回資產清冊</a>'
-          + ' <a class="btn btn-secondary" href="#users">' + ic('settings') + ' 前往帳號管理</a></div></div>';
+          + ' <a class="btn btn-secondary" href="#users" data-action="app.navToUsers">' + ic('settings') + ' 前往帳號管理</a></div></div>';
         scheduleRefreshIcons();
+        // Explicit click handler for 前往帳號管理 — anchor href is sometimes
+        // intercepted or cached; force hash navigation + reload if stuck.
+        try {
+          const navBtn = appEl.querySelector('[data-action="app.navToUsers"]');
+          if (navBtn) {
+            navBtn.addEventListener('click', function (ev) {
+              ev.preventDefault();
+              window.location.hash = '#users';
+            });
+          }
+        } catch (_) {}
         return;
       }
       // 資產編號：新建時由系統自動產生（NTU-{unitCode}-IS3-{cat}-F{seq}）
-      const userUnitCode = (user.primaryUnit || user.unit || '').replace(/\./g, '').replace(/^0+/, '').padStart(3, '0');
+      const userUnitCode = effectiveUserUnit.replace(/\./g, '').replace(/^0+/, '').padStart(3, '0');
       const idPreview = isEdit ? a.assetId : 'NTU-' + userUnitCode + '-IS3-{分類}-F{序號}';
       const basicHtml = ''
         + '<div class="form-row">'
