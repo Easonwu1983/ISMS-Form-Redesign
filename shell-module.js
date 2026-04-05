@@ -882,7 +882,7 @@
         '<a class="nav-item ' + (route.page === 'list' ? 'active' : '') + '" href="#list"><span class="nav-icon">' + ic('file-text') + '</span>' + _t('nav.corrective', '矯正單列表') + (pendingCount ? '<span class="nav-badge">' + pendingCount + '</span>' : '') + '</a>' +
         '<a class="nav-item ' + (route.page === 'checklist' || route.page === 'checklist-fill' || route.page === 'checklist-detail' ? 'active' : '') + '" href="#checklist"><span class="nav-icon">' + ic('clipboard-check') + '</span>' + _t('nav.checklist', '內稽檢核表') + '</a>' +
         '<a class="nav-item ' + (route.page === 'training' || route.page === 'training-fill' || route.page === 'training-detail' || route.page === 'training-roster' ? 'active' : '') + '" href="#training"><span class="nav-icon">' + ic('graduation-cap') + '</span>' + _t('nav.training', '資安教育訓練統計') + '</a>' +
-        '<a class="nav-item ' + (/^asset/.test(route.page) ? 'active' : '') + '" href="#assets"><span class="nav-icon">' + ic('database') + '</span>' + _t('nav.assets', '資訊資產盤點') + '</a></div>';
+        '<a class="nav-item ' + (route.page === 'assets' || route.page === 'asset-create' || route.page === 'asset-edit' || route.page === 'asset-detail' ? 'active' : '') + '" href="#assets"><span class="nav-icon">' + ic('database') + '</span>' + _t('nav.assets', '資訊資產盤點') + '</a></div>';
 
       let opNav = '';
       if (canCreateCAR()) opNav += '<a class="nav-item ' + (route.page === 'create' ? 'active' : '') + '" href="#create"><span class="nav-icon">' + ic('pen-tool') + '</span>' + _t('nav.createCase', '開立矯正單') + '</a>';
