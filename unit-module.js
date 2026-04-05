@@ -43,6 +43,36 @@
     function getOfficialUnits() {
       if (Array.isArray(officialUnitsCache)) return officialUnitsCache.slice();
       try {
+        // SSOT: use unitStructure keys (152 level-1 units) as authoritative list.
+        // unitCatalog includes entries that don't belong to any level-1 unit structure
+        // (e.g. 學分學程, 性別平等教育委員會), causing counts to drift (+11 units).
+        // This mirrors asset-dashboard and unit-governance-backend for 138 consistency.
+        const officialData = (typeof window !== 'undefined' && window.__OFFICIAL_UNIT_DATA__) || null;
+        const unitStructure = officialData && officialData.unitStructure && typeof officialData.unitStructure === 'object'
+          ? officialData.unitStructure
+          : null;
+        if (unitStructure && Object.keys(unitStructure).length > 0) {
+          const filteredLevel1 = Object.keys(unitStructure)
+            .map((entry) => String(entry || '').trim())
+            .filter((entry) => entry && !HIDDEN_OFFICIAL_UNIT_VALUES.has(entry) && !/醫院|分院|副校長|紀念品/.test(entry) && !entry.includes('?'));
+          // Also include level-2 children for use cases that need the flat list
+          // (e.g. case handling, asset owner lookups). These pass through without
+          // affecting level-1 counts since callers that need level-1 use isOfficialUnit
+          // on the parent name.
+          const level1Set = new Set(filteredLevel1);
+          const flat = filteredLevel1.slice();
+          Object.keys(unitStructure).forEach((parent) => {
+            if (!level1Set.has(parent)) return; // skip filtered-out parents' children
+            const children = Array.isArray(unitStructure[parent]) ? unitStructure[parent] : [];
+            children.forEach((child) => {
+              const childName = String(typeof child === 'string' ? child : (child && (child.name || child.value || ''))).trim();
+              if (childName) flat.push(parent + '／' + childName);
+            });
+          });
+          officialUnitsCache = flat;
+          return officialUnitsCache.slice();
+        }
+        // Fallback: legacy unitCatalog list (for environments without unitStructure)
         if (typeof window !== 'undefined' && typeof window.getOfficialUnitList_ === 'function') {
           const units = window.getOfficialUnitList_();
           if (Array.isArray(units)) {
