@@ -1988,7 +1988,22 @@
 
     function buildGovernanceTopLevelUnitIndex() {
       const entries = Array.isArray(UNIT_SEARCH_ENTRIES) ? UNIT_SEARCH_ENTRIES : [];
+      // SSOT whitelist: only include units that exist in unitStructure (152 level-1 units)
+      // AND are NOT in HIDDEN_UNITS (14 hidden → 138 visible). This unifies count
+      // across dashboard (138 total) and asset-dashboard (138 breakdown).
+      const officialData = (typeof window !== 'undefined' && window.__OFFICIAL_UNIT_DATA__) || {};
+      const unitStructureKeys = officialData.unitStructure ? new Set(Object.keys(officialData.unitStructure)) : null;
+      const cats = (typeof window !== 'undefined' && window.__UNIT_CATEGORIES__) || {};
+      const hiddenSet = new Set(Array.isArray(cats.HIDDEN_UNITS) ? cats.HIDDEN_UNITS : []);
+      const hiddenRegex = /醫院|分院|副校長|紀念品/;
+      const isAllowedUnit = (name) => {
+        if (hiddenSet.has(name) || hiddenRegex.test(name)) return false;
+        // If unitStructure is available, enforce SSOT whitelist
+        if (unitStructureKeys && unitStructureKeys.size > 0) return unitStructureKeys.has(name);
+        return true;
+      };
       const groups = new Map();
+      const categorizeFn = typeof cats.categorizeUnit === 'function' ? cats.categorizeUnit : null;
       entries.forEach((entry) => {
         const value = String(entry && entry.value || '').trim();
         if (!value) return;
@@ -1996,10 +2011,14 @@
         const parent = String(parsed && parsed.parent || value).trim();
         const child = String(parsed && parsed.child || '').trim();
         if (!parent) return;
+        if (!isAllowedUnit(parent)) return; // SSOT filter: match dashboard/asset-dashboard count
         if (!groups.has(parent)) {
+          // Prefer SSOT categorizeUnit over entry.category to ensure consistency
+          const ssotCategory = categorizeFn ? String(categorizeFn(parent) || '').trim() : '';
+          const entryCategory = String(entry && entry.category || '').trim();
           groups.set(parent, {
             unit: parent,
-            category: String(entry && entry.category || '').trim(),
+            category: ssotCategory || entryCategory,
             children: new Set()
           });
         }
