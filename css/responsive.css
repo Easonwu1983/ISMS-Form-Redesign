@@ -299,7 +299,7 @@
 @media (max-width: 900px) {
   .kanban-board { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
 }
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .kanban-board { grid-template-columns: 1fr 1fr; }
 }
 
@@ -342,12 +342,67 @@
 .asset-nowrap { white-space: nowrap; }
 .asset-form-header { padding: 8px 12px; border: 1px solid #ddd; background: #f9f9f9; }
 
-/* ── Mobile General Improvements ── */
+/* ══════════════════════════════════════════════════════
+   Responsive Fixes — 2026-04-05 Audit
+   ══════════════════════════════════════════════════════ */
+
+/* ── Tablet (<= 768px): mobile layout, forms, tables ── */
+@media (max-width: 768px) {
+  /* Form inputs — iOS no-zoom + WCAG 44px touch target */
+  .form-input, .form-select, .form-textarea {
+    min-height: 44px;
+    padding: 12px 16px;
+    font-size: 1rem; /* >= 16px prevents iOS auto-zoom */
+  }
+
+  /* Record ID column — prevent 320px overflow */
+  .record-id-head,
+  .record-id-col {
+    width: auto;
+    min-width: 0;
+  }
+
+  /* Asset table headers — allow text wrap */
+  .asset-th, .asset-th--center {
+    white-space: normal;
+    font-size: 0.78em;
+    padding: 8px 8px;
+  }
+
+  /* Dashboard hero decoration — shrink on mobile */
+  .dashboard-hero::after {
+    width: 120px;
+    height: 120px;
+  }
+
+  /* Dashboard panel pills — reduce gap */
+  .dashboard-panel-pills {
+    gap: 8px;
+  }
+
+  /* Corrective action timeline — tighter on mobile */
+  .case-timeline { padding-left: 16px; }
+  .timeline-item::before { left: -16px; width: 8px; height: 8px; }
+
+  /* Login page decorative blurs — shrink */
+  .login-page::before { width: 200px; height: 200px; }
+  .login-page::after { width: 180px; height: 180px; }
+
+  /* Nav item — bigger touch target */
+  .nav-item { padding: 13px 14px; min-height: 44px; }
+}
+
+/* ── Small mobile (<= 480px) ── */
 @media (max-width: 480px) {
   .stats-grid { grid-template-columns: 1fr; }
   .stat-card { padding: 16px; }
   .stat-value { font-size: 1.4rem; }
   .main-content { padding: 12px 8px 20px; }
   .card { border-radius: 10px; }
-  .sidebar { width: 280px; }
+
+  /* Dashboard hero decoration — hide on tiny screens */
+  .dashboard-hero::after { display: none; }
+
+  /* Kanban board — 2 columns max on tiny screens */
+  .kanban-board { grid-template-columns: 1fr 1fr; gap: 6px; }
 }
